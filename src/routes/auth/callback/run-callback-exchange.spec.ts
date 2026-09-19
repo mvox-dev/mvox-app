@@ -40,7 +40,7 @@ function jwt(payload: object): string {
 	return `${b64({ alg: 'none' })}.${b64(payload)}.sig`;
 }
 
-const VALID_JWT = jwt({ accounts: { polyphony: 'p1' }, exp: 9_999_999_999 });
+const VALID_JWT = jwt({ accounts: { sampledb: 'p1' }, exp: 9_999_999_999 });
 
 function seedStateBlob(overrides: Partial<Parameters<typeof encodeState>[0]> = {}) {
 	localStorage.setItem(
@@ -139,9 +139,9 @@ describe('runCallbackExchange — CSRF single-use state blob', () => {
 describe('runCallbackExchange — post-auth collective hydration (bug #7)', () => {
 	it('resolves collectiveState after a successful exchange (not left at pre-auth loading)', async () => {
 		seedStateBlob();
-		exchangeOk(); // VALID_JWT carries accounts { polyphony: 'p1' }
+		exchangeOk(); // VALID_JWT carries accounts { sampledb: 'p1' }
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -155,7 +155,7 @@ describe('runCallbackExchange — post-auth collective hydration (bug #7)', () =
 		// does NOT re-run on the client-side goto, so without post-exchange discovery
 		// the store stays 'loading' forever. It must be resolved before we redirect.
 		expect(get(collectiveState).status).toBe('ready');
-		expect(discoverMock).toHaveBeenCalledWith({ polyphony: 'p1' }, VALID_JWT, expect.anything());
+		expect(discoverMock).toHaveBeenCalledWith({ sampledb: 'p1' }, VALID_JWT, expect.anything());
 	});
 });
 
@@ -164,7 +164,7 @@ describe('runCallbackExchange — invite intent delegates to the invite path (T4
 		seedStateBlob({
 			intent: 'invite',
 			return_to: '/invite/tok.a.b',
-			invite: { db: 'polyphony', token: 'tok.a.b' }
+			invite: { db: 'sampledb', token: 'tok.a.b' }
 		});
 		exchangeOk(); // if the non-invite path ran by mistake, it would "succeed" — the assertions below catch it
 		inviteCallbackMock.mockResolvedValue({ ok: true, redirectTo: '/' });
@@ -175,7 +175,7 @@ describe('runCallbackExchange — invite intent delegates to the invite path (T4
 			'session-key',
 			expect.objectContaining({
 				intent: 'invite',
-				invite: { db: 'polyphony', token: 'tok.a.b' }
+				invite: { db: 'sampledb', token: 'tok.a.b' }
 			})
 		);
 		expect(exchangeMock).not.toHaveBeenCalled();

@@ -151,37 +151,37 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 /** #343 identity-switch harness: TWO collectives, so the page can genuinely
- *  change identity mid-flight (polyphony/person-p → crede/person-c). */
+ *  change identity mid-flight (sampledb/person-p → crede/person-c). */
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', crede: 'person-c' },
+		personIdByDb: { sampledb: 'person-p', crede: 'person-c' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'crede', name: 'Crede', personId: 'person-c' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 /** A byte-serving global fetch for the signed-URL GET leg. Returns the mock
@@ -319,7 +319,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		// #91 TR.3 widened the call: the read mode depends on the rights answer
 		// (a season editor reads retired/dropped too), so the flag rides along.
 		expect(loadWorksByEventIdMock).toHaveBeenCalledWith(
-			{ db: 'polyphony', token: 'jwt-abc' },
+			{ db: 'sampledb', token: 'jwt-abc' },
 			['ev-1', 'ev-0'],
 			'season-1',
 			expect.anything(),
@@ -383,7 +383,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 
 		// The prefetch settles: the NEXT event's two parts landed on the device.
 		await vi.waitFor(() => {
-			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
 				'file-a1',
 				'file-a2'
 			]);
@@ -422,7 +422,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			'file-b1'
 		]);
 		expect(signFileUrlMock.mock.calls[2].slice(0, 2)).toEqual([
-			{ db: 'polyphony', token: 'jwt-abc' },
+			{ db: 'sampledb', token: 'jwt-abc' },
 			'file-b1'
 		]);
 	});
@@ -465,7 +465,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-1');
 		// And the bytes landed under the CLICKING identity's partition.
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-score']);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-score']);
 		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
 	});
 
@@ -527,7 +527,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			if (url.startsWith('https://s3.example/')) return fetchMock();
 			throw new TypeError('Failed to fetch');
 		});
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-p' }, 'file-score', {
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-p' }, 'file-score', {
 			bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
 			filetype: 'application/pdf',
 			sha256: 'sha-cached'
@@ -564,9 +564,9 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		// have crede's #409 prefetch ALSO reach for the SAME fileId — not the
 		// late-settle poisoning this test pins, just an unrelated mock
 		// collision the real app never has (two collectives never share a
-		// work catalogue). Only polyphony's load is given rows.
+		// work catalogue). Only sampledb's load is given rows.
 		loadWorksByEventIdMock.mockImplementation((cfg: { db: string }) =>
-			cfg.db === 'polyphony'
+			cfg.db === 'sampledb'
 				? Promise.resolve({ 'ev-1': [workRow({ fileId: 'file-score' })] })
 				: Promise.resolve({})
 		);
@@ -596,8 +596,8 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		releaseSigning('https://s3.example/signed-1');
 		await vi.waitFor(() => {
 			// The fetch under the OLD identity still completes and stores under
-			// polyphony/person-p — the late-settle poisoning case: NEVER crede.
-			expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-score']);
+			// sampledb/person-p — the late-settle poisoning case: NEVER crede.
+			expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-score']);
 		});
 		expect(fakeByteStore.heldFor('crede', 'person-c')).toEqual([]);
 
@@ -658,7 +658,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		expect(tab.close).not.toHaveBeenCalled();
 		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
 		// Nothing half-fetched reached the store — a fallback delivers, it never caches.
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual([]);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
 	});
 
 	// #343 fix-round (f) — the late-settle identity guard must hold even when
@@ -702,7 +702,7 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 		expect(tab.location.href).toBe('');
 		expect(tab.location.href).not.toBe('https://s3.example/signed-1');
 		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual([]);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
 		expect(fakeByteStore.heldFor('crede', 'person-c')).toEqual([]);
 	});
 
@@ -782,7 +782,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		});
 		// file-a1 is ALREADY on the device — the singer opened it at home.
 		const pdfBytes = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-p' }, 'file-a1', {
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-p' }, 'file-a1', {
 			bytes: pdfBytes.slice().buffer,
 			filetype: 'application/pdf',
 			sha256: sha256HexSync(pdfBytes)
@@ -797,7 +797,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		render(Page);
 
 		await vi.waitFor(() => {
-			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
 				'file-a1',
 				'file-a2'
 			]);
@@ -817,7 +817,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 			}))
 		).toEqual([
 			{
-				identity: { db: 'polyphony', personId: 'person-p' },
+				identity: { db: 'sampledb', personId: 'person-p' },
 				fileId: 'file-a2',
 				filetype: 'application/pdf',
 				sha256: sha256HexSync(pdfBytes),
@@ -854,7 +854,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		const { container } = render(Page);
 
 		await vi.waitFor(() => {
-			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
 				'file-a1',
 				'file-a2'
 			]);
@@ -866,7 +866,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 			expect(heldSpy).toHaveBeenCalledTimes(3);
 		});
 		for (const call of heldSpy.mock.calls) {
-			expect(call.slice(0, 2)).toEqual(['polyphony', 'person-p']);
+			expect(call.slice(0, 2)).toEqual(['sampledb', 'person-p']);
 		}
 		// And the singer SEES it: both prefetched parts carry #367's on-device
 		// badge without any reload or click on the part itself.
@@ -903,7 +903,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 
 		// The prefetch happened — triggered by nothing but the load chain itself.
 		await vi.waitFor(() => {
-			expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-a1']);
+			expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-a1']);
 		});
 		// No wake-me-later hook of any kind was registered on the way.
 		const banned = ['visibilitychange', 'focus', 'sync', 'periodicsync'];
@@ -976,7 +976,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 		// The whole open settles: sweep ran AND the prefetch landed both parts.
 		await vi.waitFor(() => {
 			expect(relieveSpy).toHaveBeenCalled();
-			expect(fakeByteStore.heldFor('polyphony', 'person-p').sort()).toEqual([
+			expect(fakeByteStore.heldFor('sampledb', 'person-p').sort()).toEqual([
 				'file-a1',
 				'file-a2'
 			]);
@@ -989,8 +989,8 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 		const handed = protectSpy.mock.calls.at(-1)![0];
 		expect([...handed].sort()).toEqual(
 			[
-				JSON.stringify(['polyphony', 'person-p', 'file-a1']),
-				JSON.stringify(['polyphony', 'person-p', 'file-a2'])
+				JSON.stringify(['sampledb', 'person-p', 'file-a1']),
+				JSON.stringify(['sampledb', 'person-p', 'file-a2'])
 			].sort()
 		);
 		// ORDER: the set exists before the sweep, the sweep runs before the
@@ -1004,7 +1004,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 	});
 
 	it("two joined dbs → ONE agenda read for the db she is not looking at, BOTH next-event sets protected; a db she has not joined is never read; the build itself makes ZERO byte-store get()s", async () => {
-		// Selected: polyphony. ALSO joined (authStore.personIdByDb): crede.
+		// Selected: sampledb. ALSO joined (authStore.personIdByDb): crede.
 		// crede's agenda has TWO upcoming events, so "agendaItems[0] only" is a
 		// claim a build that reads every event's works must FAIL.
 		const credeSoon = new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString();
@@ -1052,7 +1052,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 
 		await vi.waitFor(() => {
 			expect(relieveSpy).toHaveBeenCalled();
-			expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-p1']);
+			expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-p1']);
 		});
 		// ONE agenda read per joined db SHE IS NOT LOOKING AT, on her own key
 		// (the shared JWT) — nothing else on the device. review F2: the SELECTED
@@ -1066,7 +1066,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 		// listAllCopies + resolveEventWorksBatch) happened ONCE, for the page's
 		// own load — the build reused those rows rather than paying for them again.
 		expect(
-			loadWorksByEventIdMock.mock.calls.filter((c) => (c[0] as { db: string }).db === 'polyphony')
+			loadWorksByEventIdMock.mock.calls.filter((c) => (c[0] as { db: string }).db === 'sampledb')
 				.length
 		).toBe(1);
 		// The OTHER collective's works read is agendaItems[0] ONLY: ev-c1,
@@ -1083,7 +1083,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 		expect([...handed].sort()).toEqual(
 			[
 				JSON.stringify(['crede', 'person-c', 'file-c1']),
-				JSON.stringify(['polyphony', 'person-p', 'file-p1'])
+				JSON.stringify(['sampledb', 'person-p', 'file-p1'])
 			].sort()
 		);
 		// The build reads the byte store NOT AT ALL: the only get() of the whole
@@ -1162,7 +1162,7 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 		expect([...protectSpy.mock.calls[0][0]].sort()).toEqual(
 			[
 				JSON.stringify(['crede', 'person-c', 'file-c1']),
-				JSON.stringify(['polyphony', 'person-p', 'file-p1'])
+				JSON.stringify(['sampledb', 'person-p', 'file-p1'])
 			].sort()
 		);
 		// Still exactly once for the page instance — the switch's own load took

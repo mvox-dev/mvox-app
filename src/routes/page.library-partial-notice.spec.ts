@@ -97,7 +97,7 @@ import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-const DB_A = 'polyphony';
+const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 /** #321 result-shape builders (the contract the data layer now returns). */
@@ -124,7 +124,7 @@ function setAuthedWithTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: DB_A, name: 'Polyphony', personId: 'person-p' },
+			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []

@@ -11,7 +11,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 // is retired — #159 deleted every organization instance, so that chain can only
 // answer wrong or empty.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // database entity id (live shape)
 
 function json(body: unknown, status = 200) {
@@ -26,7 +26,7 @@ describe('resolveDatabaseEntityId', () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
-		expect(url).toContain('/polyphony/entity?_type.string=database');
+		expect(url).toContain('/sampledb/entity?_type.string=database');
 		expect(url).toContain('limit=1');
 		expect(url).not.toContain('_type.string=member');
 		expect(url).not.toContain('organization');
@@ -43,7 +43,7 @@ describe('resolveDatabaseEntityId', () => {
 		expect(err).toBeInstanceOf(DatabaseEntityLookupError);
 		expect((err as DatabaseEntityLookupError).status).toBe(503);
 		expect((err as Error).message).toMatch(/503/);
-		expect((err as Error).message).toMatch(/polyphony/);
+		expect((err as Error).message).toMatch(/sampledb/);
 	});
 
 	it('fails loud when the 2xx entity carries no _id (apparent-success trap — same guard as inviteData.resolvePersonParentId)', async () => {

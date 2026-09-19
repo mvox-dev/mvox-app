@@ -35,7 +35,7 @@ scripts/migrations/.node-import-guard-*/
 scripts/migrations/snapshots/
 
 # mvox-app#274 — seed-results/ is TRACKED by default (schema/type-provisioning
-# and polyphony-synthetic ledgers, per the #263 convention). Only the one
+# and synthetic-db ledgers, per the #263 convention). Only the one
 # sensitive subdirectory the shared ledger writer (lib/ledger-writer.ts)
 # routes crede real-PII instance runs into stays ignored — belt-and-suspenders
 # alongside that writer's own field redaction; never commit real member data.

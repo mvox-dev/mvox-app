@@ -213,15 +213,15 @@ async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -274,7 +274,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 describe('#257 — repair confirmation announcement (profile_repair_done)', () => {
 	it('the status region is PERSISTENT: mounted (empty) from first ready render, role="status" aria-live="polite" — even with no repair pending', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -293,7 +293,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 	});
 
 	it('fail THEN succeed in one flow: failure shows profile_repair_error (no done announcement); the successful retry announces profile_repair_done and the banner unmounts', async () => {
-		selectPolyphony();
+		selectSampledb();
 		// Same value at two levels = an interrupted move → the REAL
 		// planLoadedDuplicateRepairs mounts the repair banner for `name`.
 		h.listMyProfilesMock.mockResolvedValue([
@@ -365,14 +365,14 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		// preserving its sibling email value.
 		expect(h.applyDuplicateRepairMock).toHaveBeenCalledTimes(2);
 		expect(h.applyDuplicateRepairMock.mock.calls[1][0]).toEqual({
-			cfg: { db: 'polyphony', token: 'jwt-member' },
+			cfg: { db: 'sampledb', token: 'jwt-member' },
 			field: 'name',
 			clear: [{ id: 'prof-dom', sibling: '' }]
 		});
 	});
 
 	it('transient per the house pattern: the announcement clears at the START of the next repair attempt — and NEVER by a timer', async () => {
-		selectPolyphony();
+		selectSampledb();
 		// BOTH fields duplicated → two independent repair plans, letting a
 		// second attempt start after the first success.
 		h.listMyProfilesMock.mockResolvedValue([
@@ -438,7 +438,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 	// it is mounted through the loading state the post-repair reload passes
 	// through. Pinned on the initial load (same gate, observable without a repair).
 	it('the region is outside the status gate: mounted while status is still loading, before the ready surface exists', async () => {
-		selectPolyphony();
+		selectSampledb();
 		const firstLoad = deferred<Array<Record<string, string>>>();
 		h.listMyProfilesMock.mockReturnValueOnce(firstLoad.promise);
 		const { container } = render(Page);
@@ -465,13 +465,13 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'bravura', name: 'Bravura', personId: 'person-b' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		// A loads with a duplicated `name` → the real machinery mounts the banner.
 		h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 			cfg.db === 'bravura'
@@ -524,7 +524,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 // ---------------------------------------------------------------------------
 describe('#257 — visibility section heading (profile_visibility_title / profile_visibility_intro)', () => {
 	async function renderReady(): Promise<HTMLElement> {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -600,7 +600,7 @@ describe('#257 — visibility section heading (profile_visibility_title / profil
 // failure to resolve membership standing reaches console.error.
 // ---------------------------------------------------------------------------
 describe('#257 fold-in — live resolveGate rejection is logged, stale stays silent (#260 note 2)', () => {
-	const COLLECTIVE_A = { db: 'polyphony', name: 'Polyphony', personId: 'person-p' };
+	const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 	const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 	function wireProfilesPerCollective(): void {
@@ -619,7 +619,7 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 	}
 
 	function displayValue(container: HTMLElement, field: 'name' | 'email'): string {

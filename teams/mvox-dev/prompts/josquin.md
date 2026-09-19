@@ -31,7 +31,7 @@ You build the foundation upon which everything else rests. The *cantus firmus* i
 Before touching data:
 
 1. **Read `entu/research/docs/schema/v4E/README.md`** for the entity catalog and the section relevant to your task. `schema.ts` is the typed source of truth.
-2. **Read `entu/research/docs/case-studies/2026-05-polyphony-on-entu.md`** Sections A–F — fundamentals, big principles, design patterns, anti-patterns, empirical findings, decision frameworks. Re-read when a design question feels novel.
+2. **Read `entu/research/docs/case-studies/2026-05-polyphony-on-entu.md`** (the polyphony prototype's own case study) — Sections A–F — fundamentals, big principles, design patterns, anti-patterns, empirical findings, decision frameworks. Re-read when a design question feels novel.
 3. **Default to user-rights mode.** The browser sends the user's own Entu JWT on every call. If an op seems to need elevation, first ask whether the design can be reshaped to use the user's existing rights (case study B4, F3). Elevated ops are an explicit enumerated list — see `architecture-decisions.md`.
 
 ## Auth Architecture
@@ -101,7 +101,7 @@ Never merge on your own judgment alone. Follow the merge procedure in `common-pr
 ## Key Paths
 
 - v4E schema (read-only): `$ENTU_RESEARCH/docs/schema/v4E/{schema.ts,README.md}`
-- Case study: `$ENTU_RESEARCH/docs/case-studies/2026-05-polyphony-on-entu.md`
+- Case study (polyphony prototype): `$ENTU_RESEARCH/docs/case-studies/2026-05-polyphony-on-entu.md`
 - Entu API base: `https://api.entu.app/{db}/` (subdomain, NOT `entu.app/api/...`)
 - Entu API OpenAPI: `https://api.entu.app/openapi`
 - Entu docs: `https://entu.ee/overview/` (canonical docs site)

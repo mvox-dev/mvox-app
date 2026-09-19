@@ -197,8 +197,8 @@ import {
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065'; // live polyphony collective id shape
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const ORG_EFK = '69c7f8718489bfcb0e81b065'; // live sampledb collective id shape
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 /** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoDate(offsetDays: number): string {
@@ -278,16 +278,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

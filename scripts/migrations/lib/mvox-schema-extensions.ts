@@ -199,8 +199,8 @@ export const schedule_item: MvoxEntityDef = {
  *
  * **Parent corrected post-review** (team-lead routing, 2026-09-06, following a
  * dry-run halt): the shape review approved `organization` as the parent, but
- * neither polyphony nor mvox_crede has an `organization` type-def live —
- * `organization` was RETIRED in the #161 org→db-entity migration (2026-08,
+ * neither mvox_crede nor the dev/test collective has an `organization` type-def
+ * live — `organization` was RETIRED in the #161 org→db-entity migration (2026-08,
  * MVOX-11). The collective root has been the database entity itself since
  * then; `member`'s type-def description ("membership record within one
  * organization") is aspirational leftover predating #161, not the current
@@ -369,8 +369,9 @@ export const roster_show_real_names: PropertyAdditionDef = {
 export const link: MvoxEntityDef = {
 	name: 'link',
 	blurb: "A named URL kept for the collective's members — an external resource the choir shares (e.g. a recordings archive).",
-	// Verified live (probe-256-link-premise-check-2026-09-10.ts): section and
-	// repertoire_item type-defs are both `domain` on polyphony AND mvox_crede —
+	// Verified live 2026-09-10 (probe-256-link-premise-check-2026-09-10.ts, which
+	// names the two dbs it read): section and repertoire_item type-defs were both
+	// `domain` on mvox_crede and on the dev/test collective —
 	// the empirical sibling pattern this type mirrors, per the ruling's own
 	// framing. NOT `database`'s own type-def sharing (`public`, a platform-
 	// generic constant, same trap as #265's toggle).
@@ -456,13 +457,14 @@ export const link: MvoxEntityDef = {
  * backfill that populates it must exist and be fully populated before `name`
  * is ever turned into one).
  *
- * **The estate** (Mihkel, 2026-09-18, folded into the #233 body): *"run on
- * crede only — we will return to templating the schema, when we stabilise
- * it"* and *"drop polyphony from constraining us."* This prop-def is
- * provisioned on `mvox_crede` and nowhere else — polyphony receives no
- * further schema changes, and the `-crede-`/`-polyphony-` twin-script
- * pattern every earlier schema change used (seed-246, seed-256, seed-265,
- * seed-282) ends here: one script per step.
+ * **The estate** (Mihkel, 2026-09-18, folded into the #233 body — quoted in
+ * full in docs/architecture/mvox-schema-extensions.md): "run on crede only —
+ * we will return to templating the schema, when we stabilise it" and drop
+ * the estate's other collective from constraining us. This prop-def is
+ * provisioned on `mvox_crede` and nowhere else — no other collective
+ * receives this or any further schema change, and the per-collective
+ * twin-script pattern every earlier schema change used (seed-246, seed-256,
+ * seed-265, seed-282) ends here: one script per step.
  *
  * **Sharing and ordinal are deliberately left UNSET here** — no committed
  * artefact records the live crede `event` type's `name` prop-def posture
@@ -491,7 +493,7 @@ export const event_name: PropertyAdditionDef = {
 	},
 	commissionedBy: 'mvox-app#233',
 	notes: [
-		'crede ONLY (Mihkel estate ruling, 2026-09-18) — polyphony receives no further schema changes; this is the first PropertyAdditionDef whose provisioning script is single (no -crede-/-polyphony- twin).',
+		'crede ONLY (Mihkel estate ruling, 2026-09-18) — no other collective receives this or any further schema change; this is the first PropertyAdditionDef whose provisioning script is single (no per-collective twin).',
 		"Sharing mirrors event.name's live posture and ordinal sits adjacent to it (name's ordinal + 1) — read at S1 run time, not set here, because no committed artefact records either value for the live crede `event` type.",
 		'Step ordering is a data-loss fence (issue body): S1 (this prop-def) -> S2 (backfill every event.name into event_name) -> S3 (move every app read/write off `name`) -> S4 (only then PATCH `name` into a formula) — a formula overwrites the stored value on every save and silently drops POSTs, so S2/S3 must precede it or names are destroyed.'
 	]

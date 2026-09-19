@@ -60,19 +60,19 @@ const control = (c: HTMLElement) =>
 	q(c, '[data-testid="profile-time-format"]') as HTMLSelectElement | null;
 const hint = (c: HTMLElement) => q(c, '[data-testid="profile-time-format-hint"]');
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 async function renderProfileReady(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	h.listMyProfilesMock.mockResolvedValue([]);
 	const { container } = render(ProfilePage);
 	await waitFor(() => expect(control(container)).not.toBeNull());

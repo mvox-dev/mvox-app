@@ -106,15 +106,15 @@ import {
 } from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -127,7 +127,7 @@ const input = (c: HTMLElement, field: 'name' | 'email') =>
 
 /** Render /profile seeded with a domain profile; settle on the DISPLAY state. */
 async function renderSeeded(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	h.listMyProfilesMock.mockResolvedValue([
 		{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 	]);
@@ -277,7 +277,7 @@ describe('#205 — /profile activation', () => {
 	});
 
 	it('a first-time user (empty field) still gets an activator, opening an empty editor', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitFor(() =>
@@ -297,7 +297,7 @@ describe('#205 — /profile activation', () => {
 	// exits preview mode, so the value clicked is the value edited.
 	it('activating a field during a #131 conflict PREVIEW exits the preview — the value shown is the value edited', async () => {
 		vi.useRealTimers();
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -325,7 +325,7 @@ describe('#205 — /profile activation', () => {
 
 describe('#205 — /profile confirm and cancel', () => {
 	it('Enter CONFIRMS: the flush fires (unchanged save seam), the editor closes, the display shows the new value', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValueOnce([]);
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' }
@@ -352,7 +352,7 @@ describe('#205 — /profile confirm and cancel', () => {
 	});
 
 	it('blur CONFIRMS: same flush, editor closes back to display', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValueOnce([]);
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' }
@@ -375,7 +375,7 @@ describe('#205 — /profile confirm and cancel', () => {
 	it('Escape CANCELS: editor closes, draft reverts, NOTHING is written — not even by the idle autosave later', async () => {
 		// Fake timers so the 2s idle autosave window can be crossed inside the test.
 		vi.useFakeTimers();
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -409,7 +409,7 @@ describe('#205 — /profile confirm and cancel', () => {
 	// save seam.
 	it('Escape after a mid-edit idle autosave WRITES the pre-edit value back — the display and Entu never diverge', async () => {
 		vi.useFakeTimers();
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);

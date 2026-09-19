@@ -98,10 +98,10 @@ function wireSection(id: string, name: string, displayOrder: number, dbEntityId:
 function liveSectionsWire(): unknown {
 	return {
 		entities: [
-			wireSection(EFK_SOPRANO, 'Soprano', 1, ORG_EFK, 'Polyphony'),
-			wireSection(EFK_BASS, 'Bass', 15, ORG_EFK, 'Polyphony'),
-			wireSection(TAM_TENOR, 'I Tenor', 10, ORG_TAM, 'Polyphony'),
-			wireSection(TAM_BASS, 'Bass', 16, ORG_TAM, 'Polyphony')
+			wireSection(EFK_SOPRANO, 'Soprano', 1, ORG_EFK, 'Sampledb'),
+			wireSection(EFK_BASS, 'Bass', 15, ORG_EFK, 'Sampledb'),
+			wireSection(TAM_TENOR, 'I Tenor', 10, ORG_TAM, 'Sampledb'),
+			wireSection(TAM_BASS, 'Bass', 16, ORG_TAM, 'Sampledb')
 		],
 		count: 4,
 		limit: 500,
@@ -183,16 +183,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

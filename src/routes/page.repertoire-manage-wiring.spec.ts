@@ -91,16 +91,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function json(body: unknown, status = 200) {
@@ -349,10 +349,10 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			expect(postsTo(fetchMock, 'entity/ri-1').length).toBe(1);
 		});
 		const urls = fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`);
-		expect(urls).toContain('GET https://api.entu-test.invalid/polyphony/entity/ri-1?props=status');
+		expect(urls).toContain('GET https://api.entu-test.invalid/sampledb/entity/ri-1?props=status');
 		// #264 — the atomic overwrite replaces the old value IN the POST (its
 		// `_id` rides the entry); no separate DELETE remains on this path.
-		expect(urls).not.toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
+		expect(urls).not.toContain('DELETE https://api.entu-test.invalid/sampledb/property/val-status');
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
 			{ _id: 'val-status', type: 'status', string: 'learning' }
 		]);
@@ -468,7 +468,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		const calls = fetchMock.mock.calls.map(
 			([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`
 		);
-		expect(calls).not.toContain('DELETE https://api.entu-test.invalid/polyphony/property/val-status');
+		expect(calls).not.toContain('DELETE https://api.entu-test.invalid/sampledb/property/val-status');
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
 			{ _id: 'val-status', type: 'status', string: 'learning' }
 		]);
@@ -565,7 +565,7 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 				([, init]) => (init as RequestInit | undefined)?.method === 'DELETE'
 			);
 			expect(deletes.map(([url]) => String(url))).toContain(
-				'https://api.entu-test.invalid/polyphony/entity/ri-1'
+				'https://api.entu-test.invalid/sampledb/entity/ri-1'
 			);
 		});
 	});
@@ -671,7 +671,7 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 			const deletes = fetchMock.mock.calls
 				.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')
 				.map(([url]) => String(url));
-			expect(deletes).toContain('https://api.entu-test.invalid/polyphony/entity/pi-a');
+			expect(deletes).toContain('https://api.entu-test.invalid/sampledb/entity/pi-a');
 		});
 		const deletes = fetchMock.mock.calls
 			.filter(([, init]) => (init as RequestInit | undefined)?.method === 'DELETE')

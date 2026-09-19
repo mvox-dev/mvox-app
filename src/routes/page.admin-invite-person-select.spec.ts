@@ -239,7 +239,7 @@ function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
-const MINTED_TOKEN = jwt({ db: 'polyphony', entityId: 'p-cilla', iat: 1, exp: 4_102_444_800 });
+const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p-cilla', iat: 1, exp: 4_102_444_800 });
 
 // The roster the /admin page already loads — the select's name source.
 const ROSTER = [
@@ -263,15 +263,15 @@ const JOIN_STATES = {
 
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -286,7 +286,7 @@ function loadOk() {
 	h.listJoinStatesMock.mockResolvedValue({ ...JOIN_STATES });
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
@@ -346,7 +346,7 @@ afterEach(() => {
 
 describe('#301 /admin invite — the person select (owner, uninvited persons present)', () => {
 	it('renders a labelled native select defaulting to "a new person", listing ONLY absent-state persons (withdrawn in, invited/joined out), placed between the collective line and the submit button', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { section } = await renderInviteReady();
 
@@ -388,7 +388,7 @@ describe('#301 /admin invite — the person select (owner, uninvited persons pre
 			{ db: string; token: string },
 			string[]
 		];
-		expect(jsCfg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
+		expect(jsCfg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect([...jsIds].sort()).toEqual(['p-anna', 'p-bela', 'p-cilla', 'p-dora']);
 
 		// The owner gate ran through resolveOwnerTier — viewer's personId, and
@@ -396,7 +396,7 @@ describe('#301 /admin invite — the person select (owner, uninvited persons pre
 		// redundant re-resolve).
 		expect(h.resolveOwnerTierMock).toHaveBeenCalled();
 		const tierCall = h.resolveOwnerTierMock.mock.calls[0];
-		expect(tierCall[0]).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
+		expect(tierCall[0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(tierCall[1]).toBe('admin-p');
 		expect(tierCall[3]).toBe('org-1');
 	});
@@ -406,7 +406,7 @@ describe('#301 /admin invite — the person select (owner, uninvited persons pre
 
 describe('#301 /admin invite — two behaviours, one button', () => {
 	it('default ("a new person") + submit → createInvite exactly as today; mintSelfLinkInvite is NOT called', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockResolvedValue({
 			personId: 'p-new',
@@ -426,14 +426,14 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 			{ db: string; token: string },
 			{ dbEntityId: string }
 		];
-		expect(cfgArg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
+		expect(cfgArg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(inputArg).toEqual({ dbEntityId: 'org-1' });
 		// The wrong function was NOT called: no person-targeted mint fired.
 		expect(h.mintSelfLinkInviteMock).not.toHaveBeenCalled();
 	});
 
 	it('a person chosen + submit → mintSelfLinkInvite(cfg, personId); createInvite is NOT called; the done panel (link, copy, bearer warning) is unchanged', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: MINTED_TOKEN });
 		const { container, section } = await renderInviteReady();
@@ -447,7 +447,7 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 		});
 		expect(h.mintSelfLinkInviteMock).toHaveBeenCalledTimes(1);
 		const mintCall = h.mintSelfLinkInviteMock.mock.calls[0];
-		expect(mintCall[0]).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
+		expect(mintCall[0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(mintCall[1]).toBe('p-cilla');
 		// The wrong function was NOT called: a createInvite here would mint a
 		// DUPLICATE person + member for someone who already exists.
@@ -461,7 +461,7 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 	});
 
 	it("the submit button's visible label (= accessible name: plain button, no aria-label) states which behaviour fires, and flips with the selection", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { section } = await renderInviteReady();
 		const select = await waitFor(() => personSelect(section));
@@ -489,7 +489,7 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 
 describe('#301 /admin invite — when the select is not rendered', () => {
 	it('no uninvited persons → NO select at all (not disabled, not empty — absent), and the section works as today', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		// Everyone is invited or joined — nobody is 'absent'.
 		h.listJoinStatesMock.mockResolvedValue({
@@ -523,7 +523,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	});
 
 	it('non-owner admin (editor tier) → no select, the existing owner-rights explanation, and the blank invite still works unchanged', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveOwnerTierMock.mockResolvedValue('editor');
 		h.createInviteMock.mockResolvedValue({
@@ -554,7 +554,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	});
 
 	it("owner tier 'error' → no select (an affordance is never rendered off an unresolved rights answer)", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveOwnerTierMock.mockResolvedValue('error');
 		const { section } = await renderInviteReady();
@@ -567,7 +567,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 
 	it('listJoinStates fails loud → a visible note (no silently-missing select), and the blank invite path stays fully available', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listJoinStatesMock.mockRejectedValue(
 			new Error('listLinkedIdentities: identity read failed: HTTP 500')
@@ -607,7 +607,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 describe('#301 /admin invite — person-path (mint) failures surface their own detail', () => {
 	it('a SelfLinkMintError surfaces its OWN message naming the person — never the generic createInvite branch, never the orphaned-person warning; the selection survives for retry', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.mintSelfLinkInviteMock.mockRejectedValue(
 			new h.SelfLinkMintError('self-link mint failed: HTTP 500', {
@@ -650,7 +650,7 @@ describe('#301 /admin invite — person-path (mint) failures surface their own d
 
 	it("the mint 403 ('missing-self-editor') surfaces the owner-rights meaning, not the raw platform text", async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.mintSelfLinkInviteMock.mockRejectedValue(
 			new h.SelfLinkMintError('self-link mint refused: HTTP 403 — the person lacks self-_editor', {
@@ -682,7 +682,7 @@ describe('#301 /admin invite — person-path (mint) failures surface their own d
 
 describe('#301 /admin invite — after a successful person mint', () => {
 	it('the uninvited list is RE-DERIVED: the person is gone from the options and the select is back to its default', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		// First derivation: Cilla + Dora uninvited. Every derivation after the
 		// mint sees Cilla as invited — the re-derived truth, not a local splice.
@@ -732,7 +732,7 @@ describe('#301 /admin invite — after a successful person mint', () => {
 describe('#301 /admin invite — the two error surfaces never cross paths', () => {
 	it('a failed person mint clears when the selection returns to "a new person" — no per-person note under a "Create invite" button', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.mintSelfLinkInviteMock.mockRejectedValue(
 			new h.SelfLinkMintError('self-link mint failed: HTTP 500', { phase: 'mint', reason: 'http' })
@@ -760,7 +760,7 @@ describe('#301 /admin invite — the two error surfaces never cross paths', () =
 
 	it('a failed blank invite never stacks with a later mint failure — one surface at a time', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockRejectedValue(
 			new h.InviteCreateError('invite create failed: HTTP 500', {
@@ -801,7 +801,7 @@ describe('#301 /admin invite — the two error surfaces never cross paths', () =
 
 describe('#301 /admin invite — the uninvited-list read is owner-gated', () => {
 	it('an editor-tier admin triggers NO listJoinStates fan-out, and still gets the owner-rights explanation', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveOwnerTierMock.mockResolvedValue('editor');
 		const { section } = await renderInviteReady();
@@ -833,7 +833,7 @@ describe('/admin invite — the person select states a truncated roster (#321 re
 	const NOTICE = 'invite-person-partial-notice';
 
 	it('a truncated roster read renders the shared role="status" notice in the invite section', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.loadRosterMock.mockReset().mockResolvedValue({ items: ROSTER, total: 500, truncated: true });
 
@@ -847,7 +847,7 @@ describe('/admin invite — the person select states a truncated roster (#321 re
 	});
 
 	it('a complete roster read leaves it ABSENT from the DOM', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { section } = await renderInviteReady();

@@ -11,7 +11,7 @@
 // here must target the SERIES `_parent` VALUE ID exactly, and the season's
 // value id must never appear in any write, either direction.
 //
-// RIGHTS (settled live on polyphony, #304 SPIKE — seed-results ledger
+// RIGHTS (settled via a dated live probe — #304 SPIKE, seed-results ledger
 // probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json):
 //   - REASSIGN — the house atomic-overwrite primitive (#264: ONE POST whose
 //     entry carries the old series value's `_id` + the new reference) is
@@ -63,7 +63,7 @@
 // the module is absent (seasonManage.delete.spec.ts's posture).
 import { describe, expect, it, vi } from 'vitest';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 type ActionsModule = {
 	reassignEventSeries: (

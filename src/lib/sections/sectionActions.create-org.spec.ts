@@ -4,9 +4,10 @@ import { createSection } from './sectionActions';
 
 // TU.1/#109 RED — finding #10, root cause A: the TOP-LEVEL PARENT ORG.
 //
-// LIVE-VERIFIED (2026-08-12, polyphony): the `_type.string=organization&limit=1`
-// org fallback in `createSection` rests on a FALSE premise ("polyphony's extra
-// org entities are unreadable to non-admin callers"). In truth all SIX
+// LIVE-VERIFIED (2026-08-12, the dev/test collective): the
+// `_type.string=organization&limit=1` org fallback in `createSection` rests on a
+// FALSE premise ("the dev/test collective's extra org entities are unreadable
+// to non-admin callers"). In truth all SIX
 // organization entities are `_sharing: domain` — every authenticated member
 // reads all six, and `limit=1` returns the FIRST by id:
 //
@@ -45,8 +46,8 @@ beforeEach(() => {
 });
 
 /** Live-shaped router: type-resolution GET, org-search GET (multi-org by
- *  default — umbrella FIRST, exactly as live polyphony returns them), and the
- *  entity-create POST. */
+ *  default — umbrella FIRST, exactly as the live dev/test collective returned
+ *  them), and the entity-create POST. */
 function makeFetchMock(
 	opts: {
 		typeId?: string;

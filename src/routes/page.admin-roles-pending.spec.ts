@@ -197,15 +197,15 @@ const ROSTER = [
 	{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '' }
 ];
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -222,7 +222,7 @@ function loadOk() {
 	h.removeLibrarianMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 	h.resolveOwnerTierMock.mockResolvedValue('error');
 	h.listJoinStatesMock.mockResolvedValue({});
@@ -270,7 +270,7 @@ function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: 
 
 beforeEach(() => {
 	loadOk();
-	selectPolyphony();
+	selectSampledb();
 });
 
 afterEach(() => {

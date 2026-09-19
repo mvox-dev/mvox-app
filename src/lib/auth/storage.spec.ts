@@ -71,7 +71,7 @@ describe('auth storage', () => {
 // exists for. Re-login as the same (db, personId) finds the bytes under the
 // same partition key without redownloading.
 describe('#343 — auth teardown RETAINS the byte store', () => {
-	const A = { db: 'polyphony', personId: 'person-a' };
+	const A = { db: 'sampledb', personId: 'person-a' };
 	const pdf = () => ({
 		bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
 		filetype: 'application/pdf',

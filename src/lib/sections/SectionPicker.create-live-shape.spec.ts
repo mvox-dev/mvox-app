@@ -3,10 +3,11 @@
 // TU.1/#109 RED — finding #10 root cause B, reproduced on the LIVE-SHAPED tree.
 //
 // This is the tree the live /roster picker actually holds (verbatim from
-// polyphony, 2026-08-12 probe: 16 `section` entities across FOUR test orgs, all
-// org-parented → ALL FLAT ROOTS; ids are the real entity ids). Every standard
-// voice-section name is already taken by SOME org's section, so the TS.3-era
-// GLOBAL duplicate check refuses every name an admin would actually type.
+// the dev/test collective, 2026-08-12 probe: 16 `section` entities across FOUR
+// test orgs, all org-parented → ALL FLAT ROOTS; ids are the real entity ids).
+// Every standard voice-section name is already taken by SOME org's section, so
+// the TS.3-era GLOBAL duplicate check refuses every name an admin would
+// actually type.
 // Mihkel's live gate walk (2026-08-11): typing "Soprano II" with parent
 // "Soprano" — the exact section finding #8 wants nested — was refused as a
 // duplicate of Kammernaiskoor Sireen's flat "Soprano II". Net effect: "new
@@ -38,7 +39,7 @@ afterEach(() => {
 	cleanup();
 });
 
-/** Real live entity ids (2026-08-12 probe of polyphony). */
+/** Real live entity ids (2026-08-12 probe of the dev/test collective). */
 const ORG_EFK = '69c7f8718489bfcb0e81b065'; // "Eesti Filharmoonia Kammerkoor"
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9'; // "Kammernaiskoor Sireen"
 /**
@@ -127,7 +128,7 @@ function renderLivePicker(dbEntityId: string | null = ORG_EFK) {
 	return { container, oncreate };
 }
 
-describe('SectionPicker on the LIVE polyphony tree — finding #10 reproduced', () => {
+describe('SectionPicker on the LIVE sampledb tree — finding #10 reproduced', () => {
 	it("Mihkel's exact live gesture: 'Soprano II' with parent = Soprano (which has NO child of that name) MUST fire oncreate — the flat 'Soprano II' of another test org is not a sibling", async () => {
 		const { container, oncreate } = renderLivePicker();
 		await openFormAndType(container, 'Soprano II', EFK_SOPRANO);

@@ -181,7 +181,7 @@ function deferred<T>() {
 	return { promise, resolve: resolveIt };
 }
 
-const IDENTITY = { db: 'polyphony', personId: 'person-p' };
+const IDENTITY = { db: 'sampledb', personId: 'person-p' };
 
 function pdfData() {
 	return {
@@ -195,16 +195,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -352,7 +352,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		// One store query per list render, not one per row (two rows here);
 		// re-query on a LATER render is fine, a second call in THIS settled
 		// render is the per-row shape leaking back in.
-		expect(presenceSpy.mock.calls).toEqual([['polyphony', 'person-p']]);
+		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
 		// get() counts as an open (byteStore.ts head comment) — a render must
 		// never call it, or LRU collapses to render order.
 		expect(getSpy).not.toHaveBeenCalled();
@@ -486,8 +486,8 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		// A RE-QUERY, not a local patch: the store, not the page, is what
 		// knows which rows survived.
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 
@@ -556,8 +556,8 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 			).not.toContain('[file_presence_on_device]');
 		});
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 });

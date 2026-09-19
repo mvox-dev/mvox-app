@@ -8,9 +8,9 @@
 // to import `readDryRun`/`loadCredeCfg` from somewhere, and this is the
 // only somewhere.
 //
-// Scope note: this does NOT touch `./creds.ts` (Josquin's T4.10 polyphony
+// Scope note: this does NOT touch `./creds.ts` (Josquin's T4.10 dev/test-db
 // loader, `ENTU_API_URL`/`ENTU_API_KEY`/`ENTU_DATABASE` + the frozen-host
-// verification dance) — polyphony scripts keep using `loadCfg` from there.
+// verification dance) — dev/test-db scripts keep using `loadCfg` from there.
 // `loadCredeCfg` below is the crede-side analog for `MVOX_CREDE_DB`/
 // `MVOX_CREDE_API_KEY`, which never needed the same frozen-host check:
 // crede scripts hardcode `https://api.entu.app` for the token exchange,

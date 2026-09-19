@@ -226,7 +226,7 @@ function fixtureRowsDeep(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 // ── #253 pin 1 — the refetch mock tells the TRUTH ───────────────────────────
 //
@@ -307,16 +307,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

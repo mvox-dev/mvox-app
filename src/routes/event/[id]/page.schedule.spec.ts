@@ -274,7 +274,7 @@ function scheduleWireStub(opts: WireOpts = {}) {
 	return { stub, releaseStale };
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
@@ -289,7 +289,7 @@ function setAuthed(dbs: string[] = ['polyphony']) {
 	selectedCollectiveDbStore.set(dbs[0]);
 }
 
-function renderSchedulePage(opts: WireOpts = {}, dbs: string[] = ['polyphony']) {
+function renderSchedulePage(opts: WireOpts = {}, dbs: string[] = ['sampledb']) {
 	const { stub, releaseStale } = scheduleWireStub(opts);
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
@@ -1174,7 +1174,7 @@ describe('#262 — stale schedule response never lands (generation guard)', () =
 	it('a schedule read started under collective A, settling AFTER a switch to collective B, must not reach the schedule state', async () => {
 		const { container, releaseStale, fetchStub } = renderSchedulePage(
 			{ holdFirstScheduleGet: true },
-			['polyphony', 'crede']
+			['sampledb', 'crede']
 		);
 		await waitReady(container);
 		// The stale read is in flight (held by the test) — deterministic setup.

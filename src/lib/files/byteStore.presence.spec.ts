@@ -34,8 +34,8 @@ type PresenceCapable = ByteStore & {
 	heldFileIds(db: string, personId: string): Promise<string[]>;
 };
 
-const A = { db: 'polyphony', personId: 'person-a' };
-const B = { db: 'polyphony', personId: 'person-b' };
+const A = { db: 'sampledb', personId: 'person-a' };
+const B = { db: 'sampledb', personId: 'person-b' };
 const C = { db: 'crede', personId: 'person-a' }; // same human, other collective
 
 function bytes(n: number, fill = 7): ArrayBuffer {
@@ -114,7 +114,7 @@ describe('#351 — one call answers one partition', () => {
 		expect(await store.heldFileIds(C.db, C.personId)).toEqual(['file-3']);
 		expect(await store.heldFileIds(B.db, B.personId)).toEqual(['file-4']);
 		// A partition nothing was ever stored under answers empty, not throws.
-		expect(await store.heldFileIds('polyphony', 'person-nobody')).toEqual([]);
+		expect(await store.heldFileIds('sampledb', 'person-nobody')).toEqual([]);
 	});
 });
 

@@ -58,8 +58,8 @@ function jwt(payload: object): string {
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
 
-const TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 4_102_444_800 }); // year 2100
-const EXPIRED_TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 1_000 }); // 1970
+const TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 }); // year 2100
+const EXPIRED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 1_000 }); // 1970
 
 function renderAt(token: string, search = '') {
 	pageStub.params = { token };
@@ -75,7 +75,7 @@ describe('/invite/[token] — ready (valid token)', () => {
 	it('shows the landing with the db from the token and one CTA per provider, hrefs exact', () => {
 		const { container } = renderAt(TOKEN);
 		expect(container.querySelector('[data-testid="invite-landing-valid"]')).not.toBeNull();
-		expect(container.textContent).toContain('polyphony');
+		expect(container.textContent).toContain('sampledb');
 
 		for (const provider of AUTH_PROVIDERS) {
 			const cta = container.querySelector(`[data-testid="invite-cta-${provider.id}"]`);

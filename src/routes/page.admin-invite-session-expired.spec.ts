@@ -65,15 +65,15 @@ function authExpiredError(): Error {
 	return e;
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -94,7 +94,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 	it('an auth-expired PREREQUISITE load shows the session-expired notice — not the generic load error, and never "not admin"', async () => {
 		h.resolveParentMock.mockRejectedValue(authExpiredError());
 		h.resolveInviteParentMock.mockRejectedValue(authExpiredError());
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 
@@ -113,7 +113,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		h.resolveParentMock.mockResolvedValue('parent-1');
 		h.resolveInviteParentMock.mockResolvedValue('org-1');
 		h.createInviteMock.mockRejectedValue(authExpiredError());
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -138,7 +138,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		h.resolveParentMock.mockRejectedValue(new Error('network down'));
 		h.resolveInviteParentMock.mockRejectedValue(new Error('network down'));
-		selectPolyphony();
+		selectSampledb();
 
 		const generic = render(Page);
 		await waitFor(() => {
@@ -156,7 +156,7 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
 		);
-		selectPolyphony();
+		selectSampledb();
 
 		const noAccess = render(Page);
 		await waitFor(() => {

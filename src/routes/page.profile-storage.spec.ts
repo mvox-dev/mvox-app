@@ -146,8 +146,8 @@ const q = (c: HTMLElement, testid: string) => c.querySelector(`[data-testid="${t
 // P is signed in. B is a second singer on the same collective's db. C is the
 // SAME human (same personId) in ANOTHER collective — the pinned identity-C
 // precedent: C's holdings land in the "everything else" bucket.
-const P = { db: 'polyphony', personId: 'person-p' };
-const OTHER_B = { db: 'polyphony', personId: 'person-b' };
+const P = { db: 'sampledb', personId: 'person-p' };
+const OTHER_B = { db: 'sampledb', personId: 'person-b' };
 const OTHER_C = { db: 'crede', personId: 'person-p' };
 const ALL_IDENTITIES = [P, OTHER_B, OTHER_C];
 
@@ -258,11 +258,11 @@ function signIn(): void {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 async function renderReady(): Promise<{ container: HTMLElement; controls: StorageControls }> {
@@ -354,12 +354,12 @@ describe('/profile — storage section: this account on this device', () => {
 		const { container, controls } = await renderStorageReady();
 		expect(q(container, 'profile-storage-others')).not.toBeNull();
 
-		expect(controls.usageForPartition).toHaveBeenCalledWith('polyphony', 'person-p');
-		expect(controls.usageForOthers).toHaveBeenCalledWith('polyphony', 'person-p');
+		expect(controls.usageForPartition).toHaveBeenCalledWith('sampledb', 'person-p');
+		expect(controls.usageForOthers).toHaveBeenCalledWith('sampledb', 'person-p');
 		// Never scoped queries FOR another identity — the others answer is the
 		// aggregate member's job, not a per-partition sweep from page code.
 		for (const call of controls.usageForPartition.mock.calls) {
-			expect(call).toEqual(['polyphony', 'person-p']);
+			expect(call).toEqual(['sampledb', 'person-p']);
 		}
 		// THE #351 TRAP: get() is an open. Rendering this section reads
 		// presence + usage, never bytes.
@@ -396,7 +396,7 @@ describe('/profile — storage section: this account on this device', () => {
 			await armMine(container);
 			await fireEvent.click(q(container, 'profile-storage-remove-mine-confirm') as Element);
 			await waitFor(() => {
-				expect(clearPartitionSpy).toHaveBeenCalledWith('polyphony', 'person-p');
+				expect(clearPartitionSpy).toHaveBeenCalledWith('sampledb', 'person-p');
 			});
 		} finally {
 			consoleError.mockRestore();
@@ -504,7 +504,7 @@ describe('/profile — "Remove downloaded parts from this device" is a two-step 
 
 		await waitFor(() => {
 			expect(clearPartitionSpy).toHaveBeenCalledTimes(1);
-			expect(clearPartitionSpy).toHaveBeenCalledWith('polyphony', 'person-p');
+			expect(clearPartitionSpy).toHaveBeenCalledWith('sampledb', 'person-p');
 		});
 		// The mine action never reaches for the device-wide member.
 		expect(controls.clearAllPartitions).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSeasons, listEvents, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const ORG_ID = 'org-1';
 
 function json(body: unknown, status = 200) {
@@ -61,7 +61,7 @@ describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 		);
 		const seasonsUrl = urls.find((u) => u.includes('_type.string=season'));
 		expect(seasonsUrl).toBeDefined();
-		expect(seasonsUrl).toContain('https://api.entu-test.invalid/polyphony/entity?');
+		expect(seasonsUrl).toContain('https://api.entu-test.invalid/sampledb/entity?');
 		expect(seasonsUrl).toContain(`_parent.reference=${ORG_ID}`);
 	});
 

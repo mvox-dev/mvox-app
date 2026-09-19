@@ -12,7 +12,7 @@ import type { EntuCfg } from './entuSeasons';
 // Signature is `listSeasons(cfg, fetchImpl?)` — no personId parameter, see the
 // review-fix describe block below.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 
 function json(body: unknown, status = 200) {

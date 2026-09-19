@@ -12,7 +12,7 @@
 //    but that was a per-script fix, not a structural guarantee). Regex-
 //    scanning every string leaf costs nothing on a schema-metadata payload
 //    (an email pattern cannot appear in a prop-def name) and catches a
-//    stray real address on ANY script, crede or polyphony, sensitive or not.
+//    stray real address on ANY script, crede or a synthetic db, sensitive or not.
 //
 // 2. DECLARED-field redaction (unconditional) + gitignored routing (opt-in
 //    via `sensitive: true`). `name` is a DEFAULT_REDACT_FIELDS member (added
@@ -31,7 +31,7 @@
 //    file to `seed-results/crede-instance/`, the one directory `.gitignore`
 //    excludes — belt-and-suspenders: even a redaction bug still cannot
 //    reach git history. Schema/type-provisioning ledgers (#246, #265) and
-//    every polyphony ledger stay `sensitive: false` and land in plain
+//    every synthetic-db ledger stay `sensitive: false` and land in plain
 //    `seed-results/`, tracked, per the #263 convention.
 //
 // This is a caller-declared flag, not an inferred one, on purpose — see
@@ -165,7 +165,7 @@ export interface WriteLedgerOptions {
 	/**
 	 * Explicit, caller-declared: true when this run's ledger may carry real
 	 * per-person values (crede member/profile instance data). false for
-	 * schema/type-provisioning runs and all polyphony (synthetic) runs.
+	 * schema/type-provisioning runs and all synthetic-db runs.
 	 * Never inferred from `db` or the script name — see module doc above.
 	 */
 	sensitive: boolean;

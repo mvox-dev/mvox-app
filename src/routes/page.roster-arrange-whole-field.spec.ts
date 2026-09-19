@@ -132,16 +132,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -294,7 +294,7 @@ describe('#205 — /roster arrange: whole-field rename activator', () => {
 
 		await waitFor(() => {
 			expect(renameMock).toHaveBeenCalledWith(
-				expect.objectContaining({ db: 'polyphony' }),
+				expect.objectContaining({ db: 'sampledb' }),
 				'sec-alto',
 				'Alto Voices'
 			);
@@ -337,7 +337,7 @@ describe('#205 — /roster arrange: whole-field rename activator', () => {
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
-		expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'polyphony' }), [
+		expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'sampledb' }), [
 			'sec-sop',
 			'sec-bass',
 			'sec-alto'
@@ -433,7 +433,7 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
-		expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'polyphony' }), [
+		expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'sampledb' }), [
 			'sec-sop',
 			'sec-bass',
 			'sec-alto'
@@ -472,7 +472,7 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 			await waitFor(() => {
 				expect(reorderMock).toHaveBeenCalledTimes(1);
 			});
-			expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'polyphony' }), [
+			expect(reorderMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'sampledb' }), [
 				'sec-sop',
 				'sec-bass',
 				'sec-alto'

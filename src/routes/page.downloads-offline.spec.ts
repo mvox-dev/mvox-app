@@ -138,7 +138,7 @@ beforeEach(() => {
 	} as unknown as Window);
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-1' },
+		personIdByDb: { sampledb: 'person-1' },
 		expMs: Date.now() + 3_600_000
 	});
 });
@@ -155,8 +155,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 		vi.stubGlobal('fetch', () => {
 			throw new Error('#353: the offline view touched the network');
 		});
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -169,7 +169,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	});
 
 	it('a held id with NO label renders an honest unnamed row — it must NOT disappear from the list', async () => {
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-b', pdfBytes(2));
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-b', pdfBytes(2));
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -182,9 +182,9 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	});
 
 	it('an orphan label (bytes evicted, name left behind) produces NO row — heldFileIds is the source of truth', async () => {
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-ghost', { ...LABEL, filename: 'ghost.pdf' });
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-ghost', { ...LABEL, filename: 'ghost.pdf' });
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -203,8 +203,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	});
 
 	it('opens a part through the openFileBytes path against the app byte store', async () => {
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
@@ -216,8 +216,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 			expect(openFileBytesMock).toHaveBeenCalledTimes(1);
 		});
 		const call = openFileBytesMock.mock.calls[0];
-		expect(call[0]).toEqual({ db: 'polyphony', token: 'tok-1' });
-		expect(call[1]).toEqual({ db: 'polyphony', personId: 'person-1' });
+		expect(call[0]).toEqual({ db: 'sampledb', token: 'tok-1' });
+		expect(call[1]).toEqual({ db: 'sampledb', personId: 'person-1' });
 		expect(call[2]).toBe('file-a');
 		expect(call[3]).toBe(fakeByteStore);
 	});
@@ -228,8 +228,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	// network is down). The other three openFileBytes call sites all set an
 	// error flag and render role="alert"; this pins the same contract here.
 	it('an open failure surfaces a role="alert" message — never a silent failure', async () => {
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 		openFileBytesMock.mockRejectedValueOnce(new Error('boom'));
 
 		const { container } = await renderDownloadsPage();
@@ -257,8 +257,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	// permanently mis-reading the unresolved state as "signed out".
 	it('cold start: authStore begins at loading — the page waits, then renders the held part once auth resolves', async () => {
 		authStore.set({ status: 'loading' });
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 
 		const { container } = await renderDownloadsPage();
 
@@ -268,7 +268,7 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-1' },
+			personIdByDb: { sampledb: 'person-1' },
 			expMs: Date.now() + 3_600_000
 		});
 
@@ -306,12 +306,12 @@ describe('#353 — identity offline (spike 3a: the three derivation cases, throu
 	it('several collectives, no persisted pick → parts of ALL of the token\'s identities render', async () => {
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-1', crede: 'person-2' },
+			personIdByDb: { sampledb: 'person-1', crede: 'person-2' },
 			expMs: Date.now() + 3_600_000
 		});
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
 		fakeByteStore.seed({ db: 'crede', personId: 'person-2' }, 'file-c', pdfBytes(3));
-		fakeLabelStore.seed('polyphony', 'person-1', 'file-a', LABEL);
+		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 		fakeLabelStore.seed('crede', 'person-2', 'file-c', { ...LABEL, filename: 'crede-alt.pdf' });
 
 		const { container } = await renderDownloadsPage();
@@ -324,11 +324,11 @@ describe('#353 — identity offline (spike 3a: the three derivation cases, throu
 	it('a persisted pick narrows to that collective alone', async () => {
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-1', crede: 'person-2' },
+			personIdByDb: { sampledb: 'person-1', crede: 'person-2' },
 			expMs: Date.now() + 3_600_000
 		});
-		localStorage.setItem('mvox.selected_collective', 'polyphony');
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-1' }, 'file-a', pdfBytes(1));
+		localStorage.setItem('mvox.selected_collective', 'sampledb');
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
 		fakeByteStore.seed({ db: 'crede', personId: 'person-2' }, 'file-c', pdfBytes(3));
 
 		const { container } = await renderDownloadsPage();
@@ -377,7 +377,7 @@ describe('#353 — out-of-scope views fail LEGIBLY offline (the #331 pattern, on
 		const statuses: string[] = [];
 		const machine = createRouteLoadMachine({
 			name: 'offline-representative',
-			selected: () => ({ db: 'polyphony' }),
+			selected: () => ({ db: 'sampledb' }),
 			setStatus: (s) => statuses.push(s),
 			load: async () => {
 				throw new TypeError('Failed to fetch');

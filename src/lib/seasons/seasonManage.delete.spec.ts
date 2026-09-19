@@ -103,7 +103,7 @@ const isSeasonCascadePartial = (
 	deleteErrorsNs as unknown as { isSeasonCascadePartial?: (reason: unknown) => boolean }
 ).isSeasonCascadePartial;
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -187,13 +187,13 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 		expect(typeof deleteEvent).toBe('function');
 	});
 
-	it('an event with NO children: one scoped read per child type, then ONE DELETE …/polyphony/entity/{eventId} — no /property/ call', async () => {
+	it('an event with NO children: one scoped read per child type, then ONE DELETE …/sampledb/entity/{eventId} — no /property/ call', async () => {
 		const { impl, calls } = stubFetch();
 		await deleteEvent!(cfg, 'ev-9', impl);
 
 		expect(lookupKeys(calls)).toEqual(['attendance:ev-9', 'program_item:ev-9']);
 		expect(deleteTargets(calls)).toEqual(['ev-9']);
-		expect(calls.at(-1)?.url).toContain('/polyphony/entity/ev-9');
+		expect(calls.at(-1)?.url).toContain('/sampledb/entity/ev-9');
 		// The endpoint split, pinned: an event id is an ENTITY id — a /property/
 		// DELETE here would 404 and leave the event standing.
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
@@ -312,7 +312,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		expect(calls[0].url).toContain('_type.string=event');
 		expect(calls[0].url).toContain('_parent.reference=series-1');
 		expect(calls[1].method).toBe('DELETE');
-		expect(calls[1].url).toContain('/polyphony/entity/series-1');
+		expect(calls[1].url).toContain('/sampledb/entity/series-1');
 		// The endpoint split, pinned: a series id is an ENTITY id.
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
 	});
@@ -669,7 +669,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		// The endpoint split, pinned: season / series / event / repertoire_item
 		// ids are ENTITY ids — a /property/ DELETE here would 404 and pollute.
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
-		expect(calls.at(-1)?.url).toContain('/polyphony/entity/season-1');
+		expect(calls.at(-1)?.url).toContain('/sampledb/entity/season-1');
 		expect(calls.every((c) => c.headers.includes('jwt'))).toBe(true);
 	});
 

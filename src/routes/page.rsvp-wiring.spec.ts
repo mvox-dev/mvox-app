@@ -142,16 +142,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 afterEach(() => {
@@ -180,7 +180,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 		await vi.waitFor(() => {
 			expect(findMyMemberIdMock).toHaveBeenCalled();
 		});
-		expect(findMyMemberIdMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, 'person-p');
+		expect(findMyMemberIdMock).toHaveBeenCalledWith({ db: 'sampledb', token: 'jwt-abc' }, 'person-p');
 	});
 
 	it('calls listMyRsvps with {db,token} for the selected collective and the selected person id', async () => {
@@ -194,7 +194,7 @@ describe('+page — resolves member id + existing rsvps alongside the agenda (#1
 		await vi.waitFor(() => {
 			expect(listMyRsvpsMock).toHaveBeenCalled();
 		});
-		expect(listMyRsvpsMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, 'person-p');
+		expect(listMyRsvpsMock).toHaveBeenCalledWith({ db: 'sampledb', token: 'jwt-abc' }, 'person-p');
 	});
 });
 

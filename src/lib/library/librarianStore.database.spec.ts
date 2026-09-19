@@ -13,7 +13,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 // keeps `(cfg, personId, fetchImpl?)` — personId is what the library's
 // `_owner`/`_editor` lists are matched against there.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const PERSON = 'person-ada';
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 const LIBRARY = 'lib-1';

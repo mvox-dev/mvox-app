@@ -86,7 +86,7 @@ function deferred<T>() {
 	return { promise, resolve: resolveIt };
 }
 
-const IDENTITY = { db: 'polyphony', personId: 'person-p' };
+const IDENTITY = { db: 'sampledb', personId: 'person-p' };
 
 function pdfData() {
 	return {
@@ -184,16 +184,16 @@ function renderPage() {
 	pageStub.url = new URL('http://localhost/event/ev1');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	return render(Page);
 }
 
@@ -255,7 +255,7 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 			expect(container.querySelector('[data-testid="file-presence-file-held"]')).not.toBeNull();
 		});
 
-		expect(presenceSpy.mock.calls).toEqual([['polyphony', 'person-p']]);
+		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
 		expect(getSpy).not.toHaveBeenCalled();
 	});
 
@@ -376,8 +376,8 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		// A RE-QUERY, not a local patch: the store, not the page, is what
 		// knows which rows survived.
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 
@@ -431,8 +431,8 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 			).not.toContain('[file_presence_on_device]');
 		});
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 });

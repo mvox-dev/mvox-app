@@ -317,7 +317,7 @@ function installWorld(options: WorldOptions) {
 	return fetchMock;
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',

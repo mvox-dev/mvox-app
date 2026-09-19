@@ -176,16 +176,16 @@ function wireStub(opts: { editionCount?: number; scoped?: ScopedMode } = {}) {
 function setAuthed() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 async function renderWorks(opts: { editionCount?: number; scoped?: ScopedMode } = {}) {

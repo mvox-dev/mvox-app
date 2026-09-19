@@ -359,7 +359,7 @@ function installWorld(options: WorldOptions = {}) {
 	return fetchMock;
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
@@ -374,7 +374,7 @@ function setAuthed(dbs: string[] = ['polyphony']) {
 	selectedCollectiveDbStore.set(dbs[0]);
 }
 
-function renderPage(dbs: string[] = ['polyphony']) {
+function renderPage(dbs: string[] = ['sampledb']) {
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
 	setAuthed(dbs);
@@ -695,7 +695,7 @@ describe('#324 — event page: a settled write is distinguishable from silence',
 describe('#324 — the failure/saved cues do not outlive their event', () => {
 	it('a rejected write does not caption the NEXT event’s works section', async () => {
 		installWorld({ failWrites: () => true });
-		const { container } = renderPage(['polyphony', 'crede']);
+		const { container } = renderPage(['sampledb', 'crede']);
 		const section = await worksSection(container, 2);
 
 		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);
@@ -714,7 +714,7 @@ describe('#324 — the failure/saved cues do not outlive their event', () => {
 
 	it('a settled write’s saved cue does not follow the viewer to the next event either', async () => {
 		installWorld();
-		const { container } = renderPage(['polyphony', 'crede']);
+		const { container } = renderPage(['sampledb', 'crede']);
 		const section = await worksSection(container, 2);
 
 		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);

@@ -12,8 +12,8 @@
 //   - a lent copy with a nameless borrower (resolveBorrowerName -> '', not
 //     null — see libraryData.ts) sorts LAST among the lent group under 'member';
 //   - a lent copy with no assigned_at (undated active lending, live shape
-//     probed 2026-08-12 on polyphony) sorts LAST among the lent group under
-//     'since';
+//     probed 2026-08-12 on the dev/test collective) sorts LAST among the lent
+//     group under 'since';
 //   - an available copy with no copy number sorts LAST among the available
 //     group (which is always nr-sorted).
 //
@@ -164,16 +164,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// #128 collapses available copies into a summary for MEMBER view, which
 	// would hide the individual rows this spec sorts. Partition-then-sort
 	// mechanics (sortCopies) are unaffected by librarian status, and #128
@@ -198,8 +198,8 @@ function setAuthedWithOneCollective() {
  *     lent-beta  — nr 5, "Beta Person",  since 2026-07-01
  *     lent-none  — nr 2, nameless member (resolves to ''), since 2026-06-15
  *     lent-alpha — nr 8, "Alpha Person", since '' (undated — live shape,
- *                  active lending with no assigned_at, e.g. polyphony
- *                  lendings …307ed5/…307ee7)
+ *                  active lending with no assigned_at, e.g. the dev/test
+ *                  collective's lendings …307ed5/…307ee7)
  *
  *   AVAILABLE (nr 1, 3, 0/none):
  *     avail-one  — nr 1

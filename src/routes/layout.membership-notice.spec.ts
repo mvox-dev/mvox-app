@@ -64,20 +64,20 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	discoverMock.mockResolvedValue({
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 afterEach(() => {
@@ -105,9 +105,9 @@ describe('+layout — the deactivated-member notice (done-when 6)', () => {
 		setAuthedWithOneCollective();
 
 		await vi.waitFor(() => expect(notice()).not.toBeNull());
-		// The Proxy mock stringifies params — 'Polyphony' appears only if the
+		// The Proxy mock stringifies params — 'Sampledb' appears only if the
 		// layout actually passes the collective into the notice copy.
-		expect(notice()?.textContent).toContain('Polyphony');
+		expect(notice()?.textContent).toContain('Sampledb');
 	});
 
 	it('NO redirect: the notice never navigates her anywhere (a redirect is a dead end — refusal accepted)', async () => {

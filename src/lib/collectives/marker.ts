@@ -4,13 +4,12 @@ import type { MarkerResult } from './types';
 // ─── The mvox-collective MARKER ──────────────────────────────────────────────
 //
 // A token's `accounts` map spans EVERY Entu db where the user has a person —
-// choral collectives AND unrelated Entu apps (Mihkel's live token: esmuuseum,
-// piletilevi, polyphony, template, ww — only `polyphony` is choral). So "has a
-// person" is too broad. A real mvox collective is identified by a self-describing
-// MARKER IN THE DB: a single well-known entity of a dedicated type that other Entu
+// choral collectives AND unrelated Entu apps. So "has a person" is too broad.
+// A real mvox collective is identified by a self-describing MARKER IN THE DB:
+// a single well-known entity of a dedicated type that other Entu
 // dbs do not have. Existence of the marker == this db is an mvox collective.
 //
-// SHAPE (PO-signed-off 2026-08-05; Pérotin seeds the matching entity into polyphony):
+// SHAPE (PO-signed-off 2026-08-05; Pérotin seeds the matching entity into the dev/test collective):
 //   - Entity TYPE: `mvox_collective` (dedicated; self-identifying; absent from
 //     non-mvox dbs). One singleton instance per collective.
 //   - The instance carries `name` (the collective's display label) — reused as the

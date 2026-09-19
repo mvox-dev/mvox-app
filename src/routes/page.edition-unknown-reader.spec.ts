@@ -98,19 +98,19 @@ function setAuthedReader() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', orlando: 'person-p' },
+		personIdByDb: { sampledb: 'person-p', orlando: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'orlando', name: 'Orlando', personId: 'person-p' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function agendaEvent(id: string, name: string) {
@@ -142,7 +142,7 @@ function installAgenda() {
 					}
 				: {
 						seasons: [],
-						upcoming: [agendaEvent('pv-ev', 'Polyphony rehearsal')],
+						upcoming: [agendaEvent('pv-ev', 'Sampledb rehearsal')],
 						recent: [],
 						seasonId: 'season-1',
 						seasonConductors: [],

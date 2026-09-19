@@ -204,7 +204,7 @@
 	 *   • the route param — /event/ev1 → /event/ev2 reuses this component (see
 	 *     the `$effect` below), so the event id has to be checked;
 	 *   • the selected collective — the id is UNCHANGED there, so only the
-	 *     generation distinguishes an ev1-in-polyphony write from the ev1 now
+	 *     generation distinguishes an ev1-in-db-A write from the ev1 now
 	 *     loaded from another db (whose rsvp ids live in a different database).
 	 * Both are covered by comparing the write's start generation, which
 	 * `loadForSelected` bumps for either; the id check is kept as the direct,

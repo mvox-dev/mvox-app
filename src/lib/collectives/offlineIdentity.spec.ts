@@ -25,41 +25,41 @@ import { deriveOfflineIdentities } from './offlineIdentity';
 describe('#353 — deriveOfflineIdentities (pure, zero network)', () => {
 	it('(a) persisted pick present and in the map → exactly that identity', () => {
 		expect(
-			deriveOfflineIdentities({ polyphony: 'person-1', crede: 'person-2' }, 'polyphony')
-		).toEqual([{ db: 'polyphony', personId: 'person-1' }]);
+			deriveOfflineIdentities({ sampledb: 'person-1', crede: 'person-2' }, 'sampledb')
+		).toEqual([{ db: 'sampledb', personId: 'person-1' }]);
 	});
 
 	it('(b) single entry, NO persisted key — the common single-collective case never writes localStorage', () => {
-		expect(deriveOfflineIdentities({ polyphony: 'person-1' }, null)).toEqual([
-			{ db: 'polyphony', personId: 'person-1' }
+		expect(deriveOfflineIdentities({ sampledb: 'person-1' }, null)).toEqual([
+			{ db: 'sampledb', personId: 'person-1' }
 		]);
 	});
 
 	it('(c) several entries, no persisted pick → every (db, personId) pair the token proves', () => {
 		expect(
-			deriveOfflineIdentities({ polyphony: 'person-1', crede: 'person-2' }, null)
+			deriveOfflineIdentities({ sampledb: 'person-1', crede: 'person-2' }, null)
 		).toEqual([
-			{ db: 'polyphony', personId: 'person-1' },
+			{ db: 'sampledb', personId: 'person-1' },
 			{ db: 'crede', personId: 'person-2' }
 		]);
 	});
 
 	it('a persisted pick NOT in the map is stale — falls through, never invents a partition', () => {
 		// e.g. the member left that collective; the key survives in localStorage.
-		expect(deriveOfflineIdentities({ polyphony: 'person-1' }, 'esmuuseum')).toEqual([
-			{ db: 'polyphony', personId: 'person-1' }
+		expect(deriveOfflineIdentities({ sampledb: 'person-1' }, 'esmuuseum')).toEqual([
+			{ db: 'sampledb', personId: 'person-1' }
 		]);
 		expect(
-			deriveOfflineIdentities({ polyphony: 'person-1', crede: 'person-2' }, 'esmuuseum')
+			deriveOfflineIdentities({ sampledb: 'person-1', crede: 'person-2' }, 'esmuuseum')
 		).toEqual([
-			{ db: 'polyphony', personId: 'person-1' },
+			{ db: 'sampledb', personId: 'person-1' },
 			{ db: 'crede', personId: 'person-2' }
 		]);
 	});
 
 	it('an empty map yields no identities — never a synthetic/anonymous partition key (#343 law)', () => {
 		expect(deriveOfflineIdentities({}, null)).toEqual([]);
-		expect(deriveOfflineIdentities({}, 'polyphony')).toEqual([]);
+		expect(deriveOfflineIdentities({}, 'sampledb')).toEqual([]);
 	});
 });
 

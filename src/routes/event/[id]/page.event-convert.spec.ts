@@ -156,7 +156,7 @@ import {
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 /** The page's own cfg shape: { db: selected.db, token: getToken() ?? '' }. */
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -253,16 +253,16 @@ function setAuthed() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEventPage(eventOver?: Record<string, unknown>, opts: WireOpts = {}) {

@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 //
 // TU.1/#109 — finding #8 INVESTIGATION VERDICT, pinned as tests: "Soprano II
-// not showing as subsection of Soprano" is a DATA defect in live polyphony, not
-// a rendering bug.
+// not showing as subsection of Soprano" is a DATA defect in the live dev/test
+// collective, not a rendering bug.
 //
 // Live probe (2026-08-12, authenticated GET
 // `entity?_type.string=section&props=name,display_order,_parent&limit=500`):
@@ -53,7 +53,7 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── live wire fixtures (verbatim shape from the 2026-08-12 polyphony probe,
+// ── live wire fixtures (verbatim shape from the 2026-08-12 probe,
 //    reparented to the single DATABASE entity per #161) ─────────────────────
 
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
@@ -104,9 +104,9 @@ const sectionParent = (sectionId: string, sectionName: string): WireParent => ({
 function correctedWire(): unknown {
 	return {
 		entities: [
-			wireSection(SEC_SOPRANO, 'Soprano', 1, databaseParent(DB_ENTITY, 'Polyphony')),
+			wireSection(SEC_SOPRANO, 'Soprano', 1, databaseParent(DB_ENTITY, 'Sampledb')),
 			wireSection(SEC_SOPRANO_II, 'Soprano II', 3, sectionParent(SEC_SOPRANO, 'Soprano')),
-			wireSection(SEC_ALTO, 'Alto', 4, databaseParent(DB_ENTITY, 'Polyphony'))
+			wireSection(SEC_ALTO, 'Alto', 4, databaseParent(DB_ENTITY, 'Sampledb'))
 		],
 		count: 3,
 		limit: 500,
@@ -149,16 +149,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

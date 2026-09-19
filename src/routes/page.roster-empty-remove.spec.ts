@@ -96,7 +96,7 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── live-shaped fixtures (real polyphony entity ids, 2026-08-12 probe) ──────────
+// ── live-shaped fixtures (real entity ids, 2026-08-12 probe) ──────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
@@ -159,7 +159,7 @@ function efkRows(): RosterRow[] {
 	];
 }
 
-const CFG_DB = 'polyphony';
+const CFG_DB = 'sampledb';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -170,7 +170,7 @@ function setAuthedWithOneCollective() {
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: CFG_DB, name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: CFG_DB, name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);

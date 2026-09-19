@@ -194,31 +194,31 @@ function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
 	joinStatesByDb = {
-		polyphony: { 'person-p': 'joined', 'pp-2': 'joined', 'pp-3': 'invited', 'pp-4': 'absent' },
+		sampledb: { 'person-p': 'joined', 'pp-2': 'joined', 'pp-3': 'invited', 'pp-4': 'absent' },
 		'other-choir': { 'p-bob': 'absent' }
 	};
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
+		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
+		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
 	);
 	listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
 		Promise.resolve(
@@ -379,7 +379,7 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		await waitFor(() => expect(listJoinStatesMock).toHaveBeenCalled());
 		const matching = listJoinStatesMock.mock.calls.some((call) => {
 			const [cfg, ids] = call as [{ db: string }, string[]];
-			return cfg.db === 'polyphony' && ['pp-2', 'pp-3', 'pp-4'].every((id) => ids.includes(id));
+			return cfg.db === 'sampledb' && ['pp-2', 'pp-3', 'pp-4'].every((id) => ids.includes(id));
 		});
 		expect(matching).toBe(true);
 	});
@@ -460,7 +460,7 @@ describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-o
 		await waitFor(() => expect(resolveOwnerTierMock).toHaveBeenCalled());
 		const matching = resolveOwnerTierMock.mock.calls.some((call) => {
 			const [cfg, personId] = call as [{ db: string }, string];
-			return cfg.db === 'polyphony' && personId === 'person-p';
+			return cfg.db === 'sampledb' && personId === 'person-p';
 		});
 		expect(matching).toBe(true);
 	});
@@ -473,7 +473,7 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
-		expect(mintSelfLinkInviteMock.mock.calls[0][0].db).toBe('polyphony');
+		expect(mintSelfLinkInviteMock.mock.calls[0][0].db).toBe('sampledb');
 		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-4');
 		// A createInvite here would manufacture a SECOND person+member for Dora.
 		expect(createInviteMock).not.toHaveBeenCalled();
@@ -500,7 +500,7 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 
 	it('after the mint the state is RE-READ and the row follows the contents: kutsu gone, saada uuesti + tühista kutse on', async () => {
 		mintSelfLinkInviteMock.mockImplementation(async (_cfg: unknown, personId: string) => {
-			joinStatesByDb.polyphony[personId] = 'invited';
+			joinStatesByDb.sampledb[personId] = 'invited';
 			return { inviteToken: 'tok-fresh-1' };
 		});
 		const { container } = await renderRoster();
@@ -566,14 +566,14 @@ describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer',
 describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invited', () => {
 	it('calls withdrawInvite for THAT person, mints NOTHING, and on success the row REAPPEARS in the needs-inviting population: badge absent, kutsu on (Mihkel ruling — same state, no marker)', async () => {
 		withdrawInviteMock.mockImplementation(async (_cfg: unknown, personId: string) => {
-			joinStatesByDb.polyphony[personId] = 'absent';
+			joinStatesByDb.sampledb[personId] = 'absent';
 		});
 		const { container } = await renderRoster();
 		await openCard(container, 'm3'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-withdraw-m3')!);
 		await waitFor(() => expect(withdrawInviteMock).toHaveBeenCalledTimes(1));
-		expect(withdrawInviteMock.mock.calls[0][0].db).toBe('polyphony');
+		expect(withdrawInviteMock.mock.calls[0][0].db).toBe('sampledb');
 		expect(withdrawInviteMock.mock.calls[0][1]).toBe('pp-3');
 		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
 		await waitFor(() => expect(q(container, 'roster-member-invite-m3')).not.toBeNull());
@@ -697,7 +697,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 	) {
 		let settleA: () => void = () => {};
 		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) => {
-			if (cfg.db === 'polyphony') {
+			if (cfg.db === 'sampledb') {
 				return new Promise<Record<string, JoinState>>((resolve, reject) => {
 					settleA = aTail(resolve, reject);
 				});
@@ -712,7 +712,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		// A's fan-out is now in flight and blocking A's own load body.
 		await waitFor(() =>
 			expect(
-				listJoinStatesMock.mock.calls.some((c) => (c[0] as { db: string }).db === 'polyphony')
+				listJoinStatesMock.mock.calls.some((c) => (c[0] as { db: string }).db === 'sampledb')
 			).toBe(true)
 		);
 		// Switch to B and let it complete END TO END — rows, join states, controls.

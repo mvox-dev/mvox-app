@@ -811,7 +811,7 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 	const SELF_REF_OWNER = {
 		_id: 'pv-own-self',
 		reference: DB_ID,
-		string: 'polyphony',
+		string: 'sampledb',
 		entity_type: 'database'
 	};
 	const ANNA_PERSON_OWNER = {
@@ -843,7 +843,7 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 
 		const result = await listAdmins(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch);
 
-		// FULL-shape toEqual: a { id: 'db-entity-1', name: 'polyphony' } row is
+		// FULL-shape toEqual: a { id: 'db-entity-1', name: 'sampledb' } row is
 		// exactly the bug this pins against.
 		expect(result).toEqual({
 			persons: [

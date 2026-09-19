@@ -33,7 +33,7 @@
 // true total, not a raw/unfiltered one a lower rights tier could leak off —
 // is UNDOCUMENTED upstream (entu/www's query reference names `limit`/`skip`
 // for paging but never `count`). It is established only by two ledgered
-// probes, both read-only against polyphony (synthetic):
+// probes, both read-only against the dev/test collective (synthetic):
 //   - probe-321-list-count-semantics-live-2026-09-11T00-39-06-327Z.json —
 //     `count` tracks the TRUE total under truncation regardless of `limit`/
 //     `props`, and an at-cap collection is told apart from a truncated one

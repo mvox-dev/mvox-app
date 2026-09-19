@@ -144,7 +144,7 @@ async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
-const COLLECTIVE_A = { db: 'polyphony', name: 'Polyphony', personId: 'person-p' };
+const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 /** Per-collective profiles with DISTINCT names so "which collective's ready
@@ -312,7 +312,7 @@ describe('/profile — roster-names READ (integration: the page route drives the
 	it('on load, reads the setting through readRosterNamesSetting for the selected collective', async () => {
 		const container = await renderAdminReady();
 		expect(h.readRosterNamesMock).toHaveBeenCalled();
-		expect(h.readRosterNamesMock.mock.calls[0][0]).toMatchObject({ db: 'polyphony' });
+		expect(h.readRosterNamesMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 		expect(rosterSelect(container)!.value).toBe('profile');
 	});
 
@@ -406,7 +406,7 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 		// The wire args: cfg for the selected collective, the dbEntityId the
 		// READ resolved, the boolean for the chosen option.
 		const call = h.updateRosterNamesMock.mock.calls[0];
-		expect(call[0]).toMatchObject({ db: 'polyphony' });
+		expect(call[0]).toMatchObject({ db: 'sampledb' });
 		expect(call[1]).toBe('db-entity-a');
 		expect(call[2]).toBe(true);
 

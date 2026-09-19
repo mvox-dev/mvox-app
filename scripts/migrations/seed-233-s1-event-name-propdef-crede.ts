@@ -1,9 +1,9 @@
 // mvox-app#233 S1 — `event_name` prop-def on the EXISTING canonical `event`
 // type, crede ONLY. The estate ruling (Mihkel 2026-09-18, folded into the
-// #233 body) ends the `-crede-`/`-polyphony-` twin-script pattern that every
-// earlier schema change used (seed-246, seed-256, seed-265, seed-282): ONE
-// script per step, crede only — polyphony receives no further schema
-// changes.
+// #233 body) ends the per-collective twin-script pattern that every earlier
+// schema change used (seed-246, seed-256, seed-265, seed-282): ONE script
+// per step, crede only — no other collective receives this or any further
+// schema change.
 //
 // SHARING + ORDINAL ARE NOT KNOWN from any committed artefact — this script
 // reads the live `event.name` prop-def FIRST and DERIVES event_name's
@@ -36,7 +36,7 @@
 // via Gama comment 5728594975) for the definition and scope; team-lead's
 // explicit "I authorize this run" gates DRY_RUN=false separately, per the
 // standing two-step gate (crede is real PII — routine pre-authorization
-// covers polyphony's synthetic data only).
+// covers synthetic-db work only).
 //
 // Run (standalone node, outside Vite — needs the $env shim via loader.mjs):
 //   cd ~/workspace-app

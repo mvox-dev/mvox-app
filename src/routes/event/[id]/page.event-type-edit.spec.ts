@@ -100,7 +100,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 // 'event_type' must be assignable to the union — a type-level pin that makes
 // `pnpm check` RED until eventFieldEdit.ts grows the member.
@@ -215,19 +215,19 @@ function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = 
 	return { stub };
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
@@ -235,7 +235,7 @@ function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts 
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub: stub };
 }
@@ -491,7 +491,7 @@ describe('/event/[id] — Enter and blur save; the badge re-renders in the new c
 			expect(posts.length).toBeGreaterThan(0);
 			// The db path proves the page threaded the SELECTED collective's cfg
 			// through the real data layer — not a hardcoded db, not a bypass.
-			expect(String(posts[0][0])).toContain('/polyphony/');
+			expect(String(posts[0][0])).toContain('/sampledb/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
 			expect(postedProps(posts[0])).toEqual([
 				{ _id: 'val-type-1', type: 'event_type', string: 'concert' }

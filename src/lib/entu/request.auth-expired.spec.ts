@@ -85,7 +85,7 @@ describe('entuFetch — 401 handling (#107)', () => {
 		let resolved: Response | undefined;
 		let caught: unknown;
 		try {
-			resolved = await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl);
+			resolved = await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl);
 		} catch (e) {
 			caught = e;
 		}
@@ -102,7 +102,7 @@ describe('entuFetch — 401 handling (#107)', () => {
 		storage.setLastProvider('google');
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
 
-		await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
+		await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
 
 		expect(storage.getToken(), 'stale token must be cleared').toBeNull();
 		expect(storage.getUser(), 'stale user must be cleared').toBeNull();
@@ -114,7 +114,7 @@ describe('entuFetch — 401 handling (#107)', () => {
 		storage.setToken('jwt-stale');
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
 
-		await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
+		await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
 
 		expect(gotoMock).toHaveBeenCalledTimes(1);
 		const target = String(gotoMock.mock.calls[0][0]);
@@ -128,9 +128,9 @@ describe('entuFetch — 401 handling (#107)', () => {
 		const fetchImpl = vi.fn().mockImplementation(async () => resp(401));
 
 		const results = await Promise.allSettled([
-			req.entuFetch('polyphony', 'entity?_type.string=event', 'jwt-stale', {}, fetchImpl),
-			req.entuFetch('polyphony', 'entity?_type.string=member', 'jwt-stale', {}, fetchImpl),
-			req.entuFetch('polyphony', 'entity?_type.string=season', 'jwt-stale', {}, fetchImpl)
+			req.entuFetch('sampledb', 'entity?_type.string=event', 'jwt-stale', {}, fetchImpl),
+			req.entuFetch('sampledb', 'entity?_type.string=member', 'jwt-stale', {}, fetchImpl),
+			req.entuFetch('sampledb', 'entity?_type.string=season', 'jwt-stale', {}, fetchImpl)
 		]);
 
 		for (const r of results) {
@@ -164,12 +164,12 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		storage.setToken('jwt-stale');
 		session.authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p' },
+			personIdByDb: { sampledb: 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
 
-		await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
+		await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
 
 		expect(get(session.authStore)).toEqual({ status: 'anonymous' });
 	});
@@ -184,7 +184,7 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		storage.setToken('jwt-stale');
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
 
-		await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
+		await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
 
 		const target = new URL(String(gotoMock.mock.calls[0][0]), 'http://localhost');
 		expect(target.pathname).toBe('/auth/login');
@@ -202,7 +202,7 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		storage.setToken('jwt-stale');
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
 
-		await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
+		await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-stale', {}, fetchImpl).catch(() => {});
 		expect(gotoMock).toHaveBeenCalledTimes(1);
 
 		// The user did not re-authenticate (they stayed in the SPA, or the
@@ -211,12 +211,12 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		storage.setToken('jwt-still-stale');
 		session.authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p' },
+			personIdByDb: { sampledb: 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 
 		await req
-			.entuFetch('polyphony', 'entity?limit=1', 'jwt-still-stale', {}, fetchImpl)
+			.entuFetch('sampledb', 'entity?limit=1', 'jwt-still-stale', {}, fetchImpl)
 			.catch(() => {});
 
 		expect(gotoMock, 'a second expiry must redirect again, not silently no-op').toHaveBeenCalledTimes(2);
@@ -233,7 +233,7 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		storage.setToken('jwt-stale');
 		session.authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p' },
+			personIdByDb: { sampledb: 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		const fetchImpl = vi.fn().mockResolvedValue(resp(401));
@@ -241,7 +241,7 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		let caught: unknown;
 		try {
 			await req.entuFetch(
-				'polyphony',
+				'sampledb',
 				'entity/ev1',
 				'jwt-stale',
 				{ method: 'POST', body: '[]' },
@@ -264,7 +264,7 @@ describe('entuFetch — non-401 failures stay data-loading errors (regression gu
 		storage.setToken('jwt-live');
 		const fetchImpl = vi.fn().mockResolvedValue(resp(500, 'boom'));
 
-		const res = await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-live', {}, fetchImpl);
+		const res = await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-live', {}, fetchImpl);
 
 		expect(res.status).toBe(500);
 		expect(storage.getToken(), 'a 500 must not clear the session').toBe('jwt-live');
@@ -279,7 +279,7 @@ describe('entuFetch — non-401 failures stay data-loading errors (regression gu
 
 		let caught: unknown;
 		try {
-			await req.entuFetch('polyphony', 'entity?limit=1', 'jwt-live', {}, fetchImpl);
+			await req.entuFetch('sampledb', 'entity?limit=1', 'jwt-live', {}, fetchImpl);
 		} catch (e) {
 			caught = e;
 		}

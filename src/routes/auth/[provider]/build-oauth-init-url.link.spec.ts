@@ -47,7 +47,7 @@ function buildLink() {
 		returnTo: '/profile?linked=1',
 		intent: 'link',
 		nonce: 'n-link-1',
-		invite: { db: 'polyphony', token: LINK_TOKEN },
+		invite: { db: 'sampledb', token: LINK_TOKEN },
 		linkPersonId: 'person-me'
 	});
 }
@@ -60,7 +60,7 @@ describe('buildOAuthInitUrl — link intent (#193)', () => {
 			return_to: '/profile?linked=1',
 			intent: 'link',
 			provider: 'e-mail',
-			invite: { db: 'polyphony', token: LINK_TOKEN },
+			invite: { db: 'sampledb', token: LINK_TOKEN },
 			linkPersonId: 'person-me'
 		});
 	});

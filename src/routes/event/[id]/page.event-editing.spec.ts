@@ -167,7 +167,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 const EDITABLE_FIELDS: EditableEventField[] = [
 	'name',
@@ -302,19 +302,19 @@ function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = 
 	return { stub, release: () => release() };
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
@@ -322,7 +322,7 @@ function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts 
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub: stub, release };
 }
@@ -1400,7 +1400,7 @@ describe('/event/[id] — integration: the edit surface is wired to the REAL pag
 			expect(posts.length).toBeGreaterThan(0);
 			// The db path proves the page threaded the SELECTED collective's cfg into
 			// updateEventField — not a hardcoded db, not a bypassed data layer.
-			expect(String(posts[0][0])).toContain('/polyphony/');
+			expect(String(posts[0][0])).toContain('/sampledb/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
 			expect(postedProps(posts[0])).toEqual([
 				{ _id: 'val-name-1', type: 'name', string: 'Autumn Sing' }

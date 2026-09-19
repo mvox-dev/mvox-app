@@ -127,13 +127,13 @@ function setAuthedWithTwoJoinedAndOneForeignDb() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', crede: 'person-c', 'some-other-entu-app': 'person-x' },
+		personIdByDb: { sampledb: 'person-p', crede: 'person-c', 'some-other-entu-app': 'person-x' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'crede', name: 'Crede', personId: 'person-c' }
 		],
 		erroredDbs: []
@@ -164,7 +164,7 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 		// nothing here would have handed the store anything at all.
 		const handed = fakeByteStore.protectedLog.at(-1)!;
 		expect([...handed].sort()).toEqual(
-			[pkey('crede', 'person-c', 'file-c1'), pkey('polyphony', 'person-p', 'file-p1')].sort()
+			[pkey('crede', 'person-c', 'file-c1'), pkey('sampledb', 'person-p', 'file-p1')].sort()
 		);
 		// ...and the set exists BEFORE the sweep runs on it.
 		expect(fakeByteStore.protectedLog.length).toBe(1);
@@ -182,7 +182,7 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 			expect(relieveSpy).toHaveBeenCalled();
 		});
 		const dbs = listFullAgendaMock.mock.calls.map((c) => (c[0] as { db: string }).db);
-		expect([...dbs].sort()).toEqual(['crede', 'polyphony']);
+		expect([...dbs].sort()).toEqual(['crede', 'sampledb']);
 		for (const call of listFullAgendaMock.mock.calls) {
 			expect((call[0] as { token: string }).token).toBe('jwt-abc');
 		}
@@ -208,7 +208,7 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony renamed', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb renamed', personId: 'person-p' },
 				{ db: 'crede', name: 'Crede', personId: 'person-c' }
 			],
 			erroredDbs: []
@@ -241,7 +241,7 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 			expect(relieveSpy).toHaveBeenCalled();
 		});
 		expect([...fakeByteStore.protectedLog.at(-1)!]).toEqual([
-			pkey('polyphony', 'person-p', 'file-p1')
+			pkey('sampledb', 'person-p', 'file-p1')
 		]);
 		errorSpy.mockRestore();
 	});

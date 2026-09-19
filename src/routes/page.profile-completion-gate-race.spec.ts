@@ -194,7 +194,7 @@ async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
 }
 
-const COLLECTIVE_A = { db: 'polyphony', name: 'Polyphony', personId: 'person-p' };
+const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 /** Per-collective profiles with DISTINCT names, so "which collective's ready
@@ -218,7 +218,7 @@ function signInWithTwoCollectives(): void {
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -297,7 +297,7 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 		// 1. Initiate the gate re-read in A. The resolveGate promise is HELD.
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
-		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'polyphony' });
+		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 		expect(h.resolveGateMock.mock.calls[0][1]).toBe('person-p');
 
 		// 2. Switch to B while A's read is still in flight.
@@ -379,14 +379,14 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 		await switchCollective(container, 'bravura', 'Bea');
 		await saveNameToInitiateGateRead(container, 'Bea M.', 2);
-		await switchCollective(container, 'polyphony', 'Ada');
+		await switchCollective(container, 'sampledb', 'Ada');
 		await saveNameToInitiateGateRead(container, 'Ada N.', 3);
 
 		// The three requests carried their own contexts at initiation.
-		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'polyphony' });
+		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 		expect(h.resolveGateMock.mock.calls[1][0]).toMatchObject({ db: 'bravura' });
 		expect(h.resolveGateMock.mock.calls[1][1]).toBe('person-b');
-		expect(h.resolveGateMock.mock.calls[2][0]).toMatchObject({ db: 'polyphony' });
+		expect(h.resolveGateMock.mock.calls[2][0]).toMatchObject({ db: 'sampledb' });
 
 		// Settle out of order: the superseded A-read first (no assertion on the
 		// intermediate value — RED pins outcome, not the guard's keying), then

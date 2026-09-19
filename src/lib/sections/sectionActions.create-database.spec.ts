@@ -15,7 +15,7 @@ import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 // collective id present (the `dbEntityId` input field — the roster page threads
 // the DATABASE entity id through it) → verbatim, zero lookups.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 const TYPE_SECTION = 'type-section-1';
 

@@ -82,7 +82,7 @@ function seasonEntity() {
 }
 
 /** The exact enablement read for this viewer — full URL, pinned byte-for-byte. */
-const RIGHTS_URL = 'https://api.entu-test.invalid/polyphony/entity/p-viewer?props=_owner,_editor';
+const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/p-viewer?props=_owner,_editor';
 
 /** Person-entity rights fixtures — on the PERSON entity, never member rows. */
 const SELF_EDITOR = { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] };
@@ -119,16 +119,16 @@ function wireStub(opts: WireOpts = {}) {
 function setAuthed() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderPage(opts: WireOpts = {}) {

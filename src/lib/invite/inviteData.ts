@@ -69,7 +69,7 @@ interface CreateInviteResult {
 /**
  * Resolve the parent for admin-created persons: the database entity's OWN `_id`.
  * entu-api sets a person's `_parent` to the database entity id at bootstrap
- * (setupDatabase.js:183-191); for polyphony that id equals the `add_user` value
+ * (setupDatabase.js:183-191); for the dev/test collective that id equals the `add_user` value
  * that #22 deleted, so this is the SAME parent without depending on `add_user`.
  * `add_user` is never read — a future restored add_user field can never re-arm the
  * #22 public-auto-provision exposure through this path. No hardcoded ids.

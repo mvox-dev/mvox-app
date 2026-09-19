@@ -28,13 +28,13 @@ describe('hydrateAuth', () => {
 	});
 
 	it('decodes accounts → personIdByDb and publishes authenticated', () => {
-		setToken(jwt({ accounts: { polyphony: 'p1', mvox: 'p2' }, exp: futureExp }));
+		setToken(jwt({ accounts: { sampledb: 'p1', mvox: 'p2' }, exp: futureExp }));
 
 		const state = hydrateAuth(NOW);
 
 		expect(state).toEqual({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'p1', mvox: 'p2' },
+			personIdByDb: { sampledb: 'p1', mvox: 'p2' },
 			expMs: futureExp * 1000
 		});
 		expect(get(authStore)).toEqual(state);
@@ -47,7 +47,7 @@ describe('hydrateAuth', () => {
 	});
 
 	it('fails closed on an EXPIRED token: clears storage, anonymous', () => {
-		setToken(jwt({ accounts: { polyphony: 'p1' }, exp: 1 })); // long past
+		setToken(jwt({ accounts: { sampledb: 'p1' }, exp: 1 })); // long past
 		const state = hydrateAuth(NOW);
 		expect(state).toEqual({ status: 'anonymous' });
 		expect(getToken()).toBeNull(); // storage wiped
@@ -70,7 +70,7 @@ describe('hydrateAuth', () => {
 describe('endSession', () => {
 	it('clears storage AND flips the in-memory store to anonymous', () => {
 		setUser({ _id: 'u1', email: 'ada@example.com' });
-		setToken(jwt({ accounts: { polyphony: 'p1' }, exp: futureExp }));
+		setToken(jwt({ accounts: { sampledb: 'p1' }, exp: futureExp }));
 		setLastProvider('google');
 		hydrateAuth(NOW);
 		expect(get(authStore).status).toBe('authenticated');
@@ -85,7 +85,7 @@ describe('endSession', () => {
 	});
 
 	it('drops the remembered provider when preserveProvider is false (explicit sign-out)', () => {
-		setToken(jwt({ accounts: { polyphony: 'p1' }, exp: futureExp }));
+		setToken(jwt({ accounts: { sampledb: 'p1' }, exp: futureExp }));
 		setLastProvider('google');
 
 		endSession({ preserveProvider: false });

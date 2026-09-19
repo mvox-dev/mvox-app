@@ -162,20 +162,20 @@ function wireStub(event: Record<string, unknown>) {
 	});
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	setToken('jwt-token');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -203,7 +203,7 @@ function renderPage(event: Record<string, unknown>) {
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	return { ...render(Page), fetchStub: stub };
 }
 
@@ -223,7 +223,7 @@ describe('#363 — a plain member (no grant on the event) gets the tally', () =>
 		// asked, once, for THIS event.
 		expect(listAllRsvpsForEventMock).toHaveBeenCalledTimes(1);
 		expect(listAllRsvpsForEventMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'polyphony' }),
+			expect.objectContaining({ db: 'sampledb' }),
 			'ev1'
 		);
 		// Full shape off the real fixture rows — every bucket, zero included.

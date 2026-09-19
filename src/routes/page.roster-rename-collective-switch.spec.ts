@@ -184,27 +184,27 @@ function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
+		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
+		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
 	);
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -294,8 +294,8 @@ async function switchToOtherChoirArrange(container: HTMLElement) {
 	expect(q(container, 'arrange-row-sec-sop')).toBeNull();
 }
 
-async function switchBackToPolyphonyArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('polyphony');
+async function switchBackToSampledbArrange(container: HTMLElement) {
+	selectedCollectiveDbStore.set('sampledb');
 	await waitFor(() => {
 		expect(q(container, 'arrange-row-sec-sop')).not.toBeNull();
 	});
@@ -416,7 +416,7 @@ describe('/roster — #297 rename settle across a collective switch', () => {
 
 		// A superseded settle must not have parked a stale `renameError` either:
 		// back on A — where sec-alto's row exists again — still no alert.
-		await switchBackToPolyphonyArrange(container);
+		await switchBackToSampledbArrange(container);
 		expect(
 			anyRenameErrorAlert(container),
 			"a superseded rename failure must not resurface on A's row after switching back"
@@ -443,7 +443,7 @@ describe('/roster — #297/#303 rename state across a collective switch: settled
 		// callback never clears `renameError`, so a failure message about a
 		// tree that was replaced outlives the replacement (same reasoning the
 		// reset callback already records for `removeError`).
-		await switchBackToPolyphonyArrange(container);
+		await switchBackToSampledbArrange(container);
 		expect(
 			q(container, 'arrange-rename-error-sec-alto'),
 			'a rename failure from before the switch must not survive it'
@@ -471,7 +471,7 @@ describe('/roster — #297/#303 rename state across a collective switch: settled
 			expect(renameMock).toHaveBeenCalledTimes(1);
 		});
 		expect(renameMock).toHaveBeenCalledWith(
-			{ db: 'polyphony', token: 'jwt-abc' },
+			{ db: 'sampledb', token: 'jwt-abc' },
 			'sec-alto',
 			'Half-typed'
 		);
@@ -480,7 +480,7 @@ describe('/roster — #297/#303 rename state across a collective switch: settled
 		// Committed is not "still armed": returning to A re-mounts NO editor
 		// (same no-residue contract the old pin carried), and no further write
 		// fires on the round-trip.
-		await switchBackToPolyphonyArrange(container);
+		await switchBackToSampledbArrange(container);
 		expect(
 			anyRenameInput(container),
 			'a committed rename must not leave the editor armed across a collective round-trip'
@@ -594,7 +594,7 @@ describe('/roster — #297 late settle vs a live write, and the focus contract',
 
 		await submitHeldRename(container, 'sec-alto', 'Contralto', 1);
 		await switchToOtherChoirArrange(container);
-		await switchBackToPolyphonyArrange(container);
+		await switchBackToSampledbArrange(container);
 
 		gate.resolve();
 		await flush();

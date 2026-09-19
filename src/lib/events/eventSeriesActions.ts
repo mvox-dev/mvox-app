@@ -10,7 +10,7 @@
 // `entity_type === 'event_series'`, and act on THAT value's id alone — the
 // season's value id never appears in any write either function makes.
 //
-// RIGHTS — settled live on polyphony (#304 SPIKE, seed-results ledger
+// RIGHTS — settled via a dated live probe (#304 SPIKE, seed-results ledger
 // probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json), shaped by
 // Gama's ruling (comment 5613471404):
 //   - REASSIGN (atomic-overwrite POST, the `reparentSection`/#264 idiom

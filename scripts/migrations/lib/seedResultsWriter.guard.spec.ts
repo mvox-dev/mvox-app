@@ -40,7 +40,7 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // #274, write straight to `seed-results/` via their own local `writeFileSync`
 // (the pre-#274 pattern), and were outside #274's audit scope (neither
 // crede-touching nor `ledgers/`-origin, so both audit criteria missed them).
-// All are polyphony-era, already DRY_RUN-guarded, synthetic-data artefacts —
+// All predate the crede-only convention, already DRY_RUN-guarded, synthetic-data artefacts —
 // low risk TODAY. The risk the guard exists for is a FUTURE crede-instance
 // script pasted from one of these as a starting template (Gama: "someone
 // starting from an existing script... a one-off written fresh, or one

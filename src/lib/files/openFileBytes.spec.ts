@@ -39,8 +39,8 @@ import { openFileBytes } from './openFileBytes';
 import { BYTE_STORE_CAP_BYTES } from './byteStore';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
-const A = { db: 'polyphony', personId: 'person-a' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const A = { db: 'sampledb', personId: 'person-a' };
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]); // "%PDF-1.7"
 const SIGNED_URL = 'https://s3.example/signed-abc?X-Amz-Signature=deadbeef&X-Amz-Expires=60';
@@ -243,7 +243,7 @@ describe('openFileBytes — identity discipline', () => {
 
 		expect(store.puts.length).toBe(1);
 		expect(store.puts[0].identity).toEqual(A);
-		expect(store.heldFor('polyphony', 'person-a')).toEqual(['file-1']);
+		expect(store.heldFor('sampledb', 'person-a')).toEqual(['file-1']);
 		expect(store.heldFor('crede', 'person-a')).toEqual([]);
 	});
 

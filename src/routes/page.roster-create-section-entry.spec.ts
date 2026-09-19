@@ -8,8 +8,8 @@
 // WHY (TU.6 gate walk, #114 check 1 → SPIKE root cause, 2026-08-12): section
 // creation "does nothing" in live NOT because the writes are broken — the
 // deployed bundle carries the TU.1 code and the exact createSection wire shape
-// succeeds against live polyphony — but because the ONLY entry point is buried
-// three levels deep inside a member row's picker dropdown:
+// succeeds against the live dev/test collective — but because the ONLY entry
+// point is buried three levels deep inside a member row's picker dropdown:
 //
 //   - MIS-TAP: "(Unassigned)" and "+ New section…" are adjacent 24px rows with
 //     identical styling; a tap one row high on an already-unassigned member is
@@ -129,7 +129,7 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── live-shaped fixtures (real polyphony entity ids, 2026-08-12 probe) ──────────
+// ── live-shaped fixtures (real entity ids, 2026-08-12 probe) ──────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
@@ -193,22 +193,22 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

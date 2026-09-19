@@ -47,7 +47,7 @@ function jwt(payload: object): string {
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
 
-const TOKEN = jwt({ db: 'polyphony', entityId: 'person-me', iat: 1, exp: 4_102_444_800 });
+const TOKEN = jwt({ db: 'sampledb', entityId: 'person-me', iat: 1, exp: 4_102_444_800 });
 
 function stashLinkState(): void {
 	const state: OAuthState = {
@@ -55,7 +55,7 @@ function stashLinkState(): void {
 		return_to: '/profile?linked=1',
 		intent: 'link',
 		provider: 'e-mail',
-		invite: { db: 'polyphony', token: TOKEN },
+		invite: { db: 'sampledb', token: TOKEN },
 		linkPersonId: 'person-me'
 	};
 	localStorage.setItem(OAUTH_STATE_KEY, encodeState(state));
@@ -88,7 +88,7 @@ describe('runCallbackExchange — intent "link" dispatch (#193)', () => {
 		expect(exchangeInviteMock).toHaveBeenCalledTimes(1);
 		expect(exchangeInviteMock.mock.calls[0][0]).toEqual({
 			sessionToken: 'key1',
-			db: 'polyphony',
+			db: 'sampledb',
 			inviteToken: TOKEN,
 			expectedEntityId: 'person-me'
 		});

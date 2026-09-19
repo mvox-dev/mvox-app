@@ -2,8 +2,8 @@
 // canonical `event` type, crede ONLY.
 //
 // The estate ruling (Mihkel 2026-09-18, folded into the #233 body): steps run
-// on crede and nothing else — the `-crede-`/`-polyphony-` twin-script pattern
-// ENDS here. ONE script per step. This spec pins that script's whole wire
+// on crede and nothing else — the per-collective twin-script pattern ENDS
+// here. ONE script per step. This spec pins that script's whole wire
 // contract against a fake fetch (networkGuard.setup.ts stands behind every
 // spec: nothing here can reach a live db).
 //

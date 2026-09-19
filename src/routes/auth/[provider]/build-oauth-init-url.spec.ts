@@ -29,7 +29,7 @@ describe('buildOAuthInitUrl — invite intent (T4.5/#31)', () => {
 			returnTo: `/invite/${INVITE_TOKEN}`,
 			intent: 'invite',
 			nonce: 'n1',
-			invite: { db: 'polyphony', token: INVITE_TOKEN }
+			invite: { db: 'sampledb', token: INVITE_TOKEN }
 		});
 	}
 
@@ -37,7 +37,7 @@ describe('buildOAuthInitUrl — invite intent (T4.5/#31)', () => {
 		buildInvite();
 		const state = storedState();
 		expect(state.intent).toBe('invite');
-		expect(state.invite).toEqual({ db: 'polyphony', token: INVITE_TOKEN });
+		expect(state.invite).toEqual({ db: 'sampledb', token: INVITE_TOKEN });
 	});
 
 	it('the Entu init URL NEVER contains the invite token — the bearer secret must not transit oauth.ee', () => {

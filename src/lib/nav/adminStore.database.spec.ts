@@ -15,7 +15,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 // Signature stays `resolveAdmin(cfg, personId, fetchImpl?)` — personId is still
 // what the rights lists are matched against.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const PERSON = 'person-ada';
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 

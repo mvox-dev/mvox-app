@@ -112,10 +112,10 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const CFG = { db: 'polyphony', token: 'jwt-admin' };
+const CFG = { db: 'sampledb', token: 'jwt-admin' };
 const SELF_HINT_KEY = '[admin_roles_remove_self_hint]';
 
-// selectPolyphony() gives the viewer personId 'admin-p' — a row carrying that
+// selectSampledb() gives the viewer personId 'admin-p' — a row carrying that
 // same id is HER OWN grant. Mihkel's live scenario: TWO owners (db-root +
 // himself), so the last-owner guard stays out of the picture entirely.
 const SELF_OWNER = {
@@ -143,15 +143,15 @@ const ROSTER = [
 	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' }
 ];
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -165,7 +165,7 @@ function loadOk() {
 	h.removeAdminMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
@@ -195,7 +195,7 @@ afterEach(() => {
 
 describe('/admin — #175 self-removal note renders inline in the own row', () => {
 	it("route integration — the note sits INSIDE the viewer's own <li> (the same {#each} iteration as the other Remove buttons), where the button would otherwise be", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -217,7 +217,7 @@ describe('/admin — #175 self-removal note renders inline in the own row', () =
 	});
 
 	it('route integration — NO separate note below the admin list: the section renders no direct-child paragraph carrying the self-hint message', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -254,7 +254,7 @@ describe('/admin — #175 self-removal note renders inline in the own row', () =
 	});
 
 	it("route integration — the note text shares the ROW with the admin's own name (one <li> holds both), and the row still offers no Remove control", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -272,7 +272,7 @@ describe('/admin — #175 self-removal note renders inline in the own row', () =
 	});
 
 	it("route integration — other admins' rows keep their working Remove button next to the note-bearing own row: rendered, enabled, click reaches removeAdmin", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock
 			.mockReset()

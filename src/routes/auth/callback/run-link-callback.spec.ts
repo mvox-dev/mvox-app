@@ -64,7 +64,7 @@ function jwt(payload: object): string {
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
 
-const TOKEN = jwt({ db: 'polyphony', entityId: 'person-me', iat: 1, exp: 4_102_444_800 });
+const TOKEN = jwt({ db: 'sampledb', entityId: 'person-me', iat: 1, exp: 4_102_444_800 });
 
 function linkState(overrides: Partial<OAuthState> = {}): OAuthState {
 	return {
@@ -72,7 +72,7 @@ function linkState(overrides: Partial<OAuthState> = {}): OAuthState {
 		return_to: '/profile?linked=1',
 		intent: 'link',
 		provider: 'e-mail',
-		invite: { db: 'polyphony', token: TOKEN },
+		invite: { db: 'sampledb', token: TOKEN },
 		linkPersonId: 'person-me',
 		...overrides
 	};
@@ -107,7 +107,7 @@ describe('runLinkCallbackExchange — redeemed (the append happy path)', () => {
 		expect(exchangeInviteMock).toHaveBeenCalledTimes(1);
 		expect(exchangeInviteMock.mock.calls[0][0]).toEqual({
 			sessionToken: 'key1',
-			db: 'polyphony',
+			db: 'sampledb',
 			inviteToken: TOKEN,
 			expectedEntityId: 'person-me'
 		});
@@ -341,7 +341,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			if (init?.method === 'DELETE') {
 				return new Response('{}', { status: opts.deleteStatus ?? 200 });
 			}
-			if (String(url) === 'https://api.entu-test.invalid/polyphony/entity/person-me?props=entu_user') {
+			if (String(url) === 'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user') {
 				return new Response(JSON.stringify({ entity: { entu_user: opts.entries } }), {
 					status: 200
 				});
@@ -381,7 +381,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			([, init]) => (init as RequestInit | undefined)?.method !== 'DELETE'
 		);
 		expect(readCall).toEqual([
-			'https://api.entu-test.invalid/polyphony/entity/person-me?props=entu_user',
+			'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user',
 			{ headers: { Authorization: 'Bearer new-narrowed-jwt', Accept: 'application/json' } }
 		]);
 
@@ -389,7 +389,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		// with result.token — full request shape.
 		expect(deleteCalls(fetchMock)).toEqual([
 			[
-				'https://api.entu-test.invalid/polyphony/property/eu-9',
+				'https://api.entu-test.invalid/sampledb/property/eu-9',
 				{
 					method: 'DELETE',
 					headers: { Authorization: 'Bearer new-narrowed-jwt', Accept: 'application/json' }

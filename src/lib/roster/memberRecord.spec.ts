@@ -32,7 +32,7 @@ import {
 	MemberRecordPartialSaveError
 } from './memberRecord';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -63,7 +63,7 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 		// Db-scoped per call — per-collective isolation by construction (the
 		// record's required `database` parent + single-collective-per-db make a
 		// _parent filter redundant, matching listActiveMembers).
-		expect(url).toContain('/polyphony/');
+		expect(url).toContain('/sampledb/');
 		expect(url).not.toContain('_parent.reference=');
 	});
 
@@ -147,7 +147,7 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 		expect(resolveTypeIdMock).toHaveBeenCalledWith(cfg, 'admin_member_record', expect.anything());
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
-		expect(url).toContain('/polyphony/entity');
+		expect(url).toContain('/sampledb/entity');
 		const init = fetchImpl.mock.calls[0][1] as RequestInit;
 		expect(init.method).toBe('POST');
 		// SHARING MECHANICS (state it so "sharing explicit on every property"
@@ -330,9 +330,9 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		// datetime: '' }` anywhere, neither through the helper nor on the wire.
 		expect(replaceEntityPropertyMock).not.toHaveBeenCalled();
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
-		expect(String(fetchImpl.mock.calls[0][0])).toContain('/polyphony/entity/rec-1?props=birthdate');
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('/sampledb/entity/rec-1?props=birthdate');
 		expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe('DELETE');
-		expect(String(fetchImpl.mock.calls[1][0])).toContain('/polyphony/property/v-dob');
+		expect(String(fetchImpl.mock.calls[1][0])).toContain('/sampledb/property/v-dob');
 		const wire = fetchImpl.mock.calls
 			.map((c) => String((c[1] as RequestInit | undefined)?.body ?? ''))
 			.join(' ');

@@ -14,7 +14,7 @@ import type { MyProfile } from '$lib/profile/profileData';
 // spec's `entity_type: 'organization'` fixtures describe the retired world and
 // go with the GREEN pass.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 
 function json(body: unknown, status = 200) {

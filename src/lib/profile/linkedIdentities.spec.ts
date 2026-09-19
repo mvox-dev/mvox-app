@@ -25,7 +25,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listLinkedIdentities } from './linkedIdentities';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-me' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-me' };
 const PERSON_ID = 'person-me';
 
 function json(body: unknown, status = 200) {
@@ -44,7 +44,7 @@ describe('listLinkedIdentities — wire shape', () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit?];
-		expect(String(url)).toContain('/polyphony/entity/person-me?props=entu_user');
+		expect(String(url)).toContain('/sampledb/entity/person-me?props=entu_user');
 		expect((init?.method ?? 'GET')).toBe('GET');
 		expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer jwt-me');
 	});

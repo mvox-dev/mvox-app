@@ -785,16 +785,16 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p' },
+			personIdByDb: { sampledb: 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());

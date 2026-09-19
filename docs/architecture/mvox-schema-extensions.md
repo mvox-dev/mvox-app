@@ -323,9 +323,9 @@ rather than `admin_member_record`'s inline-array pattern.
 
 - **crede ONLY** (Mihkel estate ruling, 2026-09-18, folded into the #233
   body: "run on crede only — we will return to templating the schema, when
-  we stabilise it" / "drop polyphony from constraining us"). This is the
-  first `PropertyAdditionDef` whose provisioning script is a single script,
-  not a `-crede-`/`-polyphony-` pair — every earlier schema change
+  we stabilise it" / "drop polyphony from constraining us", 2026-09-18). This
+  is the first `PropertyAdditionDef` whose provisioning script is a single
+  script, not a per-collective twin-script pair — every earlier schema change
   (`schedule_item`, `admin_member_record`+`roster_show_real_names`, `link`)
   landed twice; that pattern ends with #233.
 - **Sharing and ordinal are deliberately unset in the definition** — no
@@ -343,10 +343,10 @@ rather than `admin_member_record`'s inline-array pattern.
   formula). A formula property overwrites the stored value on every save and
   silently drops POSTs, so S2/S3 must land before S4 or names are destroyed
   permanently.
-- **Polyphony gets no `event_name` at all** — the app's read side (S3) has
-  no fallback to `name` once it moves, per Mihkel's standing no-fallbacks
-  stance; this is the visible, accepted cost of polyphony leaving the
-  estate, scoped explicitly to that deployment.
+- **No `event_name` outside crede** — the app's read side (S3) has no
+  fallback to `name` once it moves, per Mihkel's standing no-fallbacks
+  stance; this is the visible, accepted cost of scoping this change to
+  crede alone.
 
 ---
 
@@ -380,7 +380,8 @@ the shape itself:
   believe, what it claims. if life shows later otherway, then we will file the
   bug report." The branch decision (one entity, per-property sharing) rests on
   Entu's own documented bucket-exposure model, confirmed by two independent
-  source reads (`entu-api`) and a live partition probe on `polyphony`
+  source reads (`entu-api`) and a live partition probe (2026-09-06) on the
+  dev/test collective
   (`probe-265-mixed-sharing-live-2026-09-06T19-36-05Z.json` — a throwaway
   mixed-sharing type read back by a genuinely non-privileged, unauthenticated
   caller, torn down clean afterward) — not by further verification against a

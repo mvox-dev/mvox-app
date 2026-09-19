@@ -27,7 +27,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { listEventSeriesForSeason } from './seasonManage';
 import type { EntuCfg } from './entuSeasons';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -93,7 +93,7 @@ describe('#400 — listEventSeriesForSeason reads each series’ own _owner', ()
 		// `_editor` allowed to ride along — same read, zero extra cost; nothing
 		// else may creep in).
 		expect(seriesCall!.url).toMatch(
-			/^https:\/\/api\.entu-test\.invalid\/polyphony\/entity\?_type\.string=event_series&_parent\.reference=season1&props=name,_owner(,_editor)?&limit=200$/
+			/^https:\/\/api\.entu-test\.invalid\/sampledb\/entity\?_type\.string=event_series&_parent\.reference=season1&props=name,_owner(,_editor)?&limit=200$/
 		);
 	});
 

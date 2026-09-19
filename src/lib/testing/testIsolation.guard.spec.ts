@@ -7,7 +7,7 @@ import { entuFetch } from '$lib/entu/request';
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 
 // #163 RED — test isolation: `pnpm test` must not be ABLE to reach a live Entu
-// database. The SPIKE measured 112–115 real GETs to https://api.entu-test.invalid/polyphony/
+// database. The SPIKE measured 112–115 real GETs to https://api.entu-test.invalid/sampledb/
 // per full run, from 8 spec files, all green — silent live traffic one forgotten
 // `vi.mock` away from POSTing on the bulk-create path. Root causes, verified:
 //

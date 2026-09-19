@@ -4,10 +4,11 @@ import { listLinks, type LinkRow } from './linkData';
 
 // #256 RED — Lingikogu (link collection) READ layer.
 //
-// The `link` type is LIVE on both dbs (polyphony 6aa2398620ebf490c690ab23,
-// crede 6aa239d620ebf490c690ab64): props name/url/description/display_order,
-// parent = the DATABASE entity (collective root, #161 — NOT organization).
-// This slice is UI only; this module is the page's list read.
+// The `link` type was LIVE on both dbs probed at #256 (the dev/test collective
+// 6aa2398620ebf490c690ab23, crede 6aa239d620ebf490c690ab64): props
+// name/url/description/display_order, parent = the DATABASE entity
+// (collective root, #161 — NOT organization). This slice is UI only; this
+// module is the page's list read.
 //
 // Contract under test (model: listSeasons' database-entity scoping +
 // sectionData's missing-display_order-sorts-last):

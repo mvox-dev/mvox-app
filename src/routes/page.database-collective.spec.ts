@@ -136,7 +136,7 @@ import {
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -181,16 +181,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

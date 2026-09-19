@@ -179,12 +179,12 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 	return fetchMock;
 }
 
-/** polyphony: viewer m1 (profile 'Alice Alto', NO record) + m2 (profile
+/** sampledb: viewer m1 (profile 'Alice Alto', NO record) + m2 (profile
  *  'Berta Bass', record 'Aaron Aardvark') — displayed order under the toggle
  *  (Aaron, Alice) DIFFERS from profile order (Alice, Berta), so sorting by the
  *  displayed name is observable. An archived m3 carries a record too, so the
  *  inactive panel's profile-name boundary is observable. */
-function polyphonyFixture(toggle: boolean | 'absent'): DbWire {
+function sampledbFixture(toggle: boolean | 'absent'): DbWire {
 	return {
 		dbEntityId: 'db-ent-1',
 		members: [
@@ -222,35 +222,35 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-b' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-b' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-b' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 // Groups default COLLAPSED — expand Unassigned (fixture members land there).
@@ -281,7 +281,7 @@ afterEach(() => {
 
 describe('#269 /roster end-to-end — toggle ON through the real producer chain', () => {
 	it('the record-backed row shows the REAL name, the recordless row shows the profile name — in the SAME roster-row-name span with the SAME class (only the string differs)', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 
 		const m2span = rowNameSpan(container, 'm2');
@@ -299,7 +299,7 @@ describe('#269 /roster end-to-end — toggle ON through the real producer chain'
 	});
 
 	it('NON-ADMIN members see the real names too (the toggle is collective-wide, not an admin-only view)', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('not-admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
@@ -317,7 +317,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 	}
 
 	it('a record-backed row and a fallback row have IDENTICAL class lists and DOM shape — only the text differs; no placeholder, no marker, no alert', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		// Non-admin render: the rows carry no admin controls, so the shape
 		// comparison is exactly the two members' visible name/email structure.
 		const { container } = await renderRosterAs('not-admin');
@@ -338,9 +338,9 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 	});
 
 	it('a record whose name was CLEARED falls back to the profile name silently — the toggle-on load still issues its ONE records read (the fallback is a join decision, never a skipped fetch)', async () => {
-		const fx = polyphonyFixture(true);
+		const fx = sampledbFixture(true);
 		fx.records = [{ id: 'rec-q', person: 'person-q', name: '' }];
-		const fetchMock = stubWire({ polyphony: fx });
+		const fetchMock = stubWire({ sampledb: fx });
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
@@ -351,7 +351,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 	});
 
 	it('a member carrying TWO records falls back to the profile name too — the overlay refuses to guess (matching what the #268 pencil says about her), and the row stays byte-identical to any other fallback row', async () => {
-		const fx = polyphonyFixture(true);
+		const fx = sampledbFixture(true);
 		// The live-reachable damaged shape: the check-then-create is not atomic
 		// across admins, so person-q can end up with two records. #264 house
 		// semantics — surface loudly, refuse to guess — and on the roster row
@@ -360,7 +360,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 			{ id: 'rec-q1', person: 'person-q', name: 'Aaron Aardvark' },
 			{ id: 'rec-q2', person: 'person-q', name: 'Zed Zither' }
 		];
-		stubWire({ polyphony: fx });
+		stubWire({ sampledb: fx });
 		const { container } = await renderRosterAs('not-admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
@@ -376,7 +376,7 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 
 describe('#269 toggle OFF — identical to the toggle-less behavior on this tree', () => {
 	it('toggle false + records present → profile names everywhere, NO admin_member_record request at all, the toggle itself read from the server — and the #268 pencil still renders (the baseline fence)', async () => {
-		const fetchMock = stubWire({ polyphony: polyphonyFixture(false) });
+		const fetchMock = stubWire({ sampledb: sampledbFixture(false) });
 		const { container } = await renderRosterAs('admin');
 
 		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
@@ -397,7 +397,7 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 	});
 
 	it('toggle key ABSENT (never set) → false: same rendering, same absence of any records fetch', async () => {
-		const fetchMock = stubWire({ polyphony: polyphonyFixture('absent') });
+		const fetchMock = stubWire({ sampledb: sampledbFixture('absent') });
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
 		const all = (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
@@ -414,7 +414,7 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 
 describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 	it('grouped view: rows inside a group come in displayed-name order (Aaron before Alice, though profile order was Alice before Berta)', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 		const names = Array.from(
 			container.querySelectorAll('[data-testid="roster-groups"] [data-testid="roster-row-name"]')
@@ -423,7 +423,7 @@ describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 	});
 
 	it('flat view: the alphabetical list re-sorts by the displayed name too', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
@@ -442,7 +442,7 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 	// visible section-list text and #269 must not touch it. Zero production
 	// change is needed to satisfy this scope pin.
 	it('SectionPicker names the member by her PROFILE name in its listbox aria-label even while her row displays the real name (stated choice — section-assignment action, out of the contracted surface; flag for live review)', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 		// The row displays the real name…
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
@@ -466,9 +466,9 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 	// the displayed name there would resurrect a deleted real name into a fresh
 	// create; reading `profileName` is what R4's "prefill from the profile" means.
 	it('the #268 record-editor prefill uses the PROFILE name even when the row displays a real one (record deleted between the roster load and the pencil tap)', async () => {
-		const fx = polyphonyFixture(true);
+		const fx = sampledbFixture(true);
 		fx.lookupRecords = []; // deleted since the roster's bulk read → the create path
-		stubWire({ polyphony: fx });
+		stubWire({ sampledb: fx });
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
@@ -479,7 +479,7 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 	});
 
 	it('the INACTIVE panel stays profile-names in v1 (deliberate letter-first boundary): an archived member with a named record still lists under her profile name', async () => {
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 		// RED anchor on the contracted surface first:
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
@@ -503,7 +503,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 	}
 
 	it('ONE bulk records query per roster load, projected person,name EXACTLY — and no load-time URL anywhere projects phone or birthdate (the PO-ruled incidental-exposure fence)', async () => {
-		const fetchMock = stubWire({ polyphony: polyphonyFixture(true) });
+		const fetchMock = stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
@@ -523,7 +523,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 	});
 
 	it('members and admins issue the SAME narrowed query — no admin-widened variant', async () => {
-		const adminFetch = stubWire({ polyphony: polyphonyFixture(true) });
+		const adminFetch = stubWire({ sampledb: sampledbFixture(true) });
 		await renderRosterAs('admin');
 		const adminUrls = recordUrls(adminFetch);
 		expect(adminUrls).toHaveLength(1);
@@ -546,7 +546,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 		resetAdmin();
 		resetTypeIdCache();
 
-		const memberFetch = stubWire({ polyphony: polyphonyFixture(true) });
+		const memberFetch = stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('not-admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 		const memberUrls = recordUrls(memberFetch);
@@ -559,14 +559,14 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 
 describe('#269 per-load server read and the #259 switch discipline', () => {
 	it('the value is read from the server on EVERY load — no client-side persistence: a fresh render after the server flipped the toggle shows the new state (the second-session/collective-wide acceptance)', async () => {
-		stubWire({ polyphony: polyphonyFixture(false) });
+		stubWire({ sampledb: sampledbFixture(false) });
 		let utils = await renderRosterAs('admin');
 		expect(rowNameSpan(utils.container, 'm2').textContent).toBe('Berta Bass');
 
 		cleanup();
 		vi.unstubAllGlobals();
 
-		stubWire({ polyphony: polyphonyFixture(true) });
+		stubWire({ sampledb: sampledbFixture(true) });
 		utils = await renderRosterAs('admin');
 		expect(rowNameSpan(utils.container, 'm2').textContent).toBe('Aaron Aardvark');
 	});
@@ -574,8 +574,8 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 	it('DETERMINISTIC switch race: a records read HELD across a collective switch settles into NOTHING — the new collective renders its own (toggle-off) profile names, and the stale real name never appears', async () => {
 		let releaseRecords!: () => void;
 		const gate = new Promise<void>((r) => (releaseRecords = r));
-		const polyphony = polyphonyFixture(true);
-		polyphony.recordsGate = gate;
+		const sampledb = sampledbFixture(true);
+		sampledb.recordsGate = gate;
 		const otherChoir: DbWire = {
 			dbEntityId: 'db-ent-2',
 			members: [{ id: 'm-bob', person: 'person-b' }],
@@ -583,18 +583,18 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 			toggle: false,
 			records: [{ id: 'rec-b', person: 'person-b', name: 'Robert Real' }]
 		};
-		const fetchMock = stubWire({ polyphony, 'other-choir': otherChoir });
+		const fetchMock = stubWire({ sampledb, 'other-choir': otherChoir });
 
 		const { container } = render(Page);
 		setAuthedWithTwoCollectives();
 		adminStore.set('admin');
 
-		// The polyphony load reaches its records read and BLOCKS there.
+		// The sampledb load reaches its records read and BLOCKS there.
 		await waitFor(() =>
 			expect(
 				(fetchMock.mock.calls as Array<[unknown]>)
 					.map((c) => String(c[0]))
-					.some((u) => u.includes('/polyphony/') && u.includes('admin_member_record'))
+					.some((u) => u.includes('/sampledb/') && u.includes('admin_member_record'))
 			).toBe(true)
 		);
 
@@ -606,7 +606,7 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 		await waitFor(() => expect(q(container, 'roster-row-m-bob')).not.toBeNull());
 		expect(rowNameSpan(container, 'm-bob').textContent).toBe('Bob Bass');
 
-		// The stale polyphony settle lands now — and must write NOTHING.
+		// The stale sampledb settle lands now — and must write NOTHING.
 		releaseRecords();
 		await flush();
 		await tick();

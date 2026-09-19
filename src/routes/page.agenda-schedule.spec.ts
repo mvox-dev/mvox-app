@@ -177,7 +177,7 @@ function stubScheduleWire(wire: ScheduleWire) {
 	const stub = vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
 		if (url.includes('_type.string=schedule_item')) {
-			const db = url.includes('/crede/') ? 'crede' : 'polyphony';
+			const db = url.includes('/crede/') ? 'crede' : 'sampledb';
 			const eventId = url.match(/_parent\.reference=([^&]+)/)?.[1] ?? '';
 			if (wire.holdDb === db) await gate;
 			return json({ entities: wire.byKey[`${db}:${eventId}`] ?? [] });
@@ -188,7 +188,7 @@ function stubScheduleWire(wire: ScheduleWire) {
 	return { stub, release: () => release() };
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p1'])),
@@ -205,16 +205,16 @@ function setAuthed(dbs: string[] = ['polyphony']) {
 
 const DEFAULT_SCHEDULE: ScheduleWire = {
 	byKey: {
-		'polyphony:up1': [
+		'sampledb:up1': [
 			// Wire order reversed on purpose — the line must sort chronologically.
 			scheduleEntity('s2', 'kontsert', '2030-06-10T16:00:00.000Z'), // 19:00
 			scheduleEntity('s1', 'kogunemine', '2030-06-10T14:30:00.000Z') // 17:30
 		],
-		'polyphony:rec1': [scheduleEntity('s3', 'proov', '2026-05-01T17:00:00.000Z')] // 20:00
+		'sampledb:rec1': [scheduleEntity('s3', 'proov', '2026-05-01T17:00:00.000Z')] // 20:00
 	}
 };
 
-async function renderAgenda(wire: ScheduleWire = DEFAULT_SCHEDULE, dbs: string[] = ['polyphony']) {
+async function renderAgenda(wire: ScheduleWire = DEFAULT_SCHEDULE, dbs: string[] = ['sampledb']) {
 	const { stub, release } = stubScheduleWire(wire);
 	loadFullAgendaMock.mockImplementation(async () =>
 		get(selectedCollectiveDbStore) === 'crede'
@@ -334,12 +334,12 @@ describe('#262 — a stale bulk response never lands after a collective switch',
 		const { container, stub, release } = await renderAgenda(
 			{
 				byKey: {
-					'polyphony:up1': [scheduleEntity('s-stale', 'stale-item', '2030-06-10T14:30:00.000Z')],
+					'sampledb:up1': [scheduleEntity('s-stale', 'stale-item', '2030-06-10T14:30:00.000Z')],
 					'crede:up2': [scheduleEntity('s-fresh', 'fresh-item', '2030-07-01T14:30:00.000Z')]
 				},
-				holdDb: 'polyphony'
+				holdDb: 'sampledb'
 			},
-			['polyphony', 'crede']
+			['sampledb', 'crede']
 		);
 		// The stale read is in flight — held by the test, deterministically.
 		await waitFor(() => {

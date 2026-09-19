@@ -36,7 +36,7 @@ async function captureEntuFetch(pathAndQuery: string) {
 	const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
 	let err: unknown = null;
 	try {
-		await entuFetch('polyphony', pathAndQuery, 'jwt-abc', {}, fetchImpl);
+		await entuFetch('sampledb', pathAndQuery, 'jwt-abc', {}, fetchImpl);
 	} catch (e) {
 		err = e;
 	}
@@ -74,11 +74,11 @@ describe('#258 part 2 — empty-id entity path is refused at the choke point', (
 		for (const bad of ['entity/', 'entity/?props=person', '/entity/?limit=1']) {
 			let composed: string | null = null;
 			try {
-				composed = entuUrl('polyphony', bad);
+				composed = entuUrl('sampledb', bad);
 			} catch {
 				continue; // throwing is the expected shape
 			}
-			expect.fail(`entuUrl('polyphony', '${bad}') returned '${composed}' instead of throwing`);
+			expect.fail(`entuUrl('sampledb', '${bad}') returned '${composed}' instead of throwing`);
 		}
 	});
 });
@@ -87,14 +87,14 @@ describe('#258 part 2 — negative pins: legitimate paths are byte-unaffected', 
 	it('single-entity read passes through untouched', async () => {
 		const { err, fetchImpl } = await captureEntuFetch('entity/abc123');
 		expect(err).toBeNull();
-		expect(String(fetchImpl.mock.calls[0][0])).toBe('https://api.entu-test.invalid/polyphony/entity/abc123');
+		expect(String(fetchImpl.mock.calls[0][0])).toBe('https://api.entu-test.invalid/sampledb/entity/abc123');
 	});
 
 	it('single-entity read with props passes through untouched', async () => {
 		const { err, fetchImpl } = await captureEntuFetch('entity/abc123?props=name,copy_number');
 		expect(err).toBeNull();
 		expect(String(fetchImpl.mock.calls[0][0])).toBe(
-			'https://api.entu-test.invalid/polyphony/entity/abc123?props=name,copy_number'
+			'https://api.entu-test.invalid/sampledb/entity/abc123?props=name,copy_number'
 		);
 	});
 
@@ -102,25 +102,25 @@ describe('#258 part 2 — negative pins: legitimate paths are byte-unaffected', 
 		const { err, fetchImpl } = await captureEntuFetch('entity?_type.string=member&limit=1');
 		expect(err).toBeNull();
 		expect(String(fetchImpl.mock.calls[0][0])).toBe(
-			'https://api.entu-test.invalid/polyphony/entity?_type.string=member&limit=1'
+			'https://api.entu-test.invalid/sampledb/entity?_type.string=member&limit=1'
 		);
 	});
 
 	it("bare 'entity' (no query, no slash) passes through untouched — existing pin kept", () => {
-		expect(entuUrl('polyphony', 'entity')).toBe('https://api.entu-test.invalid/polyphony/entity');
+		expect(entuUrl('sampledb', 'entity')).toBe('https://api.entu-test.invalid/sampledb/entity');
 	});
 
 	it('non-entity paths (property/...) pass through untouched', async () => {
 		const { err, fetchImpl } = await captureEntuFetch('property/prop-1');
 		expect(err).toBeNull();
-		expect(String(fetchImpl.mock.calls[0][0])).toBe('https://api.entu-test.invalid/polyphony/property/prop-1');
+		expect(String(fetchImpl.mock.calls[0][0])).toBe('https://api.entu-test.invalid/sampledb/property/prop-1');
 	});
 });
 
 // #255's own guard predates this issue and STAYS — the choke point is a SECOND
 // net beneath it, not a replacement. Both nets must trip independently.
 describe('#258 cross-check — #255 first net and #258 second net trip independently', () => {
-	const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+	const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 
 	it("first net: listDeactivateBlockers('' dbEntityId) still refuses outright, before any fetch (#255 r3 F1 — unchanged)", async () => {
 		const fetchImpl = vi.fn();

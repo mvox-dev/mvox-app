@@ -74,16 +74,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function setNoCollective() {
@@ -245,7 +245,7 @@ describe('/roster — staleness guard (generation discipline)', () => {
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'otherdb', name: 'Other', personId: 'person-p2' }
 			],
 			erroredDbs: []

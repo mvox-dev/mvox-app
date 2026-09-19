@@ -91,7 +91,7 @@
 	},
 	{
 		"number": 304,
-		"title": "[TASK] Seed polyphony with lending fixtures",
+		"title": "[TASK] Seed the dev/test collective with lending fixtures",
 		"state": "closed",
 		"stateReason": "completed",
 		"labels": [{ "name": "task", "color": "1d76db" }],

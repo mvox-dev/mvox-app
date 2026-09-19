@@ -31,8 +31,8 @@
 //
 // Wire rules pinned below (all with a live precedent):
 //   • read = `_type.string=schedule_item` — NEVER a raw type id (per-db ids
-//     differ: polyphony 6a9ccea4…, crede 6a9cceab…); mirror listProgramItems
-//     (repertoireData.ts:89-111).
+//     differ: 6a9ccea4… on the dev/test collective, 6a9cceab… on crede);
+//     mirror listProgramItems (repertoireData.ts:89-111).
 //   • create = POST `entity` with `_type` as reference via resolveTypeId
 //     (create bodies need refs as `reference`, never `string` — the pinned
 //     wire shape), `_parent` reference, name string, datetime datetime, AND an
@@ -61,7 +61,7 @@ import {
 } from './scheduleData';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -98,8 +98,9 @@ describe('listScheduleItems — wire shape', () => {
 		expect(url).toContain(
 			'_type.string=schedule_item&_parent.reference=ev1&props=name,datetime&limit=500'
 		);
-		// NEVER a raw type id — per-db type-def ids differ (polyphony 6a9ccea4…,
-		// crede 6a9cceab…); a baked id reads one db's schedule and 404s the other.
+		// NEVER a raw type id — per-db type-def ids differ (6a9ccea4… on the
+		// dev/test collective, 6a9cceab… on crede); a baked id reads one db's
+		// schedule and 404s the other.
 		expect(url).not.toContain('_type.reference');
 		expect(url).not.toMatch(/6a9cce/);
 		// NO ordinal — the #246 adjudication holds on the wire too.

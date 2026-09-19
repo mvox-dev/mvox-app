@@ -31,7 +31,7 @@ type ResolveAdminPreResolved = (
 ) => Promise<AdminState>;
 const resolveAdmin = resolveAdminActual as ResolveAdminPreResolved;
 
-const cfg = { db: 'polyphony', token: 'test-token' };
+const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 

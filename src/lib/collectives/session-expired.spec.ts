@@ -47,7 +47,7 @@ function setAuthed() {
 	setToken('jwt-stale');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p1', ww: 'w1' },
+		personIdByDb: { sampledb: 'p1', ww: 'w1' },
 		expMs: Date.now() + 100_000
 	});
 }
@@ -76,7 +76,7 @@ describe('collective discovery — 401 (#107 review R2/F2)', () => {
 
 		let caught: unknown;
 		try {
-			await checkCollectiveMarker('polyphony', 'p1', 'jwt-stale');
+			await checkCollectiveMarker('sampledb', 'p1', 'jwt-stale');
 		} catch (e) {
 			caught = e;
 		}
@@ -88,7 +88,7 @@ describe('collective discovery — 401 (#107 review R2/F2)', () => {
 		stubFetchStatus(401);
 		setAuthed();
 
-		await expect(discoverCollectives({ polyphony: 'p1', ww: 'w1' }, 'jwt-stale')).rejects.toSatisfy(
+		await expect(discoverCollectives({ sampledb: 'p1', ww: 'w1' }, 'jwt-stale')).rejects.toSatisfy(
 			isAuthExpiredError
 		);
 	});
@@ -121,7 +121,7 @@ describe('collective discovery — 401 (#107 review R2/F2)', () => {
 
 		const state = await hydrateCollectives();
 
-		expect(state).toEqual({ status: 'error', erroredDbs: ['polyphony', 'ww'] });
+		expect(state).toEqual({ status: 'error', erroredDbs: ['sampledb', 'ww'] });
 		expect(gotoMock, 'a 500 must not sign the user out').not.toHaveBeenCalled();
 		expect(getToken()).toBe('jwt-stale');
 	});

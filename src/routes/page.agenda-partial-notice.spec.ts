@@ -132,19 +132,19 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
-const DB_A = 'polyphony';
+const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 function setAuthedWithTwoCollectives() {
@@ -157,7 +157,7 @@ function setAuthedWithTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: DB_A, name: 'Polyphony', personId: 'person-p' },
+			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []

@@ -110,7 +110,7 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-const DB_A = 'polyphony';
+const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 const OPTIONS_OPTION = 'bulk-checkout-edition-partial-option';
@@ -182,7 +182,7 @@ function setAuthedWithTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: DB_A, name: 'Polyphony', personId: 'person-p' },
+			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []

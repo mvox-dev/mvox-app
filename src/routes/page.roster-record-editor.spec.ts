@@ -139,35 +139,35 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 // m1 is the VIEWER's own membership; m2 is another member (unassigned).
@@ -338,7 +338,7 @@ describe('(B) editor opens IN PLACE — #222 same-frame idiom, one at a time', (
 		await openEditor(container, 'm2');
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
 		expect(loadMemberRecordMock.mock.calls[0][0]).toEqual(
-			expect.objectContaining({ db: 'polyphony' })
+			expect.objectContaining({ db: 'sampledb' })
 		);
 		expect(loadMemberRecordMock.mock.calls[0][1]).toBe('pp-2');
 	});

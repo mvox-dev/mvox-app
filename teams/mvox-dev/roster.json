@@ -1,6 +1,6 @@
 {
   "name": "mvox-dev",
-  "description": "Development team for Mvox — choral music sharing web app built on the v4E schema (see entu/research). Entu-backed (no own DB). Stack details TBD; inherited from polyphony as a starting point.",
+  "description": "Development team for Mvox — choral music sharing web app built on the v4E schema (see entu/research). Entu-backed (no own DB). Stack: SvelteKit 2 + Svelte 5 + Cloudflare Pages/Workers + Entu API + Paraglide — see common-prompt.md Stack table for current state.",
   "commonPromptFile": "common-prompt.md",
   "members": [
     {

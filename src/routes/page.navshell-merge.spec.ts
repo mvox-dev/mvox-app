@@ -202,15 +202,15 @@ function navAnchors(container: HTMLElement): HTMLAnchorElement[] {
 	return Array.from(container.querySelectorAll<HTMLAnchorElement>('nav a.nav-entry'));
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
@@ -231,7 +231,7 @@ function loadOk() {
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
 	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
@@ -342,7 +342,7 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 
 describe('#140 — /admin carries BOTH role management AND invite functionality', () => {
 	async function renderMergedReady() {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const rendered = render(AdminPage);
 		await waitFor(() => {
@@ -383,7 +383,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 
 		await waitFor(() => {
 			expect(h.createInviteMock).toHaveBeenCalledWith(
-				expect.objectContaining({ db: 'polyphony' }),
+				expect.objectContaining({ db: 'sampledb' }),
 				expect.objectContaining({ dbEntityId: expect.any(String) })
 			);
 		});
@@ -400,7 +400,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 	});
 
 	it('non-admin (no-access): NO invite functionality renders on /admin either', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveAdminMock.mockResolvedValue('not-admin');
 
@@ -429,7 +429,7 @@ function selectRamkoorOfTwo() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
 			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
 		],
 		erroredDbs: []
@@ -510,7 +510,7 @@ describe('#140 — backward compat for existing invite URLs', () => {
 	});
 
 	it('/admin/invite does not dead-end: it redirects to /admin OR still renders the invite surface standalone', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = render(AdminInvitePage);

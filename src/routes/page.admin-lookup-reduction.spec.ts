@@ -129,15 +129,15 @@ function json(body: unknown, status = 200): Response {
 	} as unknown as Response;
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: VIEWER }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: VIEWER }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -182,7 +182,7 @@ beforeEach(() => {
 		memberId: 'm-new',
 		inviteToken: 'a.b.c'
 	});
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
@@ -198,7 +198,7 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 }
 
 async function renderReady(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();

@@ -55,7 +55,7 @@ describe('loadCfg — host must be frozen at process start (PUBLIC_ENTU_API_BASE
 		for (const k of KEYS) saved[k] = process.env[k];
 		process.env.ENTU_API_URL = 'https://api.entu-test.invalid';
 		process.env.ENTU_API_KEY = 'api-key-123';
-		process.env.ENTU_DATABASE = 'polyphony';
+		process.env.ENTU_DATABASE = 'sampledb';
 		delete process.env.PUBLIC_ENTU_API_BASE;
 	});
 	afterEach(() => {
@@ -82,6 +82,6 @@ describe('loadCfg — host must be frozen at process start (PUBLIC_ENTU_API_BASE
 		process.env.PUBLIC_ENTU_API_BASE = 'https://api.entu-test.invalid/';
 		const fetchImpl = vi.fn().mockResolvedValue(json({ token: 'the-jwt' }));
 		const cfg = await loadCfg(fetchImpl);
-		expect(cfg).toEqual({ db: 'polyphony', token: 'the-jwt' });
+		expect(cfg).toEqual({ db: 'sampledb', token: 'the-jwt' });
 	});
 });

@@ -271,16 +271,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -411,7 +411,7 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 		});
 		// the fallback probes the DATABASE entity, for THIS person:
 		expect(resolveManageRightsMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'polyphony' }),
+			expect.objectContaining({ db: 'sampledb' }),
 			ORG_EFK,
 			'person-p'
 		);
@@ -765,7 +765,7 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 		// season showing nothing…
 		await waitFor(() => {
 			expect(resolveManageRightsMock).toHaveBeenCalledWith(
-				expect.objectContaining({ db: 'polyphony' }),
+				expect.objectContaining({ db: 'sampledb' }),
 				ORG_EFK,
 				'person-p'
 			);

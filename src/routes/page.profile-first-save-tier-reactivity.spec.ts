@@ -2,10 +2,10 @@
 //
 // #160 — profile sharing tier reactivity on first save.
 //
-// Reported by Mihkel on the cleaned polyphony db: a first-time user (NO profile
-// entity yet) fills the name, autosave CREATES the domain entity — but the
-// sharing tier picker never notices. "Public" stays disabled until a full page
-// reload re-fetches the profiles.
+// Reported by Mihkel on the cleaned dev/test collective: a first-time user (NO
+// profile entity yet) fills the name, autosave CREATES the domain entity — but
+// the sharing tier picker never notices. "Public" stays disabled until a full
+// page reload re-fetches the profiles.
 //
 // Mechanics (why it's stale): the tier buttons' enabled-state derives from
 // `loadedProfiles` (via resolveField().holders → movableFor), but the save
@@ -105,15 +105,15 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -167,7 +167,7 @@ function armFirstTimeUserThenCreated() {
 
 /** Render /profile and complete the first-time load (empty profile list). */
 async function renderFirstTimeProfile(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	const { container } = render(Page);
 	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 	return container;
@@ -395,7 +395,7 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 
 	async function renderWithLoaded(profiles: typeof LOADED_DOMAIN[]): Promise<HTMLElement> {
 		h.listMyProfilesMock.mockResolvedValue(profiles);
-		selectPolyphony();
+		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 		await waitFor(() => expect(displayValue(container, 'name')).toBe(profiles[0].name));
@@ -486,7 +486,7 @@ describe('/profile — #160 a save that CLEARS a field still releases its saving
 
 	async function renderLoadedAtPublic(): Promise<HTMLElement> {
 		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC]);
-		selectPolyphony();
+		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
 		return container;
@@ -550,7 +550,7 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 	 */
 	async function renderThenFailEmailCreate(): Promise<HTMLElement> {
 		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC_NAME]);
-		selectPolyphony();
+		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
 

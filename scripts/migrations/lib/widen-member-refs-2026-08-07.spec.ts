@@ -21,7 +21,7 @@ import {
 
 // ════════════════════════════════════════════════════════════════════════════
 // #20 follow-up — proves the built script against an in-memory Entu mock. No
-// agent runs this against live polyphony; this file only proves the engine
+// agent runs this against a live db; this file only proves the engine
 // before the real dry-run/live invocation. Bentham note D (pre-execution
 // review, non-blocking): a small spec matching the sibling migration libs'
 // precedent (t3-1-singer-provision.spec.ts, t4-10-plan.spec.ts) — covers

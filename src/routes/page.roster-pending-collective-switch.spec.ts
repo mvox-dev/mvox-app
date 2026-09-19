@@ -183,27 +183,27 @@ function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
+		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
+		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
 	);
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -579,7 +579,7 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 		// `loadForSelected()` — B's guarded success path would read stale and
 		// Bob's row would never leave.)
 		loadRosterMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : []))
+			Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : []))
 		);
 		gateB.resolve();
 		await flush();

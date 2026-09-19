@@ -144,16 +144,16 @@ function setAuthedAdmin() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	adminStore.set('admin');
 }
 
@@ -196,7 +196,7 @@ describe('#256 integration — the page drives the REAL read module', () => {
 
 		const listCall = wireCalls().find((c) => c.path.includes('_type.string=link'));
 		expect(listCall).toBeDefined();
-		expect(listCall!.db).toBe('polyphony');
+		expect(listCall!.db).toBe('sampledb');
 		expect(listCall!.path).toContain(`_parent.reference=${DB_ENTITY}`);
 
 		const names = rowEls(container).map(
@@ -233,7 +233,7 @@ describe('#256 integration — add drives the REAL createLink wire (pin 5, url l
 		).toBe(true);
 
 		const create = wireCalls().find((c) => c.method === 'POST' && /^\/?entity$/.test(c.path))!;
-		expect(create.db).toBe('polyphony');
+		expect(create.db).toBe('sampledb');
 		// FULL-shape toEqual: two links exist (orders 1,2) → the new one is 3.
 		expect(create.body).toEqual([
 			{ type: '_type', reference: TYPE_ID },

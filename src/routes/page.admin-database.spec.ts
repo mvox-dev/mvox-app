@@ -129,15 +129,15 @@ const ANNA: RolePerson = {
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -160,7 +160,7 @@ beforeEach(() => {
 		inviteToken: 'a.b.c'
 	});
 	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
@@ -176,7 +176,7 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 }
 
 async function renderReady(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
@@ -189,7 +189,7 @@ describe('/admin — the role lists are keyed to the DATABASE entity (#161)', ()
 		await renderReady();
 
 		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalled();
-		expect(h.resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject({ db: 'polyphony' });
+		expect(h.resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 
 		expect(h.listAdminsMock).toHaveBeenCalled();
 		// listAdmins(cfg, <collective entity id>, viewerId, …) — the collective
@@ -214,7 +214,7 @@ describe('/admin — the embedded InviteSurface targets the DATABASE entity (#16
 			expect(h.createInviteMock).toHaveBeenCalledTimes(1);
 		});
 		expect(h.createInviteMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'polyphony' }),
+			expect.objectContaining({ db: 'sampledb' }),
 			{ dbEntityId: DB_ENTITY }
 		);
 	});

@@ -11,7 +11,7 @@ function json(body: unknown, status = 200) {
 
 const ARGS: InviteExchangeArgs = {
 	sessionToken: 'sess-key-1',
-	db: 'polyphony',
+	db: 'sampledb',
 	inviteToken: 'inv.tok.sig',
 	expectedEntityId: 'p1'
 };
@@ -29,7 +29,7 @@ function bodyWith(accounts: unknown[], extra: Record<string, unknown> = {}) {
 // AC1 tripwire (id-equality check) cannot run
 const _missingExpected: InviteExchangeArgs = {
 	sessionToken: 's',
-	db: 'polyphony',
+	db: 'sampledb',
 	inviteToken: 't'
 };
 void _missingExpected;
@@ -40,13 +40,13 @@ describe('exchangeSessionWithInvite — wire shape (the sole account-scoped /aut
 	it('GETs auth?account=<db>&invite=<token> with the session Bearer token — AC1: the call ALWAYS carries invite=, which suppresses auto-create (entu-api index.get.js:199,236)', async () => {
 		const fetchImpl = vi
 			.fn()
-			.mockResolvedValue(json(bodyWith([{ _id: 'polyphony', name: 'P', user: { _id: 'p1' } }])));
+			.mockResolvedValue(json(bodyWith([{ _id: 'sampledb', name: 'P', user: { _id: 'p1' } }])));
 
 		await exchangeSessionWithInvite(ARGS, fetchImpl);
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-		expect(String(url)).toContain('auth?account=polyphony&invite=inv.tok.sig');
+		expect(String(url)).toContain('auth?account=sampledb&invite=inv.tok.sig');
 		const headers = init.headers as Record<string, string>;
 		expect(headers.Authorization).toBe('Bearer sess-key-1');
 		expect(headers.Accept).toBe('application/json');
@@ -62,13 +62,13 @@ describe('exchangeSessionWithInvite — outcome classification', () => {
 	}
 
 	it('redeemed: the db entry matches expectedEntityId and is not new', async () => {
-		const result = await run(bodyWith([{ _id: 'polyphony', name: 'P', user: { _id: 'p1', name: 'Mari' } }]));
+		const result = await run(bodyWith([{ _id: 'sampledb', name: 'P', user: { _id: 'p1', name: 'Mari' } }]));
 		expect(result).toMatchObject({ status: 'redeemed', token: 'new-12h-jwt', personId: 'p1' });
 	});
 
 	it("conflict: body.conflict === 'invite' → the identity is already bound to a DIFFERENT entity; the issued session is real", async () => {
 		const result = await run(
-			bodyWith([{ _id: 'polyphony', name: 'P', user: { _id: 'existing-9', name: 'Mari' } }], {
+			bodyWith([{ _id: 'sampledb', name: 'P', user: { _id: 'existing-9', name: 'Mari' } }], {
 				conflict: 'invite'
 			})
 		);
@@ -95,14 +95,14 @@ describe('exchangeSessionWithInvite — outcome classification', () => {
 	});
 
 	it('unexpected (AC1 tripwire): entry id differs from expectedEntityId WITHOUT a conflict flag — impossible per source, never absorbed as success', async () => {
-		const result = await run(bodyWith([{ _id: 'polyphony', name: 'P', user: { _id: 'other-2' } }]));
+		const result = await run(bodyWith([{ _id: 'sampledb', name: 'P', user: { _id: 'other-2' } }]));
 		expect(result).toMatchObject({ status: 'unexpected', token: 'new-12h-jwt' });
 		expect((result as { detail: string }).detail).toMatch(/other-2/);
 	});
 
 	it('unexpected (AC1 tripwire): entry carries user.new:true — auto-create ran, which invite= forbids; the flag rides the USER sub-object on the wire (addAccount spreads extra into user, index.get.js:136-139, :240)', async () => {
 		const result = await run(
-			bodyWith([{ _id: 'polyphony', name: 'P', user: { _id: 'p1', new: true } }])
+			bodyWith([{ _id: 'sampledb', name: 'P', user: { _id: 'p1', new: true } }])
 		);
 		expect(result).toMatchObject({ status: 'unexpected' });
 	});
@@ -110,13 +110,13 @@ describe('exchangeSessionWithInvite — outcome classification', () => {
 	it('unexpected (tripwire): conflict flag WITHOUT an account entry for the db — impossible per source (index.get.js:226-229 lists the existing entity); the real issued session is never discarded as dead', async () => {
 		const result = await run(bodyWith([], { conflict: 'invite' }));
 		expect(result).toMatchObject({ status: 'unexpected', token: 'new-12h-jwt' });
-		expect((result as { detail: string }).detail).toMatch(/polyphony/);
+		expect((result as { detail: string }).detail).toMatch(/sampledb/);
 	});
 
 	it('unexpected (tripwire): conflict flag with an entry that lacks user._id — same guard, never a conflict with an undefined existingPersonId', async () => {
-		const result = await run(bodyWith([{ _id: 'polyphony', name: 'P', user: {} }], { conflict: 'invite' }));
+		const result = await run(bodyWith([{ _id: 'sampledb', name: 'P', user: {} }], { conflict: 'invite' }));
 		expect(result).toMatchObject({ status: 'unexpected', token: 'new-12h-jwt' });
-		expect((result as { detail: string }).detail).toMatch(/polyphony/);
+		expect((result as { detail: string }).detail).toMatch(/sampledb/);
 	});
 });
 

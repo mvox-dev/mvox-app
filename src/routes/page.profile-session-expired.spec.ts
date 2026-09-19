@@ -63,15 +63,15 @@ function authExpiredError(): Error {
 	return e;
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -90,7 +90,7 @@ afterEach(() => {
 describe('/profile — session expired (#107)', () => {
 	it('an auth-expired profile load shows the session-expired notice with a sign-in link — not the generic load error', async () => {
 		h.listMyProfilesMock.mockRejectedValue(authExpiredError());
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 
@@ -110,7 +110,7 @@ describe('/profile — session expired (#107)', () => {
 	it('a GENERIC profile load failure still shows the loud load error + retry (auth handling must not swallow it)', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		h.listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 

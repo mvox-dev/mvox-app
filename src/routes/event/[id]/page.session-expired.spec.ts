@@ -65,20 +65,20 @@ beforeEach(() => {
 	install401Recovery();
 });
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	setToken('jwt-stale');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderWithStatus(status: number) {
@@ -88,7 +88,7 @@ function renderWithStatus(status: number) {
 	);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	return render(Page);
 }
 

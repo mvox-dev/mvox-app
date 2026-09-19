@@ -143,16 +143,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -246,7 +246,7 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 			expect(renameMock).toHaveBeenCalledTimes(1);
 		});
 		expect(renameMock).toHaveBeenCalledWith(
-			{ db: 'polyphony', token: 'jwt-abc' },
+			{ db: 'sampledb', token: 'jwt-abc' },
 			'sec-alto',
 			'Alto Voices'
 		);
@@ -355,7 +355,7 @@ describe('/roster — DELETE in Arrange mode is ALWAYS rendered, DISABLED when i
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 
 		await waitFor(() => {
-			expect(deleteMock).toHaveBeenCalledWith({ db: 'polyphony', token: 'jwt-abc' }, 'sec-bass');
+			expect(deleteMock).toHaveBeenCalledWith({ db: 'sampledb', token: 'jwt-abc' }, 'sec-bass');
 		});
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();

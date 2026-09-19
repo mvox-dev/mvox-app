@@ -201,7 +201,7 @@ function editWireStub(controls: WireControls) {
 	return stub;
 }
 
-function setAuthedWithPolyphony(dbs: string[] = ['polyphony']) {
+function setAuthedWithSampledb(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
@@ -216,13 +216,13 @@ function setAuthedWithPolyphony(dbs: string[] = ['polyphony']) {
 	selectedCollectiveDbStore.set(dbs[0]);
 }
 
-function renderEditPage(dbs: string[] = ['polyphony']) {
+function renderEditPage(dbs: string[] = ['sampledb']) {
 	const controls: WireControls = { holdEditPost: null, failEditPost: false };
 	const stub = editWireStub(controls);
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony(dbs);
+	setAuthedWithSampledb(dbs);
 	const rendered = render(Page);
 	return { ...rendered, fetchStub: stub, controls };
 }
@@ -437,7 +437,7 @@ describe('#328 event fields — failure handling stays byte-identical', () => {
 
 describe('#328 event fields — the saved cue does not outlive its event', () => {
 	it('a settled name write’s saved cue does not follow the editor to the NEXT event: the region is mounted and BLANK on arrival', async () => {
-		const { container } = renderEditPage(['polyphony', 'crede']);
+		const { container } = renderEditPage(['sampledb', 'crede']);
 
 		await commitEdit(container, 'name', 'Autumn Sing');
 		await waitFor(() => {
@@ -459,7 +459,7 @@ describe('#328 event fields — the saved cue does not outlive its event', () =>
 	});
 
 	it('a name write still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the new event’s region stays blank (editWriteGenerations gates the settle)', async () => {
-		const { container, controls } = renderEditPage(['polyphony', 'crede']);
+		const { container, controls } = renderEditPage(['sampledb', 'crede']);
 		const g = gate();
 		controls.holdEditPost = g.promise;
 
@@ -474,7 +474,7 @@ describe('#328 event fields — the saved cue does not outlive its event', () =>
 		});
 		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
 
-		// …and only NOW does the polyphony write land. `resetComposeState` blanked
+		// …and only NOW does the sampledb write land. `resetComposeState` blanked
 		// the region AT the switch but cannot stop a write already in flight — the
 		// generation capture-compare must swallow the announcement whole.
 		controls.holdEditPost = null;

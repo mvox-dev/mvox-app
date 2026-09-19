@@ -149,7 +149,7 @@ const ROSTER = [
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
 ];
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
@@ -337,10 +337,10 @@ describe('/event/[id] — the cue does not leak across a collective switch (#327
 		setFixtures();
 		const held = deferred<{ attendanceId: string | null }>();
 		applyAttendanceChangeMock.mockReturnValueOnce(held.promise);
-		const { container } = renderPage(['polyphony', 'other-choir']);
+		const { container } = renderPage(['sampledb', 'other-choir']);
 		await openPanel(container);
 
-		// The write starts under polyphony…
+		// The write starts under sampledb…
 		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
 		await waitFor(() => {
 			expect(

@@ -8,12 +8,12 @@ function jsonResponse(body: unknown, status = 200) {
 describe('checkCollectiveMarker', () => {
 	it('issues ONE cheap marker query per db under the user token', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ count: 0, entities: [] }));
-		await checkCollectiveMarker('polyphony', 'p1', 'jwt-abc', fetchImpl);
+		await checkCollectiveMarker('sampledb', 'p1', 'jwt-abc', fetchImpl);
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchImpl.mock.calls[0];
 		expect(url).toBe(
-			`https://api.entu-test.invalid/polyphony/entity?_type.string=${MVOX_COLLECTIVE_MARKER_TYPE}&props=name&limit=1`
+			`https://api.entu-test.invalid/sampledb/entity?_type.string=${MVOX_COLLECTIVE_MARKER_TYPE}&props=name&limit=1`
 		);
 		expect(init.headers.Authorization).toBe('Bearer jwt-abc');
 	});
@@ -24,14 +24,14 @@ describe('checkCollectiveMarker', () => {
 			.mockResolvedValue(
 				jsonResponse({ count: 1, entities: [{ _id: 'm1', name: [{ string: 'EFK' }] }] })
 			);
-		const result = await checkCollectiveMarker('polyphony', 'p1', 't', fetchImpl);
-		expect(result).toEqual({ db: 'polyphony', kind: 'collective', name: 'EFK', personId: 'p1' });
+		const result = await checkCollectiveMarker('sampledb', 'p1', 't', fetchImpl);
+		expect(result).toEqual({ db: 'sampledb', kind: 'collective', name: 'EFK', personId: 'p1' });
 	});
 
 	it('marked db without a name → falls back to the db name as label', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({ count: 1, entities: [{ _id: 'm1' }] }));
-		const result = await checkCollectiveMarker('polyphony', 'p1', 't', fetchImpl);
-		expect(result).toEqual({ db: 'polyphony', kind: 'collective', name: 'polyphony', personId: 'p1' });
+		const result = await checkCollectiveMarker('sampledb', 'p1', 't', fetchImpl);
+		expect(result).toEqual({ db: 'sampledb', kind: 'collective', name: 'sampledb', personId: 'p1' });
 	});
 
 	it('unmarked db (count 0) → not-collective', async () => {
@@ -42,13 +42,13 @@ describe('checkCollectiveMarker', () => {
 
 	it('non-2xx → error (NOT silently not-collective)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(jsonResponse({}, 500));
-		const result = await checkCollectiveMarker('polyphony', 'p1', 't', fetchImpl);
-		expect(result).toMatchObject({ db: 'polyphony', kind: 'error' });
+		const result = await checkCollectiveMarker('sampledb', 'p1', 't', fetchImpl);
+		expect(result).toMatchObject({ db: 'sampledb', kind: 'error' });
 	});
 
 	it('network throw → error', async () => {
 		const fetchImpl = vi.fn().mockRejectedValue(new Error('offline'));
-		const result = await checkCollectiveMarker('polyphony', 'p1', 't', fetchImpl);
-		expect(result).toMatchObject({ db: 'polyphony', kind: 'error', reason: 'offline' });
+		const result = await checkCollectiveMarker('sampledb', 'p1', 't', fetchImpl);
+		expect(result).toMatchObject({ db: 'sampledb', kind: 'error', reason: 'offline' });
 	});
 });

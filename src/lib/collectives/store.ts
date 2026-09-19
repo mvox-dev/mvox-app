@@ -6,7 +6,7 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { discoverCollectives, type DiscoverResult } from './discover';
 import type { Collective, CollectiveState } from './types';
 
-// Repoints the old polyphony org-picker precedence (URL → localStorage → default)
+// Repoints the legacy org-picker precedence (URL → localStorage → default)
 // onto collective-from-token. The persisted key holds the selected collective's
 // db name; the URL param carries the same so a shared link is collective-scoped.
 const SELECTED_KEY = 'mvox.selected_collective';

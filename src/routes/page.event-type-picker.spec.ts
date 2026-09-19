@@ -269,16 +269,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -596,7 +596,7 @@ describe('event form — event-create-type is a localized canonical picker that 
 		// FULL param shape — no seriesId/duration/location/description/
 		// conductorRefs/capacity keys on an untouched standalone create.
 		expect(createEventMock).toHaveBeenCalledWith(
-			{ db: 'polyphony', token: 'jwt-abc' },
+			{ db: 'sampledb', token: 'jwt-abc' },
 			{
 				dbEntityId: ORG_EFK,
 				extraParentIds: [SEASON_ID],

@@ -19,7 +19,7 @@ import {
 // substring + `init.method`; a `json(body,status)` helper wrapping `new Response`;
 // assert on the request WIRE, never by spying siblings. Zero network — all mocked.
 //
-// NO agent runs this against live polyphony; this file only proves the built script.
+// NO agent runs this against a live db; this file only proves the built script.
 // ════════════════════════════════════════════════════════════════════════════
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };

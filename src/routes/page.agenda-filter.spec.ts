@@ -143,16 +143,16 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 function setAuthedWithOneCollective() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p1' },
+		personIdByDb: { sampledb: 'p1' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function setAuthedWithTwoCollectives() {
@@ -436,7 +436,7 @@ describe('#214 — chip set RECOMPUTES when the list changes', () => {
 		// selected-tracking load — the same seam page.agenda-error.spec.ts uses.
 		collectiveState.set({
 			status: 'ready',
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 

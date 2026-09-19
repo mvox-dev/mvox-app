@@ -148,7 +148,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const DB_A = 'polyphony';
+const DB_A = 'sampledb';
 const DB_B = 'orlando';
 const SELECTED_KEY = 'mvox.selected_collective';
 
@@ -180,7 +180,7 @@ function installAgendaPerDb() {
 		fullAgendaResult(
 			get(selectedCollectiveDbStore) === DB_B
 				? { upcoming: [agendaEvent('or-ev', 'Orlando rehearsal')] }
-				: { upcoming: [agendaEvent('pv-ev', 'Polyphony rehearsal')] }
+				: { upcoming: [agendaEvent('pv-ev', 'Sampledb rehearsal')] }
 		)
 	);
 }
@@ -208,7 +208,7 @@ function setAuthedWithTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: DB_A, name: 'Polyphony', personId: 'person-p' },
+			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Orlando', personId: 'person-p' }
 		],
 		erroredDbs: []
@@ -226,7 +226,7 @@ function setAuthedWithOneCollective() {
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: DB_A, name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
@@ -260,7 +260,7 @@ async function renderTwoCollectivesReady() {
 	setAuthedWithTwoCollectives();
 	const rendered = render(Page);
 	await waitFor(() => {
-		expect(rendered.container.textContent).toContain('Polyphony rehearsal');
+		expect(rendered.container.textContent).toContain('Sampledb rehearsal');
 	});
 	return rendered;
 }
@@ -299,7 +299,7 @@ describe('#338 — header picker with 2+ collectives', () => {
 		// Options = the collectives: label = name, value = db. Value = selected db.
 		const options = Array.from(select!.options);
 		expect(options.map((o) => o.value)).toEqual([DB_A, DB_B]);
-		expect(options.map((o) => o.text.trim())).toEqual(['Polyphony', 'Orlando']);
+		expect(options.map((o) => o.text.trim())).toEqual(['Sampledb', 'Orlando']);
 		expect(select!.value).toBe(DB_A);
 
 		// The i18n key survives its link: it names the control now.
@@ -355,7 +355,7 @@ describe('#338 — static mode with exactly one collective', () => {
 		const name = q(container, 'selected-collective')!;
 		// Byte-identical to today's markup — same element, same classes, same text.
 		expect(name.outerHTML).toBe(
-			'<p class="font-display text-xl text-ink" data-testid="selected-collective">Polyphony</p>'
+			'<p class="font-display text-xl text-ink" data-testid="selected-collective">Sampledb</p>'
 		);
 		// A one-option picker teaches nothing: no select, no link, nothing.
 		expect(container.querySelector('select[data-testid="selected-collective"]')).toBeNull();
@@ -497,7 +497,7 @@ describe('#338 — switching via the header select leaves no state behind', () =
 			expect(container.textContent).toContain('Orlando rehearsal');
 		});
 		// No state from A: not its rows, not its notice.
-		expect(container.textContent).not.toContain('Polyphony rehearsal');
+		expect(container.textContent).not.toContain('Sampledb rehearsal');
 		expect(q(container, 'rsvp-partial-notice')).toBeNull();
 	});
 
@@ -515,7 +515,7 @@ describe('#338 — switching via the header select leaves no state behind', () =
 
 		await switchVia(container, DB_A);
 		await waitFor(() => {
-			expect(container.textContent).toContain('Polyphony rehearsal');
+			expect(container.textContent).toContain('Sampledb rehearsal');
 			// A's truncated read ran AGAIN and its notice re-earned its place —
 			// a generation counter confused by the round trip would swallow
 			// this second delivery (or leave B's absence sticky).

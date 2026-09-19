@@ -55,7 +55,7 @@ You write the test. You do NOT implement the feature. If you find yourself writi
 - **Component tests:** prefer extracting logic into testable utilities. Component DOM tests via Vitest's jsdom environment + `@testing-library/svelte` only when behavior isn't trivially derivable from props.
 - **E2E (Playwright):** smoke flows against either a real (fixture-backed) Entu test database or a recorded-response fixture layer — login, primary user journeys, federation discovery.
 - **Parameterized tests:** use `describe.each` / `it.each` for data-driven cases.
-- **No D1 mocks** — mvox has no D1. If you find a `createMockDb()` pattern referenced anywhere, it's leftover from polyphony and should be deleted.
+- **No D1 mocks** — mvox has no D1. If you find a `createMockDb()` pattern referenced anywhere, it's leftover from the polyphony prototype and should be deleted.
 
 ## CRITICAL: Scope Restrictions
 

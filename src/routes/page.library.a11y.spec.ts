@@ -104,14 +104,14 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { polyphony: 'person-p' }, expMs: Date.now() + 100_000 });
+	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	listAllEditionsMock.mockResolvedValue(toListRead([]));

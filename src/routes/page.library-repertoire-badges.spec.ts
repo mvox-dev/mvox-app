@@ -172,16 +172,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// Member view throughout — badges are a MEMBER surface (test 4 is exactly
 	// about what members must NOT see).
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
@@ -244,7 +244,7 @@ describe('#92 TR.4 — library browse tree repertoire badges', () => {
 		expect(seasonId).toBe('season-current');
 		// The selected collective's cfg, full-shape (not objectContaining — the
 		// partial-assertion lesson from #76).
-		expect(cfg).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		expect(cfg).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 	});
 
 	// ── 2. active + learning badges with correct status ───────────────────────

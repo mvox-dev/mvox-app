@@ -229,7 +229,7 @@ function scheduleWireStub(controls: WireControls) {
  *  subject switch reachable (the reactive half of the page's one load effect).
  *  The wire answers both dbs from the same fixture set; what the switch changes
  *  is the load `generation`, which is the thing under test. */
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
@@ -244,7 +244,7 @@ function setAuthed(dbs: string[] = ['polyphony']) {
 	selectedCollectiveDbStore.set(dbs[0]);
 }
 
-function renderSchedulePage(dbs: string[] = ['polyphony']) {
+function renderSchedulePage(dbs: string[] = ['sampledb']) {
 	const controls: WireControls = { failItemWrites: false, holdItemPost: null };
 	const stub = scheduleWireStub(controls);
 	vi.stubGlobal('fetch', stub);
@@ -490,7 +490,7 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 
 describe('#328 schedule items — a late settle never announces onto the NEXT event', () => {
 	it('a row name edit still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the region stays blank', async () => {
-		const { container, controls } = renderSchedulePage(['polyphony', 'crede']);
+		const { container, controls } = renderSchedulePage(['sampledb', 'crede']);
 		await waitReady(container);
 		await waitFor(() => {
 			expect(scheduleSection(container)?.textContent).toContain('kogunemine');
@@ -508,7 +508,7 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 		});
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
-		// …and only NOW does the polyphony write land.
+		// …and only NOW does the sampledb write land.
 		controls.holdItemPost = null;
 		g.release();
 		await new Promise((r) => setTimeout(r, 0));

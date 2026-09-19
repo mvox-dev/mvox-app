@@ -17,7 +17,7 @@
 // fields" list must replicate the raw-array test. Pinned below: an event with
 // a STORED empty-string name inherits NOTHING and gets no ceremony.
 //
-// RIGHTS — the SPIKE's live gate finding (polyphony ledger
+// RIGHTS — the SPIKE's live gate finding (dated seed-results ledger
 // probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json), shaped by
 // Gama's ruling comment 5613471404 on #304 (the OWNER-GATED branch):
 //   - UNASSIGN is a DELETE of the series `_parent` value and that DELETE is
@@ -127,7 +127,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -224,7 +224,7 @@ type WireOpts = {
 	failWritePosts?: number;
 	/** Hold every write POST open until release() — the mid-write-switch probe. */
 	holdWritePost?: boolean;
-	/** Hold the polyphony event GET open — the "loading claims nothing" probe. */
+	/** Hold the sampledb event GET open — the "loading claims nothing" probe. */
 	holdEventGet?: boolean;
 };
 
@@ -318,22 +318,22 @@ function setAuthed(withCrede = false) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: withCrede
-			? { polyphony: 'p-viewer', crede: 'p-crede' }
-			: { polyphony: 'p-viewer' },
+			? { sampledb: 'p-viewer', crede: 'p-crede' }
+			: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: withCrede
 			? [
-					{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' },
+					{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' },
 					{ db: 'crede', name: 'Crede', personId: 'p-crede' }
 				]
-			: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+			: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderSeriesPage(

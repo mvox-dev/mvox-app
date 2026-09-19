@@ -27,7 +27,7 @@ vi.mock('$lib/collectives/store', async () => {
 import { listFullAgenda, loadFullAgenda } from './agendaData';
 import { setToken } from '$lib/auth/storage';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 const NOW = new Date('2026-09-05T10:00:00.000Z');
 
 // #194/#202 — AgendaItem now carries `eventType`; the orchestration layer must
@@ -407,7 +407,7 @@ describe('listFullAgenda — manageable season (#167)', () => {
 
 describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 	it('resolves db from selectedCollectiveStore and token from storage — personId is never threaded', async () => {
-		collectiveHolder.store.set({ db: 'polyphony', personId: 'person-123' });
+		collectiveHolder.store.set({ db: 'sampledb', personId: 'person-123' });
 		setToken('jwt-live');
 		listSeasonsMock.mockResolvedValue([]);
 
@@ -416,7 +416,7 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 		// #161 review fix round 2 — `listSeasons` is db-scoped, not person-scoped:
 		// `listFullAgenda` no longer threads personId into the call.
 		expect(listSeasonsMock).toHaveBeenCalledWith(
-			{ db: 'polyphony', token: 'jwt-live' },
+			{ db: 'sampledb', token: 'jwt-live' },
 			expect.anything()
 		);
 	});
@@ -443,7 +443,7 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 	});
 
 	it('returns empty result without reading when there is no token', async () => {
-		collectiveHolder.store.set({ db: 'polyphony', personId: 'person-123' }); // collective present, but no token
+		collectiveHolder.store.set({ db: 'sampledb', personId: 'person-123' }); // collective present, but no token
 		const result = await loadFullAgenda(NOW);
 		expect(result).toEqual({
 			upcoming: [],

@@ -198,16 +198,16 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: personId },
+		personIdByDb: { sampledb: personId },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	completionGateStore.set('complete');
 }
 

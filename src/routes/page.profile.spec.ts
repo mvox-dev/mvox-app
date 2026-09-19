@@ -190,15 +190,15 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -257,7 +257,7 @@ afterEach(() => {
 
 describe('/profile v2 — render + seed', () => {
 	it('renders name and email whole-field activators once loaded (#205 — the raw inputs no longer live-mount)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
@@ -266,7 +266,7 @@ describe('/profile v2 — render + seed', () => {
 	});
 
 	it('seeds the displays from the narrowest non-empty holder, and the editor opens pre-filled', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -280,7 +280,7 @@ describe('/profile v2 — render + seed', () => {
 
 	it('shows load error with retry', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
 		const { container } = render(Page);
 		await waitFor(() =>
@@ -292,7 +292,7 @@ describe('/profile v2 — render + seed', () => {
 	});
 
 	it('renders a sign-out link to /auth/logout (#59 — moved from agenda page)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
@@ -302,7 +302,7 @@ describe('/profile v2 — render + seed', () => {
 	});
 
 	it('shows the signed-in account + provider (#60)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		setUser({ _id: 'u1', email: 'mihkel@example.com', name: 'Mihkel' });
 		setLastProvider('google');
 		h.listMyProfilesMock.mockResolvedValue([]);
@@ -314,7 +314,7 @@ describe('/profile v2 — render + seed', () => {
 	});
 
 	it('falls back to name when the user has no email (#60)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		setUser({ _id: 'u1', name: 'Mihkel' });
 		setLastProvider('smart-id');
 		h.listMyProfilesMock.mockResolvedValue([]);
@@ -327,7 +327,7 @@ describe('/profile v2 — render + seed', () => {
 
 describe('/profile v2 — autosave on blur', () => {
 	it('typing then blurring the name input triggers an autosave', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
@@ -350,7 +350,7 @@ describe('/profile v2 — autosave on blur', () => {
 
 describe('/profile v2 — autosave on idle', () => {
 	it('typing then waiting 2 seconds triggers an autosave', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
@@ -367,7 +367,7 @@ describe('/profile v2 — autosave on idle', () => {
 
 describe('/profile v2 — autosave on visibility change', () => {
 	it('clicking a visibility icon on a dirty field saves before moving', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -398,7 +398,7 @@ describe('/profile v2 — autosave on visibility change', () => {
 
 describe('/profile v2 — save feedback on active button', () => {
 	it('while saving, the active visibility button shows Saving and is disabled', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
@@ -443,7 +443,7 @@ describe('/profile v2 — save feedback on active button', () => {
 
 describe('/profile v2 — save failure shows per-field error', () => {
 	it('a rejected autosave shows an error under the field', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		h.applyProfileSaveMock.mockRejectedValueOnce(new Error('save failed'));
 		const { container } = render(Page);
@@ -463,7 +463,7 @@ describe('/profile v2 — save failure shows per-field error', () => {
 
 describe('/profile v2 — name-private guard', () => {
 	it('the private visibility button for name is always disabled', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
@@ -478,7 +478,7 @@ describe('/profile v2 — name-private guard', () => {
 	});
 
 	it('the private visibility button for email is NOT disabled (email can be private)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -493,7 +493,7 @@ describe('/profile v2 — name-private guard', () => {
 	});
 
 	it('name-private guard on the save path throws (never silent)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		// Contrive an impossible state: name sitting at the private level.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' }
@@ -510,7 +510,7 @@ describe('/profile v2 — name-private guard', () => {
 	});
 
 	it('name-private guard on the move path: button is disabled', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
@@ -528,7 +528,7 @@ describe('/profile v2 — name-private guard', () => {
 
 describe('/profile v2 — sibling value pinned (privacy leak prevention)', () => {
 	it('a name autosave while email lives at a different level pins sibling to the target entity value', async () => {
-		selectPolyphony();
+		selectSampledb();
 		// name at domain, email at private — different levels.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' },
@@ -560,7 +560,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 	it('prefills domain name from EntuUser.name when no domain profile exists', async () => {
 		setUser({ _id: 'u1', name: 'Ada Lovelace' });
 		h.listMyProfilesMock.mockResolvedValue([]);
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 
@@ -576,7 +576,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-d', name: 'Her Chosen Name', email: 'a@b.c', _sharing: 'domain' }
 		]);
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 
@@ -588,7 +588,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 	it('leaves domain name empty when EntuUser has no name', async () => {
 		setUser({ _id: 'u1' });
 		h.listMyProfilesMock.mockResolvedValue([]);
-		selectPolyphony();
+		selectSampledb();
 
 		const { container } = render(Page);
 
@@ -600,7 +600,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 
 describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => {
 	it('a move is blocked while an autosave is in flight', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -633,7 +633,7 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 
 describe('/profile v2 — T4.8 completion gate SSOT', () => {
 	it('the completion banner clears after a domain name autosave', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValueOnce([]);
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'dp-1', name: 'Ann', email: '', _sharing: 'domain' }
@@ -659,7 +659,7 @@ describe('/profile v2 — T4.8 completion gate SSOT', () => {
 
 describe('/profile v2 — repair banners still work', () => {
 	it('an interrupted-move duplicate shows the repair banner', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
@@ -675,7 +675,7 @@ describe('/profile v2 — repair banners still work', () => {
 
 describe('/profile v2 — distinct-value conflict', () => {
 	it('a field holding DIFFERENT values at two levels shows a conflict note', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Alice', email: '', _sharing: 'private' },
 			{ _id: 'prof-pub', name: 'Alice Smith', email: '', _sharing: 'public' }
@@ -702,7 +702,7 @@ describe('/profile v2 — distinct-value conflict', () => {
 // ---------------------------------------------------------------------------
 describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () => {
 	it('AC1: a conflicting tier\'s visibility button is NOT disabled (previously always disabled)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -720,7 +720,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		// ~1s default instead of hanging on fake-timer-blocked retries to
 		// vitest's 5s test timeout (see tallis.md GOTCHA, hit 2026-08-10 on #73).
 		vi.useRealTimers();
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -744,7 +744,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 
 	it('AC3: second tap on the SAME tier resolves — syncs every OTHER holder to the previewed value', async () => {
 		vi.useRealTimers(); // see AC2 comment
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValueOnce([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -787,7 +787,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 
 	it('AC4: tapping a DIFFERENT conflicting tier during preview switches the preview (no resolve)', async () => {
 		vi.useRealTimers(); // see AC2 comment
-		selectPolyphony();
+		selectSampledb();
 		// Three-way conflict: private is narrowest/active (an already-existing,
 		// pre-#131 impossible-to-CREATE-but-legal-to-HOLD state — same precedent
 		// as the "name-private guard" describe block above); domain + public are
@@ -822,7 +822,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	});
 
 	it('AC5: a non-conflicting field renders no conflict/preview markers — happy path unchanged', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' }
 		]);
@@ -841,7 +841,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 
 	it('AC6: pressing Escape while previewing dismisses the preview back to the active value', async () => {
 		vi.useRealTimers(); // see AC2 comment
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -886,7 +886,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 // ---------------------------------------------------------------------------
 describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 	async function renderProfile(): Promise<HTMLElement> {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);

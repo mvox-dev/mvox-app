@@ -34,7 +34,7 @@ import { createByteStore } from './byteStore';
 import { createIdbAdapter } from './idbAdapter';
 import { createFakeAdapter } from '$lib/testing/byteStoreFakes';
 
-const IDENTITY = { db: 'polyphony', personId: 'person-1' };
+const IDENTITY = { db: 'sampledb', personId: 'person-1' };
 
 const LABEL: PartLabel = {
 	work: 'Bogoróditse Djévo',
@@ -71,7 +71,7 @@ describe('#353 — the label database is a SIBLING, never the byte store (the fl
 		await labels.putLabel(IDENTITY, 'file-a', LABEL);
 
 		// The byte row survives, bytes and all — no upgrade, no flush.
-		expect(await byteStore.heldFileIds('polyphony', 'person-1')).toEqual(['file-a']);
+		expect(await byteStore.heldFileIds('sampledb', 'person-1')).toEqual(['file-a']);
 		const record = await byteStore.get(IDENTITY, 'file-a');
 		expect(Array.from(new Uint8Array(record!.bytes))).toEqual(new Array(16).fill(5));
 	});
@@ -88,7 +88,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 		// A brand-new adapter + store over the same factory = the cold read
 		// after a full browser restart (the idbAdapter.spec re-open precedent).
 		const reader = createLabelStore(createLabelIdbAdapter(factory));
-		const held = await reader.labelsFor('polyphony', 'person-1');
+		const held = await reader.labelsFor('sampledb', 'person-1');
 		// FULL SHAPE — the exact four fields, nothing dropped, nothing added.
 		expect(held.get('file-a')).toEqual({
 			work: 'Bogoróditse Djévo',
@@ -106,7 +106,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 		const factory = new IDBFactory();
 		const store = createLabelStore(createLabelIdbAdapter(factory));
 		await store.putLabel(IDENTITY, 'file-a', LABEL);
-		const held = await store.labelsFor('polyphony', 'person-1');
+		const held = await store.labelsFor('sampledb', 'person-1');
 		expect(held.get('file-a')).toEqual(LABEL);
 	});
 
@@ -120,7 +120,7 @@ describe('#353 — labels survive restart and read back with zero network', () =
 			edition: '',
 			filename: 'other.pdf'
 		});
-		const held = await store.labelsFor('polyphony', 'person-1');
+		const held = await store.labelsFor('sampledb', 'person-1');
 		expect([...held.keys()]).toEqual(['file-a']);
 	});
 
@@ -149,7 +149,7 @@ describe('#353 — recordPartLabel: the put-time write, gated on DELIVERY reason
 		// Fire-and-forget: wait for the two positive writes to land, then the
 		// negatives are provably absent (same store, same event loop).
 		await vi.waitFor(async () => {
-			const held = await store.labelsFor('polyphony', 'person-1');
+			const held = await store.labelsFor('sampledb', 'person-1');
 			expect([...held.keys()].sort()).toEqual(['file-cached', 'file-stored']);
 		});
 	});
@@ -184,7 +184,7 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 		await store.put(IDENTITY, 'file-a', bytes(1));
 		await store.evict(IDENTITY, 'file-a');
 		expect(onRowRemoved.mock.calls).toEqual([
-			[{ db: 'polyphony', personId: 'person-1', fileId: 'file-a' }]
+			[{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' }]
 		]);
 	});
 
@@ -194,10 +194,10 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 		await store.put(IDENTITY, 'file-a', bytes(1));
 		await store.put(IDENTITY, 'file-b', bytes(2));
 		await store.put({ db: 'crede', personId: 'person-2' }, 'file-c', bytes(3));
-		await store.clearPartition('polyphony', 'person-1');
+		await store.clearPartition('sampledb', 'person-1');
 		expect(onRowRemoved.mock.calls.map(([key]) => key).sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
-			{ db: 'polyphony', personId: 'person-1', fileId: 'file-a' },
-			{ db: 'polyphony', personId: 'person-1', fileId: 'file-b' }
+			{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' },
+			{ db: 'sampledb', personId: 'person-1', fileId: 'file-b' }
 		]);
 	});
 
@@ -214,7 +214,7 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 		// match; the property under test (every key on the device, both
 		// partitions) is unchanged.
 		expect(onRowRemoved.mock.calls.map(([key]) => key).sort((a, b) => a.fileId.localeCompare(b.fileId))).toEqual([
-			{ db: 'polyphony', personId: 'person-1', fileId: 'file-a' },
+			{ db: 'sampledb', personId: 'person-1', fileId: 'file-a' },
 			{ db: 'crede', personId: 'person-2', fileId: 'file-c' }
 		]);
 	});
@@ -228,7 +228,7 @@ describe('#353 — eager label removal rides the byte-row lifecycle (opts.onRowR
 		vi.setSystemTime(2_000);
 		await store.put(IDENTITY, 'file-new', bytes(2, 60));
 		expect(onRowRemoved.mock.calls).toEqual([
-			[{ db: 'polyphony', personId: 'person-1', fileId: 'file-old' }]
+			[{ db: 'sampledb', personId: 'person-1', fileId: 'file-old' }]
 		]);
 	});
 });

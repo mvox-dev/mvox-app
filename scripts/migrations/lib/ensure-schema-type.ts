@@ -7,7 +7,7 @@
 // team) — this reproduces its proven wire-shape (meta-type refs, check-then-
 // create, add_from wiring) as a small workspace-app-owned primitive, per the
 // #246 settle's approval of "the new type+prop-def CREATE primitive... as new
-// work." First use: schedule_item, on polyphony and mvox_crede.
+// work." First use: schedule_item, on the dev/test collective and mvox_crede.
 //
 // Per Pérotin's own standing toolkit-extraction discipline: this stays local to
 // scripts/migrations/lib/ (not proposed into Josquin's `$lib/entu/*`) until a
@@ -15,8 +15,9 @@
 //
 // Meta-type ids (the "entity" and "property" type-definitions themselves) are
 // RESOLVED PER-DB, never hardcoded: each Entu database is a distinct collection
-// with its own auto-generated ids, so a constant proven on polyphony would be
-// silently wrong on mvox_crede. This mirrors setup-entity-types.ts's own Step 1.
+// with its own auto-generated ids, so a constant proven on the dev/test
+// collective would be silently wrong on mvox_crede. This mirrors
+// setup-entity-types.ts's own Step 1.
 
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';

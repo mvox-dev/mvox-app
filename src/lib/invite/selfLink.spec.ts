@@ -1,5 +1,5 @@
 // #193 RED — self-invite mint on the user's OWN person (profile auth-provider
-// linking). Per the SPIKE (2026-09-01, live-probed on polyphony):
+// linking). Per the SPIKE (2026-09-01, live-probed on the dev/test collective):
 //
 // - The mint trigger fires on the UPDATE endpoint too: POST /{db}/entity/{personId}
 //   with [{type:'entu_user', string:'trigger invite token'}] mints an invite JWT
@@ -33,7 +33,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 import { mintSelfLinkInvite, SelfLinkMintError, INVITE_MINT_TRIGGER } from './inviteData';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-me' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-me' };
 const PERSON_ID = 'person-me';
 
 function json(body: unknown, status = 200) {
@@ -107,14 +107,14 @@ describe('mintSelfLinkInvite — the POST wire shape (the real mint producer)', 
 
 		// 1. identity read — the stale-placeholder sweep's source of truth.
 		expect(calls[0].method).toBe('GET');
-		expect(calls[0].url).toContain('/polyphony/entity/person-me?props=entu_user');
+		expect(calls[0].url).toContain('/sampledb/entity/person-me?props=entu_user');
 		expect(calls[0].headers.Authorization).toBe('Bearer jwt-me');
 
 		// 2. the mint — POST to the entity UPDATE endpoint (the existing person),
 		//    body is EXACTLY the one trigger property. Full toEqual: any extra
 		//    property here (a name, an email, a second entu_user) is a bug.
 		expect(calls[1].method).toBe('POST');
-		expect(calls[1].url).toContain('/polyphony/entity/person-me');
+		expect(calls[1].url).toContain('/sampledb/entity/person-me');
 		expect(calls[1].headers.Authorization).toBe('Bearer jwt-me');
 		expect(calls[1].body).toEqual([{ type: 'entu_user', string: 'trigger invite token' }]);
 		// The literal is the shared constant — the sole-mint-mechanism invariant.
@@ -155,12 +155,12 @@ describe('mintSelfLinkInvite — stale-invite cleanup BEFORE mint (orphan hazard
 		const calls = callsOf(fetchImpl);
 		// Full ordered sequence: read → delete stale × 2 → mint.
 		expect(
-			calls.map((c) => ({ method: c.method, url: c.url.slice(c.url.indexOf('/polyphony')) }))
+			calls.map((c) => ({ method: c.method, url: c.url.slice(c.url.indexOf('/sampledb')) }))
 		).toEqual([
-			{ method: 'GET', url: '/polyphony/entity/person-me?props=entu_user' },
-			{ method: 'DELETE', url: '/polyphony/property/eu-stale-1' },
-			{ method: 'DELETE', url: '/polyphony/property/eu-stale-2' },
-			{ method: 'POST', url: '/polyphony/entity/person-me' }
+			{ method: 'GET', url: '/sampledb/entity/person-me?props=entu_user' },
+			{ method: 'DELETE', url: '/sampledb/property/eu-stale-1' },
+			{ method: 'DELETE', url: '/sampledb/property/eu-stale-2' },
+			{ method: 'POST', url: '/sampledb/entity/person-me' }
 		]);
 		// The bound identity's property id appears in NO delete call — destroying it
 		// would destroy a real sign-in credential.

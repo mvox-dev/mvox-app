@@ -17,7 +17,7 @@
 //     returned in the response — all four are required".
 //   THE RESPONSE ENVELOPE IS LIVE-CAPTURED, NOT DOC-DERIVED — provenance
 //     scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
-//     2026-09-07T23-13-25-163Z.json (polyphony, 2026-09-08):
+//     2026-09-07T23-13-25-163Z.json (the dev/test collective, 2026-09-08):
 //     `{ _id, properties: [ { _id, type: 'file', filename, filesize,
 //     filetype, upload } ] }` — a FLAT ARRAY. The docs disagree with each
 //     other and with the wire here: quickstart/index.md:57-67 shows the keyed
@@ -101,7 +101,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import { uploadEditionFiles, formatFileSize } from './editionFiles';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-abc' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-abc' };
 
 // .env.test pins PUBLIC_ENTU_API_BASE to this literal (see #163 note there);
 // entuFetch-built URLs are asserted against it EXACTLY, the S3 URL never is.
@@ -139,9 +139,10 @@ function uploadFor(name: string, size: number, type: string, n: number): UploadO
 
 /** The step-1 response envelope, mirroring REAL BYTES — provenance:
  *  scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
- *  2026-09-07T23-13-25-163Z.json (live capture against the polyphony db,
- *  2026-09-08). `properties` is a FLAT ARRAY of property objects, one per
- *  created value (probe 1: 1-element; probe 2: 2-element, identical shape) —
+ *  2026-09-07T23-13-25-163Z.json (live capture against the dev/test
+ *  collective, 2026-09-08). `properties` is a FLAT ARRAY of property objects,
+ *  one per created value (probe 1: 1-element; probe 2: 2-element, identical
+ *  shape) —
  *  NOT quickstart/index.md's keyed `properties: { file: [...] }`, which is the
  *  new-ENTITY-create response for a different operation, and not
  *  files/index.md's bare flat object either. This fixture ENCODING THE WRONG
@@ -221,7 +222,7 @@ describe('#275 — step 1: one POST to entity/{editionId} carries EVERY file (ap
 		const posts = callsOf(impl, 'POST');
 		expect(posts, 'several files must ride ONE POST (files/index.md:70), never N POSTs').toHaveLength(1);
 		const [url, init] = posts[0];
-		expect(String(url)).toBe(`${API}polyphony/entity/edition-1`);
+		expect(String(url)).toBe(`${API}sampledb/entity/edition-1`);
 		// entuFetch leg: Bearer token present.
 		expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer jwt-abc');
 		expect((init?.headers as Record<string, string>)['Content-Type']).toBe('application/json');
@@ -266,7 +267,7 @@ describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unrea
 					filesize: 11,
 					filetype: 'text/plain',
 					upload: {
-						url: 'https://entu-files.fra1.digitaloceanspaces.com/polyphony/6a9f440dca67df980f417d78/6a9f4512ca67df980f417d81?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=60&X-Amz-Signature=0da7024c85ad876618e2516ef8ded7f5de60da54f87bcc347f8239f86af53449&x-amz-acl=private&x-id=PutObject',
+						url: 'https://entu-files.fra1.digitaloceanspaces.com/sampledb/6a9f440dca67df980f417d78/6a9f4512ca67df980f417d81?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Expires=60&X-Amz-Signature=0da7024c85ad876618e2516ef8ded7f5de60da54f87bcc347f8239f86af53449&x-amz-acl=private&x-id=PutObject',
 						method: 'PUT',
 						headers: {
 							ACL: 'private',
@@ -430,7 +431,7 @@ describe('#275 — step-1 parsing is grounded on the LIVE envelope, and an unrea
 		expect(callsOf(impl, 'PUT')).toHaveLength(0);
 		const dels = callsOf(impl, 'DELETE');
 		expect(dels).toHaveLength(1);
-		expect(String(dels[0][0])).toBe(`${API}polyphony/property/prop-1`);
+		expect(String(dels[0][0])).toBe(`${API}sampledb/property/prop-1`);
 	});
 });
 
@@ -553,7 +554,7 @@ describe('#275 — a failed PUT deletes its phantom property (DELETE /property/{
 		expect(dels).toHaveLength(1);
 		// PROPERTY-VALUE endpoint, never entity/{id} (the wire-shape split), for
 		// exactly the failed file's property — through entuFetch, authed.
-		expect(String(dels[0][0])).toBe(`${API}polyphony/property/prop-2`);
+		expect(String(dels[0][0])).toBe(`${API}sampledb/property/prop-2`);
 		expect((dels[0][1]?.headers as Record<string, string>).Authorization).toBe('Bearer jwt-abc');
 	});
 
@@ -697,7 +698,7 @@ describe('#275 — returned entries are reconciled with the local files, and eve
 		expect(String(puts[0][0])).toBe(upA.url);
 		const dels = callsOf(impl, 'DELETE');
 		expect(dels).toHaveLength(1);
-		expect(String(dels[0][0])).toBe(`${API}polyphony/property/prop-ghost`);
+		expect(String(dels[0][0])).toBe(`${API}sampledb/property/prop-ghost`);
 	});
 
 	it('OUT-OF-ORDER entries pair by filename + filesize, not by position — each file\'s bytes go to ITS OWN signed url', async () => {

@@ -21,8 +21,8 @@
 //   those four headers.
 //   ENVELOPE (LIVE-CAPTURED — the contract's source of truth here, NOT the
 //   docs): scripts/migrations/seed-results/probe-275-envelope-diagnostic-live-
-//   2026-09-07T23-13-25-163Z.json, captured against the polyphony db on
-//   2026-09-08. The real answer to the append POST is
+//   2026-09-07T23-13-25-163Z.json, captured against the dev/test collective
+//   on 2026-09-08. The real answer to the append POST is
 //   `{ _id: '<editionId>', properties: [ { _id, type: 'file', filename,
 //   filesize, filetype, upload: {…} }, … ] }` — `properties` is a FLAT ARRAY
 //   of property objects, one per created value (probe 1: one file, 1-element

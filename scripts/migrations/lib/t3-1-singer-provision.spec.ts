@@ -12,7 +12,7 @@ import {
 
 // ════════════════════════════════════════════════════════════════════════════
 // T3.1 (#17) singer provisioning — proves the built script against an in-memory
-// Entu mock. No agent runs this against live polyphony; this file only proves
+// Entu mock. No agent runs this against a live db; this file only proves
 // the engine before the real dry-run/live invocation.
 // ════════════════════════════════════════════════════════════════════════════
 

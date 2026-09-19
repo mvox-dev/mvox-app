@@ -3,7 +3,9 @@
  *
  * Pure Entu API mutations — no git branches, no TDD chain.
  * Follows §8.6 discipline: PREPARE (dry-run) → REVIEW → EXECUTE (live) → VERIFY.
- * Authorization: launching this workflow = team-lead blanket authorization for the audited scope.
+ * Authorization: NOT implied by launching. The target db is args.db (no default); every live
+ * run carries its own authorization in the task brief, and a real-PII db needs explicit
+ * per-run say-so from the PO (standing rule: routine pre-authorization is synthetic-db only).
  * Git artifacts deferred — scripts written to disk but NOT committed (tree may be on a feature branch).
  *
  * args.tasks: Array of task descriptors:
@@ -18,6 +20,7 @@
  *   }
  *
  * args.repoPath: string
+ * args.db: string — target Entu db name. Required, no default.
  *
  * (*MVOX:Palestrina*)
  */
@@ -35,6 +38,8 @@ export const meta = {
 const _args = typeof args === 'string' ? JSON.parse(args) : (args || {})
 const REPO = _args.repoPath
 const tasks = _args.tasks
+const DB = _args.db
+if (!DB) throw new Error('data-tidy-pipeline: args.db is required (target Entu db name) — this pipeline names no db of its own')
 
 const ENTU_CONTEXT = [
   '',
@@ -44,10 +49,10 @@ const ENTU_CONTEXT = [
   '```bash',
   'cd ' + REPO,
   'set -a; . ~/.config/mvox/credentials.env; set +a',
-  'JWT=$(curl -s -H "Authorization: Bearer $ENTU_API_KEY" "https://api.entu.app/auth?db=polyphony" | jq -r \'.token\')',
-  '# GET:  curl -s -H "Authorization: Bearer $JWT" "https://api.entu.app/polyphony/entity?..."',
-  '# POST: curl -s -X POST -H "Authorization: Bearer $JWT" -F "property=value" "https://api.entu.app/polyphony/entity/{id}"',
-  '# DELETE property: curl -s -X DELETE -H "Authorization: Bearer $JWT" "https://api.entu.app/polyphony/property/{id}"',
+  'JWT=$(curl -s -H "Authorization: Bearer $ENTU_API_KEY" "https://api.entu.app/auth?db=' + DB + '" | jq -r \'.token\')',
+  '# GET:  curl -s -H "Authorization: Bearer $JWT" "https://api.entu.app/' + DB + '/entity?..."',
+  '# POST: curl -s -X POST -H "Authorization: Bearer $JWT" -F "property=value" "https://api.entu.app/' + DB + '/entity/{id}"',
+  '# DELETE property: curl -s -X DELETE -H "Authorization: Bearer $JWT" "https://api.entu.app/' + DB + '/property/{id}"',
   '```',
   '',
   '## TD.1 Audit (ground truth)',
@@ -236,7 +241,8 @@ if (parallelTasks.length > 0) {
     return function() {
       return agent(
         '## EXECUTE: ' + item.task.name + ' — ' + item.task.title + ' (LIVE)\n\n' +
-        'Run these mutations LIVE against polyphony. This is AUTHORIZED by team-lead.\n\n' +
+        'Run these mutations LIVE against ' + DB + '. Proceed only if this task brief carries the\n' +
+        'authorization for this run against ' + DB + '; if it does not, stop and report instead of mutating.\n\n' +
         (item.prep.scriptPath ? 'Script at: ' + item.prep.scriptPath + '\n\n' : '') +
         'Planned mutations (' + item.prep.mutationCount + '):\n' + JSON.stringify(item.prep.planned || [], null, 2) + '\n\n' +
         (item.task.execPrompt || '') + '\n\n' +
@@ -261,7 +267,8 @@ for (var si = 0; si < sequentialTasks.length; si++) {
   log('EXECUTE sequential: ' + item.task.name)
   var result = await agent(
     '## EXECUTE: ' + item.task.name + ' — ' + item.task.title + ' (LIVE)\n\n' +
-    'Run these mutations LIVE against polyphony. This is AUTHORIZED by team-lead.\n\n' +
+    'Run these mutations LIVE against ' + DB + '. Proceed only if this task brief carries the\n' +
+    'authorization for this run against ' + DB + '; if it does not, stop and report instead of mutating.\n\n' +
     'Prior tasks in this pipeline have already executed — entity visibility fixes are live.\n\n' +
     (item.prep.scriptPath ? 'Script at: ' + item.prep.scriptPath + '\n\n' : '') +
     'Planned mutations (' + item.prep.mutationCount + '):\n' + JSON.stringify(item.prep.planned || [], null, 2) + '\n\n' +
@@ -287,7 +294,7 @@ var verifyChecks = tasks.map(function(t) { return '### ' + t.name + ' — ' + t.
 
 var verify = await agent(
   '## VERIFY: Confirm All Database Tidiness Fixes\n\n' +
-  'All mutations have been executed. Re-query live polyphony and confirm:\n\n' +
+  'All mutations have been executed. Re-query live ' + DB + ' and confirm:\n\n' +
   verifyChecks + '\n\n' +
   'For name-visibility checks, apply the 3-gate-AND model:\n' +
   '- Gate 1: name prop-def _sharing (should be domain)\n' +

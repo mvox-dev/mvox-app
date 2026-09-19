@@ -107,15 +107,15 @@ function setNavigatorLanguages(langs: string[]) {
 	});
 }
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -249,7 +249,7 @@ describe('locale switch takes effect — rendered UI (#123)', () => {
 	// page with unmocked messages.
 
 	it('selecting a locale re-renders the profile page in that language', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { reload, restore } = spyOnReload();
 		try {
@@ -397,7 +397,7 @@ describe('LanguageSelector — keyboard accessibility (#123)', () => {
 
 describe('integration — /profile route (#123)', () => {
 	it('renders the language selector on the actual profile page (ready state)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
 		// Wait until the page has fully loaded (profile fields present) so the

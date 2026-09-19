@@ -412,7 +412,7 @@ function installWorld(options: WorldOptions) {
 	return fetchMock;
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
@@ -797,7 +797,7 @@ describe('#234 — collective switch resets the section’s state', () => {
 			pendingRepertoireDbs: ['org-b']
 		});
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
-		setAuthed(['polyphony', 'org-b']);
+		setAuthed(['sampledb', 'org-b']);
 		const container = await renderAgendaReady('agenda-empty');
 		await openPanel(container);
 		await waitFor(() => {
@@ -815,7 +815,7 @@ describe('#234 — collective switch resets the section’s state', () => {
 			expect(q(container, 'season-manage-repertoire')).not.toBeNull();
 		});
 		// org-b's read is still pending, so ANY row here is stale state from
-		// polyphony that a reset failed to clear.
+		// sampledb that a reset failed to clear.
 		//
 		// Asserted on ROWS, not on the section's raw text (review F1): the
 		// add-work select is fed by the panel's own works read, which is
@@ -1214,7 +1214,7 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 			async releaseWorkReads() {
 				holdArmed = false;
 				for (const resolve of held.splice(0, held.length)) {
-					resolve(await base('https://api.entu-test.invalid/polyphony/search?_type.string=work'));
+					resolve(await base('https://api.entu-test.invalid/sampledb/search?_type.string=work'));
 				}
 			}
 		};

@@ -59,7 +59,7 @@ describe('OAuth state — invite intent (T4.5/#31)', () => {
 			return_to: '/invite/tok.a.b',
 			intent: 'invite' as const,
 			provider: 'google',
-			invite: { db: 'polyphony', token: 'tok.a.b' }
+			invite: { db: 'sampledb', token: 'tok.a.b' }
 		};
 		expect(decodeState(encodeState(payload))).toEqual(payload);
 	});

@@ -24,7 +24,7 @@ import type { Collective } from './types';
 import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
 
-const A: Collective = { db: 'polyphony', name: 'Polyphony', personId: 'p1' };
+const A: Collective = { db: 'sampledb', name: 'Sampledb', personId: 'p1' };
 const B: Collective = { db: 'ww', name: 'WW Choir', personId: 'w1' };
 
 function ready(collectives: Collective[]) {
@@ -48,7 +48,7 @@ describe('selectedCollectiveStore precedence (URL → localStorage → default)'
 	it('defaults to the first collective when nothing is chosen', () => {
 		ready([A, B]);
 		expect(get(selectedCollectiveStore)).toEqual(A);
-		expect(get(selectedDbStore)).toBe('polyphony');
+		expect(get(selectedDbStore)).toBe('sampledb');
 	});
 
 	it('honours an explicit persisted pick over the default', () => {
@@ -60,9 +60,9 @@ describe('selectedCollectiveStore precedence (URL → localStorage → default)'
 	it('URL wins over the persisted pick and writes through to localStorage', () => {
 		ready([A, B]);
 		selectedCollectiveDbStore.set('ww');
-		urlCollectiveDbStore.set('polyphony');
+		urlCollectiveDbStore.set('sampledb');
 		expect(get(selectedCollectiveStore)).toEqual(A);
-		expect(localStorage.getItem('mvox.selected_collective')).toBe('polyphony');
+		expect(localStorage.getItem('mvox.selected_collective')).toBe('sampledb');
 	});
 
 	it('ignores a URL/pick that names an unknown db (falls through to default)', () => {
@@ -102,7 +102,7 @@ describe('hydrateCollectives', () => {
 	});
 
 	it('ready when discovery returns collectives', async () => {
-		authAs({ polyphony: 'p1' });
+		authAs({ sampledb: 'p1' });
 		discoverMock.mockResolvedValue({ collectives: [A], erroredDbs: [] });
 		const state = await hydrateCollectives();
 		expect(state).toEqual({ status: 'ready', collectives: [A], erroredDbs: [] });
@@ -116,9 +116,9 @@ describe('hydrateCollectives', () => {
 	});
 
 	it('error when zero collectives but a check errored', async () => {
-		authAs({ polyphony: 'p1' });
-		discoverMock.mockResolvedValue({ collectives: [], erroredDbs: ['polyphony'] });
-		expect(await hydrateCollectives()).toEqual({ status: 'error', erroredDbs: ['polyphony'] });
+		authAs({ sampledb: 'p1' });
+		discoverMock.mockResolvedValue({ collectives: [], erroredDbs: ['sampledb'] });
+		expect(await hydrateCollectives()).toEqual({ status: 'error', erroredDbs: ['sampledb'] });
 	});
 });
 
@@ -139,12 +139,12 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 
 	it('renames the matching collective (the label the picker + agenda header read)', () => {
 		ready([A, B]);
-		renameCollectiveInStore('polyphony', 'Koor Polyphony');
-		expect(get(selectedCollectiveStore)).toEqual({ ...A, name: 'Koor Polyphony' });
+		renameCollectiveInStore('sampledb', 'Koor Sampledb');
+		expect(get(selectedCollectiveStore)).toEqual({ ...A, name: 'Koor Sampledb' });
 		// Siblings are untouched.
 		expect(get(collectiveState)).toEqual({
 			status: 'ready',
-			collectives: [{ ...A, name: 'Koor Polyphony' }, B],
+			collectives: [{ ...A, name: 'Koor Sampledb' }, B],
 			erroredDbs: []
 		});
 	});
@@ -152,7 +152,7 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 	it('a same-name rename and an unknown db publish NOTHING at all', () => {
 		ready([A, B]);
 		const seen = emissions(selectedCollectiveStore, () => {
-			renameCollectiveInStore('polyphony', 'Polyphony'); // already named that
+			renameCollectiveInStore('sampledb', 'Sampledb'); // already named that
 			renameCollectiveInStore('nope', 'Whatever'); // not a known collective
 		});
 		// The initial emission on subscribe, and nothing more.
@@ -162,12 +162,12 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 	it('the IDENTITY store stays silent through a rename but fires on a real switch', () => {
 		ready([A, B]);
 		const seen = emissions(selectedCollectiveIdentityStore, () => {
-			renameCollectiveInStore('polyphony', 'Koor Polyphony');
-			renameCollectiveInStore('polyphony', 'Koor Polyphony II');
+			renameCollectiveInStore('sampledb', 'Koor Sampledb');
+			renameCollectiveInStore('sampledb', 'Koor Sampledb II');
 			selectedCollectiveDbStore.set('ww'); // a genuine collective switch
 		});
 		expect(seen).toEqual([
-			{ db: 'polyphony', personId: 'p1' },
+			{ db: 'sampledb', personId: 'p1' },
 			{ db: 'ww', personId: 'w1' }
 		]);
 	});
@@ -178,8 +178,8 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 			ready([{ ...A, personId: 'p2' }]);
 		});
 		expect(seen).toEqual([
-			{ db: 'polyphony', personId: 'p1' },
-			{ db: 'polyphony', personId: 'p2' }
+			{ db: 'sampledb', personId: 'p1' },
+			{ db: 'sampledb', personId: 'p2' }
 		]);
 	});
 

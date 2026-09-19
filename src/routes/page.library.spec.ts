@@ -120,7 +120,7 @@ vi.mock('$lib/library/librarianStore', async () => {
 
 // T6.4/#73 — "my loans" resolves the viewer's own active member the same way
 // RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
-// org scoping in single-collective polyphony). Reused rather than re-derived.
+// org scoping in the single-collective dev/test db). Reused, not re-derived.
 const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
@@ -144,14 +144,14 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { polyphony: 'person-p' }, expMs: Date.now() + 100_000 });
+	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.

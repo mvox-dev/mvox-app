@@ -18,7 +18,7 @@ import {
 // (`resolveDatabaseEntityId`), the database-scoped library list
 // (`resolveMyLibraryId`), and the library GET by id (rights read).
 
-const cfg = { db: 'polyphony', token: 'test-token' };
+const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 

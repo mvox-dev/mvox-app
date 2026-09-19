@@ -62,7 +62,7 @@ import {
 // ── the wire (post-#159 shape: NO organization entities exist) ─────────────────
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -117,16 +117,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-pete' },
+		personIdByDb: { sampledb: 'p-pete' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-pete' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-pete' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

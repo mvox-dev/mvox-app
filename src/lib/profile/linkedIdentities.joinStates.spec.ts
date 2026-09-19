@@ -24,7 +24,7 @@
 // here as its own case.
 //
 // Wire shape: per-person GET entity/{personId}?props=entu_user — the exact
-// read the 2026-09-08 polyphony probe verified live for all three states
+// read the 2026-09-08 probe verified live for all three states
 // (issue #294, probe result comment: absent → no key; placeholder →
 // [{_id, invite:'***'}]; bound → [{_id, uid, email, provider}]). A list-query
 // batch was never probed for masked-prop behaviour and is NOT the contract.
@@ -50,7 +50,7 @@ type ListJoinStates = (
 const listJoinStates = (linkedIdentities as unknown as { listJoinStates?: ListJoinStates })
 	.listJoinStates;
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-admin' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-admin' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });

@@ -85,10 +85,10 @@ const _extra: InviteStatus = 'creating';
 void _extends;
 void _extra;
 
-const POLYPHONY = { db: 'polyphony', name: 'Polyphony', personId: 'person-p' };
+const SAMPLEDB = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const BRAVURA = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
-function setCollectives(...collectives: (typeof POLYPHONY)[]) {
+function setCollectives(...collectives: (typeof SAMPLEDB)[]) {
 	collectiveState.set({ status: 'ready', collectives, erroredDbs: [] });
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set(collectives[0]?.db ?? null);
@@ -123,11 +123,11 @@ function deferred<T = void>() {
 function harness(opts?: {
 	load?: (ctx: {
 		cfg: { db: string; token: string };
-		selected: typeof POLYPHONY;
+		selected: typeof SAMPLEDB;
 		g: number;
 		isCurrent: () => boolean;
 	}) => Promise<void>;
-	reset?: (info: { isSwitch: boolean; selected: typeof POLYPHONY | null }) => void;
+	reset?: (info: { isSwitch: boolean; selected: typeof SAMPLEDB | null }) => void;
 	onNoCollective?: () => void;
 	onNoToken?: () => void;
 	name?: string;
@@ -142,7 +142,7 @@ function harness(opts?: {
 			statuses.push(s);
 			events.push(`status:${s}`);
 		},
-		reset: (info: { isSwitch: boolean; selected: typeof POLYPHONY | null }) => {
+		reset: (info: { isSwitch: boolean; selected: typeof SAMPLEDB | null }) => {
 			events.push(`reset:${info.isSwitch ? 'switch' : 'refresh'}`);
 			opts?.reset?.(info);
 		},
@@ -156,7 +156,7 @@ function harness(opts?: {
 		},
 		load: async (ctx: {
 			cfg: { db: string; token: string };
-			selected: typeof POLYPHONY;
+			selected: typeof SAMPLEDB;
 			g: number;
 			isCurrent: () => boolean;
 		}) => {
@@ -207,7 +207,7 @@ describe('routeLoad — transitions', () => {
 	});
 
 	it('collective selected but no token → exactly [load-error], loud console.error, body never runs; the no-token hook precedes the status write (roster drops currentCfg BEFORE erroring)', async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		// no setToken — protected-route inconsistency
 		const h = harness({ name: 'roster' });
 
@@ -222,7 +222,7 @@ describe('routeLoad — transitions', () => {
 	});
 
 	it("happy path → 'loading' set before the body runs; the body receives the full context shape (cfg, selected, g, isCurrent)", async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const h = harness();
 
@@ -237,14 +237,14 @@ describe('routeLoad — transitions', () => {
 			g: unknown;
 			isCurrent: () => boolean;
 		};
-		expect(ctx.cfg).toEqual({ db: 'polyphony', token: 'jwt-1' });
-		expect(ctx.selected).toEqual(POLYPHONY);
+		expect(ctx.cfg).toEqual({ db: 'sampledb', token: 'jwt-1' });
+		expect(ctx.selected).toEqual(SAMPLEDB);
 		expect(typeof ctx.g).toBe('number');
 		expect(ctx.isCurrent()).toBe(true);
 	});
 
 	it("the machine never invents 'ready' — a body that resolves without writing leaves status at 'loading' (the body owns 'ready')", async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const h = harness({ load: async () => {} });
 
@@ -254,7 +254,7 @@ describe('routeLoad — transitions', () => {
 	});
 
 	it("an auth-expired rejection → 'session-expired', and NO console.error (a dead token is a named state, not a fault)", async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const h = harness({
 			load: async () => {
@@ -269,7 +269,7 @@ describe('routeLoad — transitions', () => {
 	});
 
 	it("a generic rejection → 'load-error', logged loud as '<name>: load failed' — and loadForSelected itself resolves (never rejects into the caller's effect)", async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const boom = new Error('listThings failed: 500');
 		const h = harness({
@@ -288,7 +288,7 @@ describe('routeLoad — transitions', () => {
 
 describe('routeLoad — stale-generation drop', () => {
 	it("a superseded load's rejection writes NOTHING: no status, no console.error — the newer load's outcome stands", async () => {
-		setCollectives(POLYPHONY, BRAVURA);
+		setCollectives(SAMPLEDB, BRAVURA);
 		setToken('jwt-1');
 		const held = deferred();
 		let first = true;
@@ -318,7 +318,7 @@ describe('routeLoad — stale-generation drop', () => {
 	});
 
 	it('ctx.isCurrent() flips false for the superseded run and stays true for the newest — the in-body guard seam', async () => {
-		setCollectives(POLYPHONY, BRAVURA);
+		setCollectives(SAMPLEDB, BRAVURA);
 		setToken('jwt-1');
 		const contexts: { isCurrent: () => boolean }[] = [];
 		const h = harness({
@@ -337,7 +337,7 @@ describe('routeLoad — stale-generation drop', () => {
 	});
 
 	it('#260 co-guard seam: machine.generation is a NON-MUTATING read; a captured value goes stale exactly when a new load starts', async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const h = harness();
 		await h.machine.loadForSelected();
@@ -356,7 +356,7 @@ describe('routeLoad — stale-generation drop', () => {
 
 describe('routeLoad — collective-switch reset (#255 semantics)', () => {
 	it('first load of a collective is a SWITCH; a same-db reload is a REFRESH (deactivate/reinstate reload paths must not slam the inactive panel shut)', async () => {
-		setCollectives(POLYPHONY);
+		setCollectives(SAMPLEDB);
 		setToken('jwt-1');
 		const resets: boolean[] = [];
 		const h = harness({ reset: (info) => resets.push(info.isSwitch) });
@@ -368,14 +368,14 @@ describe('routeLoad — collective-switch reset (#255 semantics)', () => {
 	});
 
 	it('changing db is a SWITCH again, and dropping to no collective is a SWITCH too (state keyed to the old db must not survive it)', async () => {
-		setCollectives(POLYPHONY, BRAVURA);
+		setCollectives(SAMPLEDB, BRAVURA);
 		setToken('jwt-1');
 		const resets: { isSwitch: boolean; db: string | null }[] = [];
 		const h = harness({
 			reset: (info) => resets.push({ isSwitch: info.isSwitch, db: info.selected?.db ?? null })
 		});
 
-		await h.machine.loadForSelected(); // polyphony — first
+		await h.machine.loadForSelected(); // sampledb — first
 		selectedCollectiveDbStore.set('bravura');
 		urlCollectiveDbStore.set('bravura');
 		await h.machine.loadForSelected(); // bravura — switch
@@ -384,7 +384,7 @@ describe('routeLoad — collective-switch reset (#255 semantics)', () => {
 		await h.machine.loadForSelected(); // none — switch
 
 		expect(resets).toEqual([
-			{ isSwitch: true, db: 'polyphony' },
+			{ isSwitch: true, db: 'sampledb' },
 			{ isSwitch: true, db: 'bravura' },
 			{ isSwitch: false, db: 'bravura' },
 			{ isSwitch: true, db: null }

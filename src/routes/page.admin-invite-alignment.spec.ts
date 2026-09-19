@@ -214,15 +214,15 @@ import {
 const STANDALONE_ROOT_CLASSES = 'mx-auto flex w-full max-w-md flex-col gap-4';
 const EMBEDDED_ROOT_CLASSES = 'flex w-full flex-col gap-4';
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -243,7 +243,7 @@ function loadOk() {
 		{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' }
 	]));
 	h.listSectionsMock.mockResolvedValue([]);
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 	// InviteSurface's prerequisite resolution (both mounts)
 	h.resolveParentMock.mockResolvedValue('parent-1');
@@ -297,7 +297,7 @@ afterEach(() => {
 
 describe('#235 — embedded InviteSurface on /admin (integration: real route page)', () => {
 	async function renderAdminReady() {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = render(AdminPage);
 		const section = await waitFor(() => {
@@ -344,7 +344,7 @@ describe('#235 — embedded InviteSurface on /admin (integration: real route pag
 
 describe('#235 — standalone /admin/invite stays pixel-identical (integration: real route page)', () => {
 	it("root div class string is byte-identical to today's — the component's own classes remain the sole centering mechanism on the full-bleed route", async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.resolveParentMock.mockResolvedValue('parent-1');
 		h.resolveInviteParentMock.mockResolvedValue('org-1');
 

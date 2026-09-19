@@ -57,7 +57,7 @@ type WithdrawInvite = (
 const withdrawInvite = (inviteData as unknown as { withdrawInvite?: WithdrawInvite })
 	.withdrawInvite;
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-owner' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-owner' };
 const PERSON_ID = 'person-target';
 
 function json(body: unknown, status = 200) {

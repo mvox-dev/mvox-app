@@ -108,17 +108,17 @@ function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
-const MINTED_TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
+const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
 
-function selectPolyphony(): void {
+function selectSampledb(): void {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: string): T | null {
@@ -127,7 +127,7 @@ function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: 
 
 /** Render the real route page and drive it to the done panel (copy-only). */
 async function renderDone(): Promise<{ container: HTMLElement }> {
-	selectPolyphony();
+	selectSampledb();
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({

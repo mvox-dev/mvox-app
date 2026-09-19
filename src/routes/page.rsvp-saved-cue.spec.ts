@@ -244,7 +244,7 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		applyRsvpChangeMock.mockResolvedValue({ rsvpId: 'rsvp-new-1' });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -267,7 +267,7 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		applyRsvpChangeMock.mockResolvedValue({ rsvpId: 'rsvp-new-1' });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -289,7 +289,7 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 			toListRead([{ rsvpId: 'rsvp-77', eventId: 'e1', status: 'going' }])
 		);
 		applyRsvpChangeMock.mockResolvedValue({ rsvpId: null });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -321,7 +321,7 @@ describe('+page — the dangerous pair: pending stays SILENT (byte-preserved), a
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const held = deferred<{ rsvpId: string }>();
 		applyRsvpChangeMock.mockReturnValue(held.promise);
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -353,7 +353,7 @@ describe('+page — the dangerous pair: pending stays SILENT (byte-preserved), a
 		applyRsvpChangeMock
 			.mockResolvedValueOnce({ rsvpId: 'rsvp-new-1' })
 			.mockReturnValueOnce(held.promise);
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -381,7 +381,7 @@ describe('+page — the failure path is byte-preserved, and failure never announ
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		applyRsvpChangeMock.mockRejectedValue(new Error('save failed'));
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -408,7 +408,7 @@ describe('+page — the failure path is byte-preserved, and failure never announ
 		applyRsvpChangeMock
 			.mockResolvedValueOnce({ rsvpId: 'rsvp-new-1' })
 			.mockRejectedValueOnce(new Error('save failed'));
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const goingBtn = await waitForEnabledButton(container, 'e1', 'going');
@@ -441,7 +441,7 @@ describe('+page — the saved cue does not leak across a collective switch (#326
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		applyRsvpChangeMock.mockResolvedValue({ rsvpId: 'rsvp-new-1' });
 		setAuthed([
-			{ db: 'polyphony', name: 'Polyphony' },
+			{ db: 'sampledb', name: 'Sampledb' },
 			{ db: 'other-choir', name: 'Other Choir' }
 		]);
 

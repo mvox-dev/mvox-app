@@ -35,8 +35,9 @@
 //                                   top-level sections when "(top level)" is
 //                                   chosen). The global check live-verifiably
 //                                   refused EVERY real-world voice name —
-//                                   polyphony's tree holds all four test orgs'
-//                                   sections flat (Soprano I/II, Alto I/II,
+//                                   the dev/test collective's tree held all
+//                                   four test orgs' sections flat (Soprano
+//                                   I/II, Alto I/II,
 //                                   I/II Tenor, Baritone, Bass…), so "Soprano
 //                                   II" under Soprano was rejected as a
 //                                   duplicate of ANOTHER org's flat section.

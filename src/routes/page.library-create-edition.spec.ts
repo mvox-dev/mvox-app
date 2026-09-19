@@ -222,16 +222,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// Defaults; tests override resolveLibrarianMock per case.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -897,7 +897,7 @@ describe('#271 — submitting calls createEdition with THE WORK id and appends l
 
 		await waitFor(() => expect(createEditionMock).toHaveBeenCalledTimes(1));
 		const [cfgArg, payload] = createEditionMock.mock.calls[0];
-		expect(cfgArg).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		expect(cfgArg).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 		// Full-shape (no objectContaining): the parent is the WORK the form sits
 		// under — 'work-2', straight from the #each loop context. The library
 		// entity id ('lib-1') must appear NOWHERE in this payload.
@@ -1133,19 +1133,19 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', secondchoir: 'person-s' },
+			personIdByDb: { sampledb: 'person-p', secondchoir: 'person-s' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -1159,7 +1159,7 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 			toListRead([
 				{
 					id: 'work-1',
-					name: cfg.db === 'polyphony' ? 'Erste Messe' : 'Zweite Messe',
+					name: cfg.db === 'sampledb' ? 'Erste Messe' : 'Zweite Messe',
 					composer: ''
 				}
 			])
@@ -1202,8 +1202,8 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 			container.querySelector('[data-testid="create-edition-submit-work-1"]') as Element
 		);
 		await waitFor(() => expect(createEditionMock).toHaveBeenCalledTimes(1));
-		// The write was captured BEFORE the switch — against polyphony.
-		expect(createEditionMock.mock.calls[0][0]).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		// The write was captured BEFORE the switch — against sampledb.
+		expect(createEditionMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 
 		// …switch the collective while it is still pending…
 		selectedCollectiveDbStore.set('secondchoir');

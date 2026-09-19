@@ -86,17 +86,17 @@ function jwt(payload: object): string {
 
 // The minted token is a REAL decodable invite JWT — the done-panel derives the
 // shown expiry from the token's own exp, not an assumed +7d.
-const MINTED_TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
+const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function selectTwoCollectives() {
@@ -104,7 +104,7 @@ function selectTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
 			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
 		],
 		erroredDbs: []
@@ -151,7 +151,7 @@ describe('/admin/invite — prerequisites', () => {
 	});
 
 	it("a not-visible org resolution → the no-access state (#67 — resolveInviteParentId replaces listOrganizations as the org-parent source; #161 review fix round 2 — loadPrerequisites resolves ONLY via resolveInviteParentId now, resolvePersonParentId is no longer called from the page)", async () => {
-		selectPolyphony();
+		selectSampledb();
 		h.resolveParentMock.mockResolvedValue('parent-1');
 		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('no organization entity is readable', {
@@ -169,7 +169,7 @@ describe('/admin/invite — prerequisites', () => {
 
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		h.resolveInviteParentMock.mockRejectedValue(
 			new h.InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
 		);
@@ -209,7 +209,7 @@ describe('/admin/invite — prerequisites', () => {
 
 describe('/admin/invite — ready form', () => {
 	it('preselects a sole collective (database select still rendered) and submit is immediately enabled once prerequisites resolve — no organization-entity picker', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = render(Page);
@@ -218,7 +218,7 @@ describe('/admin/invite — ready form', () => {
 		});
 
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
-		expect(select.value).toBe('polyphony'); // sole collective preselected (select still rendered)
+		expect(select.value).toBe('sampledb'); // sole collective preselected (select still rendered)
 		// Explicit empty placeholder option + the one real collective.
 		expect(select.options.length).toBe(2);
 
@@ -235,7 +235,7 @@ describe('/admin/invite — ready form', () => {
 		// #161 review fix round 2 — `resolveInviteParentId` is DB-SCOPED, not
 		// person-scoped: no personId argument.
 		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
-			expect.objectContaining({ db: 'polyphony', token: 'jwt-admin' })
+			expect.objectContaining({ db: 'sampledb', token: 'jwt-admin' })
 		);
 	});
 
@@ -276,7 +276,7 @@ describe('/admin/invite — page heading', () => {
 	// before the extraction — heading hierarchy is part of the backward-compat
 	// promise for the standalone URL, not just the rendered controls.
 	it('renders the invite title as the single page-level h1', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = render(Page);
@@ -294,7 +294,7 @@ describe('/admin/invite — page heading', () => {
 
 describe('/admin/invite — done (show-once link)', () => {
 	it('calls createInvite with the selected db + the internally-resolved org, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockResolvedValue({
 			personId: 'p1',
@@ -324,7 +324,7 @@ describe('/admin/invite — done (show-once link)', () => {
 			{ db: string; token: string },
 			{ dbEntityId: string; email?: string; memberName?: string }
 		];
-		expect(cfgArg).toMatchObject({ db: 'polyphony', token: 'jwt-admin' });
+		expect(cfgArg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(inputArg).toEqual({ dbEntityId: 'org-1' });
 		expect(inputArg).not.toHaveProperty('email');
 		expect(inputArg).not.toHaveProperty('memberName');
@@ -367,7 +367,7 @@ describe('/admin/invite — done (show-once link)', () => {
 	// The message mock echoes `admin_invite_show_once`'s `date` param, so this
 	// pins the string the surface derives from the minted token's own exp.
 	it('#207 rule 7: the show-once expiry date renders as ISO YYYY-MM-DD', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockResolvedValue({
 			personId: 'p1',
@@ -404,7 +404,7 @@ describe('/admin/invite — done (show-once link)', () => {
 describe('/admin/invite — create-error', () => {
 	it('renders a generic localized error (not the raw thrown message); logs detail to console.error; with a personId attached, the orphaned-person warning — form values preserved for retry', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockRejectedValue(
 			new h.InviteCreateError('member create failed: 500', {
@@ -445,13 +445,13 @@ describe('/admin/invite — create-error', () => {
 
 		// Form value preserved for retry: the sole-collective selection survives the error.
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
-		expect(select.value).toBe('polyphony');
+		expect(select.value).toBe('sampledb');
 
 		consoleSpy.mockRestore();
 	});
 
 	it('an error WITHOUT a personId (nothing created yet) shows the phased error but NO orphan warning', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.createInviteMock.mockRejectedValue(
 			new h.InviteCreateError('person create failed: 403', { phase: 'person-create', reason: 'http' })

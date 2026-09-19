@@ -184,33 +184,33 @@ function rowsB(): RosterRow[] {
 	];
 }
 
-const CFG_A = { db: 'polyphony', token: 'jwt-abc' };
+const CFG_A = { db: 'sampledb', token: 'jwt-abc' };
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'polyphony' ? rowsA() : rowsB()))
+		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
 	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'polyphony' ? treeA() : treeB())
+		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
 	);
 	assignMock.mockResolvedValue(undefined);
 	unassignMock.mockResolvedValue(undefined);
@@ -296,8 +296,8 @@ async function switchToOtherChoirArrange(container: HTMLElement) {
 	expect(q(container, 'arrange-row-sec-sop')).toBeNull();
 }
 
-async function switchBackToPolyphonyArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('polyphony');
+async function switchBackToSampledbArrange(container: HTMLElement) {
+	selectedCollectiveDbStore.set('sampledb');
 	await waitFor(() => {
 		expect(q(container, 'arrange-row-sec-sop')).not.toBeNull();
 	});
@@ -802,7 +802,7 @@ describe('/roster — #303 a collective switch commits the open rename (and the 
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 		expect(q(container, 'arrange-row-sec-sop')).toBeNull();
 
-		await switchBackToPolyphonyArrange(container);
+		await switchBackToSampledbArrange(container);
 		expect(
 			anyRenameErrorAlert(container),
 			"a superseded switch-commit failure must not resurface on A's row"

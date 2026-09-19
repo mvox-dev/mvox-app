@@ -66,14 +66,14 @@ describe('resolveCollectiveNameMarker', () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				count: 1,
-				entities: [{ _id: 'marker-1', name: [{ _id: 'nv-1', string: '  Koor Polyphony  ' }] }]
+				entities: [{ _id: 'marker-1', name: [{ _id: 'nv-1', string: '  Koor Sampledb  ' }] }]
 			})
 		);
 
 		const result = await resolveCollectiveNameMarker(cfg, fetchImpl);
 
 		// The display name is TRIMMED — the raw wire value may carry padding.
-		expect(result).toEqual({ markerId: 'marker-1', name: 'Koor Polyphony' });
+		expect(result).toEqual({ markerId: 'marker-1', name: 'Koor Sampledb' });
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = callUrls(fetchImpl)[0];

@@ -591,7 +591,7 @@ function seededWire(): FakeEntu {
 	wire.seed('type-event', 'entity', { name: [{ string: 'event' }] });
 	wire.seed('type-event_series', 'entity', { name: [{ string: 'event_series' }] });
 	// the collective tree: database entity → season → one standalone event
-	wire.seed('org-1', 'database', { name: [{ string: 'Polyphony test' }] });
+	wire.seed('org-1', 'database', { name: [{ string: 'Sampledb test' }] });
 	wire.seed('season-1', 'season', {
 		name: [{ string: 'Kevad 2027' }],
 		_parent: [{ reference: 'org-1' }]

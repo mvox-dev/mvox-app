@@ -191,16 +191,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// Defaults; tests override resolveLibrarianMock per case.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -375,7 +375,7 @@ describe('#198 — inline create-work form', () => {
 
 		await waitFor(() => expect(createWorkMock).toHaveBeenCalledTimes(1));
 		const [cfgArg, payload] = createWorkMock.mock.calls[0];
-		expect(cfgArg).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		expect(cfgArg).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 		// Full-shape (no objectContaining): the parent is the LIBRARY entity id
 		// resolveLibrarian returned — 'lib-1' — never the database entity.
 		expect(payload).toEqual({

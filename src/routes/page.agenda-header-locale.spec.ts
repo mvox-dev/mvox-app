@@ -115,16 +115,16 @@ import {
 function setAuthedWithOneCollective() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p1' },
+		personIdByDb: { sampledb: 'p1' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function item(id: string, name: string, startDatetime: string): AgendaItem {

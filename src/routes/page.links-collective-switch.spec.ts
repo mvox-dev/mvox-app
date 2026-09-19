@@ -87,19 +87,19 @@ function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -136,7 +136,7 @@ describe('#256 pin 6 — a stale list read never repopulates the new collective 
 	it("collective A's read, settling AFTER a switch to B, leaves B's rows (and ONLY B's) on screen", async () => {
 		const heldA = deferred<LinkRow[]>();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			cfg.db === 'polyphony' ? heldA.promise : Promise.resolve(rowsB())
+			cfg.db === 'sampledb' ? heldA.promise : Promise.resolve(rowsB())
 		);
 
 		const { container } = render(Page);
@@ -166,7 +166,7 @@ describe('#256 pin 6 — a stale list read never repopulates the new collective 
 	it("a stale read REJECTING after the switch neither surfaces an error over B's list nor clears it", async () => {
 		const heldA = deferred<LinkRow[]>();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			cfg.db === 'polyphony' ? heldA.promise : Promise.resolve(rowsB())
+			cfg.db === 'sampledb' ? heldA.promise : Promise.resolve(rowsB())
 		);
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -191,7 +191,7 @@ describe('#256 pin 6 — a stale list read never repopulates the new collective 
 describe('#256 pin 6 — page state resets on a collective switch', () => {
 	it("typed add-form draft from collective A does not survive into B (a cross-collective draft is the #299 bug class)", async () => {
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+			Promise.resolve(cfg.db === 'sampledb' ? rowsA() : rowsB())
 		);
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -211,7 +211,7 @@ describe('#256 pin 6 — page state resets on a collective switch', () => {
 
 	it('an OPEN edit form from collective A is not left open over B rows', async () => {
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rowsA() : rowsB())
+			Promise.resolve(cfg.db === 'sampledb' ? rowsA() : rowsB())
 		);
 		const { container } = render(Page);
 		await waitFor(() => {

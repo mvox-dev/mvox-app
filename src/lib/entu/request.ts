@@ -21,7 +21,7 @@ import { AuthExpiredError } from './auth-expired';
 //
 // (1) and (2) are BROWSER-ONLY concerns (localStorage, `$app/navigation`), and
 // this module is NOT browser-only: 37 scripts under scripts/migrations/ — every
-// shipped `pnpm migrate:*` target and every polyphony probe — import `entuFetch`
+// shipped `pnpm migrate:*` target and every migration probe — import `entuFetch`
 // under plain node/tsx via scripts/migrations/lib/loader.mjs, which maps only
 // `$env/dynamic/public` and `$lib/*`. Importing `$app/navigation` here (a Vite
 // virtual module with no on-disk package) hard-breaks every one of them at

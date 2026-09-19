@@ -248,7 +248,7 @@ import {
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 const SEASON_ID = 'season-1';
 
 /** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
@@ -394,38 +394,38 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
-/** Two collectives, polyphony selected — what the collective-SWITCH pins need.
+/** Two collectives, sampledb selected — what the collective-SWITCH pins need.
  *  It lived inside the requestId-guard describe until the #321 review F1 notice
  *  teardown pin (end of this file) became its second caller. */
 function setAuthedWithTwoCollectives(): void {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+		personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'org-b', name: 'Org B', personId: 'person-p' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -1297,7 +1297,7 @@ describe('agenda — the panel’s reads respect the page-wide requestId guard',
 		resolveStale({ items: seriesFixture(), truncated: false });
 		await new Promise((r) => setTimeout(r, 0));
 
-		// The org-b panel must be empty of polyphony's series (org-b's own read is
+		// The org-b panel must be empty of sampledb's series (org-b's own read is
 		// still pending — anything visible here came from the stale resolve).
 		await openPanel(container);
 		expect(q(container, 'season-manage-series-series-1')).toBeNull();

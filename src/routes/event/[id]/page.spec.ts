@@ -124,7 +124,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const cfg = { db: 'polyphony', token: 'jwt' };
+const cfg = { db: 'sampledb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -427,19 +427,19 @@ describe('loadEventDetail — conductor resolution (#77 model via resolveConduct
 // actually wire loadEventDetail into the route (a page that renders its header
 // from anything but the loaded detail cannot pass these).
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEventPage(fixtures: Fixtures = {}) {
@@ -447,7 +447,7 @@ function renderEventPage(fixtures: Fixtures = {}) {
 	vi.stubGlobal('fetch', fetchStub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub };
 }
@@ -501,7 +501,7 @@ describe('/event/[id] — header (integration: route param → loadEventDetail �
 			).toContain('Tuesday Rehearsal');
 		});
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(urls.some((u) => u.includes('/polyphony/') && u.includes('ev1'))).toBe(true);
+		expect(urls.some((u) => u.includes('/sampledb/') && u.includes('ev1'))).toBe(true);
 	});
 
 	it('renders conductor names comma-separated, in resolved order', async () => {
@@ -837,7 +837,7 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 		);
 		pageStub.params = { id: 'ev1' };
 		pageStub.url = new URL('http://localhost/event/ev1');
-		setAuthedWithPolyphony();
+		setAuthedWithSampledb();
 		const { container } = render(Page);
 
 		await waitFor(() => {
@@ -859,7 +859,7 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 		);
 		pageStub.params = { id: 'ev1' };
 		pageStub.url = new URL('http://localhost/event/ev1');
-		setAuthedWithPolyphony();
+		setAuthedWithSampledb();
 		const { container } = render(Page);
 
 		await waitFor(() => {
@@ -1019,7 +1019,7 @@ function renderWithFetch(fetchStub: ReturnType<typeof vi.fn>) {
 	vi.stubGlobal('fetch', fetchStub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub };
 }
@@ -1621,7 +1621,7 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 // that had since reloaded — seeding a pressed status the new collective has no
 // rsvp for, whose id then got REWRITTEN by the next tap.
 describe('/event/[id] — a write that settles after a collective switch never lands (#102 review round 2, F1)', () => {
-	/** Both dbs serve ev1; only `polyphony` has the viewer's rsvp-77. The update
+	/** Both dbs serve ev1; only `sampledb` has the viewer's rsvp-77. The update
 	 *  POST is held open until `release()`, so it settles AFTER the switch. */
 	function switchedCollectiveWire() {
 		let release: () => void = () => {};
@@ -1647,19 +1647,19 @@ describe('/event/[id] — a write that settles after a collective switch never l
 		pageStub.url = new URL('http://localhost/event/ev1');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'p-viewer', vox: 'p-viewer' },
+			personIdByDb: { sampledb: 'p-viewer', vox: 'p-viewer' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' },
 				{ db: 'vox', name: 'Vox', personId: 'p-viewer' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		return { ...render(Page), fetchStub };
 	}
 
@@ -1667,7 +1667,7 @@ describe('/event/[id] — a write that settles after a collective switch never l
 		const { fetchStub, release } = switchedCollectiveWire();
 		const { container } = renderWithTwoCollectives(fetchStub);
 
-		// polyphony: the viewer's rsvp-77 seeds 'going', and the control is live.
+		// sampledb: the viewer's rsvp-77 seeds 'going', and the control is live.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
@@ -1688,7 +1688,7 @@ describe('/event/[id] — a write that settles after a collective switch never l
 				expect(btn.getAttribute('aria-pressed')).toBe('false');
 		});
 
-		// The polyphony write settles now, onto a page showing the vox load.
+		// The sampledb write settles now, onto a page showing the vox load.
 		release();
 		await new Promise((r) => setTimeout(r, 30));
 		for (const btn of rsvpButtons(container))
@@ -1703,7 +1703,7 @@ describe('/event/[id] — a write that settles after a collective switch never l
 		await new Promise((r) => setTimeout(r, 30));
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(
-			urls.filter((u) => u.includes('rsvp-77')).every((u) => u.includes('/polyphony/')),
+			urls.filter((u) => u.includes('rsvp-77')).every((u) => u.includes('/sampledb/')),
 			'rsvp-77 was touched in the vox db'
 		).toBe(true);
 	});
@@ -2284,7 +2284,7 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 			async releaseWorkReads() {
 				holdArmed = false;
 				for (const resolve of held.splice(0, held.length)) {
-					resolve(await base('https://api.entu-test.invalid/polyphony/search?_type.string=work'));
+					resolve(await base('https://api.entu-test.invalid/sampledb/search?_type.string=work'));
 				}
 			}
 		};

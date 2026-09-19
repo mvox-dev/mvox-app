@@ -156,7 +156,7 @@ function wireStub(opts: WireOpts = {}) {
 	};
 }
 
-function setAuthed(dbs: string[] = ['polyphony']) {
+function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
@@ -299,12 +299,12 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#326)',
 describe('/event/[id] — the cue does not leak across a collective switch (#326 pin 7, hold → switch → settle)', () => {
 	it('a write that settles AFTER the switch never paints the saved cue onto the reloaded page', async () => {
 		const { container, releasePost } = renderPage({ updatePost: 'hold' }, [
-			'polyphony',
+			'sampledb',
 			'other-choir'
 		]);
 		await waitForAnsweredControl(container);
 
-		// The write starts under polyphony…
+		// The write starts under sampledb…
 		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-not_going"]')!);
 		await waitFor(() => {
 			expect(

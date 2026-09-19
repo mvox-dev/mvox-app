@@ -7,10 +7,11 @@ import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 // scope for slice-2, see epic #8 "Out of slice-2").
 //
 // `member` resolution is DE-FANNED to match `listSeasons`/`listEvents`: no
-// dbEntityId param. In polyphony (single-collective) a person has exactly one active
-// `member` row, so `person.reference` + `status.string=active` alone disambiguates
-// — same simplification already landed for seasons ("in polyphony all seasons are
-// EFK's"). Not the end state; flagged to team-lead alongside the RED report.
+// dbEntityId param. In the dev/test collective (single-collective) a person has
+// exactly one active `member` row, so `person.reference` + `status.string=active`
+// alone disambiguates — same simplification already landed for seasons ("in a
+// single-collective db all seasons are EFK's"). Not the end state; flagged to
+// team-lead alongside the RED report.
 
 export type RsvpStatus = 'going' | 'not_going' | 'maybe' | 'late';
 

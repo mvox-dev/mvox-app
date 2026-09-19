@@ -219,19 +219,19 @@ function entuStub(event: Record<string, unknown>) {
 	});
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEventPage(event: Record<string, unknown> = eventEntity()) {
@@ -239,7 +239,7 @@ function renderEventPage(event: Record<string, unknown> = eventEntity()) {
 	vi.stubGlobal('fetch', fetchStub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub };
 }

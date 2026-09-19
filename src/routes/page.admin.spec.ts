@@ -259,7 +259,7 @@ import {
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-const CFG = { db: 'polyphony', token: 'jwt-admin' };
+const CFG = { db: 'sampledb', token: 'jwt-admin' };
 
 // RolePerson rows as listAdmins/listLibrarians answer them — ONE ROW PER PERSON,
 // carrying EVERY backing rights property value id (see roleManagement.spec.ts,
@@ -302,15 +302,15 @@ const ROSTER = [
 	{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '' }
 ];
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -332,7 +332,7 @@ function loadOk() {
 	// #165 scaffolding — this file has no opinion on the collective-name
 	// surface; a benign resolution keeps its OWN tests' `load()` reaching
 	// 'ready' the same as before this dependency existed.
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 	// #301 — inert by construction: 'error' tier renders neither the select nor
 	// the owner note (this file's own contract is unaffected either way).
@@ -435,7 +435,7 @@ describe('/admin — access gate', () => {
 	});
 
 	it("resolveAdmin → 'not-admin': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveAdminMock.mockResolvedValue('not-admin');
 
@@ -463,7 +463,7 @@ describe('/admin — access gate', () => {
 	});
 
 	it("resolveAdmin → 'error': the load-error state with retry — a network failure is NEVER rendered as not-admin", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveAdminMock.mockResolvedValueOnce('error');
 
@@ -488,7 +488,7 @@ describe('/admin — access gate', () => {
 
 describe('/admin — role lists', () => {
 	it('renders the admin + librarian lists off listAdmins(cfg, dbEntityId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -536,7 +536,7 @@ describe('/admin — role lists', () => {
 	});
 
 	it('a person holding BOTH an _owner and a separate _editor value arrives as ONE folded row and renders ONE entry — a repeated key would kill the page (each_key_duplicate)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const ANNA_FOLDED = { ...ANNA, valueIds: ['pv-own-anna', 'pv-ed-anna'] };
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA_FOLDED, BELA]));
@@ -551,7 +551,7 @@ describe('/admin — role lists', () => {
 	});
 
 	it('the role badge renders the LOCALIZED label, never the raw RolePerson.role enum — in both lists', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -565,7 +565,7 @@ describe('/admin — role lists', () => {
 	});
 
 	it('resolveLibrarian answering libraryId: null → the no-library state; listLibrarians is NOT called; the admin list still renders', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
@@ -578,7 +578,7 @@ describe('/admin — role lists', () => {
 	});
 
 	it("resolveLibrarian → { state: 'error', libraryId: null }: the load-error state with retry — a FAILED library read is NEVER rendered as \"no library exists\"", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveLibrarianMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
 
@@ -607,7 +607,7 @@ describe('/admin — role lists', () => {
 
 describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('the admin select is a NATIVE <select data-testid="admin-add-admin-select"> named by admin_roles_add_admin_label, prompt option first (value "", disabled selected hidden, the reworded add-prompt), then roster people MINUS current admins — value = person id, text = display name', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -636,7 +636,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 
 	it('changing the admin select to a person id calls addAdmin(cfg, dbEntityId, personId), the list refetches with the new entry, and the select RESETS to the prompt', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock
 			.mockReset()
@@ -668,7 +668,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 
 	it('re-selecting the prompt ("") grants nothing — only a person id is a pick', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -682,7 +682,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 
 	it('the librarian select (admin-add-librarian-select) excludes current librarians and a pick calls addLibrarian(cfg, libraryId, personId) and resets to the prompt', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -711,7 +711,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 
 	it('option order is ROSTER order — section (listSections tree order), then position within section — NOT alphabetical (Gama ruling 3)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		// Nobody granted yet → every roster person is an option; the ORDER is
 		// what this test pins.
@@ -742,7 +742,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 
 	it('EVERYONE already granted: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added — never hidden, never an inert enabled select (Gama ruling 2)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		// All four roster people are already admins…
 		h.listAdminsMock
@@ -770,7 +770,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 
 describe('/admin — a failed section read costs the pickers their order, not the page', () => {
 	it('listSections rejects: the page still reaches READY (lists, remove buttons, invite section intact), both selects still offer the whole roster in name order, and each says its order degraded', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		// `listSections` throws on any non-2xx AND on its own data conditions (an
 		// unplaceable parent, a parent cycle) — none of which say anything about
@@ -799,7 +799,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 	});
 
 	it('an EMPTY roster is not "everyone is already added": the prompt says there is nobody to add', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.loadRosterMock.mockReset().mockResolvedValue(toListRead([]));
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
@@ -830,7 +830,7 @@ describe('/admin — #321 review F2: a truncated roster makes a member ungrantab
 	}
 
 	it('both person selects carry the shared role="status" notice when the member read was partial', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		truncatedRoster();
 
@@ -857,7 +857,7 @@ describe('/admin — #321 review F2: a truncated roster makes a member ungrantab
 	});
 
 	it('a complete roster read leaves both notices ABSENT from the DOM', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -872,7 +872,7 @@ describe('/admin — #321 review F2: a truncated roster makes a member ungrantab
 
 describe('/admin — removing people', () => {
 	it('each admin entry carries a remove button; activating it calls removeAdmin(cfg, dbEntityId, personId) and the list refetches', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock
 			.mockReset()
@@ -898,7 +898,7 @@ describe('/admin — removing people', () => {
 	});
 
 	it("the LAST 'owner' entry's remove button is DISABLED (lockout prevention, UI leg); editors' buttons stay enabled", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk(); // one owner (Anna) + one editor (Bela)
 
 		const { container } = await renderReady();
@@ -911,7 +911,7 @@ describe('/admin — removing people', () => {
 	});
 
 	it('with TWO owners, BOTH owner remove buttons are enabled (the guard is about the last owner, not owners in general)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock
 			.mockReset()
@@ -929,7 +929,7 @@ describe('/admin — removing people', () => {
 
 	it('a rejected removeAdmin surfaces the generic localized action error (raw message stays OUT of the DOM) and the entry stays listed', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.removeAdminMock.mockRejectedValue(new Error('remove failed: 500'));
 
@@ -948,7 +948,7 @@ describe('/admin — removing people', () => {
 	});
 
 	it('each librarian entry carries a remove button wired to removeLibrarian(cfg, libraryId, personId)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -969,7 +969,7 @@ describe('/admin — removing people', () => {
 // ── #147 self-lockout: an admin/librarian can never remove HER OWN rights ───────
 
 describe('/admin — self-lockout guard (#147)', () => {
-	// selectPolyphony() gives the viewer personId 'admin-p' — a row carrying
+	// selectSampledb() gives the viewer personId 'admin-p' — a row carrying
 	// that same id is HER OWN grant.
 	const SELF_EDITOR = {
 		id: 'admin-p',
@@ -989,7 +989,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	// to his own row). The self row now renders NO Remove button at all — same
 	// resolution #148 chose for the library-owner row.
 	it("an admin holding only _editor gets NO remove button on HER OWN row (#164 — not rendered, not merely disabled), even though canManage is true and she isn't the last owner", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const EMIL = { id: 'p-emil', name: 'Emil Erg', role: 'owner' as const, valueIds: ['pv-own-emil'] };
 		// Two owners (Anna, Emil) so neither is the "last owner" — isolates the
@@ -1007,7 +1007,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('an owner among TWO owners still gets NO remove button on HER OWN row — self-lockout applies even when she is not the last owner (#164)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_OWNER]));
 
@@ -1021,7 +1021,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('with the self button unrendered there is nothing to click — removeAdmin is unreachable for the own row (#164)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
 
@@ -1031,7 +1031,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('a librarian sees HER OWN remove button disabled in the librarian list too — same guard, both sections', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listLibrariansMock
 			.mockReset()
@@ -1051,7 +1051,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	// under #164 the button is gone entirely, so this hint is the ONLY place
 	// the rule is explained.
 	it('renders the self-lockout reason as VISIBLE text under the admin list even though the own row carries no button', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
 
@@ -1067,7 +1067,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('shows no self-lockout hint when the viewer holds no grant in the list — nothing is disabled, so there is nothing to explain', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk(); // ANNA + BELA in admins, CILLA in librarians — no 'admin-p' row
 
 		const { container } = await renderReady();
@@ -1077,7 +1077,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('renders the same visible reason under the librarian list', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listLibrariansMock
 			.mockReset()
@@ -1091,7 +1091,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 
 	it('shows no librarian self-lockout hint when the viewer is a library OWNER — her row renders no button at all (#148), so nothing is greyed out to explain', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listLibrariansMock
 			.mockReset()
@@ -1114,7 +1114,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 // stays untouched as defense in depth (pinned in roleManagement.spec.ts).
 
 describe('/admin — #164 self Remove button is NOT rendered on the own row', () => {
-	// selectPolyphony() gives the viewer personId 'admin-p'.
+	// selectSampledb() gives the viewer personId 'admin-p'.
 	const SELF_OWNER = {
 		id: 'admin-p',
 		name: 'Mihkel Putrinš',
@@ -1129,7 +1129,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	};
 
 	it("route integration — Mihkel's exact scenario: two owners, viewer is one of them; HIS row renders name+badge but NO Remove button; the OTHER owner's button renders enabled", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([DB_ROOT, SELF_OWNER]));
 
@@ -1154,7 +1154,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	});
 
 	it("route integration — other admins' Remove buttons still WORK normally next to the buttonless own row: a click calls removeAdmin and the list refetches", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock
 			.mockReset()
@@ -1183,7 +1183,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	});
 
 	it('a self row hides its button even when the viewer is the LAST owner — the own row never grows a control regardless of which guard also applies', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([SELF_OWNER, BELA]));
 
@@ -1196,7 +1196,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	});
 
 	it('rows NOT matching viewerId are unaffected: with no self row in the list, every entry renders its Remove button', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk(); // ANNA + BELA — the viewer 'admin-p' holds no listed grant
 
 		const { container } = await renderReady();
@@ -1210,7 +1210,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 
 describe('/admin — write gate (canManage)', () => {
 	it("an org EDITOR (resolveAdmin 'admin', but no _owner value → canManage false) gets the lists READ-ONLY: no combobox, every Remove disabled, a localized explanation — the API would 403 every one of those writes", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
 		h.listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
@@ -1239,7 +1239,7 @@ describe('/admin — write gate (canManage)', () => {
 	});
 
 	it('a non-owner viewer cannot reach the write functions even by activating a disabled Remove', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
 		h.listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
@@ -1253,7 +1253,7 @@ describe('/admin — write gate (canManage)', () => {
 	});
 
 	it('canManage true keeps the write controls: both person selects render (the gate is not "always off")', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container } = await renderReady();
@@ -1273,7 +1273,7 @@ describe('/admin — a library OWNER row', () => {
 	// the fix drops the control entirely for an owner row. The role badge
 	// (rendered via roleLabel, asserted separately) already says why.
 	it("renders NO Remove button at all — removeLibrarian is 'editor-only' scope and would reject before any write (a dead click); the role badge alone explains the row", async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const LIB_OWNER = {
 			id: 'p-anna',

@@ -26,7 +26,7 @@ import {
 	DomainNameInconsistencyError
 } from './completionGate';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-abc' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-abc' };
 
 function profile(sharing: MyProfile['_sharing'], name: string, email = ''): MyProfile {
 	return { _id: `p-${sharing}`, name, email, _sharing: sharing };

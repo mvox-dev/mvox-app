@@ -243,20 +243,20 @@ function wireStub(event: Record<string, unknown>, opts: { activeMembersCount?: n
 	});
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	setToken('jwt-token');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -281,7 +281,7 @@ function renderPage(event: Record<string, unknown>, opts: { activeMembersCount?:
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	return { ...render(Page), fetchStub: stub };
 }
 
@@ -530,7 +530,7 @@ describe('#344 — the card lists profile names per group, resolved once per ope
 		});
 		// Seven names on screen, ONE roster read.
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
-		expect(loadRosterMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'polyphony' }));
+		expect(loadRosterMock).toHaveBeenCalledWith(expect.objectContaining({ db: 'sampledb' }));
 	});
 });
 

@@ -17,8 +17,8 @@ function jwt(payload: object): string {
 
 describe('decodeJwtPayload', () => {
 	it('decodes a base64url payload including the accounts map', () => {
-		const payload = decodeJwtPayload(jwt({ accounts: { polyphony: 'p1' }, exp: 123 }));
-		expect(payload).toEqual({ accounts: { polyphony: 'p1' }, exp: 123 });
+		const payload = decodeJwtPayload(jwt({ accounts: { sampledb: 'p1' }, exp: 123 }));
+		expect(payload).toEqual({ accounts: { sampledb: 'p1' }, exp: 123 });
 	});
 
 	it('returns null on garbage / empty / non-JWT input', () => {
@@ -138,8 +138,8 @@ describe('resolveGuardRedirect', () => {
 
 	it('root-path redirect preserves the query string (#221)', () => {
 		expect(
-			resolveGuardRedirect({ pathname: '/', search: '?collective=polyphony', token: null, nowMs: now })
-		).toEqual('/auth/login?redirect=%2F%3Fcollective%3Dpolyphony');
+			resolveGuardRedirect({ pathname: '/', search: '?collective=sampledb', token: null, nowMs: now })
+		).toEqual('/auth/login?redirect=%2F%3Fcollective%3Dsampledb');
 	});
 
 	it('/about stays public — anonymous visit is allowed (#221)', () => {

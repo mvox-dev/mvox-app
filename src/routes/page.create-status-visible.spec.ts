@@ -320,24 +320,24 @@ async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
-/** TWO collectives — the context-change tests switch polyphony → bravura. */
+/** TWO collectives — the context-change tests switch sampledb → bravura. */
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', bravura: 'person-b' },
+		personIdByDb: { sampledb: 'person-p', bravura: 'person-b' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'bravura', name: 'Bravura', personId: 'person-b' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

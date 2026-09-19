@@ -148,7 +148,7 @@ function json(body: unknown, status = 200) {
 }
 
 /** The exact enablement read (ER-26 shape) — full URL, pinned byte-for-byte. */
-const RIGHTS_URL = 'https://api.entu-test.invalid/polyphony/entity/person-p?props=_owner,_editor';
+const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/person-p?props=_owner,_editor';
 const RIGHTS_URL_OTHER =
 	'https://api.entu-test.invalid/other-choir/entity/person-p?props=_owner,_editor';
 
@@ -247,7 +247,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: SELF_EDITOR } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 
@@ -275,7 +275,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: SELF_EDITOR } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		await waitForRow(container, 'e1');
@@ -302,7 +302,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: SELF_OWNER_ONLY } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 
@@ -324,7 +324,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue('member-1'); // an ACTIVE member — #369's trap
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: NO_GRANT } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const r = await waitForRow(container, 'e1');
@@ -348,7 +348,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue('member-1');
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		stubWire({ [RIGHTS_URL]: { hold: true } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		await waitForRow(container, 'e1');
@@ -369,16 +369,16 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const stale = deferred<Response>();
 		const fetchStub = stubWire({
-			[RIGHTS_URL]: { deferredResponse: stale.promise }, // polyphony: held, resolves LATE
+			[RIGHTS_URL]: { deferredResponse: stale.promise }, // sampledb: held, resolves LATE
 			[RIGHTS_URL_OTHER]: { hold: true } // other-choir: unresolved
 		});
 		setAuthed([
-			{ db: 'polyphony', name: 'Polyphony' },
+			{ db: 'sampledb', name: 'Sampledb' },
 			{ db: 'other-choir', name: 'Other Choir' }
 		]);
 
 		const { container } = render(Page);
-		// Polyphony's rights read is in flight…
+		// Sampledb's rights read is in flight…
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
@@ -389,7 +389,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 			expect(rightsCalls(fetchStub, RIGHTS_URL_OTHER).length).toBeGreaterThan(0);
 		});
 
-		// …NOW the stale polyphony answer lands: editor. It belongs to the OLD
+		// …NOW the stale sampledb answer lands: editor. It belongs to the OLD
 		// identity and must be discarded — other-choir's own answer is still
 		// unresolved, so nothing may enable.
 		stale.resolve(json({ entity: SELF_EDITOR }));
@@ -406,7 +406,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue('member-1'); // active member, like all 19
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: GRANTS_EXCLUDE_SELF } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const r = await waitForRow(container, 'e1');
@@ -436,7 +436,7 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		findMyMemberIdMock.mockResolvedValue(null); // archived / not yet accepted
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: SELF_EDITOR } });
-		setAuthed([{ db: 'polyphony', name: 'Polyphony' }]);
+		setAuthed([{ db: 'sampledb', name: 'Sampledb' }]);
 
 		const { container } = render(Page);
 		const r = await waitForRow(container, 'e1');

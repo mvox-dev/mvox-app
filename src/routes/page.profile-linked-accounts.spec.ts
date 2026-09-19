@@ -209,15 +209,15 @@ import { resetGate } from '$lib/profile/completionGate';
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const qa = (c: HTMLElement, sel: string) => Array.from(c.querySelectorAll(sel));
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 const GOOGLE_ID = { _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
@@ -227,7 +227,7 @@ const EMAIL_ID = { _id: 'eu-2', uid: 'me@example.com', provider: 'e-mail', email
 const SMART_ID = { _id: 'eu-3', uid: 'EE38001085718', provider: 'smart-id', email: '' };
 
 async function renderReady(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	const { container } = render(Page);
 	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 	return container;
@@ -281,11 +281,11 @@ describe('/profile — linked accounts section (#193 AC1: display from the entit
 			expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull()
 		);
 		const section = q(container, '[data-testid="profile-linked-accounts"]') as HTMLElement;
-		expect(section.textContent).toContain('Sign-ins that work for Polyphony');
+		expect(section.textContent).toContain('Sign-ins that work for Sampledb');
 
 		expect(h.listLinkedIdentitiesMock).toHaveBeenCalledTimes(1);
 		expect(h.listLinkedIdentitiesMock.mock.calls[0].slice(0, 2)).toEqual([
-			{ db: 'polyphony', token: 'jwt-member' },
+			{ db: 'sampledb', token: 'jwt-member' },
 			'person-p'
 		]);
 	});
@@ -354,7 +354,7 @@ describe('/profile — linking copy is scoped to the collective (#193 review F1)
 			expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull()
 		);
 		const heading = q(container, '[data-testid="profile-linked-accounts"] h2') as HTMLElement;
-		expect(heading.textContent?.trim()).toBe('Sign-ins that work for Polyphony');
+		expect(heading.textContent?.trim()).toBe('Sign-ins that work for Sampledb');
 	});
 
 	it('the success line says which collective the sign-in now works for — never "your account"', async () => {
@@ -365,7 +365,7 @@ describe('/profile — linking copy is scoped to the collective (#193 review F1)
 			expect(q(container, '[data-testid="profile-link-success"]')).not.toBeNull()
 		);
 		const success = q(container, '[data-testid="profile-link-success"]') as HTMLElement;
-		expect(success.textContent?.trim()).toBe('That sign-in now works for Polyphony.');
+		expect(success.textContent?.trim()).toBe('That sign-in now works for Sampledb.');
 		expect(success.textContent).not.toContain('your account');
 	});
 
@@ -375,19 +375,19 @@ describe('/profile — linking copy is scoped to the collective (#193 review F1)
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'kammerkoor', name: 'Kammerkoor', personId: 'person-k' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 
 		const { container } = render(Page);
 		await waitFor(() =>
 			expect(
 				(q(container, '[data-testid="profile-linked-accounts"] h2') as HTMLElement)?.textContent
-			).toContain('Polyphony')
+			).toContain('Sampledb')
 		);
 
 		selectedCollectiveDbStore.set('kammerkoor');
@@ -450,7 +450,7 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 		// The real mint producer is driven with the route's own cfg + personId.
 		await waitFor(() => expect(h.mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 		expect(h.mintSelfLinkInviteMock.mock.calls[0].slice(0, 2)).toEqual([
-			{ db: 'polyphony', token: 'jwt-member' },
+			{ db: 'sampledb', token: 'jwt-member' },
 			'person-p'
 		]);
 
@@ -463,7 +463,7 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 			return_to: '/profile?linked=1',
 			intent: 'link',
 			provider: 'apple',
-			invite: { db: 'polyphony', token: 'tok.link.1' },
+			invite: { db: 'sampledb', token: 'tok.link.1' },
 			linkPersonId: 'person-p',
 			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
 		});
@@ -538,7 +538,7 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 		// same shape as for a not-yet-linked provider. No refusal, no linkError.
 		await waitFor(() => expect(h.mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 		expect(h.mintSelfLinkInviteMock.mock.calls[0].slice(0, 2)).toEqual([
-			{ db: 'polyphony', token: 'jwt-member' },
+			{ db: 'sampledb', token: 'jwt-member' },
 			'person-p'
 		]);
 		expect(q(container, '[data-testid="profile-link-error"]')).toBeNull();
@@ -551,7 +551,7 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 			return_to: '/profile?linked=1',
 			intent: 'link',
 			provider: 'google',
-			invite: { db: 'polyphony', token: 'tok.link.1' },
+			invite: { db: 'sampledb', token: 'tok.link.1' },
 			linkPersonId: 'person-p',
 			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
 		});
@@ -650,7 +650,7 @@ describe('/profile — link round-trip outcome from the URL (#193 review F1)', (
 		);
 		expect(
 			(q(container, '[data-testid="profile-link-success"]') as HTMLElement).textContent
-		).toContain('That sign-in now works for Polyphony.');
+		).toContain('That sign-in now works for Sampledb.');
 		expect(q(container, '[data-testid="profile-link-error"]')).toBeNull();
 	});
 

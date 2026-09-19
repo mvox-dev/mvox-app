@@ -134,25 +134,25 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const CFG = { db: 'polyphony', token: 'jwt-admin' };
+const CFG = { db: 'sampledb', token: 'jwt-admin' };
 
 // The MARKER's display name deliberately differs from the store's picker label
-// ('Polyphony') — an implementation echoing the store label instead of the
+// ('Sampledb') — an implementation echoing the store label instead of the
 // marker read would pass a same-name fixture and prove nothing.
-const MARKER = { markerId: 'marker-1', name: 'Koor Polyphony' };
+const MARKER = { markerId: 'marker-1', name: 'Koor Sampledb' };
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own'] };
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function loadOk() {
@@ -234,13 +234,13 @@ afterEach(() => {
 
 describe('/admin — collective name display', () => {
 	it('READY renders the MARKER resolution\'s name with a pencil button — the real admin route, not an isolated component', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 
 		const { container, nameEl, pencil } = await renderWithName();
 
 		// The marker's name, NOT the store's picker label.
-		expect(nameEl.textContent).toContain('Koor Polyphony');
+		expect(nameEl.textContent).toContain('Koor Sampledb');
 		// The resolution ran against the selected collective's cfg.
 		expect(h.resolveCollectiveNameMarkerMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
@@ -261,14 +261,14 @@ describe('/admin — collective name display', () => {
 		expect(classes, 'the WHOLE field is the target, not the ✎ glyph').toContain('w-full');
 		// The value lives INSIDE the button — that is what makes the field the target.
 		expect(pencil.querySelector('#admin-collective-name-value')?.textContent).toBe(
-			'Koor Polyphony'
+			'Koor Sampledb'
 		);
 		// The role sections still render alongside — this is the SAME page.
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
 	});
 
 	it('no marker in the db (resolution → null): neither name nor pencil — nothing to edit', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveCollectiveNameMarkerMock.mockResolvedValue(null);
 
@@ -284,7 +284,7 @@ describe('/admin — collective name display', () => {
 	});
 
 	it('an empty-name marker renders a labelled, non-blank placeholder control — never a blank heading', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: '' });
 
@@ -308,7 +308,7 @@ describe('/admin — collective name display', () => {
 	});
 
 	it('a FAILED marker read lands in load-error + retry — never rendered as "no name" (house rule)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.resolveCollectiveNameMarkerMock.mockRejectedValueOnce(new Error('marker query 500'));
 
@@ -330,13 +330,13 @@ describe('/admin — collective name display', () => {
 
 describe('/admin — collective name editing', () => {
 	it('tapping the pencil opens an inline text input PRE-FILLED with the current name, carrying its own aria-label', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
 		const input = await openEditor(container);
 
-		expect(input.value).toBe('Koor Polyphony');
+		expect(input.value).toBe('Koor Sampledb');
 		expect((input.getAttribute('aria-label') ?? '').trim()).not.toBe('');
 		// The pencil unmounts (or at minimum stops being a second tab stop)
 		// while the editor is open — same shape as the event page.
@@ -346,7 +346,7 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('Enter confirms: updateCollectiveName(cfg, markerId, draft) fires ONCE and the display shows the new name without a reload', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -372,7 +372,7 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('a successful write renames the selected collective in the STORE — picker + agenda header reflect it without reload (#165 AC)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -384,7 +384,7 @@ describe('/admin — collective name editing', () => {
 			expect(get(selectedCollectiveStore)?.name).toBe('Uus Koorinimi');
 		});
 		// Still the same collective — only the label moved.
-		expect(get(selectedCollectiveStore)?.db).toBe('polyphony');
+		expect(get(selectedCollectiveStore)?.db).toBe('sampledb');
 		expect(container).toBeTruthy();
 	});
 
@@ -394,7 +394,7 @@ describe('/admin — collective name editing', () => {
 	// would silently trim it back — a write that appears to do something and
 	// then undoes itself.
 	it('the draft is TRIMMED before it reaches the wire and the store', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -416,19 +416,19 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('a whitespace-only edit of an UNCHANGED name writes nothing — trimming makes it the no-change case', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
 		const input = await openEditor(container);
-		await fireEvent.input(input, { target: { value: 'Koor Polyphony   ' } });
+		await fireEvent.input(input, { target: { value: 'Koor Sampledb   ' } });
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => {
 			expect(q(container, 'admin-collective-name-input')).toBeNull();
 		});
 		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
-		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Polyphony');
+		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 	});
 
 	// #165 review F2 / #105 R2 — Enter is a KEYBOARD dismissal, so it owes the
@@ -436,7 +436,7 @@ describe('/admin — collective name editing', () => {
 	// while the write is in flight (the pencil is `disabled`, and focus() is a
 	// no-op on a disabled element), so it lands once the write settles.
 	it('Enter hands focus back to the pencil once the write settles — a keyboard admin is never stranded on <body>', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -453,7 +453,7 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('Enter on an UNCHANGED name restores focus too (the no-write branch owes it the same)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -469,7 +469,7 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('Escape dismisses: editor closes, the OLD name stands, NOTHING is written', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -480,13 +480,13 @@ describe('/admin — collective name editing', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-collective-name-input')).toBeNull();
 		});
-		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Polyphony');
+		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 		expect(q(container, 'admin-collective-name')!.textContent).not.toContain('Peaaegu Muudetud');
 		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('blur dismisses too — #165 pins blur-cancels for THIS surface (unlike the event page\'s blur-confirms)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const { container } = await renderWithName();
 
@@ -497,12 +497,12 @@ describe('/admin — collective name editing', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-collective-name-input')).toBeNull();
 		});
-		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Polyphony');
+		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('the pencil is DISABLED while the write is in flight, re-enabled when it settles (#165 AC)', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		const gate = deferred<void>();
 		h.updateCollectiveNameMock.mockReturnValue(gate.promise);
@@ -529,7 +529,7 @@ describe('/admin — collective name editing', () => {
 	});
 
 	it('a FAILED write reverts the display to the pre-edit name and shows a visible alert — never a silent success', async () => {
-		selectPolyphony();
+		selectSampledb();
 		loadOk();
 		h.updateCollectiveNameMock.mockRejectedValue(new Error('POST failed: 403'));
 
@@ -546,10 +546,10 @@ describe('/admin — collective name editing', () => {
 		// The raw error message stays OUT of the DOM (localized copy only).
 		expect(error.textContent).not.toContain('403');
 		// The display reverted — the server still holds the old name.
-		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Polyphony');
+		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 		expect(q(container, 'admin-collective-name')!.textContent).not.toContain('Uus Koorinimi');
 		// The store label did NOT move either.
-		expect(get(selectedCollectiveStore)?.name).toBe('Polyphony');
+		expect(get(selectedCollectiveStore)?.name).toBe('Sampledb');
 	});
 });
 

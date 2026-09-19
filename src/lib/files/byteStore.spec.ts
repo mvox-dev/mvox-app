@@ -44,8 +44,8 @@ import {
 } from './byteStore';
 import { createFakeAdapter, type FakeAdapter } from '$lib/testing/byteStoreFakes';
 
-const A = { db: 'polyphony', personId: 'person-a' };
-const B = { db: 'polyphony', personId: 'person-b' };
+const A = { db: 'sampledb', personId: 'person-a' };
+const B = { db: 'sampledb', personId: 'person-b' };
 const C = { db: 'crede', personId: 'person-a' }; // same human, other collective
 
 function bytes(n: number, fill = 7): ArrayBuffer {

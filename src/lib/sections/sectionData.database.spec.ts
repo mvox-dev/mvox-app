@@ -8,7 +8,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 // but must carry the DATABASE entity id — the picker's sibling-scoped duplicate
 // check and the roster page's create threading both key on it.
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 
 function json(body: unknown, status = 200) {

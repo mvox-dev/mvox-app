@@ -2,7 +2,7 @@
 // from plain node/tsx.
 //
 // 37 scripts under scripts/migrations/ import `entuFetch` from that module,
-// including all four shipped `pnpm migrate:*` targets and every polyphony probe.
+// including all four shipped `pnpm migrate:*` targets and every migration probe.
 // They run OUTSIDE Vite, through `register-loader.mjs`, whose resolve hook maps
 // only `$env/dynamic/public` and `$lib/*`. Adding any `$app/*` import to
 // request.ts (or to anything in its transitive graph) is therefore an instant
@@ -53,13 +53,13 @@ describe('migration scripts can import the shared Entu data layer under node/tsx
 				"import { entuFetch, entuUrl, isAuthExpiredError } from '$lib/entu/request';",
 				"if (typeof entuFetch !== 'function') throw new Error('entuFetch missing');",
 				"if (typeof isAuthExpiredError !== 'function') throw new Error('isAuthExpiredError missing');",
-				"console.log('URL', entuUrl('polyphony', 'entity?limit=1'));",
+				"console.log('URL', entuUrl('sampledb', 'entity?limit=1'));",
 				"console.log('IMPORT OK');"
 			].join('\n')
 		);
 
 		expect(out).toContain('IMPORT OK');
-		expect(out).toContain('/polyphony/entity?limit=1');
+		expect(out).toContain('/sampledb/entity?limit=1');
 	});
 
 	it('a 401 under node rejects with the AuthExpiredError tag — no handler, no localStorage access', () => {
@@ -69,7 +69,7 @@ describe('migration scripts can import the shared Entu data layer under node/tsx
 				'const fetchImpl = async () => new Response("unauthorized", { status: 401 });',
 				'let caught: unknown;',
 				'try {',
-				"  await entuFetch('polyphony', 'entity?limit=1', 'stale', {}, fetchImpl as typeof fetch);",
+				"  await entuFetch('sampledb', 'entity?limit=1', 'stale', {}, fetchImpl as typeof fetch);",
 				'} catch (e) {',
 				'  caught = e;',
 				'}',
@@ -95,7 +95,7 @@ describe('migration scripts can import the shared Entu data layer under node/tsx
 				"if (process.env.MVOX_TEST_NO_NETWORK !== '1') throw new Error('fixture did not inherit MVOX_TEST_NO_NETWORK=1');",
 				'let caught: unknown;',
 				'try {',
-				"  await entuFetch('polyphony', 'entity?limit=1', 'fake-token');",
+				"  await entuFetch('sampledb', 'entity?limit=1', 'fake-token');",
 				'} catch (e) {',
 				'  caught = e;',
 				'}',

@@ -54,8 +54,8 @@ type StorageControlCapable = ByteStore & {
 	clearAllPartitions(): Promise<void>;
 };
 
-const A = { db: 'polyphony', personId: 'person-a' };
-const B = { db: 'polyphony', personId: 'person-b' };
+const A = { db: 'sampledb', personId: 'person-a' };
+const B = { db: 'sampledb', personId: 'person-b' };
 const C = { db: 'crede', personId: 'person-a' }; // same human, other collective
 
 function bytes(n: number, fill = 7): ArrayBuffer {
@@ -126,7 +126,7 @@ describe('#352 — scoped usage: one partition vs everything else (full-shape an
 		expect(await store.usageForPartition(A.db, A.personId)).toEqual({ count: 0, size: 0 });
 		expect(await store.usageForOthers(A.db, A.personId)).toEqual({ count: 0, size: 0 });
 		await seedThreePartitions();
-		expect(await store.usageForPartition('polyphony', 'person-nobody')).toEqual({
+		expect(await store.usageForPartition('sampledb', 'person-nobody')).toEqual({
 			count: 0,
 			size: 0
 		});
@@ -222,27 +222,27 @@ describe('#352 — the fake store implements the SAME members (reconciled, not a
 	it('createFakeByteStore(): usageForPartition / usageForOthers answer the seeded state, full shape', async () => {
 		const fake = createFakeByteStore() as unknown as ReturnType<typeof createFakeByteStore> &
 			StorageControlCapable;
-		fake.seed({ db: 'polyphony', personId: 'person-a' }, 'file-1', data(10));
-		fake.seed({ db: 'polyphony', personId: 'person-a' }, 'file-2', data(20));
-		fake.seed({ db: 'polyphony', personId: 'person-b' }, 'file-3', data(5));
+		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-1', data(10));
+		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-2', data(20));
+		fake.seed({ db: 'sampledb', personId: 'person-b' }, 'file-3', data(5));
 		fake.seed({ db: 'crede', personId: 'person-a' }, 'file-4', data(30));
 
-		expect(await fake.usageForPartition('polyphony', 'person-a')).toEqual({
+		expect(await fake.usageForPartition('sampledb', 'person-a')).toEqual({
 			count: 2,
 			size: 30
 		});
-		expect(await fake.usageForOthers('polyphony', 'person-a')).toEqual({ count: 2, size: 35 });
+		expect(await fake.usageForOthers('sampledb', 'person-a')).toEqual({ count: 2, size: 35 });
 	});
 
 	it('createFakeByteStore(): clearAllPartitions empties every partition', async () => {
 		const fake = createFakeByteStore() as unknown as ReturnType<typeof createFakeByteStore> &
 			StorageControlCapable;
-		fake.seed({ db: 'polyphony', personId: 'person-a' }, 'file-1', data(10));
+		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-1', data(10));
 		fake.seed({ db: 'crede', personId: 'person-a' }, 'file-2', data(30));
 
 		await fake.clearAllPartitions();
 
-		expect(fake.heldFor('polyphony', 'person-a')).toEqual([]);
+		expect(fake.heldFor('sampledb', 'person-a')).toEqual([]);
 		expect(fake.heldFor('crede', 'person-a')).toEqual([]);
 		expect(await fake.usage()).toBe(0);
 	});

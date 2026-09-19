@@ -260,16 +260,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -692,7 +692,7 @@ describe('#343 — library Open serves bytes through the store', () => {
 		});
 		expect(tab.location.href).not.toContain('s3.example');
 		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-1');
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-1']);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-1']);
 		expect(
 			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
 		).toBeNull();
@@ -731,7 +731,7 @@ describe('#343 — library Open serves bytes through the store', () => {
 			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
 		).toBeNull();
 		// Nothing half-fetched was stored — a fallback delivers, it never caches.
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual([]);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
 	});
 
 	it('OFFLINE: a file already in the store opens with every network path dead — no signing, no fetch, no error', async () => {
@@ -744,7 +744,7 @@ describe('#343 — library Open serves bytes through the store', () => {
 		});
 		vi.stubGlobal('fetch', fetchMock);
 		signFileUrlMock.mockRejectedValue(new Error('network down'));
-		fakeByteStore.seed({ db: 'polyphony', personId: 'person-p' }, 'file-1', {
+		fakeByteStore.seed({ db: 'sampledb', personId: 'person-p' }, 'file-1', {
 			bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
 			filetype: 'application/pdf',
 			sha256: 'sha-cached'
@@ -855,7 +855,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 
 		await waitFor(() => expect(uploadEditionFilesMock).toHaveBeenCalledTimes(1));
 		const call = uploadEditionFilesMock.mock.calls[0];
-		expect(call[0]).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		expect(call[0]).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 		expect(call[1]).toBe('edition-2');
 		const sent = call[2] as File[];
 		expect(sent.map((f) => f.name)).toEqual(['new-a.pdf', 'new-b.pdf']);
@@ -1161,19 +1161,19 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', secondchoir: 'person-s' },
+			personIdByDb: { sampledb: 'person-p', secondchoir: 'person-s' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -1185,7 +1185,7 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		listRepertoireItemsMock.mockResolvedValue([]);
 		listWorksMock.mockImplementation(async (cfg: { db: string }) =>
 			toListRead([
-				{ id: 'work-1', name: cfg.db === 'polyphony' ? 'Erste Messe' : 'Zweite Messe', composer: '' }
+				{ id: 'work-1', name: cfg.db === 'sampledb' ? 'Erste Messe' : 'Zweite Messe', composer: '' }
 			])
 		);
 		listEditionsMock.mockResolvedValue(toListRead([
@@ -1218,7 +1218,7 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		);
 		await selectFiles(input, [makeFile('new-a.pdf', 2048, 'application/pdf')]);
 		await waitFor(() => expect(uploadEditionFilesMock).toHaveBeenCalledTimes(1));
-		expect(uploadEditionFilesMock.mock.calls[0][0]).toEqual({ db: 'polyphony', token: 'jwt-abc' });
+		expect(uploadEditionFilesMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 
 		// …switch the collective while it is pending…
 		selectedCollectiveDbStore.set('secondchoir');

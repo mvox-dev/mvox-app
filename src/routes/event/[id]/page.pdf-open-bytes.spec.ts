@@ -141,16 +141,16 @@ function renderPage() {
 	pageStub.url = new URL('http://localhost/event/ev1');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	loadWorksByEventIdMock.mockResolvedValue({ ev1: [workRowFixture()] });
 	return render(Page);
 }
@@ -193,7 +193,7 @@ describe('event detail — PDF open through the byte store (#343)', () => {
 			expect(tab.location.href).toMatch(/^blob:/);
 		});
 		expect(tab.location.href).not.toContain('s3.example');
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual(['file-score']);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-score']);
 	});
 
 	it('READ-THROUGH on this page too: a second open signs nothing and fetches nothing', async () => {
@@ -237,7 +237,7 @@ describe('event detail — PDF open through the byte store (#343)', () => {
 		});
 		expect(tab.close).not.toHaveBeenCalled();
 		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
-		expect(fakeByteStore.heldFor('polyphony', 'person-p')).toEqual([]);
+		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
 	});
 
 	it('a rejected SIGNING gets the same surface (the case the page used to swallow into console.error)', async () => {

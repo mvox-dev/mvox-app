@@ -8,7 +8,7 @@ import {
 	type CreateInviteInput
 } from './inviteData';
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'jwt-admin' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-admin' };
 
 const INPUT: CreateInviteInput = {
 	dbEntityId: 'org-1'
@@ -115,7 +115,7 @@ describe('resolvePersonParentId', () => {
 	// #29/T4.9 — #22 deleted the database entity's `add_user` property, so the old
 	// add_user-based lookup throws live. Fix: the parent is the database entity's
 	// OWN `_id` — entu-api sets person `_parent = databaseId` at bootstrap
-	// (entu-api setupDatabase.js:183-191), and for polyphony that databaseId equals
+	// (entu-api setupDatabase.js:183-191), and for sampledb that databaseId equals
 	// the deleted add_user value, so it's the same parent WITHOUT depending on (or
 	// re-arming) add_user.
 
@@ -127,7 +127,7 @@ describe('resolvePersonParentId', () => {
 		expect(call).toBeDefined();
 		// Query shape beyond `_type.string=database` + `limit=1` is immaterial — GREEN
 		// may drop `props=add_user` from the request now that it's unused.
-		expect(call!.url).toContain('/polyphony/entity?_type.string=database');
+		expect(call!.url).toContain('/sampledb/entity?_type.string=database');
 		expect(call!.url).toContain('limit=1');
 		expect(call!.headers.Authorization).toBe('Bearer jwt-admin');
 	});
@@ -187,7 +187,7 @@ describe('resolveInviteParentId', () => {
 		expect(id).toBe(DB_ENTITY);
 
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
-		expect(String(url)).toContain('/polyphony/entity?_type.string=database');
+		expect(String(url)).toContain('/sampledb/entity?_type.string=database');
 		expect(String(url)).not.toContain('_type.string=member');
 		expect(String(url)).not.toContain('_type.string=organization');
 		expect((init.headers as Record<string, string>).Authorization).toBe('Bearer jwt-admin');

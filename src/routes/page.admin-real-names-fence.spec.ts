@@ -85,15 +85,15 @@ import {
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, PROFILE_NAMES, REAL_NAMES, DB_ENTITY_ID } from '$lib/testing/realNamesFence';
 
-function selectPolyphony() {
+function selectSampledb() {
 	setToken('jwt-admin');
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'admin-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -104,7 +104,7 @@ beforeEach(() => {
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY_ID);
 	h.createInviteMock.mockResolvedValue({ personId: 'p', memberId: 'm', inviteToken: 'a.b.c' });
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Polyphony' });
+	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
@@ -120,7 +120,7 @@ afterEach(() => {
 });
 
 async function renderReady(): Promise<HTMLElement> {
-	selectPolyphony();
+	selectSampledb();
 	const { container } = render(Page);
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="admin-add-admin-select"]')).not.toBeNull();

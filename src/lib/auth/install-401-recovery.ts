@@ -2,7 +2,7 @@
 //
 // `$lib/entu/request` is shared code: the browser imports it, and so do the 37
 // scripts under scripts/migrations/ that run under plain node/tsx (every shipped
-// `pnpm migrate:*` target plus every polyphony probe). Their resolve hook
+// `pnpm migrate:*` target plus every migration probe). Their resolve hook
 // (scripts/migrations/lib/loader.mjs) maps `$env/dynamic/public` and `$lib/*` and
 // nothing else, so a top-level `$app/navigation` import in request.ts is an
 // ERR_MODULE_NOT_FOUND for all of them — and `localStorage` does not exist under

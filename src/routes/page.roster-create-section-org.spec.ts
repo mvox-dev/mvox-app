@@ -74,7 +74,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
-/** Real live entity ids (2026-08-12 probe of polyphony). */
+/** Real live entity ids (2026-08-12 probe of the dev/test collective). */
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
 const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
@@ -139,22 +139,22 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {

@@ -130,35 +130,35 @@ function setAuthed() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
@@ -583,7 +583,7 @@ describe('#323 — a collective switch resets failure/saved residue (routeLoad r
 	it("collective A's reorder FAILURE alert does not survive the switch to B", async () => {
 		setAuthedWithTwoCollectives();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rows() : rowsB())
+			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsB())
 		);
 		reorderLinksMock.mockRejectedValue(new Error('boom'));
 		adminStore.set('admin');
@@ -608,7 +608,7 @@ describe('#323 — a collective switch resets failure/saved residue (routeLoad r
 	it("collective A's SAVED announcement does not survive the switch to B", async () => {
 		setAuthedWithTwoCollectives();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rows() : rowsB())
+			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsB())
 		);
 		adminStore.set('admin');
 		const { container } = render(Page);
@@ -655,7 +655,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 	async function renderAWithHeldReorder() {
 		setAuthedWithTwoCollectives();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rows() : rowsBPair())
+			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsBPair())
 		);
 		const held = deferred();
 		reorderLinksMock.mockReturnValue(held.promise);
@@ -720,7 +720,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 	it("A's createLink REJECTING after the switch paints no write alert on B", async () => {
 		setAuthedWithTwoCollectives();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rows() : rowsBPair())
+			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsBPair())
 		);
 		const held = deferred<string>();
 		createLinkMock.mockReturnValue(held.promise);
@@ -754,7 +754,7 @@ describe('#323 review F1 — a write started in A settles silently once the user
 	it("A's createLink RESOLVING after the switch does not wipe B's draft", async () => {
 		setAuthedWithTwoCollectives();
 		listLinksMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(cfg.db === 'polyphony' ? rows() : rowsBPair())
+			Promise.resolve(cfg.db === 'sampledb' ? rows() : rowsBPair())
 		);
 		const held = deferred<string>();
 		createLinkMock.mockReturnValue(held.promise);

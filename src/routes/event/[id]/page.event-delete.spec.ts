@@ -97,7 +97,7 @@ import {
 } from '$lib/collectives/store';
 
 /** The exact cfg the page hands the data layer: selected db + stored token. */
-const CFG = { db: 'polyphony', token: 'jwt-token' };
+const CFG = { db: 'sampledb', token: 'jwt-token' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -176,20 +176,20 @@ function readWireStub(eventOver?: Record<string, unknown>) {
 	});
 }
 
-function setAuthedWithPolyphony() {
+function setAuthedWithSampledb() {
 	setToken(CFG.token);
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'p-viewer' },
+		personIdByDb: { sampledb: 'p-viewer' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p-viewer' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderPage(eventOver?: Record<string, unknown>) {
@@ -197,7 +197,7 @@ function renderPage(eventOver?: Record<string, unknown>) {
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	setAuthedWithPolyphony();
+	setAuthedWithSampledb();
 	const rendered = render(Page);
 	return { ...rendered, fetchStub: stub };
 }

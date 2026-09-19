@@ -230,7 +230,7 @@ import {
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'polyphony', token: 'jwt-abc' };
+const CFG = { db: 'sampledb', token: 'jwt-abc' };
 const SEASON_ID = 'season-1';
 
 function isoDate(offsetDays: number): string {
@@ -309,16 +309,16 @@ function setAuthedWithOneCollective(): void {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -1185,27 +1185,27 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 
-		let landPolyphonyRead!: (scope: PageScope) => void;
+		let landSampledbRead!: (scope: PageScope) => void;
 		let reads = 0;
 		countSeasonScopeMock.mockImplementation(async () => {
 			reads += 1;
 			if (reads === 1) {
 				return await new Promise<PageScope>((res) => {
-					landPolyphonyRead = res;
+					landSampledbRead = res;
 				});
 			}
 			// org-b's OWN read never lands either — so any scope on org-b's
@@ -1234,7 +1234,7 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 			expect(countSeasonScopeMock).toHaveBeenCalledTimes(2);
 		});
 
-		landPolyphonyRead({ series: 3, events: 21, repertoireItems: 6 });
+		landSampledbRead({ series: 3, events: 21, repertoireItems: 6 });
 		await new Promise((r) => setTimeout(r, 0));
 
 		const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
@@ -1371,19 +1371,19 @@ describe('agenda — #217/#216/#236 ONE progress counter at CARD level, for BOTH
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 
 		const run = hangingDeleteSeason();
 		const { container } = render(Page);
@@ -1417,19 +1417,19 @@ describe('agenda — #217/#216/#236 ONE progress counter at CARD level, for BOTH
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'org-b': 'person-p' },
+			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 
 		const run = hangingDeleteSeason();
 		const { container } = render(Page);

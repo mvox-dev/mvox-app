@@ -15,10 +15,10 @@ const PAST_EXP = 1_999_999_900; // s → 1_999_999_900_000 ms < NOW
 
 describe('parseInviteToken — valid token', () => {
 	it('returns ok with db, entityId, and expMs (exp seconds → ms)', () => {
-		const token = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: FUTURE_EXP });
+		const token = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: FUTURE_EXP });
 		expect(parseInviteToken(token, NOW)).toEqual({
 			status: 'ok',
-			db: 'polyphony',
+			db: 'sampledb',
 			entityId: 'p1',
 			expMs: FUTURE_EXP * 1000
 		});
@@ -27,17 +27,17 @@ describe('parseInviteToken — valid token', () => {
 
 describe('parseInviteToken — client-clock expiry (warning, NOT a verdict — the server is the authority)', () => {
 	it('returns expired but KEEPS db/entityId/expMs so the landing can still offer the CTA', () => {
-		const token = jwt({ db: 'polyphony', entityId: 'p1', exp: PAST_EXP });
+		const token = jwt({ db: 'sampledb', entityId: 'p1', exp: PAST_EXP });
 		expect(parseInviteToken(token, NOW)).toEqual({
 			status: 'expired',
-			db: 'polyphony',
+			db: 'sampledb',
 			entityId: 'p1',
 			expMs: PAST_EXP * 1000
 		});
 	});
 
 	it('treats exp exactly at nowMs as expired', () => {
-		const token = jwt({ db: 'polyphony', entityId: 'p1', exp: NOW / 1000 });
+		const token = jwt({ db: 'sampledb', entityId: 'p1', exp: NOW / 1000 });
 		expect(parseInviteToken(token, NOW)).toMatchObject({ status: 'expired' });
 	});
 });
@@ -60,17 +60,17 @@ describe('parseInviteToken — invalid input', () => {
 	});
 
 	it('returns invalid when entityId is missing', () => {
-		expect(parseInviteToken(jwt({ db: 'polyphony', exp: FUTURE_EXP }), NOW)).toEqual({
+		expect(parseInviteToken(jwt({ db: 'sampledb', exp: FUTURE_EXP }), NOW)).toEqual({
 			status: 'invalid'
 		});
 	});
 
 	it('returns invalid when exp is missing or not a number (never guesses a validity window)', () => {
-		expect(parseInviteToken(jwt({ db: 'polyphony', entityId: 'p1' }), NOW)).toEqual({
+		expect(parseInviteToken(jwt({ db: 'sampledb', entityId: 'p1' }), NOW)).toEqual({
 			status: 'invalid'
 		});
 		expect(
-			parseInviteToken(jwt({ db: 'polyphony', entityId: 'p1', exp: 'soon' }), NOW)
+			parseInviteToken(jwt({ db: 'sampledb', entityId: 'p1', exp: 'soon' }), NOW)
 		).toEqual({ status: 'invalid' });
 	});
 });

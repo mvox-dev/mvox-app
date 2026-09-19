@@ -40,7 +40,7 @@ type ResolveOwnerTier = (
 const resolveOwnerTier = (adminStoreModule as unknown as { resolveOwnerTier?: ResolveOwnerTier })
 	.resolveOwnerTier;
 
-const cfg: EntuCfg = { db: 'polyphony', token: 'test-token' };
+const cfg: EntuCfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 

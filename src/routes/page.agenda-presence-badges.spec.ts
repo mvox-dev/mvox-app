@@ -191,7 +191,7 @@ function deferred<T>() {
 	return { promise, resolve: resolveIt };
 }
 
-const IDENTITY = { db: 'polyphony', personId: 'person-p' };
+const IDENTITY = { db: 'sampledb', personId: 'person-p' };
 
 function pdfData() {
 	return {
@@ -205,16 +205,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 /** TWO collectives with DISTINCT personIds — the partition-keying fixture. */
@@ -222,19 +222,19 @@ function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p', crede: 'person-c' },
+		personIdByDb: { sampledb: 'person-p', crede: 'person-c' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'crede', name: 'Crede', personId: 'person-c' }
 		],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 /** Byte-serving global fetch for the signed-URL GET leg; every other bare
@@ -457,8 +457,8 @@ describe('#367 — home agenda part rows carry the presence badge (integration)'
 		// (prefetch.ts's pinned contract — one keys-only read decides every
 		// skip). Both key on the SAME selected-collective partition.
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 		// get() counts as an open (byteStore.ts head comment) — a render must
 		// never call it, or LRU collapses to render order.
@@ -559,9 +559,9 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 		// event's (already-held) 'file-held' part, and the click-triggered
 		// re-query below.
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 
@@ -630,9 +630,9 @@ describe('#367 — the open handler re-queries after a store-write ATTEMPT (#351
 		// THREE calls (#409): load-time #367 query, the prefetch's own
 		// skip-check for 'file-held', and the click-triggered re-query.
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p']
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p']
 		]);
 	});
 });
@@ -658,9 +658,9 @@ describe('#367 — the query keys on the SELECTED collective (per-load clear + p
 
 		// Switch. The agenda reloads; the previous partition's answer must NOT
 		// survive onto the new collective's rows. Wait for the NEW load's own
-		// distinguishing content — the polyphony on-device badge gone — rather
+		// distinguishing content — the sampledb on-device badge gone — rather
 		// than a bare row-testid presence check: that testid is ALSO true on
-		// the STALE pre-switch DOM (same event id, still showing polyphony's
+		// the STALE pre-switch DOM (same event id, still showing sampledb's
 		// badge) before Svelte's queued flush swaps in `agenda-skeleton`, so a
 		// bare presence check resolves immediately without ever waiting for
 		// the switch to actually land (mirrors switchTo() in
@@ -673,11 +673,11 @@ describe('#367 — the query keys on the SELECTED collective (per-load clear + p
 		await expandWorks(container, 'agenda-row-ev-1');
 
 		// Part rows are on screen; crede's partition has not answered: ZERO
-		// badges — polyphony's on-device claim is gone, and no default stands
+		// badges — sampledb's on-device claim is gone, and no default stands
 		// in for the pending answer.
 		expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(0);
 
-		// crede holds NOTHING: the very file polyphony held badges
+		// crede holds NOTHING: the very file sampledb held badges
 		// needs-network here — presence is a claim about the PARTITION.
 		credePending.resolve([]);
 		await waitFor(() => {
@@ -692,12 +692,12 @@ describe('#367 — the query keys on the SELECTED collective (per-load clear + p
 		// #409 — TWO queries per load, each keyed on ITS load's identity:
 		// #367's own load-time query, then the opportunistic prefetch's own
 		// skip-check for the next event's 'file-held' part (held under
-		// polyphony, so no further write-attempt call; not held under crede,
+		// sampledb, so no further write-attempt call; not held under crede,
 		// but the fetch it tries resolves 'fallback-navigation' — no signed
 		// URL to sign in this fixture — which is not a write-attempt either).
 		expect(presenceSpy.mock.calls).toEqual([
-			['polyphony', 'person-p'],
-			['polyphony', 'person-p'],
+			['sampledb', 'person-p'],
+			['sampledb', 'person-p'],
 			['crede', 'person-c'],
 			['crede', 'person-c']
 		]);
@@ -782,7 +782,7 @@ describe('#367 — the season-manage repertoire panel is the SECOND render site'
 
 		// The panel consumed the LOAD's one answer: opening it queried nothing
 		// new, and rendering never touched get().
-		expect(presenceSpy.mock.calls).toEqual([['polyphony', 'person-p']]);
+		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
 		expect(getSpy).not.toHaveBeenCalled();
 	});
 });

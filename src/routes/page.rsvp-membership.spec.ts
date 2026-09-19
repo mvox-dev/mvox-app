@@ -177,16 +177,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 	// T4.8/#28 — the home page now folds the completion gate into the membership value
 	// (gatedMembership): a member is only shown the ENABLED control once the gate is
 	// 'complete'. This spec exercises the membership 3-state, so establish a complete
@@ -240,7 +240,7 @@ describe('+page — membership is display, the Entu grant is the gate (#372)', (
 		// against the entity the write targets: her own person, as herself.
 		expect(
 			resolveManageRightsMock.mock.calls.some(
-				(c) => (c[0] as { db?: string })?.db === 'polyphony' && c[1] === 'person-p' && c[2] === 'person-p'
+				(c) => (c[0] as { db?: string })?.db === 'sampledb' && c[1] === 'person-p' && c[2] === 'person-p'
 			)
 		).toBe(true);
 	});

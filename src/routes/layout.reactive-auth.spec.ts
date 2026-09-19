@@ -36,7 +36,7 @@ function setAuthedAuthStore() {
 	// (without a token in storage) makes it treat the transition as anonymous,
 	// same as it would for a genuinely stale/missing token in production.
 	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { polyphony: 'p1' }, expMs: Date.now() + 100_000 });
+	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'p1' }, expMs: Date.now() + 100_000 });
 }
 
 beforeEach(() => {
@@ -64,7 +64,7 @@ afterEach(() => {
 describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', () => {
 	it('resolves collectiveState on the first auth resolution (plain full-page-load path)', async () => {
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -88,7 +88,7 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 
 	it('an auth flip to authenticated AFTER an earlier resolve, with NO remount, still resolves collectiveState (the #7 bug class)', async () => {
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -112,7 +112,7 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 
 	it('an authenticated->anonymous transition (client-side sign-out, no remount) resets collectiveState — not left stale at ready', async () => {
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -134,7 +134,7 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 
 	it('does not re-fire hydrateCollectives on a repeated authenticated emission (no loop)', async () => {
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -148,7 +148,7 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 
 		// Re-emit the SAME status (e.g. a store notification without a real
 		// transition) — must not trigger a second discovery call.
-		authStore.set({ status: 'authenticated', personIdByDb: { polyphony: 'p1' }, expMs: Date.now() + 100_000 });
+		authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'p1' }, expMs: Date.now() + 100_000 });
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(discoverMock).toHaveBeenCalledTimes(1);
@@ -158,7 +158,7 @@ describe('+layout — reactive collective hydration on auth flip (Fix B, #7)', (
 describe('+layout — a 401 tears the whole session down, not just localStorage (#107 review F1)', () => {
 	it('the signed-in nav disappears and collectiveState resets after an Entu 401 — no reload involved', async () => {
 		discoverMock.mockResolvedValue({
-			collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'p1' }],
+			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
 			erroredDbs: []
 		});
 
@@ -178,7 +178,7 @@ describe('+layout — a 401 tears the whole session down, not just localStorage 
 		// rendering (on the sign-in page the user had just been sent to) and the
 		// layout's auth-keyed effects kept firing Entu reads with an empty Bearer.
 		await entuFetch(
-			'polyphony',
+			'sampledb',
 			'entity?limit=1',
 			'jwt-abc',
 			{},

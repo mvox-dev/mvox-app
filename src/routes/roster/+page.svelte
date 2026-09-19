@@ -560,8 +560,8 @@
 	// `listSections` queries `entity?_type.string=section&…&limit=500` with NO org
 	// scoping, and sections are created `_sharing: 'public'` (federation
 	// discoverability, v4E) — so EVERY readable section in the db lands in
-	// `sections`, not just this collective's. Live polyphony holds 16 sections
-	// across FOUR test orgs, all org-parented.
+	// `sections`, not just this collective's. The dev/test collective holds 16
+	// sections across FOUR test orgs, all org-parented.
 	//
 	// SPIKE root cause (2026-08-12, #124 check 4): `currentDbEntityId` used to read
 	// `rows.find((r) => r.dbEntityId)?.dbEntityId` — i.e. whichever roster row `loadRoster`

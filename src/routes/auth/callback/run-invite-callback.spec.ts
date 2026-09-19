@@ -40,8 +40,8 @@ function jwt(payload: object): string {
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
 
-const TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 4_102_444_800 }); // exp year 2100
-const EXPIRED_TOKEN = jwt({ db: 'polyphony', entityId: 'p1', iat: 1, exp: 1_000 }); // exp 1970
+const TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 }); // exp year 2100
+const EXPIRED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 1_000 }); // exp 1970
 
 function inviteState(overrides: Partial<OAuthState> = {}): OAuthState {
 	return {
@@ -49,7 +49,7 @@ function inviteState(overrides: Partial<OAuthState> = {}): OAuthState {
 		return_to: `/invite/${TOKEN}`,
 		intent: 'invite',
 		provider: 'google',
-		invite: { db: 'polyphony', token: TOKEN },
+		invite: { db: 'sampledb', token: TOKEN },
 		...overrides
 	};
 }
@@ -82,7 +82,7 @@ describe('runInviteCallbackExchange — redeemed', () => {
 		expect(exchangeInviteMock).toHaveBeenCalledWith(
 			expect.objectContaining({
 				sessionToken: 'sess-key',
-				db: 'polyphony',
+				db: 'sampledb',
 				inviteToken: TOKEN,
 				expectedEntityId: 'p1'
 			})
@@ -172,7 +172,7 @@ describe('runInviteCallbackExchange — inconsistent state blobs fail loudly, ne
 	it('an unparseable invite token in the blob: invite_state_invalid, no exchange call', async () => {
 		const outcome = await runInviteCallbackExchange(
 			'sess-key',
-			inviteState({ invite: { db: 'polyphony', token: 'garbage-not-a-jwt' } })
+			inviteState({ invite: { db: 'sampledb', token: 'garbage-not-a-jwt' } })
 		);
 		expect(outcome).toMatchObject({ ok: false, error: 'invite_state_invalid' });
 		expect(exchangeInviteMock).not.toHaveBeenCalled();
@@ -184,7 +184,7 @@ describe('runInviteCallbackExchange — inconsistent state blobs fail loudly, ne
 			'sess-key',
 			inviteState({
 				return_to: `/invite/${EXPIRED_TOKEN}`,
-				invite: { db: 'polyphony', token: EXPIRED_TOKEN }
+				invite: { db: 'sampledb', token: EXPIRED_TOKEN }
 			})
 		);
 		expect(exchangeInviteMock).toHaveBeenCalledWith(

@@ -150,7 +150,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 // TWO works per collective on purpose — see the header note on the #74
 // auto-select effect.
 
-const DB_A = 'polyphony';
+const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 function worksFor(db: string) {
@@ -208,7 +208,7 @@ function setAuthedWithTwoCollectives() {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [
-			{ db: DB_A, name: 'Polyphony', personId: 'person-p' },
+			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
 		],
 		erroredDbs: []

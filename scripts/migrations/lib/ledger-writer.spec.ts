@@ -34,7 +34,7 @@ describe('writeLedger — sensitive→directory routing', () => {
 	});
 
 	it('routes sensitive:false into plain seed-results/, not crede-instance', () => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: {} });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: {} });
 		const { path } = lastWrite();
 		expect(path).toMatch(/seed-results[/\\]/);
 		expect(path).not.toMatch(/crede-instance/);
@@ -57,7 +57,7 @@ describe('writeLedger — crede + sensitive:false cross-check (YELLOW-274.3)', (
 
 	it('does not require acknowledgement for a non-crede db', () => {
 		expect(() =>
-			writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: {} })
+			writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: {} })
 		).not.toThrow();
 	});
 
@@ -70,7 +70,7 @@ describe('writeLedger — crede + sensitive:false cross-check (YELLOW-274.3)', (
 
 describe('writeLedger — email content scrub runs unconditionally', () => {
 	it('redacts an email-shaped string leaf even when sensitive:false and the field is not declared', () => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: { note: 'contact jaan@example.ee please' } });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: { note: 'contact jaan@example.ee please' } });
 		const { content } = lastWrite();
 		expect(content.note).toBe('contact [REDACTED-EMAIL] please');
 	});
@@ -101,19 +101,19 @@ describe('writeLedger — redaction shape table (RED-274.1)', () => {
 	const customFieldCells = cellsFor('nickname'); // caller-supplied redactFields member
 
 	it.each(defaultFieldCells)('DEFAULT_REDACT_FIELDS field — $label', ({ build, read }) => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: build() });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: build() });
 		const { content } = lastWrite();
 		expect(read(content)).toBe('[REDACTED]');
 	});
 
 	it.each(customFieldCells)('caller redactFields field — $label', ({ build, read }) => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, redactFields: ['nickname'], payload: build() });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, redactFields: ['nickname'], payload: build() });
 		const { content } = lastWrite();
 		expect(read(content)).toBe('[REDACTED]');
 	});
 
 	it('an undeclared field of the same shapes is left untouched (no false positives)', () => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: { section: ['Soprano I'] } });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: { section: ['Soprano I'] } });
 		const { content } = lastWrite();
 		expect(content.section).toEqual(['Soprano I']);
 	});
@@ -127,7 +127,7 @@ describe('writeLedger — redaction shape table (RED-274.1)', () => {
 	const nameFieldCells = cellsFor('name');
 
 	it.each(nameFieldCells)('DEFAULT_REDACT_FIELDS field (#278) — $label', ({ build, read }) => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: build() });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: build() });
 		const { content } = lastWrite();
 		expect(read(content)).toBe('[REDACTED]');
 	});
@@ -141,7 +141,7 @@ describe('writeLedger — redaction shape table (RED-274.1)', () => {
 	const idCodeFieldCells = cellsFor('id_code');
 
 	it.each(idCodeFieldCells)('DEFAULT_REDACT_FIELDS field (#282) — $label', ({ build, read }) => {
-		writeLedger({ scriptName: 'x', dryRun: true, db: 'polyphony', sensitive: false, payload: build() });
+		writeLedger({ scriptName: 'x', dryRun: true, db: 'sampledb', sensitive: false, payload: build() });
 		const { content } = lastWrite();
 		expect(read(content)).toBe('[REDACTED]');
 	});
@@ -428,7 +428,7 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 			writeLedger({
 				scriptName: 'x',
 				dryRun: true,
-				db: 'polyphony',
+				db: 'sampledb',
 				sensitive: false,
 				committed: { allow: ['total'] },
 				payload: { total: 1 }

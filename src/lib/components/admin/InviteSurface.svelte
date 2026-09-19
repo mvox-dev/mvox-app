@@ -128,7 +128,7 @@
 	type Status = RouteLoadStatus | 'no-access' | 'creating' | 'done' | 'create-error';
 
 	// The enumerable set: mvox collectives (databases) this account has a person
-	// in — NOT organization entities. Today that's exactly one (polyphony).
+	// in — NOT organization entities. Today that's typically exactly one.
 	const availableDbs = $derived(
 		$collectiveState.status === 'ready' ? $collectiveState.collectives : []
 	);

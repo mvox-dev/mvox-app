@@ -118,11 +118,11 @@ describe('#353 — the HARD FENCE: Entu API URLs are NEVER cached or served from
 	// decision function keys on, so the fence pinned here holds for the
 	// production host by the same rule.
 	const ENTU_URLS = [
-		'https://api.entu-test.invalid/polyphony/entity/68000000000000000000abcd',
-		'https://api.entu-test.invalid/polyphony/entity?_type.string=work&props=name&limit=500',
-		'https://api.entu-test.invalid/polyphony/property/68000000000000000000ffff',
-		'https://api.entu-test.invalid/auth?account=polyphony',
-		'https://entu-files.fra1.digitaloceanspaces.com/polyphony/file.pdf?X-Amz-Signature=deadbeef'
+		'https://api.entu-test.invalid/sampledb/entity/68000000000000000000abcd',
+		'https://api.entu-test.invalid/sampledb/entity?_type.string=work&props=name&limit=500',
+		'https://api.entu-test.invalid/sampledb/property/68000000000000000000ffff',
+		'https://api.entu-test.invalid/auth?account=sampledb',
+		'https://entu-files.fra1.digitaloceanspaces.com/sampledb/file.pdf?X-Amz-Signature=deadbeef'
 	];
 
 	it.each(ENTU_URLS)('bypasses (no cache read, no cache write): %s', (url) => {

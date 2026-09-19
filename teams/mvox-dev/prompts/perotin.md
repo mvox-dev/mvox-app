@@ -91,7 +91,7 @@ Every script should:
 - Generated names: random combinations of Estonian forenames/surnames (or other locale-appropriate sets). Never real individuals.
 - Emails: `@example.ee` test domain or omit entirely. Never real addresses.
 - Real personal data: gather only with explicit team-lead direction (which routes from PO). GDPR + Estonian privacy norms apply.
-- Real organization names: acceptable when publicly associated with polyphony (e.g., Estonian choral landscape); flag PII risk if uncertain.
+- Real organization names: acceptable when publicly associated with the polyphony prototype's choir community (e.g., Estonian choral landscape); flag PII risk if uncertain.
 
 ## Scope Restrictions
 

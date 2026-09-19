@@ -110,16 +110,16 @@ function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { polyphony: 'person-p' },
+		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({
 		status: 'ready',
-		collectives: [{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' }],
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
 		erroredDbs: []
 	});
 	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('polyphony');
+	selectedCollectiveDbStore.set('sampledb');
 }
 
 // m1 is the VIEWER's own membership (personId matches the selected collective's
@@ -288,7 +288,7 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		});
 		// The Proxy message mock stringifies params, so the collective name only
 		// appears if GREEN actually passes it into the refusal copy.
-		expect(refused.textContent).toContain('Polyphony');
+		expect(refused.textContent).toContain('Sampledb');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
 		// #286 done-when 5 — the refusal does NOT disarm: the pair stays ARMED
 		// beside the alert (blockers listed; the admin cancels out or retries
@@ -512,19 +512,19 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+			personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 		adminStore.set('admin');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
@@ -1147,7 +1147,7 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		dbEntityId: string;
 	};
 
-	// Collective A's (polyphony's) inactive member — the rows a stale settle
+	// Collective A's (sampledb's) inactive member — the rows a stale settle
 	// tries to smuggle under collective B's roster.
 	const goneGirl: InactiveRow = {
 		memberId: 'm9',
@@ -1162,19 +1162,19 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
-			personIdByDb: { polyphony: 'person-p', 'other-choir': 'person-q' },
+			personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
 			expMs: Date.now() + 100_000
 		});
 		collectiveState.set({
 			status: 'ready',
 			collectives: [
-				{ db: 'polyphony', name: 'Polyphony', personId: 'person-p' },
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
 			],
 			erroredDbs: []
 		});
 		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('polyphony');
+		selectedCollectiveDbStore.set('sampledb');
 	}
 
 	// Every loadInactiveRoster call is HELD until the test releases it — the
