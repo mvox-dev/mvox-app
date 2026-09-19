@@ -25,12 +25,27 @@
 //    (a truncated census would leave events outside the pairing check for
 //    the formula to blank).
 //
-// 2. MULTI-VALUE stops the step ahead of pairing (S2 precedent: a doubled
-//    value is not classifiable at all): any event holding more than one
-//    `name` or `event_name` value aborts the whole run before anything
-//    else is checked.
+// 2. PROP-DEF + RIGHTS + IDEMPOTENCE PREFLIGHT — resolve the event type's
+//    existing `name` prop-def by S1's exact query shape (meta-type ids +
+//    event type id via the same lib/ensure-schema-type helpers S1 uses),
+//    then a plain GET for `_owner`/`_editor`/`formula`. Rights first:
+//    abort when `cfg.userId` is absent from the prop-def's own
+//    `_owner`/`_editor` references (`.reference` only — `.string` bakes
+//    the person's name). Then idempotence: abort when the prop-def already
+//    carries a formula value — a re-run after success reports and stops
+//    without writing. All four are read-only GETs, and they run BEFORE the
+//    census verdicts below for one reason: once the formula has landed,
+//    every nameless event carries a computed `name` with no `event_name`
+//    beside it — the straggler shape exactly — so a re-run judged on the
+//    census first would abort 'aborted-pairing' and announce 36 names
+//    about to be destroyed, when the step in fact already succeeded and
+//    only the touch-saves remain.
 //
-// 3. PAIRING PREFLIGHT — the go/no-go (#421 body): any event with a
+// 3. MULTI-VALUE stops the step ahead of pairing (S2 precedent: a doubled
+//    value is not classifiable at all): any event holding more than one
+//    `name` or `event_name` value aborts the whole run.
+//
+// 4. PAIRING PREFLIGHT — the go/no-go (#421 body): any event with a
 //    non-empty `name` and an empty/absent `event_name` is a straggler the
 //    formula would destroy. Found even one -> abort ledger, throw, zero
 //    POSTs, zero aggregate GETs. Classification for counts: `paired` =
@@ -38,22 +53,14 @@
 //    non-empty. A total would be wrong (#421 body) — it moves as the app
 //    writes new events.
 //
-// 4. PROP-DEF + RIGHTS PREFLIGHT — resolve the event type's existing `name`
-//    prop-def by S1's exact query shape (meta-type ids + event type id via
-//    the same lib/ensure-schema-type helpers S1 uses), then a plain GET for
-//    `_owner`/`_editor`/`formula`. Rights checked first: abort when
-//    `cfg.userId` is absent from the prop-def's own `_owner`/`_editor`
-//    references (`.reference` only — `.string` bakes the person's name).
-//    Then idempotence: abort when the prop-def already carries a formula
-//    value — a re-run after success reports and stops without writing.
-//
 // 5. DRY RUN (the default) — zero POSTs, zero aggregate GETs. The ledger
 //    carries the exact formula string, the counts, the prop-def id, the
 //    rights result, and says plainly that the overwrite cannot be
 //    previewed (a formula has no non-destructive mode).
 //
 // 6. LIVE — exactly ONE POST, `entity/{namePropDefId}` with body
-//    `[{type:'formula', string: FORMULA}]` (probe-233's proven wire shape —
+//    `[{type:'formula', string: FORMULA}]`
+//    (probe-233-formula-name-overwrite-2026-09-03.ts's proven wire shape —
 //    no DELETE first: `formula` behaved as a settable single value). Then
 //    touch-save EVERY crede event via `GET entity/{id}/aggregate` — the
 //    documented mechanic (api/best-practices: "fresh formula values after
@@ -257,24 +264,14 @@ export async function runSeed233S4(
 		return { total, paired: pairedIds.length, nameless: namelessIds.length };
 	}
 
-	if (multiValue.length > 0) {
-		writeS4Ledger('aborted-multi-value', { counts: baseCounts(), multiValue });
-		throw new Error(
-			`runSeed233S4: ${multiValue.length} event(s) hold more than one name/event_name value -- not ` +
-				`classifiable -- stopping before any write: ${multiValue.map((m) => m.eventId).join(', ')}`
-		);
-	}
-
-	if (pairingStragglers.length > 0) {
-		writeS4Ledger('aborted-pairing', { counts: baseCounts(), pairingStragglers });
-		throw new Error(
-			`runSeed233S4: pairing preflight failed for ${pairingStragglers.length} event(s) -- a non-empty ` +
-				`name with no event_name copy -- the formula would destroy it -- stopping before any write: ` +
-				`${pairingStragglers.map((s) => s.eventId).join(', ')}`
-		);
-	}
-
-	// 2. PROP-DEF + RIGHTS PREFLIGHT — S1's exact resolution shape.
+	// 2. PROP-DEF + RIGHTS + IDEMPOTENCE PREFLIGHT — S1's exact resolution
+	// shape, and it runs AHEAD of the multi-value/pairing blocks: all four
+	// checks here are read-only GETs, and until the script knows whether the
+	// formula already landed it cannot read the census straight. After a
+	// successful run every nameless event carries a formula-computed `name`
+	// and still has no `event_name`, which is exactly the straggler shape —
+	// so a re-run classified first would abort 'aborted-pairing' and report
+	// names about to be destroyed when in truth the step already succeeded.
 	const { entityMetaTypeId, propertyMetaTypeId } = await resolveMetaTypeIds(cfg, fetchImpl);
 	const typeId = await resolveTypeIdByName(cfg, entityMetaTypeId, event_name.onType, fetchImpl);
 
@@ -316,7 +313,10 @@ export async function runSeed233S4(
 	}
 
 	// Idempotence, checked only once rights are confirmed: a re-run after
-	// success reports and stops without writing.
+	// success reports and stops without writing. The counts riding along are
+	// the census read under a formula already in force — `nameless` reads 0
+	// there, since those events now hold a computed `name`; the outcome, not
+	// the split, is what this ledger is for.
 	const existingFormula = propDefEntity.formula?.[0]?.string;
 	if (existingFormula !== undefined) {
 		writeS4Ledger('aborted-already-formula', {
@@ -328,6 +328,28 @@ export async function runSeed233S4(
 		throw new Error(
 			`runSeed233S4: the 'name' prop-def already carries a formula -- this looks like a re-run after ` +
 				`success -- stopping without writing`
+		);
+	}
+
+	// 3. MULTI-VALUE stops the step ahead of pairing (S2 precedent: a doubled
+	// value is not classifiable at all).
+	if (multiValue.length > 0) {
+		writeS4Ledger('aborted-multi-value', { counts: baseCounts(), multiValue });
+		throw new Error(
+			`runSeed233S4: ${multiValue.length} event(s) hold more than one name/event_name value -- not ` +
+				`classifiable -- stopping before any write: ${multiValue.map((m) => m.eventId).join(', ')}`
+		);
+	}
+
+	// 4. PAIRING PREFLIGHT — the go/no-go. Reached only once the prop-def is
+	// known to carry no formula, so a non-empty `name` here is a real stored
+	// value, never one the formula computed.
+	if (pairingStragglers.length > 0) {
+		writeS4Ledger('aborted-pairing', { counts: baseCounts(), pairingStragglers });
+		throw new Error(
+			`runSeed233S4: pairing preflight failed for ${pairingStragglers.length} event(s) -- a non-empty ` +
+				`name with no event_name copy -- the formula would destroy it -- stopping before any write: ` +
+				`${pairingStragglers.map((s) => s.eventId).join(', ')}`
 		);
 	}
 
@@ -348,7 +370,8 @@ export async function runSeed233S4(
 		};
 	}
 
-	// 3. LIVE — the ONE formula POST, no DELETE first (probe-233's proven wire shape).
+	// 5. LIVE — the ONE formula POST, no DELETE first
+	// (probe-233-formula-name-overwrite-2026-09-03.ts's proven wire shape).
 	const formulaPostRes = await entuFetch(
 		cfg.db,
 		`entity/${namePropDefId}`,
@@ -377,7 +400,7 @@ export async function runSeed233S4(
 		aggregated += 1;
 	}
 
-	// 4. READ-BACK — proves Done-when box 2 ("no event lost its name").
+	// 6. READ-BACK — proves Done-when box 2 ("no event lost its name").
 	const readbackRes = await entuFetch(
 		cfg.db,
 		'entity?_type.string=event&props=name,event_name&limit=10000',

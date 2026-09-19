@@ -40,8 +40,11 @@
 //   proceed past (#421 body): any event with a non-empty `name` and an
 //   empty/absent `event_name` is a straggler the formula would destroy.
 //   Collected as `pairingStragglers` ({eventId} only), abort ledger with
-//   outcome 'aborted-pairing', throw — dry and live alike, no request
-//   beyond the census, zero POSTs, zero aggregate GETs.
+//   outcome 'aborted-pairing', throw — dry and live alike, zero POSTs,
+//   zero aggregate GETs. It is judged AFTER the prop-def preflight below:
+//   under a formula already in force the census cannot be read straight
+//   (a computed `name` beside no `event_name` wears the straggler shape),
+//   so 'aborted-already-formula' must win on a re-run.
 //
 // - MULTI-VALUE stops the step AHEAD of pairing (S2 precedent: a doubled
 //   name is not classifiable at all): any event holding more than one
@@ -62,7 +65,9 @@
 //   references (`.reference` ONLY — `.string` bakes the person's name).
 //   Abort 'aborted-already-formula' when the prop-def already carries a
 //   formula value — idempotence: a re-run after success reports and stops
-//   without writing. Rights checked first.
+//   without writing. Rights checked first. This whole block (four
+//   read-only GETs) runs BEFORE the multi-value and pairing verdicts, so
+//   the idempotence abort is reachable in the state it exists for.
 //
 // - DRY RUN (the default): zero POSTs, zero aggregate GETs — the census
 //   and the prop-def resolution GETs are the whole wire. The ledger
@@ -249,8 +254,25 @@ const MULTI_VALUE: CensusEvent[] = [
 	}
 ];
 
-/** Small clean estate for the preflight-abort cases. */
+/** Small clean estate for the preflight-abort cases — the estate BEFORE S4 runs. */
 const SMALL: CensusEvent[] = [pairedEvent(1), namelessEvent(1), namelessEvent(2)];
+
+/**
+ * The estate a re-run actually meets, one successful run later: the formula
+ * computed a `name` onto EVERY event, so the nameless ones now carry a
+ * non-empty `name` with no `event_name` beside it — the straggler shape
+ * exactly, worn by events that lost nothing. Nothing in the census tells
+ * the two apart; only the prop-def's own formula value does, which is why
+ * it is read before the census is judged.
+ */
+const AFTER_SUCCESS: CensusEvent[] = SMALL.map((event) => {
+	const eventName = event.event_name?.[0]?.string;
+	const computed =
+		eventName !== undefined && eventName.trim().length > 0
+			? `${START} — ${TYPE} — ${eventName}`
+			: `${START} — ${TYPE}`;
+	return { ...event, name: [{ _id: `p-${event._id}-name-computed`, string: computed }] };
+});
 
 // ---------------------------------------------------------------------------
 // Fake wire: census GET, meta-type + prop-def resolution GETs, the ONE
@@ -441,8 +463,11 @@ describe('#421 — pairing preflight: the go/no-go, a STOP, never a count to pro
 
 		// The dry run cannot preview the overwrite, so this preflight is the
 		// only thing standing between a straggler and a destroyed name: the
-		// census is the ONLY request — not even the prop-def is resolved.
-		expect(requests).toEqual([censusGet]);
+		// wire holds the census and the four read-only prop-def resolution
+		// GETs, nothing else. (The prop-def is resolved first so a re-run
+		// under a live formula is diagnosed as one — see the
+		// aborted-already-formula re-run case below.)
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
 		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
 		expect(requests.filter((r) => r.url.endsWith('/aggregate'))).toEqual([]);
 
@@ -466,12 +491,13 @@ describe('#421 — pairing preflight: the go/no-go, a STOP, never a count to pro
 		});
 	});
 
-	it('DRY: the pairing abort fires on the dry run alike — throws, outcome aborted-pairing, census is the only request', async () => {
+	it('DRY: the pairing abort fires on the dry run alike — throws, outcome aborted-pairing, reads only (census + prop-def resolution)', async () => {
 		const { fetchImpl, requests } = makeWire(STRAGGLERS);
 
 		await expect(runSeed233S4(cfg, true, fetchImpl)).rejects.toThrow(/pairing/i);
 
-		expect(requests).toEqual([censusGet]);
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		const call = writeLedgerMock.mock.calls[0]?.[0] as {
@@ -485,12 +511,13 @@ describe('#421 — pairing preflight: the go/no-go, a STOP, never a count to pro
 });
 
 describe('#421 — a multi-valued name/event_name stops the step ahead of pairing', () => {
-	it('DRY: multiValue non-empty → throws, outcome aborted-multi-value with both counts per event, census is the only request', async () => {
+	it('DRY: multiValue non-empty → throws, outcome aborted-multi-value with both counts per event, reads only (census + prop-def resolution)', async () => {
 		const { fetchImpl, requests } = makeWire(MULTI_VALUE);
 
 		await expect(runSeed233S4(cfg, true, fetchImpl)).rejects.toThrow(/more than one/i);
 
-		expect(requests).toEqual([censusGet]);
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		expect(writeLedgerMock).toHaveBeenCalledWith({
@@ -528,7 +555,7 @@ describe('#421 — a multi-valued name/event_name stops the step ahead of pairin
 
 		await expect(runSeed233S4(cfg, true, fetchImpl)).rejects.toThrow(/more than one/i);
 
-		expect(requests).toEqual([censusGet]);
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
 		const call = writeLedgerMock.mock.calls[0]?.[0] as {
 			payload: { outcome: string; multiValue: Array<{ eventId: string }> };
 		};
@@ -566,6 +593,10 @@ describe('#421 — prop-def + rights preflight on the `name` prop-def', () => {
 		});
 	});
 
+	// The PRE-run estate with a formula bolted onto the prop-def: a state
+	// that cannot occur live (a landed formula computes a name onto every
+	// event), kept because it pins the check in isolation. The re-run case
+	// right below is the one the operator actually meets.
 	it('LIVE: the prop-def already carries a formula value → aborted-already-formula, NO POST — a re-run after success reports and stops', async () => {
 		const { fetchImpl, requests } = makeWire(SMALL, {
 			propDef: { owners: [RUNNER_ID], formula: FORMULA }
@@ -588,6 +619,40 @@ describe('#421 — prop-def + rights preflight on the `name` prop-def', () => {
 				dryRun: false,
 				outcome: 'aborted-already-formula',
 				counts: { total: 3, paired: 1, nameless: 2 },
+				namePropDefId: NAME_PROPDEF_ID,
+				rightsOk: true,
+				existingFormula: FORMULA
+			}
+		});
+	});
+
+	it('the re-run estate (the formula already computed a name onto every event) is diagnosed as aborted-already-formula, NOT as pairing stragglers', async () => {
+		const { fetchImpl, requests } = makeWire(AFTER_SUCCESS, {
+			propDef: { owners: [RUNNER_ID], formula: FORMULA }
+		});
+
+		await expect(runSeed233S4(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/already.*formula/i);
+
+		// Read-only throughout: the prop-def block precedes the pairing
+		// verdict precisely so this path exists.
+		expect(requests).toEqual([censusGet, ...propDefResolutionGets]);
+		expect(requests.filter((r) => r.method !== 'GET')).toEqual([]);
+
+		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
+		expect(writeLedgerMock).toHaveBeenCalledWith({
+			scriptName: 'seed-233-s4-event-name-formula-crede',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: [...COMMITTED_ALLOW] },
+			payload: {
+				dryRun: false,
+				outcome: 'aborted-already-formula',
+				// the census read under a formula in force: the two nameless
+				// events wear the straggler shape, so `nameless` reads 0 — the
+				// outcome, not the split, is what this ledger is for
+				counts: { total: 3, paired: 1, nameless: 0 },
 				namePropDefId: NAME_PROPDEF_ID,
 				rightsOk: true,
 				existingFormula: FORMULA
