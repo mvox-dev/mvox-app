@@ -138,19 +138,29 @@ describe('mvox-app#417 — every crede-mutating script gates its live run on a r
 		).toEqual([]);
 	});
 
-	it("every enumerated script with a committed twin names 'authorizedBy' in its allow array — the tracked ledger must carry the authorizer", () => {
+	// Review round 1 (Bentham) removed a third fence here that required every
+	// committed-twin script to name 'authorizedBy' in its `committed.allow`.
+	// Done-when box 3 ("the committed ledger carries the authorizer") does not
+	// need it: `writeLedger` injects `authorizedBy` into the committed
+	// envelope unconditionally, pinned by ledger-writer.spec.ts ("live + valid
+	// value lands under authorizedBy in BOTH twins"). The allow entry was a
+	// no-op for the envelope and did only one real thing — let a PAYLOAD key
+	// named `authorizedBy` through `filterByAllowlist` into the tracked file.
+	// The writer now writes its own value last so such a key cannot win, and
+	// the scripts no longer allowlist a name the envelope already owns.
+	it("no enumerated script allowlists 'authorizedBy' — the committed envelope carries it, the allow entry only admits a payload impostor", () => {
 		const violations: string[] = [];
 		for (const rel of CREDE_MUTATING_SCRIPTS) {
 			const content = readScript(rel);
 			if (!content.includes('committed:')) continue;
-			if (!content.includes("'authorizedBy'")) {
-				violations.push(`${rel}: has a committed twin but 'authorizedBy' is missing from its allow array`);
+			if (content.includes("'authorizedBy'")) {
+				violations.push(`${rel}: names 'authorizedBy' in its committed.allow array`);
 			}
 		}
 		expect(
 			violations,
-			"Done-when box 3 (#417): the committed ledger carries the authorizer and it is in its allowlist — " +
-				"add 'authorizedBy' to the committed.allow array."
+			"writeLedger writes the envelope's authorizedBy into the committed twin itself — drop 'authorizedBy' " +
+				'from committed.allow; allowlisting it only opens a path for a same-named payload key.'
 		).toEqual([]);
 	});
 });

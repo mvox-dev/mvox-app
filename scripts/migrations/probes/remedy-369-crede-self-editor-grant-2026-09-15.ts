@@ -182,8 +182,7 @@ async function main(): Promise<void> {
 				'status',
 				'total',
 				'withSelfEditorCount',
-				'expectedGivenFlags',
-				'authorizedBy'
+				'expectedGivenFlags'
 			]
 		},
 		payload: {

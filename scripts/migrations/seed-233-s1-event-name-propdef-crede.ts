@@ -153,7 +153,7 @@ export async function runSeed233S1(
 		db: cfg.db,
 		sensitive: true,
 		authorizedBy,
-		committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
+		committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
 		payload
 	});
 

@@ -355,7 +355,7 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 		expect(returned).toBe(instance.path);
 	});
 
-	it('sensitive:true WITHOUT committed → one write, byte-pinned envelope (#417 adds authorizedBy after sensitive)', () => {
+	it('sensitive:true WITHOUT committed → one write, byte-pinned envelope (#417 adds authorizedBy after the payload)', () => {
 		writeLedgerWithAuth({
 			scriptName: 'seed-999-crede-members',
 			dryRun: false,
@@ -368,16 +368,17 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 		expect(writeFileSyncMock).toHaveBeenCalledTimes(1);
 		const only = allWrites()[0];
 		expect(only.path).toMatch(/crede-instance/);
-		// Byte-pin: the pre-#402 envelope + the #417 `authorizedBy` key (after
-		// `sensitive`, before the payload spread) + denylist-redacted payload,
-		// 2-space JSON — no committed marker, no reordering, nothing else.
+		// Byte-pin: the pre-#402 envelope + denylist-redacted payload + the #417
+		// `authorizedBy` key LAST, 2-space JSON — no committed marker, no
+		// reordering, nothing else. `authorizedBy` sits after the payload
+		// spread deliberately (review round 1): a payload key of that name
+		// must never shadow the recorded authorizer.
 		expect(only.raw).toBe(
 			JSON.stringify(
 				{
 					dryRun: false,
 					db: 'mvox_crede',
 					sensitive: true,
-					authorizedBy: LIVE_AUTH,
 					total: 2,
 					byStatus: { created: 1, skipped: 1 },
 					entries: [
@@ -389,7 +390,8 @@ describe('writeLedger — committed ledger twin (#402)', () => {
 							email: '[REDACTED]',
 							fullName: 'Jaan Tamm'
 						}
-					]
+					],
+					authorizedBy: LIVE_AUTH
 				},
 				null,
 				2
@@ -584,6 +586,14 @@ describe('assertLiveRunAuthorized — preflight unit contract (#417)', () => {
 		expect(() => assertLiveRunAuthorized(false, 'mihkel@example.test, team console')).toThrow(/@|email/i);
 	});
 
+	// Review round 1 (Bentham): the sentinel is non-blank and '@'-free, so the
+	// two checks above let it through and a live ledger came out byte-identical
+	// to a dry run's — the exact ambiguity the sentinel exists to remove.
+	it('throws when live and the value IS the dry-run sentinel — "no authorization required" never authorizes a live run', () => {
+		expect(() => assertLiveRunAuthorized(false, NO_AUTH_DRY_RUN_LITERAL)).toThrow(/sentinel|dry run/i);
+		expect(() => assertLiveRunAuthorized(false, `  ${NO_AUTH_DRY_RUN_LITERAL}  `)).toThrow(/sentinel|dry run/i);
+	});
+
 	it('does not throw when live and the value is the full name+channel+issue-comment shape', () => {
 		expect(() => assertLiveRunAuthorized(false, LIVE_AUTH)).not.toThrow();
 	});
@@ -649,6 +659,28 @@ describe('writeLedger — authorizedBy in the envelope (#417)', () => {
 		for (const key of Object.keys(committed?.content ?? {})) {
 			expect(permitted.has(key), `unexpected key '${key}' in committed ledger`).toBe(true);
 		}
+	});
+
+	// Review round 1 (Bentham): the envelope key used to be written BEFORE the
+	// payload spread, so `{...envelope, ...payload}` handed a payload key named
+	// `authorizedBy` the last word and the recorded authorizer vanished from
+	// the ledger without a trace. Both twins now write it last.
+	it('a payload key named authorizedBy cannot shadow the recorded authorizer — in either twin', () => {
+		writeLedgerWithAuth({
+			scriptName: 'seed-999-crede-members',
+			dryRun: false,
+			db: 'mvox_crede',
+			sensitive: true,
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: ['total', 'authorizedBy'] },
+			payload: { total: 1, authorizedBy: 'PAYLOAD-SUPPLIED — not the recorded authorizer' }
+		});
+
+		expect(writeFileSyncMock).toHaveBeenCalledTimes(2);
+		const instance = writes().find((w) => /crede-instance/.test(w.path));
+		const committed = writes().find((w) => /-committed\.json$/.test(w.path));
+		expect(instance?.content.authorizedBy).toBe(LIVE_AUTH);
+		expect(committed?.content.authorizedBy).toBe(LIVE_AUTH);
 	});
 
 	it('dry run + no value writes exactly the fixed sentinel — an absent field is never ambiguous', () => {

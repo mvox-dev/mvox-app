@@ -13,7 +13,7 @@
 //   side-effect-free on import (no main() at module scope — importing it from
 //   this spec must not attempt loadCredeCfg or any fetch; the network guard
 //   turns such an attempt into a loud suite failure) and exports
-//   `runSeed233S1(cfg, dryRun, fetchImpl)` returning
+//   `runSeed233S1(cfg, dryRun, fetchImpl, authorizedBy?)` returning
 //   `{ typeId, propDefId, outcome, sharing, ordinal, ledgerPath }`.
 //
 // - SHARING + ORDINAL ARE NOT KNOWN from any committed artefact (no ledger
@@ -47,21 +47,30 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/seed-233-s1-fake.json');
 
-// mvox-app#417 — this spec exercises the prop-def-ensure contract, not the
-// authorization gate (that's ledger-writer.spec.ts + liveRunAuthorization.
-// guard.spec.ts); assertLiveRunAuthorized is mocked to a no-op so these
-// dryRun:false calls (none of which pass an authorizedBy) keep passing.
-vi.mock('./lib/ledger-writer', () => ({
-	writeLedger: (...args: unknown[]) => writeLedgerMock(...(args as [unknown])),
-	assertLiveRunAuthorized: () => {},
-	DEFAULT_REDACT_FIELDS: ['email', 'forename', 'surname', 'phone', 'birthdate', 'name', 'id_code']
-}));
+// mvox-app#417 (review round 1, Bentham) — ONLY `writeLedger` is replaced;
+// everything else in the module, `assertLiveRunAuthorized` above all, is the
+// REAL export. seed-233 is the one crede-mutating script whose preflight
+// lives inside an exported engine rather than at module top level, so this
+// spec is the only place the gate can actually be exercised against running
+// code — mocking it to a no-op here both hid that and let the spec pin a
+// production-impossible shape (dryRun:false with authorizedBy:undefined,
+// which the real writeLedger throws on).
+vi.mock('./lib/ledger-writer', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('./lib/ledger-writer')>();
+	return {
+		...actual,
+		writeLedger: (...args: unknown[]) => writeLedgerMock(...(args as [unknown]))
+	};
+});
 
 import { runSeed233S1 } from './seed-233-s1-event-name-propdef-crede';
 import { event_name } from './lib/mvox-schema-extensions';
 
 const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
+
+/** #417 canonical authorizer shape: name, channel, issue-comment URL — never an email. */
+const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/233#issuecomment-4171';
 
 // Fixture ids — meta types, the event type, its existing `name` prop-def.
 const META_ENTITY = 'meta-entity-1';
@@ -251,8 +260,10 @@ describe('#233 S1 — seed-233-s1-event-name-propdef-crede (dry-run)', () => {
 			dryRun: true,
 			db: 'mvox_crede',
 			sensitive: true,
+			// #417: a dry run passes no authorizer and needs none — the writer
+			// records the fixed sentinel for it.
 			authorizedBy: undefined,
-			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
+			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
 			payload: {
 				typeId: TYPE_EVENT,
 				propDefId: null,
@@ -269,7 +280,7 @@ describe('#233 S1 — live run', () => {
 	it('POSTs the full prop-def create body (type ref, event_name, string, live-read sharing, adjacent ordinal), then read-back-asserts sharing', async () => {
 		const { fetchImpl, requests } = makeWire();
 
-		const result = await runSeed233S1(cfg, false, fetchImpl);
+		const result = await runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH);
 
 		expect(requests).toEqual([
 			...expectedLeadingGets(),
@@ -292,7 +303,39 @@ describe('#233 S1 — live run', () => {
 	it('THROWS when the read-back _sharing mismatches the live-read intent (never records a false created)', async () => {
 		const { fetchImpl } = makeWire({ readbackSharing: 'public' });
 
-		await expect(runSeed233S1(cfg, false, fetchImpl)).rejects.toThrow(/READ-BACK MISMATCH/);
+		await expect(runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK MISMATCH/);
+	});
+
+	// mvox-app#417 (review round 1, Bentham) — the ONLY place seed-233's gate
+	// can be proven: its preflight lives inside runSeed233S1, not at module
+	// top level, so the source-level fence (liveRunAuthorization.guard.spec.ts)
+	// can see the call but not that it actually stops the run. The real
+	// assertLiveRunAuthorized is in play here (only writeLedger is mocked).
+	it('a live run with NO recorded authorizer is refused before anything is written — not one request, not one POST', async () => {
+		const { fetchImpl, requests } = makeWire();
+
+		await expect(runSeed233S1(cfg, false, fetchImpl)).rejects.toThrow(/authorizedBy|AUTHORIZED_BY/i);
+
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
+		expect(requests).toEqual([]);
+		expect(writeLedgerMock).not.toHaveBeenCalled();
+	});
+
+	it('a live run whose authorizer is the dry-run sentinel is refused the same way — "not required" never authorizes', async () => {
+		const { fetchImpl, requests } = makeWire();
+
+		await expect(
+			runSeed233S1(cfg, false, fetchImpl, 'dry run — no authorization required')
+		).rejects.toThrow(/sentinel|dry run/i);
+
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
+	});
+
+	it('a DRY run needs no authorizer — the gate is a live-run gate only', async () => {
+		const { fetchImpl, requests } = makeWire();
+
+		await expect(runSeed233S1(cfg, true, fetchImpl)).resolves.toMatchObject({ outcome: 'dry-run' });
+		expect(requests.filter((r) => r.method === 'POST')).toEqual([]);
 	});
 });
 
@@ -300,7 +343,7 @@ describe('#233 S1 — idempotence', () => {
 	it('prop-def already present → outcome `found`, ZERO POSTs', async () => {
 		const { fetchImpl, requests } = makeWire({ eventNamePropDefExists: true });
 
-		const result = await runSeed233S1(cfg, false, fetchImpl);
+		const result = await runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH);
 
 		expect(requests).toEqual([
 			...expectedLeadingGets(),
@@ -329,7 +372,7 @@ describe('#233 S1 — ledger through the #402 committed-allowlist writer', () =>
 	it('live run writes ONE ledger: sensitive:true, committed allowlist, payload keyed by ids/outcome/posture — no key named `name`', async () => {
 		const { fetchImpl } = makeWire();
 
-		await runSeed233S1(cfg, false, fetchImpl);
+		await runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		// Pinned full shape — #402's landed API: sensitive:true routes the
@@ -341,8 +384,11 @@ describe('#233 S1 — ledger through the #402 committed-allowlist writer', () =>
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
-			authorizedBy: undefined,
-			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun', 'authorizedBy'] },
+			// #417: the live run's authorizer, threaded from the caller — the
+			// real writeLedger throws on dryRun:false + authorizedBy:undefined,
+			// so that pair can never be a shape this spec pins.
+			authorizedBy: LIVE_AUTH,
+			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
 			payload: {
 				typeId: TYPE_EVENT,
 				propDefId: PD_EVENT_NAME_NEW,
@@ -381,7 +427,7 @@ describe('#233 S1 — schema of record sources the script', () => {
 	it('what the script creates IS the schema-file def — name, wire type and descriptions come from the import, not an inline copy', async () => {
 		const { fetchImpl, requests } = makeWire();
 
-		await runSeed233S1(cfg, false, fetchImpl);
+		await runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH);
 
 		const post = requests.find((r) => r.method === 'POST');
 		if (!post) throw new Error('no CREATE POST issued');

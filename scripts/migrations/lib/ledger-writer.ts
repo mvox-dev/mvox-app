@@ -96,10 +96,10 @@ export const NO_AUTHORIZATION_DRY_RUN = 'dry run — no authorization required';
  * the actual gate. `writeLedger` also calls this (defense in depth).
  *
  * Throws synchronously when the run is live (`dryRun === false`) and
- * `authorizedBy` is absent, blank, or contains '@'. The recorded value is a
- * name, the channel it came through, and the issue-comment URL where the
- * authorization is recorded — never an email address. Never throws on a
- * dry run; this is a live-run gate only.
+ * `authorizedBy` is absent, blank, the reserved dry-run sentinel, or
+ * contains '@'. The recorded value is a name, the channel it came through,
+ * and the issue-comment URL where the authorization is recorded — never an
+ * email address. Never throws on a dry run; this is a live-run gate only.
  */
 export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | undefined): void {
 	if (dryRun) return;
@@ -109,6 +109,18 @@ export function assertLiveRunAuthorized(dryRun: boolean, authorizedBy: string | 
 				`the channel it came through, and the issue-comment URL where the authorization is recorded ` +
 				`(e.g. 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/418#issuecomment-…'). ` +
 				`Never an email address.`
+		);
+	}
+	// mvox-app#417 review round 1 (Bentham) — the sentinel is non-blank and
+	// carries no '@', so without this it passed the live gate verbatim and the
+	// ledger's `authorizedBy` came out byte-identical to a genuine dry run's.
+	// That is exactly the ambiguity the sentinel exists to remove, so the
+	// reserved value is refused on a live run.
+	if (authorizedBy.trim() === NO_AUTHORIZATION_DRY_RUN) {
+		throw new Error(
+			`assertLiveRunAuthorized: AUTHORIZED_BY '${authorizedBy}' is the reserved dry-run sentinel — it means ` +
+				`"no authorization required" and may never stand in for one on a live run. Set AUTHORIZED_BY to a ` +
+				`name, the channel it came through, and the issue-comment URL where the authorization is recorded.`
 		);
 	}
 	if (authorizedBy.includes('@')) {
@@ -334,10 +346,15 @@ export function writeLedger(opts: WriteLedgerOptions): string {
 	const filename = `${opts.scriptName}-${opts.dryRun ? 'dry' : 'live'}-${timestamp}.json`;
 	const filePath = join(dir, filename);
 
+	// mvox-app#417 review round 1 (Bentham) — `authorizedBy` is written AFTER
+	// the payload spread, in both twins. With the envelope key first, a payload
+	// key of the same name won the merge and silently replaced the recorded
+	// authorizer with caller-supplied text. Last writer wins, so the envelope's
+	// value is the one that lands, whatever the payload carries.
 	writeFileSync(
 		filePath,
 		JSON.stringify(
-			{ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, authorizedBy, ...redactedPayload },
+			{ dryRun: opts.dryRun, db: opts.db, sensitive: opts.sensitive, ...redactedPayload, authorizedBy },
 			null,
 			2
 		)
@@ -361,8 +378,8 @@ export function writeLedger(opts: WriteLedgerOptions): string {
 					db: opts.db,
 					sensitive: opts.sensitive,
 					committed: true,
-					authorizedBy,
-					...scrubbed
+					...scrubbed,
+					authorizedBy
 				},
 				null,
 				2
