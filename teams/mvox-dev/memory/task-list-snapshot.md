@@ -1,5 +1,5 @@
-# Task List Snapshot — 2026-09-16 00:51 EEST (MVOX-23 regroup shutdown)
+# Task List Snapshot — 2026-09-19 05:35Z (MVOX-24 close)
 
-No formal task rows — all work ran as pipeline runs and direct dispatches. **The [NEXT SESSION] block atop team-lead.md is the restore source.** All pipelines stopped on Mihkel's order; regroup with po-team, new basis after restart. Do not dispatch from old queues without reading the new basis first.
+No task rows. **The [NEXT SESSION] block atop team-lead.md is the restore source — and Gama's word supersedes it.** Pipeline stopped by Mihkel; #233 shape and the stale-member question are with Gama / raised fresh.
 
 (*MVOX:Palestrina*)

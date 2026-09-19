@@ -2,17 +2,19 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-24, seam checkpoint 2026-09-18 21:05Z]
+### [NEXT SESSION — MVOX-25, closed on Mihkel's word 2026-09-19 05:35Z — READ GAMA FIRST]
 
-**LANDED TODAY (10 slices, all one commit each):** #362 pack #363 fb2c20d · #372 7315cdd · #400 7b4be2c · #365 d7b7dfe · #371 e27beb2; ledger pack #402 13a1f06 · #401 a362a6f · #367 09036c6 · #344 864929c. Epic #362 closed (Gama). #334 open: #409/#410 remain.
+**Session ended after a bad turn: my "Name unavailable" assessment stated inferences as findings (Mihkel: "confidently presenting me lies") and #233 was run as four slices under one issue, which the pipeline closed after step 1. Both handed to Gama (comms b9e14e245d3d82af). Do not resume either from this block — read Gama's word and the board.**
 
-**QUEUE (args in ~/workspace/scratchpad/, all prepped):** (1) links args-links-374-375.json — LAUNCH NEXT (one slice, closes both); (2) #409→#410 args-409-410.json (scope ruled: every collective the signed-in person joined, never other identities; #409 needs #367 — landed); (3) #233 args-233-pack.json S1..S4 CODE slices — live runs are Pérotin's on Mihkel's per-step authorization (S1, S2, then S2-rerun+S4), all after #402 (landed); S3 precondition = S1+S2 live ledgers on main; (4) #407 args-407.json LAST. #411 = Gama's own (research digest sent: 3-deep fence repin). #408 unrung.
+**#233 STATE:** main has S1 code a5b6f19 (schema def + crede propdef script, DRY_RUN default). NOTHING ran live on crede. Branch feat/233-s2-event-name-backfill kept, 3 commits, unmerged (pipeline stopped mid-review-2). Issue OPEN, labels stale (`in process` with nothing running) — Gama re-cuts into children or drops; Mihkel doubts it is needed. Args files in scratchpad (args-233-*.json) are for reference only. Template still auto-appends `Closes #N` at merge — multi-slice issues are not supported; do not pack them.
 
-**GATE FACTS:** manual mode covers the team-lead session only; workflow subagents were classifier-blocked on git merge/push until Mihkel's 17:50 settings change — since then MERGE agents land on their own (#367, #344). Recovery from any halt = remainder args + fresh launch, never resume. Relayed operator lines abort running agents → RELAYED_LINE_GUARD now in agentS. Context-health is the last step of both templates (no hooks).
+**"NAME UNAVAILABLE" (Mihkel raises fresh):** two probe facts only, from Pérotin's untracked scripts/migrations/probes/probe-crede-rsvp-tally-nameless-diagnosis-2026-09-19.ts: crede roster_show_real_names=true (so the event page's name path is the admin-record overlay, not the profile gate); member 6aa18c1a20ebf490c690aa81 is active, invite-path, 0 profiles, 0 rsvps. Everything I wrote beyond that is withdrawn.
 
-**TOOLS ON MAIN:** teams/mvox-dev/scripts/context-health.sh · .claude/workflows/research-pack.js (contract pins + blast + clears `in research` + context report) · tdd-slice-pipeline.js with TURN_DISCIPLINE + RELAYED_LINE_GUARD + final context-health agent.
+**LANDED THIS SESSION:** #362 pack (5), ledger pack (4), links #374+#375, #409, #410, #233 S1 — all one commit each; epic #362 closed, #334 childless. Board deploy fence: my seam 34a7965 broke it for 7 h; fixed c957e66. 62 closed issues stripped of stale motion labels (last-100 window only).
 
-**Session record:** ~/workspace/scratchpad/findings-362-slice.md + research-*-digest.md; gist https://gist.github.com/mitselek/4a4401ecfc6606a6aa7e10552e3d683b.
+**QUEUE (Gama's word before any of it):** #407 prepped (last, 358-file polyphony sweep); #413 → Gama; #408 unrung. S1 live run, S2/S3/S4: only after Gama re-cuts #233. Untracked on tree, leave alone: Pérotin's probe above; seed-results/seed-233-s1-…-dry-…-committed.json (S1 dry-run twin).
+
+**RULES ADDED (memory):** no assessment before the probe; no broad sweeps in foreground; machine timestamps only; template edits run pipeline-ref-discipline.spec.ts; relayed operator lines derail agents (guard now in both templates); research clears its own labels.
 
 (*MVOX:Palestrina*)
 
