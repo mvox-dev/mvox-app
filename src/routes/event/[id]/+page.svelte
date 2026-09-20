@@ -2145,10 +2145,29 @@
 	 *  used to run here at click time now runs INSIDE `/part/[fileId]`
 	 *  (src/routes/part/page.part-viewer.spec.ts) — an in-app `goto` has no
 	 *  async gap to survive, so the old popup-blocker-safe blank-tab dance
-	 *  (window.open('', '_blank') sync in the gesture) is gone with it. */
+	 *  (window.open('', '_blank') sync in the gesture) is gone with it.
+	 *
+	 *  #353's LABEL rides along in the navigation's page state (#427 review
+	 *  finding 3). The viewer is where bytes land, so it owns the write; this
+	 *  page is where the NAME is — `workRows` already carries all four fields
+	 *  on the row this fileId came from. Without the handoff a part first
+	 *  opened here lands on the device unnamed and renders as "Unnamed part"
+	 *  on /downloads. */
 	function handlePdfClick(fileId: string): void {
 		if (!selected) return;
-		goto(`/part/${fileId}?db=${selected.db}`);
+		const row = workRows.find((r) => r.fileId === fileId);
+		goto(`/part/${fileId}?db=${selected.db}`, {
+			state: row
+				? {
+						partLabel: {
+							work: row.workName,
+							composer: row.composer,
+							edition: row.editionName,
+							filename: row.fileName
+						}
+					}
+				: {}
+		});
 	}
 
 	/** Re-read what a settled write changed — the rows are a join over four

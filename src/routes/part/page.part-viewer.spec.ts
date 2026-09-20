@@ -49,7 +49,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 
 const pageStub = vi.hoisted(() => ({
 	params: { fileId: 'file-score' } as Record<string, string>,
-	url: new URL('http://localhost/part/file-score?db=sampledb')
+	url: new URL('http://localhost/part/file-score?db=sampledb'),
+	// #427 review finding 3 — `goto`'s page state is how the event/library
+	// entry handlers hand the part's NAME to the viewer, which is where the
+	// bytes land and so where #353's label write belongs.
+	state: {} as { partLabel?: PartLabel }
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
@@ -60,6 +64,20 @@ const { gotoMock, signFileUrlMock } = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+// The #353 LABEL INDEX — a different store from the byte store, and the one
+// surface of it this route touches (see the route's own fence note).
+const labelWrites = vi.hoisted(
+	() => [] as Array<{ identity: unknown; fileId: string; label: unknown }>
+);
+vi.mock('$lib/files/appLabelStore', () => ({
+	getAppLabelStore: () => ({
+		putLabel: async (identity: unknown, fileId: string, label: unknown) => {
+			labelWrites.push({ identity, fileId, label });
+		},
+		labelsFor: async () => new Map(),
+		remove: async () => {}
+	})
+}));
 // $lib/collectives/store pulls in discover.ts -> marker.ts -> entu/request.ts
 // -> entu-config.ts's `$env/dynamic/public` read, which the vitest node
 // environment has no value for — same seam the event/library page specs
@@ -105,12 +123,9 @@ vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-
 import Page from './[fileId]/+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { collectiveState } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import type { PartLabel } from '$lib/files/labelStore';
 
 let fakeByteStore: FakeByteStore;
 
@@ -135,22 +150,25 @@ function seedHeldPart(): void {
 	});
 }
 
-function renderViewer() {
+/**
+ * The house render. COLLECTIVE DISCOVERY IS LEFT UNRESOLVED on purpose
+ * (#427 review finding 2): `collectiveState` is filled by a network call per
+ * db, so on the cold offline start this issue is about it never answers.
+ * Every test in this file therefore runs the viewer with that store at
+ * 'loading' — identity comes off the decoded token and the `?db=` param
+ * alone, or the offline promise is not kept.
+ */
+function renderViewer(state: { partLabel?: PartLabel } = {}) {
 	pageStub.params = { fileId: 'file-score' };
 	pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
+	pageStub.state = state;
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
 		personIdByDb: { sampledb: 'person-p' },
 		expMs: Date.now() + 100_000
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	collectiveState.set({ status: 'loading' });
 	return render(Page);
 }
 
@@ -226,6 +244,8 @@ afterEach(() => {
 	pdfjs.renderCalls.length = 0;
 	gotoMock.mockReset();
 	signFileUrlMock.mockReset();
+	labelWrites.length = 0;
+	pageStub.state = {};
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -468,4 +488,139 @@ describe('#427 — a part NOT on the device, with no network', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #427 RED)
+describe('#427 review finding 2 — a COLD entry: identity is derived from the token, never from a network call', () => {
+	it('auth still LOADING at mount claims nothing, and the held part renders once auth resolves — collective discovery never answers', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		seedHeldPart();
+		const restore = setRequestFullscreen(undefined);
+		try {
+			pageStub.params = { fileId: 'file-score' };
+			pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
+			pageStub.state = {};
+			setToken('jwt-abc');
+			// The cold-start truth: this component mounts BEFORE the layout's
+			// hydrateAuth resolves, and collective discovery (a network call
+			// per db) never resolves at all with no signal.
+			collectiveState.set({ status: 'loading' });
+			authStore.set({ status: 'loading' });
+
+			const { container } = render(Page);
+
+			// Nothing claimed while auth is unresolved: a "not on this device"
+			// notice here would be a lie the effect could never take back.
+			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
+			expect(pdfjs.getDocument).not.toHaveBeenCalled();
+
+			authStore.set({
+				status: 'authenticated',
+				personIdByDb: { sampledb: 'person-p' },
+				expMs: Date.now() + 100_000
+			});
+
+			await loaded(container);
+			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
+			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
+		} finally {
+			restore();
+		}
+	});
+
+	it('with two collectives on the token, ?db= picks the partition the entry link named', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		fakeByteStore.seed({ db: 'otherdb', personId: 'person-o' }, 'file-score', {
+			bytes: PDF_BYTES.slice().buffer,
+			filetype: 'application/pdf',
+			sha256: 'sha-other'
+		});
+		const restore = setRequestFullscreen(undefined);
+		try {
+			pageStub.params = { fileId: 'file-score' };
+			pageStub.url = new URL('http://localhost/part/file-score?db=otherdb');
+			pageStub.state = {};
+			setToken('jwt-abc');
+			collectiveState.set({ status: 'loading' });
+			authStore.set({
+				status: 'authenticated',
+				personIdByDb: { sampledb: 'person-p', otherdb: 'person-o' },
+				expMs: Date.now() + 100_000
+			});
+
+			const { container } = render(Page);
+			await loaded(container);
+			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
+		} finally {
+			restore();
+		}
+	});
+});
+
+describe('#427 review finding 3 — the part LABEL the entry page handed down', () => {
+	it('a delivery that landed bytes records the label, with the identity the bytes were read under — full shape', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		seedHeldPart();
+		const restore = setRequestFullscreen(undefined);
+		const label: PartLabel = {
+			work: 'Spem in alium',
+			composer: 'Thomas Tallis',
+			edition: 'Vocal score',
+			filename: 'SOPRAN.pdf'
+		};
+		try {
+			const { container } = renderViewer({ partLabel: label });
+			await loaded(container);
+
+			await waitFor(() => expect(labelWrites).toHaveLength(1));
+			expect(labelWrites).toEqual([
+				{ identity: { db: 'sampledb', personId: 'person-p' }, fileId: 'file-score', label }
+			]);
+		} finally {
+			restore();
+		}
+	});
+
+	it('no label handed down (a reload, a bookmark) writes nothing — a label is never invented from a fileId', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		seedHeldPart();
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+			await loaded(container);
+			expect(labelWrites).toEqual([]);
+		} finally {
+			restore();
+		}
+	});
+});
+
+describe('#427 review finding 4 — a DEGRADED delivery must not dead-end', () => {
+	it('a byte fetch blocked by CORS hands the SIGNED url to the browser — pdf.js is never fed it, and no false not-on-device notice appears', async () => {
+		// Signing works; the byte GET rejects — the documented dev/preview CORS
+		// case (#343 finding 1(a)). openFileBytes reports
+		// 'fallback-navigation' and hands back the signed url itself, NOT a
+		// blob. Re-issuing that url from the page origin (what pdf.js would do)
+		// re-runs the request that was just blocked.
+		const fetchMock = vi.fn(async () => {
+			throw new TypeError('Failed to fetch');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+		// Store deliberately empty — this is the online miss, not a cache hit.
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+
+			await waitFor(() => expect(window.location.href).toBe('https://s3.example/signed-1'));
+			expect(pdfjs.getDocument).not.toHaveBeenCalled();
+			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
+			expect(labelWrites).toEqual([]);
+		} finally {
+			restore();
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #427 RED; review-fix round *MVOX:Josquin*)

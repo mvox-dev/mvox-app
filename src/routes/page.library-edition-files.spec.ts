@@ -121,7 +121,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_edition_file_error: () => 'Could not attach files.',
 		library_edition_file_not_created: (p: { filename: string }) =>
 			`${p.filename} was not attached — the server returned nothing for it.`,
-		library_edition_file_open_error: () => 'Could not open the file.',
 		// #351 — presence badge, rendered on every file row once the store answers.
 		file_presence_on_device: () => 'On this device',
 		file_presence_needs_network: () => 'Needs network'
@@ -579,7 +578,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 		expect(open.tagName).toBe('BUTTON');
 	});
 
-	it('clicking Open NAVIGATES — goto(/part/<file property id>?db=<db>), full shape, and NO tab opens (#427)', async () => {
+	it('clicking Open NAVIGATES — goto(/part/<file property id>?db=<db>) with the part LABEL in the navigation state, full shape, and NO tab opens (#427)', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		const openMock = vi.fn(() => null);
@@ -598,7 +597,25 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 		await fireEvent.click(open);
 
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-1?db=sampledb']]);
+		// #427 review finding 3 — work/composer/edition/filename are in hand
+		// exactly here and nowhere in the viewer, which is where the bytes
+		// land; the label rides the navigation so a part opened from the
+		// library is not "Unnamed part" on /downloads. Full shape, both args.
+		expect(gotoMock.mock.calls.slice(before)).toEqual([
+			[
+				'/part/file-1?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: 'Vocal score',
+							filename: 'spem-vocal.pdf'
+						}
+					}
+				}
+			]
+		]);
 		expect(openMock).not.toHaveBeenCalled();
 	});
 
@@ -662,7 +679,21 @@ describe('#427 — a part already on the device navigates the same way', () => {
 		await fireEvent.click(open);
 
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-1?db=sampledb']]);
+		expect(gotoMock.mock.calls.slice(before)).toEqual([
+			[
+				'/part/file-1?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: 'Vocal score',
+							filename: 'spem-vocal.pdf'
+						}
+					}
+				}
+			]
+		]);
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(fetchMock).not.toHaveBeenCalled();
 		expect(
@@ -823,7 +854,21 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 
 		// #427 — same affordance as an existing file: a navigation, no signing.
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/prop-new-1?db=sampledb']]);
+		expect(gotoMock.mock.calls.slice(before)).toEqual([
+			[
+				'/part/prop-new-1?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: 'Full score',
+							filename: 'new-a.pdf'
+						}
+					}
+				}
+			]
+		]);
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 	});
 });

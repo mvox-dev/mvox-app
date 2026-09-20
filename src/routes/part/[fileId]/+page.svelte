@@ -13,11 +13,18 @@
 	// pdf.js (src/lib/parts/pdfRenderer.ts — the one file in this tree
 	// allowed a 2d canvas context) renders ONE page at a time.
 	//
-	// IDENTITY: the same store the event/library pages read
-	// (`selectedCollectiveIdentityStore`), preferring the `?db=` the entry
-	// link carried when the session already holds that collective — a
-	// bookmarked/reloaded viewer URL should resolve identity from itself,
-	// not from whatever the global picker happened to be showing last.
+	// IDENTITY (#427 review finding 2): derived with ZERO NETWORK from the
+	// decoded JWT — `deriveOfflineIdentities($authStore.personIdByDb, ?db=)`,
+	// the same move /downloads makes and for the same reason
+	// (offlineIdentity.ts, #353 spike 3): `collectiveState` /
+	// `selectedCollectiveIdentityStore` are filled by a NETWORK call per db,
+	// so on a cold offline start — the headline case of this issue — they are
+	// null by construction. Reading them here also lost the reload/bookmark
+	// race, since the read was an untracked `get()` inside an effect that
+	// depended only on the fileId and so never re-ran once the stores
+	// settled. The `?db=` the entry link carries plays the role /downloads
+	// gives its persisted pick: it selects ONE partition when it names one
+	// the token holds.
 	//
 	// PAGE TURNS (Mihkel's ruling on #333): two invisible corner zones, tap
 	// thresholds in src/lib/parts/tapZone.ts. Nothing here calls
@@ -28,16 +35,24 @@
 	// (Android); where it does not (iOS has none), the route itself already
 	// IS the fullscreen — no branch needed, the call is just a no-op via
 	// optional chaining.
+	//
+	// THE FENCE (src/part-viewer-fence.spec.ts) forbids this tree a
+	// STORE/Entu/webstorage write: no byte-store put, no evict, no wire
+	// mutation. `recordPartLabel` below is none of those — it is the #353
+	// LABEL INDEX write (a separate IndexedDB database that only NAMES bytes
+	// someone else stored), and it is why a part opened from the library or
+	// an event still shows its title on /downloads instead of "Unnamed part"
+	// (#427 review finding 3). It writes only on a delivery whose `reason`
+	// says bytes landed, and only when the entry handler handed a label down
+	// through the navigation's page state.
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
+	import { authStore } from '$lib/auth/session';
 	import { getToken } from '$lib/auth/storage';
-	import { get } from 'svelte/store';
-	import {
-		collectiveState,
-		selectedCollectiveIdentityStore,
-		type CollectiveIdentity
-	} from '$lib/collectives/store';
+	import { deriveOfflineIdentities } from '$lib/collectives/offlineIdentity';
 	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { getAppLabelStore } from '$lib/files/appLabelStore';
+	import { recordPartLabel } from '$lib/files/labelStore';
 	import { openFileBytes, type OpenedFileBytes } from '$lib/files/openFileBytes';
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
@@ -60,19 +75,24 @@
 	const tapPrev: TapTracker = createTapTracker();
 	const tapNext: TapTracker = createTapTracker();
 
-	function resolveIdentity(): CollectiveIdentity | null {
-		const dbParam = page.url.searchParams.get('db');
-		const state = get(collectiveState);
-		if (dbParam && state.status === 'ready') {
-			const match = state.collectives.find((c) => c.db === dbParam);
-			if (match) return { db: match.db, personId: match.personId };
-		}
-		return get(selectedCollectiveIdentityStore);
-	}
+	// Renders are SERIALISED: pdf.js rejects a render issued while another is
+	// still running on the same canvas, and three things can now issue one —
+	// a page turn, a viewport re-fit, the first paint. Each waits for the one
+	// before it; a failed render never breaks the chain.
+	let renderChain: Promise<void> = Promise.resolve();
 
-	async function renderCurrentPage(): Promise<void> {
-		if (!pdf || !canvasEl) return;
-		await pdf.renderPage(currentPage, canvasEl);
+	function renderCurrentPage(): Promise<void> {
+		renderChain = renderChain
+			.then(async () => {
+				if (!pdf || !canvasEl) return;
+				await pdf.renderPage(currentPage, canvasEl);
+			})
+			.catch(() => {
+				// A render that fails leaves the previous page on screen; there
+				// is nothing truthful to say about it beyond that, and no retry
+				// loop (see the route header).
+			});
+		return renderChain;
 	}
 
 	async function goToPage(target: number): Promise<void> {
@@ -119,45 +139,102 @@
 		else if (event.key === 'ArrowLeft' || event.key === 'PageUp') previous();
 	}
 
-	// Loads the file once per route entry (re-runs if `fileId` changes — a
-	// navigation from one part straight to another reuses the mounted
-	// route). `cancelled` guards a late resolve after the effect tore down
-	// (an unmount, or a fileId change) from clobbering fresher state.
+	// Loads the file once per (fileId, auth) pair. DEPENDS ON $authStore on
+	// purpose (#427 review finding 2): on a cold document load — a reload
+	// while reading, a bookmarked viewer URL, an offline start — this
+	// component mounts BEFORE +layout.svelte's onMount hydrateAuth resolves,
+	// so the store's first value is 'loading'. Returning early there claims
+	// nothing (`status` stays 'loading', no notice rendered) and the effect
+	// re-runs on the real value. Svelte tears the previous run down before
+	// re-running, so `cancelled` is all the staleness guard this needs: a
+	// late resolve from a superseded run releases what it opened and writes
+	// no state.
 	$effect(() => {
+		const auth = $authStore;
 		const fileId = page.params.fileId ?? '';
+		const dbParam = page.url.searchParams.get('db');
+		// The label the entry handler carried down through `goto`'s page
+		// state (event/library). Absent on a reload or a bookmark — the label
+		// was already written the first time the part was opened from a page
+		// that knows its name, so there is nothing to recover here.
+		const label = page.state.partLabel;
+		if (auth.status === 'loading') return;
+
 		let cancelled = false;
 
 		async function load(): Promise<void> {
-			const identity = resolveIdentity();
-			if (!identity) {
+			if (auth.status !== 'authenticated') {
 				if (!cancelled) status = 'missing';
 				return;
 			}
-			const cfg = { db: identity.db, token: getToken() ?? '' };
-			try {
-				const result = await openFileBytes(cfg, identity, fileId, getAppByteStore());
+			const token = getToken() ?? '';
+			// `?db=` names one partition when the token holds it; otherwise the
+			// single-collective singer's only one, or every one the token
+			// proves is the same human (offlineIdentity.ts). Several candidates
+			// are tried in order — a partition that cannot deliver says nothing
+			// about the part, only about that partition.
+			for (const identity of deriveOfflineIdentities(auth.personIdByDb, dbParam)) {
+				let result: OpenedFileBytes;
+				try {
+					result = await openFileBytes(
+						{ db: identity.db, token },
+						identity,
+						fileId,
+						getAppByteStore()
+					);
+				} catch {
+					continue;
+				}
 				if (cancelled) {
 					result.release();
 					return;
 				}
-				const doc = await openPdf(result.url);
-				if (cancelled) {
-					doc.destroy();
+				// #427 review finding 4 — a PASSTHROUGH delivery hands back the
+				// cross-origin SIGNED url, not a blob: the byte fetch rejected
+				// (the documented dev/preview CORS case, #343 finding 1(a)) or
+				// the declared size was over the store cap. Feeding that url to
+				// pdf.js would re-issue the very request that was just blocked,
+				// from the page origin, and land the singer on a false "not on
+				// this device" with no way to open the file at all. Hand it to
+				// the browser instead — a top-level navigation is not
+				// CORS-subject, and it is exactly the pre-#427 delivery path.
+				if (!result.url.startsWith('blob:')) {
 					result.release();
+					window.location.href = result.url;
 					return;
 				}
-				opened = result;
-				pdf = doc;
-				numPages = doc.numPages;
-				currentPage = 1;
-				status = 'ready';
-			} catch {
-				// A dead network plus a missing file, or any other open
-				// failure: the plain not-on-device notice, no retry loop
-				// (see the route header — this is the behavioural half of
-				// "nothing drawn, nothing stored").
-				if (!cancelled) status = 'missing';
+				try {
+					const doc = await openPdf(result.url);
+					if (cancelled) {
+						doc.destroy();
+						result.release();
+						return;
+					}
+					opened = result;
+					pdf = doc;
+					numPages = doc.numPages;
+					currentPage = 1;
+					status = 'ready';
+					// #353's label, written at the moment bytes land — see THE
+					// FENCE in the route header. `reason` gates it to the two
+					// deliveries that left an offline copy behind.
+					if (label) {
+						recordPartLabel(getAppLabelStore(), identity, fileId, label, result.reason);
+					}
+				} catch {
+					// Bytes in hand that pdf.js cannot open: a failure of this
+					// FILE, not of this partition — no other identity would open
+					// it either.
+					result.release();
+					if (!cancelled) status = 'missing';
+				}
+				return;
 			}
+			// A dead network plus a missing file, or any other open failure:
+			// the plain not-on-device notice, no retry loop (see the route
+			// header — this is the behavioural half of "nothing drawn, nothing
+			// stored").
+			if (!cancelled) status = 'missing';
 		}
 
 		void load();
@@ -181,11 +258,72 @@
 		void renderCurrentPage();
 	});
 
-	// Android: an enhancement, called once the surround mounts. iOS ships no
-	// Fullscreen API at all — the optional chain makes that a plain no-op,
-	// and the full-viewport route is the fullscreen there.
+	// #427 review finding 6 — RE-FIT ON VIEWPORT CHANGE. pdfRenderer sizes the
+	// canvas from its parent box AT RENDER TIME, so without this the page keeps
+	// its portrait fit until the next page turn — and lifting a score to
+	// landscape is the ordinary move at a music stand. Debounced to one frame:
+	// a rotation fires a burst of callbacks and each render is real work. The
+	// first ResizeObserver callback (delivered on observe, before anything has
+	// changed) is skipped — the render effect above has just painted that size.
+	let refitFrame: number | null = null;
+
+	function scheduleRefit(): void {
+		if (status !== 'ready' || refitFrame !== null) return;
+		refitFrame = requestAnimationFrame(() => {
+			refitFrame = null;
+			void renderCurrentPage();
+		});
+	}
+
 	$effect(() => {
-		rootEl?.requestFullscreen?.();
+		if (status !== 'ready') return;
+		const box = canvasEl?.parentElement;
+		if (!box) return;
+		const cancelPending = (): void => {
+			if (refitFrame !== null) cancelAnimationFrame(refitFrame);
+			refitFrame = null;
+		};
+		if (typeof ResizeObserver === 'undefined') {
+			// No ResizeObserver (older iOS Safari): the window's own resize and
+			// orientationchange cover the rotation this exists for.
+			window.addEventListener('resize', scheduleRefit);
+			window.addEventListener('orientationchange', scheduleRefit);
+			return () => {
+				window.removeEventListener('resize', scheduleRefit);
+				window.removeEventListener('orientationchange', scheduleRefit);
+				cancelPending();
+			};
+		}
+		let initial = true;
+		const observer = new ResizeObserver(() => {
+			if (initial) {
+				initial = false;
+				return;
+			}
+			scheduleRefit();
+		});
+		observer.observe(box);
+		return () => {
+			observer.disconnect();
+			cancelPending();
+		};
+	});
+
+	// Android: an enhancement, called once there is something to read
+	// fullscreen. iOS ships no Fullscreen API at all — the optional chain
+	// makes that a plain no-op, and the full-viewport route is the fullscreen
+	// there.
+	//
+	// #427 review finding 5 — the returned promise is CAUGHT. Outside a
+	// transient user activation (a client-side `goto` may have outlived the
+	// one the click created) browsers reject with NotAllowedError, and
+	// discarding that promise raises an unhandled rejection on every entry.
+	// Gated on 'ready' too: there is nothing to read fullscreen behind the
+	// not-on-device notice.
+	$effect(() => {
+		if (status !== 'ready') return;
+		const request = rootEl?.requestFullscreen?.();
+		void request?.catch(() => {});
 	});
 </script>
 
@@ -257,4 +395,4 @@
 	{/if}
 </div>
 
-<!-- (*MVOX:Josquin* — #427 GREEN) -->
+<!-- (*MVOX:Josquin* — #427 GREEN; review-fix round *MVOX:Josquin*) -->

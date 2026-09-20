@@ -896,10 +896,26 @@
 	 *  (src/routes/part/page.part-viewer.spec.ts), not this page's. The
 	 *  byte read (signing, fetch, store) that used to run here at click
 	 *  time runs INSIDE `/part/[fileId]` instead, so the old
-	 *  popup-blocker-safe blank-tab dance is gone with it. */
-	function handleOpenEditionFile(fileId: string): void {
+	 *  popup-blocker-safe blank-tab dance is gone with it.
+	 *
+	 *  #353's LABEL rides along in the navigation's page state (#427 review
+	 *  finding 3): work/composer/edition/filename are in hand exactly here
+	 *  (resolved by the surrounding {#each} blocks) and nowhere in the
+	 *  viewer, which is where the bytes land and so where the write belongs.
+	 *  Without the handoff a part first opened here lands on the device
+	 *  unnamed and renders as "Unnamed part" on /downloads. */
+	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
-		goto(`/part/${fileId}?db=${selected.db}`);
+		goto(`/part/${fileId}?db=${selected.db}`, {
+			state: {
+				partLabel: {
+					work: work.name,
+					composer: work.composer,
+					edition: edition.name,
+					filename
+				}
+			}
+		});
 	}
 
 	// #74 — auto-select work when there is exactly one
@@ -1833,7 +1849,8 @@
 																			type="button"
 																			data-testid="library-edition-file-open-{file.id}"
 																			class="shrink-0 text-xs underline"
-																			onclick={() => handleOpenEditionFile(file.id)}
+																			onclick={() =>
+												handleOpenEditionFile(file.id, work, edition, file.filename)}
 																		>
 																			{m.library_edition_file_open()}
 																		</button>

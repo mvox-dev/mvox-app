@@ -651,7 +651,6 @@
 	"library_edition_file_broken": "Завантаження файлу {filename} не вдалося, і пошкоджений запис міг залишитися.",
 	"library_edition_file_error": "Не вдалося додати файли.",
 	"library_edition_file_not_created": "Файл {filename} не додано — сервер нічого не повернув для нього.",
-	"library_edition_file_open_error": "Не вдалося відкрити файл.",
 	"file_presence_on_device": "На цьому пристрої",
 	"file_presence_needs_network": "Потрібна мережа",
 	"login_heading": "Увійти в mvox",

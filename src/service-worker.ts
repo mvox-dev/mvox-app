@@ -32,10 +32,12 @@ import { build, files, version } from '$service-worker';
 import { cacheNameFor, decideFetch, isStaleShellCache, precacheUrls } from '$lib/sw/swPolicy';
 // #427 — the part viewer's pdf.js worker is a SEPARATE static asset (Vite's
 // `?url` import gives its hashed build path, same as any other asset
-// import), and neither `build` nor `files` above is guaranteed to name it —
-// see src/lib/sw/swPolicy.part-viewer.spec.ts. Precached explicitly so a
-// singer who cold-starts the app at a no-signal rehearsal still gets a
-// renderer that can boot.
+// import). In THIS build `build` above already names it, so naming it here
+// is a belt against a Vite emit that lands it outside the manifest — and
+// `precacheUrls` DEDUPES for exactly that reason (#427 review finding 1: a
+// repeated url would reject the batch cache write below, reject the install,
+// and leave every client on the old worker forever — svelte.config.js's #368
+// comment names that failure). See src/lib/sw/swPolicy.part-viewer.spec.ts.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 declare let self: ServiceWorkerGlobalScope;

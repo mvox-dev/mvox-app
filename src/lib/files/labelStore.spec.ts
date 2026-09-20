@@ -276,17 +276,29 @@ describe('#353 — composition + call sites: the label index is WIRED, not besid
 		expect(source).toContain('getAppLabelStore');
 	});
 
-	// #427 — the library and event-detail Open/PDF click handlers stopped
-	// reaching openFileBytes at all: they now `goto` the fullscreen part
-	// viewer, which does the byte read itself (and, by the viewer's own
-	// "nothing stored" fence — src/part-viewer-fence.spec.ts — may NOT carry
-	// a label write of its own). Of #353's original three put()-reaching
-	// surfaces, only the agenda root's own click-time open still fetches
-	// bytes directly, so it is the only one left recording a label there.
-	it.each(['src/routes/+page.svelte'])(
-		'%s records the label at its open handler — metadata is in hand exactly there',
+	// #427 — the byte read MOVED for two of #353's three put()-reaching
+	// surfaces: the library and event-detail Open/PDF handlers now `goto` the
+	// fullscreen viewer, and the viewer is where bytes land. So the WRITE
+	// moved with it. The agenda root still opens at click time and still
+	// records there.
+	it.each(['src/routes/+page.svelte', 'src/routes/part/[fileId]/+page.svelte'])(
+		'%s records the label where the bytes land — the delivery `reason` is only knowable there',
 		(page) => {
 			expect(src(page)).toContain('recordPartLabel');
+		}
+	);
+
+	// #427 review finding 3 — the regression this pins: the two handlers that
+	// stopped writing must still HAND DOWN the name, or a part first opened
+	// from the library or an event lands on the device unlabelled and renders
+	// as "Unnamed part" on /downloads. The metadata exists nowhere else — the
+	// viewer knows a fileId and nothing about the music.
+	it.each(['src/routes/library/+page.svelte', 'src/routes/event/[id]/+page.svelte'])(
+		'%s hands the part label to the viewer through the navigation state',
+		(page) => {
+			const source = src(page);
+			expect(source).toContain('partLabel');
+			expect(source).toMatch(/goto\([^;]*state:/s);
 		}
 	);
 });

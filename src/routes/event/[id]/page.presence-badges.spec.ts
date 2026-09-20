@@ -158,6 +158,7 @@ function workRow(id: string, workName: string, fileId: string) {
 		editionName: 'Vocal score',
 		ordinal: null,
 		fileId,
+		fileName: fileId === '' ? '' : `${fileId}.pdf`,
 		externalLinks: [],
 		canBorrow: false,
 		notes: ''
@@ -315,7 +316,24 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		const links = container.querySelectorAll('[data-testid="work-link-pdf"]');
 		await fireEvent.click(links[0]);
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-held?db=sampledb']]);
+		// #427 review finding 3 — the part's NAME rides the navigation: this
+		// page is the only place that has it, the viewer is where the bytes
+		// land. Full shape, both arguments.
+		expect(gotoMock.mock.calls.slice(before)).toEqual([
+			[
+				'/part/file-held?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: 'Vocal score',
+							filename: 'file-held.pdf'
+						}
+					}
+				}
+			]
+		]);
 		expect(openSpy).not.toHaveBeenCalled();
 	});
 

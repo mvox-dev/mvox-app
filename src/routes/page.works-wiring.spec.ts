@@ -911,14 +911,17 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		// And the service worker gained NOTHING from #409/#410's OWN wiring:
 		// still exactly three listeners (install/activate/fetch — no sync,
-		// no periodicsync, no push). The hash itself moved once, legitimately,
-		// at #427 (the pdf.js worker's `?url` import + its precacheUrls
-		// `extra` entry — see swPolicy.part-viewer.spec.ts) — re-pinned here
-		// to that content; the listener-name assertion right below is the
-		// one that actually carries this test's invariant forward.
+		// no periodicsync, no push). The hash has moved twice, both times at
+		// #427 and both times in COMMENT + precache input only: first the
+		// pdf.js worker's `?url` import and its precacheUrls `extra` entry,
+		// then the review-fix round correcting the comment that justified
+		// that entry (the dedupe lives in swPolicy.ts — see
+		// swPolicy.part-viewer.spec.ts). Re-pinned here to that content; the
+		// listener-name assertion right below is the one that actually
+		// carries this test's invariant forward.
 		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
 		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'1d107782f3d3252ea98d9fe91494366a8997b3a2d0fc99a5f4010f3c7c83dd15'
+			'03dc4b57f83d53a2a83768fe27b7e174eceae7ff4d1ae656e241019a8ccd7871'
 		);
 		expect(
 			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])

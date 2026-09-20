@@ -125,6 +125,7 @@ function workRowFixture() {
 		editionName: '40-part original',
 		ordinal: null,
 		fileId: 'file-score',
+		fileName: 'SOPRAN.pdf',
 		externalLinks: [],
 		canBorrow: false,
 		notes: ''
@@ -177,7 +178,7 @@ describe('#427 — the PDF affordance navigates to the in-app part viewer', () =
 	// The pre-#427 delivery (blank tab + blob URL) is GONE from this
 	// handler. The byte-store substitution harness above STAYS — it is
 	// exactly what proves the click no longer touches any of it.
-	it('click → goto(/part/<fileId>?db=<db>) — full shape on the emitted call — and NO tab opens', async () => {
+	it('click → goto(/part/<fileId>?db=<db>) with the part LABEL in the navigation state — full shape on the emitted call — and NO tab opens', async () => {
 		installWire();
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
@@ -188,7 +189,24 @@ describe('#427 — the PDF affordance navigates to the in-app part viewer', () =
 		await fireEvent.click(link);
 
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-score?db=sampledb']]);
+		// #427 review finding 3 — the label rides the navigation: this page is
+		// the only place that knows the part's NAME, the viewer is the only
+		// place that knows whether bytes landed. Full shape, both arguments.
+		expect(gotoMock.mock.calls.slice(before)).toEqual([
+			[
+				'/part/file-score?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: '40-part original',
+							filename: 'SOPRAN.pdf'
+						}
+					}
+				}
+			]
+		]);
 		expect(openSpy).not.toHaveBeenCalled();
 	});
 
@@ -222,7 +240,6 @@ describe('#343 — zero new locale keys (pinned)', () => {
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 			) as Record<string, unknown>;
 			expect(messages['repertoire_pdf_error'], locale).toBeTruthy();
-			expect(messages['library_edition_file_open_error'], locale).toBeTruthy();
 		}
 	});
 
