@@ -120,6 +120,12 @@ describe('package.json: at most a generator scripts entry', () => {
 
 	const BASELINE_DEV_DEPS = [
 		'@inlang/paraglide-js',
+		// #408 repin — @resvg/resvg-js (the "Install as app" icon set's
+		// build-time SVG-to-PNG rasteriser, a sanctioned, commissioned change
+		// to the STATIC APP, not this slice's work): same #427 precedent
+		// immediately below — refreshing this pin on a legitimate addition
+		// elsewhere is the pin working as designed, not a loosening of it.
+		'@resvg/resvg-js',
 		'@sveltejs/adapter-static',
 		'@sveltejs/kit',
 		'@sveltejs/vite-plugin-svelte',
@@ -155,7 +161,7 @@ describe('package.json: at most a generator scripts entry', () => {
 		expect(pkg().dependencies).toEqual({ 'pdfjs-dist': '^6.3.289' });
 	});
 
-	it('devDependencies are exactly the pre-slice set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*, nothing new', () => {
+	it('devDependencies are exactly the pre-slice-plus-#408 set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*, nothing new', () => {
 		expect(Object.keys(pkg().devDependencies).sort()).toEqual([...BASELINE_DEV_DEPS].sort());
 	});
 

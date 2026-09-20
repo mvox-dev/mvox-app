@@ -47,6 +47,13 @@
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { formatFileSize } from '$lib/files/fileSize';
 	import { listAllEditions } from '$lib/library/libraryData';
+	// #408 — "Install as app": app chrome, like sign-out/language/time-format
+	// below, not gated on collective selection. $installAffordance decides
+	// everything the button does. This page is a pure SUBSCRIBER: the
+	// `beforeinstallprompt` adapter is started by the root layout (#408 review
+	// F1), because Chromium fires that event once per page load — long before
+	// this component mounts on the ordinary nav-click path.
+	import { installAffordance, promptInstall } from '$lib/install/installState';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -62,6 +69,27 @@
 	const selected = $derived($selectedCollectiveStore);
 
 	let status = $state<RouteLoadStatus>('loading');
+
+	// #408 — the iOS Share-menu hint line: hidden until the button is pressed
+	// (the button itself is the SAME control for 'prompt' and 'ios-hint').
+	let installIosHintShown = $state(false);
+
+	function onInstallButtonClick(): void {
+		if ($installAffordance === 'prompt') {
+			// prompt() can reject (Chromium's InvalidStateError when the banner was
+			// already consumed). promptInstall has already cleared the stash and
+			// recomputed by then, so the affordance COLLAPSES — the button leaves
+			// rather than sitting there inert. Logged, not swallowed: a failed
+			// user-initiated action, so console.error like every other action
+			// handler on this page (the console.warn cases above are load-time
+			// reads that degrade to a documented default, a different class).
+			promptInstall().catch((err) => {
+				console.error('profile: install prompt failed', err);
+			});
+		} else if ($installAffordance === 'ios-hint') {
+			installIosHintShown = true;
+		}
+	}
 
 	// Unified draft: one value per field (not per level).
 	let draft = $state<{ name: string; email: string }>({ name: '', email: '' });
@@ -1210,6 +1238,32 @@
 				{m.profile_time_format_hint()}
 			</p>
 		</div>
+
+		<!--
+			#408 — "Install as app": app chrome, like sign-out/language/time-format
+			above, not gated on `status` / collective selection. `$installAffordance`
+			decides everything: 'none' renders nothing at all (no disabled button,
+			no explanation — issue body), 'prompt' and 'ios-hint' render the SAME
+			native button, and only 'ios-hint' can ever reveal the Share-menu line,
+			and only after a press (never before).
+		-->
+		{#if $installAffordance !== 'none'}
+			<div class="flex flex-col items-start gap-1">
+				<button
+					type="button"
+					data-testid="profile-install-button"
+					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+					onclick={onInstallButtonClick}
+				>
+					{m.profile_install_button()}
+				</button>
+				{#if $installAffordance === 'ios-hint' && installIosHintShown}
+					<p data-testid="profile-install-ios-hint" class="text-xs text-ink-3">
+						{m.profile_install_ios_hint()}
+					</p>
+				{/if}
+			</div>
+		{/if}
 
 		<!--
 			#267 — admin-only roster-names toggle: mirrors the time-format control

@@ -196,6 +196,8 @@
 	"profile_storage_cancel": "Atcelt",
 	"profile_storage_remove_error": "Neizdevās noņemt — lejupielādētās daļas joprojām ir šajā ierīcē.",
 	"profile_storage_names_partial": "Ne katru daļu šeit izdevās nosaukt — skaits un izmērs augstāk tomēr aptver visu glabāto.",
+	"profile_install_button": "Instalēt mvox šajā ierīcē",
+	"profile_install_ios_hint": "Atveriet izvēlni Kopīgot un izvēlieties «Pievienot sākuma ekrānam».",
 	"roster_title": "Dalībnieki",
 	"roster_no_collective": "Lai skatītu sarakstu, izvēlieties kolektīvu.",
 	"roster_load_error": "Neizdevās ielādēt dalībnieku sarakstu.",
