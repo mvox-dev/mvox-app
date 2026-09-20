@@ -22,11 +22,7 @@
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import { getToken } from '$lib/auth/storage';
 	import { get } from 'svelte/store';
-	import {
-		selectedCollectiveStore,
-		selectedCollectiveIdentityStore,
-		sameCollectiveIdentity
-	} from '$lib/collectives/store';
+	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
 		loadEventDetail,
 		listEventLocations,
@@ -127,10 +123,7 @@
 	} from '$lib/library/libraryData';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import type { ManageRightsState, PickerOption, RepertoireStatus, WorkRow } from '$lib/repertoire/types';
-	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { getAppByteStore } from '$lib/files/appByteStore';
-	import { getAppLabelStore } from '$lib/files/appLabelStore';
-	import { recordPartLabel } from '$lib/files/labelStore';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
@@ -435,9 +428,6 @@
 		}
 	}
 
-	// #343 — the agenda's own error surface, reused verbatim: zero new locale
-	// keys for this page's first PDF-open error (see `handlePdfClick`).
-	let pdfError = $state(false);
 	// Management picker sources — only ever fetched for a rights-holder (season
 	// OR event editor), same economy as the agenda's loadManagePickers.
 	let libraryWorks = $state<Work[]>([]);
@@ -2150,86 +2140,15 @@
 		return selected ? { db: selected.db, token: getToken() ?? '' } : null;
 	}
 
-	/** The PDF download, signed AT CLICK TIME — Entu's signed S3 url is valid
-	 *  for 60 seconds (entu-www src/api/files/index.md), so it can never be
-	 *  resolved ahead of the click and parked in an href (RepertoireElement
-	 *  hands up the file property id instead). Verbatim the agenda's own
-	 *  `handlePdfClick`: the blank tab opens SYNCHRONOUSLY, inside the click's
-	 *  user-gesture window, so a popup blocker cannot swallow it.
-	 *
-	 *  #343 — read-through byte store, same flip as the agenda/library: on the
-	 *  cache-hit and stored paths the tab receives a `blob:` URL of the
-	 *  fetched bytes; on the two DEGRADED paths (byte fetch or body read
-	 *  rejected, or declared size over the store cap) it receives the signed
-	 *  url itself — `reason` names which ran, and openFileBytes' DELIVERY
-	 *  REPORTING block carries the account.
-	 *
-	 *  Identity is captured HERE at click time; a late-settling open
-	 *  under an identity that is no longer current is suppressed rather than
-	 *  navigating or erroring — closing the blank tab and releasing the minted
-	 *  object URL on the way out, same as the agenda (a never-resolving
-	 *  about:blank, and a pinned copy of the score nothing can reach, are both
-	 *  worse than nothing). A byte-leg failure now SURFACES (this page's first
-	 *  PDF error UI) via the agenda's own existing key/testid — zero new
-	 *  locale strings. */
+	/** #427 — the PDF affordance is a plain in-app NAVIGATION to the
+	 *  fullscreen part viewer. The byte read (signing, fetch, store) that
+	 *  used to run here at click time now runs INSIDE `/part/[fileId]`
+	 *  (src/routes/part/page.part-viewer.spec.ts) — an in-app `goto` has no
+	 *  async gap to survive, so the old popup-blocker-safe blank-tab dance
+	 *  (window.open('', '_blank') sync in the gesture) is gone with it. */
 	function handlePdfClick(fileId: string): void {
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const identity = get(selectedCollectiveIdentityStore);
-		if (!identity) return;
-		pdfError = false;
-		// #353 — the label write needs work/composer/edition/filename; this
-		// single event's own `workRows` already carries all four on the row
-		// this fileId came from.
-		const row = workRows.find((r) => r.fileId === fileId);
-		const tab = window.open('', '_blank');
-		if (tab) tab.opener = null;
-		openFileBytes(cfg, identity, fileId, getAppByteStore())
-			.then(({ url, release, reason }) => {
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					release();
-					tab?.close();
-					return;
-				}
-				if (tab) tab.location.href = url;
-				else window.location.href = url;
-				// #353 — the label written at download time (`reason` gates the
-				// write to the two paths that landed bytes).
-				if (row) {
-					recordPartLabel(
-						getAppLabelStore(),
-						identity,
-						fileId,
-						{ work: row.workName, composer: row.composer, edition: row.editionName, filename: row.fileName },
-						reason
-					);
-				}
-				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
-				// store, not just this key: the put runs the cap's evictUntilFits
-				// first and may have deleted other rows on this same screen to
-				// make room (see refreshPresence). Re-ask.
-				//
-				// BOTH write-attempting reasons, not just the successful one:
-				// byteStore.put evicts BEFORE it writes (IndexedDB offers no way
-				// to reserve space ahead of a write), so a put that REJECTS has
-				// already discarded those rows — and openFileBytes reports that
-				// open 'network-uncached'. Gating on 'network-stored' alone would
-				// leave the discarded rows badged on-device for the rest of the
-				// page's life. 'cache' moves recency but deletes nothing, and
-				// 'fallback-navigation' never reaches the store at all, so
-				// neither of those needs a re-query.
-				if (reason === 'network-stored' || reason === 'network-uncached') {
-					refreshPresence(identity.db, identity.personId, () =>
-						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
-					);
-				}
-			})
-			.catch((e) => {
-				console.error('event detail: pdf open failed', e);
-				tab?.close();
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
-				pdfError = true;
-			});
+		goto(`/part/${fileId}?db=${selected.db}`);
 	}
 
 	/** Re-read what a settled write changed — the rows are a join over four
@@ -5059,14 +4978,6 @@
 						{#if manageError}
 							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_manage_error()}
-							</p>
-						{/if}
-						<!-- #343 — a byte-leg failure after a successful sign (or a
-						     rejected signing): the agenda's own existing error surface,
-						     reused verbatim (zero new locale keys). -->
-						{#if pdfError}
-							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red-700" role="alert">
-								{m.repertoire_pdf_error()}
 							</p>
 						{/if}
 						<!-- #324/#267 shape — persistent sr-only role="status" region,

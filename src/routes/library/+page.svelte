@@ -4,13 +4,10 @@
 	// roster/+page.svelte (loading/no-collective/load-error/ready + generation guard).
 	// T6.4/#73 — my-loans section + librarian checkout/return UI.
 	import { get } from 'svelte/store';
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
-	import {
-		selectedCollectiveStore,
-		selectedCollectiveIdentityStore,
-		sameCollectiveIdentity
-	} from '$lib/collectives/store';
+	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
 		listWorks,
@@ -42,10 +39,7 @@
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
 	// #275 — the app's first upload path: attach files to an edition.
 	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
-	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { getAppByteStore } from '$lib/files/appByteStore';
-	import { getAppLabelStore } from '$lib/files/appLabelStore';
-	import { recordPartLabel } from '$lib/files/labelStore';
 	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
 	// reuses the agenda's pure currentSeason picker (never re-derived); the
 	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
@@ -779,12 +773,6 @@
 	// failure nor a broken phantom; it gets its own message rather than
 	// borrowing one that would misdescribe what happened.
 	let editionFilesNotCreated = $state<Map<string, string[]>>(new Map());
-	// Per-FILE open failures (signFileUrl rejected). Keyed by file property id,
-	// not by edition: Open is a per-file control and this is a READ-path error
-	// every member can hit, so it renders with the files list, OUTSIDE the
-	// librarian gate. Cleared at the start of each open attempt for that file,
-	// so the next successful open removes it.
-	let editionFileOpenErrors = $state<Set<string>>(new Set());
 	let editionFilesStatuses = $state<Map<string, string>>(new Map());
 
 	/** Locate which work owns `editionId` and replace that one edition's
@@ -902,84 +890,16 @@
 		}
 	}
 
-	// #90 TR.2 precedent, reused for #275 — sign AT CLICK TIME (60s TTL,
-	// never cached — the read model carries no url field by design). The
-	// blank tab opens SYNCHRONOUSLY inside the click's user-gesture window,
-	// same popup-blocker-safe shape as the agenda's handlePdfClick.
-	//
-	// #343 — same read-through flip as the agenda: `openFileBytes` serves the
-	// tab a `blob:` URL of the actual bytes on the cache-hit and stored paths,
-	// and the signed url itself on the two DEGRADED paths (byte fetch or body
-	// read rejected, or declared size over the store cap) — `reason` names
-	// which ran, see openFileBytes' DELIVERY REPORTING block.
-	//
-	// Identity is captured HERE off `selectedCollectiveIdentityStore` at click
-	// time; a late-settling open whose identity has since changed is suppressed
-	// (nothing to navigate for a screen showing someone else's data now) —
-	// and suppressing closes the blank tab and releases the minted object URL,
-	// same as the agenda: an about:blank that never resolves, and a pinned
-	// copy of the score nothing can reach, are both worse than nothing.
-	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
+	/** #427 — Open is a plain in-app NAVIGATION to the fullscreen part
+	 *  viewer, whether or not the file is already on this device — that
+	 *  distinction is the viewer's business now
+	 *  (src/routes/part/page.part-viewer.spec.ts), not this page's. The
+	 *  byte read (signing, fetch, store) that used to run here at click
+	 *  time runs INSIDE `/part/[fileId]` instead, so the old
+	 *  popup-blocker-safe blank-tab dance is gone with it. */
+	function handleOpenEditionFile(fileId: string): void {
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const identity = get(selectedCollectiveIdentityStore);
-		if (!identity) return;
-		// A retry clears the previous verdict up front, so a later success
-		// leaves nothing stale behind (agenda handlePdfClick precedent).
-		const cleared = new Set(editionFileOpenErrors);
-		cleared.delete(fileId);
-		editionFileOpenErrors = cleared;
-		const tab = window.open('', '_blank');
-		if (tab) tab.opener = null;
-		openFileBytes(cfg, identity, fileId, getAppByteStore())
-			.then(({ url, release, reason }) => {
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					release();
-					tab?.close();
-					return;
-				}
-				if (tab) tab.location.href = url;
-				else window.location.href = url;
-				// #353 — the label written at download time: work/composer/edition
-				// are in hand exactly here (the work/edition this file belongs to,
-				// resolved by the surrounding {#each} blocks), and `reason` is
-				// what gates the write to the two paths that actually landed bytes
-				// (recordPartLabel's own doc).
-				recordPartLabel(
-					getAppLabelStore(),
-					identity,
-					fileId,
-					{ work: work.name, composer: work.composer, edition: edition.name, filename },
-					reason
-				);
-				// #351 — a delivery that ATTEMPTED a store write mutates the WHOLE
-				// store, not just this key: the put runs the cap's evictUntilFits
-				// first and may have deleted other rows on this same screen to
-				// make room (see refreshPresence). Re-ask.
-				//
-				// BOTH write-attempting reasons, not just the successful one:
-				// byteStore.put evicts BEFORE it writes (IndexedDB offers no way
-				// to reserve space ahead of a write), so a put that REJECTS has
-				// already discarded those rows — and openFileBytes reports that
-				// open 'network-uncached'. Gating on 'network-stored' alone would
-				// leave the discarded rows badged on-device for the rest of the
-				// page's life. 'cache' moves recency but deletes nothing, and
-				// 'fallback-navigation' never reaches the store at all, so
-				// neither of those needs a re-query.
-				if (reason === 'network-stored' || reason === 'network-uncached') {
-					refreshPresence(identity.db, identity.personId, () =>
-						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
-					);
-				}
-			})
-			.catch((e) => {
-				console.error('library: open edition file failed', fileId, e);
-				tab?.close();
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
-				// The blank tab closing again is invisible feedback — say it on
-				// the page, or the click looks like nothing happened.
-				editionFileOpenErrors = new Set(editionFileOpenErrors).add(fileId);
-			});
+		goto(`/part/${fileId}?db=${selected.db}`);
 	}
 
 	// #74 — auto-select work when there is exactly one
@@ -1913,26 +1833,12 @@
 																			type="button"
 																			data-testid="library-edition-file-open-{file.id}"
 																			class="shrink-0 text-xs underline"
-																			onclick={() => handleOpenEditionFile(file.id, work, edition, file.filename)}
+																			onclick={() => handleOpenEditionFile(file.id)}
 																		>
 																			{m.library_edition_file_open()}
 																		</button>
 																	</span>
 																</div>
-																<!-- Open is a READ affordance every member has, so its
-																     failure message lives HERE, beside the files list,
-																     and NOT inside the librarian gate below — a
-																     non-librarian who clicks Open must see why nothing
-																     opened. -->
-																{#if editionFileOpenErrors.has(file.id)}
-																	<span
-																		data-testid="library-edition-file-open-error-{file.id}"
-																		role="alert"
-																		class="break-words text-xs text-red-700"
-																	>
-																		{m.library_edition_file_open_error()}
-																	</span>
-																{/if}
 															</div>
 														{/each}
 														{#each editionFilesBroken.get(edition.id) ?? [] as broken (broken.propertyId)}

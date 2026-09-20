@@ -15,8 +15,9 @@
 //   - THE trap (issue #351): presence is ONE heldFileIds(db, personId) call
 //     for the whole works list — never a per-row get(), which counts as an
 //     open and would collapse the store's LRU to render order.
-//   - The badge is not a control, and the row's open behaviour is UNCHANGED:
-//     tapping the PDF link still opens the tab exactly as #343 pinned it.
+//   - The badge is not a control; the row's open behaviour is #427's, now:
+//     tapping the PDF link navigates to the fullscreen part viewer, no tab
+//     and no byte fetch on this page at all.
 //
 // INTEGRATION posture (house rule): the REAL route component renders; only
 // the wire, loadWorksByEventId, signFileUrl and the $lib/files/appByteStore
@@ -175,10 +176,6 @@ function mockWorksRead() {
 	});
 }
 
-function makeTab() {
-	return { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
-}
-
 function renderPage() {
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
@@ -284,14 +281,13 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		});
 	});
 
-	it('the badge is NOT a control, and the row open behaviour is UNCHANGED: tapping the PDF link still opens the tab with a blob: URL (#343 pin)', async () => {
+	it('the badge is NOT a control, and the row open behaviour is a NAVIGATION to the fullscreen viewer (#427 — no tab, no byte fetch here anymore)', async () => {
 		installWire();
 		mockWorksRead();
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		installPresence();
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		const tab = makeTab();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+		const openSpy = vi.spyOn(window, 'open').mockReturnValue(null);
 
 		const { container } = renderPage();
 		await worksVisible(container);
@@ -307,134 +303,32 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		expect(badge.hasAttribute('tabindex')).toBe(false);
 		expect(badge.closest('button, a, [role="button"]')).toBeNull();
 
-		// Clicking the badge does NOTHING — no tab, no signing.
+		// Clicking the badge does NOTHING — no tab, no signing, no navigation.
+		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(badge);
 		expect(openSpy).not.toHaveBeenCalled();
 		expect(signFileUrlMock).not.toHaveBeenCalled();
+		expect(gotoMock.mock.calls.length).toBe(before);
 
-		// Tapping the row's PDF link works exactly as #343 pinned it.
+		// Tapping the row's PDF link navigates to the viewer (#427) — it no
+		// longer opens a tab or touches a byte on this page at all.
 		const links = container.querySelectorAll('[data-testid="work-link-pdf"]');
 		await fireEvent.click(links[0]);
-		expect(openSpy).toHaveBeenCalledWith('', '_blank');
-		await waitFor(() => {
-			expect(tab.location.href).toMatch(/^blob:/);
-		});
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
+		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-held?db=sampledb']]);
+		expect(openSpy).not.toHaveBeenCalled();
 	});
 
-	// #351 review finding 1 — the done-when bullet "a part that is downloaded,
-	// then evicted by the cap, stops showing as available", at the only level
-	// the member ever sees it. Mirrors the /library pin of the same name.
-	//
-	// A put is a STORE-WIDE mutation: the cap's evictUntilFits deletes the
-	// globally-least-recently-opened rows to admit the newcomer, and those
-	// rows can be on this very screen. A page that patches the newcomer into
-	// its presence Set and stops there leaves the evicted row badged
-	// "on this device" forever — the wrong-badge direction.
-	it('opening an unheld part whose store put EVICTS a held one flips BOTH badges — the evicted row stops claiming on-device', async () => {
-		installWire();
-		mockWorksRead();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		// The cap in miniature. createFakeByteStore holds no cap policy (the
-		// REAL eviction arithmetic is specced in byteStore.presence.spec.ts);
-		// what this pins is the PAGE's reaction to a put that took something
-		// else away — storing file-absent costs the device file-held.
-		const realPut = fakeByteStore.put.bind(fakeByteStore);
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async (identity, fileId, data) => {
-			await realPut(identity, fileId, data);
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-		});
-		const tab = makeTab();
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const { container } = renderPage();
-		await worksVisible(container);
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_on_device]');
-		});
-
-		// Row 2 is the unheld part — its open goes to the network and stores.
-		const links = container.querySelectorAll('[data-testid="work-link-pdf"]');
-		await fireEvent.click(links[1]);
-
-		await waitFor(() => {
-			// The newcomer is now on the device...
-			expect(
-				container.querySelector('[data-testid="file-presence-file-absent"]')!.textContent
-			).toContain('[file_presence_on_device]');
-			// ...and the row the cap took away no longer says it is.
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).not.toContain('[file_presence_on_device]');
-		});
-		// A RE-QUERY, not a local patch: the store, not the page, is what
-		// knows which rows survived.
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
-
-	// #351 second review round, finding 1 — mirrored from the /library pin of
-	// the same name. byteStore.put evicts BEFORE it writes (no way to reserve
-	// IndexedDB space ahead of a write), so a put that REJECTS has already
-	// discarded the rows it made room with — and openFileBytes reports that
-	// open 'network-uncached'. Re-asking only on 'network-stored' leaves the
-	// discarded rows badged on-device. The re-query follows the write ATTEMPT.
-	it('an open whose store put EVICTS a held row and then REJECTS still re-queries — the discarded row stops claiming on-device', async () => {
-		installWire();
-		mockWorksRead();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		// Eviction lands, the write that needed the room does not — exactly the
-		// order byteStore.put runs them in.
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async () => {
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-			throw new Error('idb: transaction aborted');
-		});
-		const tab = makeTab();
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const { container } = renderPage();
-		await worksVisible(container);
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_on_device]');
-		});
-
-		const links = container.querySelectorAll('[data-testid="work-link-pdf"]');
-		await fireEvent.click(links[1]);
-
-		// The open still DELIVERS — the cache is never a gate (#343).
-		await waitFor(() => {
-			expect(tab.location.href).not.toBe('');
-		});
-		await waitFor(() => {
-			// Nothing was stored, so the newcomer gained no offline copy...
-			expect(
-				container.querySelector('[data-testid="file-presence-file-absent"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			// ...and the row the failed write discarded no longer claims one.
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).not.toContain('[file_presence_on_device]');
-		});
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
+	// #351's two eviction-cascade pins (store put evicts a held row / evicts
+	// then the write itself rejects) lived here because this page's OWN click
+	// used to reach openFileBytes' store.put directly. #427 moved that read
+	// (and so every write it can trigger) into the fullscreen part viewer —
+	// this page's click is now a bare `goto`, so there is no store write left
+	// on THIS surface for a page-reaction test to pin. The eviction
+	// arithmetic itself stays covered in byteStore.presence.spec.ts; the
+	// "page re-queries presence after its own write" shape these two
+	// exercised has no place to live until the viewer (or a return-to-page
+	// refresh) grows the same coverage — flagged, not silently dropped.
 });
 
 // (*MVOX:Tallis*)

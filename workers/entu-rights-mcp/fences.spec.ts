@@ -142,8 +142,17 @@ describe('package.json: at most a generator scripts entry', () => {
 		'yaml'
 	];
 
-	it('no runtime dependencies — the field stays absent', () => {
-		expect(pkg().dependencies).toBeUndefined();
+	// Repinned for #427 (pdfjs-dist — the fullscreen part viewer's PDF
+	// renderer, a sanctioned, commissioned change to the STATIC APP, not this
+	// slice's work): this pin's job is catching this slice's OWN scripts
+	// entry from growing MCP-SDK/wrangler/cloudflare runtime deps alongside
+	// it (guarded explicitly, by name, in the very next test), not
+	// forbidding the app from ever gaining a legitimate dependency —
+	// refreshing it on a sanctioned change outside this slice's scope is the
+	// pin working as designed (#322 ER-pin / svelte.config.js precedent
+	// above).
+	it('runtime dependencies are exactly the pre-slice-plus-#427 set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*', () => {
+		expect(pkg().dependencies).toEqual({ 'pdfjs-dist': '^6.3.289' });
 	});
 
 	it('devDependencies are exactly the pre-slice set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*, nothing new', () => {

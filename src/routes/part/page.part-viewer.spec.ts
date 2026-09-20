@@ -60,11 +60,18 @@ const { gotoMock, signFileUrlMock } = vi.hoisted(() => ({
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
+// $lib/collectives/store pulls in discover.ts -> marker.ts -> entu/request.ts
+// -> entu-config.ts's `$env/dynamic/public` read, which the vitest node
+// environment has no value for — same seam the event/library page specs
+// substitute for the same transitive reason.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 // pdf.js, mocked at the module seam: the real library is a multi-MB renderer
 // with a worker — none of that runs here. The mock mirrors the real API
-// shape (getDocument(src).promise → { numPages, getPage }, page.render →
-// { promise }) so the route exercises its real call sites.
+// shape (getDocument(src) → the LOADING TASK, synchronously, with its own
+// destroy() — the resolved `.promise` value is the PDFDocumentProxy, which
+// carries getPage/numPages but, in the real library, no destroy of its own;
+// page.render → { promise }) so the route exercises its real call sites.
 const pdfjs = vi.hoisted(() => {
 	const destroy = vi.fn();
 	const renderCalls: unknown[] = [];
@@ -81,9 +88,9 @@ const pdfjs = vi.hoisted(() => {
 					renderCalls.push(args);
 					return { promise: Promise.resolve(), cancel: vi.fn() };
 				}
-			}),
-			destroy
-		})
+			})
+		}),
+		destroy
 	}));
 	return { getDocument, destroy, renderCalls };
 });

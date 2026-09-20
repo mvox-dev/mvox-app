@@ -700,5 +700,8 @@
 	"downloads_empty": "Nothing downloaded on this device yet.",
 	"downloads_unnamed_part": "Unnamed part",
 	"downloads_open": "Open",
-	"agenda_downloads_link": "Open downloaded parts"
+	"agenda_downloads_link": "Open downloaded parts",
+	"part_viewer_close": "Close",
+	"part_viewer_not_on_device": "This part isn't saved on this device.",
+	"part_viewer_page_of": "{current} / {total}"
 }

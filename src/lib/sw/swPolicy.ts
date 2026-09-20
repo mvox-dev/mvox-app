@@ -31,9 +31,15 @@ export function cacheNameFor(version: string): string {
  * '/_app/env.js' (the bootstrap imports it unconditionally before
  * `kit.start`, so a cold offline navigation dies before any app code runs
  * without it precached).
+ *
+ * `extra` (#427) — optional caller-named assets that `build`/`files` cannot
+ * be trusted to include, e.g. the part viewer's pdf.js worker (a
+ * `?url`-imported build artefact, not something `$service-worker` names).
+ * Slotted BETWEEN `files` and the two hand-added urls: existing callers pass
+ * nothing and get exactly the old list back.
  */
-export function precacheUrls(input: { build: string[]; files: string[] }): string[] {
-	return [...input.build, ...input.files, '/', '/_app/env.js'];
+export function precacheUrls(input: { build: string[]; files: string[]; extra?: string[] }): string[] {
+	return [...input.build, ...input.files, ...(input.extra ?? []), '/', '/_app/env.js'];
 }
 
 /**

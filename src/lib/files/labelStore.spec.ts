@@ -276,17 +276,19 @@ describe('#353 — composition + call sites: the label index is WIRED, not besid
 		expect(source).toContain('getAppLabelStore');
 	});
 
-	it.each([
-		'src/routes/library/+page.svelte',
-		'src/routes/+page.svelte',
-		'src/routes/event/[id]/+page.svelte'
-	])('%s records the label at its open handler — metadata is in hand exactly there', (page) => {
-		// The three put()-reaching surfaces (spike 2a: openFileBytes is the ONLY
-		// caller of store.put, reached from these three pages' handlers). The
-		// write rides the existing `reason` branch — outside the delivery path,
-		// so the label can never gate the open.
-		expect(src(page)).toContain('recordPartLabel');
-	});
+	// #427 — the library and event-detail Open/PDF click handlers stopped
+	// reaching openFileBytes at all: they now `goto` the fullscreen part
+	// viewer, which does the byte read itself (and, by the viewer's own
+	// "nothing stored" fence — src/part-viewer-fence.spec.ts — may NOT carry
+	// a label write of its own). Of #353's original three put()-reaching
+	// surfaces, only the agenda root's own click-time open still fetches
+	// bytes directly, so it is the only one left recording a label there.
+	it.each(['src/routes/+page.svelte'])(
+		'%s records the label at its open handler — metadata is in hand exactly there',
+		(page) => {
+			expect(src(page)).toContain('recordPartLabel');
+		}
+	);
 });
 
 // (*MVOX:Tallis* — #353 RED)

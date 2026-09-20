@@ -909,12 +909,16 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		const banned = ['visibilitychange', 'focus', 'sync', 'periodicsync'];
 		expect(winAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
-		// And the service worker gained NOTHING: byte-identical to the #353
-		// shell-only worker (its three listeners are install/activate/fetch —
-		// no sync, no periodicsync, no push). Read from disk, pinned by hash.
+		// And the service worker gained NOTHING from #409/#410's OWN wiring:
+		// still exactly three listeners (install/activate/fetch — no sync,
+		// no periodicsync, no push). The hash itself moved once, legitimately,
+		// at #427 (the pdf.js worker's `?url` import + its precacheUrls
+		// `extra` entry — see swPolicy.part-viewer.spec.ts) — re-pinned here
+		// to that content; the listener-name assertion right below is the
+		// one that actually carries this test's invariant forward.
 		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
 		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'fbb0db9246a7a41aaa676f51fbcc854f7a69e6a22f780df7485f074cef230527'
+			'1d107782f3d3252ea98d9fe91494366a8997b3a2d0fc99a5f4010f3c7c83dd15'
 		);
 		expect(
 			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])

@@ -30,11 +30,18 @@
 // opposite of what that endpoint exists to do.
 import { build, files, version } from '$service-worker';
 import { cacheNameFor, decideFetch, isStaleShellCache, precacheUrls } from '$lib/sw/swPolicy';
+// #427 — the part viewer's pdf.js worker is a SEPARATE static asset (Vite's
+// `?url` import gives its hashed build path, same as any other asset
+// import), and neither `build` nor `files` above is guaranteed to name it —
+// see src/lib/sw/swPolicy.part-viewer.spec.ts. Precached explicitly so a
+// singer who cold-starts the app at a no-signal rehearsal still gets a
+// renderer that can boot.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 declare let self: ServiceWorkerGlobalScope;
 
 const CACHE_NAME = cacheNameFor(version);
-const PRECACHE_URLS = precacheUrls({ build, files });
+const PRECACHE_URLS = precacheUrls({ build, files, extra: [pdfWorkerUrl] });
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
