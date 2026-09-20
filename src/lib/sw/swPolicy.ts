@@ -37,14 +37,18 @@ export function cacheNameFor(version: string): string {
  * and the two hand-added urls: existing callers pass nothing and get exactly
  * the old list back.
  *
- * DEDUPED, and that is load-bearing (#427 review finding 1). This list is
- * handed straight to `cache.addAll`, which REJECTS on a duplicate request
- * (the spec's Batch Cache Operations throws InvalidStateError) — and a
- * rejected addAll rejects the install's `waitUntil`, so no new worker ever
- * activates and no client can be recovered by a later deploy. That is the
- * exact wedge svelte.config.js's #368 comment exists to prevent. An `extra`
- * asset that Vite DOES name in `build` (today's pdf.js worker is one) would
- * otherwise appear twice. Order-stable: the first occurrence keeps its slot.
+ * DEDUPED, and that is load-bearing (#427 review finding 1). The REQUIRED
+ * half of this list (see `splitPrecache`) is handed straight to
+ * `cache.addAll`, which REJECTS on a duplicate request (the spec's Batch
+ * Cache Operations throws InvalidStateError) — and a rejected addAll rejects
+ * the install's `waitUntil`, so no new worker ever activates and no client
+ * can be recovered by a later deploy. That is the exact wedge
+ * svelte.config.js's #368 comment exists to prevent. A duplicate in the
+ * optional tail is cheaper but not free: those adds are individual and their
+ * failures swallowed, so it buys a second fetch of the same asset rather
+ * than a wedge. An `extra` asset that Vite DOES name in `build` (today's
+ * pdf.js worker is one) would otherwise appear twice. Order-stable: the
+ * first occurrence keeps its slot.
  */
 export function precacheUrls(input: { build: string[]; files: string[]; extra?: string[] }): string[] {
 	return [...new Set([...input.build, ...input.files, ...(input.extra ?? []), '/', '/_app/env.js'])];

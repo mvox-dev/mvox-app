@@ -919,12 +919,13 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		// chunks, pdf worker) is added one request at a time with each failure
 		// swallowed, so one miss on hall wifi degrades an asset instead of
 		// wedging the install. That rule lives in swPolicy.ts
-		// (`splitPrecache`, pinned in swPolicy.part-viewer.spec.ts). Re-pinned
+		// (`splitPrecache`, pinned in swPolicy.part-viewer.spec.ts), and round 4
+		// corrected the dedupe comment's consequence for the split. Re-pinned
 		// here to that content; the listener-name assertion right below is the
 		// one that actually carries this test's invariant forward.
 		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
 		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'3f0b43a8cb403284150b4a3d3f8f26ae02feea06183c7b261fdc1fa43a7c2d0d'
+			'b360f68c38d3972899cfea912840eb79002f06c7dd2e15e03e01b90cf91c9d9a'
 		);
 		expect(
 			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])

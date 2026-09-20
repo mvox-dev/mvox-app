@@ -40,10 +40,12 @@ import {
 // `?url` import gives its hashed build path, same as any other asset
 // import). In THIS build `build` above already names it, so naming it here
 // is a belt against a Vite emit that lands it outside the manifest — and
-// `precacheUrls` DEDUPES for exactly that reason (#427 review finding 1: a
-// repeated url would reject the batch cache write below, reject the install,
-// and leave every client on the old worker forever — svelte.config.js's #368
-// comment names that failure). See src/lib/sw/swPolicy.part-viewer.spec.ts.
+// `precacheUrls` DEDUPES for exactly that reason (#427 review finding 1).
+// What a duplicate costs depends on which half it lands in: in the required
+// core it rejects the batch write and with it the install, which is the
+// wedge svelte.config.js's #368 comment names; in the optional tail it only
+// buys a second fetch of a 1.2 MB asset, since those failures are swallowed.
+// The dedupe removes both cases. See src/lib/sw/swPolicy.part-viewer.spec.ts.
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 declare let self: ServiceWorkerGlobalScope;
