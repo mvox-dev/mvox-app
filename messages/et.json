@@ -196,6 +196,8 @@
 	"profile_storage_cancel": "Loobu",
 	"profile_storage_remove_error": "Eemaldamine ebaõnnestus — allalaaditud osad on endiselt selles seadmes.",
 	"profile_storage_names_partial": "Kõiki osi ei õnnestunud siin nimetada — ülal olev arv ja maht katavad siiski kõik hoitava.",
+	"profile_install_button": "Paigalda mvox seadmesse",
+	"profile_install_ios_hint": "Ava jagamismenüü ja vali «Lisa avakuvale».",
 	"roster_title": "Liikmed",
 	"roster_no_collective": "Nimekirja vaatamiseks vali kollektiiv.",
 	"roster_load_error": "Liikmete nimekirja laadimine ebaõnnestus.",

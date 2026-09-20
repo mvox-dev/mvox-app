@@ -62,6 +62,7 @@ Keys are flat strings in `messages/{locale}.json`. No nesting.
 | `org_` | Organisation-level settings, onboarding, admin |
 | `auth_` | Login, logout, identity, invite flows |
 | `part_viewer_` | The fullscreen `/part/[fileId]` PDF reading surface (#427): close control, page-of indicator, not-on-device notice. Deliberately THREE keys only — no `_open` (entry buttons keep their existing `repertoire_pdf_link`/`library_edition_file_open` labels) and no `_ink`/`_draw`/`_layer` shape (the viewer settles paging before #333's markings schema; `src/lib/i18n/partViewerKeys.spec.ts` pins the group's exact set in all four locales, while `src/part-viewer-fence.spec.ts` separately forbids an ink/draw/layer key SEGMENT anywhere in the message files). |
+| `profile_install_` | The profile-page "Install as app" button (#408): `profile_install_button` labels the one native control (both the `beforeinstallprompt` and the iOS Share-menu path reuse it — the state, not the key, decides which happens on press); `profile_install_ios_hint` is the Share-menu instruction line, shown only after a press on iOS. The `et` copy for both is Mihkel's drafted default from the issue body — the iOS menu item's exact wording is the platform's, not ours, and is flagged for a real-device check. |
 
 Use `common_` not `shared_`. Use `actions_` not `btn_`. Use `roster_` not `event_members_`.
 

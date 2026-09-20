@@ -196,6 +196,8 @@
 	"profile_storage_cancel": "Cancel",
 	"profile_storage_remove_error": "Couldn't remove — the downloaded parts are still on this device.",
 	"profile_storage_names_partial": "Not every part could be named here — the count and size above still cover everything held.",
+	"profile_install_button": "Install mvox on this device",
+	"profile_install_ios_hint": "Open the Share menu and choose “Add to Home Screen”.",
 	"roster_title": "Roster",
 	"roster_no_collective": "Select a collective to view the roster.",
 	"roster_load_error": "Something went wrong loading the roster.",

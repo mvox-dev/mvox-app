@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
@@ -47,6 +47,11 @@
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { formatFileSize } from '$lib/files/fileSize';
 	import { listAllEditions } from '$lib/library/libraryData';
+	// #408 — "Install as app": app chrome, like sign-out/language/time-format
+	// below, not gated on collective selection. $installAffordance decides
+	// everything the button does; startInstallAffordance's return value IS the
+	// teardown onMount expects.
+	import { installAffordance, promptInstall, startInstallAffordance } from '$lib/install/installState';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -62,6 +67,20 @@
 	const selected = $derived($selectedCollectiveStore);
 
 	let status = $state<RouteLoadStatus>('loading');
+
+	// #408 — the iOS Share-menu hint line: hidden until the button is pressed
+	// (the button itself is the SAME control for 'prompt' and 'ios-hint').
+	let installIosHintShown = $state(false);
+
+	function onInstallButtonClick(): void {
+		if ($installAffordance === 'prompt') {
+			void promptInstall();
+		} else if ($installAffordance === 'ios-hint') {
+			installIosHintShown = true;
+		}
+	}
+
+	onMount(() => startInstallAffordance());
 
 	// Unified draft: one value per field (not per level).
 	let draft = $state<{ name: string; email: string }>({ name: '', email: '' });
@@ -1210,6 +1229,32 @@
 				{m.profile_time_format_hint()}
 			</p>
 		</div>
+
+		<!--
+			#408 — "Install as app": app chrome, like sign-out/language/time-format
+			above, not gated on `status` / collective selection. `$installAffordance`
+			decides everything: 'none' renders nothing at all (no disabled button,
+			no explanation — issue body), 'prompt' and 'ios-hint' render the SAME
+			native button, and only 'ios-hint' can ever reveal the Share-menu line,
+			and only after a press (never before).
+		-->
+		{#if $installAffordance !== 'none'}
+			<div class="flex flex-col items-start gap-1">
+				<button
+					type="button"
+					data-testid="profile-install-button"
+					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+					onclick={onInstallButtonClick}
+				>
+					{m.profile_install_button()}
+				</button>
+				{#if $installAffordance === 'ios-hint' && installIosHintShown}
+					<p data-testid="profile-install-ios-hint" class="text-xs text-ink-3">
+						{m.profile_install_ios_hint()}
+					</p>
+				{/if}
+			</div>
+		{/if}
 
 		<!--
 			#267 — admin-only roster-names toggle: mirrors the time-format control
