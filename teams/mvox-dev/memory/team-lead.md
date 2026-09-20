@@ -2,9 +2,11 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-19 11:05Z, live]
+### [MVOX-26 — 2026-09-19 19:20Z, live]
 
-**LANDED:** #407 3c839ae (pipeline, review YELLOW×2→GREEN, 277 files) · #417 0543d90 via PR #423 (pipeline YELLOW×3 at fix cap → Josquin fix round 3 → Bentham GREEN round 4 → PR merge; first merge through the required CI check). Template MERGE is now the PR path (f3194aa + CI-register wait loop); branch protection ON (`check + test` required). #422 filed by Gama (loadCfg scripts reach crede ungated, follow-up). #418→#421 are the #233 re-cut; #418 unblocked by #417, unlabelled until Gama releases; #233 `blocked`, args-233-* stale.
+**#233 CHAIN COMPLETE 2026-09-20 02:3xZ:** #418 (prop-def, ledger 971d286) · #419 (backfill 10/36, ledger 109a4a2) · #420 (app on event_name, 75686df) · #421 (formula live, prop-def 6a92a333ca67df980f415044, ledger 54ab40b) — all CLOSED. #233 parent still OPEN `blocked`, Gama's to close. Live commands ran from the TEAM-LEAD session under manual mode (Pérotin's session classifier-blocked); auth comments verbatim on each issue first; Pérotin did read-back + ledger PRs. Template: noClose option (e2998b7). Findings log: ~/workspace/scratchpad/findings-mvox-26.md. Pattern for live steps: dry run → Mihkel → auth comment → live from team-lead → Pérotin read-back + PR → close with landing comment.
+
+**LANDED EARLIER:** #407 3c839ae (pipeline, review YELLOW×2→GREEN, 277 files) · #417 0543d90 via PR #423 (pipeline YELLOW×3 at fix cap → Josquin fix round 3 → Bentham GREEN round 4 → PR merge; first merge through the required CI check). Template MERGE is now the PR path (f3194aa + CI-register wait loop); branch protection ON (`check + test` required). #422 filed by Gama (loadCfg scripts reach crede ungated, follow-up). #418→#421 are the #233 re-cut; #418 unblocked by #417, unlabelled until Gama releases; #233 `blocked`, args-233-* stale.
 
 **RULES THIS SESSION:** pipeline halts at YELLOW after fix cap → team fix round (Josquin) + Bentham verdict + PR merge; PO calls found in review go on the issue AND to Gama by courier. `gh pr checks --watch` can exit before CI registers — template now waits. Pérotin's untracked crede probe + seed-233 dry artifact still on tree, untouched.
 
