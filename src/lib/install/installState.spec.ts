@@ -28,7 +28,12 @@
 //                 && navigator.maxTouchPoints > 1)   // iPadOS desktop UA
 //   - promptInstall(): Promise<void> — calls the stashed event's prompt()
 //     and clears the stash WHATEVER the choice (accepted or dismissed);
-//     a second call finds no stash and calls nothing.
+//     a second call finds no stash and calls nothing. A REJECTING prompt()
+//     (Chromium throws InvalidStateError once the banner has been consumed)
+//     still reconciles the store to 'none' — the stash is gone, so leaving
+//     the store on 'prompt' would leave a button that does nothing on every
+//     further press. The rejection reaches the caller rather than being
+//     swallowed.
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -235,6 +240,29 @@ describe('promptInstall — opens the stashed browser dialog, then forgets it (#
 		await promptInstall();
 		expect(evt.prompt).toHaveBeenCalledTimes(1);
 		// stash cleared: no prompt, not iOS, not standalone -> 'none'
+		expect(get(installAffordance)).toBe('none');
+
+		await promptInstall();
+		expect(evt.prompt).toHaveBeenCalledTimes(1);
+	});
+
+	it("a REJECTING prompt() still collapses the affordance to 'none' and rethrows", async () => {
+		stop = startInstallAffordance();
+		const evt = makeBeforeInstallPrompt();
+		// Chromium's failure mode: the banner was already consumed.
+		const invalidState = Object.assign(
+			new Error('The prompt() method may only be called once.'),
+			{ name: 'InvalidStateError' }
+		);
+		evt.prompt = vi.fn().mockRejectedValue(invalidState);
+		window.dispatchEvent(evt);
+		expect(get(installAffordance)).toBe('prompt');
+
+		await expect(promptInstall()).rejects.toBe(invalidState);
+
+		// The stash is gone, so the store must have followed it: a button left on
+		// 'prompt' with nothing behind it is the dead control the issue body rules
+		// out.
 		expect(get(installAffordance)).toBe('none');
 
 		await promptInstall();

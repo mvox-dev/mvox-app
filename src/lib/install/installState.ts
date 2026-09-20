@@ -97,11 +97,22 @@ export function startInstallAffordance(): () => void {
 
 /** Opens the stashed browser dialog, if any, and clears the stash whatever
  *  the choice (accepted or dismissed) — a second call finds no stash and
- *  calls nothing. */
+ *  calls nothing.
+ *
+ *  prompt() can also REJECT (Chromium throws InvalidStateError when the banner
+ *  has already been consumed), so the store is reconciled in a `finally`: the
+ *  stash is gone either way, and leaving the store on 'prompt' would keep the
+ *  button on screen with nothing behind it — an inert control that does
+ *  nothing on every further press, the one thing the issue body rules out.
+ *  The rejection is NOT swallowed here: it reaches the caller, which logs it
+ *  (see onInstallButtonClick on the profile page). */
 export async function promptInstall(): Promise<void> {
 	const event = stashedPrompt;
 	if (!event) return;
 	stashedPrompt = null;
-	await event.prompt();
-	recompute();
+	try {
+		await event.prompt();
+	} finally {
+		recompute();
+	}
 }

@@ -74,7 +74,16 @@
 
 	function onInstallButtonClick(): void {
 		if ($installAffordance === 'prompt') {
-			void promptInstall();
+			// prompt() can reject (Chromium's InvalidStateError when the banner was
+			// already consumed). promptInstall has already cleared the stash and
+			// recomputed by then, so the affordance COLLAPSES — the button leaves
+			// rather than sitting there inert. Logged, not swallowed: a failed
+			// user-initiated action, so console.error like every other action
+			// handler on this page (the console.warn cases above are load-time
+			// reads that degrade to a documented default, a different class).
+			promptInstall().catch((err) => {
+				console.error('profile: install prompt failed', err);
+			});
 		} else if ($installAffordance === 'ios-hint') {
 			installIosHintShown = true;
 		}

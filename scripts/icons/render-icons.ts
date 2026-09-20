@@ -25,9 +25,16 @@ const COLOR_INK = '#2a2620'; // --color-ink (src/app.css)
 // scaled to fill this fraction of the square canvas (a small margin, not a
 // safe-zone reservation — nothing crops these).
 const REGULAR_FIT = 0.84;
-// icon-maskable-512: the OS applies its own mask shape and guarantees only
-// the central 80% of the canvas survives (W3C maskable-icon safe zone), so
-// the mark is scaled to fit inside that fraction instead.
+// icon-maskable-512: the OS applies its OWN mask shape, and the W3C manifest
+// spec guarantees only a CIRCLE survives it — centred on the icon, radius 2/5
+// (40%) of the icon size, i.e. a diameter of this fraction of the canvas
+// ("safe zone", https://w3c.github.io/manifest/). A centred 80% SQUARE is NOT
+// that circle: its corners reach 0.566 of the canvas from the centre, well
+// past the 0.4 radius, so a round Android mask shaves the outer arm tips off
+// the mark. The mark is therefore inscribed IN the circle — its bounding
+// box's DIAGONAL, not its longest side, is what gets fitted into the safe
+// zone (see src/icon-maskable-safe-zone.spec.ts, which measures the committed
+// PNG's ink and fails if any of it leaves the circle).
 const MASKABLE_SAFE_ZONE = 0.8;
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -51,9 +58,25 @@ if (pathData.length !== 2) {
 	throw new Error(`mvox-mark.svg: expected 2 <path> elements, found ${pathData.length}`);
 }
 
-/** Builds a flat SVG: an opaque background rect, then the mark centred and scaled to fit `fit` of the canvas. */
-function buildIconSvg(canvasSize: number, fit: number, background: string, color: string): string {
-	const scale = (canvasSize * fit) / Math.max(markWidth, markHeight);
+// The two extents a canvas fraction can be measured against: the bounding
+// box's longest side (fits the box in a centred SQUARE) and its diagonal
+// (fits the box in a centred CIRCLE — the maskable safe zone).
+const MARK_LONGEST_SIDE = Math.max(markWidth, markHeight);
+const MARK_DIAGONAL = Math.hypot(markWidth, markHeight);
+
+/** Builds a flat SVG: an opaque background rect, then the mark centred and
+ *  scaled so that `span` — the mark extent that has to fit — covers `fit` of
+ *  the canvas. Regular icons pass MARK_LONGEST_SIDE (fit the box in the
+ *  square); the maskable icon passes MARK_DIAGONAL (fit the box in the safe
+ *  circle). */
+function buildIconSvg(
+	canvasSize: number,
+	fit: number,
+	span: number,
+	background: string,
+	color: string
+): string {
+	const scale = (canvasSize * fit) / span;
 	const markCenterX = minX + markWidth / 2;
 	const markCenterY = minY + markHeight / 2;
 	const translateX = canvasSize / 2 - scale * markCenterX;
@@ -81,15 +104,15 @@ function writeIcon(fileName: string, svg: string, size: number): void {
 
 mkdirSync(iconsDir, { recursive: true });
 
-writeIcon('icon-192.png', buildIconSvg(192, REGULAR_FIT, COLOR_PAPER, COLOR_INK), 192);
-writeIcon('icon-512.png', buildIconSvg(512, REGULAR_FIT, COLOR_PAPER, COLOR_INK), 512);
+writeIcon('icon-192.png', buildIconSvg(192, REGULAR_FIT, MARK_LONGEST_SIDE, COLOR_PAPER, COLOR_INK), 192);
+writeIcon('icon-512.png', buildIconSvg(512, REGULAR_FIT, MARK_LONGEST_SIDE, COLOR_PAPER, COLOR_INK), 512);
 writeIcon(
 	'icon-maskable-512.png',
-	buildIconSvg(512, MASKABLE_SAFE_ZONE, COLOR_PAPER, COLOR_INK),
+	buildIconSvg(512, MASKABLE_SAFE_ZONE, MARK_DIAGONAL, COLOR_PAPER, COLOR_INK),
 	512
 );
 writeIcon(
 	'apple-touch-icon-180.png',
-	buildIconSvg(180, REGULAR_FIT, COLOR_PAPER, COLOR_INK),
+	buildIconSvg(180, REGULAR_FIT, MARK_LONGEST_SIDE, COLOR_PAPER, COLOR_INK),
 	180
 );

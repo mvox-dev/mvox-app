@@ -186,6 +186,27 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 		await waitFor(() => expect(evt.prompt).toHaveBeenCalledTimes(1));
 	});
 
+	it('a REJECTED prompt() removes the button and logs — never an inert control', async () => {
+		const container = await renderProfileReady();
+		const evt = makeBeforeInstallPrompt();
+		// Chromium's failure mode: the banner had already been consumed.
+		const invalidState = Object.assign(
+			new Error('The prompt() method may only be called once.'),
+			{ name: 'InvalidStateError' }
+		);
+		evt.prompt = vi.fn().mockRejectedValue(invalidState);
+		window.dispatchEvent(evt);
+		await waitFor(() => expect(installButton(container)).not.toBeNull());
+
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+		await fireEvent.click(installButton(container)!);
+
+		// The stash is spent, so the affordance collapses: there is no button
+		// left to press uselessly (the issue body's one explicit "no").
+		await waitFor(() => expect(installButton(container)).toBeNull());
+		expect(consoleError).toHaveBeenCalledWith('profile: install prompt failed', invalidState);
+	});
+
 	it('is app chrome — present even with NO collective selected', async () => {
 		setToken('jwt-member');
 		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
