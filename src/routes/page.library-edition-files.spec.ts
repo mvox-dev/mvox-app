@@ -16,6 +16,8 @@
 //     ($lib/repertoire/fileUrls) mints the 60s URL AT CLICK TIME. The read
 //     model carries no url field by design — nothing from the upload response
 //     or the entity fetch is stored or rendered as a link.
+//     (#427: the click itself is now a NAVIGATION to /part/<fileId> — the
+//     signing/read-through runs inside the /part viewer route, not here.)
 //   - ATTACH ([data-testid="library-attach-file-{editionId}"]): librarian-only
 //     (absent-not-disabled, $librarianStore idiom), a NATIVE
 //     <input type=file multiple> — [TRIGGER-NATIVE-CONTROLS]. Selection needs
@@ -166,7 +168,8 @@ vi.mock('$lib/library/libraryData', async () => {
 });
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -354,6 +357,7 @@ afterEach(() => {
 	listRepertoireItemsMock.mockReset();
 	uploadEditionFilesMock.mockReset();
 	signFileUrlMock.mockReset();
+	gotoMock.mockReset();
 	vi.unstubAllGlobals();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
@@ -554,7 +558,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 // DOWNLOAD — the existing signFileUrl mechanism, minted AT CLICK TIME
 // ---------------------------------------------------------------------------
 
-describe('#275 — opening a file signs its URL at click time (60s TTL — never stored)', () => {
+describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-rendered; the click navigates', () => {
 	it('no URL is rendered or pre-signed: at render, signFileUrl has NOT been called, the row holds no <a href>, and the open control is a BUTTON', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
@@ -575,103 +579,33 @@ describe('#275 — opening a file signs its URL at click time (60s TTL — never
 		expect(open.tagName).toBe('BUTTON');
 	});
 
-	it('clicking Open signs THAT file — signFileUrl called once with the file PROPERTY id, only then', async () => {
+	it('clicking Open NAVIGATES — goto(/part/<file property id>?db=<db>), full shape, and NO tab opens (#427)', async () => {
+		mockBaselineLibrary();
+		setAuthedWithOneCollective();
+		const openMock = vi.fn(() => null);
+		vi.stubGlobal('open', openMock);
+		stubByteFetch(); // a live wire, to prove the click needs none of it
+		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+
+		const container = await renderWithEditionOpen('edition-1');
+		const open = await waitFor(() => {
+			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
+
+		const before = gotoMock.mock.calls.length;
+		await fireEvent.click(open);
+
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
+		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-1?db=sampledb']]);
+		expect(openMock).not.toHaveBeenCalled();
+	});
+
+	it('the click signs NOTHING, fetches NOTHING, stores NOTHING and raises NO per-file error — the /part viewer owns the read (#427)', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		vi.stubGlobal('open', vi.fn(() => null));
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-
-		const container = await renderWithEditionOpen('edition-1');
-		const open = await waitFor(() => {
-			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-
-		await fireEvent.click(open);
-
-		await waitFor(() => expect(signFileUrlMock).toHaveBeenCalledTimes(1));
-		expect(signFileUrlMock.mock.calls[0][1]).toBe('file-1');
-	});
-
-	// Review YELLOW: the rejection path used to console.error and close the
-	// blank tab — the click looked like nothing happened at all.
-	it('a REJECTED signing shows a visible error on that file, for the NON-LIBRARIAN too (Open is a read affordance every member has, so the message must live outside the librarian gate)', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective(); // default: not-librarian
-		const close = vi.fn();
-		vi.stubGlobal('open', vi.fn(() => ({ opener: {}, location: { href: '' }, close })));
-		signFileUrlMock.mockRejectedValue(new Error('sign failed'));
-
-		const container = await renderWithEditionOpen('edition-1');
-		const open = await waitFor(() => {
-			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-
-		await fireEvent.click(open);
-
-		const alert = await waitFor(() => {
-			const el = container.querySelector('[data-testid="library-edition-file-open-error-file-1"]');
-			expect(el, 'a failed open must SAY so on the page').not.toBeNull();
-			return el as HTMLElement;
-		});
-		expect(alert.getAttribute('role')).toBe('alert');
-		expect(alert.textContent?.trim()).toBe('Could not open the file.');
-		// Non-librarian really is the case under test: no attach control exists.
-		expect(container.querySelector('[data-testid="library-attach-file-edition-1"]')).toBeNull();
-		// Only the clicked file is marked — its sibling stays clean.
-		expect(
-			container.querySelector('[data-testid="library-edition-file-open-error-file-2"]')
-		).toBeNull();
-	});
-
-	it('the next SUCCESSFUL open of that same file clears the error', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		vi.stubGlobal('open', vi.fn(() => ({ opener: {}, location: { href: '' }, close: vi.fn() })));
-		// #343 — success now includes the byte GET, so the retry needs a live wire.
-		stubByteFetch();
-		signFileUrlMock.mockRejectedValueOnce(new Error('sign failed'));
-
-		const container = await renderWithEditionOpen('edition-1');
-		const open = await waitFor(() => {
-			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-
-		await fireEvent.click(open);
-		await waitFor(() =>
-			expect(
-				container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
-			).not.toBeNull()
-		);
-
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-		await fireEvent.click(open);
-
-		await waitFor(() =>
-			expect(
-				container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
-			).toBeNull()
-		);
-	});
-});
-
-// ---------------------------------------------------------------------------
-// #343 — the open path READS THROUGH the byte store (blob: URL, never the
-// signed URL; failure AFTER signing gets the same existing error surface)
-// ---------------------------------------------------------------------------
-
-describe('#343 — library Open serves bytes through the store', () => {
-	it('the tab receives a blob: URL — never the raw signed url — and the bytes land under the clicking identity', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
-		const openMock = vi.fn(() => tab);
-		vi.stubGlobal('open', openMock);
 		const fetchMock = stubByteFetch();
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
 
@@ -682,63 +616,30 @@ describe('#343 — library Open serves bytes through the store', () => {
 			return el as HTMLElement;
 		});
 
+		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(open);
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
 
-		// Popup pattern preserved: blank tab opened SYNC in the gesture, severed.
-		expect(openMock).toHaveBeenCalledWith('', '_blank');
-		expect(tab.opener).toBeNull();
-		await waitFor(() => {
-			expect(tab.location.href).toMatch(/^blob:/);
-		});
-		expect(tab.location.href).not.toContain('s3.example');
-		expect(String(fetchMock.mock.calls[0][0])).toBe('https://s3.example/signed-1');
-		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-1']);
-		expect(
-			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
-		).toBeNull();
-	});
-
-	// #343 fix-round — Gama's 1(b) ruling: a byte GET dying after successful
-	// signing now falls back to the signed URL already in hand instead of
-	// closing the tab with an error (the exact pre-#343 delivery path).
-	it('a fetch that fails AFTER successful signing falls back to the RAW signed url — no per-file error, tab not closed', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		const close = vi.fn();
-		const tab = { opener: {} as unknown, location: { href: '' }, close };
-		vi.stubGlobal('open', vi.fn(() => tab));
-		const fetchMock = vi.fn(async () => {
-			throw new TypeError('Failed to fetch');
-		});
-		vi.stubGlobal('fetch', fetchMock);
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-
-		const container = await renderWithEditionOpen('edition-1');
-		const open = await waitFor(() => {
-			const el = container.querySelector('[data-testid="library-edition-file-open-file-1"]');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-
-		await fireEvent.click(open);
-
-		await waitFor(() => {
-			expect(tab.location.href).toBe('https://s3.example/signed-1');
-		});
-		expect(fetchMock).toHaveBeenCalled();
-		expect(close).not.toHaveBeenCalled();
-		expect(
-			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
-		).toBeNull();
-		// Nothing half-fetched was stored — a fallback delivers, it never caches.
+		expect(signFileUrlMock).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
 		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
+		expect(
+			container.querySelector('[data-testid="library-edition-file-open-error-file-1"]')
+		).toBeNull();
 	});
+});
 
-	it('OFFLINE: a file already in the store opens with every network path dead — no signing, no fetch, no error', async () => {
+// ---------------------------------------------------------------------------
+// #427 — Open is a navigation whether or not the part is on the device; the
+// held/missing distinction is the VIEWER's business (see
+// src/routes/part/page.part-viewer.spec.ts), never this page's
+// ---------------------------------------------------------------------------
+
+describe('#427 — a part already on the device navigates the same way', () => {
+	it('with every network path dead and the file in the store, the click still just navigates — same URL, no signing, no fetch, no error', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
-		const tab = { opener: {} as unknown, location: { href: '' }, close: vi.fn() };
-		vi.stubGlobal('open', vi.fn(() => tab));
+		vi.stubGlobal('open', vi.fn(() => null));
 		const fetchMock = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
 		});
@@ -757,11 +658,11 @@ describe('#343 — library Open serves bytes through the store', () => {
 			return el as HTMLElement;
 		});
 
+		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(open);
 
-		await waitFor(() => {
-			expect(tab.location.href).toMatch(/^blob:/);
-		});
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
+		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-1?db=sampledb']]);
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(fetchMock).not.toHaveBeenCalled();
 		expect(
@@ -888,7 +789,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 		expect(status.textContent?.trim()).toBe('new-a.pdf, new-b.pdf attached.');
 	});
 
-	it('a JUST-uploaded file opens the same way as an existing one — click its Open, signFileUrl gets the NEW property id at click time', async () => {
+	it('a JUST-uploaded file opens the same way as an existing one — its Open navigates to /part/<NEW property id> (#427)', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		mockLibrarian();
@@ -917,10 +818,13 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 		// Nothing pre-signed by the upload flow.
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 
+		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(open);
 
-		await waitFor(() => expect(signFileUrlMock).toHaveBeenCalledTimes(1));
-		expect(signFileUrlMock.mock.calls[0][1]).toBe('prop-new-1');
+		// #427 — same affordance as an existing file: a navigation, no signing.
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
+		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/prop-new-1?db=sampledb']]);
+		expect(signFileUrlMock).not.toHaveBeenCalled();
 	});
 });
 

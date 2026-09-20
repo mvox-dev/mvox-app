@@ -1,20 +1,19 @@
 // @vitest-environment happy-dom
 //
-// #343 — the EVENT DETAIL page's PDF open goes through the byte store, and —
-// new to this page — a failed open finally SAYS so. Today (branch base) this
-// page's handlePdfClick has NO error surface at all: a rejected open is a
-// `console.error` and a silently closed tab (zero spec coverage — this file
-// is that coverage). The agenda page's #91 idiom is the in-repo reference:
-// [data-testid="repertoire-pdf-error"] rendering m.repertoire_pdf_error().
-//
-// PINNED: the SAME existing key on this page — ZERO new locale keys anywhere
-// in this slice (locale-file pin below). Popup-blocker pattern preserved:
-// window.open('', '_blank') SYNCHRONOUSLY inside the click, before any await.
+// #343 established: this page's PDF open reads THROUGH the byte store.
+// #427 moves the consumption: the click no longer opens a blank tab and
+// navigates it to a blob: URL — it is a plain in-app navigation to the
+// fullscreen part viewer, /part/<fileId>?db=<db>, and THE VIEWER runs the
+// openFileBytes read-through (see src/routes/part/page.part-viewer.spec.ts).
+// The old popup-blocker dance (window.open('', '_blank') sync in the click)
+// existed to survive an async gap before a cross-document navigation; an
+// in-app goto has no such gap and must open no tab at all.
 //
 // INTEGRATION posture (house rule): the REAL route component renders; only
 // the wire (global fetch), the works read (loadWorksByEventId — the module
 // seam the agenda works-wiring spec uses), signFileUrl, and the
-// $lib/files/appByteStore persistence seam are substituted.
+// $lib/files/appByteStore persistence seam are substituted — kept in place
+// precisely to pin that the click TOUCHES NONE OF THEM anymore.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
@@ -132,10 +131,6 @@ function workRowFixture() {
 	};
 }
 
-function makeTab() {
-	return { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
-}
-
 function renderPage() {
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
@@ -173,86 +168,46 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	loadWorksByEventIdMock.mockReset();
 	signFileUrlMock.mockReset();
+	gotoMock.mockReset();
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 });
 
-describe('event detail — PDF open through the byte store (#343)', () => {
-	it('the tab opens SYNC in the click gesture and receives a blob: URL — never the raw signed url', async () => {
+describe('#427 — the PDF affordance navigates to the in-app part viewer', () => {
+	// The pre-#427 delivery (blank tab + blob URL) is GONE from this
+	// handler. The byte-store substitution harness above STAYS — it is
+	// exactly what proves the click no longer touches any of it.
+	it('click → goto(/part/<fileId>?db=<db>) — full shape on the emitted call — and NO tab opens', async () => {
 		installWire();
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		const tab = makeTab();
-		const openSpy = vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const { container } = renderPage();
-		await fireEvent.click(await pdfLink(container));
-
-		expect(openSpy).toHaveBeenCalledWith('', '_blank');
-		expect(tab.opener).toBeNull();
-		await waitFor(() => {
-			expect(tab.location.href).toMatch(/^blob:/);
-		});
-		expect(tab.location.href).not.toContain('s3.example');
-		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual(['file-score']);
-	});
-
-	it('READ-THROUGH on this page too: a second open signs nothing and fetches nothing', async () => {
-		const fetchMock = installWire();
-		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		const tabs = [makeTab(), makeTab()];
-		let openCount = 0;
-		vi.spyOn(window, 'open').mockImplementation(() => tabs[openCount++] as unknown as Window);
+		const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
 
 		const { container } = renderPage();
 		const link = await pdfLink(container);
-
+		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(link);
-		await waitFor(() => {
-			expect(tabs[0].location.href).toMatch(/^blob:/);
-		});
-		await fireEvent.click(link);
-		await waitFor(() => {
-			expect(tabs[1].location.href).toMatch(/^blob:/);
-		});
 
-		expect(signFileUrlMock).toHaveBeenCalledTimes(1);
-		const byteGets = fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('https://s3.example/'));
-		expect(byteGets.length).toBe(1);
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
+		expect(gotoMock.mock.calls.slice(before)).toEqual([['/part/file-score?db=sampledb']]);
+		expect(openSpy).not.toHaveBeenCalled();
 	});
 
-	// #343 fix-round — Gama's 1(b) ruling: a byte GET dying after successful
-	// signing now falls back to the signed URL already in hand instead of
-	// closing the tab with an error (the exact pre-#343 delivery path).
-	it('a fetch that fails AFTER successful signing falls back to the RAW signed url — no error surface, tab not closed', async () => {
-		installWire({ bytesFail: true });
+	it('the click moves NO bytes: no signing, no byte GET, no store write — the viewer route owns the read', async () => {
+		const fetchMock = installWire();
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
-		const tab = makeTab();
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
+		vi.spyOn(window, 'open').mockImplementation(() => null);
 
 		const { container } = renderPage();
-		await fireEvent.click(await pdfLink(container));
+		const link = await pdfLink(container);
+		const before = gotoMock.mock.calls.length;
+		await fireEvent.click(link);
+		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
 
-		await waitFor(() => {
-			expect(tab.location.href).toBe(SIGNED_URL);
-		});
-		expect(tab.close).not.toHaveBeenCalled();
-		expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).toBeNull();
+		expect(signFileUrlMock).not.toHaveBeenCalled();
+		expect(
+			fetchMock.mock.calls.filter((c) => String(c[0]).startsWith('https://s3.example/'))
+		).toEqual([]);
 		expect(fakeByteStore.heldFor('sampledb', 'person-p')).toEqual([]);
-	});
-
-	it('a rejected SIGNING gets the same surface (the case the page used to swallow into console.error)', async () => {
-		installWire();
-		signFileUrlMock.mockRejectedValue(new Error('403'));
-		const tab = makeTab();
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const { container } = renderPage();
-		await fireEvent.click(await pdfLink(container));
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="repertoire-pdf-error"]')).not.toBeNull();
-		});
-		expect(tab.close).toHaveBeenCalled();
 	});
 });
 

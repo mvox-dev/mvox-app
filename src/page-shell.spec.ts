@@ -43,7 +43,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { HOUSE_SHELL, findShellViolations, type RouteFile } from './page-shell';
 
-// ── the allowlist: six routes, each with its reason where you meet it ────────
+// ── the allowlist: seven routes, each with its reason where you meet it ──────
 // A route earns a line here by being a DIFFERENT page shape on purpose — not
 // by missing its shell. If you are adding a route and reaching for this map,
 // first ask whether the page should simply carry the house shell.
@@ -68,7 +68,11 @@ const ALLOWLIST: ReadonlyMap<string, string> = new Map([
 		'/invite/[token]',
 		'centered full-screen family — same as /auth/login: px-6 gutter present, py-10 absent by design, content centered'
 	],
-	['/auth/logout', 'renders nothing — script-only redirect, no markup at all']
+	['/auth/logout', 'renders nothing — script-only redirect, no markup at all'],
+	[
+		'/part/[fileId]',
+		'#427 fullscreen part viewer — the /auth/* full-screen family precedent taken one shape further: 100dvh edge-to-edge reading surface on a dark paper-black surround (a music stand, not a page), NO nav shell, no px-6 gutter and no py-10 rhythm — the tap zones need the whole viewport'
+	]
 ]);
 
 // ── the live walk: every src/routes/**/+page.svelte ──────────────────────────
