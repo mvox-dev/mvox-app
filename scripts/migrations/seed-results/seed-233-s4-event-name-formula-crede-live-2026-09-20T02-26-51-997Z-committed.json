@@ -1,0 +1,19 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "outcome": "completed",
+  "formula": "start_datetime event_type event_name ' — ' CONCAT_WS",
+  "counts": {
+    "total": 46,
+    "paired": 10,
+    "nameless": 36,
+    "aggregated": 46,
+    "readBackOk": 46,
+    "readBackMismatch": 0
+  },
+  "namePropDefId": "6a92a333ca67df980f415044",
+  "mismatchIds": [],
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/421#issuecomment-5747030948"
+}
