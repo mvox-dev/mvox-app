@@ -110,6 +110,59 @@ describe('#427 — nothing drawn: canvas stays pdf.js-owned', () => {
 	});
 });
 
+describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index, named on the fence', () => {
+	// The write-pattern sweep above is blind to this call: `.put(` and
+	// `indexedDB` live inside labelStore/appLabelStore, not here, so the
+	// tree's single real write path passed the fence unseen — a green that
+	// described the instrument, not the code. Name the exception instead.
+	//
+	// WHAT IT IS: `recordPartLabel` writes the #353 LABEL INDEX — a separate
+	// IndexedDB database that only NAMES bytes someone else stored. It is not
+	// the byte store, not an Entu mutation, and not a marking: without it a
+	// part first opened from a library or an event page renders as "Unnamed
+	// part" on /downloads. Every OTHER LabelStore method stays out.
+	const LABEL_STORE_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]\$lib\/files\/labelStore['"]/g;
+	const OTHER_LABEL_METHODS = /\.(putLabel|labelsFor|remove|clear)\s*\(/;
+
+	it("recordPartLabel is the only symbol the tree imports from the label store, and the only label-store call it makes", () => {
+		const imported: Array<{ file: string; names: string[] }> = [];
+		for (const { file, source } of viewerFiles()) {
+			for (const match of source.matchAll(LABEL_STORE_IMPORT)) {
+				const names = match[1]
+					.split(',')
+					.map((n) => n.trim().replace(/^type\s+/, ''))
+					.filter(Boolean);
+				imported.push({ file, names });
+			}
+		}
+		for (const { file, names } of imported) {
+			expect(
+				names,
+				`${file}: the viewer may write #353's label index and nothing else — not the byte store, not a marking`
+			).toEqual(['recordPartLabel']);
+		}
+	});
+
+	it('it appears in EXACTLY one file — the route where the bytes land, nowhere else in the tree', () => {
+		const users = viewerFiles()
+			.filter(({ source }) => /recordPartLabel/.test(source))
+			.map(({ file }) => file);
+		expect(users, 'the label write belongs to the one file that knows bytes landed').toEqual([
+			'src/routes/part/[fileId]/+page.svelte'
+		]);
+	});
+
+	it('no OTHER LabelStore method (putLabel/labelsFor/remove/clear) appears anywhere in the tree', () => {
+		for (const { file, source } of viewerFiles()) {
+			const hit = source.match(OTHER_LABEL_METHODS);
+			expect(
+				hit,
+				`${file} calls ${hit?.[0] ?? ''} — the viewer records a name when bytes land and never edits or clears the index`
+			).toBeNull();
+		}
+	});
+});
+
 describe('#427 — no locale key prejudges the markings question', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	// Segment match, not substring: 'links_*' and 'profile_link_*' contain

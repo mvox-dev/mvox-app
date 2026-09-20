@@ -57,11 +57,21 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const { gotoMock, signFileUrlMock } = vi.hoisted(() => ({
+const { gotoMock, signFileUrlMock, afterNavigateCallbacks } = vi.hoisted(() => ({
 	gotoMock: vi.fn(),
-	signFileUrlMock: vi.fn()
+	signFileUrlMock: vi.fn(),
+	// #427 review round 3, finding 4 — the route registers an afterNavigate
+	// callback at init to learn HOW it was entered. Captured here so a test
+	// can drive both entries: a cold document load ('enter') and an in-app
+	// navigation from the library/event page ('goto').
+	afterNavigateCallbacks: [] as Array<(nav: { type: string }) => void>
 }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({
+	goto: gotoMock,
+	afterNavigate: (cb: (nav: { type: string }) => void) => {
+		afterNavigateCallbacks.push(cb);
+	}
+}));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 // The #353 LABEL INDEX — a different store from the byte store, and the one
@@ -180,6 +190,13 @@ function renderViewer(state: { partLabel?: PartLabel } = {}) {
 	return render(Page);
 }
 
+/** How the route learns it was entered: 'enter' is a fresh document load
+ *  (PWA launch, bookmark, reload); 'goto' is the in-app navigation the
+ *  library and event pages make. SvelteKit fires this after mount. */
+function reportEntry(type: 'enter' | 'goto' | 'link' | 'popstate'): void {
+	for (const cb of afterNavigateCallbacks) cb({ type });
+}
+
 const INDICATOR_1_OF_3 = '[part_viewer_page_of {"current":1,"total":3}]';
 const INDICATOR_2_OF_3 = '[part_viewer_page_of {"current":2,"total":3}]';
 const INDICATOR_3_OF_3 = '[part_viewer_page_of {"current":3,"total":3}]';
@@ -252,6 +269,7 @@ afterEach(() => {
 	pdfjs.renderCalls.length = 0;
 	gotoMock.mockReset();
 	signFileUrlMock.mockReset();
+	afterNavigateCallbacks.length = 0;
 	labelWrites.length = 0;
 	pageStub.state = {};
 	clearAll({ preserveProvider: false });
@@ -434,10 +452,63 @@ describe('#427 — close and fullscreen', () => {
 			expect(close.getAttribute('class'), 'native controls carry class= (#335)').toBeTruthy();
 			expect(close.textContent?.trim()).toEqual('[part_viewer_close]');
 
+			reportEntry('goto');
 			await fireEvent.click(close);
 			expect(backSpy).toHaveBeenCalledTimes(1);
+			expect(gotoMock).not.toHaveBeenCalled();
 		} finally {
 			restore();
+			backSpy.mockRestore();
+		}
+	});
+
+	// #427 review round 3, finding 4 — the headline entry of this whole
+	// issue is a cold one: an installed-PWA launch or a bookmarked
+	// /part/<fileId> at a no-signal rehearsal. Nothing in the app is behind
+	// it, so history.back() either does nothing (she is stuck on a fullscreen
+	// page with no nav chrome) or leaves the app.
+	it('entered COLD (a PWA launch or a bookmark, no in-app history): close goes to the agenda instead of walking her out of the app', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		seedHeldPart();
+		const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+			await loaded(container);
+			reportEntry('enter');
+
+			const close = container.querySelector('[data-testid="part-viewer-close"]') as HTMLElement;
+			await fireEvent.click(close);
+
+			expect(gotoMock.mock.calls).toEqual([['/']]);
+			expect(backSpy).not.toHaveBeenCalled();
+		} finally {
+			restore();
+			backSpy.mockRestore();
+		}
+	});
+
+	// The not-on-device notice is the other place the close button lives, and
+	// it is the MOST likely cold entry of all: a bookmark to a part that was
+	// never downloaded.
+	it('the not-on-device notice\'s close also lands in the app on a cold entry', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
+		try {
+			const { container } = renderViewer();
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).not.toBeNull();
+			});
+			reportEntry('enter');
+
+			const close = container.querySelector('[data-testid="part-viewer-close"]') as HTMLElement;
+			await fireEvent.click(close);
+
+			expect(gotoMock.mock.calls).toEqual([['/']]);
+			expect(backSpy).not.toHaveBeenCalled();
+		} finally {
 			backSpy.mockRestore();
 		}
 	});

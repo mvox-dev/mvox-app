@@ -51,6 +51,47 @@ export function precacheUrls(input: { build: string[]; files: string[]; extra?: 
 }
 
 /**
+ * #427 review round 3, finding 2 — the install list, split by what a cold
+ * offline start cannot do without.
+ *
+ * The whole list used to go into one batch cache write, which is
+ * all-or-nothing: a single failed request rejects it, rejects the install's
+ * `waitUntil`, and leaves every client on the old worker — the wedge
+ * svelte.config.js's #368 comment names. #427 roughly tripled the list
+ * (pdf.js's worker is ~1.2 MB and its route chunk ~0.4 MB against a ~0.8 MB
+ * app), on the flaky hall wifi this feature is aimed at.
+ *
+ * REQUIRED is what the app cannot start from at all: the fallback shell,
+ * the env bootstrap, the entry chunks, the static files. It keeps the batch
+ * write, so a broken deploy still fails loudly instead of half-installing.
+ *
+ * OPTIONAL is the per-route tail — route node chunks and the pdf.js worker.
+ * Each one stands for exactly ONE surface: a miss means that surface needs
+ * the network next time, which is a degraded feature, not a dead app. The
+ * caller adds these individually and swallows the failure.
+ *
+ * Order within each half is preserved, and every url lands in exactly one of
+ * them.
+ */
+const OPTIONAL_PRECACHE_PATTERNS: readonly RegExp[] = [
+	/\/_app\/immutable\/nodes\//,
+	/pdf\.worker[^/]*\.mjs$/
+];
+
+export function splitPrecache(urls: readonly string[]): {
+	required: string[];
+	optional: string[];
+} {
+	const required: string[] = [];
+	const optional: string[] = [];
+	for (const url of urls) {
+		if (OPTIONAL_PRECACHE_PATTERNS.some((pattern) => pattern.test(url))) optional.push(url);
+		else required.push(url);
+	}
+	return { required, optional };
+}
+
+/**
  * The activate-time cleanup must only ever claim a cache THIS module wrote —
  * a blanket `caches.keys()` delete would nuke any other cache the origin
  * holds for an unrelated reason. `cacheName` outside the `mvox-shell-`

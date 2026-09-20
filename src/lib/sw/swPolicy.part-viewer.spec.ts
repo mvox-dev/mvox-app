@@ -16,7 +16,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { decideFetch, precacheUrls } from './swPolicy';
+import { decideFetch, precacheUrls, splitPrecache } from './swPolicy';
 
 const ORIGIN = 'https://mvox.eu';
 
@@ -83,4 +83,43 @@ describe('#427 — the pdf.js worker rides the shell precache (a cold offline st
 	});
 });
 
-// (*MVOX:Tallis* — #427 RED)
+describe('#427 review round 3, finding 2 — the install list splits: a heavy asset may miss, the app still installs', () => {
+	const WORKER = '/_app/immutable/assets/pdf.worker.C0ffee.mjs';
+	const ENTRY = '/_app/immutable/entry/start.abc123.js';
+	const NODE = '/_app/immutable/nodes/14.d00d.js';
+
+	it('splits into the core the app cannot start without and the per-route tail — full shape, order preserved', () => {
+		const list = precacheUrls({ build: [ENTRY, NODE], files: ['/robots.txt'], extra: [WORKER] });
+		expect(splitPrecache(list)).toEqual({
+			required: [ENTRY, '/robots.txt', '/', '/_app/env.js'],
+			optional: [NODE, WORKER]
+		});
+	});
+
+	it("'/' and '/_app/env.js' are ALWAYS required — a cold offline navigation dies before any app code runs without them", () => {
+		const { required, optional } = splitPrecache([WORKER, '/', '/_app/env.js']);
+		expect(required).toEqual(['/', '/_app/env.js']);
+		expect(optional).toEqual([WORKER]);
+	});
+
+	it('every url lands in exactly one half — nothing is dropped and nothing is precached twice', () => {
+		const list = precacheUrls({ build: [ENTRY, NODE], files: ['/robots.txt'], extra: [WORKER] });
+		const { required, optional } = splitPrecache(list);
+		expect([...required, ...optional].sort()).toEqual([...list].sort());
+		expect(new Set([...required, ...optional]).size).toBe(list.length);
+	});
+
+	// The wedge this exists to prevent: one failed request in the batch write
+	// rejects install's waitUntil, no new worker ever activates, and no later
+	// deploy can reach that client (svelte.config.js's #368 comment).
+	it('src/service-worker.ts batch-writes the REQUIRED half and adds the tail one by one, each failure swallowed', () => {
+		const source = readFileSync(resolve(process.cwd(), 'src/service-worker.ts'), 'utf-8');
+		expect(source).toMatch(/splitPrecache\(PRECACHE_URLS\)/);
+		expect(source).toMatch(/cache\.addAll\(REQUIRED_URLS\)/);
+		expect(source).toMatch(/OPTIONAL_URLS\.map\(\(url\) => cache\.add\(url\)\.catch\(\(\) => \{\}\)\)/);
+		// The whole list is never handed to the batch write again.
+		expect(source).not.toMatch(/addAll\(PRECACHE_URLS\)/);
+	});
+});
+
+// (*MVOX:Tallis* — #427 RED; review round 3 pins *MVOX:Josquin*)

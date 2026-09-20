@@ -45,6 +45,7 @@
 	// (#427 review finding 3). It writes only on a delivery whose `reason`
 	// says bytes landed, and only when the entry handler handed a label down
 	// through the navigation's page state.
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { authStore } from '$lib/auth/session';
@@ -124,8 +125,23 @@
 		goToPage(currentPage - 1);
 	}
 
+	// HOW SHE GOT HERE decides where Close goes (#427 review round 3,
+	// finding 4). `afterNavigate` reports type 'enter' for a fresh document
+	// load — an installed-PWA launch, a bookmark, a reload while reading,
+	// which is exactly the cold offline entry this route is FOR. There is no
+	// in-app history behind such an entry, so `history.back()` either does
+	// nothing or walks her out of the app entirely. Any other type ('link',
+	// 'goto', 'popstate') means the entry page is one step back, and going
+	// back is what she expects: it keeps her scroll position on the page she
+	// came from, which goto('/') would throw away.
+	let enteredInApp = false;
+	afterNavigate((navigation) => {
+		if (navigation.type !== 'enter') enteredInApp = true;
+	});
+
 	function close(): void {
-		window.history.back();
+		if (enteredInApp) window.history.back();
+		else void goto('/');
 	}
 
 	function pointerTimeMs(): number {

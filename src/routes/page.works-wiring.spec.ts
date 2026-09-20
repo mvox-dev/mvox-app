@@ -910,18 +910,21 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		expect(winAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		// And the service worker gained NOTHING from #409/#410's OWN wiring:
-		// still exactly three listeners (install/activate/fetch — no sync,
-		// no periodicsync, no push). The hash has moved twice, both times at
-		// #427 and both times in COMMENT + precache input only: first the
-		// pdf.js worker's `?url` import and its precacheUrls `extra` entry,
-		// then the review-fix round correcting the comment that justified
-		// that entry (the dedupe lives in swPolicy.ts — see
-		// swPolicy.part-viewer.spec.ts). Re-pinned here to that content; the
-		// listener-name assertion right below is the one that actually
-		// carries this test's invariant forward.
+		// still exactly three listeners (install/activate/fetch — no sync, no
+		// periodicsync, no push). The hash has moved three times, every time at
+		// #427 and never for a wake-me-later hook: the pdf.js worker's `?url`
+		// import and its precacheUrls `extra` entry, then the comment that
+		// justified that entry, then review round 3's install split — the
+		// required core keeps the batch write while the heavy tail (route
+		// chunks, pdf worker) is added one request at a time with each failure
+		// swallowed, so one miss on hall wifi degrades an asset instead of
+		// wedging the install. That rule lives in swPolicy.ts
+		// (`splitPrecache`, pinned in swPolicy.part-viewer.spec.ts). Re-pinned
+		// here to that content; the listener-name assertion right below is the
+		// one that actually carries this test's invariant forward.
 		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
 		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'03dc4b57f83d53a2a83768fe27b7e174eceae7ff4d1ae656e241019a8ccd7871'
+			'3f0b43a8cb403284150b4a3d3f8f26ae02feea06183c7b261fdc1fa43a7c2d0d'
 		);
 		expect(
 			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])
