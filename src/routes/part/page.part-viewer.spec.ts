@@ -131,12 +131,20 @@ let fakeByteStore: FakeByteStore;
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
 
+/** How `fetch` rejects when nothing can be reached — a TypeError, every
+ *  engine, and the signal the route classifies on (see wireUnreachable in
+ *  the route). A signing stub that rejected with a plain Error would be
+ *  claiming a server ANSWERED, which is the opposite case. */
+function deadWire(): TypeError {
+	return new TypeError('Failed to fetch');
+}
+
 /** Every test runs with the WIRE DEAD unless it says otherwise: the offline
  *  promise is the point, so network unreachability is the default, not the
  *  exception. */
 function deadFetch() {
 	const fetchMock = vi.fn(async () => {
-		throw new TypeError('Failed to fetch');
+		throw deadWire();
 	});
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
@@ -254,7 +262,7 @@ afterEach(() => {
 describe('#427 — a held part renders with the network dead (the offline promise)', () => {
 	it('opens on page 1 — the indicator reads exactly 1 / 3, pdf.js gets the minted blob: URL, and NOTHING touches the wire', async () => {
 		const fetchMock = deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const restore = setRequestFullscreen(undefined);
 		try {
@@ -282,7 +290,7 @@ describe('#427 — a held part renders with the network dead (the offline promis
 
 	it('releases the minted object URL on unmount — not before', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const revokeSpy = vi.spyOn(URL, 'revokeObjectURL');
 		const restore = setRequestFullscreen(undefined);
@@ -307,7 +315,7 @@ describe('#427 — a held part renders with the network dead (the offline promis
 describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #333)', () => {
 	async function renderLoaded(): Promise<HTMLElement> {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const { container } = renderViewer();
 		await loaded(container);
@@ -319,22 +327,34 @@ describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #3
 		try {
 			const container = await renderLoaded();
 			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
+			// ONE rasterisation for the first paint (#427 review round 2,
+			// finding 1). Every assertion below pins the running total: a
+			// page turn costs exactly one more render, and a turn refused at
+			// a bound costs none. Two drivers racing on the same page turn
+			// would show up here as 2, 4, 6 — the serialised render chain
+			// hides the doubling everywhere else.
+			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(1));
 
-			// Left bound holds: page 1 stays page 1.
+			// Left bound holds: page 1 stays page 1 — and nothing re-renders.
 			await tap(zonePrev(container), 40, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_1_OF_3));
+			expect(pdfjs.renderCalls.length).toBe(1);
 
 			await tap(zoneNext(container), 980, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_2_OF_3));
+			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(2));
 			await tap(zoneNext(container), 980, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_3_OF_3));
+			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(3));
 
-			// Right bound holds: page 3 stays page 3.
+			// Right bound holds: page 3 stays page 3, and no render either.
 			await tap(zoneNext(container), 980, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_3_OF_3));
+			expect(pdfjs.renderCalls.length).toBe(3);
 
 			await tap(zonePrev(container), 40, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_2_OF_3));
+			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(4));
 		} finally {
 			restore();
 		}
@@ -400,7 +420,7 @@ describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #3
 describe('#427 — close and fullscreen', () => {
 	it('the close control is a NATIVE, CLASSED <button> (#335) labelled part_viewer_close, and clicking it goes BACK in history', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => {});
 		const restore = setRequestFullscreen(undefined);
@@ -424,7 +444,7 @@ describe('#427 — close and fullscreen', () => {
 
 	it('requestFullscreen IS called on entry where the API exists (Android)', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const rfs = vi.fn(async () => {});
 		const restore = setRequestFullscreen(rfs);
@@ -439,7 +459,7 @@ describe('#427 — close and fullscreen', () => {
 
 	it('where the API is ABSENT (iOS) nothing breaks — the route itself is the fullscreen', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const restore = setRequestFullscreen(undefined);
 		try {
@@ -455,7 +475,7 @@ describe('#427 — close and fullscreen', () => {
 describe('#427 — a part NOT on the device, with no network', () => {
 	it('renders the plain not-on-device notice and a close button — no page, no retry loop', async () => {
 		const fetchMock = deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		// Store deliberately empty: the file was never opened at home.
 		const restore = setRequestFullscreen(undefined);
 		try {
@@ -491,7 +511,7 @@ describe('#427 — a part NOT on the device, with no network', () => {
 describe('#427 review finding 2 — a COLD entry: identity is derived from the token, never from a network call', () => {
 	it('auth still LOADING at mount claims nothing, and the held part renders once auth resolves — collective discovery never answers', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const restore = setRequestFullscreen(undefined);
 		try {
@@ -528,7 +548,7 @@ describe('#427 review finding 2 — a COLD entry: identity is derived from the t
 
 	it('with two collectives on the token, ?db= picks the partition the entry link named', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		fakeByteStore.seed({ db: 'otherdb', personId: 'person-o' }, 'file-score', {
 			bytes: PDF_BYTES.slice().buffer,
 			filetype: 'application/pdf',
@@ -559,7 +579,7 @@ describe('#427 review finding 2 — a COLD entry: identity is derived from the t
 describe('#427 review finding 3 — the part LABEL the entry page handed down', () => {
 	it('a delivery that landed bytes records the label, with the identity the bytes were read under — full shape', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const restore = setRequestFullscreen(undefined);
 		const label: PartLabel = {
@@ -583,7 +603,7 @@ describe('#427 review finding 3 — the part LABEL the entry page handed down', 
 
 	it('no label handed down (a reload, a bookmark) writes nothing — a label is never invented from a fileId', async () => {
 		deadFetch();
-		signFileUrlMock.mockRejectedValue(new Error('network down'));
+		signFileUrlMock.mockRejectedValue(deadWire());
 		seedHeldPart();
 		const restore = setRequestFullscreen(undefined);
 		try {
@@ -623,4 +643,95 @@ describe('#427 review finding 4 — a DEGRADED delivery must not dead-end', () =
 	});
 });
 
-// (*MVOX:Tallis* — #427 RED; review-fix round *MVOX:Josquin*)
+describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim about her device', () => {
+	it('signing that answers 500 shows the open-failure notice, never "not saved on this device"', async () => {
+		// Good wifi, a part she has never cached, and Entu's signing call
+		// answers 500. openFileBytes propagates (a signing failure is a
+		// delivery failure, by design), and the loop must not report that as
+		// an absent offline copy.
+		const fetchMock = vi.fn(async () => {
+			throw new Error('the byte GET is never reached');
+		});
+		vi.stubGlobal('fetch', fetchMock);
+		signFileUrlMock.mockRejectedValue(
+			new Error('signFileUrl: file file-score signing failed: 500')
+		);
+		// Store deliberately empty — nothing on the device to fall back to.
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+
+			const notice = await waitFor(() => {
+				const el = container.querySelector('[data-testid="part-viewer-open-failed"]');
+				expect(el).not.toBeNull();
+				return el as HTMLElement;
+			});
+			// The house open-error copy, not a new part_viewer_ key.
+			expect(notice.textContent?.trim()).toEqual('[repertoire_pdf_error]');
+			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
+			expect(pdfjs.getDocument).not.toHaveBeenCalled();
+
+			// The way out is the same close button, classed and native.
+			const close = container.querySelector('[data-testid="part-viewer-close"]') as HTMLElement;
+			expect(close).not.toBeNull();
+			expect(close.tagName).toBe('BUTTON');
+			expect(close.getAttribute('class')).toBeTruthy();
+		} finally {
+			restore();
+		}
+	});
+
+	it('a byte GET the bucket answers 403 shows the same open-failure notice', async () => {
+		// Signing works; the bucket refuses the signed GET (an expired
+		// signature). openFileBytes throws `byte fetch failed: 403` — a
+		// server that answered, so no passthrough navigation and no device
+		// claim.
+		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
+		const fetchMock = vi.fn(
+			async () =>
+				({
+					ok: false,
+					status: 403,
+					headers: new Headers(),
+					arrayBuffer: async () => new ArrayBuffer(0)
+				}) as unknown as Response
+		);
+		vi.stubGlobal('fetch', fetchMock);
+		const restore = setRequestFullscreen(undefined);
+		const hrefBefore = window.location.href;
+		try {
+			const { container } = renderViewer();
+
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="part-viewer-open-failed"]')).not.toBeNull();
+			});
+			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
+			expect(pdfjs.getDocument).not.toHaveBeenCalled();
+			// Not a fallback-navigation: nothing was handed to the browser.
+			expect(window.location.href).toBe(hrefBefore);
+			expect(fakeByteStore.puts).toEqual([]);
+		} finally {
+			restore();
+		}
+	});
+
+	it('a dead wire with no stored copy still reads as not-on-device — the two are never collapsed', async () => {
+		// The mirror of the two above, on the same code path: nothing
+		// ANSWERED, so the device claim is the truthful one.
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).not.toBeNull();
+			});
+			expect(container.querySelector('[data-testid="part-viewer-open-failed"]')).toBeNull();
+		} finally {
+			restore();
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #427 RED; review-fix rounds 1+2 *MVOX:Josquin*)

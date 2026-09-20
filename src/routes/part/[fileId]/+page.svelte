@@ -57,7 +57,13 @@
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
 
-	type Status = 'loading' | 'ready' | 'missing';
+	// 'missing'     — nothing could be reached and no stored copy exists: the
+	//                 not-on-device notice, the offline truth.
+	// 'open-failed' — something ANSWERED and the part still did not open (a
+	//                 refused signing, a refused byte GET, bytes pdf.js
+	//                 cannot parse). See wireUnreachable() below for why the
+	//                 two are never collapsed into one notice.
+	type Status = 'loading' | 'ready' | 'missing' | 'open-failed';
 
 	let status = $state<Status>('loading');
 	let currentPage = $state(1);
@@ -95,21 +101,27 @@
 		return renderChain;
 	}
 
-	async function goToPage(target: number): Promise<void> {
+	// ONE DRIVER PER PAGE TURN (#427 review round 2, finding 1). This is a
+	// clamp-and-assign and nothing more: the render $effect below TRACKS
+	// `currentPage`, so a turn that also rendered here rasterised the same
+	// page twice on every tap. The serialised chain hid it — no crash, no
+	// visual artefact — and the phone paid the full second rasterisation
+	// anyway. `renderCurrentPage` has exactly two callers now: that effect,
+	// and the viewport re-fit.
+	function goToPage(target: number): void {
 		const clamped = Math.min(Math.max(target, 1), numPages);
 		if (clamped === currentPage) return;
 		currentPage = clamped;
-		await renderCurrentPage();
 	}
 
 	function next(): void {
 		if (status !== 'ready') return;
-		void goToPage(currentPage + 1);
+		goToPage(currentPage + 1);
 	}
 
 	function previous(): void {
 		if (status !== 'ready') return;
-		void goToPage(currentPage - 1);
+		goToPage(currentPage - 1);
 	}
 
 	function close(): void {
@@ -137,6 +149,21 @@
 	function handleKeydown(event: KeyboardEvent): void {
 		if (event.key === 'ArrowRight' || event.key === 'PageDown') next();
 		else if (event.key === 'ArrowLeft' || event.key === 'PageUp') previous();
+	}
+
+	// WHICH FAILURE WAS IT (#427 review round 2, finding 2). `openFileBytes`
+	// throws on a genuine DELIVERY failure just as it does on a dead wire,
+	// and the two owe the singer opposite answers. "This part isn't saved on
+	// this device" is true only when nothing could be reached to ask: a
+	// rejection raised by `fetch` ITSELF is a TypeError and means no server
+	// answered. Everything else openFileBytes can throw — `signFileUrl: ...
+	// signing failed: 500`, a signed response carrying no url, `byte fetch
+	// failed: 403` from an expired bucket signature — is a server that
+	// answered and REFUSED, on a wire that plainly works. Telling her the
+	// part is not on her device there is false about the device and silent
+	// about the server.
+	function wireUnreachable(error: unknown): boolean {
+		return error instanceof TypeError;
 	}
 
 	// Loads the file once per (fileId, auth) pair. DEPENDS ON $authStore on
@@ -173,6 +200,10 @@
 			// proves is the same human (offlineIdentity.ts). Several candidates
 			// are tried in order — a partition that cannot deliver says nothing
 			// about the part, only about that partition.
+			// Did any partition FAIL to deliver, as opposed to simply not
+			// holding the file? Decides which notice the exhausted loop
+			// falls out to (wireUnreachable above).
+			let deliveryFailed = false;
 			for (const identity of deriveOfflineIdentities(auth.personIdByDb, dbParam)) {
 				let result: OpenedFileBytes;
 				try {
@@ -182,7 +213,8 @@
 						fileId,
 						getAppByteStore()
 					);
-				} catch {
+				} catch (error) {
+					if (!wireUnreachable(error)) deliveryFailed = true;
 					continue;
 				}
 				if (cancelled) {
@@ -224,17 +256,18 @@
 				} catch {
 					// Bytes in hand that pdf.js cannot open: a failure of this
 					// FILE, not of this partition — no other identity would open
-					// it either.
+					// it either. The bytes ARE on the device, so this is an open
+					// failure, never the not-on-device notice.
 					result.release();
-					if (!cancelled) status = 'missing';
+					if (!cancelled) status = 'open-failed';
 				}
 				return;
 			}
-			// A dead network plus a missing file, or any other open failure:
-			// the plain not-on-device notice, no retry loop (see the route
-			// header — this is the behavioural half of "nothing drawn, nothing
-			// stored").
-			if (!cancelled) status = 'missing';
+			// Nothing delivered. A dead network plus no stored copy is the
+			// plain not-on-device notice, no retry loop (see the route header
+			// — the behavioural half of "nothing drawn, nothing stored"). A
+			// server that answered and refused is an OPEN failure instead.
+			if (!cancelled) status = deliveryFailed ? 'open-failed' : 'missing';
 		}
 
 		void load();
@@ -392,7 +425,27 @@
 				{m.part_viewer_close()}
 			</button>
 		</div>
+	{:else if status === 'open-failed'}
+		<!-- The server answered and the part still did not open. Reuses the
+		     house open-error copy (repertoire_pdf_error, all four locales,
+		     also on /downloads and the home repertoire): no new part_viewer_
+		     key, so the exact-set pin in src/lib/i18n/partViewerKeys.spec.ts
+		     and the i18n fence in src/part-viewer-fence.spec.ts both stay
+		     honest. Still no retry loop — the way out is the same close. -->
+		<div class="flex flex-1 flex-col items-center justify-center gap-6 px-6 text-center">
+			<p data-testid="part-viewer-open-failed" class="font-sans text-base text-paper">
+				{m.repertoire_pdf_error()}
+			</p>
+			<button
+				type="button"
+				class="font-sans text-sm text-paper underline"
+				data-testid="part-viewer-close"
+				onclick={close}
+			>
+				{m.part_viewer_close()}
+			</button>
+		</div>
 	{/if}
 </div>
 
-<!-- (*MVOX:Josquin* — #427 GREEN; review-fix round *MVOX:Josquin*) -->
+<!-- (*MVOX:Josquin* — #427 GREEN; review-fix rounds 1+2 *MVOX:Josquin*) -->
