@@ -42,6 +42,16 @@
 	import { NAV_ENTRIES } from '$lib/nav/entries';
 	import { adminStore, resetAdmin, resolveAdmin } from '$lib/nav/adminStore';
 	import { getLocale } from '$lib/paraglide/runtime.js';
+	// #408 review F1 — the `beforeinstallprompt` adapter. It lives HERE, not on
+	// the profile page: Chromium fires that event once per page LOAD and never
+	// re-fires it on a client-side navigation, and the root layout is the only
+	// component that survives a route change. Started from the profile page's
+	// own `onMount`, the listener did not exist yet in the ordinary flow (land
+	// on `/` or return from the OAuth callback, then click Profile in the nav),
+	// so the event was dropped and the button never rendered at all. The stash
+	// and the store are module scope in installState.ts, so catching the event
+	// app-wide is enough — the page stays a pure subscriber.
+	import { startInstallAffordance } from '$lib/install/installState';
 	import { m } from '$lib/paraglide/messages.js';
 
 	let { children } = $props();
@@ -73,6 +83,10 @@
 	// resolve AND any later client-side auth flip without a re-mount.
 	onMount(() => {
 		hydrateAuth();
+		// Returned teardown: the install listeners live exactly as long as the app
+		// shell does (this layout never unmounts in the browser; under test it
+		// does, and the listeners go with it).
+		return startInstallAffordance();
 	});
 
 	// Fix B (#7 defense-in-depth): re-hydrate collectives reactively on the FIRST

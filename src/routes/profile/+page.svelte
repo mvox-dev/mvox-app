@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte';
+	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
@@ -49,9 +49,11 @@
 	import { listAllEditions } from '$lib/library/libraryData';
 	// #408 — "Install as app": app chrome, like sign-out/language/time-format
 	// below, not gated on collective selection. $installAffordance decides
-	// everything the button does; startInstallAffordance's return value IS the
-	// teardown onMount expects.
-	import { installAffordance, promptInstall, startInstallAffordance } from '$lib/install/installState';
+	// everything the button does. This page is a pure SUBSCRIBER: the
+	// `beforeinstallprompt` adapter is started by the root layout (#408 review
+	// F1), because Chromium fires that event once per page load — long before
+	// this component mounts on the ordinary nav-click path.
+	import { installAffordance, promptInstall } from '$lib/install/installState';
 
 	// #60 — identity display: which account + provider the user is signed in with.
 	// Informational only (no interactivity); multi-provider linking is parked.
@@ -88,8 +90,6 @@
 			installIosHintShown = true;
 		}
 	}
-
-	onMount(() => startInstallAffordance());
 
 	// Unified draft: one value per field (not per level).
 	let draft = $state<{ name: string; email: string }>({ name: '', email: '' });

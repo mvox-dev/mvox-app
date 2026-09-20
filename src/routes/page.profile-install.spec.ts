@@ -20,6 +20,13 @@
 //     no dialog widget. The hint is NOT in the DOM before the press.
 //   - 'none' state: NOTHING renders — no disabled button, no explanation;
 //     no [data-testid^="profile-install-"] node exists at all.
+//
+// review F1 — WHO starts the browser adapter is part of the contract. The
+// page is a pure `$installAffordance` subscriber; `startInstallAffordance`
+// is an APP-lifetime bootstrap in the root layout, because Chromium fires
+// `beforeinstallprompt` once per page LOAD and never again on a client-side
+// navigation. `bootApp()` below stands in for that layout boot in the
+// page-level cases; the last describe renders the REAL layout and pins it.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -50,6 +57,8 @@ vi.mock('$lib/profile/profileData', async () => {
 });
 
 import ProfilePage from './profile/+page.svelte';
+import Layout from './+layout.svelte';
+import { startInstallAffordance } from '$lib/install/installState';
 import { clearAll, setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
@@ -119,7 +128,17 @@ function selectSampledb() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
+/** Stands in for the root layout's `onMount`: starts the browser adapter for
+ *  the whole "app session" a test represents. Idempotent, so a test that boots
+ *  deliberately EARLY (before rendering the page) is not re-booted underneath
+ *  itself by the render helper. */
+let stopAdapter: (() => void) | null = null;
+function bootApp(): void {
+	if (!stopAdapter) stopAdapter = startInstallAffordance();
+}
+
 async function renderProfileReady(): Promise<HTMLElement> {
+	bootApp();
 	selectSampledb();
 	h.listMyProfilesMock.mockResolvedValue([]);
 	const { container } = render(ProfilePage);
@@ -138,9 +157,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	// Contract-defined reset while the page (and thus the adapter) is still
-	// mounted: appinstalled clears any stashed prompt -> 'none'.
+	// Contract-defined reset while the adapter is still listening: appinstalled
+	// clears the module-scope stash -> 'none'. Then stop the adapter, so no
+	// listener (and no stash) leaks into the next test's "app session".
 	window.dispatchEvent(new Event('appinstalled'));
+	stopAdapter?.();
+	stopAdapter = null;
 	cleanup();
 	localStorage.clear();
 	clearAll({ preserveProvider: false });
@@ -208,6 +230,7 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 	});
 
 	it('is app chrome — present even with NO collective selected', async () => {
+		bootApp();
 		setToken('jwt-member');
 		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
 		h.listMyProfilesMock.mockResolvedValue([]);
@@ -238,6 +261,49 @@ describe("/profile — install button, 'ios-hint' state (#408)", () => {
 		await fireEvent.click(installButton(container)!);
 		await waitFor(() => expect(iosHint(container)).not.toBeNull());
 		expect(iosHint(container)!.textContent).toContain('[profile_install_ios_hint]');
+	});
+});
+
+// ── review F1: the adapter's LIFETIME, not its decision logic ──────────────
+//
+// The field bug: Chromium fires `beforeinstallprompt` once per page LOAD. In
+// the ordinary flow she lands on `/` (or returns from the OAuth callback) and
+// then clicks Profile in the nav — a client-side navigation, so the event has
+// already fired and been dropped by the time the profile component exists. A
+// listener attached in the PAGE's `onMount` is attached too late, every time,
+// and the button never appears on Chromium at all.
+//
+// The first case is the PIN: it mounts the layout and nothing else, so it goes
+// red the moment ownership moves back onto the page. The second documents the
+// ordering the stash exists for.
+
+describe('#408 review F1 — the install adapter is app-lifetime, owned by the root layout', () => {
+	it('the ROOT LAYOUT alone catches beforeinstallprompt; the profile mounted later shows the button', async () => {
+		// No profile page in sight — just the app shell, as on `/`.
+		render(Layout);
+		const evt = makeBeforeInstallPrompt();
+		window.dispatchEvent(evt);
+
+		// ...and only NOW does she navigate to the profile.
+		selectSampledb();
+		h.listMyProfilesMock.mockResolvedValue([]);
+		const { container } = render(ProfilePage);
+		await waitFor(() => expect(installButton(container)).not.toBeNull());
+
+		// The stashed event survived the wait and is still the one that prompts.
+		await fireEvent.click(installButton(container)!);
+		await waitFor(() => expect(evt.prompt).toHaveBeenCalledTimes(1));
+		// Teardown: this case boots the adapter through the layout's own
+		// `onMount`, so afterEach's `cleanup()` unmounts it and the listeners go
+		// with it — nothing for `stopAdapter` to do.
+	});
+
+	it('an event that fired BEFORE the page mounted is not lost', async () => {
+		bootApp(); // the layout boot, in its cheap form
+		window.dispatchEvent(makeBeforeInstallPrompt());
+
+		const container = await renderProfileReady();
+		expect(installButton(container)).not.toBeNull();
 	});
 });
 
