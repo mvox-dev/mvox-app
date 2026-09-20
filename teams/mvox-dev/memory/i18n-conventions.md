@@ -61,6 +61,7 @@ Keys are flat strings in `messages/{locale}.json`. No nesting.
 | `seasons_` | Rehearsal-schedule feature sub-group (session 29+): season/series forms, conductor panel, rehearsal list, confirmations. Chosen over `events_` to match the `src/lib/seasons/` module name — first concrete slice of the `events_` domain. Future concert/programme keys will use `events_` or their own sub-group. |
 | `org_` | Organisation-level settings, onboarding, admin |
 | `auth_` | Login, logout, identity, invite flows |
+| `part_viewer_` | The fullscreen `/part/[fileId]` PDF reading surface (#427): close control, page-of indicator, not-on-device notice. Deliberately THREE keys only — no `_open` (entry buttons keep their existing `repertoire_pdf_link`/`library_edition_file_open` labels) and no `_ink`/`_draw`/`_layer` shape (the viewer settles paging before #333's markings schema; `src/lib/i18n/partViewerKeys.spec.ts` pins the group's exact set in all four locales, while `src/part-viewer-fence.spec.ts` separately forbids an ink/draw/layer key SEGMENT anywhere in the message files). |
 
 Use `common_` not `shared_`. Use `actions_` not `btn_`. Use `roster_` not `event_members_`.
 

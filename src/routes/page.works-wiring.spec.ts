@@ -909,12 +909,23 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		const banned = ['visibilitychange', 'focus', 'sync', 'periodicsync'];
 		expect(winAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
-		// And the service worker gained NOTHING: byte-identical to the #353
-		// shell-only worker (its three listeners are install/activate/fetch —
-		// no sync, no periodicsync, no push). Read from disk, pinned by hash.
+		// And the service worker gained NOTHING from #409/#410's OWN wiring:
+		// still exactly three listeners (install/activate/fetch — no sync, no
+		// periodicsync, no push). The hash has moved three times, every time at
+		// #427 and never for a wake-me-later hook: the pdf.js worker's `?url`
+		// import and its precacheUrls `extra` entry, then the comment that
+		// justified that entry, then review round 3's install split — the
+		// required core keeps the batch write while the heavy tail (route
+		// chunks, pdf worker) is added one request at a time with each failure
+		// swallowed, so one miss on hall wifi degrades an asset instead of
+		// wedging the install. That rule lives in swPolicy.ts
+		// (`splitPrecache`, pinned in swPolicy.part-viewer.spec.ts), and round 4
+		// corrected the dedupe comment's consequence for the split. Re-pinned
+		// here to that content; the listener-name assertion right below is the
+		// one that actually carries this test's invariant forward.
 		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
 		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'fbb0db9246a7a41aaa676f51fbcc854f7a69e6a22f780df7485f074cef230527'
+			'b360f68c38d3972899cfea912840eb79002f06c7dd2e15e03e01b90cf91c9d9a'
 		);
 		expect(
 			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])

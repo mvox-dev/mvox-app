@@ -29,18 +29,49 @@
 // '/version.json' — the #350 build stamp — as one of them, which is the
 // opposite of what that endpoint exists to do.
 import { build, files, version } from '$service-worker';
-import { cacheNameFor, decideFetch, isStaleShellCache, precacheUrls } from '$lib/sw/swPolicy';
+import {
+	cacheNameFor,
+	decideFetch,
+	isStaleShellCache,
+	precacheUrls,
+	splitPrecache
+} from '$lib/sw/swPolicy';
+// #427 — the part viewer's pdf.js worker is a SEPARATE static asset (Vite's
+// `?url` import gives its hashed build path, same as any other asset
+// import). In THIS build `build` above already names it, so naming it here
+// is a belt against a Vite emit that lands it outside the manifest — and
+// `precacheUrls` DEDUPES for exactly that reason (#427 review finding 1).
+// What a duplicate costs depends on which half it lands in: in the required
+// core it rejects the batch write and with it the install, which is the
+// wedge svelte.config.js's #368 comment names; in the optional tail it only
+// buys a second fetch of a 1.2 MB asset, since those failures are swallowed.
+// The dedupe removes both cases. See src/lib/sw/swPolicy.part-viewer.spec.ts.
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 
 declare let self: ServiceWorkerGlobalScope;
 
 const CACHE_NAME = cacheNameFor(version);
-const PRECACHE_URLS = precacheUrls({ build, files });
+const PRECACHE_URLS = precacheUrls({ build, files, extra: [pdfWorkerUrl] });
+// #427 review round 3, finding 2 — which half of the list may fail without
+// taking the install down with it. The rule lives in swPolicy
+// (`splitPrecache`, pinned in swPolicy.part-viewer.spec.ts); this file only
+// obeys it.
+const { required: REQUIRED_URLS, optional: OPTIONAL_URLS } = splitPrecache(PRECACHE_URLS);
 
 self.addEventListener('install', (event) => {
 	event.waitUntil(
 		(async () => {
 			const cache = await caches.open(CACHE_NAME);
-			await cache.addAll(PRECACHE_URLS);
+			// The core, as one batch write: if the shell, the bootstrap or an
+			// entry chunk cannot be fetched, there is no working offline app to
+			// install and failing loudly is right.
+			await cache.addAll(REQUIRED_URLS);
+			// The heavy tail, one request each, each failure swallowed. A miss
+			// here costs exactly the surface that asset serves (the part viewer
+			// needs the network next time); wedging the whole install over it
+			// would cost every surface, forever, on a client no later deploy can
+			// reach.
+			await Promise.all(OPTIONAL_URLS.map((url) => cache.add(url).catch(() => {})));
 			// Atomic per-deploy dance (see module header): this worker replaces
 			// whatever is currently controlling every tab as soon as it installs.
 			await self.skipWaiting();

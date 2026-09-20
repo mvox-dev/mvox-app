@@ -649,7 +649,6 @@
 	"library_edition_file_broken": "Faili {filename} üleslaadimine ebaõnnestus ja katkine kirje võis alles jääda.",
 	"library_edition_file_error": "Failide lisamine ebaõnnestus.",
 	"library_edition_file_not_created": "Faili {filename} ei lisatud — server ei tagastanud selle kohta midagi.",
-	"library_edition_file_open_error": "Faili avamine ebaõnnestus.",
 	"file_presence_on_device": "Selles seadmes",
 	"file_presence_needs_network": "Vajab võrguühendust",
 	"login_heading": "Logi mvoxi sisse",
@@ -700,5 +699,8 @@
 	"downloads_empty": "Selles seadmes pole veel midagi alla laaditud.",
 	"downloads_unnamed_part": "Nimetu partii",
 	"downloads_open": "Ava",
-	"agenda_downloads_link": "Ava allalaaditud partiid"
+	"agenda_downloads_link": "Ava allalaaditud partiid",
+	"part_viewer_close": "Sulge",
+	"part_viewer_not_on_device": "See partii pole selles seadmes salvestatud.",
+	"part_viewer_page_of": "{current} / {total}"
 }

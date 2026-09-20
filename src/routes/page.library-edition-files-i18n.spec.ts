@@ -26,8 +26,12 @@
 //               property for: nothing exists server-side and nothing landed,
 //               which is a different thing to say than `failed`'s
 //               created-then-cleaned-up; {filename}
-//   open-error  — (review YELLOW) signing a file's download url failed. A
-//               READ-path message: every member sees it, not just librarians.
+//
+// EIGHT, not nine, since #427: `library_edition_file_open_error` is GONE.
+// Open stopped being a byte read on this page — it is a navigation to the
+// fullscreen viewer, which carries its own not-on-device notice — so the key
+// rendered on no surface at all (#427 review finding 7). A locale string no
+// screen can show is a promise of a message that never arrives.
 //
 // Filesize formatting carries NO i18n key: it is numeric/tabular text
 // (the #207 rule-7 family), rendered locale-independently by
@@ -55,8 +59,7 @@ const NEW_KEYS = [
 	'library_edition_file_failed',
 	'library_edition_file_broken',
 	'library_edition_file_error',
-	'library_edition_file_not_created',
-	'library_edition_file_open_error'
+	'library_edition_file_not_created'
 ] as const;
 
 // Exact-text pins — engineering drafts, all four locales refinable (header).
@@ -70,8 +73,7 @@ const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 		library_edition_file_broken: '{filename} failed and could not be cleaned up.',
 		library_edition_file_error: 'Could not attach files.',
 		library_edition_file_not_created:
-			'{filename} was not attached — the server returned nothing for it.',
-		library_edition_file_open_error: 'Could not open the file.'
+			'{filename} was not attached — the server returned nothing for it.'
 	},
 	et: {
 		library_edition_file_attach: 'Lisa failid',
@@ -82,8 +84,7 @@ const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 		library_edition_file_broken: 'Faili {filename} üleslaadimine ebaõnnestus ja katkine kirje võis alles jääda.',
 		library_edition_file_error: 'Failide lisamine ebaõnnestus.',
 		library_edition_file_not_created:
-			'Faili {filename} ei lisatud — server ei tagastanud selle kohta midagi.',
-		library_edition_file_open_error: 'Faili avamine ebaõnnestus.'
+			'Faili {filename} ei lisatud — server ei tagastanud selle kohta midagi.'
 	},
 	lv: {
 		library_edition_file_attach: 'Pievienot failus',
@@ -94,8 +95,7 @@ const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 		library_edition_file_broken: 'Faila {filename} augšupielāde neizdevās, un bojāts ieraksts var būt palicis.',
 		library_edition_file_error: 'Neizdevās pievienot failus.',
 		library_edition_file_not_created:
-			'Fails {filename} netika pievienots — serveris par to neko neatgrieza.',
-		library_edition_file_open_error: 'Neizdevās atvērt failu.'
+			'Fails {filename} netika pievienots — serveris par to neko neatgrieza.'
 	},
 	uk: {
 		library_edition_file_attach: 'Додати файли',
@@ -106,12 +106,11 @@ const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 		library_edition_file_broken: 'Завантаження файлу {filename} не вдалося, і пошкоджений запис міг залишитися.',
 		library_edition_file_error: 'Не вдалося додати файли.',
 		library_edition_file_not_created:
-			'Файл {filename} не додано — сервер нічого не повернув для нього.',
-		library_edition_file_open_error: 'Не вдалося відкрити файл.'
+			'Файл {filename} не додано — сервер нічого не повернув для нього.'
 	}
 };
 
-describe('#275 — locale parity: the nine library_edition_file_* keys exist, non-empty, exact text, in en/et/lv/uk', () => {
+describe('#275 — locale parity: the eight library_edition_file_* keys exist, non-empty, exact text, in en/et/lv/uk', () => {
 	for (const locale of LOCALES) {
 		it(`${locale}.json carries every new key, non-empty`, () => {
 			const messages = readMessages(locale);
@@ -132,6 +131,17 @@ describe('#275 — locale parity: the nine library_edition_file_* keys exist, no
 			}
 		});
 	}
+
+	// #427 review finding 7 — the retired key stays retired: re-adding a
+	// string no surface renders is how dead copy accumulates.
+	it('no locale carries library_edition_file_open_error — the surface that showed it is gone (#427)', () => {
+		for (const locale of LOCALES) {
+			expect(
+				'library_edition_file_open_error' in readMessages(locale),
+				`${locale}.json still carries the retired open-error key`
+			).toBe(false);
+		}
+	});
 
 	it('every locale keeps the {filenames} placeholder in the uploaded-announcement and the {filename} placeholder in failed, broken AND not_created — a locale that drops one announces a nameless outcome (#253; survives any later copy refinement)', () => {
 		for (const locale of LOCALES) {

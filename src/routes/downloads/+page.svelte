@@ -11,17 +11,25 @@
 	// with no network — routeLoad.ts's `load-error` state is how they do that
 	// legibly, not this page's problem.
 	//
+	// OPEN (#427 review round 3, finding 5): a row is an in-app NAVIGATION to
+	// the fullscreen viewer, /part/[fileId]?db=. This page is the only
+	// surface that lists parts with no network, so it is the only offline
+	// DOOR to the viewer — the library and event entry points both need an
+	// Entu read to render their lists at all. The byte read the viewer
+	// performs is the same openFileBytes read-through this page used to run
+	// itself, so a store hit still touches no network; what is gone is the
+	// blank-tab dance and raw bytes in a foreign tab.
+	//
 	// DATA: `heldFileIds` (byte store) is the source of truth for WHAT is
 	// held; `labelsFor` (label store) only NAMES held ids. A held id with no
 	// label still renders — hiding a file the view cannot name is worse than
 	// showing it unnamed — and a label whose byte row is gone (an orphan)
 	// never produces a row.
+	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { authStore } from '$lib/auth/session';
-	import { getToken } from '$lib/auth/storage';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { getAppLabelStore } from '$lib/files/appLabelStore';
-	import { openFileBytes } from '$lib/files/openFileBytes';
 	import { deriveOfflineIdentities, type OfflineIdentity } from '$lib/collectives/offlineIdentity';
 	import type { PartLabel } from '$lib/files/labelStore';
 
@@ -39,7 +47,6 @@
 	let rows = $state<Row[]>([]);
 	let loaded = $state(false);
 	let loadError = $state(false);
-	let openError = $state(false);
 
 	async function loadRows(auth: { personIdByDb: Record<string, string> }): Promise<Row[]> {
 		const persisted =
@@ -105,20 +112,14 @@
 			});
 	});
 
+	/** #427 review round 3, finding 5 — the row opens the part IN the app.
+	 *  The viewer owns the byte read, the page turns and every failure notice
+	 *  that read can produce (it distinguishes "not on this device" from "a
+	 *  server refused", which this page never could), so nothing is left here
+	 *  but the navigation. `?db=` names the partition the row was listed
+	 *  under — this page holds several identities at once. */
 	function handleOpen(identity: OfflineIdentity, fileId: string): void {
-		openError = false;
-		const cfg = { db: identity.db, token: getToken() ?? '' };
-		const tab = window.open('', '_blank');
-		if (tab) tab.opener = null;
-		openFileBytes(cfg, identity, fileId, getAppByteStore())
-			.then(({ url }) => {
-				if (tab) tab.location.href = url;
-				else window.location.href = url;
-			})
-			.catch(() => {
-				tab?.close();
-				openError = true;
-			});
+		void goto(`/part/${fileId}?db=${identity.db}`);
 	}
 </script>
 
@@ -157,11 +158,6 @@
 				</li>
 			{/each}
 		</ul>
-	{/if}
-	{#if openError}
-		<p data-testid="downloads-open-error" class="mt-4 text-xs text-red-700" role="alert">
-			{m.repertoire_pdf_error()}
-		</p>
 	{/if}
 </main>
 

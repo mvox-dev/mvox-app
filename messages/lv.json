@@ -650,7 +650,6 @@
 	"library_edition_file_broken": "Faila {filename} augšupielāde neizdevās, un bojāts ieraksts var būt palicis.",
 	"library_edition_file_error": "Neizdevās pievienot failus.",
 	"library_edition_file_not_created": "Fails {filename} netika pievienots — serveris par to neko neatgrieza.",
-	"library_edition_file_open_error": "Neizdevās atvērt failu.",
 	"file_presence_on_device": "Šajā ierīcē",
 	"file_presence_needs_network": "Nepieciešams tīkls",
 	"login_heading": "Pieslēgties mvox",
@@ -701,5 +700,8 @@
 	"downloads_empty": "Šajā ierīcē vēl nekas nav lejupielādēts.",
 	"downloads_unnamed_part": "Nenosaukta partija",
 	"downloads_open": "Atvērt",
-	"agenda_downloads_link": "Atvērt lejupielādētās partijas"
+	"agenda_downloads_link": "Atvērt lejupielādētās partijas",
+	"part_viewer_close": "Aizvērt",
+	"part_viewer_not_on_device": "Šī partija nav saglabāta šajā ierīcē.",
+	"part_viewer_page_of": "{current} / {total}"
 }

@@ -651,7 +651,6 @@
 	"library_edition_file_broken": "Завантаження файлу {filename} не вдалося, і пошкоджений запис міг залишитися.",
 	"library_edition_file_error": "Не вдалося додати файли.",
 	"library_edition_file_not_created": "Файл {filename} не додано — сервер нічого не повернув для нього.",
-	"library_edition_file_open_error": "Не вдалося відкрити файл.",
 	"file_presence_on_device": "На цьому пристрої",
 	"file_presence_needs_network": "Потрібна мережа",
 	"login_heading": "Увійти в mvox",
@@ -702,5 +701,8 @@
 	"downloads_empty": "На цьому пристрої ще нічого не завантажено.",
 	"downloads_unnamed_part": "Партія без назви",
 	"downloads_open": "Відкрити",
-	"agenda_downloads_link": "Відкрити завантажені партії"
+	"agenda_downloads_link": "Відкрити завантажені партії",
+	"part_viewer_close": "Закрити",
+	"part_viewer_not_on_device": "Ця партія не збережена на цьому пристрої.",
+	"part_viewer_page_of": "{current} / {total}"
 }

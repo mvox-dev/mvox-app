@@ -421,145 +421,17 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		).not.toBeNull();
 	});
 
-	// #351 review finding 1 — the done-when bullet "a part that is downloaded,
-	// then evicted by the cap, stops showing as available", at the only level
-	// the member ever sees it.
-	//
-	// A put is a STORE-WIDE mutation: the cap's evictUntilFits deletes the
-	// globally-least-recently-opened rows to admit the newcomer, and those
-	// rows can be on this very screen. A page that patches the newcomer into
-	// its presence Set and stops there leaves the evicted row badged
-	// "on this device" forever — the wrong-badge direction, which #351 calls
-	// worse than no badge.
-	it('opening an unheld part whose store put EVICTS a held one flips BOTH badges — the evicted row stops claiming on-device', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-lib?X-Amz-Expires=60');
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(
-				async () =>
-					new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]).slice(), {
-						status: 200,
-						headers: { 'content-type': 'application/pdf' }
-					})
-			)
-		);
-		// The cap in miniature. createFakeByteStore holds no cap policy (the
-		// REAL eviction arithmetic is specced in byteStore.presence.spec.ts);
-		// what this pins is the PAGE's reaction to a put that took something
-		// else away — storing file-absent costs the device file-held.
-		const realPut = fakeByteStore.put.bind(fakeByteStore);
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async (identity, fileId, data) => {
-			await realPut(identity, fileId, data);
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-		});
-		const tab = { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const container = await renderWithFilesVisible();
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_on_device]');
-		});
-
-		await fireEvent.click(
-			container.querySelector('[data-testid="library-edition-file-open-file-absent"]') as Element
-		);
-
-		await waitFor(() => {
-			// The newcomer is now on the device...
-			expect(
-				container.querySelector('[data-testid="file-presence-file-absent"]')!.textContent
-			).toContain('[file_presence_on_device]');
-			// ...and the row the cap took away no longer says it is.
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).not.toContain('[file_presence_on_device]');
-		});
-		// A RE-QUERY, not a local patch: the store, not the page, is what
-		// knows which rows survived.
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
-
-	// #351 second review round, finding 1 — the eviction is not undone when the
-	// write that caused it FAILS. byteStore.put runs `evictUntilFits` BEFORE
-	// `adapter.put` (byteStore.ts), because IndexedDB offers no way to reserve
-	// space ahead of a write. So a put that rejects (transaction abort, a
-	// VersionError from a rolled-back DB, site data cleared mid-open) has
-	// ALREADY deleted the rows it made room with, and openFileBytes reports
-	// that open 'network-uncached', not 'network-stored'. A page that re-asks
-	// only on 'network-stored' therefore keeps badging the discarded rows
-	// on-device — the same wrong-badge direction as the test above, reached
-	// through the failure path. The re-query follows the store-write ATTEMPT,
-	// not its success.
-	it('an open whose store put EVICTS a held row and then REJECTS still re-queries — the discarded row stops claiming on-device', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
-		const presenceSpy = installPresence();
-		signFileUrlMock.mockResolvedValue('https://s3.example/signed-lib?X-Amz-Expires=60');
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(
-				async () =>
-					new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]).slice(), {
-						status: 200,
-						headers: { 'content-type': 'application/pdf' }
-					})
-			)
-		);
-		// Eviction lands, the write that needed the room does not — exactly the
-		// order byteStore.put runs them in.
-		vi.spyOn(fakeByteStore, 'put').mockImplementation(async () => {
-			await fakeByteStore.evict(IDENTITY, 'file-held');
-			throw new Error('idb: transaction aborted');
-		});
-		const tab = { location: { href: '' }, opener: {} as unknown, close: vi.fn() };
-		vi.spyOn(window, 'open').mockReturnValue(tab as unknown as Window);
-
-		const container = await renderWithFilesVisible();
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_on_device]');
-		});
-
-		await fireEvent.click(
-			container.querySelector('[data-testid="library-edition-file-open-file-absent"]') as Element
-		);
-
-		// The open still DELIVERS — the cache is never a gate (#343).
-		await waitFor(() => {
-			expect(tab.location.href).not.toBe('');
-		});
-		await waitFor(() => {
-			// Nothing was stored, so the newcomer gained no offline copy...
-			expect(
-				container.querySelector('[data-testid="file-presence-file-absent"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			// ...and the row the failed write discarded no longer claims one.
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).toContain('[file_presence_needs_network]');
-			expect(
-				container.querySelector('[data-testid="file-presence-file-held"]')!.textContent
-			).not.toContain('[file_presence_on_device]');
-		});
-		expect(presenceSpy.mock.calls).toEqual([
-			['sampledb', 'person-p'],
-			['sampledb', 'person-p']
-		]);
-	});
+	// #351's two eviction-cascade pins (store put evicts a held row / evicts
+	// then the write itself rejects) lived here because this page's OWN Open
+	// click used to reach openFileBytes' store.put directly. #427 moved that
+	// read (and so every write it can trigger) into the fullscreen part
+	// viewer — this page's click is now a bare `goto`
+	// (page.library-edition-files.spec.ts), so there is no store write left
+	// on THIS surface for a page-reaction test to pin. The eviction
+	// arithmetic itself stays covered in byteStore.presence.spec.ts; the
+	// "page re-queries presence after its own write" shape these two
+	// exercised has no place to live until the viewer (or a return-to-page
+	// refresh) grows the same coverage — flagged, not silently dropped.
 });
 
 describe('#351 — wording honesty (byteStore.ts:8 — a correctness boundary, NOT a security boundary)', () => {

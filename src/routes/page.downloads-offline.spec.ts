@@ -19,8 +19,12 @@
 //     A held id with NO label renders an honest unnamed row (a file the view
 //     hides is worse than one it cannot name); an orphan label (bytes gone)
 //     produces NO row.
-//   - OPEN: through the openFileBytes path (a store hit touches no network),
-//     against the app byte store — never a bespoke read.
+//   - OPEN (#427 review round 3, finding 5): an in-app navigation to the
+//     fullscreen viewer, /part/[fileId]?db=. The viewer runs the same
+//     openFileBytes read-through this page used to run itself (a store hit
+//     touches no network) and owns every notice that read can produce. This
+//     page is the only surface that lists parts with no network, so it is
+//     the viewer's only offline door.
 //   - Testids: downloads-part-{fileId} per row, downloads-open-{fileId} the
 //     open control, downloads-empty the empty state.
 //   - WORDING: same honesty fence as #351/#352 (byteStore.ts:8) — nothing may
@@ -47,11 +51,12 @@ vi.mock('$lib/paraglide/messages', () => ({
 	})
 }));
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-// The auth storage seam: the offline page reads the token for the openFileBytes
-// cfg; everything else is inert here.
+// The auth storage seam: inert here since the byte read moved into the viewer
+// (#427), kept because the root-layout imports still resolve through it.
 vi.mock('$lib/auth/storage', () => ({
 	getToken: () => 'tok-1',
 	setToken: vi.fn(),
@@ -61,9 +66,6 @@ vi.mock('$lib/auth/storage', () => ({
 	setLastProvider: vi.fn(),
 	clearAll: vi.fn()
 }));
-
-const { openFileBytesMock } = vi.hoisted(() => ({ openFileBytesMock: vi.fn() }));
-vi.mock('$lib/files/openFileBytes', () => ({ openFileBytes: openFileBytesMock }));
 
 // ── the two store seams, substituted at the app singletons ──────────────────
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
@@ -130,8 +132,10 @@ beforeEach(() => {
 	fakeByteStore = createFakeByteStore();
 	fakeLabelStore = createFakeLabelStore();
 	localStorage.clear();
-	openFileBytesMock.mockReset();
-	openFileBytesMock.mockResolvedValue({ url: 'blob:mvox/1', release: vi.fn(), reason: 'cache' });
+	gotoMock.mockReset();
+	// Kept as a spy, not because the page opens tabs — it must NOT (#427
+	// review round 3, finding 5) — but so a regression to the blank-tab
+	// dance is visible rather than silently opening a window in the suite.
 	vi.spyOn(window, 'open').mockReturnValue({
 		location: { href: '' },
 		close: vi.fn()
@@ -202,7 +206,12 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 		expect(container.querySelectorAll('[data-testid^="downloads-part-"]')).toHaveLength(0);
 	});
 
-	it('opens a part through the openFileBytes path against the app byte store', async () => {
+	// #427 review round 3, finding 5 — this page is the ONLY surface that
+	// lists parts with no network (the library and event entry points both
+	// need an Entu read before they can show a file at all), so if it does
+	// not reach the viewer, the viewer has no offline door and #427's third
+	// done-when is satisfied only by a bookmarked URL.
+	it('opens a part IN the app: an in-app navigation to the fullscreen viewer, carrying the row\'s own db', async () => {
 		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
 		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
 
@@ -213,39 +222,38 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 		await fireEvent.click(container.querySelector('[data-testid="downloads-open-file-a"]')!);
 
 		await waitFor(() => {
-			expect(openFileBytesMock).toHaveBeenCalledTimes(1);
+			expect(gotoMock.mock.calls).toEqual([['/part/file-a?db=sampledb']]);
 		});
-		const call = openFileBytesMock.mock.calls[0];
-		expect(call[0]).toEqual({ db: 'sampledb', token: 'tok-1' });
-		expect(call[1]).toEqual({ db: 'sampledb', personId: 'person-1' });
-		expect(call[2]).toBe('file-a');
-		expect(call[3]).toBe(fakeByteStore);
+		// No blank tab, no raw bytes in a foreign tab: the viewer reads them.
+		expect(window.open).not.toHaveBeenCalled();
 	});
 
-	// Bentham review round, finding 3 — the catch used to be `tab?.close()`
-	// only: a tap that fails leaves no trace anywhere in the UI, on the one
-	// page least able to afford it (this IS the recovery path when the
-	// network is down). The other three openFileBytes call sites all set an
-	// error flag and render role="alert"; this pins the same contract here.
-	it('an open failure surfaces a role="alert" message — never a silent failure', async () => {
-		fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', pdfBytes(1));
-		fakeLabelStore.seed('sampledb', 'person-1', 'file-a', LABEL);
-		openFileBytesMock.mockRejectedValueOnce(new Error('boom'));
+	it('a row of a SECOND collective navigates under its own db — the page holds several identities at once', async () => {
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { sampledb: 'person-1', otherdb: 'person-2' },
+			expMs: Date.now() + 3_600_000
+		});
+		fakeByteStore.seed({ db: 'otherdb', personId: 'person-2' }, 'file-b', pdfBytes(2));
+		fakeLabelStore.seed('otherdb', 'person-2', 'file-b', LABEL);
 
 		const { container } = await renderDownloadsPage();
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="downloads-open-file-a"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="downloads-open-file-b"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid="downloads-open-error"]')).toBeNull();
-		await fireEvent.click(container.querySelector('[data-testid="downloads-open-file-a"]')!);
+		await fireEvent.click(container.querySelector('[data-testid="downloads-open-file-b"]')!);
 
 		await waitFor(() => {
-			const alert = container.querySelector('[data-testid="downloads-open-error"]');
-			expect(alert).not.toBeNull();
-			expect(alert!.getAttribute('role')).toBe('alert');
-			expect(alert!.textContent).toContain('[repertoire_pdf_error]');
+			expect(gotoMock.mock.calls).toEqual([['/part/file-b?db=otherdb']]);
 		});
 	});
+
+	// The open-failure alert that used to live here is gone with the byte
+	// read (#427 review round 3, finding 5): a navigation cannot fail the way
+	// a signing or a byte GET can, and the viewer distinguishes "not on this
+	// device" from "a server answered and refused" — a distinction this page
+	// never drew. Its notices are pinned in
+	// src/routes/part/page.part-viewer.spec.ts.
 
 	// Bentham review round, finding 1 — the cold-start auth race. authStore's
 	// REAL first value on a fresh full-document load is 'loading' (the root

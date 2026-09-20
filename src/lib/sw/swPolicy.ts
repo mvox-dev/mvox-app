@@ -31,9 +31,68 @@ export function cacheNameFor(version: string): string {
  * '/_app/env.js' (the bootstrap imports it unconditionally before
  * `kit.start`, so a cold offline navigation dies before any app code runs
  * without it precached).
+ *
+ * `extra` (#427) — optional caller-named assets, e.g. the part viewer's
+ * pdf.js worker (a `?url`-imported build artefact). Slotted BETWEEN `files`
+ * and the two hand-added urls: existing callers pass nothing and get exactly
+ * the old list back.
+ *
+ * DEDUPED, and that is load-bearing (#427 review finding 1). The REQUIRED
+ * half of this list (see `splitPrecache`) is handed straight to
+ * `cache.addAll`, which REJECTS on a duplicate request (the spec's Batch
+ * Cache Operations throws InvalidStateError) — and a rejected addAll rejects
+ * the install's `waitUntil`, so no new worker ever activates and no client
+ * can be recovered by a later deploy. That is the exact wedge
+ * svelte.config.js's #368 comment exists to prevent. A duplicate in the
+ * optional tail is cheaper but not free: those adds are individual and their
+ * failures swallowed, so it buys a second fetch of the same asset rather
+ * than a wedge. An `extra` asset that Vite DOES name in `build` (today's
+ * pdf.js worker is one) would otherwise appear twice. Order-stable: the
+ * first occurrence keeps its slot.
  */
-export function precacheUrls(input: { build: string[]; files: string[] }): string[] {
-	return [...input.build, ...input.files, '/', '/_app/env.js'];
+export function precacheUrls(input: { build: string[]; files: string[]; extra?: string[] }): string[] {
+	return [...new Set([...input.build, ...input.files, ...(input.extra ?? []), '/', '/_app/env.js'])];
+}
+
+/**
+ * #427 review round 3, finding 2 — the install list, split by what a cold
+ * offline start cannot do without.
+ *
+ * The whole list used to go into one batch cache write, which is
+ * all-or-nothing: a single failed request rejects it, rejects the install's
+ * `waitUntil`, and leaves every client on the old worker — the wedge
+ * svelte.config.js's #368 comment names. #427 roughly tripled the list
+ * (pdf.js's worker is ~1.2 MB and its route chunk ~0.4 MB against a ~0.8 MB
+ * app), on the flaky hall wifi this feature is aimed at.
+ *
+ * REQUIRED is what the app cannot start from at all: the fallback shell,
+ * the env bootstrap, the entry chunks, the static files. It keeps the batch
+ * write, so a broken deploy still fails loudly instead of half-installing.
+ *
+ * OPTIONAL is the per-route tail — route node chunks and the pdf.js worker.
+ * Each one stands for exactly ONE surface: a miss means that surface needs
+ * the network next time, which is a degraded feature, not a dead app. The
+ * caller adds these individually and swallows the failure.
+ *
+ * Order within each half is preserved, and every url lands in exactly one of
+ * them.
+ */
+const OPTIONAL_PRECACHE_PATTERNS: readonly RegExp[] = [
+	/\/_app\/immutable\/nodes\//,
+	/pdf\.worker[^/]*\.mjs$/
+];
+
+export function splitPrecache(urls: readonly string[]): {
+	required: string[];
+	optional: string[];
+} {
+	const required: string[] = [];
+	const optional: string[] = [];
+	for (const url of urls) {
+		if (OPTIONAL_PRECACHE_PATTERNS.some((pattern) => pattern.test(url))) optional.push(url);
+		else required.push(url);
+	}
+	return { required, optional };
 }
 
 /**
