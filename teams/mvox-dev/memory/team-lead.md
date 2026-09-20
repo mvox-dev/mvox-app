@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-19 19:20Z, live]
+### [MVOX-26 — 2026-09-20 11:55Z, live]
+
+**LANDED 2026-09-20:** #427 part viewer 8686405 (PR #435; pipeline RED→Y→Y at cap → Josquin fix 3 → Bentham GREEN 4; pdfjs-dist added, split SW install core/tail, downloads → viewer per Gama ruling; #434 filed by Gama for the offline event-page gap) · #408 install-as-app 969fc62 (Y→Y→GREEN; manifest + icons from Mihkel SVG via scripts/icons/render-icons.ts + @resvg/resvg-js; SW untouched). Device checks owed by Mihkel post-deploy (installed iPhone still updates; ET iOS hint wording). LESSONS: my #427 brief contradicted itself (cache write vs no-store fence → #353 label regression); split greenfield slices (route first, wiring second); SPIKE runs the build when a dependency/worker is added; stale comment above refreshPresence in event/[id]/+page.svelte to fix in place next touch. Board empty; #422 (loadCfg gate) and #434 unlabelled.
 
 **#233 CHAIN COMPLETE 2026-09-20 02:3xZ:** #418 (prop-def, ledger 971d286) · #419 (backfill 10/36, ledger 109a4a2) · #420 (app on event_name, 75686df) · #421 (formula live, prop-def 6a92a333ca67df980f415044, ledger 54ab40b) — all CLOSED. #233 parent still OPEN `blocked`, Gama's to close. Live commands ran from the TEAM-LEAD session under manual mode (Pérotin's session classifier-blocked); auth comments verbatim on each issue first; Pérotin did read-back + ledger PRs. Template: noClose option (e2998b7). Findings log: ~/workspace/scratchpad/findings-mvox-26.md. Pattern for live steps: dry run → Mihkel → auth comment → live from team-lead → Pérotin read-back + PR → close with landing comment.
 
