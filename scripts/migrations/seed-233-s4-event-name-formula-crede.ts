@@ -136,9 +136,8 @@ import { writeLedger as writeLedgerShared, assertLiveRunAuthorized } from './lib
 // render `date — type` with no stray separator (entu-www formula syntax:
 // the last stack value is the separator, the rest are joined with it).
 //
-// Full ISO timestamp in the formula, no platform-side way to shorten it at the time of the
-// 2026-09-20 live run. Entu documented REGEX on 2026-09-21 (entu/www bc86660); Mihkel then set
-// the live formula by hand to
+// Full ISO timestamp in the formula, no platform-side way to shorten it (re-verify if Entu ships SUBSTRING).
+// Re-verified 2026-09-21: Entu documented REGEX (entu/www bc86660); Mihkel then set the live formula by hand to
 //   start_datetime '^(\d{4}-\d{2}-\d{2}).*$' '$1' REGEX event_type event_name ' -- ' CONCAT_WS
 // (#421 comment, 2026-09-21). The constant below is what this script wrote and stays as history;
 // a re-run aborts on the existing formula.
