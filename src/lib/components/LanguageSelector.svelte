@@ -15,8 +15,8 @@
 	never re-evaluates — with `reload: false` the locale would change while the
 	screen stayed in the old language. runtime.js says as much: `reload: false`
 	"does not re-render the UI [...] Do not use it for normal locale pickers."
-	So the click reloads the document, and on reload the localStorage/cookie
-	strategy resolves the new locale and the whole page renders translated.
+	So the click reloads the document, and on reload the cookie strategy
+	resolves the new locale and the whole page renders translated.
 	Reload is safe here: the token and the selected collective live in
 	localStorage, and profile edits autosave on blur.
 

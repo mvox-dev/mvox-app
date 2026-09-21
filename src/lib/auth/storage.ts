@@ -36,20 +36,14 @@ export interface EntuUser {
 	[key: string]: unknown;
 }
 
-// #442 review F1 — a browser told not to store site data (Chrome/Edge "Don't
-// allow sites to save data", Safari "Block all cookies") makes `localStorage`
-// itself a THROWING ACCESSOR: the property read throws SecurityError before any
-// method is called, so `typeof localStorage !== 'undefined'` does not shield a
-// caller (typeof only suppresses ReferenceError for unresolvable bindings).
-// Every READ here goes through these helpers so that browser degrades to "no
-// stored auth" — which is the truth — instead of throwing out of the root
-// layout's `load` and the login page's init, i.e. out of the very screen that
-// exists to tell the user about it.
+// A browser told not to store site data makes `localStorage` access itself
+// throw — mechanism in $lib/testing/blockedStorage. Every READ goes through
+// these helpers so it degrades to "no stored auth", which is the truth, rather
+// than throwing out of the root layout's `load` and the login page's init (#442).
 //
 // WRITES deliberately still throw: run-callback-exchange.ts and
 // auth/[provider]/+page.svelte catch them to fail closed (`persist_failed`)
-// rather than hand the user a session that was never persisted. Swallowing
-// there would trade a clear error for a silent logged-out loop.
+// rather than hand the user a session that was never persisted.
 function readKey(key: string): string | null {
 	try {
 		return localStorage.getItem(key);
@@ -105,12 +99,10 @@ export function setLastProvider(provider: string): void {
 	localStorage.setItem(KEYS.lastProvider, provider);
 }
 
-// #442 — proactive self-test the login screen runs on mount. Writes a fixed
-// value under a throwaway probe key (never token/user), reads it back, and
-// removes it. Any throw (quota refused, access denied) or read-back mismatch
-// means the browser won't persist for us → false. Nothing survives either way:
-// the removal sits in `finally`, so a write that succeeded is still dropped when
-// the read-back or the removal itself throws (#442 review F2).
+// Proactive self-test the login screen runs on mount: write a fixed value under
+// a throwaway probe key (never token/user), read it back, remove it. Any throw
+// or read-back mismatch → false. The removal sits in `finally`, so nothing
+// survives even when the read-back or the removal itself throws.
 export function canPersistLocally(): boolean {
 	try {
 		localStorage.setItem(KEYS.storageProbe, STORAGE_PROBE_VALUE);

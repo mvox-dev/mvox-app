@@ -188,11 +188,10 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 });
 
-// #442 review F1 — the browser that BLOCKS site data outright: `localStorage`
-// itself is a throwing accessor, so every read path must degrade to "nothing
-// stored" instead of throwing out of the root layout's load (+layout.ts calls
-// getToken on every navigation, including /auth/login) and the login page init.
-// Spying on getItem/setItem cannot reproduce this — the throw precedes the call.
+// The browser that BLOCKS site data outright (mechanism in the helper below):
+// every read path must degrade to "nothing stored" instead of throwing out of
+// the root layout's load (+layout.ts calls getToken on every navigation,
+// including /auth/login) and the login page init.
 import { withBlockedStorage } from '$lib/testing/blockedStorage';
 
 describe('#442 review F1 — storage access itself throws (site data blocked)', () => {
