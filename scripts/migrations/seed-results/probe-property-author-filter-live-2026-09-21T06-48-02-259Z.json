@@ -1,0 +1,402 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Gama follow-up to the property-created-stamp probe (#439/#440): does the documented reference/datetime filter pattern work on entity-level _created; do three undocumented value-stamp filter spellings get rejected or silently ignored; does created ever appear on an entity-embedded value under a different read shape (full entity, or props naming _created); and does the \"entity reads never carry created\" finding hold on a real multi-value, mixed-property-type entity, not just the single-value sample from the original probe. Read-only, polyphony synthetic.",
+  "docQuote": "entu-www src/api/query-reference/index.md: \"`prop.reference=id` | `owner.reference=abc123` | Exact reference match\" and \"`prop.datetime.gte=ISO8601` | `created_at.datetime.gte=2025-01-01T00:00:00Z` | Greater than or equal\" — `_created` itself never appears as a worked filter example.",
+  "ledger": [
+    {
+      "step": "q1a-created-reference-filter",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 221,
+      "returnedCount": 5,
+      "everyMatchesRunner": true
+    },
+    {
+      "step": "q1b-created-datetime-gte-filter",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 1,
+      "returnedCount": 1,
+      "sinceIso": "2026-09-20T06:48:01.100Z"
+    },
+    {
+      "step": "q2-baseline-unfiltered-count",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 319
+    },
+    {
+      "step": "q2-value-stamp-spelling-name-created-by",
+      "outcome": "filtered-to-zero",
+      "spelling": "name.created.by",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319,
+      "note": "safe (empty set, not everything) but does NOT confirm this spelling addresses the value-level stamp specifically"
+    },
+    {
+      "step": "q2-value-stamp-spelling-name-created-reference",
+      "outcome": "filtered-to-zero",
+      "spelling": "name.created.reference",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319,
+      "note": "safe (empty set, not everything) but does NOT confirm this spelling addresses the value-level stamp specifically"
+    },
+    {
+      "step": "q2-value-stamp-spelling-created-by",
+      "outcome": "filtered-to-zero",
+      "spelling": "created.by",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319,
+      "note": "safe (empty set, not everything) but does NOT confirm this spelling addresses the value-level stamp specifically"
+    },
+    {
+      "step": "q3a-full-entity-read-name-key-set",
+      "outcome": "observed",
+      "entityId": "69bcfd8e9c031ab8e6ce807a",
+      "keySets": [
+        [
+          "_id",
+          "string"
+        ]
+      ]
+    },
+    {
+      "step": "q3b-props-name-and-created-key-sets",
+      "outcome": "observed",
+      "entityId": "69bcfd8e9c031ab8e6ce807a",
+      "nameKeySets": [
+        [
+          "_id",
+          "string"
+        ]
+      ],
+      "entityLevelCreatedKeySets": [
+        [
+          "_id",
+          "datetime"
+        ]
+      ]
+    },
+    {
+      "step": "q4a-mixed-type-entity-full-read",
+      "outcome": "observed",
+      "entityId": "6a8967f0ac0a9c7d5f122dc3",
+      "entityType": "member",
+      "keySetsByProperty": {
+        "_created": [
+          [
+            "_id",
+            "datetime",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_inheritrights": [
+          [
+            "_id",
+            "boolean"
+          ]
+        ],
+        "_owner": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_parent": [
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_sharing": [
+          [
+            "_id",
+            "string"
+          ]
+        ],
+        "_type": [
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "person": [
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_reference": [
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "status": [
+          [
+            "_id",
+            "string"
+          ]
+        ],
+        "name": "[REDACTED]",
+        "_parent_viewer": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_parent_expander": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_parent_editor": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_parent_owner": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_editor": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_expander": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "_viewer": [
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "inherited",
+            "property_type",
+            "reference",
+            "string"
+          ],
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ]
+      }
+    },
+    {
+      "step": "q4b-mixed-type-entity-scoped-props-read",
+      "outcome": "confirmed-absent",
+      "entityId": "6a8967f0ac0a9c7d5f122dc3",
+      "entityType": "member",
+      "keySetsByProperty": {
+        "_created": [
+          [
+            "_id",
+            "datetime",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "person": [
+          [
+            "_id",
+            "entity_type",
+            "property_type",
+            "reference",
+            "string"
+          ]
+        ],
+        "status": [
+          [
+            "_id",
+            "string"
+          ]
+        ],
+        "name": "[REDACTED]"
+      },
+      "anyNonCreatedValueCarriesCreated": false
+    }
+  ],
+  "authorizedBy": "live run — authorizer not recorded"
+}
