@@ -1,0 +1,164 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "Settles what entu-www properties/index.md leaves open about the `created` stamp on a value object, and whether GET /property/{_id} — documented only for file values — resolves a plain string value at all. Gama commission via team-lead, 2026-09-21, polyphony synthetic, routine-ops pre-auth.",
+  "docQuote": "entu-www src/api/properties/index.md: \"`created` | Object with `at` (ISO timestamp) and `by` (person entity ID) — who set this value and when.\"",
+  "docQuoteQ4": "entu-www src/api/query-reference/index.md: \"`prop.reference=id` | `owner.reference=abc123` | Exact reference match\" and \"`prop.datetime.gte=ISO8601` | `created_at.datetime.gte=2025-01-01T00:00:00Z` | Greater than or equal\" — `_created` itself never appears as a worked filter example, only as a returnable field via `props=`.",
+  "ledger": [
+    {
+      "step": "q1-existing-value-key-set",
+      "outcome": "observed",
+      "entityId": "69bcfd8e9c031ab8e6ce807a",
+      "valueCount": 1,
+      "keySets": [
+        [
+          "_id",
+          "string"
+        ]
+      ],
+      "createdShape": {
+        "atPresent": false,
+        "byPresent": false
+      }
+    },
+    {
+      "step": "q2-property-endpoint-string-value",
+      "outcome": "http-200",
+      "propertyId": "69bcfd8e9c031ab8e6ce816a",
+      "httpStatus": 200,
+      "bodyKeys": [
+        "_id",
+        "type",
+        "string",
+        "entity",
+        "created"
+      ]
+    },
+    {
+      "step": "q3-create-fixture",
+      "outcome": "created",
+      "fixtureId": "6ab0d16b4eec726cad30a9b0"
+    },
+    {
+      "step": "q3-read-value-a",
+      "outcome": "observed",
+      "valueId": "6ab0d16b4eec726cad30a9b3",
+      "created": {
+        "at": "2026-09-21T06:40:43.422Z",
+        "by": "69bcfd8e9c031ab8e6ce8079"
+      }
+    },
+    {
+      "step": "q3-read-value-b",
+      "outcome": "observed",
+      "valueId": "6ab0d16b4eec726cad30a9b8",
+      "created": {
+        "at": "2026-09-21T06:40:43.845Z",
+        "by": "69bcfd8e9c031ab8e6ce8079"
+      },
+      "totalValuesAfterPost": 2
+    },
+    {
+      "step": "q3-verdict-ordering-and-identity",
+      "outcome": "confirmed",
+      "bPostdatesA": true,
+      "bByIsRunner": true
+    },
+    {
+      "step": "q3-delete-value-a",
+      "outcome": "deleted",
+      "valueId": "6ab0d16b4eec726cad30a9b3",
+      "httpStatus": 200
+    },
+    {
+      "step": "q3-read-after-delete",
+      "outcome": "observed",
+      "valueCount": 1,
+      "remainingIds": [
+        "6ab0d16b4eec726cad30a9b8"
+      ]
+    },
+    {
+      "step": "q3-soft-delete-visibility-check",
+      "outcome": "http-404",
+      "propertyId": "6ab0d16b4eec726cad30a9b3",
+      "httpStatus": 404,
+      "bodyKeys": [
+        "error",
+        "url",
+        "status",
+        "statusText",
+        "message"
+      ],
+      "stillReadable": false
+    },
+    {
+      "step": "cleanup-delete-value-b",
+      "outcome": "deleted",
+      "valueId": "6ab0d16b4eec726cad30a9b8",
+      "httpStatus": 200
+    },
+    {
+      "step": "cleanup-delete-fixture",
+      "outcome": "deleted",
+      "fixtureId": "6ab0d16b4eec726cad30a9b0",
+      "httpStatus": 200
+    },
+    {
+      "step": "verify-fixture-gone",
+      "outcome": "404",
+      "expected": 404
+    },
+    {
+      "step": "q4a-created-reference-filter",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 221,
+      "returnedCount": 5,
+      "everyMatchesRunner": true
+    },
+    {
+      "step": "q4b-created-datetime-gte-filter",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 1,
+      "returnedCount": 1,
+      "sinceIso": "2026-09-20T06:40:44.810Z"
+    },
+    {
+      "step": "q4-baseline-unfiltered-count",
+      "outcome": "http-200",
+      "httpStatus": 200,
+      "reportedCount": 319
+    },
+    {
+      "step": "q4c-value-stamp-spelling-name-created-by",
+      "outcome": "filtered-to-zero — HTTP 200, count 0 (not the baseline): the spelling parses as SOME real filter, just one nothing satisfies — safe (caller gets an empty set, not everything), but this does NOT confirm it addresses the value-level created stamp specifically",
+      "spelling": "name.created.by",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319
+    },
+    {
+      "step": "q4c-value-stamp-spelling-name-created-reference",
+      "outcome": "filtered-to-zero — HTTP 200, count 0 (not the baseline): the spelling parses as SOME real filter, just one nothing satisfies — safe (caller gets an empty set, not everything), but this does NOT confirm it addresses the value-level created stamp specifically",
+      "spelling": "name.created.reference",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319
+    },
+    {
+      "step": "q4c-value-stamp-spelling-created-by",
+      "outcome": "filtered-to-zero — HTTP 200, count 0 (not the baseline): the spelling parses as SOME real filter, just one nothing satisfies — safe (caller gets an empty set, not everything), but this does NOT confirm it addresses the value-level created stamp specifically",
+      "spelling": "created.by",
+      "httpStatus": 200,
+      "bodyIsJson": true,
+      "reportedCount": 0,
+      "baselineCount": 319
+    }
+  ],
+  "authorizedBy": "Palestrina, team-lead routine-ops pre-auth (polyphony synthetic), courier 2026-09-21 06:23Z"
+}
