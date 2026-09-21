@@ -187,3 +187,74 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 		expect([...new Set(removedKeys)]).toEqual([PROBE_KEY]);
 	});
 });
+
+// #442 review F1 — the browser that BLOCKS site data outright: `localStorage`
+// itself is a throwing accessor, so every read path must degrade to "nothing
+// stored" instead of throwing out of the root layout's load (+layout.ts calls
+// getToken on every navigation, including /auth/login) and the login page init.
+// Spying on getItem/setItem cannot reproduce this — the throw precedes the call.
+import { withBlockedStorage } from '$lib/testing/blockedStorage';
+
+describe('#442 review F1 — storage access itself throws (site data blocked)', () => {
+	it('every reader degrades to null instead of throwing', () => {
+		setToken('jwt-abc');
+		setUser({ _id: 'u1' });
+		setLastProvider('google');
+
+		withBlockedStorage(() => {
+			expect(getToken()).toBeNull();
+			expect(getUser()).toBeNull();
+			expect(getLastProvider()).toBeNull();
+		});
+	});
+
+	it('canPersistLocally() reports false', () => {
+		withBlockedStorage(() => {
+			expect(canPersistLocally()).toBe(false);
+		});
+	});
+
+	it('clearAll does not throw', () => {
+		withBlockedStorage(() => {
+			expect(() => clearAll({ preserveProvider: false })).not.toThrow();
+			expect(() => clearAll({ preserveProvider: true })).not.toThrow();
+		});
+	});
+
+	it('writers still throw — the OAuth callback fails closed on persist_failed', () => {
+		withBlockedStorage(() => {
+			expect(() => setToken('jwt-abc')).toThrow();
+		});
+	});
+});
+
+// #442 review F2 — "nothing survives either way" must hold on EVERY path, not
+// just the happy one: a setItem that succeeded before a throwing getItem used to
+// leave `mvox.storage_probe` behind.
+describe('#442 review F2 — the probe key never survives', () => {
+	it('cleans up when getItem throws after a successful write', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+	});
+
+	it('cleans up when the read-back is tampered with', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => 'tampered-value');
+
+		expect(canPersistLocally()).toBe(false);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+	});
+
+	it('a throwing removeItem cannot escape the probe', () => {
+		vi.spyOn(localStorage, 'removeItem').mockImplementationOnce(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(() => canPersistLocally()).not.toThrow();
+	});
+});
+
+// (*MVOX:Josquin* — #442 review fixes)

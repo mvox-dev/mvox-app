@@ -36,8 +36,38 @@ export interface EntuUser {
 	[key: string]: unknown;
 }
 
+// #442 review F1 — a browser told not to store site data (Chrome/Edge "Don't
+// allow sites to save data", Safari "Block all cookies") makes `localStorage`
+// itself a THROWING ACCESSOR: the property read throws SecurityError before any
+// method is called, so `typeof localStorage !== 'undefined'` does not shield a
+// caller (typeof only suppresses ReferenceError for unresolvable bindings).
+// Every READ here goes through these helpers so that browser degrades to "no
+// stored auth" — which is the truth — instead of throwing out of the root
+// layout's `load` and the login page's init, i.e. out of the very screen that
+// exists to tell the user about it.
+//
+// WRITES deliberately still throw: run-callback-exchange.ts and
+// auth/[provider]/+page.svelte catch them to fail closed (`persist_failed`)
+// rather than hand the user a session that was never persisted. Swallowing
+// there would trade a clear error for a silent logged-out loop.
+function readKey(key: string): string | null {
+	try {
+		return localStorage.getItem(key);
+	} catch {
+		return null;
+	}
+}
+
+function removeKey(key: string): void {
+	try {
+		localStorage.removeItem(key);
+	} catch {
+		// Storage is refusing: nothing was ever written, so there is nothing to drop.
+	}
+}
+
 function isStaleVersion(): boolean {
-	const stored = localStorage.getItem(KEYS.tokenVersion);
+	const stored = readKey(KEYS.tokenVersion);
 	return stored !== null && stored !== CURRENT_TOKEN_VERSION;
 }
 
@@ -46,7 +76,7 @@ export function getToken(): string | null {
 		clearAll({ preserveProvider: false });
 		return null;
 	}
-	return localStorage.getItem(KEYS.token);
+	return readKey(KEYS.token);
 }
 
 export function setToken(token: string): void {
@@ -59,7 +89,7 @@ export function getUser(): EntuUser | null {
 		clearAll({ preserveProvider: false });
 		return null;
 	}
-	const raw = localStorage.getItem(KEYS.user);
+	const raw = readKey(KEYS.user);
 	return raw ? (JSON.parse(raw) as EntuUser) : null;
 }
 
@@ -68,7 +98,7 @@ export function setUser(user: EntuUser): void {
 }
 
 export function getLastProvider(): string | null {
-	return localStorage.getItem(KEYS.lastProvider);
+	return readKey(KEYS.lastProvider);
 }
 
 export function setLastProvider(provider: string): void {
@@ -78,29 +108,35 @@ export function setLastProvider(provider: string): void {
 // #442 — proactive self-test the login screen runs on mount. Writes a fixed
 // value under a throwaway probe key (never token/user), reads it back, and
 // removes it. Any throw (quota refused, access denied) or read-back mismatch
-// means the browser won't persist for us → false. Nothing survives either way.
+// means the browser won't persist for us → false. Nothing survives either way:
+// the removal sits in `finally`, so a write that succeeded is still dropped when
+// the read-back or the removal itself throws (#442 review F2).
 export function canPersistLocally(): boolean {
 	try {
 		localStorage.setItem(KEYS.storageProbe, STORAGE_PROBE_VALUE);
-		const readBack = localStorage.getItem(KEYS.storageProbe);
-		localStorage.removeItem(KEYS.storageProbe);
-		return readBack === STORAGE_PROBE_VALUE;
+		return localStorage.getItem(KEYS.storageProbe) === STORAGE_PROBE_VALUE;
 	} catch {
 		return false;
+	} finally {
+		removeKey(KEYS.storageProbe);
 	}
 }
 
 export function clearAll(opts: { preserveProvider: boolean }): void {
-	localStorage.removeItem(KEYS.token);
-	localStorage.removeItem(KEYS.user);
-	localStorage.removeItem(KEYS.tokenVersion);
+	removeKey(KEYS.token);
+	removeKey(KEYS.user);
+	removeKey(KEYS.tokenVersion);
 	// Drop any in-flight OAuth-state blob too — otherwise a stale blob survives
 	// logout and the callback's presence-check would key off it (single-use gate).
-	localStorage.removeItem(OAUTH_STATE_KEY);
+	removeKey(OAUTH_STATE_KEY);
 	if (!opts.preserveProvider) {
-		localStorage.removeItem(KEYS.lastProvider);
+		removeKey(KEYS.lastProvider);
 	}
-	sessionStorage.clear();
+	try {
+		sessionStorage.clear();
+	} catch {
+		// Same refusing-browser case as removeKey: nothing was stored to clear.
+	}
 }
 
 // (*MVOX:Josquin*)

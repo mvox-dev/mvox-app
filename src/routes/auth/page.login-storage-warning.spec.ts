@@ -23,6 +23,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { withBlockedStorage } from '$lib/testing/blockedStorage';
+import { getLocale, overwriteGetLocale } from '$lib/paraglide/runtime.js';
+
+const ORIGINAL_GET_LOCALE = getLocale;
 
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
@@ -55,6 +59,7 @@ function assertAllProvidersRender(container: HTMLElement): void {
 
 afterEach(() => {
 	cleanup();
+	overwriteGetLocale(ORIGINAL_GET_LOCALE);
 	gotoMock.mockReset();
 	vi.restoreAllMocks();
 	localStorage.clear();
@@ -81,6 +86,33 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 		});
 
 		const { container } = renderAt();
+
+		const warning = container.querySelector(WARNING_SELECTOR);
+		expect(warning, 'the storage warning must render').not.toBeNull();
+		expect(warning?.getAttribute('role')).toBe('alert');
+		expect(warning?.textContent?.trim()).toBe(m.login_storage_warning());
+		assertAllProvidersRender(container);
+	});
+
+	// #442 review F1 — the headline case the slice was written for: a browser set
+	// to block site data outright, where reading the `localStorage` PROPERTY
+	// throws before any method call. The page reads getLastProvider() one line
+	// above the probe, and the root layout's load calls getToken() on the way in,
+	// so an unguarded read anywhere on that path replaces this screen with
+	// SvelteKit's error page (there is no +error.svelte). Method spies cannot
+	// reproduce it — the throw precedes the call.
+	//
+	// The locale is frozen for this case ON PURPOSE, and it is NOT the assertion
+	// being weakened: Paraglide's compiled runtime resolves the locale through an
+	// unguarded `localStorage.getItem` (strategy list in vite.config.ts, #123), so
+	// in this browser EVERY m.*() call in the app throws inside generated code
+	// this slice cannot reach. That is a separate, app-wide i18n defect, reported
+	// with this review fix and NOT fixed here (the strategy list is a #123
+	// product decision) — freezing getLocale isolates what IS ours: the page's
+	// own storage reads and the probe.
+	it('storage access itself throws (site data blocked) → the warning renders and every provider CTA still renders', () => {
+		overwriteGetLocale(() => 'en');
+		const { container } = withBlockedStorage(() => renderAt());
 
 		const warning = container.querySelector(WARNING_SELECTOR);
 		expect(warning, 'the storage warning must render').not.toBeNull();

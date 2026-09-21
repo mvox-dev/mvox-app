@@ -17,10 +17,22 @@ export const collectiveState: Writable<CollectiveState> = writable({ status: 'lo
 /** Selected db from the current URL (`?collective=<db>`), wired by the root layout. */
 export const urlCollectiveDbStore: Writable<string | null> = writable(null);
 
-/** Persisted explicit pick (survives reloads). */
-export const selectedCollectiveDbStore: Writable<string | null> = writable(
-	typeof localStorage !== 'undefined' ? localStorage.getItem(SELECTED_KEY) : null
-);
+/** Persisted explicit pick (survives reloads).
+ *  Read defensively: the root layout imports this module unconditionally, so a
+ *  throw at module scope takes down every route. A browser set to block site
+ *  data makes `localStorage` a THROWING ACCESSOR, which the `typeof` guard does
+ *  NOT stop — typeof only suppresses ReferenceError for unresolvable bindings,
+ *  not a getter that throws (#442 review F1). "No stored pick" is the truth
+ *  there anyway. */
+function readSelectedDb(): string | null {
+	try {
+		return typeof localStorage !== 'undefined' ? localStorage.getItem(SELECTED_KEY) : null;
+	} catch {
+		return null;
+	}
+}
+
+export const selectedCollectiveDbStore: Writable<string | null> = writable(readSelectedDb());
 
 /**
  * Discover the user's mvox collectives from the authenticated token and publish
