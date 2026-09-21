@@ -660,6 +660,7 @@
 	"login_error_missing_session_token": "Вхід не завершився. Спробуйте ще раз.",
 	"login_error_generic": "Щось пішло не так. Спробуйте ще раз.",
 	"login_last_used": "· востаннє використано",
+	"login_storage_warning": "Цей браузер не дозволяє mvox зберігати дані на цьому пристрої. mvox потрібно це, щоб працювати належним чином.",
 	"auth_provider_smart_id": "Smart-ID",
 	"auth_provider_mobile_id": "Mobile-ID",
 	"auth_provider_id_card": "ID-картка",

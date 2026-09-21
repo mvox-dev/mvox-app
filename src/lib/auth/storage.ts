@@ -16,7 +16,10 @@ const KEYS = {
 	user: 'user',
 	lastProvider: 'mvox.last_provider',
 	tokenVersion: 'mvox.token_version',
+	storageProbe: 'mvox.storage_probe',
 } as const;
+
+const STORAGE_PROBE_VALUE = 'ok';
 
 const CURRENT_TOKEN_VERSION = '1';
 
@@ -70,6 +73,21 @@ export function getLastProvider(): string | null {
 
 export function setLastProvider(provider: string): void {
 	localStorage.setItem(KEYS.lastProvider, provider);
+}
+
+// #442 — proactive self-test the login screen runs on mount. Writes a fixed
+// value under a throwaway probe key (never token/user), reads it back, and
+// removes it. Any throw (quota refused, access denied) or read-back mismatch
+// means the browser won't persist for us → false. Nothing survives either way.
+export function canPersistLocally(): boolean {
+	try {
+		localStorage.setItem(KEYS.storageProbe, STORAGE_PROBE_VALUE);
+		const readBack = localStorage.getItem(KEYS.storageProbe);
+		localStorage.removeItem(KEYS.storageProbe);
+		return readBack === STORAGE_PROBE_VALUE;
+	} catch {
+		return false;
+	}
 }
 
 export function clearAll(opts: { preserveProvider: boolean }): void {

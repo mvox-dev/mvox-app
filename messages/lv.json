@@ -659,6 +659,7 @@
 	"login_error_missing_session_token": "Pierakstīšanās netika pabeigta. Lūdzu, mēģiniet vēlreiz.",
 	"login_error_generic": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
 	"login_last_used": "· pēdējoreiz izmantots",
+	"login_storage_warning": "Šī pārlūkprogramma neļauj mvox saglabāt datus šajā ierīcē. mvox tas ir nepieciešams, lai darbotos pareizi.",
 	"auth_provider_smart_id": "Smart-ID",
 	"auth_provider_mobile_id": "Mobile-ID",
 	"auth_provider_id_card": "ID-karte",

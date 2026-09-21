@@ -658,6 +658,7 @@
 	"login_error_missing_session_token": "Sisselogimine ei lõppenud. Palun proovi uuesti.",
 	"login_error_generic": "Midagi läks valesti. Palun proovi uuesti.",
 	"login_last_used": "· viimati kasutatud",
+	"login_storage_warning": "See brauser ei luba mvoxil selles seadmes andmeid salvestada. mvox vajab seda, et korralikult töötada.",
 	"auth_provider_smart_id": "Smart-ID",
 	"auth_provider_mobile_id": "Mobile-ID",
 	"auth_provider_id_card": "ID-kaart",

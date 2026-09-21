@@ -146,7 +146,14 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 
 	it('returns false when setItem throws (quota exceeded / storage refused)', () => {
-		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+		// mockImplementationOnce (not mockImplementation): happy-dom's Storage is a
+		// Proxy over a per-instance method cache (ClassMethodBinder) whose
+		// getOwnPropertyDescriptor trap returns undefined for these methods, so
+		// vi.restoreAllMocks() can't restore a permanently-overridden spy — the
+		// mock leaks into later tests. A one-shot override matches how
+		// canPersistLocally() actually calls setItem (once per invocation) and
+		// self-clears without depending on restore.
+		vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
 			throw new DOMException('quota exceeded', 'QuotaExceededError');
 		});
 
@@ -154,7 +161,7 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 
 	it('returns false when getItem throws (access denied)', () => {
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => {
 			throw new DOMException('access denied', 'SecurityError');
 		});
 
@@ -162,14 +169,14 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 
 	it('returns false when the read-back does not match what was written', () => {
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => 'tampered-value');
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => 'tampered-value');
 
 		expect(canPersistLocally()).toBe(false);
 	});
 
 	it('never touches the token/user keys — the probe key is the ONLY key written or removed', () => {
-		const setSpy = vi.spyOn(Storage.prototype, 'setItem');
-		const removeSpy = vi.spyOn(Storage.prototype, 'removeItem');
+		const setSpy = vi.spyOn(localStorage, 'setItem');
+		const removeSpy = vi.spyOn(localStorage, 'removeItem');
 
 		expect(canPersistLocally()).toBe(true);
 

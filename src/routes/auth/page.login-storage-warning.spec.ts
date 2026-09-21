@@ -73,7 +73,10 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 	});
 
 	it('setItem throws → the warning renders with role=alert and the i18n text; every provider CTA still renders', () => {
-		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+		// mockImplementationOnce — see storage.spec.ts's #442 block for why
+		// (happy-dom's Storage Proxy can't be relied on to restore a permanent
+		// override); canPersistLocally() only calls setItem once per mount anyway.
+		vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
 			throw new DOMException('quota exceeded', 'QuotaExceededError');
 		});
 
@@ -87,7 +90,7 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 	});
 
 	it('the URL error notice and the storage notice co-exist as independent blocks', () => {
-		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+		vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
 			throw new DOMException('quota exceeded', 'QuotaExceededError');
 		});
 
