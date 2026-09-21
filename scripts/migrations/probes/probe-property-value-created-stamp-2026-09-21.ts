@@ -19,6 +19,24 @@
 //        `created.by` read as the runner's own identity, and is the OLD
 //        (now-deleted) value still fetchable via Q2's endpoint (soft-delete
 //        visibility) after the DELETE?
+//   Q4 — Gama follow-up (06:24Z), read-only, no writes:
+//        (a) entu-www src/api/query-reference/index.md documents the filter
+//            pattern `prop.reference=id` ("Exact reference match", worked
+//            example `owner.reference=abc123`) and `prop.datetime.gte=ISO8601`
+//            — but never applies either to `_created` itself, only listing
+//            `_created` as a returnable field via `props=`. Does the
+//            documented pattern actually work on an entity-level system
+//            field: `entity?_created.reference=<runnerId>` and
+//            `entity?_created.datetime.gte=<yesterday>`?
+//        (b) can any filter spelling reach a VALUE's own `created` stamp
+//            (not the entity-level `_created`) from the entity LIST endpoint
+//            — `name.created.by=`, `name.created.reference=`, `created.by=`?
+//            Undocumented; the risk is a spelling that's silently IGNORED
+//            (returns the unfiltered set) rather than erroring, which would
+//            mislead a caller who reads a non-empty result as a match. Each
+//            spelling's result count is compared against an unfiltered
+//            baseline count to tell "ignored" from "errored" from "actually
+//            filtered."
 //
 // Q1 target: the database entity's own `name` property (resolveDatabaseEntityId
 // — one canonical entity per db, schema-level, no PII). Q3 fixture: one
@@ -249,6 +267,106 @@ async function main(): Promise<void> {
 		ledger.push({ step: 'verify-fixture-gone', outcome: String(verifyGoneRes.status), expected: 404 });
 	}
 
+	// ── Q4 — filter syntax on _created (entity-level), and attempts to reach
+	// a VALUE's own stamp via the entity LIST endpoint. Read-only throughout,
+	// runs on both dry and live invocations — nothing here writes.
+	console.log('\n=== Q4 — _created filter syntax + value-stamp filter spellings (read-only) ===');
+
+	const q4aRes = await entuFetch(cfg.db, `entity?_created.reference=${callerId}&props=_type,_created&limit=5`, cfg.token);
+	let q4aBody: { entities?: Array<{ _created?: PropValue[] }>; count?: number } = {};
+	try {
+		q4aBody = await q4aRes.json();
+	} catch {
+		q4aBody = {};
+	}
+	const q4aEntities = q4aBody.entities ?? [];
+	const q4aAllMatch = q4aEntities.length > 0 && q4aEntities.every((e) => e._created?.[0]?.reference === callerId);
+	console.log(
+		`Q4a — entity?_created.reference=<runner>: HTTP ${q4aRes.status}, count=${q4aBody.count}, returned=${q4aEntities.length}, every _created[0].reference===runner: ${q4aAllMatch}`
+	);
+	ledger.push({
+		step: 'q4a-created-reference-filter',
+		outcome: `http-${q4aRes.status}`,
+		httpStatus: q4aRes.status,
+		reportedCount: q4aBody.count,
+		returnedCount: q4aEntities.length,
+		everyMatchesRunner: q4aAllMatch
+	});
+
+	const yesterdayIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+	const q4bRes = await entuFetch(
+		cfg.db,
+		`entity?_created.datetime.gte=${encodeURIComponent(yesterdayIso)}&props=_type,_created&limit=5`,
+		cfg.token
+	);
+	let q4bBody: { entities?: unknown[]; count?: number } = {};
+	try {
+		q4bBody = await q4bRes.json();
+	} catch {
+		q4bBody = {};
+	}
+	console.log(
+		`Q4b — entity?_created.datetime.gte=<yesterday>: HTTP ${q4bRes.status}, count=${q4bBody.count}, returned=${(q4bBody.entities ?? []).length}`
+	);
+	ledger.push({
+		step: 'q4b-created-datetime-gte-filter',
+		outcome: `http-${q4bRes.status}`,
+		httpStatus: q4bRes.status,
+		reportedCount: q4bBody.count,
+		returnedCount: (q4bBody.entities ?? []).length,
+		sinceIso: yesterdayIso
+	});
+
+	// Baseline — same db, no created-stamp filter at all, so a spelling's
+	// result count can be classified: equals baseline -> IGNORED (silently
+	// returned everything); non-2xx -> ERRORED; anything else -> actually
+	// changed the result set, which for an undocumented spelling needs its
+	// own investigation before anyone trusts it.
+	const baselineRes = await entuFetch(cfg.db, 'entity?props=_id&limit=1', cfg.token);
+	const baselineBody = (await baselineRes.json()) as { count?: number };
+	const baselineCount = baselineBody.count;
+	console.log(`Q4 baseline — entity?limit=1 (no filter): HTTP ${baselineRes.status}, count=${baselineCount}`);
+	ledger.push({
+		step: 'q4-baseline-unfiltered-count',
+		outcome: `http-${baselineRes.status}`,
+		httpStatus: baselineRes.status,
+		reportedCount: baselineCount
+	});
+
+	const valueStampSpellings = [
+		{ label: 'name.created.by', qs: `name.created.by=${callerId}` },
+		{ label: 'name.created.reference', qs: `name.created.reference=${callerId}` },
+		{ label: 'created.by', qs: `created.by=${callerId}` }
+	];
+	for (const { label, qs } of valueStampSpellings) {
+		const res = await entuFetch(cfg.db, `entity?${qs}&props=_id&limit=5`, cfg.token);
+		let body: { count?: number } = {};
+		let bodyIsJson = true;
+		try {
+			body = await res.json();
+		} catch {
+			bodyIsJson = false;
+		}
+		const reportedCount = body.count;
+		const verdict = !res.ok
+			? 'errored'
+			: reportedCount === baselineCount
+				? 'ignored — count equals the unfiltered baseline, ALL entities returned, filter had no effect (misleading: a caller reading a non-empty result would think it matched)'
+				: reportedCount === 0
+					? 'filtered-to-zero — HTTP 200, count 0 (not the baseline): the spelling parses as SOME real filter, just one nothing satisfies — safe (caller gets an empty set, not everything), but this does NOT confirm it addresses the value-level created stamp specifically'
+					: 'count-differs-nonzero-nonbaseline — neither ignored nor empty, needs its own investigation before trusting this spelling';
+		console.log(`Q4c spelling '${label}': HTTP ${res.status}, count=${reportedCount}, verdict=${verdict}`);
+		ledger.push({
+			step: `q4c-value-stamp-spelling-${label.replace(/\./g, '-')}`,
+			outcome: verdict,
+			spelling: label,
+			httpStatus: res.status,
+			bodyIsJson,
+			reportedCount,
+			baselineCount
+		});
+	}
+
 	const artifactPath = writeLedger({
 		scriptName: 'probe-property-value-created-stamp',
 		dryRun: DRY_RUN,
@@ -262,6 +380,11 @@ async function main(): Promise<void> {
 			docQuote:
 				'entu-www src/api/properties/index.md: "`created` | Object with `at` (ISO timestamp) and `by` (person ' +
 				'entity ID) — who set this value and when."',
+			docQuoteQ4:
+				'entu-www src/api/query-reference/index.md: "`prop.reference=id` | `owner.reference=abc123` | Exact ' +
+				'reference match" and "`prop.datetime.gte=ISO8601` | `created_at.datetime.gte=2025-01-01T00:00:00Z` | ' +
+				'Greater than or equal" — `_created` itself never appears as a worked filter example, only as a ' +
+				'returnable field via `props=`.',
 			ledger
 		},
 		authorizedBy: AUTHORIZED_BY
