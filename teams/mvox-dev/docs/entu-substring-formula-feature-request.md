@@ -1,5 +1,7 @@
 # Feature request: a SUBSTRING (or date-truncation) operation for formula fields
 
+> **Delivered 2026-09-21.** Entu shipped a `REGEX` formula operator (entu/www `bc86660`); crede's event `name` formula now cuts the timestamp to the date (#421 comment, 2026-09-21).
+
 ## The need
 
 A formula field concatenating a `datetime` property renders the full ISO timestamp — `2026-09-09T18:00:00.000Z` — because `getValueArray` resolves `datetime` values whole, and only `.date`-typed fields are sliced to `YYYY-MM-DD`. There is no formula operation that truncates or slices a value.
