@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-20 11:55Z, live]
+### [MVOX-26 — 2026-09-21 22:55Z, live]
+
+**LANDED 2026-09-21:** #442 login storage warning e03f902 (Y→RED→GREEN; RED = Paraglide getLocale() reads localStorage unguarded, fixed in-slice) · probes 5ac4e21/4705d3c/bc03c65 (value created stamp; parked on Argo) · #421 REGEX record 48b8f82 (Mihkel hand-set the formula; Entu docs rewritten 2026-09-21, memory refreshed). Docs checkout ~/projects/entu-www sits on a feature branch — read origin/main via git show. Board empty; #422/#434 unlabelled.
 
 **LANDED 2026-09-20:** #427 part viewer 8686405 (PR #435; pipeline RED→Y→Y at cap → Josquin fix 3 → Bentham GREEN 4; pdfjs-dist added, split SW install core/tail, downloads → viewer per Gama ruling; #434 filed by Gama for the offline event-page gap) · #408 install-as-app 969fc62 (Y→Y→GREEN; manifest + icons from Mihkel SVG via scripts/icons/render-icons.ts + @resvg/resvg-js; SW untouched). Device checks owed by Mihkel post-deploy (installed iPhone still updates; ET iOS hint wording). LESSONS: my #427 brief contradicted itself (cache write vs no-store fence → #353 label regression); split greenfield slices (route first, wiring second); SPIKE runs the build when a dependency/worker is added; stale comment above refreshPresence in event/[id]/+page.svelte to fix in place next touch. Board empty; #422 (loadCfg gate) and #434 unlabelled.
 
