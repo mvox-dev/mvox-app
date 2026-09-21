@@ -115,3 +115,68 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 		}
 	});
 });
+
+// #442 RED — canPersistLocally(): a proactive write/read-back/remove probe the
+// login screen runs on mount. CONTRACT (for the GREEN implementer):
+//   - one exported function `canPersistLocally(): boolean` in THIS file (the
+//     single source of truth for auth storage; Path C gate);
+//   - one KEYS entry `storageProbe: 'mvox.storage_probe'` — the ONLY key the
+//     probe may touch; token/user keys stay untouched;
+//   - write a fixed value under the probe key, read it back, compare, remove
+//     the key; ANY throw or read-back mismatch → false; nothing survives.
+import { canPersistLocally } from './storage';
+import { afterEach, vi } from 'vitest';
+
+const PROBE_KEY = 'mvox.storage_probe';
+
+describe('#442 — canPersistLocally() storage self-test', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('returns true on working storage and leaves no key behind', () => {
+		localStorage.setItem('unrelated', 'stays');
+		const lengthBefore = localStorage.length;
+
+		expect(canPersistLocally()).toBe(true);
+
+		expect(localStorage.length, 'probe must clean up after itself').toBe(lengthBefore);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+		expect(localStorage.getItem('unrelated')).toBe('stays');
+	});
+
+	it('returns false when setItem throws (quota exceeded / storage refused)', () => {
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new DOMException('quota exceeded', 'QuotaExceededError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('returns false when getItem throws (access denied)', () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('returns false when the read-back does not match what was written', () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => 'tampered-value');
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('never touches the token/user keys — the probe key is the ONLY key written or removed', () => {
+		const setSpy = vi.spyOn(Storage.prototype, 'setItem');
+		const removeSpy = vi.spyOn(Storage.prototype, 'removeItem');
+
+		expect(canPersistLocally()).toBe(true);
+
+		const setKeys = setSpy.mock.calls.map(([key]) => key);
+		const removedKeys = removeSpy.mock.calls.map(([key]) => key);
+		expect(setKeys.length).toBeGreaterThan(0);
+		expect([...new Set(setKeys)]).toEqual([PROBE_KEY]);
+		expect([...new Set(removedKeys)]).toEqual([PROBE_KEY]);
+	});
+});
