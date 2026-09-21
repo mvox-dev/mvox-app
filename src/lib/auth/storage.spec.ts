@@ -115,3 +115,145 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 		}
 	});
 });
+
+// #442 RED — canPersistLocally(): a proactive write/read-back/remove probe the
+// login screen runs on mount. CONTRACT (for the GREEN implementer):
+//   - one exported function `canPersistLocally(): boolean` in THIS file (the
+//     single source of truth for auth storage; Path C gate);
+//   - one KEYS entry `storageProbe: 'mvox.storage_probe'` — the ONLY key the
+//     probe may touch; token/user keys stay untouched;
+//   - write a fixed value under the probe key, read it back, compare, remove
+//     the key; ANY throw or read-back mismatch → false; nothing survives.
+import { canPersistLocally } from './storage';
+import { afterEach, vi } from 'vitest';
+
+const PROBE_KEY = 'mvox.storage_probe';
+
+describe('#442 — canPersistLocally() storage self-test', () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it('returns true on working storage and leaves no key behind', () => {
+		localStorage.setItem('unrelated', 'stays');
+		const lengthBefore = localStorage.length;
+
+		expect(canPersistLocally()).toBe(true);
+
+		expect(localStorage.length, 'probe must clean up after itself').toBe(lengthBefore);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+		expect(localStorage.getItem('unrelated')).toBe('stays');
+	});
+
+	it('returns false when setItem throws (quota exceeded / storage refused)', () => {
+		// mockImplementationOnce (not mockImplementation): happy-dom's Storage is a
+		// Proxy over a per-instance method cache (ClassMethodBinder) whose
+		// getOwnPropertyDescriptor trap returns undefined for these methods, so
+		// vi.restoreAllMocks() can't restore a permanently-overridden spy — the
+		// mock leaks into later tests. A one-shot override matches how
+		// canPersistLocally() actually calls setItem (once per invocation) and
+		// self-clears without depending on restore.
+		vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
+			throw new DOMException('quota exceeded', 'QuotaExceededError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('returns false when getItem throws (access denied)', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('returns false when the read-back does not match what was written', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => 'tampered-value');
+
+		expect(canPersistLocally()).toBe(false);
+	});
+
+	it('never touches the token/user keys — the probe key is the ONLY key written or removed', () => {
+		const setSpy = vi.spyOn(localStorage, 'setItem');
+		const removeSpy = vi.spyOn(localStorage, 'removeItem');
+
+		expect(canPersistLocally()).toBe(true);
+
+		const setKeys = setSpy.mock.calls.map(([key]) => key);
+		const removedKeys = removeSpy.mock.calls.map(([key]) => key);
+		expect(setKeys.length).toBeGreaterThan(0);
+		expect([...new Set(setKeys)]).toEqual([PROBE_KEY]);
+		expect([...new Set(removedKeys)]).toEqual([PROBE_KEY]);
+	});
+});
+
+// The browser that BLOCKS site data outright (mechanism in the helper below):
+// every read path must degrade to "nothing stored" instead of throwing out of
+// the root layout's load (+layout.ts calls getToken on every navigation,
+// including /auth/login) and the login page init.
+import { withBlockedStorage } from '$lib/testing/blockedStorage';
+
+describe('#442 review F1 — storage access itself throws (site data blocked)', () => {
+	it('every reader degrades to null instead of throwing', () => {
+		setToken('jwt-abc');
+		setUser({ _id: 'u1' });
+		setLastProvider('google');
+
+		withBlockedStorage(() => {
+			expect(getToken()).toBeNull();
+			expect(getUser()).toBeNull();
+			expect(getLastProvider()).toBeNull();
+		});
+	});
+
+	it('canPersistLocally() reports false', () => {
+		withBlockedStorage(() => {
+			expect(canPersistLocally()).toBe(false);
+		});
+	});
+
+	it('clearAll does not throw', () => {
+		withBlockedStorage(() => {
+			expect(() => clearAll({ preserveProvider: false })).not.toThrow();
+			expect(() => clearAll({ preserveProvider: true })).not.toThrow();
+		});
+	});
+
+	it('writers still throw — the OAuth callback fails closed on persist_failed', () => {
+		withBlockedStorage(() => {
+			expect(() => setToken('jwt-abc')).toThrow();
+		});
+	});
+});
+
+// #442 review F2 — "nothing survives either way" must hold on EVERY path, not
+// just the happy one: a setItem that succeeded before a throwing getItem used to
+// leave `mvox.storage_probe` behind.
+describe('#442 review F2 — the probe key never survives', () => {
+	it('cleans up when getItem throws after a successful write', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(canPersistLocally()).toBe(false);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+	});
+
+	it('cleans up when the read-back is tampered with', () => {
+		vi.spyOn(localStorage, 'getItem').mockImplementationOnce(() => 'tampered-value');
+
+		expect(canPersistLocally()).toBe(false);
+		expect(localStorage.getItem(PROBE_KEY), 'probe key must not survive').toBeNull();
+	});
+
+	it('a throwing removeItem cannot escape the probe', () => {
+		vi.spyOn(localStorage, 'removeItem').mockImplementationOnce(() => {
+			throw new DOMException('access denied', 'SecurityError');
+		});
+
+		expect(() => canPersistLocally()).not.toThrow();
+	});
+});
+
+// (*MVOX:Josquin* — #442 review fixes)

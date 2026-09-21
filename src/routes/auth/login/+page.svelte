@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { getLastProvider } from '$lib/auth/storage';
+	import { canPersistLocally, getLastProvider } from '$lib/auth/storage';
 	import { safeRedirectTarget } from '$lib/auth/redirect';
 	// Provider list shared with the invite landing (T4.5) — extracted verbatim to
 	// $lib/auth/providers.
@@ -21,6 +21,9 @@
 		)
 	);
 	const lastProvider = $state(typeof window !== 'undefined' ? getLastProvider() : null);
+	// #442 — proactive storage self-test. Defaults true (no warning) when there's
+	// no window yet (SSR/prerender); the real check runs client-side on mount.
+	const canPersist = $state(typeof window !== 'undefined' ? canPersistLocally() : true);
 
 	function providerHref(id: string, intent: 'login' | 'reauth'): string {
 		return `/auth/${id}?return_to=${encodeURIComponent(returnTo)}&intent=${intent}`;
@@ -36,6 +39,12 @@
 			{:else if error === 'missing_session_token'}{m.login_error_missing_session_token()}
 			{:else if error === 'session_expired'}{m.session_expired_message()}
 			{:else}{m.login_error_generic()}{/if}
+		</p>
+	{/if}
+
+	{#if !canPersist}
+		<p class="text-sm text-red-700" role="alert" data-testid="login-storage-warning">
+			{m.login_storage_warning()}
 		</p>
 	{/if}
 

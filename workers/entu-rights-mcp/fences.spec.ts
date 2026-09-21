@@ -79,13 +79,15 @@ describe('the static app is untouched', () => {
 	});
 
 	it('vite.config.ts is unchanged (vitest.config.ts is NOT pinned — its include glob legitimately grows workers/**)', () => {
-		// Repinned for #347 (dev port 3000 + strictPort — a sanctioned,
-		// commissioned change to vite.config.ts, not this slice's work): the
-		// pin's job is catching ACCIDENTAL drift from workers/entu-rights-mcp/,
-		// and refreshing it on a sanctioned change outside that scope is the
-		// pin working as designed (#322 ER-pin precedent).
+		// Repinned for #347 (dev port 3000 + strictPort) and again for #442
+		// (dropping 'localStorage' from the paraglide strategy, so locale
+		// resolution stops throwing in a browser that refuses to store site
+		// data) — both sanctioned changes to vite.config.ts, neither this
+		// slice's work. The pin's job is catching ACCIDENTAL drift from
+		// workers/entu-rights-mcp/, and refreshing it on a sanctioned change
+		// outside that scope is the pin working as designed (#322 precedent).
 		expect(sha256('vite.config.ts')).toBe(
-			'bf74d50dd99763fcb8335c43f3d38f07fabc638955655411496e0b6ef5aac363'
+			'63d38d3c144303ef0b00ba32aef6993fb225cf7ba0a06c3c0c859560206e96f5'
 		);
 	});
 });

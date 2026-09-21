@@ -14,11 +14,18 @@ export default defineConfig({
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
-			// #123 — 'cookie' added ahead of 'preferredLanguage' so an explicit
-			// selection (LanguageSelector → setLocale) persists across reloads and
-			// wins over browser-language detection. localStorage stays first for
-			// back-compat; baseLocale remains the final fallback.
-			strategy: ['localStorage', 'cookie', 'preferredLanguage', 'baseLocale'],
+			// #123 — 'cookie' ahead of 'preferredLanguage' so an explicit selection
+			// (LanguageSelector → setLocale) persists across reloads and beats
+			// browser-language detection; baseLocale is the final fallback.
+			//
+			// 'localStorage' is deliberately absent (#442). The generated runtime
+			// reads it unguarded while resolving a locale and writes it on the
+			// first resolve of every page load, so in a browser told not to store
+			// site data EVERY m.*() call threw — including the notice that exists
+			// to explain that browser. The cookie already carries the explicit
+			// pick (setLocale has written it on every load since #123); a browser
+			// refusing cookies too falls through to preferredLanguage.
+			strategy: ['cookie', 'preferredLanguage', 'baseLocale'],
 		}),
 		sveltekit(),
 	],

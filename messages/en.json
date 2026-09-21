@@ -658,6 +658,7 @@
 	"login_error_missing_session_token": "Sign-in did not complete. Please try again.",
 	"login_error_generic": "Something went wrong. Please try again.",
 	"login_last_used": "· last used",
+	"login_storage_warning": "This browser won't let mvox store data on this device. mvox needs that to work properly.",
 	"auth_provider_smart_id": "Smart-ID",
 	"auth_provider_mobile_id": "Mobile-ID",
 	"auth_provider_id_card": "ID-card",
