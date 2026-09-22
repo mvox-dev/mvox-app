@@ -173,11 +173,13 @@ export interface RunSeed445Result {
 	widerThanExpected: boolean;
 	rerun: boolean;
 	ledgerPath: string;
+	/** Delayed re-read of every row this run wrote — [] on a dry run (nothing written) or an abort before any write. */
+	postRunRecheck: RecheckRow[];
 }
 
 // ids/counts/tiers/prop-def-names only — no DEFAULT_REDACT_FIELDS member,
 // no `string` (the Entu wrapper key), never a member value.
-const COMMITTED_ALLOW = [
+export const COMMITTED_ALLOW = [
 	'dryRun',
 	'rerun',
 	'counts',
@@ -237,7 +239,23 @@ const COMMITTED_ALLOW = [
 	'created',
 	'at',
 	'by',
-	'boolean'
+	'boolean',
+	// #445 (team-lead, 2nd round) — the readback/recheck bodies nest Entu's
+	// own wire-shape keys, which need their own allowlist entries: the
+	// generic 'body'/'entity' names above only admit the CONTAINER, not
+	// these leaf property names. Fixes a real gap in round 1: without
+	// these, filterByAllowlist silently dropped `_sharing`/`_inheritrights`
+	// out of every readback/probe body in the committed twin (though the
+	// full detail always survived in the gitignored instance ledger).
+	'_sharing',
+	'_inheritrights',
+	// #445 (team-lead, 2nd round) — every written row's returned property
+	// ids, and the delayed post-run recheck that catches a reversion.
+	'writtenPropertyIds',
+	'sharingPropertyId',
+	'inheritPropertyId',
+	'postRunRecheck',
+	'stillCorrect'
 ] as const;
 
 /** Parse a Response body as JSON, tolerating a non-JSON or empty body — the
@@ -249,6 +267,57 @@ async function safeJson(res: Response): Promise<unknown> {
 	} catch {
 		return null;
 	}
+}
+
+/** The property `_id` a POST response returned for `propType`, if any — shared by the success path (writtenPropertyIds) and the failure path's diagnostic probe. */
+function extractPostedPropertyId(diag: Record<string, unknown>, postField: 'sharingPost' | 'inheritPost', propType: string): string | undefined {
+	const post = diag[postField] as { body?: { properties?: Array<{ _id?: string; type?: string }> } } | undefined;
+	return post?.body?.properties?.find((p) => p.type === propType)?._id;
+}
+
+/** Real by default; injectable so the spec never actually waits. */
+function defaultSleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export interface RecheckRow {
+	id: string;
+	status: number;
+	_sharing: unknown;
+	_inheritrights: unknown;
+	stillCorrect: boolean;
+}
+
+/**
+ * #445 (team-lead, 2nd round) — a delayed re-read of every row THIS RUN
+ * wrote, after `delayMs` (30s in production), so a reversion that only
+ * shows up moments after a passing read-back (exactly what happened live
+ * to 6a9c3d37...292) is caught and dated by the script itself, not
+ * discovered by a human minutes later. Runs regardless of whether the loop
+ * that called it went on to succeed or throw — `writtenIds` only ever
+ * contains rows this run actually wrote and verified at write-time.
+ */
+async function recheckWrittenRows(
+	cfg: EntuCfg,
+	ids: string[],
+	fetchImpl: typeof fetch,
+	delayMs: number,
+	sleepFn: (ms: number) => Promise<void>
+): Promise<RecheckRow[]> {
+	if (ids.length === 0) return [];
+	await sleepFn(delayMs);
+	const rows: RecheckRow[] = [];
+	for (const id of ids) {
+		const res = await entuFetch(cfg.db, `entity/${id}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
+		const body = (await safeJson(res)) as {
+			entity?: { _sharing?: Array<{ string?: string }>; _inheritrights?: Array<{ boolean?: boolean }> };
+		} | null;
+		const sharing = body?.entity?._sharing ?? [];
+		const inheritrights = body?.entity?._inheritrights ?? [];
+		const stillCorrect = sharing.length === 1 && sharing[0]?.string === 'domain' && inheritrights.length === 1 && inheritrights[0]?.boolean === true;
+		rows.push({ id, status: res.status, _sharing: sharing, _inheritrights: inheritrights, stillCorrect });
+	}
+	return rows;
 }
 
 function tierOf(sharingString: string | undefined): Tier {
@@ -321,7 +390,9 @@ export async function runSeed445(
 	cfg: EntuCfg & { userId: string },
 	dryRun: boolean,
 	fetchImpl: typeof fetch = fetch,
-	authorizedBy?: string
+	authorizedBy?: string,
+	recheckDelayMs = 30_000,
+	sleepFn: (ms: number) => Promise<void> = defaultSleep
 ): Promise<RunSeed445Result> {
 	// mvox-app#417 — before any census GET, before any request leaves the script.
 	assertLiveRunAuthorized(dryRun, authorizedBy);
@@ -386,6 +457,9 @@ export async function runSeed445(
 	// (the writer's own blanket rule) — the full detail survives in the
 	// gitignored instance ledger regardless.
 	const failureDiagnostics: Array<Record<string, unknown>> = [];
+	// #445 (team-lead, 2nd round) — every WRITTEN row's returned property
+	// ids, one entry per entity, ids only.
+	const writtenPropertyIds: Array<{ id: string; sharingPropertyId?: string; inheritPropertyId?: string }> = [];
 	let aborted = false;
 
 	function toWriteList(): Classified[] {
@@ -451,7 +525,7 @@ export async function runSeed445(
 				movingSet: buildMovingSet(),
 				movingPersonIdentityCount: identities.size,
 				widerThanExpected: identities.size > 1,
-				...(dryRun || aborted ? { wouldWriteIds: toWriteList().map((c) => c.id) } : { writtenIds }),
+				...(dryRun || aborted ? { wouldWriteIds: toWriteList().map((c) => c.id) } : { writtenIds, writtenPropertyIds }),
 				failedIds,
 				...extra
 			}
@@ -519,7 +593,8 @@ export async function runSeed445(
 			movingPersonIdentityCount: identityCount,
 			widerThanExpected: identityCount > 1,
 			rerun: isRerun(),
-			ledgerPath
+			ledgerPath,
+			postRunRecheck: []
 		};
 	}
 
@@ -580,6 +655,11 @@ export async function runSeed445(
 			}
 
 			writtenIds.push(entity.id);
+			writtenPropertyIds.push({
+				id: entity.id,
+				sharingPropertyId: extractPostedPropertyId(diag, 'sharingPost', '_sharing'),
+				inheritPropertyId: extractPostedPropertyId(diag, 'inheritPost', '_inheritrights')
+			});
 		} catch (err) {
 			failedIds.push(entity.id);
 
@@ -589,8 +669,7 @@ export async function runSeed445(
 			// persisted" is visible from the ledger without a separate live
 			// probe next time.
 			async function probeIfIdReturned(postField: 'sharingPost' | 'inheritPost', probeField: string, propType: string): Promise<void> {
-				const post = diag[postField] as { body?: { properties?: Array<{ _id?: string; type?: string }> } } | undefined;
-				const newId = post?.body?.properties?.find((p) => p.type === propType)?._id;
+				const newId = extractPostedPropertyId(diag, postField, propType);
 				if (!newId) return;
 				const probeRes = await entuFetch(cfg.db, `property/${newId}`, cfg.token, {}, fetchImpl);
 				diag[probeField] = { propertyId: newId, status: probeRes.status, body: await safeJson(probeRes) };
@@ -599,12 +678,19 @@ export async function runSeed445(
 			await probeIfIdReturned('inheritPost', 'inheritPropertyProbe', '_inheritrights');
 
 			failureDiagnostics.push(diag);
-			writeLedgerNow({ failureDiagnostics });
+			// #445 (team-lead, 2nd round) — delayed recheck of every row THIS
+			// RUN wrote so far, even though the run is about to abort: a prior
+			// row can pass its own read-back and still revert later (exactly
+			// what happened live to 6a9c3d37...292), so the abort ledger must
+			// carry the same recheck the healthy path does.
+			const postRunRecheck = await recheckWrittenRows(cfg, writtenIds, fetchImpl, recheckDelayMs, sleepFn);
+			writeLedgerNow({ failureDiagnostics, postRunRecheck });
 			throw err;
 		}
 	}
 
-	const ledgerPath = writeLedgerNow();
+	const postRunRecheck = await recheckWrittenRows(cfg, writtenIds, fetchImpl, recheckDelayMs, sleepFn);
+	const ledgerPath = writeLedgerNow({ postRunRecheck });
 	return {
 		counts: buildCounts(),
 		visibility: { person: personVisibility, rsvp: rsvpVisibility },
@@ -612,7 +698,8 @@ export async function runSeed445(
 		movingPersonIdentityCount: identityCount,
 		widerThanExpected: identityCount > 1,
 		rerun: isRerun(),
-		ledgerPath
+		ledgerPath,
+		postRunRecheck
 	};
 }
 
@@ -642,6 +729,12 @@ async function main(): Promise<void> {
 	console.log(`movingPersonIdentityCount=${result.movingPersonIdentityCount} widerThanExpected=${result.widerThanExpected}`);
 	console.log(`movingSet: ${JSON.stringify(result.movingSet)}`);
 	console.log(`rerun=${result.rerun}`);
+	if (result.postRunRecheck.length > 0) {
+		console.log(`postRunRecheck (delayed re-read of every written row):`);
+		for (const row of result.postRunRecheck) {
+			console.log(`  ${row.id}: HTTP ${row.status} stillCorrect=${row.stillCorrect}`);
+		}
+	}
 	console.log(`Ledger: ${result.ledgerPath}`);
 }
 
