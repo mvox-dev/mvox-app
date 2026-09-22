@@ -47,31 +47,14 @@ interface StoredEntuUserEntry {
 }
 
 // THE WITHHELD-BUCKET TELL (#454) — why this read asks for `_viewer` too.
-//
-// A refused `entu_user` read is NOT an error status. `cleanupEntity` picks ONE
-// bucket by reader tier (entu-api utils/entity.js:569-586; ER-20/ER-21): an
-// explicit-grant caller gets `private`, an in-db caller with no grant gets
-// `domain`, and the route only 403s when NO bucket admits them at all
-// (routes/[db]/entity/[_id]/index.get.js:97-102). mvox `person` entities are
-// `_sharing: domain` and the `entu_user` prop-def is `_sharing: private`, so a
-// grant-less teammate reading another member's person gets HTTP 200 with a body
-// of `{ entity: { _id } }` — the property filtered out, no error to catch. Read
-// as "no entu_user", that badges every joined member "never invited".
-//
-// The tell: rights-tier arrays are written ONLY into `private`
-// (utils/aggregate.js:188-209 — the domain/public copies at :148-155 are built
-// from the TYPE's prop-defs, which `_viewer` is not), so `_viewer` comes back
-// exactly when the private bucket does. `_viewer` specifically, not `_owner`:
-// the tiers cascade upward as they are assembled (`_owner` ⊆ `_editor` ⊆
-// `_expander` ⊆ `_viewer`, utils/aggregate.js:188-209) and each is DELETED when
-// empty (:230-253), so `_viewer` is the only one guaranteed non-empty whenever
-// any grant exists — and a private-bucket read requires a grant, since `access`
-// is built from those same arrays (utils/rights.js:76-97). An `_owner` check
-// would read a `_viewer`-granted caller as refused.
-//
-// The returned `_viewer` rows are inspected for PRESENCE only and never
-// retained: each reference carries the grantee's name+email baked into
-// `.string` (ER-26).
+// `entu_user` sits in the PRIVATE bucket, and a reader not admitted to it
+// gets HTTP 200 with the property filtered out, never a refusal (entu-api
+// utils/entity.js:569-586; the route 403s only when no bucket admits at all,
+// routes/[db]/entity/[_id]/index.get.js:97-102). `_viewer` is written into
+// that same bucket and names every admitted caller — `access` is the union
+// of the four rights tiers plus `_sharing` (utils/rights.js:76-97) — so
+// `_viewer` present ⇔ the bucket was read. Withheld ⇒ omit the person.
+// The rows are counted, never retained: `.string` carries PII (ER-26).
 
 /**
  * List the caller's OWN bound auth identities plus a count of un-redeemed
@@ -133,24 +116,14 @@ export async function listLinkedIdentities(
 // `Promise.all`, mirroring the per-member profile fan-out `loadRoster` already
 // does (rosterData.ts) — one read per row, genuinely independent.
 //
-// FAIL LOUD, in the two shapes a refusal actually takes:
-//
-//   1. HTTP failure on ANY person — propagates out of `Promise.all` and
-//      rejects the whole call. Observed by the #294 probe against a
-//      `_sharing: private` entity: a zero-rights caller gets a clean TOTAL
-//      403.
-//   2. HTTP 200 with the private bucket WITHHELD (#454) — the shape a
-//      `_sharing: domain` person entity produces for a grant-less in-db
-//      reader, which is every ordinary member looking at a teammate's row.
-//      No status to catch; `listLinkedIdentities` reports it as
-//      `readable: false` (see THE WITHHELD-BUCKET TELL above) and this
-//      function then OMITS that personId from the record entirely.
-//
-// Either way "absent" means OBSERVED absent, never "not returned" (the
-// rosterData.ts:123 class of trap, kept out of this layer by refusing to
-// guess). A caller therefore reads a missing key as "this reader cannot see
-// it" — which is exactly what the roster's chip condition
-// (`joinStates[personId] !== undefined`, roster/+page.svelte) already does.
+// FAIL LOUD, in the two shapes a refusal takes. An HTTP failure propagates
+// out of `Promise.all` and rejects the whole call. A 200 whose private
+// bucket was withheld carries no status to catch, so `listLinkedIdentities`
+// reports `readable: false` (THE WITHHELD-BUCKET TELL above) and this
+// function OMITS that personId. "Absent" therefore means OBSERVED absent,
+// never "not returned" (the rosterData.ts:123 class of trap): a missing key
+// tells the caller this reader cannot see it, which is what the roster's
+// chip condition already acts on.
 export type JoinState = 'absent' | 'invited' | 'joined';
 
 export async function listJoinStates(
