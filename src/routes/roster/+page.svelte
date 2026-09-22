@@ -3969,9 +3969,10 @@
 	     email, BEFORE the section name. Joined is the SILENT default (no chip
 	     at all); not-invited and invited-awaiting keep DISTINCT chips — if both
 	     were silent the two states #294 exists to distinguish would collapse
-	     into one. Still contents-derived via `listJoinStates` (never presence),
-	     still every admin tier (PO ruling 2026-09-09) — unchanged, only moved
-	     and the joined case gone quiet. Shared between the collapsed card
+	     into one. Still contents-derived via `listJoinStates` (never presence).
+	     The read is the gate (#454, Mihkel 2026-09-22): no app-computed role
+	     decides the chip, only whether the read returned a state for the row.
+	     Shared between the collapsed card
 	     (rendered as this snippet's caller, wrapped in the activator button)
 	     and the non-admin/open-editor callers, so the info itself is defined
 	     exactly once regardless of which state renders it. -->
@@ -3979,7 +3980,7 @@
 	{#if row.email}
 		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
 	{/if}
-	{#if admin === 'admin' && joinStates[row.personId] !== undefined}
+	{#if joinStates[row.personId] !== undefined}
 		{@const state = joinStates[row.personId]}
 		{#if state !== 'joined'}
 			<span
