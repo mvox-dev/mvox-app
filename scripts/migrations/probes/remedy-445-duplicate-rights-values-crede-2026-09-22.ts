@@ -1,26 +1,33 @@
-// mvox-app#445 — REMEDY. Mihkel, verbatim via team-lead/Gama: "go for
-// cleanup" (11:16Z). Cleanup ONLY — the resume of the remaining rsvps is
-// NOT covered by this authorization and waits for a separate word.
+// mvox-app#445 — REMEDY. Mihkel, verbatim via team-lead/Gama, comment
+// 5775480675: "go for cleanup" then "resume on 38", in that order —
+// covers cleanup of every row this shape turns up on, not only the first.
 //
-// One entity, `6a9c3d37ca67df980f417292` (rsvp), diagnosed read-only
-// immediately before this script: it holds TWO values each for `_sharing`
-// and `_inheritrights` — one pair from the first live run
-// (created.at ≈2026-09-22T10:42:53Z), one pair from the resume run
-// (created.at ≈2026-09-22T11:11:29Z). Both pairs read identically
-// (`domain` / `true`); this remedy keeps the OLDER pair and deletes the
-// newer, matching the same "one value per rights-type property" shape
-// every other row on this job already holds.
+// GENERALISED (2nd round): `runRemedyDuplicateRights(cfg, dryRun,
+// target, ...)` takes the entity id and both value pairs as an explicit
+// `target` parameter — nothing about a specific row is hardcoded in the
+// engine. `main()` below still targets ONE row per invocation (edit
+// `TARGET` and re-run for the next one) — see its own comment for the
+// current target and the diagnosis it's based on.
+//
+// SHAPE this remedies (seen twice: 6a9c3d37...292, 6a9c3d38...729b): an
+// entity holds TWO values each for `_sharing` and `_inheritrights` — an
+// OLDER pair from the first live run, and a NEWER pair from a later
+// resume run whose own POST/read-back never saw the older pair (every
+// read from the first run's write until the resume's own write showed it
+// absent). Both pairs read identically (`domain` / `true`); this remedy
+// keeps the OLDER pair and deletes the newer, matching the "one value per
+// rights-type property" shape every other row on this job already holds.
 //
 // SAFETY: step 1 reads the entity fresh and asserts its `_sharing`/
-// `_inheritrights` value ids are EXACTLY the two known pairs — nothing
-// more, nothing less, nothing renamed. Any other observed state aborts
-// before any write (a fresh surprise gets reported, not guessed at).
+// `_inheritrights` value ids are EXACTLY the four ids `target` names —
+// the two to keep AND the two to delete, nothing more, nothing less,
+// nothing renamed. Any other observed state aborts before any write.
 //
 // Run (dry-run first, always):
 //   cd ~/workspace-app
 //   set -a; . ~/.config/mvox/credentials.env; set +a
 //   node --import tsx --import ./scripts/migrations/lib/register-loader.mjs \
-//     ./scripts/migrations/probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts        # DRY_RUN=true default
+//     ./scripts/migrations/probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts        # DRY_RUN=true default, targets TARGET below
 //   DRY_RUN=false AUTHORIZED_BY='...' node --import tsx \
 //     --import ./scripts/migrations/lib/register-loader.mjs \
 //     ./scripts/migrations/probes/remedy-445-duplicate-rights-values-crede-2026-09-22.ts        # ONLY after dry-run verified + authorization
@@ -31,16 +38,25 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { loadCredeCfg, readDryRun, readAuthorizedBy } from '../lib/script-runner';
 import { writeLedger, assertLiveRunAuthorized } from '../lib/ledger-writer';
 
-export const ENTITY_ID = '6a9c3d37ca67df980f417292';
-// 10:42:53Z pair (the first live run) — kept.
-export const KEEP_SHARING_ID = '6ab25bad5685992c758ad3d3';
-export const KEEP_INHERIT_ID = '6ab25bad5685992c758ad3d4';
-// 11:11:29Z pair (the resume run) — deleted.
-export const DELETE_SHARING_ID = '6ab262615685992c758ad3d7';
-export const DELETE_INHERIT_ID = '6ab262615685992c758ad3d8';
+export interface RemedyTarget {
+	entityId: string;
+	keepSharingId: string;
+	deleteSharingId: string;
+	keepInheritId: string;
+	deleteInheritId: string;
+}
 
-const EXPECTED_SHARING_IDS = [KEEP_SHARING_ID, DELETE_SHARING_ID].sort();
-const EXPECTED_INHERIT_IDS = [KEEP_INHERIT_ID, DELETE_INHERIT_ID].sort();
+// Read-only diagnosis (2026-09-22 11:2xZ), evidence relayed to team-lead:
+// entity 6a9c3d38ca67df980f41729b holds a 10:42:54Z pair (first live run)
+// and an 11:27:1xZ pair (the aborted resume). Edit this constant and
+// re-run for the NEXT row this shape turns up on.
+export const TARGET: RemedyTarget = {
+	entityId: '6a9c3d38ca67df980f41729b',
+	keepSharingId: '6ab25bae5685992c758ad3d5',
+	deleteSharingId: '6ab266145685992c758ad3e0',
+	keepInheritId: '6ab25bae5685992c758ad3d6',
+	deleteInheritId: '6ab266155685992c758ad3e1'
+};
 
 export const COMMITTED_ALLOW = [
 	'dryRun',
@@ -85,9 +101,10 @@ export interface RemedyResult {
 	ledgerPath: string;
 }
 
-export async function runRemedy445(
+export async function runRemedyDuplicateRights(
 	cfg: EntuCfg,
 	dryRun: boolean,
+	target: RemedyTarget,
 	fetchImpl: typeof fetch = fetch,
 	authorizedBy?: string,
 	recheckDelayMs = 30_000,
@@ -96,9 +113,25 @@ export async function runRemedy445(
 	// mvox-app#417 — before any request leaves the script.
 	assertLiveRunAuthorized(dryRun, authorizedBy);
 
+	const { entityId, keepSharingId, deleteSharingId, keepInheritId, deleteInheritId } = target;
+	const expectedSharingIds = [keepSharingId, deleteSharingId].sort();
+	const expectedInheritIds = [keepInheritId, deleteInheritId].sort();
+
+	function writeLedgerNow(extra: Record<string, unknown>): string {
+		return writeLedger({
+			scriptName: 'remedy-445-duplicate-rights-values-crede',
+			dryRun,
+			db: cfg.db,
+			sensitive: true,
+			authorizedBy,
+			committed: { allow: COMMITTED_ALLOW },
+			payload: { dryRun, entityId, ...extra }
+		});
+	}
+
 	// ── Step 1 — read fresh, assert the exact known duplicate shape ──────────
-	const res = await entuFetch(cfg.db, `entity/${ENTITY_ID}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
-	if (!res.ok) throw new Error(`runRemedy445: pre-write read failed: ${res.status}`);
+	const res = await entuFetch(cfg.db, `entity/${entityId}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
+	if (!res.ok) throw new Error(`runRemedyDuplicateRights: pre-write read failed: ${res.status}`);
 	const body = (await res.json()) as {
 		entity?: { _sharing?: Array<{ _id: string; string?: string }>; _inheritrights?: Array<{ _id: string; boolean?: boolean }> };
 	};
@@ -106,60 +139,40 @@ export async function runRemedy445(
 	const observedInheritIds = (body.entity?._inheritrights ?? []).map((v) => v._id).sort();
 
 	const matches =
-		JSON.stringify(observedSharingIds) === JSON.stringify(EXPECTED_SHARING_IDS) &&
-		JSON.stringify(observedInheritIds) === JSON.stringify(EXPECTED_INHERIT_IDS);
+		JSON.stringify(observedSharingIds) === JSON.stringify(expectedSharingIds) &&
+		JSON.stringify(observedInheritIds) === JSON.stringify(expectedInheritIds);
 
 	if (!matches) {
-		const ledgerPath = writeLedger({
-			scriptName: 'remedy-445-duplicate-rights-values-crede',
-			dryRun,
-			db: cfg.db,
-			sensitive: true,
-			authorizedBy,
-			committed: { allow: COMMITTED_ALLOW },
-			payload: {
-				dryRun,
-				entityId: ENTITY_ID,
-				outcome: 'aborted-state-mismatch',
-				observedSharingIds,
-				observedInheritIds,
-				expectedSharingIds: EXPECTED_SHARING_IDS,
-				expectedInheritIds: EXPECTED_INHERIT_IDS
-			}
+		const ledgerPath = writeLedgerNow({
+			outcome: 'aborted-state-mismatch',
+			observedSharingIds,
+			observedInheritIds,
+			expectedSharingIds,
+			expectedInheritIds
 		});
 		throw new Error(
-			`runRemedy445: ${ENTITY_ID} does not hold exactly the expected duplicate value ids -- refusing to guess -- observed _sharing=${JSON.stringify(observedSharingIds)} _inheritrights=${JSON.stringify(observedInheritIds)}, expected _sharing=${JSON.stringify(EXPECTED_SHARING_IDS)} _inheritrights=${JSON.stringify(EXPECTED_INHERIT_IDS)} (ledger: ${ledgerPath})`
+			`runRemedyDuplicateRights: ${entityId} does not hold exactly the expected duplicate value ids -- refusing to guess -- observed _sharing=${JSON.stringify(observedSharingIds)} _inheritrights=${JSON.stringify(observedInheritIds)}, expected _sharing=${JSON.stringify(expectedSharingIds)} _inheritrights=${JSON.stringify(expectedInheritIds)} (ledger: ${ledgerPath})`
 		);
 	}
 
 	if (dryRun) {
-		const ledgerPath = writeLedger({
-			scriptName: 'remedy-445-duplicate-rights-values-crede',
-			dryRun,
-			db: cfg.db,
-			sensitive: true,
-			authorizedBy,
-			committed: { allow: COMMITTED_ALLOW },
-			payload: {
-				dryRun,
-				entityId: ENTITY_ID,
-				outcome: 'dry-run',
-				observedSharingIds,
-				observedInheritIds,
-				deletedIds: dryRun ? [] : [DELETE_SHARING_ID, DELETE_INHERIT_ID]
-			}
+		const ledgerPath = writeLedgerNow({
+			outcome: 'dry-run',
+			observedSharingIds,
+			observedInheritIds,
+			deletedIds: []
 		});
 		return { outcome: 'dry-run', ledgerPath };
 	}
 
-	// ── Step 2 — delete the newer (11:11:29Z) pair only ───────────────────────
-	const delSharing = await entuFetch(cfg.db, `property/${DELETE_SHARING_ID}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-	if (!delSharing.ok) throw new Error(`runRemedy445: DELETE property/${DELETE_SHARING_ID} failed: ${delSharing.status}`);
-	const delInherit = await entuFetch(cfg.db, `property/${DELETE_INHERIT_ID}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-	if (!delInherit.ok) throw new Error(`runRemedy445: DELETE property/${DELETE_INHERIT_ID} failed: ${delInherit.status}`);
+	// ── Step 2 — delete the newer pair only ───────────────────────────────────
+	const delSharing = await entuFetch(cfg.db, `property/${deleteSharingId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+	if (!delSharing.ok) throw new Error(`runRemedyDuplicateRights: DELETE property/${deleteSharingId} failed: ${delSharing.status}`);
+	const delInherit = await entuFetch(cfg.db, `property/${deleteInheritId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+	if (!delInherit.ok) throw new Error(`runRemedyDuplicateRights: DELETE property/${deleteInheritId} failed: ${delInherit.status}`);
 
 	// ── Step 3 — read back: exactly one value per property, the KEPT ids ─────
-	const readRes = await entuFetch(cfg.db, `entity/${ENTITY_ID}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
+	const readRes = await entuFetch(cfg.db, `entity/${entityId}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
 	const readBody = (await safeJson(readRes)) as {
 		entity?: { _sharing?: Array<{ _id: string; string?: string }>; _inheritrights?: Array<{ _id: string; boolean?: boolean }> };
 	} | null;
@@ -168,34 +181,24 @@ export async function runRemedy445(
 	const readbackOk =
 		readRes.ok &&
 		sharingVals.length === 1 &&
-		sharingVals[0]?._id === KEEP_SHARING_ID &&
+		sharingVals[0]?._id === keepSharingId &&
 		sharingVals[0]?.string === 'domain' &&
 		inheritVals.length === 1 &&
-		inheritVals[0]?._id === KEEP_INHERIT_ID &&
+		inheritVals[0]?._id === keepInheritId &&
 		inheritVals[0]?.boolean === true;
 
 	if (!readbackOk) {
-		const ledgerPath = writeLedger({
-			scriptName: 'remedy-445-duplicate-rights-values-crede',
-			dryRun,
-			db: cfg.db,
-			sensitive: true,
-			authorizedBy,
-			committed: { allow: COMMITTED_ALLOW },
-			payload: {
-				dryRun,
-				entityId: ENTITY_ID,
-				outcome: 'aborted-readback-mismatch',
-				deletedIds: [DELETE_SHARING_ID, DELETE_INHERIT_ID],
-				readback: { status: readRes.status, body: readBody }
-			}
+		const ledgerPath = writeLedgerNow({
+			outcome: 'aborted-readback-mismatch',
+			deletedIds: [deleteSharingId, deleteInheritId],
+			readback: { status: readRes.status, body: readBody }
 		});
-		throw new Error(`runRemedy445: read-back after delete did not show exactly the kept pair (ledger: ${ledgerPath})`);
+		throw new Error(`runRemedyDuplicateRights: read-back after delete did not show exactly the kept pair (ledger: ${ledgerPath})`);
 	}
 
 	// ── Step 4 — delayed recheck, dated ───────────────────────────────────────
 	await sleepFn(recheckDelayMs);
-	const recheckRes = await entuFetch(cfg.db, `entity/${ENTITY_ID}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
+	const recheckRes = await entuFetch(cfg.db, `entity/${entityId}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
 	const recheckBody = (await safeJson(recheckRes)) as {
 		entity?: { _sharing?: Array<{ _id: string; string?: string }>; _inheritrights?: Array<{ _id: string; boolean?: boolean }> };
 	} | null;
@@ -203,28 +206,18 @@ export async function runRemedy445(
 	const recheckInherit = recheckBody?.entity?._inheritrights ?? [];
 	const stillCorrect =
 		recheckSharing.length === 1 &&
-		recheckSharing[0]?._id === KEEP_SHARING_ID &&
+		recheckSharing[0]?._id === keepSharingId &&
 		recheckSharing[0]?.string === 'domain' &&
 		recheckInherit.length === 1 &&
-		recheckInherit[0]?._id === KEEP_INHERIT_ID &&
+		recheckInherit[0]?._id === keepInheritId &&
 		recheckInherit[0]?.boolean === true;
 	const postRunRecheck = { status: recheckRes.status, _sharing: recheckSharing, _inheritrights: recheckInherit, stillCorrect };
 
-	const ledgerPath = writeLedger({
-		scriptName: 'remedy-445-duplicate-rights-values-crede',
-		dryRun,
-		db: cfg.db,
-		sensitive: true,
-		authorizedBy,
-		committed: { allow: COMMITTED_ALLOW },
-		payload: {
-			dryRun,
-			entityId: ENTITY_ID,
-			outcome: 'cleaned',
-			deletedIds: [DELETE_SHARING_ID, DELETE_INHERIT_ID],
-			readback: { status: readRes.status, body: readBody },
-			postRunRecheck
-		}
+	const ledgerPath = writeLedgerNow({
+		outcome: 'cleaned',
+		deletedIds: [deleteSharingId, deleteInheritId],
+		readback: { status: readRes.status, body: readBody },
+		postRunRecheck
 	});
 
 	return { outcome: 'cleaned', ledgerPath };
@@ -234,9 +227,9 @@ async function main(): Promise<void> {
 	const dryRun = readDryRun();
 	const authorizedBy = readAuthorizedBy();
 	const cfg = await loadCredeCfg();
-	console.log(`Mode: ${dryRun ? 'DRY_RUN' : 'LIVE'} — db=${cfg.db}, entity=${ENTITY_ID}\n`);
+	console.log(`Mode: ${dryRun ? 'DRY_RUN' : 'LIVE'} — db=${cfg.db}, entity=${TARGET.entityId}\n`);
 
-	const result = await runRemedy445(cfg, dryRun, fetch, authorizedBy);
+	const result = await runRemedyDuplicateRights(cfg, dryRun, TARGET, fetch, authorizedBy);
 	console.log(`outcome=${result.outcome}`);
 	console.log(`Ledger: ${result.ledgerPath}`);
 }

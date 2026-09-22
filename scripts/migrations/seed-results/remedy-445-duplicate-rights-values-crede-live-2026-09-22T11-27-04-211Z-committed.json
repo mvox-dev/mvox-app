@@ -1,0 +1,31 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "entityId": "6a9c3d37ca67df980f417292",
+  "outcome": "cleaned",
+  "deletedIds": [
+    "6ab262615685992c758ad3d7",
+    "6ab262615685992c758ad3d8"
+  ],
+  "readback": {
+    "status": 200
+  },
+  "postRunRecheck": {
+    "status": 200,
+    "_sharing": [
+      {
+        "_id": "6ab25bad5685992c758ad3d3"
+      }
+    ],
+    "_inheritrights": [
+      {
+        "_id": "6ab25bad5685992c758ad3d4",
+        "boolean": true
+      }
+    ],
+    "stillCorrect": true
+  },
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-5775480675"
+}

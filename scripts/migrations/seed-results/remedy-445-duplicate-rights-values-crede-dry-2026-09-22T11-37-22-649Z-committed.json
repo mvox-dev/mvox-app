@@ -1,0 +1,18 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "entityId": "6a9c3d38ca67df980f41729b",
+  "outcome": "dry-run",
+  "observedSharingIds": [
+    "6ab25bae5685992c758ad3d5",
+    "6ab266145685992c758ad3e0"
+  ],
+  "observedInheritIds": [
+    "6ab25bae5685992c758ad3d6",
+    "6ab266155685992c758ad3e1"
+  ],
+  "deletedIds": [],
+  "authorizedBy": "dry run — no authorization required"
+}
