@@ -120,6 +120,26 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 		const dbMatch = /invalid\/([^/]+)\//.exec(u);
 		const fx = dbMatch ? byDb[dbMatch[1]] : undefined;
 		if (!fx) return jsonRes({ entities: [] });
+		// #454 — the roster's join-state read (listJoinStates) now runs its
+		// visible effect for every reader, not just admins, so this real-chain
+		// fixture needs an answer instead of falling through to the generic
+		// `{ entities: [] }` (unrelated shape, entity vs entities) that used to
+		// read as an unlinked person. Every fixture person is a settled,
+		// already-joined roster member — a `joined` state renders no badge
+		// (JOIN_STATE_LABEL stays silent for it), keeping this #269 fallback
+		// suite's fixture describing only what it means to: name resolution,
+		// not join state. `_viewer` rides along because the producer reads it
+		// as the private-bucket tell (#454); without it this body would be the
+		// WITHHELD shape, which is also badge-less but for a different reason —
+		// and this fixture means "joined", not "unreadable".
+		if (u.includes('props=entu_user')) {
+			return jsonRes({
+				entity: {
+					_viewer: [{ _id: 'gr-1', reference: 'p-self', property_type: '_editor' }],
+					entu_user: [{ _id: 'eu-1', uid: 'u1', provider: 'test' }]
+				}
+			});
+		}
 		if (u.includes('_type.string=admin_member_record')) {
 			if (fx.recordsGate) await fx.recordsGate;
 			const rows =

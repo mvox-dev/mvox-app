@@ -450,7 +450,7 @@ describe('(2) chips — joined is silent; not-invited and invited-awaiting stay 
 		).toBeTruthy();
 	});
 
-	it('an EDITOR-admin still sees the chips — the display is for every admin (PO ruling 2026-09-09), only joined went silent', async () => {
+	it('an EDITOR-admin still sees the chips — the read is the gate (#454, Mihkel 2026-09-22), only joined went silent', async () => {
 		const { container } = await renderRosterAs('admin', 'editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');

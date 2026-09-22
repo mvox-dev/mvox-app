@@ -115,9 +115,11 @@
 	// "which button" flag, so a mint/withdraw success routes the row to its
 	// next control set for free the moment the record is re-read.
 	let joinStates = $state<Record<string, JoinState>>({});
-	// PO ruling 2026-09-09 (issue #294): the three-state DISPLAY is for every
-	// admin; the three CONTROLS (kutsu/saada uuesti/tühista kutse) gate on
-	// `_owner` alone (probe-observed: `_owner` mint → HTTP 200, `_editor` →
+	// The DISPLAY gates on the READ alone (#454, Mihkel 2026-09-22, superseding
+	// the 2026-09-09 every-admin framing for this half): a chip renders iff
+	// this record carries a state for the row. The three CONTROLS
+	// (kutsu/saada uuesti/tühista kutse) gate on `_owner` alone (PO ruling
+	// 2026-09-09, unchanged) (probe-observed: `_owner` mint → HTTP 200, `_editor` →
 	// HTTP 403 "User not in _owner property"). 'loading' fails CLOSED — same
 	// discipline as `adminStore`'s own initial state — so a control never
 	// renders ahead of knowing whether this caller actually holds it.
@@ -3969,9 +3971,13 @@
 	     email, BEFORE the section name. Joined is the SILENT default (no chip
 	     at all); not-invited and invited-awaiting keep DISTINCT chips — if both
 	     were silent the two states #294 exists to distinguish would collapse
-	     into one. Still contents-derived via `listJoinStates` (never presence),
-	     still every admin tier (PO ruling 2026-09-09) — unchanged, only moved
-	     and the joined case gone quiet. Shared between the collapsed card
+	     into one. Still contents-derived via `listJoinStates` (never presence).
+	     The read is the gate (#454, Mihkel 2026-09-22): no app-computed role
+	     decides the chip, only whether the read returned a state for the row.
+	     `listJoinStates` omits any person whose auth-identity property the
+	     caller was not admitted to read, so the `!== undefined` check below is
+	     the reader's own gate (THE WITHHELD-BUCKET TELL,
+	     lib/profile/linkedIdentities.ts). Shared between the collapsed card
 	     (rendered as this snippet's caller, wrapped in the activator button)
 	     and the non-admin/open-editor callers, so the info itself is defined
 	     exactly once regardless of which state renders it. -->
@@ -3979,7 +3985,7 @@
 	{#if row.email}
 		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
 	{/if}
-	{#if admin === 'admin' && joinStates[row.personId] !== undefined}
+	{#if joinStates[row.personId] !== undefined}
 		{@const state = joinStates[row.personId]}
 		{#if state !== 'joined'}
 			<span

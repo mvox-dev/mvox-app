@@ -16,14 +16,39 @@
 //   `kutsu` reachable on a row that already has a live link is a
 //   STATE-ROUTING BUG, not a case to handle — pinned as unreachable.
 //
-//   WHO SEES WHAT (PO ruling 2026-09-09, probe-verified): the three-state
-//   DISPLAY is for EVERY admin (`admin === 'admin'`, i.e. `_owner` OR
-//   `_editor` on the database entity, adminStore.ts:84-86 — a `_viewer`-level
-//   read already returns the placeholder shape, so an editor-admin loses
-//   nothing). The three CONTROLS are `_owner` ONLY (probe: `_owner` mint →
-//   HTTP 200; `_editor` → HTTP 403 "User not in _owner property"). An
-//   editor-admin gets ONE LINE where the controls would be — NOT three
-//   disabled buttons, NOT three failing buttons, NOT silence.
+//   WHO SEES WHAT — the DISPLAY (#454, Mihkel 2026-09-22, supersedes the
+//   2026-09-09 role framing for this half): the READ is the gate. A chip
+//   renders when `listJoinStates` returned a state for that row, and not
+//   otherwise — no app-computed role (`admin`, `ownerTier`) is consulted. A
+//   `_viewer`-level read already returns the placeholder shape, so everyone
+//   Entu lets read sees the true state, and a reader Entu refuses sees no
+//   chip rather than a guessed one.
+//
+//   A refusal reaches this page in TWO shapes, and the reachable one is not
+//   the loud one:
+//     • PER-PERSON, silent, and the ONLY shape an ordinary member actually
+//       meets: HTTP 200 with the private bucket withheld. mvox `person`
+//       entities are `_sharing: domain` while the `entu_user` prop-def is
+//       `_sharing: private`, so a reader admitted by TIER alone — domain,
+//       no explicit grant — receives only the domain bucket (ER-1/ER-4,
+//       docs/architecture/entu-rights-and-visibility-model.md:109,198). No
+//       error: the body is `{ entity: { _id } }` and the property is simply
+//       not in it. `listJoinStates` detects it via the rights tell and OMITS
+//       that personId (linkedIdentities.ts, THE WITHHELD-BUCKET TELL); the
+//       page's `joinStates[row.personId] !== undefined` then renders nothing.
+//       This is the shape (B) below drives through the real producer.
+//     • WHOLE-CALL, loud: an HTTP failure on any one person rejects the
+//       `Promise.all` fan-out, and the page's catch
+//       (roster/+page.svelte:517-520) blanks the entire record. The #294
+//       probe observed this against a `_sharing: private` entity (a clean
+//       total 403) — real, but not what a domain-shared person produces.
+//   Both shapes are pinned in (A) below.
+//
+//   WHO SEES WHAT — the CONTROLS (PO ruling 2026-09-09, probe-verified,
+//   UNCHANGED by #454): `_owner` ONLY (probe: `_owner` mint → HTTP 200;
+//   `_editor` → HTTP 403 "User not in _owner property"). An editor-admin
+//   gets ONE LINE where the controls would be — NOT three disabled buttons,
+//   NOT three failing buttons, NOT silence.
 //
 //   ACTIONS: kutsu and saada uuesti mint onto the EXISTING person via
 //   mintSelfLinkInvite (sweep-then-mint — the one-live-link invariant is
@@ -331,7 +356,7 @@ async function openCard(container: HTMLElement, memberId: string) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('(A) three-state display — every admin, contents not presence', () => {
+describe('(A) three-state display — the read is the gate, contents not presence', () => {
 	// #302 item 2 REWRITE (the one assertion class this issue falsifies by
 	// design): joined is the SILENT default — no chip at all — while
 	// not-invited and invited-awaiting keep their distinct chips. The old
@@ -359,7 +384,7 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).not.toBe('joined');
 	});
 
-	it('an EDITOR-admin sees the same chips — the display is for every admin (PO ruling 2026-09-09; #302: readiness gate repointed at a chip that still renders)', async () => {
+	it('an EDITOR-admin sees the same chips — the read is the gate (#454, Mihkel 2026-09-22): the chip renders because listJoinStates returned a state, not because of any admin tier (#302: readiness gate repointed at a chip that still renders)', async () => {
 		const { container } = await renderRoster({ tier: 'editor' });
 		await waitFor(() =>
 			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
@@ -369,9 +394,120 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 	});
 
-	it('a NON-admin sees no join-state badge on any row', async () => {
+	// ── #454 (Mihkel 2026-09-22, supersedes the 2026-09-09 role framing for the
+	//    DISPLAY): the read is the gate. listJoinStates already runs for every
+	//    reader; a state in its answer renders the chip, a missing key (Entu
+	//    refused the read) renders nothing. No app-computed role decides the
+	//    chip. The exact-set helper below pins testids AND labels so a count
+	//    can't pass while the wrong rows carry chips. ─────────────────────────
+	function chipSet(container: HTMLElement): Record<string, { state: string | null; label: string }> {
+		return Object.fromEntries(
+			[...container.querySelectorAll('[data-testid^="roster-row-join-state-"]')].map((el) => [
+				el.getAttribute('data-testid')!,
+				{ state: el.getAttribute('data-join-state'), label: (el.textContent ?? '').trim() }
+			])
+		);
+	}
+
+	const EXPECTED_CHIPS_SAMPLEDB = {
+		'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' },
+		'roster-row-join-state-m4': { state: 'absent', label: '[roster_member_join_state_absent]' }
+	};
+
+	it('#454: a NON-admin reader whose read returned states sees EXACTLY the chips an admin sees — the read is the gate, not the role', async () => {
+		// The same fixture an admin renders against; only the app role differs.
+		const admin = await renderRoster();
+		await waitFor(() => expect(q(admin.container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(admin.container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+		cleanup();
+
 		const { container } = await renderRoster({ admin: 'not-admin' });
-		expect(container.querySelectorAll('[data-testid^="roster-row-join-state-"]')).toHaveLength(0);
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+	});
+
+	// The PAGE-level half of the rule, stated as such: the chip condition is
+	// `joinStates[row.personId] !== undefined` and nothing else, so a personId
+	// the answer does not carry gets NO chip. Since #454 this is a shape the
+	// producer really emits — `listJoinStates` omits any person whose private
+	// bucket was withheld — and the next test drives it through the real
+	// producer over the wire body that causes it.
+	it('#454 PAGE guard: a personId missing from the answer renders NO chip, while the keys that ARE present render theirs — never a guessed one', async () => {
+		// Hand the page an answer with no key for pp-4 (Dora, m4).
+		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
+			Promise.resolve(
+				Object.fromEntries(
+					personIds
+						.filter((id) => id !== 'pp-4')
+						.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent'])
+				)
+			)
+		);
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(container)).toEqual({
+			'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' }
+		});
+	});
+
+	it('#454 WIRE refusal, the REACHABLE shape: HTTP 200 with the private bucket withheld — driven through the REAL producer — leaves every row chip-less while the rows render', async () => {
+		// The answer an ordinary member's browser actually receives for a
+		// teammate's domain-shared `person`: 200, `{ entity: { _id } }`, the
+		// `entu_user` property (and the `_viewer` tell alongside it) filtered
+		// out by the bucket selection. NOTHING rejects here — the catch below
+		// never runs, which is exactly why the page cannot be left to infer the
+		// refusal from an error. The REAL `listJoinStates` runs over this wire
+		// body so the omission is the producer's own, not the mock's.
+		const actual =
+			await vi.importActual<typeof import('$lib/profile/linkedIdentities')>(
+				'$lib/profile/linkedIdentities'
+			);
+		const withheldFetch = vi.fn().mockImplementation((url: string) => {
+			const id = String(url).split('/entity/')[1]?.split('?')[0] ?? '';
+			return Promise.resolve(
+				new Response(JSON.stringify({ entity: { _id: id } }), { status: 200 })
+			);
+		}) as unknown as typeof fetch;
+		listJoinStatesMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
+			actual.listJoinStates(cfg, ids, withheldFetch)
+		);
+
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		// Readiness: the rows only render once `load()` has run the join-state
+		// fan-out to completion (`status` flips to 'ready' after it), so the
+		// emptiness below is the SETTLED state, not an unresolved load. The row
+		// existence check keeps this a claim about CHIPS, not about a page that
+		// failed to render anything at all.
+		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
+		expect(withheldFetch, 'the real producer must have issued the reads').toHaveBeenCalled();
+		expect(chipSet(container)).toEqual({});
+	});
+
+	it('#454 WIRE refusal, the LOUD shape: an HTTP failure rejects the whole fan-out and the page carries NO chip on any row', async () => {
+		// The second refusal shape, kept because it is real (the #294 probe saw
+		// a clean total 403 against a `_sharing: private` entity): `Promise.all`
+		// rejects whole on the first refused person (linkedIdentities.ts, FAIL
+		// LOUD by design), and the page's catch sets `joinStates = {}`
+		// (+page.svelte:517-520). Every chip goes — no row shows a state this
+		// reader never observed.
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		listJoinStatesMock.mockRejectedValue(
+			new Error('listLinkedIdentities: identity read failed: HTTP 403')
+		);
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
+		expect(chipSet(container)).toEqual({});
+		expect(errSpy).toHaveBeenCalled();
+		errSpy.mockRestore();
+	});
+
+	it('#454: the joined state still renders no chip for a NON-admin — silence stays contents-derived, not role-derived', async () => {
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		// Readiness: the fan-out landed (an invited row's chip is on screen), so
+		// the absences below are the CONTRACT, not an unresolved load.
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(q(container, 'roster-row-join-state-m1')).toBeNull();
+		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 	});
 
 	it("INTEGRATION: the route calls listJoinStates with the selected collective's cfg and the rendered rows' personIds", async () => {

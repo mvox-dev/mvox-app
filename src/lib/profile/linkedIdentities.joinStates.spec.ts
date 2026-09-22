@@ -13,7 +13,9 @@
 // reinvite / present username -> good!") — discriminate on the entry's
 // CONTENTS, never on the property's presence:
 //
-//   absent  — no `entu_user` key on the entity at all (never invited)
+//   absent  — the caller CAN read the property and it is not there (never
+//             invited). A read the caller was never admitted to is a fourth
+//             outcome, not this one — see #454 below.
 //   invited — an entry carrying `invite` (masked '***' on every read after the
 //             mint — linkedIdentities.ts:37) and no `uid`
 //   joined  — an entry carrying `uid`/`provider`/`email`, never `invite`
@@ -23,16 +25,28 @@
 // for. The issue body's original framing made that exact mistake; it is pinned
 // here as its own case.
 //
-// Wire shape: per-person GET entity/{personId}?props=entu_user — the exact
-// read the 2026-09-08 probe verified live for all three states
-// (issue #294, probe result comment: absent → no key; placeholder →
+// Wire shape: per-person GET entity/{personId}?props=entu_user,_viewer — the
+// #294 read plus the #454 rights tell. The 2026-09-08 probe verified all three
+// states live (issue #294, probe result comment: absent → no key; placeholder →
 // [{_id, invite:'***'}]; bound → [{_id, uid, email, provider}]). A list-query
 // batch was never probed for masked-prop behaviour and is NOT the contract.
 //
-// Fail-loud: the probe showed a zero-rights caller gets a clean TOTAL 403,
-// never a 200 with the key silently omitted. So a failed read must THROW —
-// "missing" means OBSERVED absent, never "not returned" (the rosterData.ts:123
-// class of trap, kept out of this layer by refusing to guess).
+// Fail-loud, in BOTH refusal shapes:
+//
+//   1. HTTP failure → THROW. The #294 probe's zero-rights caller got a clean
+//      TOTAL 403 — against a `_sharing: private` entity.
+//   2. #454 — HTTP 200 with the private bucket WITHHELD → the personId is
+//      OMITTED from the record. This is the shape a `_sharing: domain` person
+//      entity produces for a grant-less in-db reader (mvox persons are
+//      domain-shared; the `entu_user` prop-def is private), i.e. every
+//      ordinary member reading a teammate's row — the population #454 newly
+//      shows chips to. There is no status to catch: the answer is 200 and the
+//      property is simply not in it. Classified 'absent', it would badge every
+//      joined teammate "never invited".
+//
+// Either way "missing" means OBSERVED absent, never "not returned" (the
+// rosterData.ts:123 class of trap, kept out of this layer by refusing to
+// guess).
 
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -58,22 +72,33 @@ function json(body: unknown, status = 200) {
 
 type WireEntry = { _id: string; uid?: string; provider?: string; email?: string; invite?: string };
 
+/** A grant admitting the caller to the private bucket. Presence is the whole
+ *  signal; the grantee name+email a live row bakes into `.string` (ER-26) is
+ *  deliberately not modelled. */
+const ADMITTED = [{ _id: 'gr-1', reference: 'me', property_type: '_editor' }];
+
 /**
- * Routed fetch stub: GET entity/{id}?props=entu_user answered per-person from
- * `byId`. An id present with `null` answers HTTP 403 (the probe's observed
- * zero-rights shape); an id absent from the map answers 404.
+ * Routed fetch stub: GET entity/{id}?props=entu_user,_viewer answered
+ * per-person from `byId`:
+ *   WireEntry[]  → 200, admitted, that entu_user array
+ *   'no-key'     → 200, admitted, NO entu_user  (observed absent)
+ *   'withheld'   → 200, `{ entity: { _id } }` — the private bucket filtered
+ *                  out, so neither entu_user NOR the `_viewer` tell (#454)
+ *   null         → HTTP 403 (the #294 probe's total-refusal shape)
+ * An id absent from the map answers 404.
  */
-function personFetch(byId: Record<string, WireEntry[] | 'no-key' | null>) {
+function personFetch(byId: Record<string, WireEntry[] | 'no-key' | 'withheld' | null>) {
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
 		const id = u.split('/entity/')[1]?.split('?')[0] ?? '';
-		if (!(id in byId) || !u.includes('props=entu_user')) {
+		if (!(id in byId) || !u.includes('props=entu_user,_viewer')) {
 			return Promise.resolve(json({ error: `unexpected request ${u}` }, 404));
 		}
 		const val = byId[id];
 		if (val === null) return Promise.resolve(json({ error: 'forbidden' }, 403));
-		if (val === 'no-key') return Promise.resolve(json({ entity: { _id: id } }));
-		return Promise.resolve(json({ entity: { _id: id, entu_user: val } }));
+		if (val === 'withheld') return Promise.resolve(json({ entity: { _id: id } }));
+		if (val === 'no-key') return Promise.resolve(json({ entity: { _id: id, _viewer: ADMITTED } }));
+		return Promise.resolve(json({ entity: { _id: id, _viewer: ADMITTED, entu_user: val } }));
 	}) as unknown as typeof fetch;
 }
 
@@ -94,7 +119,10 @@ describe('listJoinStates — the three states, read from CONTENTS', () => {
 		expect(states['p-2']).toBe('invited');
 	});
 
-	it('absent — no entu_user key at all reads as absent (never invited)', async () => {
+	it('absent — a person the caller CAN read, with no entu_user key at all, reads as absent (never invited)', async () => {
+		// "Can read" is load-bearing since #454: the same empty-looking body
+		// from a caller the private bucket was withheld from is NOT this case —
+		// it is the omission pinned below.
 		const states = await listJoinStates!(cfg, ['p-3'], personFetch({ 'p-3': 'no-key' }));
 		expect(states).toEqual<Record<string, JoinState>>({ 'p-3': 'absent' });
 	});
@@ -133,6 +161,23 @@ describe('listJoinStates — fail loud, never classify a failed read', () => {
 		await expect(listJoinStates!(cfg, ['p-1', 'p-2'], fetchImpl)).rejects.toThrow(/403/);
 	});
 
+	it('#454 — a WITHHELD private bucket (200, no rights tell) OMITS the personId: no key, never \'absent\'', async () => {
+		// The shape an ordinary member gets for a teammate's domain-shared
+		// person. p-2 is genuinely JOINED on the server; this caller simply was
+		// not admitted to the property that says so. A key here — any key —
+		// would be a guess.
+		const fetchImpl = personFetch({ 'p-1': [BOUND], 'p-2': 'withheld' });
+		const states = await listJoinStates!(cfg, ['p-1', 'p-2'], fetchImpl);
+		expect(states).toEqual<Record<string, JoinState>>({ 'p-1': 'joined' });
+		expect('p-2' in states).toBe(false);
+	});
+
+	it('#454 — a reader admitted to NONE of them gets {}, not a roster of false \'absent\'', async () => {
+		const fetchImpl = personFetch({ 'p-1': 'withheld', 'p-2': 'withheld', 'p-3': 'withheld' });
+		const states = await listJoinStates!(cfg, ['p-1', 'p-2', 'p-3'], fetchImpl);
+		expect(states).toEqual({});
+	});
+
 	it('an empty personIds list resolves to {} without issuing any request', async () => {
 		const fetchImpl = personFetch({});
 		const states = await listJoinStates!(cfg, [], fetchImpl);
@@ -142,3 +187,4 @@ describe('listJoinStates — fail loud, never classify a failed read', () => {
 });
 
 // (*MVOX:Tallis* — #294 RED: three-state join read, contents-not-presence)
+// (*MVOX:Josquin* — #454: the fourth outcome — a read that was never admitted)

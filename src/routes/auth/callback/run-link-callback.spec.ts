@@ -328,6 +328,17 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		email: 'me@example.com'
 	};
 
+	// #454 — the re-read now also asks for `_viewer`: `listLinkedIdentities`
+	// reads a returned rights property as the tell that the private bucket
+	// (which is where `entu_user` lives) came back at all, rather than reading
+	// an empty-looking 200 as "no identities". On THIS path the caller is
+	// reading their OWN person with the just-redeemed JWT and holds
+	// self-`_editor`, so the tell is always present live — the fixture says so.
+	const READ_URL = 'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user,_viewer';
+	const SELF_EDITOR_GRANT = [
+		{ _id: 'gr-self', reference: 'person-me', property_type: '_editor' }
+	];
+
 	/**
 	 * Route the REAL entuFetch's traffic: the identity re-read gets a canned
 	 * entity body; a DELETE gets the configured status. Anything else is a wiring
@@ -341,10 +352,11 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			if (init?.method === 'DELETE') {
 				return new Response('{}', { status: opts.deleteStatus ?? 200 });
 			}
-			if (String(url) === 'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user') {
-				return new Response(JSON.stringify({ entity: { entu_user: opts.entries } }), {
-					status: 200
-				});
+			if (String(url) === READ_URL) {
+				return new Response(
+					JSON.stringify({ entity: { _viewer: SELF_EDITOR_GRANT, entu_user: opts.entries } }),
+					{ status: 200 }
+				);
 			}
 			throw new Error(`unexpected fetch: ${init?.method ?? 'GET'} ${String(url)}`);
 		});
@@ -381,7 +393,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			([, init]) => (init as RequestInit | undefined)?.method !== 'DELETE'
 		);
 		expect(readCall).toEqual([
-			'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user',
+			READ_URL,
 			{ headers: { Authorization: 'Bearer new-narrowed-jwt', Accept: 'application/json' } }
 		]);
 
