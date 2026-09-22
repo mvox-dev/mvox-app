@@ -1,8 +1,10 @@
-// mvox-app#445 — REMEDY spec. Mihkel: "go for cleanup" (11:16Z). One
-// entity, one known duplicate-value shape (see the script header for the
-// full diagnosis). networkGuard.setup.ts stands behind every spec: the
-// whole wire is a fake fetch, every request asserted full-shape with
-// toEqual.
+// mvox-app#445 — REMEDY spec. Mihkel: "go for cleanup" then "resume on
+// 38" (comment 5775480675) — covers every row this duplicate-value shape
+// turns up on. `runRemedyDuplicateRights` takes the target entity/ids as
+// a parameter, so this spec pins its own fixture ids, independent of
+// whatever `TARGET` the script currently points `main()` at.
+// networkGuard.setup.ts stands behind every spec: the whole wire is a
+// fake fetch, every request asserted full-shape with toEqual.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -17,21 +19,22 @@ vi.mock('../lib/ledger-writer', async (importOriginal) => {
 	};
 });
 
-import {
-	runRemedy445,
-	ENTITY_ID,
-	KEEP_SHARING_ID,
-	KEEP_INHERIT_ID,
-	DELETE_SHARING_ID,
-	DELETE_INHERIT_ID
-} from './remedy-445-duplicate-rights-values-crede-2026-09-22';
+import { runRemedyDuplicateRights, type RemedyTarget } from './remedy-445-duplicate-rights-values-crede-2026-09-22';
 
 const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-fake';
-const READ_URL = `${BASE}/entity/${ENTITY_ID}?props=_sharing,_inheritrights`;
 const NO_DELAY = 0;
 const noSleep = async (): Promise<void> => {};
+
+const TARGET: RemedyTarget = {
+	entityId: 'ex-entity',
+	keepSharingId: 'keep-sh',
+	deleteSharingId: 'del-sh',
+	keepInheritId: 'keep-in',
+	deleteInheritId: 'del-in'
+};
+const READ_URL = `${BASE}/entity/${TARGET.entityId}?props=_sharing,_inheritrights`;
 
 function json(body: unknown, status = 200): Promise<Response> {
 	return Promise.resolve(new Response(JSON.stringify(body), { status }));
@@ -66,23 +69,23 @@ function makeWire(opts: { readSequence: unknown[]; deleteFails?: string }): { fe
 
 const DUPLICATE_STATE = {
 	entity: {
-		_id: ENTITY_ID,
+		_id: TARGET.entityId,
 		_sharing: [
-			{ _id: KEEP_SHARING_ID, string: 'domain' },
-			{ _id: DELETE_SHARING_ID, string: 'domain' }
+			{ _id: TARGET.keepSharingId, string: 'domain' },
+			{ _id: TARGET.deleteSharingId, string: 'domain' }
 		],
 		_inheritrights: [
-			{ _id: KEEP_INHERIT_ID, boolean: true },
-			{ _id: DELETE_INHERIT_ID, boolean: true }
+			{ _id: TARGET.keepInheritId, boolean: true },
+			{ _id: TARGET.deleteInheritId, boolean: true }
 		]
 	}
 };
 
 const CLEANED_STATE = {
 	entity: {
-		_id: ENTITY_ID,
-		_sharing: [{ _id: KEEP_SHARING_ID, string: 'domain' }],
-		_inheritrights: [{ _id: KEEP_INHERIT_ID, boolean: true }]
+		_id: TARGET.entityId,
+		_sharing: [{ _id: TARGET.keepSharingId, string: 'domain' }],
+		_inheritrights: [{ _id: TARGET.keepInheritId, boolean: true }]
 	}
 };
 
@@ -90,75 +93,75 @@ beforeEach(() => {
 	writeLedgerMock.mockClear();
 });
 
-describe('runRemedy445 — gate ordering', () => {
+describe('runRemedyDuplicateRights — gate ordering', () => {
 	it('a live run with no authorizedBy throws before any fetch call', async () => {
 		const { fetchImpl, requests } = makeWire({ readSequence: [] });
-		await expect(runRemedy445(cfg, false, fetchImpl, undefined)).rejects.toThrow(/authorizedBy/);
+		await expect(runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, undefined)).rejects.toThrow(/authorizedBy/);
 		expect(requests).toEqual([]);
 	});
 });
 
-describe('runRemedy445 — step 1: exact-state assertion', () => {
-	it('aborts before any write when the observed value ids are not exactly the known duplicate pair', async () => {
-		const unexpected = { entity: { _id: ENTITY_ID, _sharing: [{ _id: 'some-other-id', string: 'domain' }], _inheritrights: [] } };
+describe('runRemedyDuplicateRights — step 1: exact-state assertion', () => {
+	it('aborts before any write when the observed value ids are not exactly the target pair', async () => {
+		const unexpected = { entity: { _id: TARGET.entityId, _sharing: [{ _id: 'some-other-id', string: 'domain' }], _inheritrights: [] } };
 		const { fetchImpl, requests } = makeWire({ readSequence: [unexpected] });
-		await expect(runRemedy445(cfg, true, fetchImpl, undefined)).rejects.toThrow(/does not hold exactly the expected duplicate value ids/);
+		await expect(runRemedyDuplicateRights(cfg, true, TARGET, fetchImpl, undefined)).rejects.toThrow(/does not hold exactly the expected duplicate value ids/);
 		expect(requests).toEqual([{ url: READ_URL, method: 'GET' }]);
 		expect(writeLedgerMock.mock.calls[0][0]).toMatchObject({ payload: expect.objectContaining({ outcome: 'aborted-state-mismatch' }) });
 	});
 
 	it('a dry run matching the expected state prints the plan and issues zero writes', async () => {
 		const { fetchImpl, requests } = makeWire({ readSequence: [DUPLICATE_STATE] });
-		const result = await runRemedy445(cfg, true, fetchImpl);
+		const result = await runRemedyDuplicateRights(cfg, true, TARGET, fetchImpl);
 		expect(result.outcome).toBe('dry-run');
 		expect(requests).toEqual([{ url: READ_URL, method: 'GET' }]);
 	});
 });
 
-describe('runRemedy445 — live cleanup', () => {
-	it('deletes exactly the two 11:11Z ids, keeps the 10:42Z pair, verifies by read-back, then recheck', async () => {
+describe('runRemedyDuplicateRights — live cleanup', () => {
+	it('deletes exactly the target "delete" ids, keeps the "keep" pair, verifies by read-back, then recheck', async () => {
 		const { fetchImpl, requests } = makeWire({ readSequence: [DUPLICATE_STATE, CLEANED_STATE, CLEANED_STATE] });
-		const result = await runRemedy445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+		const result = await runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 
 		expect(result.outcome).toBe('cleaned');
 		expect(requests).toEqual([
 			{ url: READ_URL, method: 'GET' },
-			{ url: `${BASE}/property/${DELETE_SHARING_ID}`, method: 'DELETE' },
-			{ url: `${BASE}/property/${DELETE_INHERIT_ID}`, method: 'DELETE' },
+			{ url: `${BASE}/property/${TARGET.deleteSharingId}`, method: 'DELETE' },
+			{ url: `${BASE}/property/${TARGET.deleteInheritId}`, method: 'DELETE' },
 			{ url: READ_URL, method: 'GET' },
 			{ url: READ_URL, method: 'GET' }
 		]);
 
 		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
-		expect(payload.deletedIds).toEqual([DELETE_SHARING_ID, DELETE_INHERIT_ID]);
+		expect(payload.deletedIds).toEqual([TARGET.deleteSharingId, TARGET.deleteInheritId]);
 		expect(payload.postRunRecheck.stillCorrect).toBe(true);
 	});
 
 	it('a DELETE failure throws before any read-back', async () => {
-		const { fetchImpl } = makeWire({ readSequence: [DUPLICATE_STATE], deleteFails: DELETE_SHARING_ID });
-		await expect(runRemedy445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/DELETE property.*failed/);
+		const { fetchImpl } = makeWire({ readSequence: [DUPLICATE_STATE], deleteFails: TARGET.deleteSharingId });
+		await expect(runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/DELETE property.*failed/);
 	});
 
 	it('a read-back not showing exactly the kept pair aborts with a diagnostic ledger', async () => {
 		const stillDuplicate = DUPLICATE_STATE; // simulates the delete not having taken effect
 		const { fetchImpl } = makeWire({ readSequence: [DUPLICATE_STATE, stillDuplicate] });
-		await expect(runRemedy445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/read-back after delete did not show exactly the kept pair/);
+		await expect(runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/read-back after delete did not show exactly the kept pair/);
 		expect(writeLedgerMock.mock.calls.at(-1)?.[0]).toMatchObject({ payload: expect.objectContaining({ outcome: 'aborted-readback-mismatch' }) });
 	});
 
 	it('the delayed recheck catches a post-cleanup reversion', async () => {
 		const { fetchImpl } = makeWire({ readSequence: [DUPLICATE_STATE, CLEANED_STATE, DUPLICATE_STATE] });
-		const result = await runRemedy445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+		const result = await runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 		expect(result.outcome).toBe('cleaned'); // the write+readback succeeded; the recheck result is informational, not a throw
 		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
 		expect(payload.postRunRecheck.stillCorrect).toBe(false);
 	});
 });
 
-describe('runRemedy445 — ledger authorization threading', () => {
+describe('runRemedyDuplicateRights — ledger authorization threading', () => {
 	it('threads the recorded authorizer through to writeLedger on a live run', async () => {
 		const { fetchImpl } = makeWire({ readSequence: [DUPLICATE_STATE, CLEANED_STATE, CLEANED_STATE] });
-		await runRemedy445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+		await runRemedyDuplicateRights(cfg, false, TARGET, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 		expect(writeLedgerMock.mock.calls[0][0]).toMatchObject({ authorizedBy: LIVE_AUTH, dryRun: false });
 	});
 });
