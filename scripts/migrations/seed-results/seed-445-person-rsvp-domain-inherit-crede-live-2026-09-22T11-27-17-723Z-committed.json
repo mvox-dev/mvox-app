@@ -1,0 +1,355 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "rerun": false,
+  "counts": {
+    "person": {
+      "total": 27,
+      "alreadyDomain": 27,
+      "needsSharing": 0,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 0,
+      "alreadyInherit": 27,
+      "needsInherit": 0,
+      "toWrite": 0,
+      "failed": 0,
+      "written": 0
+    },
+    "rsvp": {
+      "total": 150,
+      "alreadyDomain": 112,
+      "needsSharing": 38,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 38,
+      "alreadyInherit": 112,
+      "needsInherit": 38,
+      "toWrite": 38,
+      "failed": 1,
+      "written": 0
+    }
+  },
+  "visibility": {
+    "person": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "email",
+        "name"
+      ]
+    },
+    "rsvp": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "event",
+        "going_ref",
+        "late_ref",
+        "maybe_ref",
+        "member",
+        "name",
+        "not_going_ref",
+        "notes",
+        "status"
+      ]
+    }
+  },
+  "movingSet": [
+    {
+      "id": "6a9c3d38ca67df980f41729b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d39ca67df980f4172a4",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3aca67df980f4172ad",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3bca67df980f4172b6",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3cca67df980f4172bf",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d41ca67df980f4172c8",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d44ca67df980f4172d1",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d45ca67df980f4172da",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d46ca67df980f4172e3",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d47ca67df980f4172ec",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d48ca67df980f4172f5",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d49ca67df980f4172fe",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4aca67df980f417307",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4bca67df980f417310",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4cca67df980f417319",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4dca67df980f417322",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4eca67df980f41732b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4fca67df980f417334",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d50ca67df980f41733d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d59ca67df980f41736a",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f417373",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f41737c",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5bca67df980f417385",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5cca67df980f41738e",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f417397",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f4173a0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5eca67df980f4173a9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5fca67df980f4173b2",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d60ca67df980f4173bb",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa92c3631ced11fa92bba71",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932d931ced11fa92bbade",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932da31ced11fa92bbae7",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932dc31ced11fa92bbaf0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932de31ced11fa92bbaf9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932df31ced11fa92bbb02",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932e031ced11fa92bbb0b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f331ced11fa92bbb14",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f531ced11fa92bbb1d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    }
+  ],
+  "movingPersonIdentityCount": 1,
+  "widerThanExpected": false,
+  "writtenIds": [],
+  "writtenPropertyIds": [],
+  "failedIds": [
+    "6a9c3d38ca67df980f41729b"
+  ],
+  "failureDiagnostics": [
+    {
+      "entityId": "6a9c3d38ca67df980f41729b",
+      "sharingPost": {
+        "requestBody": [
+          {
+            "type": "_sharing"
+          }
+        ],
+        "status": 200,
+        "body": {
+          "_id": "6a9c3d38ca67df980f41729b",
+          "properties": [
+            {
+              "_id": "6ab266145685992c758ad3e0",
+              "type": "_sharing"
+            }
+          ]
+        }
+      },
+      "inheritPost": {
+        "requestBody": [
+          {
+            "type": "_inheritrights",
+            "boolean": true
+          }
+        ],
+        "status": 200,
+        "body": {
+          "_id": "6a9c3d38ca67df980f41729b",
+          "properties": [
+            {
+              "_id": "6ab266155685992c758ad3e1",
+              "type": "_inheritrights",
+              "boolean": true
+            }
+          ]
+        }
+      },
+      "readback": {
+        "status": 200,
+        "body": {
+          "entity": {
+            "_id": "6a9c3d38ca67df980f41729b",
+            "_inheritrights": [
+              {
+                "_id": "6ab25bae5685992c758ad3d6",
+                "boolean": true
+              },
+              {
+                "_id": "6ab266155685992c758ad3e1",
+                "boolean": true
+              }
+            ],
+            "_sharing": [
+              {
+                "_id": "6ab25bae5685992c758ad3d5"
+              },
+              {
+                "_id": "6ab266145685992c758ad3e0"
+              }
+            ]
+          }
+        }
+      },
+      "sharingPropertyProbe": {
+        "propertyId": "6ab266145685992c758ad3e0",
+        "status": 200,
+        "body": {
+          "_id": "6ab266145685992c758ad3e0",
+          "type": "_sharing",
+          "entity": "6a9c3d38ca67df980f41729b",
+          "created": {
+            "at": "2026-09-22T11:27:16.655Z",
+            "by": "6a8f471a5eb2498f434e5111"
+          }
+        }
+      },
+      "inheritPropertyProbe": {
+        "propertyId": "6ab266155685992c758ad3e1",
+        "status": 200,
+        "body": {
+          "_id": "6ab266155685992c758ad3e1",
+          "type": "_inheritrights",
+          "boolean": true,
+          "entity": "6a9c3d38ca67df980f41729b",
+          "created": {
+            "at": "2026-09-22T11:27:17.017Z",
+            "by": "6a8f471a5eb2498f434e5111"
+          }
+        }
+      }
+    }
+  ],
+  "postRunRecheck": [],
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-5775480675"
+}

@@ -1,0 +1,1071 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "rerun": false,
+  "counts": {
+    "person": {
+      "total": 27,
+      "alreadyDomain": 27,
+      "needsSharing": 0,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 0,
+      "alreadyInherit": 27,
+      "needsInherit": 0,
+      "toWrite": 0,
+      "failed": 0,
+      "written": 0
+    },
+    "rsvp": {
+      "total": 150,
+      "alreadyDomain": 113,
+      "needsSharing": 37,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 37,
+      "alreadyInherit": 113,
+      "needsInherit": 37,
+      "toWrite": 37,
+      "failed": 0,
+      "written": 37
+    }
+  },
+  "visibility": {
+    "person": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "email",
+        "name"
+      ]
+    },
+    "rsvp": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "event",
+        "going_ref",
+        "late_ref",
+        "maybe_ref",
+        "member",
+        "name",
+        "not_going_ref",
+        "notes",
+        "status"
+      ]
+    }
+  },
+  "movingSet": [
+    {
+      "id": "6a9c3d39ca67df980f4172a4",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3aca67df980f4172ad",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3bca67df980f4172b6",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3cca67df980f4172bf",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d41ca67df980f4172c8",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d44ca67df980f4172d1",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d45ca67df980f4172da",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d46ca67df980f4172e3",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d47ca67df980f4172ec",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d48ca67df980f4172f5",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d49ca67df980f4172fe",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4aca67df980f417307",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4bca67df980f417310",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4cca67df980f417319",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4dca67df980f417322",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4eca67df980f41732b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4fca67df980f417334",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d50ca67df980f41733d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d59ca67df980f41736a",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f417373",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f41737c",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5bca67df980f417385",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5cca67df980f41738e",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f417397",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f4173a0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5eca67df980f4173a9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5fca67df980f4173b2",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d60ca67df980f4173bb",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa92c3631ced11fa92bba71",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932d931ced11fa92bbade",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932da31ced11fa92bbae7",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932dc31ced11fa92bbaf0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932de31ced11fa92bbaf9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932df31ced11fa92bbb02",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932e031ced11fa92bbb0b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f331ced11fa92bbb14",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f531ced11fa92bbb1d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    }
+  ],
+  "movingPersonIdentityCount": 1,
+  "widerThanExpected": false,
+  "writtenIds": [
+    "6a9c3d39ca67df980f4172a4",
+    "6a9c3d3aca67df980f4172ad",
+    "6a9c3d3bca67df980f4172b6",
+    "6a9c3d3cca67df980f4172bf",
+    "6a9c3d41ca67df980f4172c8",
+    "6a9c3d44ca67df980f4172d1",
+    "6a9c3d45ca67df980f4172da",
+    "6a9c3d46ca67df980f4172e3",
+    "6a9c3d47ca67df980f4172ec",
+    "6a9c3d48ca67df980f4172f5",
+    "6a9c3d49ca67df980f4172fe",
+    "6a9c3d4aca67df980f417307",
+    "6a9c3d4bca67df980f417310",
+    "6a9c3d4cca67df980f417319",
+    "6a9c3d4dca67df980f417322",
+    "6a9c3d4eca67df980f41732b",
+    "6a9c3d4fca67df980f417334",
+    "6a9c3d50ca67df980f41733d",
+    "6a9c3d59ca67df980f41736a",
+    "6a9c3d5aca67df980f417373",
+    "6a9c3d5aca67df980f41737c",
+    "6a9c3d5bca67df980f417385",
+    "6a9c3d5cca67df980f41738e",
+    "6a9c3d5dca67df980f417397",
+    "6a9c3d5dca67df980f4173a0",
+    "6a9c3d5eca67df980f4173a9",
+    "6a9c3d5fca67df980f4173b2",
+    "6a9c3d60ca67df980f4173bb",
+    "6aa92c3631ced11fa92bba71",
+    "6aa932d931ced11fa92bbade",
+    "6aa932da31ced11fa92bbae7",
+    "6aa932dc31ced11fa92bbaf0",
+    "6aa932de31ced11fa92bbaf9",
+    "6aa932df31ced11fa92bbb02",
+    "6aa932e031ced11fa92bbb0b",
+    "6aa932f331ced11fa92bbb14",
+    "6aa932f531ced11fa92bbb1d"
+  ],
+  "writtenPropertyIds": [
+    {
+      "id": "6a9c3d39ca67df980f4172a4",
+      "sharingPropertyId": "6ab268e85685992c758ad3e2",
+      "inheritPropertyId": "6ab268e85685992c758ad3e3"
+    },
+    {
+      "id": "6a9c3d3aca67df980f4172ad",
+      "sharingPropertyId": "6ab268e85685992c758ad3e4",
+      "inheritPropertyId": "6ab268e85685992c758ad3e5"
+    },
+    {
+      "id": "6a9c3d3bca67df980f4172b6",
+      "sharingPropertyId": "6ab268e85685992c758ad3e6",
+      "inheritPropertyId": "6ab268e85685992c758ad3e7"
+    },
+    {
+      "id": "6a9c3d3cca67df980f4172bf",
+      "sharingPropertyId": "6ab268e95685992c758ad3e8",
+      "inheritPropertyId": "6ab268e95685992c758ad3e9"
+    },
+    {
+      "id": "6a9c3d41ca67df980f4172c8",
+      "sharingPropertyId": "6ab268e95685992c758ad3ea",
+      "inheritPropertyId": "6ab268e95685992c758ad3eb"
+    },
+    {
+      "id": "6a9c3d44ca67df980f4172d1",
+      "sharingPropertyId": "6ab268e95685992c758ad3ec",
+      "inheritPropertyId": "6ab268e95685992c758ad3ed"
+    },
+    {
+      "id": "6a9c3d45ca67df980f4172da",
+      "sharingPropertyId": "6ab268ea5685992c758ad3ee",
+      "inheritPropertyId": "6ab268ea5685992c758ad3ef"
+    },
+    {
+      "id": "6a9c3d46ca67df980f4172e3",
+      "sharingPropertyId": "6ab268ea5685992c758ad3f0",
+      "inheritPropertyId": "6ab268ea5685992c758ad3f1"
+    },
+    {
+      "id": "6a9c3d47ca67df980f4172ec",
+      "sharingPropertyId": "6ab268ea5685992c758ad3f2",
+      "inheritPropertyId": "6ab268eb5685992c758ad3f3"
+    },
+    {
+      "id": "6a9c3d48ca67df980f4172f5",
+      "sharingPropertyId": "6ab268eb5685992c758ad3f4",
+      "inheritPropertyId": "6ab268eb5685992c758ad3f5"
+    },
+    {
+      "id": "6a9c3d49ca67df980f4172fe",
+      "sharingPropertyId": "6ab268eb5685992c758ad3f6",
+      "inheritPropertyId": "6ab268eb5685992c758ad3f7"
+    },
+    {
+      "id": "6a9c3d4aca67df980f417307",
+      "sharingPropertyId": "6ab268ec5685992c758ad3f8",
+      "inheritPropertyId": "6ab268ec5685992c758ad3f9"
+    },
+    {
+      "id": "6a9c3d4bca67df980f417310",
+      "sharingPropertyId": "6ab268ec5685992c758ad3fa",
+      "inheritPropertyId": "6ab268ec5685992c758ad3fb"
+    },
+    {
+      "id": "6a9c3d4cca67df980f417319",
+      "sharingPropertyId": "6ab268ec5685992c758ad3fc",
+      "inheritPropertyId": "6ab268ec5685992c758ad3fd"
+    },
+    {
+      "id": "6a9c3d4dca67df980f417322",
+      "sharingPropertyId": "6ab268ed5685992c758ad3fe",
+      "inheritPropertyId": "6ab268ed5685992c758ad3ff"
+    },
+    {
+      "id": "6a9c3d4eca67df980f41732b",
+      "sharingPropertyId": "6ab268ed5685992c758ad400",
+      "inheritPropertyId": "6ab268ed5685992c758ad401"
+    },
+    {
+      "id": "6a9c3d4fca67df980f417334",
+      "sharingPropertyId": "6ab268ed5685992c758ad402",
+      "inheritPropertyId": "6ab268ed5685992c758ad403"
+    },
+    {
+      "id": "6a9c3d50ca67df980f41733d",
+      "sharingPropertyId": "6ab268ee5685992c758ad404",
+      "inheritPropertyId": "6ab268ee5685992c758ad405"
+    },
+    {
+      "id": "6a9c3d59ca67df980f41736a",
+      "sharingPropertyId": "6ab268ee5685992c758ad406",
+      "inheritPropertyId": "6ab268ee5685992c758ad407"
+    },
+    {
+      "id": "6a9c3d5aca67df980f417373",
+      "sharingPropertyId": "6ab268ee5685992c758ad408",
+      "inheritPropertyId": "6ab268ee5685992c758ad409"
+    },
+    {
+      "id": "6a9c3d5aca67df980f41737c",
+      "sharingPropertyId": "6ab268ef5685992c758ad40a",
+      "inheritPropertyId": "6ab268ef5685992c758ad40b"
+    },
+    {
+      "id": "6a9c3d5bca67df980f417385",
+      "sharingPropertyId": "6ab268ef5685992c758ad40c",
+      "inheritPropertyId": "6ab268ef5685992c758ad40d"
+    },
+    {
+      "id": "6a9c3d5cca67df980f41738e",
+      "sharingPropertyId": "6ab268ef5685992c758ad40e",
+      "inheritPropertyId": "6ab268ef5685992c758ad40f"
+    },
+    {
+      "id": "6a9c3d5dca67df980f417397",
+      "sharingPropertyId": "6ab268ef5685992c758ad410",
+      "inheritPropertyId": "6ab268f05685992c758ad411"
+    },
+    {
+      "id": "6a9c3d5dca67df980f4173a0",
+      "sharingPropertyId": "6ab268f15685992c758ad412",
+      "inheritPropertyId": "6ab268f15685992c758ad413"
+    },
+    {
+      "id": "6a9c3d5eca67df980f4173a9",
+      "sharingPropertyId": "6ab268f25685992c758ad414",
+      "inheritPropertyId": "6ab268f25685992c758ad415"
+    },
+    {
+      "id": "6a9c3d5fca67df980f4173b2",
+      "sharingPropertyId": "6ab268f25685992c758ad416",
+      "inheritPropertyId": "6ab268f35685992c758ad417"
+    },
+    {
+      "id": "6a9c3d60ca67df980f4173bb",
+      "sharingPropertyId": "6ab268f35685992c758ad418",
+      "inheritPropertyId": "6ab268f35685992c758ad419"
+    },
+    {
+      "id": "6aa92c3631ced11fa92bba71",
+      "sharingPropertyId": "6ab268f45685992c758ad41a",
+      "inheritPropertyId": "6ab268f45685992c758ad41b"
+    },
+    {
+      "id": "6aa932d931ced11fa92bbade",
+      "sharingPropertyId": "6ab268f45685992c758ad41c",
+      "inheritPropertyId": "6ab268f45685992c758ad41d"
+    },
+    {
+      "id": "6aa932da31ced11fa92bbae7",
+      "sharingPropertyId": "6ab268f55685992c758ad41e",
+      "inheritPropertyId": "6ab268f55685992c758ad41f"
+    },
+    {
+      "id": "6aa932dc31ced11fa92bbaf0",
+      "sharingPropertyId": "6ab268f55685992c758ad420",
+      "inheritPropertyId": "6ab268f55685992c758ad421"
+    },
+    {
+      "id": "6aa932de31ced11fa92bbaf9",
+      "sharingPropertyId": "6ab268f65685992c758ad422",
+      "inheritPropertyId": "6ab268f65685992c758ad423"
+    },
+    {
+      "id": "6aa932df31ced11fa92bbb02",
+      "sharingPropertyId": "6ab268f65685992c758ad424",
+      "inheritPropertyId": "6ab268f65685992c758ad425"
+    },
+    {
+      "id": "6aa932e031ced11fa92bbb0b",
+      "sharingPropertyId": "6ab268f65685992c758ad426",
+      "inheritPropertyId": "6ab268f75685992c758ad427"
+    },
+    {
+      "id": "6aa932f331ced11fa92bbb14",
+      "sharingPropertyId": "6ab268f75685992c758ad428",
+      "inheritPropertyId": "6ab268f75685992c758ad429"
+    },
+    {
+      "id": "6aa932f531ced11fa92bbb1d",
+      "sharingPropertyId": "6ab268f75685992c758ad42a",
+      "inheritPropertyId": "6ab268f75685992c758ad42b"
+    }
+  ],
+  "failedIds": [],
+  "postRunRecheck": [
+    {
+      "id": "6a9c3d39ca67df980f4172a4",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e85685992c758ad3e2"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e85685992c758ad3e3",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d3aca67df980f4172ad",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e85685992c758ad3e4"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e85685992c758ad3e5",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d3bca67df980f4172b6",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e85685992c758ad3e6"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e85685992c758ad3e7",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d3cca67df980f4172bf",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e95685992c758ad3e8"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e95685992c758ad3e9",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d41ca67df980f4172c8",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e95685992c758ad3ea"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e95685992c758ad3eb",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d44ca67df980f4172d1",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268e95685992c758ad3ec"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268e95685992c758ad3ed",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d45ca67df980f4172da",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ea5685992c758ad3ee"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ea5685992c758ad3ef",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d46ca67df980f4172e3",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ea5685992c758ad3f0"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ea5685992c758ad3f1",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d47ca67df980f4172ec",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ea5685992c758ad3f2"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268eb5685992c758ad3f3",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d48ca67df980f4172f5",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268eb5685992c758ad3f4"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268eb5685992c758ad3f5",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d49ca67df980f4172fe",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268eb5685992c758ad3f6"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268eb5685992c758ad3f7",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4aca67df980f417307",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ec5685992c758ad3f8"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ec5685992c758ad3f9",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4bca67df980f417310",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ec5685992c758ad3fa"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ec5685992c758ad3fb",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4cca67df980f417319",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ec5685992c758ad3fc"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ec5685992c758ad3fd",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4dca67df980f417322",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ed5685992c758ad3fe"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ed5685992c758ad3ff",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4eca67df980f41732b",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ed5685992c758ad400"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ed5685992c758ad401",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d4fca67df980f417334",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ed5685992c758ad402"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ed5685992c758ad403",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d50ca67df980f41733d",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ee5685992c758ad404"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ee5685992c758ad405",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d59ca67df980f41736a",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ee5685992c758ad406"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ee5685992c758ad407",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5aca67df980f417373",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ee5685992c758ad408"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ee5685992c758ad409",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5aca67df980f41737c",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ef5685992c758ad40a"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ef5685992c758ad40b",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5bca67df980f417385",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ef5685992c758ad40c"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ef5685992c758ad40d",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5cca67df980f41738e",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ef5685992c758ad40e"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268ef5685992c758ad40f",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5dca67df980f417397",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268ef5685992c758ad410"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f05685992c758ad411",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5dca67df980f4173a0",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f15685992c758ad412"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f15685992c758ad413",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5eca67df980f4173a9",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f25685992c758ad414"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f25685992c758ad415",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d5fca67df980f4173b2",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f25685992c758ad416"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f35685992c758ad417",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6a9c3d60ca67df980f4173bb",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f35685992c758ad418"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f35685992c758ad419",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa92c3631ced11fa92bba71",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f45685992c758ad41a"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f45685992c758ad41b",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932d931ced11fa92bbade",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f45685992c758ad41c"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f45685992c758ad41d",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932da31ced11fa92bbae7",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f55685992c758ad41e"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f55685992c758ad41f",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932dc31ced11fa92bbaf0",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f55685992c758ad420"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f55685992c758ad421",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932de31ced11fa92bbaf9",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f65685992c758ad422"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f65685992c758ad423",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932df31ced11fa92bbb02",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f65685992c758ad424"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f65685992c758ad425",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932e031ced11fa92bbb0b",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f65685992c758ad426"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f75685992c758ad427",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932f331ced11fa92bbb14",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f75685992c758ad428"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f75685992c758ad429",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    },
+    {
+      "id": "6aa932f531ced11fa92bbb1d",
+      "status": 200,
+      "_sharing": [
+        {
+          "_id": "6ab268f75685992c758ad42a"
+        }
+      ],
+      "_inheritrights": [
+        {
+          "_id": "6ab268f75685992c758ad42b",
+          "boolean": true
+        }
+      ],
+      "stillCorrect": true
+    }
+  ],
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-5775639365"
+}

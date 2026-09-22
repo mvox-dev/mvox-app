@@ -152,6 +152,8 @@ export interface TypeCounts {
 	written?: number;
 	wouldWrite?: number;
 	failed: number;
+	/** Written rows where a hidden pre-existing value was found and self-healed mid-write. LIVE runs only; absent on a dry run. */
+	preExistingHidden?: number;
 }
 
 export interface RunSeed445Counts {
@@ -255,7 +257,13 @@ export const COMMITTED_ALLOW = [
 	'sharingPropertyId',
 	'inheritPropertyId',
 	'postRunRecheck',
-	'stillCorrect'
+	'stillCorrect',
+	// #445 (team-lead, 3rd round) — hidden-pre-existing-value self-heal.
+	'preExistingHiddenIds',
+	'preExistingHidden',
+	'sharingSelfHealDelete',
+	'inheritSelfHealDelete',
+	'selfHealReadback'
 ] as const;
 
 /** Parse a Response body as JSON, tolerating a non-JSON or empty body — the
@@ -460,6 +468,11 @@ export async function runSeed445(
 	// #445 (team-lead, 2nd round) — every WRITTEN row's returned property
 	// ids, one entry per entity, ids only.
 	const writtenPropertyIds: Array<{ id: string; sharingPropertyId?: string; inheritPropertyId?: string }> = [];
+	// #445 (team-lead, 3rd round) — rows where a hidden pre-existing value
+	// was found and self-healed mid-write (see the write loop's own
+	// comment). A subset of writtenIds, listed separately so the ledger
+	// shows the anomaly without treating it as a failure.
+	const preExistingHiddenIds: string[] = [];
 	let aborted = false;
 
 	function toWriteList(): Classified[] {
@@ -484,7 +497,10 @@ export async function runSeed445(
 				failed: failedIds.filter((id) => toWriteRows.some((r) => r.id === id)).length,
 				...(dryRun || aborted
 					? { wouldWrite: toWriteRows.length }
-					: { written: writtenIds.filter((id) => toWriteRows.some((r) => r.id === id)).length })
+					: {
+							written: writtenIds.filter((id) => toWriteRows.some((r) => r.id === id)).length,
+							preExistingHidden: preExistingHiddenIds.filter((id) => toWriteRows.some((r) => r.id === id)).length
+						})
 			};
 		}
 		return { person: forType('person'), rsvp: forType('rsvp') };
@@ -525,7 +541,9 @@ export async function runSeed445(
 				movingSet: buildMovingSet(),
 				movingPersonIdentityCount: identities.size,
 				widerThanExpected: identities.size > 1,
-				...(dryRun || aborted ? { wouldWriteIds: toWriteList().map((c) => c.id) } : { writtenIds, writtenPropertyIds }),
+				...(dryRun || aborted
+					? { wouldWriteIds: toWriteList().map((c) => c.id) }
+					: { writtenIds, writtenPropertyIds, preExistingHiddenIds }),
 				failedIds,
 				...extra
 			}
@@ -640,13 +658,53 @@ export async function runSeed445(
 			}
 
 			const readRes = await entuFetch(cfg.db, `entity/${entity.id}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
-			const readBody = (await safeJson(readRes)) as {
-				entity?: { _sharing?: Array<{ string?: string }>; _inheritrights?: Array<{ boolean?: boolean }> };
-			} | null;
+			type ReadBody = { entity?: { _sharing?: Array<{ _id?: string; string?: string }>; _inheritrights?: Array<{ _id?: string; boolean?: boolean }> } } | null;
+			const readBody = (await safeJson(readRes)) as ReadBody;
 			diag.readback = { status: readRes.status, body: readBody };
 			if (!readRes.ok) throw new Error(`read-back GET for ${entity.id} failed: ${readRes.status}`);
-			const sharingVals = readBody?.entity?._sharing ?? [];
-			const inheritVals = readBody?.entity?._inheritrights ?? [];
+			let sharingVals = readBody?.entity?._sharing ?? [];
+			let inheritVals = readBody?.entity?._inheritrights ?? [];
+
+			// #445 (team-lead, 3rd round) — a HIDDEN pre-existing value: the
+			// census and this row's own pre-write checks all reported a
+			// property absent, but a PRIOR write (this row's own history —
+			// e.g. an earlier aborted run) had actually persisted invisibly,
+			// and only reappears once this run's fresh POST lands beside it.
+			// Observed live twice (6a9c3d37...292, 6a9c3d38...729b): every
+			// read from the first write until a SECOND write landed showed
+			// the property absent; the first write's value then reappeared.
+			// Self-heal: delete the id THIS RUN's own POST response
+			// returned — never guess which of two values is "the
+			// pre-existing one," only the id we minted ourselves is certain
+			// — re-read, and let the checks below decide correctness on
+			// whatever's left. `selfHealed` drives the outcome classification
+			// ('pre-existing-hidden' vs a plain write) below.
+			let selfHealed = false;
+			if (sharingVals.length > 1) {
+				const postedId = extractPostedPropertyId(diag, 'sharingPost', '_sharing');
+				if (postedId) {
+					selfHealed = true;
+					const delRes = await entuFetch(cfg.db, `property/${postedId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+					diag.sharingSelfHealDelete = { propertyId: postedId, status: delRes.status };
+				}
+			}
+			if (inheritVals.length > 1) {
+				const postedId = extractPostedPropertyId(diag, 'inheritPost', '_inheritrights');
+				if (postedId) {
+					selfHealed = true;
+					const delRes = await entuFetch(cfg.db, `property/${postedId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+					diag.inheritSelfHealDelete = { propertyId: postedId, status: delRes.status };
+				}
+			}
+			if (selfHealed) {
+				const reReadRes = await entuFetch(cfg.db, `entity/${entity.id}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
+				const reReadBody = (await safeJson(reReadRes)) as ReadBody;
+				diag.selfHealReadback = { status: reReadRes.status, body: reReadBody };
+				if (!reReadRes.ok) throw new Error(`self-heal re-read GET for ${entity.id} failed: ${reReadRes.status}`);
+				sharingVals = reReadBody?.entity?._sharing ?? [];
+				inheritVals = reReadBody?.entity?._inheritrights ?? [];
+			}
+
 			if (sharingVals.length !== 1 || sharingVals[0]?.string !== 'domain') {
 				throw new Error(`READ-BACK _sharing mismatch for ${entity.id}: ${JSON.stringify(sharingVals)}`);
 			}
@@ -655,6 +713,7 @@ export async function runSeed445(
 			}
 
 			writtenIds.push(entity.id);
+			if (selfHealed) preExistingHiddenIds.push(entity.id);
 			writtenPropertyIds.push({
 				id: entity.id,
 				sharingPropertyId: extractPostedPropertyId(diag, 'sharingPost', '_sharing'),

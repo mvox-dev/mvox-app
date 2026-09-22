@@ -1,0 +1,66 @@
+{
+  "dryRun": true,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "rerun": true,
+  "counts": {
+    "person": {
+      "total": 27,
+      "alreadyDomain": 27,
+      "needsSharing": 0,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 0,
+      "alreadyInherit": 27,
+      "needsInherit": 0,
+      "toWrite": 0,
+      "failed": 0,
+      "wouldWrite": 0
+    },
+    "rsvp": {
+      "total": 150,
+      "alreadyDomain": 150,
+      "needsSharing": 0,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 0,
+      "alreadyInherit": 150,
+      "needsInherit": 0,
+      "toWrite": 0,
+      "failed": 0,
+      "wouldWrite": 0
+    }
+  },
+  "visibility": {
+    "person": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "email",
+        "name"
+      ]
+    },
+    "rsvp": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "event",
+        "going_ref",
+        "late_ref",
+        "maybe_ref",
+        "member",
+        "name",
+        "not_going_ref",
+        "notes",
+        "status"
+      ]
+    }
+  },
+  "movingSet": [],
+  "movingPersonIdentityCount": 0,
+  "widerThanExpected": false,
+  "wouldWriteIds": [],
+  "failedIds": [],
+  "authorizedBy": "dry run — no authorization required"
+}
