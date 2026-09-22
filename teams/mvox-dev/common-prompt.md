@@ -135,26 +135,24 @@ Josquin merges after Bentham GREEN + team-lead approval. This is a delegation fr
 
 ### Merge Procedure
 
-**Always merge locally, never via `gh pr merge`.** NOTE (verified 2026-09-12, Josquin): this repo has **no git hooks** (`.git/hooks` empty, no `core.hooksPath`) — nothing appends the co-author trailer for you. **Author it into the commit message by hand, every merge.**
+**Every merge goes through a pull request.** Since 2026-09-19 (#415, Mihkel) main carries branch protection with the CI check `check + test` required, so a direct push to main is rejected. This repo has no git hooks — author the co-author trailer into the squash body by hand.
 
 ```bash
-git checkout main
-git pull
-git merge --squash <feature-branch>
-git commit -m "feat(#XXX): description
+git checkout <feature-branch> && git push -u origin <feature-branch>
+cat > /tmp/pr-<N>.md <<'EOF'
+...body (STATED CHOICES, review line, Closes #N)...
 
-...body...
-
-Co-authored-by: Mihkel Putrinš <mihkel.putrinsh@gmail.com>"
-git push
+Co-authored-by: Mihkel Putrinš <mihkel.putrinsh@gmail.com>
+EOF
+gh pr create --base main --head <feature-branch> --title "feat(#N): title" --body-file /tmp/pr-<N>.md
+# the CI run can take a few seconds to register — poll before watching
+for i in $(seq 1 30); do gh pr checks <feature-branch> >/dev/null 2>&1 && break; sleep 10; done
+gh pr checks <feature-branch> --watch --fail-fast
+gh pr merge <feature-branch> --squash --delete-branch --subject "feat(#N): title" --body-file /tmp/pr-<N>.md
+git checkout main && git pull && gh pr view <number> --json state   # must say MERGED
 ```
 
-Then close the PR (if one exists) and delete the branch. After a squash merge the branch's commits are not ancestors of main, so `git branch -d` refuses — verify emptiness first, then force-delete:
-```bash
-gh pr close <number>
-git diff main <feature-branch> --quiet && git branch -D <feature-branch>
-git push origin --delete <feature-branch>   # skip if the branch was local-only
-```
+A failing check means no merge: report the check name and the PR URL. Never `--admin`, never `--auto`. Team-lead checkpoints (scratchpads, task snapshot, inboxes) follow the same path.
 
 ### Issue Closure
 
@@ -310,10 +308,4 @@ The team lead shuts down LAST. Execute in this order:
      done
    fi
    ```
-6. **Commit and push** — all scratchpads, task snapshot, and inboxes:
-   ```bash
-   git add teams/mvox-dev/memory/ teams/mvox-dev/inboxes/
-   git commit -m "chore: save mvox-dev team state"
-   git push
-   ```
-   By convention, **pause before `git push`** so PO can review the diff first (especially the [NEXT SESSION] seed and any scratchpad additions).
+6. **Commit and merge via PR** — all scratchpads, task snapshot, and inboxes, on a `chore/…-checkpoint` branch, then the Merge Procedure above (branch protection rejects a direct push to main). By convention, **pause before opening the PR** so PO can review the diff first (especially the [NEXT SESSION] seed and any scratchpad additions).
