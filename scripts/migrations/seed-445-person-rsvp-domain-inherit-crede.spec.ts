@@ -32,6 +32,9 @@ const RUNNER_ID = 'runner-person-1';
 const cfg: CredeRunnerCfg = { db: 'mvox_crede', token: 'jwt', userId: RUNNER_ID };
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-fake';
+/** #445 (team-lead, 2nd round) — the postRunRecheck delay, made instant for every spec run. */
+const NO_DELAY = 0;
+const noSleep = async (): Promise<void> => {};
 
 const ENTITY_META = 'meta-entity-type';
 const PROPERTY_META = 'meta-property-type';
@@ -91,6 +94,8 @@ interface WireOptions {
 	personPropDefs?: Array<{ name: string; sharing?: string }>;
 	rsvpPropDefs?: Array<{ name: string; sharing?: string }>;
 	readbackOverrides?: Record<string, { sharing?: string; inheritCount?: number }>;
+	/** #445 (team-lead, 2nd round) — overrides applied ONLY from the SECOND call to `entity/{id}?props=_sharing,_inheritrights` onward for a given id (the in-loop read-back is the first; the delayed postRunRecheck is the second) — the tool to reproduce "passed read-back, reverted moments later." */
+	recheckOverrides?: Record<string, { sharing?: string; inheritCount?: number }>;
 	/** #445 — controls the diagnostic `GET /property/{id}` probe response, keyed by the property id the POST response returned. */
 	propertyProbeOverrides?: Record<string, { status?: number; body?: unknown }>;
 }
@@ -101,6 +106,7 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 	const profileIds = opts.profileIds ?? [];
 	const requests: LoggedRequest[] = [];
 	const state = new Map<string, { sharing?: string; inherit?: boolean }>();
+	const readbackCallCounts = new Map<string, number>();
 	for (const e of [...persons, ...rsvps]) {
 		state.set(e._id, { sharing: e._sharing?.[0]?.string, inherit: e._inheritrights?.[0]?.boolean });
 	}
@@ -158,20 +164,25 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 		const readbackMatch = url.match(new RegExp(`^${BASE}/entity/([\\w-]+)\\?props=_sharing,_inheritrights$`));
 		if (method === 'GET' && readbackMatch) {
 			const id = readbackMatch[1];
-			const override = opts.readbackOverrides?.[id];
+			const callNumber = (readbackCallCounts.get(id) ?? 0) + 1;
+			readbackCallCounts.set(id, callNumber);
+			const override = callNumber >= 2 && opts.recheckOverrides?.[id] ? opts.recheckOverrides[id] : opts.readbackOverrides?.[id];
 			const entry = state.get(id) ?? {};
-			const sharingStr = override?.sharing ?? entry.sharing;
-			const inheritCount = override?.inheritCount ?? (entry.inherit !== undefined ? 1 : 0);
+			// 'in' checks, not `??`: an override explicitly setting `sharing:
+			// undefined` (the "reverted to absent" shape) must NOT fall
+			// through to the unchanged state value.
+			const sharingStr = override && 'sharing' in override ? override.sharing : entry.sharing;
+			const inheritCount = override && 'inheritCount' in override ? override.inheritCount : entry.inherit !== undefined ? 1 : 0;
 			return json({
 				entity: {
 					_id: id,
 					_sharing: sharingStr !== undefined ? [{ _id: `p-${id}-sh`, string: sharingStr }] : [],
 					_inheritrights:
-						inheritCount === 2
-							? [{ _id: `p-${id}-in-a`, boolean: entry.inherit }, { _id: `p-${id}-in-b`, boolean: entry.inherit }]
-							: entry.inherit !== undefined
-								? [{ _id: `p-${id}-in`, boolean: entry.inherit }]
-								: []
+						inheritCount === 0
+							? []
+							: inheritCount === 2
+								? [{ _id: `p-${id}-in-a`, boolean: entry.inherit }, { _id: `p-${id}-in-b`, boolean: entry.inherit }]
+								: [{ _id: `p-${id}-in`, boolean: entry.inherit }]
 				}
 			});
 		}
@@ -355,7 +366,7 @@ describe('runSeed445 — live write', () => {
 		const { fetchImpl, requests } = makeWire({
 			persons: [{ _id: 'pe-w1', _sharing: [{ _id: 'old-sh', string: 'private' }], _owner: [RUNNER_ID] }]
 		});
-		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH);
+		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 
 		expect(result.counts.person.written).toBe(1);
 		const mutating = requests.filter((r) => r.method !== 'GET' || /\?props=_sharing,_inheritrights$/.test(r.url));
@@ -363,8 +374,40 @@ describe('runSeed445 — live write', () => {
 			{ url: `${BASE}/property/old-sh`, method: 'DELETE', body: null },
 			{ url: `${BASE}/entity/pe-w1`, method: 'POST', body: [{ type: '_sharing', string: 'domain' }] },
 			{ url: `${BASE}/entity/pe-w1`, method: 'POST', body: [{ type: '_inheritrights', boolean: true }] },
+			{ url: `${BASE}/entity/pe-w1?props=_sharing,_inheritrights`, method: 'GET', body: null },
+			// #445 (team-lead, 2nd round) — the post-run delayed recheck reads
+			// the same written row a second time, same URL shape.
 			{ url: `${BASE}/entity/pe-w1?props=_sharing,_inheritrights`, method: 'GET', body: null }
 		]);
+
+		expect(result.postRunRecheck).toEqual([{ id: 'pe-w1', status: 200, _sharing: [{ _id: 'p-pe-w1-sh', string: 'domain' }], _inheritrights: [{ _id: 'p-pe-w1-in', boolean: true }], stillCorrect: true }]);
+	});
+
+	it("records every written row's returned property ids in the ledger", async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-w2', _sharing: [{ _id: 'old-sh2', string: 'private' }], _owner: [RUNNER_ID] }]
+		});
+		await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
+		expect(payload.writtenPropertyIds).toEqual([{ id: 'pe-w2', sharingPropertyId: 'p-pe-w2-_sharing-new', inheritPropertyId: 'p-pe-w2-_inheritrights-new' }]);
+	});
+
+	it('the delayed recheck catches a row that PASSED its own read-back and reverted moments later — the exact live shape (6a9c3d37...292)', async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-reverts', _owner: [RUNNER_ID] }],
+			// recheckOverrides apply from the SECOND read-back call onward —
+			// the in-loop read-back (call 1) sees the write succeed; the
+			// delayed postRunRecheck (call 2) sees it gone, same as the live
+			// anomaly on 6a9c3d37...292.
+			recheckOverrides: { 'pe-reverts': { sharing: undefined, inheritCount: 0 } }
+		});
+		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+
+		// the write itself succeeded — the in-loop read-back was clean
+		expect(result.counts.person.written).toBe(1);
+		expect(result.counts.person.failed).toBe(0);
+		// but the delayed recheck caught the reversion, dated by this run
+		expect(result.postRunRecheck).toEqual([{ id: 'pe-reverts', status: 200, _sharing: [], _inheritrights: [], stillCorrect: false }]);
 	});
 
 	it('a read-back mismatch on _sharing records the entity failed, writes the ledger, and throws', async () => {
@@ -372,7 +415,7 @@ describe('runSeed445 — live write', () => {
 			persons: [{ _id: 'pe-bad', _owner: [RUNNER_ID] }],
 			readbackOverrides: { 'pe-bad': { sharing: 'private' } }
 		});
-		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 		expect(writeLedgerMock.mock.calls.at(-1)?.[0]).toMatchObject({ payload: expect.objectContaining({ failedIds: ['pe-bad'] }) });
 	});
 });
@@ -383,7 +426,7 @@ describe('runSeed445 — failure diagnostics (#445, closes the ledger gap: a 2xx
 			persons: [{ _id: 'pe-bad', _owner: [RUNNER_ID] }],
 			readbackOverrides: { 'pe-bad': { sharing: 'private' } }
 		});
-		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 
 		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
 		expect(payload.failureDiagnostics).toEqual([
@@ -420,7 +463,7 @@ describe('runSeed445 — failure diagnostics (#445, closes the ledger gap: a 2xx
 				}
 			}
 		});
-		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 
 		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
 		expect(payload.failureDiagnostics[0].sharingPropertyProbe).toEqual({
@@ -453,7 +496,7 @@ describe('runSeed445 — ledger authorization threading', () => {
 		const { fetchImpl } = makeWire({
 			persons: [{ _id: 'pe-1', _sharing: [{ _id: 's1', string: 'domain' }], _inheritrights: [{ _id: 'i1', boolean: true }] }]
 		});
-		await runSeed445(cfg, false, fetchImpl, LIVE_AUTH);
+		await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 		expect(writeLedgerMock.mock.calls[0][0]).toMatchObject({ authorizedBy: LIVE_AUTH, dryRun: false });
 	});
 });
