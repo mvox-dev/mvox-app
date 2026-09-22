@@ -274,6 +274,101 @@ describe('listInactiveMembers', () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		await expect(listInactiveMembers(cfg, fetchImpl)).rejects.toThrow(/500/);
 	});
+
+	it('#456: an archived member with an unreadable person reference is SKIPPED — one console.warn naming her member id, healthy rows returned in wire order (full ListRead shape)', async () => {
+		// Identical contract to listActiveMembers (rosterData.spec.ts, same issue):
+		// deleting the person in Entu soft-deletes every property referencing it,
+		// so `person` is genuinely absent on the wire — the row skips, the rest of
+		// the archived view renders.
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const fetchImpl = vi.fn().mockResolvedValue(
+				json({
+					count: 3,
+					entities: [
+						{
+							_id: 'member-9',
+							person: [{ reference: 'person-9' }],
+							_parent: [
+								{ reference: 'sec-alto', entity_type: 'section' },
+								{ reference: 'db-1', entity_type: 'database' }
+							]
+						},
+						{ _id: 'member-orphan' },
+						{
+							_id: 'member-8',
+							person: [{ reference: 'person-8' }],
+							_parent: [{ reference: 'db-1', entity_type: 'database' }]
+						}
+					]
+				})
+			);
+			const read = await listInactiveMembers(cfg, fetchImpl);
+			// FULL toEqual: healthy rows in wire order; `total` stays the server's
+			// count; `truncated` false — deriveListRead keys off the RAW wire
+			// length, so the client-side drop can never fabricate a truncation.
+			expect(read).toEqual({
+				items: [
+					{
+						memberId: 'member-9',
+						personId: 'person-9',
+						sectionIds: ['sec-alto'],
+						dbEntityId: 'db-1'
+					},
+					{ memberId: 'member-8', personId: 'person-8', sectionIds: [], dbEntityId: 'db-1' }
+				],
+				total: 3,
+				truncated: false
+			});
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining('member-orphan'));
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it('#456: an archived roster with NO orphaned member is unchanged — exact pre-change output, console.warn never called', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const fetchImpl = vi.fn().mockResolvedValue(
+				json({
+					count: 2,
+					entities: [
+						{
+							_id: 'member-9',
+							person: [{ reference: 'person-9' }],
+							_parent: [
+								{ reference: 'sec-alto', entity_type: 'section' },
+								{ reference: 'db-1', entity_type: 'database' }
+							]
+						},
+						{
+							_id: 'member-8',
+							person: [{ reference: 'person-8' }],
+							_parent: [{ reference: 'db-1', entity_type: 'database' }]
+						}
+					]
+				})
+			);
+			const read = await listInactiveMembers(cfg, fetchImpl);
+			expect(read).toEqual({
+				items: [
+					{
+						memberId: 'member-9',
+						personId: 'person-9',
+						sectionIds: ['sec-alto'],
+						dbEntityId: 'db-1'
+					},
+					{ memberId: 'member-8', personId: 'person-8', sectionIds: [], dbEntityId: 'db-1' }
+				],
+				total: 2,
+				truncated: false
+			});
+			expect(warn).not.toHaveBeenCalled();
+		} finally {
+			warn.mockRestore();
+		}
+	});
 });
 
 // ── loadInactiveRoster — loadRoster's orchestration over the archived read ────

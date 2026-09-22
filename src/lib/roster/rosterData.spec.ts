@@ -150,12 +150,96 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		await expect(listActiveMembers(cfg, fetchImpl)).rejects.toThrow(/500/);
 	});
 
-	it('fails loud when a returned member entity carries an unreadable person reference — names the member id, asserts can\'t-see (not doesn\'t-exist), never silently dropped', async () => {
-		const orphanFetch = () =>
-			vi.fn().mockResolvedValue(json({ entities: [{ _id: 'member-orphan' }] }));
-		await expect(listActiveMembers(cfg, orphanFetch())).rejects.toThrow(/member-orphan/);
-		await expect(listActiveMembers(cfg, orphanFetch())).rejects.toThrow(/cannot read/i);
-		await expect(listActiveMembers(cfg, orphanFetch())).rejects.not.toThrow(/has no person reference/i);
+	it('#456: a member with an unreadable person reference is SKIPPED — one console.warn naming her member id, healthy rows returned in wire order (full ListRead shape)', async () => {
+		// Deleting the person in Entu soft-deletes every property referencing it
+		// (entu-www db-mutations), so `person` is genuinely absent on the wire —
+		// the row skips (house shape: attendanceData listAttendance, libraryData
+		// listLendings), the rest of the roster renders.
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const fetchImpl = vi.fn().mockResolvedValue(
+				json({
+					count: 3,
+					entities: [
+						{
+							_id: 'member-1',
+							person: [{ reference: 'person-a' }],
+							_parent: [{ reference: 'sec-sop', entity_type: 'section' }]
+						},
+						{ _id: 'member-orphan' },
+						{
+							_id: 'member-2',
+							person: [{ reference: 'person-b' }],
+							_parent: [{ reference: 'org-1', entity_type: 'database' }]
+						}
+					]
+				})
+			);
+			const read = await listActiveMembers(cfg, fetchImpl);
+			// FULL toEqual: the two healthy rows in wire order; `total` stays the
+			// server's count (the orphan is still a member the server holds);
+			// `truncated` false — deriveListRead keys off the RAW wire length, so a
+			// client-side drop can never fabricate a truncation the server never
+			// reported.
+			expect(read).toEqual({
+				items: [
+					{
+						memberId: 'member-1',
+						personId: 'person-a',
+						sectionIds: ['sec-sop'],
+						dbEntityId: undefined
+					},
+					{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
+				],
+				total: 3,
+				truncated: false
+			});
+			// One warning per dropped row per load, naming the member id.
+			expect(warn).toHaveBeenCalledTimes(1);
+			expect(warn).toHaveBeenCalledWith(expect.stringContaining('member-orphan'));
+		} finally {
+			warn.mockRestore();
+		}
+	});
+
+	it('#456: a roster with NO orphaned member is unchanged — exact pre-change output, console.warn never called', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		try {
+			const fetchImpl = vi.fn().mockResolvedValue(
+				json({
+					count: 2,
+					entities: [
+						{
+							_id: 'member-1',
+							person: [{ reference: 'person-a' }],
+							_parent: [{ reference: 'sec-sop', entity_type: 'section' }]
+						},
+						{
+							_id: 'member-2',
+							person: [{ reference: 'person-b' }],
+							_parent: [{ reference: 'org-1', entity_type: 'database' }]
+						}
+					]
+				})
+			);
+			const read = await listActiveMembers(cfg, fetchImpl);
+			expect(read).toEqual({
+				items: [
+					{
+						memberId: 'member-1',
+						personId: 'person-a',
+						sectionIds: ['sec-sop'],
+						dbEntityId: undefined
+					},
+					{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
+				],
+				total: 2,
+				truncated: false
+			});
+			expect(warn).not.toHaveBeenCalled();
+		} finally {
+			warn.mockRestore();
+		}
 	});
 });
 

@@ -165,20 +165,24 @@ export async function listInactiveMembers(
 		}>;
 	};
 	const raws = body.entities ?? [];
-	const items = raws.map((raw) => {
+	const items = raws.flatMap((raw) => {
 		const personId = raw.person?.[0]?.reference;
+		// #456 — same as listActiveMembers: a missing `person` here is genuinely
+		// absent data (soft-deleted on the wire), not a rights gap. Skip and warn,
+		// naming the member id (house shape: attendanceData.ts, libraryData.ts).
 		if (!personId) {
-			throw new Error(
-				`listInactiveMembers: member ${raw._id} — cannot read person reference (visible fields insufficient for this reader's rights)`
+			console.warn(
+				`listInactiveMembers: skipping member ${raw._id} — no readable person reference`
 			);
+			return [];
 		}
 		const sectionIds = (raw._parent ?? [])
 			.filter((p) => p.entity_type === 'section')
 			.map((p) => p.reference);
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
-		return { memberId: raw._id, personId, sectionIds, dbEntityId };
+		return [{ memberId: raw._id, personId, sectionIds, dbEntityId }];
 	});
-	// RAW length, not `items.length` — the mapper throws rather than dropping, but
+	// RAW length, not `items.length` — the mapper drops rather than throws, but
 	// the contract is the wire array before any client-side filtering
 	// ($lib/entu/listRead).
 	return deriveListRead(items, raws.length, body.count);
