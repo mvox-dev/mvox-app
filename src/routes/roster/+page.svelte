@@ -115,9 +115,11 @@
 	// "which button" flag, so a mint/withdraw success routes the row to its
 	// next control set for free the moment the record is re-read.
 	let joinStates = $state<Record<string, JoinState>>({});
-	// PO ruling 2026-09-09 (issue #294): the three-state DISPLAY is for every
-	// admin; the three CONTROLS (kutsu/saada uuesti/tühista kutse) gate on
-	// `_owner` alone (probe-observed: `_owner` mint → HTTP 200, `_editor` →
+	// The DISPLAY gates on the READ alone (#454, Mihkel 2026-09-22, superseding
+	// the 2026-09-09 every-admin framing for this half): a chip renders iff
+	// this record carries a state for the row. The three CONTROLS
+	// (kutsu/saada uuesti/tühista kutse) gate on `_owner` alone (PO ruling
+	// 2026-09-09, unchanged) (probe-observed: `_owner` mint → HTTP 200, `_editor` →
 	// HTTP 403 "User not in _owner property"). 'loading' fails CLOSED — same
 	// discipline as `adminStore`'s own initial state — so a control never
 	// renders ahead of knowing whether this caller actually holds it.

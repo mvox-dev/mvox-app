@@ -16,14 +16,24 @@
 //   `kutsu` reachable on a row that already has a live link is a
 //   STATE-ROUTING BUG, not a case to handle — pinned as unreachable.
 //
-//   WHO SEES WHAT (PO ruling 2026-09-09, probe-verified): the three-state
-//   DISPLAY is for EVERY admin (`admin === 'admin'`, i.e. `_owner` OR
-//   `_editor` on the database entity, adminStore.ts:84-86 — a `_viewer`-level
-//   read already returns the placeholder shape, so an editor-admin loses
-//   nothing). The three CONTROLS are `_owner` ONLY (probe: `_owner` mint →
-//   HTTP 200; `_editor` → HTTP 403 "User not in _owner property"). An
-//   editor-admin gets ONE LINE where the controls would be — NOT three
-//   disabled buttons, NOT three failing buttons, NOT silence.
+//   WHO SEES WHAT — the DISPLAY (#454, Mihkel 2026-09-22, supersedes the
+//   2026-09-09 role framing for this half): the READ is the gate. A chip
+//   renders when `listJoinStates` returned a state for that row, and not
+//   otherwise — no app-computed role (`admin`, `ownerTier`) is consulted. A
+//   `_viewer`-level read already returns the placeholder shape, so everyone
+//   Entu lets read sees the true state, and a reader Entu refuses sees no
+//   chip rather than a guessed one. That refusal is ALL-OR-NOTHING at the
+//   page: `listJoinStates` fans out with `Promise.all`
+//   (linkedIdentities.ts:110) and rejects whole on the first refused person,
+//   and the page's catch (roster/+page.svelte:517-520) blanks the entire
+//   record — so a partially-refused reader loses EVERY chip, not one. Both
+//   halves are pinned in (A) below.
+//
+//   WHO SEES WHAT — the CONTROLS (PO ruling 2026-09-09, probe-verified,
+//   UNCHANGED by #454): `_owner` ONLY (probe: `_owner` mint → HTTP 200;
+//   `_editor` → HTTP 403 "User not in _owner property"). An editor-admin
+//   gets ONE LINE where the controls would be — NOT three disabled buttons,
+//   NOT three failing buttons, NOT silence.
 //
 //   ACTIONS: kutsu and saada uuesti mint onto the EXISTING person via
 //   mintSelfLinkInvite (sweep-then-mint — the one-live-link invariant is
@@ -331,7 +341,7 @@ async function openCard(container: HTMLElement, memberId: string) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('(A) three-state display — every admin, contents not presence', () => {
+describe('(A) three-state display — the read is the gate, contents not presence', () => {
 	// #302 item 2 REWRITE (the one assertion class this issue falsifies by
 	// design): joined is the SILENT default — no chip at all — while
 	// not-invited and invited-awaiting keep their distinct chips. The old
@@ -401,8 +411,14 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(chipSet(container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
 	});
 
-	it("#454: a refused read (no key in listJoinStates' answer) renders NO chip for that person while the others' chips render — never a guessed one", async () => {
-		// Entu refused pp-4: the producer's answer simply has no key for her.
+	// The PAGE-level half of the rule, stated as such: the chip condition is
+	// `joinStates[row.personId] !== undefined` and nothing else, so a personId
+	// the answer does not carry gets NO chip. This is the page's own guard,
+	// NOT a shape today's producer can emit — `listJoinStates` writes a key for
+	// every personId it is handed (linkedIdentities.ts:105-121). The shape the
+	// wire CAN produce is the whole-call rejection pinned in the next test.
+	it('#454 PAGE guard: a personId missing from the answer renders NO chip, while the keys that ARE present render theirs — never a guessed one', async () => {
+		// Hand the page an answer with no key for pp-4 (Dora, m4).
 		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
 			Promise.resolve(
 				Object.fromEntries(
@@ -417,6 +433,28 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(chipSet(container)).toEqual({
 			'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' }
 		});
+	});
+
+	it('#454 WIRE refusal: the read refuses per CALLER, not per person — listJoinStates rejects and the page carries NO chip on any row', async () => {
+		// What a reader Entu refuses actually gets: `listJoinStates` fans out
+		// with `Promise.all`, so ONE refused person rejects the whole call
+		// (linkedIdentities.ts:110, FAIL LOUD by design), and the page's catch
+		// sets `joinStates = {}` (+page.svelte:517-520). Every chip goes — and
+		// that is the point: no row shows a state this reader never observed.
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		listJoinStatesMock.mockRejectedValue(
+			new Error('listLinkedIdentities: identity read failed: HTTP 403')
+		);
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		// Readiness: the rows only render once `load()` has run the join-state
+		// try/catch to completion (`status` flips to 'ready' after it), so the
+		// emptiness below is the SETTLED state, not an unresolved load. The row
+		// existence check keeps this a claim about CHIPS, not about a page that
+		// failed to render anything at all.
+		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
+		expect(chipSet(container)).toEqual({});
+		expect(errSpy).toHaveBeenCalled();
+		errSpy.mockRestore();
 	});
 
 	it('#454: the joined state still renders no chip for a NON-admin — silence stays contents-derived, not role-derived', async () => {
