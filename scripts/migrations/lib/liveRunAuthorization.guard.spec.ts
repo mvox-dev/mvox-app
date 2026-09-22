@@ -71,7 +71,8 @@ const CREDE_MUTATING_SCRIPTS = [
 	'seed-256-link-type-crede-2026-09-10.ts',
 	'seed-265-admin-member-record-type-crede-2026-09-06.ts',
 	'seed-282-id-code-propdef-crede-2026-09-07.ts',
-	'seed-293-crede-season-repertoire-2026-09-08.ts'
+	'seed-293-crede-season-repertoire-2026-09-08.ts',
+	'seed-crede-person-rsvp-domain-inherit-2026-09-22.ts'
 ] as const;
 
 const MUTATION_MARKERS = [
