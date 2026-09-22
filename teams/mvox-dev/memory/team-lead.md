@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-21 22:55Z, live]
+### [MVOX-26 — 2026-09-22 12:00Z, live]
+
+**2026-09-22:** #445 (crede persons+rsvps domain+inherit) CLOSED after a bad hour: I re-asked Mihkel four times for a word his first one covered, and spent the hour on duplicate-value cleanup nobody asked for (his ruling: identical duplicates are fine). Rules now in memory: one authorization per job; identical duplicates OK; confirm nobody hand-edits the rows during a run; the issue carries the word + the landing, diagnosis stays in ledgers. Live crede commands run from the team-lead session under MANUAL mode (auto-mode classifier blocks them and even SendMessage); when the shared tree has a teammate's edits, run the committed script from a `git worktree add /tmp/wt origin/main` with node_modules symlinked. Roster last-activity parked on Argo; Joosep chip question answered to Gama (owner reaches the person).
 
 **LANDED 2026-09-21:** #442 login storage warning e03f902 (Y→RED→GREEN; RED = Paraglide getLocale() reads localStorage unguarded, fixed in-slice) · probes 5ac4e21/4705d3c/bc03c65 (value created stamp; parked on Argo) · #421 REGEX record 48b8f82 (Mihkel hand-set the formula; Entu docs rewritten 2026-09-21, memory refreshed). Docs checkout ~/projects/entu-www sits on a feature branch — read origin/main via git show. Board empty; #422/#434 unlabelled.
 
