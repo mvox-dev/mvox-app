@@ -126,16 +126,17 @@ export async function listActiveMembers(
 		}>;
 	};
 	const raws = body.entities ?? [];
-	const items = raws.map((raw) => {
+	const items = raws.flatMap((raw) => {
 		const personId = raw.person?.[0]?.reference;
-		// `person` is REQUIRED on the target member shape — fail loud, naming the
-		// object, rather than silently dropping her out of the roster. An absent
-		// value here means THIS reader's token couldn't read it — not proof the
-		// property doesn't exist (a narrower-than-entity sharing tier can hide it).
+		// #456 — deleting a person in Entu soft-deletes every property referencing
+		// it, so a missing `person` here is genuinely absent data, not a
+		// narrower-than-entity sharing tier hiding it. Skip the row and warn,
+		// naming the member id (house shape: attendanceData.ts listAttendance /
+		// listMyAttendance, libraryData.ts listLendings) — never fabricate a
+		// personId, never break the rest of the roster for one bad row.
 		if (!personId) {
-			throw new Error(
-				`listActiveMembers: member ${raw._id} — cannot read person reference (visible fields insufficient for this reader's rights; may be a narrower-than-entity sharing tier, not necessarily absent data)`
-			);
+			console.warn(`listActiveMembers: skipping member ${raw._id} — no readable person reference`);
+			return [];
 		}
 		// PO ruling 2026-08-11 (#95/#80) — every `_parent` entry that is a section
 		// is a section this member belongs to; [] when she has none. Sole source,
@@ -149,17 +150,19 @@ export async function listActiveMembers(
 		// non-section entry is a LEGACY `organization` parent (see
 		// rosterData.database.spec.ts).
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
-		return {
-			memberId: raw._id,
-			personId,
-			sectionIds,
-			dbEntityId
-		};
+		return [
+			{
+				memberId: raw._id,
+				personId,
+				sectionIds,
+				dbEntityId
+			}
+		];
 	});
-	// RAW length, not `items.length`: this mapper throws rather than dropping, so
-	// the two are equal today — but the contract is "the wire array before any
-	// client-side filtering", so a future drop here can never fabricate a
-	// truncation the server never reported ($lib/entu/listRead).
+	// RAW length, not `items.length`: the mapper drops rather than throws, so the
+	// contract is "the wire array before any client-side filtering" — a dropped
+	// row here can never fabricate a truncation the server never reported
+	// ($lib/entu/listRead).
 	return deriveListRead(items, raws.length, body.count);
 }
 
