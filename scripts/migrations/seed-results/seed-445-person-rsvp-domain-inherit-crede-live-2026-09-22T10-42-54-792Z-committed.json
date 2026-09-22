@@ -1,0 +1,290 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": true,
+  "committed": true,
+  "rerun": false,
+  "counts": {
+    "person": {
+      "total": 27,
+      "alreadyDomain": 26,
+      "needsSharing": 1,
+      "fromPrivate": 1,
+      "fromPublic": 0,
+      "fromAbsent": 0,
+      "alreadyInherit": 27,
+      "needsInherit": 0,
+      "toWrite": 1,
+      "failed": 0,
+      "written": 1
+    },
+    "rsvp": {
+      "total": 150,
+      "alreadyDomain": 108,
+      "needsSharing": 42,
+      "fromPrivate": 0,
+      "fromPublic": 0,
+      "fromAbsent": 42,
+      "alreadyInherit": 108,
+      "needsInherit": 42,
+      "toWrite": 42,
+      "failed": 1,
+      "written": 4
+    }
+  },
+  "visibility": {
+    "person": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "email",
+        "name"
+      ]
+    },
+    "rsvp": {
+      "typeCap": "domain",
+      "capBlocksProjection": false,
+      "domainVisiblePropDefNames": [
+        "event",
+        "going_ref",
+        "late_ref",
+        "maybe_ref",
+        "member",
+        "name",
+        "not_going_ref",
+        "notes",
+        "status"
+      ]
+    }
+  },
+  "movingSet": [
+    {
+      "id": "6a8f471a5eb2498f434e5111",
+      "type": "person",
+      "fromSharing": "private"
+    },
+    {
+      "id": "6a9c3d35ca67df980f417277",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d36ca67df980f417280",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d37ca67df980f417289",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d37ca67df980f417292",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d38ca67df980f41729b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d39ca67df980f4172a4",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3aca67df980f4172ad",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3bca67df980f4172b6",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d3cca67df980f4172bf",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d41ca67df980f4172c8",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d44ca67df980f4172d1",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d45ca67df980f4172da",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d46ca67df980f4172e3",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d47ca67df980f4172ec",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d48ca67df980f4172f5",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d49ca67df980f4172fe",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4aca67df980f417307",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4bca67df980f417310",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4cca67df980f417319",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4dca67df980f417322",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4eca67df980f41732b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d4fca67df980f417334",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d50ca67df980f41733d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d59ca67df980f41736a",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f417373",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5aca67df980f41737c",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5bca67df980f417385",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5cca67df980f41738e",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f417397",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5dca67df980f4173a0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5eca67df980f4173a9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d5fca67df980f4173b2",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6a9c3d60ca67df980f4173bb",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa92c3631ced11fa92bba71",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932d931ced11fa92bbade",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932da31ced11fa92bbae7",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932dc31ced11fa92bbaf0",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932de31ced11fa92bbaf9",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932df31ced11fa92bbb02",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932e031ced11fa92bbb0b",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f331ced11fa92bbb14",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    },
+    {
+      "id": "6aa932f531ced11fa92bbb1d",
+      "type": "rsvp",
+      "fromSharing": "absent"
+    }
+  ],
+  "movingPersonIdentityCount": 1,
+  "widerThanExpected": false,
+  "writtenIds": [
+    "6a8f471a5eb2498f434e5111",
+    "6a9c3d35ca67df980f417277",
+    "6a9c3d36ca67df980f417280",
+    "6a9c3d37ca67df980f417289",
+    "6a9c3d37ca67df980f417292"
+  ],
+  "failedIds": [
+    "6a9c3d38ca67df980f41729b"
+  ],
+  "authorizedBy": "Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-5774916999"
+}
