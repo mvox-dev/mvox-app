@@ -91,6 +91,8 @@ interface WireOptions {
 	personPropDefs?: Array<{ name: string; sharing?: string }>;
 	rsvpPropDefs?: Array<{ name: string; sharing?: string }>;
 	readbackOverrides?: Record<string, { sharing?: string; inheritCount?: number }>;
+	/** #445 — controls the diagnostic `GET /property/{id}` probe response, keyed by the property id the POST response returned. */
+	propertyProbeOverrides?: Record<string, { status?: number; body?: unknown }>;
 }
 
 function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: LoggedRequest[] } {
@@ -133,6 +135,14 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 
 		const deleteMatch = url.match(new RegExp(`^${BASE}/property/(.+)$`));
 		if (method === 'DELETE' && deleteMatch) return json({ deleted: true });
+
+		const propertyGetMatch = url.match(new RegExp(`^${BASE}/property/([\\w-]+)$`));
+		if (method === 'GET' && propertyGetMatch) {
+			const propId = propertyGetMatch[1];
+			const override = opts.propertyProbeOverrides?.[propId];
+			if (override) return json(override.body ?? {}, override.status ?? 200);
+			return json({ error: 'not found' }, 404);
+		}
 
 		const postMatch = url.match(new RegExp(`^${BASE}/entity/([\\w-]+)$`));
 		if (method === 'POST' && postMatch) {
@@ -364,6 +374,60 @@ describe('runSeed445 — live write', () => {
 		});
 		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 		expect(writeLedgerMock.mock.calls.at(-1)?.[0]).toMatchObject({ payload: expect.objectContaining({ failedIds: ['pe-bad'] }) });
+	});
+});
+
+describe('runSeed445 — failure diagnostics (#445, closes the ledger gap: a 2xx POST followed by an empty read-back)', () => {
+	it('records the request bodies, POST status+body (incl. the returned property _id), and the read-back status+body', async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-bad', _owner: [RUNNER_ID] }],
+			readbackOverrides: { 'pe-bad': { sharing: 'private' } }
+		});
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+
+		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
+		expect(payload.failureDiagnostics).toEqual([
+			{
+				entityId: 'pe-bad',
+				sharingPost: {
+					requestBody: [{ type: '_sharing', string: 'domain' }],
+					status: 200,
+					body: { properties: [{ _id: 'p-pe-bad-_sharing-new', type: '_sharing' }] }
+				},
+				inheritPost: {
+					requestBody: [{ type: '_inheritrights', boolean: true }],
+					status: 200,
+					body: { properties: [{ _id: 'p-pe-bad-_inheritrights-new', type: '_inheritrights' }] }
+				},
+				readback: {
+					status: 200,
+					body: { entity: { _id: 'pe-bad', _sharing: [{ _id: 'p-pe-bad-sh', string: 'private' }], _inheritrights: [{ _id: 'p-pe-bad-in', boolean: true }] } }
+				},
+				sharingPropertyProbe: { propertyId: 'p-pe-bad-_sharing-new', status: 404, body: { error: 'not found' } },
+				inheritPropertyProbe: { propertyId: 'p-pe-bad-_inheritrights-new', status: 404, body: { error: 'not found' } }
+			}
+		]);
+	});
+
+	it('when the property probe finds the value present after all, its body is recorded verbatim — the exact "2xx POST, nothing persisted at read-back, but IS there moments later" shape', async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-ghost', _owner: [RUNNER_ID] }],
+			readbackOverrides: { 'pe-ghost': { sharing: 'private' } },
+			propertyProbeOverrides: {
+				'p-pe-ghost-_sharing-new': {
+					status: 200,
+					body: { _id: 'p-pe-ghost-_sharing-new', type: '_sharing', string: 'domain', entity: 'pe-ghost', created: { at: '2026-09-22T10:42:48.000Z', by: RUNNER_ID } }
+				}
+			}
+		});
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+
+		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
+		expect(payload.failureDiagnostics[0].sharingPropertyProbe).toEqual({
+			propertyId: 'p-pe-ghost-_sharing-new',
+			status: 200,
+			body: { _id: 'p-pe-ghost-_sharing-new', type: '_sharing', string: 'domain', entity: 'pe-ghost', created: { at: '2026-09-22T10:42:48.000Z', by: RUNNER_ID } }
+		});
 	});
 });
 

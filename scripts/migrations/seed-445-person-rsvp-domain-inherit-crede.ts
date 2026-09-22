@@ -215,8 +215,41 @@ const COMMITTED_ALLOW = [
 	'movingSet',
 	'movingPersonIdentityCount',
 	'widerThanExpected',
-	'profileOverlap'
+	'profileOverlap',
+	// #445 failure-diagnostics fields — ids/statuses/structure only; the
+	// writer's own blanket rule excludes 'string' from the committed twin
+	// regardless (rights-tier text, not PII, but the full detail survives
+	// in the gitignored instance ledger either way).
+	'failureDiagnostics',
+	'entityId',
+	'sharingPost',
+	'inheritPost',
+	'readback',
+	'sharingPropertyProbe',
+	'inheritPropertyProbe',
+	'requestBody',
+	'status',
+	'body',
+	'propertyId',
+	'properties',
+	'_id',
+	'entity',
+	'created',
+	'at',
+	'by',
+	'boolean'
 ] as const;
+
+/** Parse a Response body as JSON, tolerating a non-JSON or empty body — the
+ * diagnostic paths below must never themselves throw while building a
+ * failure record. */
+async function safeJson(res: Response): Promise<unknown> {
+	try {
+		return await res.json();
+	} catch {
+		return null;
+	}
+}
 
 function tierOf(sharingString: string | undefined): Tier {
 	if (sharingString === 'domain' || sharingString === 'public' || sharingString === 'private') return sharingString;
@@ -337,6 +370,22 @@ export async function runSeed445(
 
 	const writtenIds: string[] = [];
 	const failedIds: string[] = [];
+	// #445 (team-lead, post-abort diagnosis) — closes the ledger gap: the
+	// FIRST live run's failure carried no record of what the POSTs actually
+	// returned, only the thrown message. One entry per failed entity: the
+	// exact request body sent for each property this entity needed, the
+	// POST response (status + body, including any new property `_id` it
+	// returned), the read-back response, and — ONLY when a POST response
+	// carried a property `_id` — a diagnostic `GET /property/{id}` on that
+	// exact id, so a "POST said ok, but nothing persisted" gap (exactly
+	// what happened on 6a9c3d38...29b) is visible from the ledger alone,
+	// no separate live probe needed next time. Ids/statuses/structure only
+	// — no member value ever named in a report; `string`/`boolean` payload
+	// values are rights-tier text (domain/private/public, true/false), not
+	// PII, but `string` is still excluded from the COMMITTED twin below
+	// (the writer's own blanket rule) — the full detail survives in the
+	// gitignored instance ledger regardless.
+	const failureDiagnostics: Array<Record<string, unknown>> = [];
 	let aborted = false;
 
 	function toWriteList(): Classified[] {
@@ -475,8 +524,13 @@ export async function runSeed445(
 	}
 
 	for (const entity of toWriteList()) {
+		// Populated as each step completes; attached to the ledger verbatim
+		// (ids/statuses/structure — see the accumulator's own comment above)
+		// if this entity ends up in the catch block below.
+		const diag: Record<string, unknown> = { entityId: entity.id };
 		try {
 			if (entity.needsSharing) {
+				const requestBody = [{ type: '_sharing', string: 'domain' }];
 				if (entity.sharingValueId) {
 					const delRes = await entuFetch(cfg.db, `property/${entity.sharingValueId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
 					if (!delRes.ok) throw new Error(`DELETE _sharing property/${entity.sharingValueId} failed: ${delRes.status}`);
@@ -485,12 +539,15 @@ export async function runSeed445(
 					cfg.db,
 					`entity/${entity.id}`,
 					cfg.token,
-					{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([{ type: '_sharing', string: 'domain' }]) },
+					{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) },
 					fetchImpl
 				);
+				const postBody = await safeJson(postRes);
+				diag.sharingPost = { requestBody, status: postRes.status, body: postBody };
 				if (!postRes.ok) throw new Error(`POST _sharing entity/${entity.id} failed: ${postRes.status}`);
 			}
 			if (entity.needsInherit) {
+				const requestBody = [{ type: '_inheritrights', boolean: true }];
 				if (entity.inheritValueId) {
 					const delRes = await entuFetch(cfg.db, `property/${entity.inheritValueId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
 					if (!delRes.ok) throw new Error(`DELETE _inheritrights property/${entity.inheritValueId} failed: ${delRes.status}`);
@@ -499,19 +556,22 @@ export async function runSeed445(
 					cfg.db,
 					`entity/${entity.id}`,
 					cfg.token,
-					{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify([{ type: '_inheritrights', boolean: true }]) },
+					{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) },
 					fetchImpl
 				);
+				const postBody = await safeJson(postRes);
+				diag.inheritPost = { requestBody, status: postRes.status, body: postBody };
 				if (!postRes.ok) throw new Error(`POST _inheritrights entity/${entity.id} failed: ${postRes.status}`);
 			}
 
 			const readRes = await entuFetch(cfg.db, `entity/${entity.id}?props=_sharing,_inheritrights`, cfg.token, {}, fetchImpl);
-			if (!readRes.ok) throw new Error(`read-back GET for ${entity.id} failed: ${readRes.status}`);
-			const readBody = (await readRes.json()) as {
+			const readBody = (await safeJson(readRes)) as {
 				entity?: { _sharing?: Array<{ string?: string }>; _inheritrights?: Array<{ boolean?: boolean }> };
-			};
-			const sharingVals = readBody.entity?._sharing ?? [];
-			const inheritVals = readBody.entity?._inheritrights ?? [];
+			} | null;
+			diag.readback = { status: readRes.status, body: readBody };
+			if (!readRes.ok) throw new Error(`read-back GET for ${entity.id} failed: ${readRes.status}`);
+			const sharingVals = readBody?.entity?._sharing ?? [];
+			const inheritVals = readBody?.entity?._inheritrights ?? [];
 			if (sharingVals.length !== 1 || sharingVals[0]?.string !== 'domain') {
 				throw new Error(`READ-BACK _sharing mismatch for ${entity.id}: ${JSON.stringify(sharingVals)}`);
 			}
@@ -522,7 +582,24 @@ export async function runSeed445(
 			writtenIds.push(entity.id);
 		} catch (err) {
 			failedIds.push(entity.id);
-			writeLedgerNow();
+
+			// Diagnostic property probe — ONLY for a property whose POST
+			// response actually returned a new `_id`: GET /property/{that id}
+			// and record status+body, so "the POST said ok but nothing
+			// persisted" is visible from the ledger without a separate live
+			// probe next time.
+			async function probeIfIdReturned(postField: 'sharingPost' | 'inheritPost', probeField: string, propType: string): Promise<void> {
+				const post = diag[postField] as { body?: { properties?: Array<{ _id?: string; type?: string }> } } | undefined;
+				const newId = post?.body?.properties?.find((p) => p.type === propType)?._id;
+				if (!newId) return;
+				const probeRes = await entuFetch(cfg.db, `property/${newId}`, cfg.token, {}, fetchImpl);
+				diag[probeField] = { propertyId: newId, status: probeRes.status, body: await safeJson(probeRes) };
+			}
+			await probeIfIdReturned('sharingPost', 'sharingPropertyProbe', '_sharing');
+			await probeIfIdReturned('inheritPost', 'inheritPropertyProbe', '_inheritrights');
+
+			failureDiagnostics.push(diag);
+			writeLedgerNow({ failureDiagnostics });
 			throw err;
 		}
 	}
