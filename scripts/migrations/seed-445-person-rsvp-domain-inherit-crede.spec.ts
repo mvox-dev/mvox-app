@@ -93,9 +93,9 @@ interface WireOptions {
 	rsvpCap?: string;
 	personPropDefs?: Array<{ name: string; sharing?: string }>;
 	rsvpPropDefs?: Array<{ name: string; sharing?: string }>;
-	readbackOverrides?: Record<string, { sharing?: string; inheritCount?: number }>;
-	/** #445 (team-lead, 2nd round) — overrides applied ONLY from the SECOND call to `entity/{id}?props=_sharing,_inheritrights` onward for a given id (the in-loop read-back is the first; the delayed postRunRecheck is the second) — the tool to reproduce "passed read-back, reverted moments later." */
-	recheckOverrides?: Record<string, { sharing?: string; inheritCount?: number }>;
+	readbackOverrides?: Record<string, { sharing?: string; inheritCount?: number; sharingCount?: number }>;
+	/** #445 (team-lead, 2nd round) — overrides applied ONLY from the SECOND call to `entity/{id}?props=_sharing,_inheritrights` onward for a given id (the in-loop read-back is the first; the delayed postRunRecheck is the second) — the tool to reproduce "passed read-back, reverted moments later." Also covers the self-heal re-read (3rd round): the 2nd call is answered by this override, and so is the 3rd (postRunRecheck) unless it differs. */
+	recheckOverrides?: Record<string, { sharing?: string; inheritCount?: number; sharingCount?: number }>;
 	/** #445 — controls the diagnostic `GET /property/{id}` probe response, keyed by the property id the POST response returned. */
 	propertyProbeOverrides?: Record<string, { status?: number; body?: unknown }>;
 }
@@ -173,10 +173,16 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 			// through to the unchanged state value.
 			const sharingStr = override && 'sharing' in override ? override.sharing : entry.sharing;
 			const inheritCount = override && 'inheritCount' in override ? override.inheritCount : entry.inherit !== undefined ? 1 : 0;
+			const sharingCount = override && 'sharingCount' in override ? override.sharingCount : sharingStr !== undefined ? 1 : 0;
 			return json({
 				entity: {
 					_id: id,
-					_sharing: sharingStr !== undefined ? [{ _id: `p-${id}-sh`, string: sharingStr }] : [],
+					_sharing:
+						sharingCount === 0
+							? []
+							: sharingCount === 2
+								? [{ _id: `p-${id}-sh-a`, string: sharingStr }, { _id: `p-${id}-sh-b`, string: sharingStr }]
+								: [{ _id: `p-${id}-sh`, string: sharingStr }],
 					_inheritrights:
 						inheritCount === 0
 							? []
@@ -417,6 +423,58 @@ describe('runSeed445 — live write', () => {
 		});
 		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 		expect(writeLedgerMock.mock.calls.at(-1)?.[0]).toMatchObject({ payload: expect.objectContaining({ failedIds: ['pe-bad'] }) });
+	});
+});
+
+describe('runSeed445 — hidden pre-existing value self-heal (#445, 3rd round: 6a9c3d37...292 / 6a9c3d38...729b shape)', () => {
+	it('a duplicate found at read-back self-heals: deletes THIS RUN\'S own posted id, converges to the hidden pre-existing value, classifies pre-existing-hidden, no duplicate left', async () => {
+		const { fetchImpl, requests } = makeWire({
+			persons: [{ _id: 'pe-hidden', _owner: [RUNNER_ID] }],
+			// call 1 (in-loop read-back): _sharing shows TWO values — this
+			// run's own fresh POST landed beside a hidden pre-existing one.
+			readbackOverrides: { 'pe-hidden': { sharingCount: 2 } },
+			// call 2+ (self-heal re-read, then postRunRecheck): back to one
+			// correct value, as if the self-heal delete converged it.
+			recheckOverrides: { 'pe-hidden': { sharingCount: 1, sharing: 'domain' } }
+		});
+		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
+
+		expect(result.counts.person.written).toBe(1);
+		expect(result.counts.person.failed).toBe(0);
+		expect(result.counts.person.preExistingHidden).toBe(1);
+
+		// the self-heal DELETE targets the id THIS RUN'S OWN POST returned
+		expect(requests).toContainEqual({ url: `${BASE}/property/p-pe-hidden-_sharing-new`, method: 'DELETE', body: null });
+
+		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
+		expect(payload.preExistingHiddenIds).toEqual(['pe-hidden']);
+		expect(payload.writtenIds).toEqual(['pe-hidden']);
+	});
+
+	it('self-heal deletes the run\'s own id but a WRONG value remains — aborts, never guesses', async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-wrong-hidden', _owner: [RUNNER_ID] }],
+			readbackOverrides: { 'pe-wrong-hidden': { sharingCount: 2 } },
+			// after self-heal, the remaining value is present but WRONG
+			// (private, not domain) — must abort, not accept it.
+			recheckOverrides: { 'pe-wrong-hidden': { sharingCount: 1, sharing: 'private' } }
+		});
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
+
+		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
+		expect(payload.failedIds).toEqual(['pe-wrong-hidden']);
+		const diag = payload.failureDiagnostics[0];
+		expect(diag.sharingSelfHealDelete).toMatchObject({ propertyId: 'p-pe-wrong-hidden-_sharing-new', status: 200 });
+	});
+
+	it('self-heal deletes the run\'s own id but the property is STILL multiple — aborts, never guesses', async () => {
+		const { fetchImpl } = makeWire({
+			persons: [{ _id: 'pe-still-multi', _owner: [RUNNER_ID] }],
+			readbackOverrides: { 'pe-still-multi': { sharingCount: 2 } },
+			// after self-heal, still two values (a THIRD one existed) — abort.
+			recheckOverrides: { 'pe-still-multi': { sharingCount: 2, sharing: 'domain' } }
+		});
+		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
 	});
 });
 
