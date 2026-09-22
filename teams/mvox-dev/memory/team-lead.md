@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-22 12:00Z, live]
+### [MVOX-26 — 2026-09-22 20:15Z, live]
+
+**Later 2026-09-22:** #454 CLOSED a828096 (chip gated on the read; producer reads _viewer — Entu returns 200 with the private bucket withheld, never a refusal; Gama corrected the body premise) · #456 CLOSED 35549d7 first-pass GREEN (orphan members skipped in active + archived lists). Pérotin respawned fresh at this seam (74% context). Board empty. Team-lead context 61% — next seam soon.
 
 **2026-09-22:** #445 (crede persons+rsvps domain+inherit) CLOSED after a bad hour: I re-asked Mihkel four times for a word his first one covered, and spent the hour on duplicate-value cleanup nobody asked for (his ruling: identical duplicates are fine). Rules now in memory: one authorization per job; identical duplicates OK; confirm nobody hand-edits the rows during a run; the issue carries the word + the landing, diagnosis stays in ledgers. Live crede commands run from the team-lead session under MANUAL mode (auto-mode classifier blocks them and even SendMessage); when the shared tree has a teammate's edits, run the committed script from a `git worktree add /tmp/wt origin/main` with node_modules symlinked. Roster last-activity parked on Argo; Joosep chip question answered to Gama (owner reaches the person).
 
