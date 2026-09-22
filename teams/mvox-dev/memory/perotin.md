@@ -57,6 +57,11 @@ work = `git log --oneline -- scripts/migrations/` (one committed result artifact
   `_editor` entry, `/history`'s `old`/`new` — carries a denormalized human-readable `.string` of the
   target, even when `name` was never in the requested `props` (confirmed #369; `/history` does the
   same server-side via `$lookup`). "Don't request name" ≠ ids-only — strip `.string` at extraction.
+- **`created` stamp lives on `property/{_id}` only**: `entity/{id}?props=X` value objects carry
+  `_id`+`string` alone — `GET /property/{_id}` returns the full shape (`_id,type,string,entity,
+  created:{at,by}`) and resolves for plain strings too, though entu-www documents it only for files.
+  A DELETEd value 404s there after — no soft-delete read (probe, 2026-09-21). `loadCfg`'s
+  `PUBLIC_ENTU_API_BASE` needs the same trailing slash as `ENTU_API_URL` or URLs lose the separator.
 
 ## Authorization gate — canonical (cross-ref `[[feedback_authorization_gate]]`)
 
@@ -79,23 +84,22 @@ read the dispatch's exact wording, don't assume the standard 2-party gate is the
 
 ## Currently deferred / not scheduled
 
-- **Real member-seat empirical verification** — every live run I execute is db-root-omniscient;
-  "write landed" ≠ "a real non-owner member sees it." No second seat to synthesize myself
-  (`ENTU_ADMIN_KEY` confirmed anonymous-floor) — needs an actual second OAuth login.
-- **#68 db-root `_owner` backfill — STRUCTURALLY BLOCKED** (2026-08-09): needs `_owner` already held
-  on the target — db-root holds none of the 72 flagged entities, chicken-and-egg via plain API. Needs
-  an Entu admin override or manual admin-UI action.
+- **Real member-seat verification** — every live run here is db-root-omniscient; "write landed" ≠ "a
+  real non-owner member sees it." No second seat to synthesize (`ENTU_ADMIN_KEY` = anonymous-floor) —
+  needs a real second OAuth login.
+- **#68 db-root `_owner` backfill BLOCKED** (2026-08-09) — needs `_owner` already held on target;
+  db-root holds none of the 72 flagged entities, chicken-and-egg via plain API. Needs an Entu admin
+  override.
 
 ## Standing patterns worth naming once
 
 - **Frozen-set drift-check + canary-first + ownership pre-check**: hardcode a population snapshot and
   diff live re-reads every run, naming deltas individually; touch one representative row before a
   full sweep, throw on canary failure; scan `_owner` for non-db-root holders pre-write, abort if found.
-- **Ledger fields name what they attest** (intended/config value vs. observed/read-back value are
-  different things) and **artifact hygiene** (delete superseded pre-authorization dry-runs as you go,
-  keep exactly one current artifact per script until the live run lands its own). **A remedy run's
-  done-signal is the post-verify POPULATION TOTAL, not the write count** — they diverge the moment
-  anything skip-and-flags (Gama, #369, 2026-09-15).
+- **Ledger fields name what they attest** (intended/config vs. observed/read-back are different
+  things); **artifact hygiene** — delete superseded dry-runs, keep one current artifact per script.
+  **A remedy run's done-signal is the post-verify POPULATION TOTAL, not the write count** — they
+  diverge the moment anything skip-and-flags (Gama, #369, 2026-09-15).
 - **Single-tree serialization**: `git branch --show-current` before every commit — if not `main`,
   STOP, report branch+status+log evidence, never switch/stash/work around. Caught two real
   concurrent-chain collisions (2026-08-08) and one classifier-block escalation (#348, 2026-09-14).
