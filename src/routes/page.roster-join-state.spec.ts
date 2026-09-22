@@ -359,7 +359,7 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).not.toBe('joined');
 	});
 
-	it('an EDITOR-admin sees the same chips — the display is for every admin (PO ruling 2026-09-09; #302: readiness gate repointed at a chip that still renders)', async () => {
+	it('an EDITOR-admin sees the same chips — the read is the gate (#454, Mihkel 2026-09-22): the chip renders because listJoinStates returned a state, not because of any admin tier (#302: readiness gate repointed at a chip that still renders)', async () => {
 		const { container } = await renderRoster({ tier: 'editor' });
 		await waitFor(() =>
 			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
@@ -369,9 +369,63 @@ describe('(A) three-state display — every admin, contents not presence', () =>
 		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 	});
 
-	it('a NON-admin sees no join-state badge on any row', async () => {
+	// ── #454 (Mihkel 2026-09-22, supersedes the 2026-09-09 role framing for the
+	//    DISPLAY): the read is the gate. listJoinStates already runs for every
+	//    reader; a state in its answer renders the chip, a missing key (Entu
+	//    refused the read) renders nothing. No app-computed role decides the
+	//    chip. The exact-set helper below pins testids AND labels so a count
+	//    can't pass while the wrong rows carry chips. ─────────────────────────
+	function chipSet(container: HTMLElement): Record<string, { state: string | null; label: string }> {
+		return Object.fromEntries(
+			[...container.querySelectorAll('[data-testid^="roster-row-join-state-"]')].map((el) => [
+				el.getAttribute('data-testid')!,
+				{ state: el.getAttribute('data-join-state'), label: (el.textContent ?? '').trim() }
+			])
+		);
+	}
+
+	const EXPECTED_CHIPS_SAMPLEDB = {
+		'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' },
+		'roster-row-join-state-m4': { state: 'absent', label: '[roster_member_join_state_absent]' }
+	};
+
+	it('#454: a NON-admin reader whose read returned states sees EXACTLY the chips an admin sees — the read is the gate, not the role', async () => {
+		// The same fixture an admin renders against; only the app role differs.
+		const admin = await renderRoster();
+		await waitFor(() => expect(q(admin.container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(admin.container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+		cleanup();
+
 		const { container } = await renderRoster({ admin: 'not-admin' });
-		expect(container.querySelectorAll('[data-testid^="roster-row-join-state-"]')).toHaveLength(0);
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+	});
+
+	it("#454: a refused read (no key in listJoinStates' answer) renders NO chip for that person while the others' chips render — never a guessed one", async () => {
+		// Entu refused pp-4: the producer's answer simply has no key for her.
+		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
+			Promise.resolve(
+				Object.fromEntries(
+					personIds
+						.filter((id) => id !== 'pp-4')
+						.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent'])
+				)
+			)
+		);
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(container)).toEqual({
+			'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' }
+		});
+	});
+
+	it('#454: the joined state still renders no chip for a NON-admin — silence stays contents-derived, not role-derived', async () => {
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		// Readiness: the fan-out landed (an invited row's chip is on screen), so
+		// the absences below are the CONTRACT, not an unresolved load.
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(q(container, 'roster-row-join-state-m1')).toBeNull();
+		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
 	});
 
 	it("INTEGRATION: the route calls listJoinStates with the selected collective's cfg and the rendered rows' personIds", async () => {
