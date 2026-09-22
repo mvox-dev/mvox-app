@@ -22,12 +22,27 @@
 //   otherwise — no app-computed role (`admin`, `ownerTier`) is consulted. A
 //   `_viewer`-level read already returns the placeholder shape, so everyone
 //   Entu lets read sees the true state, and a reader Entu refuses sees no
-//   chip rather than a guessed one. That refusal is ALL-OR-NOTHING at the
-//   page: `listJoinStates` fans out with `Promise.all`
-//   (linkedIdentities.ts:110) and rejects whole on the first refused person,
-//   and the page's catch (roster/+page.svelte:517-520) blanks the entire
-//   record — so a partially-refused reader loses EVERY chip, not one. Both
-//   halves are pinned in (A) below.
+//   chip rather than a guessed one.
+//
+//   A refusal reaches this page in TWO shapes, and the reachable one is not
+//   the loud one:
+//     • PER-PERSON, silent, and the ONLY shape an ordinary member actually
+//       meets: HTTP 200 with the private bucket withheld. mvox `person`
+//       entities are `_sharing: domain` while the `entu_user` prop-def is
+//       `_sharing: private`, so a reader admitted by TIER alone — domain,
+//       no explicit grant — receives only the domain bucket (ER-1/ER-4,
+//       docs/architecture/entu-rights-and-visibility-model.md:109,198). No
+//       error: the body is `{ entity: { _id } }` and the property is simply
+//       not in it. `listJoinStates` detects it via the rights tell and OMITS
+//       that personId (linkedIdentities.ts, THE WITHHELD-BUCKET TELL); the
+//       page's `joinStates[row.personId] !== undefined` then renders nothing.
+//       This is the shape (B) below drives through the real producer.
+//     • WHOLE-CALL, loud: an HTTP failure on any one person rejects the
+//       `Promise.all` fan-out, and the page's catch
+//       (roster/+page.svelte:517-520) blanks the entire record. The #294
+//       probe observed this against a `_sharing: private` entity (a clean
+//       total 403) — real, but not what a domain-shared person produces.
+//   Both shapes are pinned in (A) below.
 //
 //   WHO SEES WHAT — the CONTROLS (PO ruling 2026-09-09, probe-verified,
 //   UNCHANGED by #454): `_owner` ONLY (probe: `_owner` mint → HTTP 200;
@@ -413,10 +428,10 @@ describe('(A) three-state display — the read is the gate, contents not presenc
 
 	// The PAGE-level half of the rule, stated as such: the chip condition is
 	// `joinStates[row.personId] !== undefined` and nothing else, so a personId
-	// the answer does not carry gets NO chip. This is the page's own guard,
-	// NOT a shape today's producer can emit — `listJoinStates` writes a key for
-	// every personId it is handed (linkedIdentities.ts:105-121). The shape the
-	// wire CAN produce is the whole-call rejection pinned in the next test.
+	// the answer does not carry gets NO chip. Since #454 this is a shape the
+	// producer really emits — `listJoinStates` omits any person whose private
+	// bucket was withheld — and the next test drives it through the real
+	// producer over the wire body that causes it.
 	it('#454 PAGE guard: a personId missing from the answer renders NO chip, while the keys that ARE present render theirs — never a guessed one', async () => {
 		// Hand the page an answer with no key for pp-4 (Dora, m4).
 		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
@@ -435,22 +450,51 @@ describe('(A) three-state display — the read is the gate, contents not presenc
 		});
 	});
 
-	it('#454 WIRE refusal: the read refuses per CALLER, not per person — listJoinStates rejects and the page carries NO chip on any row', async () => {
-		// What a reader Entu refuses actually gets: `listJoinStates` fans out
-		// with `Promise.all`, so ONE refused person rejects the whole call
-		// (linkedIdentities.ts:110, FAIL LOUD by design), and the page's catch
-		// sets `joinStates = {}` (+page.svelte:517-520). Every chip goes — and
-		// that is the point: no row shows a state this reader never observed.
+	it('#454 WIRE refusal, the REACHABLE shape: HTTP 200 with the private bucket withheld — driven through the REAL producer — leaves every row chip-less while the rows render', async () => {
+		// The answer an ordinary member's browser actually receives for a
+		// teammate's domain-shared `person`: 200, `{ entity: { _id } }`, the
+		// `entu_user` property (and the `_viewer` tell alongside it) filtered
+		// out by the bucket selection. NOTHING rejects here — the catch below
+		// never runs, which is exactly why the page cannot be left to infer the
+		// refusal from an error. The REAL `listJoinStates` runs over this wire
+		// body so the omission is the producer's own, not the mock's.
+		const actual =
+			await vi.importActual<typeof import('$lib/profile/linkedIdentities')>(
+				'$lib/profile/linkedIdentities'
+			);
+		const withheldFetch = vi.fn().mockImplementation((url: string) => {
+			const id = String(url).split('/entity/')[1]?.split('?')[0] ?? '';
+			return Promise.resolve(
+				new Response(JSON.stringify({ entity: { _id: id } }), { status: 200 })
+			);
+		}) as unknown as typeof fetch;
+		listJoinStatesMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
+			actual.listJoinStates(cfg, ids, withheldFetch)
+		);
+
+		const { container } = await renderRoster({ admin: 'not-admin' });
+		// Readiness: the rows only render once `load()` has run the join-state
+		// fan-out to completion (`status` flips to 'ready' after it), so the
+		// emptiness below is the SETTLED state, not an unresolved load. The row
+		// existence check keeps this a claim about CHIPS, not about a page that
+		// failed to render anything at all.
+		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
+		expect(withheldFetch, 'the real producer must have issued the reads').toHaveBeenCalled();
+		expect(chipSet(container)).toEqual({});
+	});
+
+	it('#454 WIRE refusal, the LOUD shape: an HTTP failure rejects the whole fan-out and the page carries NO chip on any row', async () => {
+		// The second refusal shape, kept because it is real (the #294 probe saw
+		// a clean total 403 against a `_sharing: private` entity): `Promise.all`
+		// rejects whole on the first refused person (linkedIdentities.ts, FAIL
+		// LOUD by design), and the page's catch sets `joinStates = {}`
+		// (+page.svelte:517-520). Every chip goes — no row shows a state this
+		// reader never observed.
 		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listJoinStatesMock.mockRejectedValue(
 			new Error('listLinkedIdentities: identity read failed: HTTP 403')
 		);
 		const { container } = await renderRoster({ admin: 'not-admin' });
-		// Readiness: the rows only render once `load()` has run the join-state
-		// try/catch to completion (`status` flips to 'ready' after it), so the
-		// emptiness below is the SETTLED state, not an unresolved load. The row
-		// existence check keeps this a claim about CHIPS, not about a page that
-		// failed to render anything at all.
 		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
 		expect(chipSet(container)).toEqual({});
 		expect(errSpy).toHaveBeenCalled();

@@ -19,7 +19,17 @@
 // without being a mint mechanism):
 //   listLinkedIdentities(cfg, personId, fetchImpl?):
 //     Promise<{ identities: Array<{ _id: string; uid: string; provider: string; email: string }>;
-//               pendingInvites: number }>
+//               pendingInvites: number; readable: boolean }>
+//
+// #454 added `readable` and the `_viewer` half of the projection. A caller Entu
+// refuses does NOT get an error status: `person` entities are `_sharing:
+// domain` and the `entu_user` prop-def is `_sharing: private`, so a grant-less
+// in-db reader gets HTTP 200 with the property filtered out (entu-api
+// utils/entity.js:569-586 picks ONE bucket by tier). Rights-tier arrays live
+// only in the private bucket, so `_viewer` returning is the tell that the
+// bucket carrying `entu_user` returned too — see THE WITHHELD-BUCKET TELL in
+// the module for the full source citation, including why `_viewer` and not
+// `_owner`.
 
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -36,15 +46,22 @@ function fetchReturning(body: unknown, status = 200) {
 	return vi.fn().mockResolvedValue(json(body, status));
 }
 
+// A grant that admits the caller to the private bucket. Only its PRESENCE is
+// read; the `.string` a live row carries (grantee name + email, ER-26) is
+// deliberately not modelled, because nothing may retain it.
+const ADMITTED = [{ _id: 'gr-1', reference: 'person-me', property_type: '_editor' }];
+
 describe('listLinkedIdentities — wire shape', () => {
-	it('reads the OWN person entity, props=entu_user, under the caller\'s own JWT', async () => {
-		const fetchImpl = fetchReturning({ entity: { _id: PERSON_ID, entu_user: [] } });
+	it("reads the OWN person entity under the caller's own JWT, asking for entu_user AND the _viewer tell", async () => {
+		const fetchImpl = fetchReturning({
+			entity: { _id: PERSON_ID, entu_user: [], _viewer: ADMITTED }
+		});
 
 		await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit?];
-		expect(String(url)).toContain('/sampledb/entity/person-me?props=entu_user');
+		expect(String(url)).toContain('/sampledb/entity/person-me?props=entu_user,_viewer');
 		expect((init?.method ?? 'GET')).toBe('GET');
 		expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer jwt-me');
 	});
@@ -55,6 +72,7 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 		const fetchImpl = fetchReturning({
 			entity: {
 				_id: PERSON_ID,
+				_viewer: ADMITTED,
 				entu_user: [
 					{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
 					// Live-probed mobile-id shape: the national ID code rides BOTH uid and
@@ -73,16 +91,52 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 				{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' },
 				{ _id: 'eu-2', uid: '38510170212', provider: 'mobile-id', email: '38510170212' }
 			],
-			pendingInvites: 1
+			pendingInvites: 1,
+			readable: true
 		});
 	});
 
-	it('a person with no entu_user property at all yields the empty full shape', async () => {
+	it('a person the caller CAN read, carrying no entu_user property at all, yields the empty full shape — readable, just empty', async () => {
+		const fetchImpl = fetchReturning({ entity: { _id: PERSON_ID, _viewer: ADMITTED } });
+
+		const result = await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);
+
+		expect(result).toEqual({ identities: [], pendingInvites: 0, readable: true });
+	});
+});
+
+describe('listLinkedIdentities — the WITHHELD private bucket is not an observation (#454)', () => {
+	it('HTTP 200 with NO rights property is readable:false, never an empty identity list dressed as fact', async () => {
+		// The exact wire answer a grant-less in-db reader gets for a
+		// `_sharing: domain` person: 200, `{ entity: { _id } }`, the private
+		// bucket (and with it `entu_user` AND `_viewer`) filtered out. Nothing
+		// here is an error to catch.
 		const fetchImpl = fetchReturning({ entity: { _id: PERSON_ID } });
 
 		const result = await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);
 
-		expect(result).toEqual({ identities: [], pendingInvites: 0 });
+		expect(result).toEqual({ identities: [], pendingInvites: 0, readable: false });
+	});
+
+	it('an entu_user payload arriving WITHOUT the rights tell is still readable:false — the tell decides, not the payload', async () => {
+		// Defensive: `entu_user` cannot reach a caller the private bucket was
+		// withheld from, so this shape should never occur on the wire. Pinned so
+		// the classifier can never be "trust whatever came back".
+		const fetchImpl = fetchReturning({
+			entity: { _id: PERSON_ID, entu_user: [{ _id: 'eu-1', uid: 'u', provider: 'p', email: 'e' }] }
+		});
+
+		const result = await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);
+
+		expect(result).toEqual({ identities: [], pendingInvites: 0, readable: false });
+	});
+
+	it('an EMPTY _viewer array counts as withheld — the array is deleted when empty (entu-api utils/aggregate.js:230-253), so it is never a legitimate admitted answer', async () => {
+		const fetchImpl = fetchReturning({ entity: { _id: PERSON_ID, _viewer: [] } });
+
+		const result = await listLinkedIdentities(cfg, PERSON_ID, fetchImpl);
+
+		expect(result.readable).toBe(false);
 	});
 });
 
@@ -95,3 +149,4 @@ describe('listLinkedIdentities — fail loud (no silent empty list)', () => {
 });
 
 // (*MVOX:Tallis* — #193 RED: linked-identities display producer)
+// (*MVOX:Josquin* — #454: the withheld-bucket refusal shape)

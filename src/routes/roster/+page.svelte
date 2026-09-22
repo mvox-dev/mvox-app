@@ -3974,7 +3974,13 @@
 	     into one. Still contents-derived via `listJoinStates` (never presence).
 	     The read is the gate (#454, Mihkel 2026-09-22): no app-computed role
 	     decides the chip, only whether the read returned a state for the row.
-	     Shared between the collapsed card
+	     "Returned a state" carries the whole rule, so `listJoinStates` OMITS
+	     any person whose `entu_user` the caller was not admitted to read —
+	     an HTTP 200 with the private bucket withheld, the answer an ordinary
+	     member gets for a teammate, is not an observation (see THE
+	     WITHHELD-BUCKET TELL in lib/profile/linkedIdentities.ts). The
+	     `!== undefined` check below is therefore the reader's own gate, not a
+	     formality. Shared between the collapsed card
 	     (rendered as this snippet's caller, wrapped in the activator button)
 	     and the non-admin/open-editor callers, so the info itself is defined
 	     exactly once regardless of which state renders it. -->

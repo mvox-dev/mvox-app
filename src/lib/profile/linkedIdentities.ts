@@ -27,6 +27,14 @@ export interface LinkedIdentity {
 export interface LinkedIdentitiesResult {
 	identities: LinkedIdentity[];
 	pendingInvites: number;
+	/**
+	 * Whether this caller was actually admitted to the `entu_user` property —
+	 * i.e. whether `identities`/`pendingInvites` describe an OBSERVATION rather
+	 * than an unanswered question. See THE WITHHELD-BUCKET TELL below: a
+	 * refused read is an HTTP 200 with the property simply missing, so an empty
+	 * result alone cannot tell "no identities" from "not allowed to look".
+	 */
+	readable: boolean;
 }
 
 interface StoredEntuUserEntry {
@@ -38,10 +46,38 @@ interface StoredEntuUserEntry {
 	invite?: string;
 }
 
+// THE WITHHELD-BUCKET TELL (#454) — why this read asks for `_viewer` too.
+//
+// A refused `entu_user` read is NOT an error status. `cleanupEntity` picks ONE
+// bucket by reader tier (entu-api utils/entity.js:569-586; ER-20/ER-21): an
+// explicit-grant caller gets `private`, an in-db caller with no grant gets
+// `domain`, and the route only 403s when NO bucket admits them at all
+// (routes/[db]/entity/[_id]/index.get.js:97-102). mvox `person` entities are
+// `_sharing: domain` and the `entu_user` prop-def is `_sharing: private`, so a
+// grant-less teammate reading another member's person gets HTTP 200 with a body
+// of `{ entity: { _id } }` — the property filtered out, no error to catch. Read
+// as "no entu_user", that badges every joined member "never invited".
+//
+// The tell: rights-tier arrays are written ONLY into `private`
+// (utils/aggregate.js:188-209 — the domain/public copies at :148-155 are built
+// from the TYPE's prop-defs, which `_viewer` is not), so `_viewer` comes back
+// exactly when the private bucket does. `_viewer` specifically, not `_owner`:
+// the tiers cascade upward as they are assembled (`_owner` ⊆ `_editor` ⊆
+// `_expander` ⊆ `_viewer`, utils/aggregate.js:188-209) and each is DELETED when
+// empty (:230-253), so `_viewer` is the only one guaranteed non-empty whenever
+// any grant exists — and a private-bucket read requires a grant, since `access`
+// is built from those same arrays (utils/rights.js:76-97). An `_owner` check
+// would read a `_viewer`-granted caller as refused.
+//
+// The returned `_viewer` rows are inspected for PRESENCE only and never
+// retained: each reference carries the grantee's name+email baked into
+// `.string` (ER-26).
+
 /**
  * List the caller's OWN bound auth identities plus a count of un-redeemed
  * invite placeholders (never presented as identities). Fails loud on any HTTP
- * failure — never resolves to a silently-empty list.
+ * failure — never resolves to a silently-empty list. `readable: false` marks
+ * the other refusal shape: a 200 whose private bucket was withheld.
  */
 export async function listLinkedIdentities(
 	cfg: EntuCfg,
@@ -50,7 +86,7 @@ export async function listLinkedIdentities(
 ): Promise<LinkedIdentitiesResult> {
 	const res = await entuFetch(
 		cfg.db,
-		`entity/${personId}?props=entu_user`,
+		`entity/${personId}?props=entu_user,_viewer`,
 		cfg.token,
 		{},
 		fetchImpl
@@ -58,8 +94,11 @@ export async function listLinkedIdentities(
 	if (!res.ok) {
 		throw new Error(`listLinkedIdentities: identity read failed: HTTP ${res.status}`);
 	}
-	const body = (await res.json()) as { entity?: { entu_user?: StoredEntuUserEntry[] } };
-	const entries = body.entity?.entu_user ?? [];
+	const body = (await res.json()) as {
+		entity?: { entu_user?: StoredEntuUserEntry[]; _viewer?: unknown[] };
+	};
+	const readable = (body.entity?._viewer?.length ?? 0) > 0;
+	const entries = readable ? (body.entity?.entu_user ?? []) : [];
 
 	const identities: LinkedIdentity[] = [];
 	let pendingInvites = 0;
@@ -76,7 +115,7 @@ export async function listLinkedIdentities(
 		});
 	}
 
-	return { identities, pendingInvites };
+	return { identities, pendingInvites, readable };
 }
 
 // ── #294 — the roster's three-state join read ───────────────────────────────
@@ -94,12 +133,24 @@ export async function listLinkedIdentities(
 // `Promise.all`, mirroring the per-member profile fan-out `loadRoster` already
 // does (rosterData.ts) — one read per row, genuinely independent.
 //
-// FAIL LOUD: a rejection on ANY person propagates out of `Promise.all` and
-// rejects the whole call. The live probe (issue #294) observed a zero-rights
-// caller get a clean TOTAL 403, never a 200 with the key silently omitted —
-// so "absent" must mean OBSERVED absent, never "not returned" (the
+// FAIL LOUD, in the two shapes a refusal actually takes:
+//
+//   1. HTTP failure on ANY person — propagates out of `Promise.all` and
+//      rejects the whole call. Observed by the #294 probe against a
+//      `_sharing: private` entity: a zero-rights caller gets a clean TOTAL
+//      403.
+//   2. HTTP 200 with the private bucket WITHHELD (#454) — the shape a
+//      `_sharing: domain` person entity produces for a grant-less in-db
+//      reader, which is every ordinary member looking at a teammate's row.
+//      No status to catch; `listLinkedIdentities` reports it as
+//      `readable: false` (see THE WITHHELD-BUCKET TELL above) and this
+//      function then OMITS that personId from the record entirely.
+//
+// Either way "absent" means OBSERVED absent, never "not returned" (the
 // rosterData.ts:123 class of trap, kept out of this layer by refusing to
-// guess).
+// guess). A caller therefore reads a missing key as "this reader cannot see
+// it" — which is exactly what the roster's chip condition
+// (`joinStates[personId] !== undefined`, roster/+page.svelte) already does.
 export type JoinState = 'absent' | 'invited' | 'joined';
 
 export async function listJoinStates(
@@ -109,16 +160,24 @@ export async function listJoinStates(
 ): Promise<Record<string, JoinState>> {
 	const entries = await Promise.all(
 		personIds.map(async (personId) => {
-			const { identities, pendingInvites } = await listLinkedIdentities(cfg, personId, fetchImpl);
+			const { identities, pendingInvites, readable } = await listLinkedIdentities(
+				cfg,
+				personId,
+				fetchImpl
+			);
+			if (!readable) return [personId, undefined] as const;
 			const state: JoinState =
 				identities.length > 0 ? 'joined' : pendingInvites > 0 ? 'invited' : 'absent';
 			return [personId, state] as const;
 		})
 	);
 	const result: Record<string, JoinState> = {};
-	for (const [personId, state] of entries) result[personId] = state;
+	for (const [personId, state] of entries) {
+		if (state !== undefined) result[personId] = state;
+	}
 	return result;
 }
 
 // (*MVOX:Josquin* — #193 GREEN: linked-identities display producer)
 // (*MVOX:Palestrina* — #294 GREEN: listJoinStates, reusing listLinkedIdentities)
+// (*MVOX:Josquin* — #454 GREEN: a withheld private bucket is not an observation)
