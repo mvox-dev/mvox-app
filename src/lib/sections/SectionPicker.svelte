@@ -379,10 +379,16 @@
 		     options and the "+ New section…" entry beside them) and the
 		     outside-click boundary; the ARIA listbox is the inner element below, and
 		     `onMenuKeydown` rides on the focusable ENTRIES themselves. -->
+		<!-- `right-0` (#468 review F1): the menu right-aligns to its trigger and
+		     extends LEFTWARD. The trigger's wrapper is `absolute top-1 right-1` in
+		     the roster card's upper-right corner, so a leftward-anchored menu (no
+		     horizontal offset, the default) starts at the corner and runs off the
+		     card's right edge at phone width. Anchoring the right edges instead
+		     puts the whole `min-w-40` menu back inside the card. -->
 		<div
 			bind:this={menuEl}
 			data-testid="section-picker-menu-{memberId}"
-			class="absolute z-10 mt-1 flex min-w-40 flex-col border border-ink bg-paper py-1 shadow-sm"
+			class="absolute right-0 z-10 mt-1 flex min-w-40 flex-col border border-ink bg-paper py-1 shadow-sm"
 		>
 			{#if !creating}
 				<!-- #99 review F1/F4 — the listbox is its OWN element, wrapping ONLY the

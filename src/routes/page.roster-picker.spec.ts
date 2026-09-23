@@ -301,6 +301,29 @@ describe('/roster — picker position (#468): upper right on the card, lifted by
 		expect(li.contains(wrapper)).toBe(true);
 	});
 
+	it('the open menu is `absolute right-0` — right-aligned to the corner-anchored trigger so it extends INTO the card, not off its right edge', async () => {
+		// #468 review F1. The wrapper above is `absolute top-1 right-1`, i.e. the
+		// trigger sits in the card's upper-right corner; a menu with no horizontal
+		// offset is left-anchored there and `min-w-40` of it hangs off the card at
+		// phone width. `right-0` anchors the right edges together instead.
+		//
+		// This asserts CLASS PRESENCE, which is the whole of what this DOM test
+		// environment can see: happy-dom parses no Tailwind stylesheet and lays
+		// nothing out, so it cannot report a geometric overflow. The real fit is a
+		// browser check at ~390px viewport width — that is the confirmation this
+		// test stands in for, not one it replaces.
+		const container = await renderReady('admin');
+		await openPicker(container, 'm-ada');
+		const menu = q(container, 'section-picker-menu-m-ada') as HTMLElement;
+		expect(menu, 'open picker menu').not.toBeNull();
+		const classes = menu.className.split(/\s+/);
+		expect(classes).toContain('absolute');
+		expect(classes).toContain('right-0');
+		// No competing left anchor — `left-*` alongside `right-0` would stretch the
+		// menu across both edges instead of right-aligning it.
+		expect(classes.some((c) => c.startsWith('left-'))).toBe(false);
+	});
+
 	it('a row WITHOUT the picker still shows the section name in rowInfo (flat view) — the information is already on screen; nothing else on the card moves', async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		const container = await renderReady('admin');
