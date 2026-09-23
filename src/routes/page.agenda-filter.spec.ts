@@ -343,6 +343,11 @@ describe('#214 — single-select TOGGLE (polyphony.uk pattern)', () => {
 			[UP_REHEARSAL, UP_CONCERT],
 			[RECENT_SOCIAL, RECENT_CONCERT]
 		);
+		// #471 — two recent items collapse to one card behind a show-more
+		// button; reveal both before reading the pre-filter row set.
+		await fireEvent.click(
+			container.querySelector('[data-testid="agenda-recent-show-more"]')!
+		);
 		expect(upcomingRowIds(container)).toEqual(['up-reh', 'up-con']);
 		expect(recentRowIds(container)).toEqual(['rec-soc', 'rec-con']);
 

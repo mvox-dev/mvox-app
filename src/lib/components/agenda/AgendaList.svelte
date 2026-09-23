@@ -1,6 +1,8 @@
 <!-- src/lib/components/agenda/AgendaList.svelte -->
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	// #471 review F2 — `tick` because the show-more press removes its own button
+	// from the DOM, so focus has to be re-landed AFTER that render lands.
+	import { tick, type Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	// #466 — the whole card opens the event; goto() is the row's own tap
@@ -225,6 +227,31 @@
 		scheduleItemsByEventId = {},
 		justCreatedEventId = null
 	}: Props = $props();
+
+	// #471 — the Recent section starts collapsed to the single most recent
+	// past card; pressing the show-more button reveals the rest for THIS
+	// mount only (no persistence — a fresh render, incl. the page's own
+	// {#key current?.db} remount on a collective switch, starts collapsed
+	// again).
+	let showAllRecent = $state(false);
+
+	// #471 review F1 — a viewer can create a PAST-dated event (there is no date
+	// floor on the create form; a conductor adding last month's rehearsal so
+	// attendance can be taken is the case the page's own comment contemplates).
+	// If that event is not the most recent past one it lands BEHIND the button,
+	// and the page's confirmation — a scroll + highlight addressed by
+	// `[data-testid="agenda-recent-row-<id>"]` (+page.svelte) — finds no element
+	// and silently no-ops: the create gets no visible confirmation at all. So
+	// open the list whenever the just-created row is one of the hidden ones.
+	//
+	// ONE-WAY on purpose: it never assigns false, so the page clearing
+	// `justCreatedEventId` on its own JUST_CREATED_MARK_MS timer cannot snap the
+	// list shut under a reader mid-scroll.
+	$effect(() => {
+		const id = justCreatedEventId;
+		if (!id) return;
+		if (recentItems.findIndex((it) => it.id === id) > 0) showAllRecent = true;
+	});
 
 	/** The compact times line's full text — computed as ONE string (never a
 	 *  nested per-pair span: AgendaList.spec.ts's row-span containment checks
@@ -468,7 +495,7 @@
 			     to a filter tap was an unreviewed side effect. -->
 			{@render recentEmptyState()}
 		{/if}
-		{#each recentItems as item (item.id)}
+		{#each showAllRecent ? recentItems : recentItems.slice(0, 1) as item (item.id)}
 			<!-- #466 — tapping anywhere on the card opens the event; keyboard and
 			     screen-reader users already reach it through the accessible name
 			     link below (#101 TE.1), so the row itself gains no tabindex/role. -->
@@ -565,6 +592,44 @@
 								onclose={attendancePanel.onclose}
 							/>
 						</div>
+					{/if}
+					<!-- #471 — bottom-right of the one collapsed card; a plain <button>,
+					     so #466's CARD_CONTROLS already keeps the row's own goto() tap
+					     handler off it (see CARD_CONTROLS above — do not touch). Only
+					     renders while collapsed AND there is something more to show. -->
+					{#if !showAllRecent && recentItems.length > 1}
+						<button
+							type="button"
+							data-testid="agenda-recent-show-more"
+							class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
+							onclick={async (event) => {
+								// #471 review F2 — the press unmounts the button it came
+								// from ({#if !showAllRecent} above), which drops focus to
+								// <body>: the next Tab restarts at the top of the document,
+								// far above the Recent section the viewer was reading. Land
+								// focus on the first newly revealed row's accessible link
+								// instead — it keeps the reading position AND makes a screen
+								// reader announce the content that just appeared. The section
+								// is captured BEFORE the await (currentTarget is nulled once
+								// the handler yields, and the button is gone by then anyway),
+								// and the query is scoped to it so a second AgendaList mount
+								// on the same document can never be focused instead.
+								const section = (event.currentTarget as HTMLElement).closest(
+									'[data-testid="agenda-recent"]'
+								);
+								const firstRevealedId = recentItems[1]?.id;
+								showAllRecent = true;
+								await tick();
+								if (!section || firstRevealedId === undefined) return;
+								section
+									.querySelector<HTMLElement>(
+										`[data-testid="agenda-recent-row-${firstRevealedId}"] a[aria-label]`
+									)
+									?.focus();
+							}}
+						>
+							{m.agenda_recent_show_more()}
+						</button>
 					{/if}
 				</div>
 			</div>

@@ -12,6 +12,7 @@
 	"agenda_load_error": "Päevakorra laadimine ebaõnnestus.",
 	"agenda_retry": "Proovi uuesti",
 	"agenda_recent": "Hiljutised",
+	"agenda_recent_show_more": "Näita varasemaid",
 	"agenda_take_attendance": "Märgi kohalolek",
 	"agenda_take_attendance_label": "Märgi kohalolek: {event}",
 	"agenda_onboarding_step_season": "1. Loo hooaeg",

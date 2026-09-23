@@ -53,6 +53,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
+		// #471 — the Recent section's show-more button.
+		agenda_recent_show_more: () => 'Show earlier',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
 		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
@@ -321,6 +323,10 @@ describe('+page — the attendance panel opens INSIDE the tapped event row (#87)
 
 	it('opening a SECOND event closes the first panel — exactly one panel, inside the newly tapped row', async () => {
 		const container = await renderPageWithRecentRows();
+		// #471 — past-3's row only exists after show-more; reveal it up front.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		await openPanelOnRow(container, 'past-1');
 		expect(container.querySelector(panelInRow('past-1'))).not.toBeNull();
 
@@ -339,6 +345,10 @@ describe('+page — the attendance panel opens INSIDE the tapped event row (#87)
 
 	it('the relocated panel still renders the member list with P/A/L toggles and the RSVP comparison — scoped INSIDE the row', async () => {
 		const container = await renderPageWithRecentRows();
+		// #471 — past-2's row only exists after show-more; reveal it up front.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		await openPanelOnRow(container, 'past-2');
 
 		// One row per roster member, INSIDE the event row's panel.

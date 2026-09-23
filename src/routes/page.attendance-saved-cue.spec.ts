@@ -55,6 +55,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		agenda_row_link_label: (p) => `View details for ${(p as { event: string }).event}`,
 		agenda_row_link_label_unnamed: () => 'View event details',
 		agenda_recent: () => 'Recent',
+		// #471 — the Recent section's show-more button.
+		agenda_recent_show_more: () => 'Show earlier',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p) => `Take attendance for ${(p as { event: string }).event}`,
 		rsvp_status_going: () => 'Going',
@@ -539,6 +541,10 @@ describe("+page — the cue never leaks across events (#327 per-(event,member) g
 		});
 
 		await closePanel(container);
+		// #471 — past-2's row only exists after show-more.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		await openPanel(container, 'past-2');
 
 		expect(rowSavedText(container, 'm1')).toBe('');
@@ -558,6 +564,10 @@ describe("+page — the cue never leaks across events (#327 per-(event,member) g
 		});
 
 		await closePanel(container);
+		// #471 — past-2's row only exists after show-more.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		await openPanel(container, 'past-2');
 
 		// NOW event A's write settles — it must not claim a row in B's panel.

@@ -8790,6 +8790,13 @@
 						     `filteredAgendaItems` ONLY (Gama's scope ruling: upcoming
 						     only, `recentItems` never reaches month mode). -->
 						{#if $agendaViewStore === 'list'}
+							<!-- #471 — keyed on the SELECTED COLLECTIVE's db, not on
+							     `recentItems`' identity: a type-filter tap must not
+							     collapse an already-expanded Recent list, but switching
+							     collectives must always hand the list a fresh mount so a
+							     pressed show-more never leaks from one collective to the
+							     next. -->
+							{#key selected?.db}
 							<AgendaList
 								items={filteredAgendaItems}
 								loading={agendaLoading}
@@ -8829,6 +8836,7 @@
 									/>
 								{/snippet}
 							</AgendaList>
+							{/key}
 						{:else}
 							<!-- #214 applies to BOTH views: the same snippet, handed over under
 							     the identical `agendaTypeFilter !== 'all'` condition as the day

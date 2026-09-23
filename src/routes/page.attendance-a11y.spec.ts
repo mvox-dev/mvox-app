@@ -412,7 +412,7 @@ describe('#86 — a11y: season summary expansion + member-rates semantics', () =
 // 6 — 'Take attendance' button: descriptive aria-label
 // ---------------------------------------------------------------------------
 describe("#86 — a11y: 'Take attendance' button identifies its event", () => {
-	it("the button's aria-label names the event — several recent rows each carry one, and 'Take attendance' alone doesn't say which rehearsal", () => {
+	it("the button's aria-label names the event — several recent rows each carry one, and 'Take attendance' alone doesn't say which rehearsal", async () => {
 		const { container } = render(AgendaList, {
 			items: [],
 			recentItems: [
@@ -423,6 +423,11 @@ describe("#86 — a11y: 'Take attendance' button identifies its event", () => {
 			conductorEventIds: new Set(['past-1', 'past-2']),
 			ontakeattendance: () => {}
 		});
+		// #471 — only the first recent card renders until asked; reveal the rest
+		// so both rows' take-attendance buttons are on screen.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		const buttons = container.querySelectorAll('[data-testid="take-attendance-btn"]');
 		expect(buttons.length).toBe(2);
 		const labels = Array.from(buttons).map((b) => b.getAttribute('aria-label'));

@@ -12,6 +12,7 @@
 	"agenda_load_error": "Neizdevās ielādēt darba kārtību.",
 	"agenda_retry": "Mēģināt vēlreiz",
 	"agenda_recent": "Nesenie",
+	"agenda_recent_show_more": "Rādīt agrākos",
 	"agenda_take_attendance": "Atzīmēt apmeklējumu",
 	"agenda_take_attendance_label": "Atzīmēt apmeklējumu: {event}",
 	"agenda_onboarding_step_season": "1. Izveidojiet sezonu",
