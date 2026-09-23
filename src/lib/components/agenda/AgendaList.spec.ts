@@ -1,6 +1,9 @@
 // @vitest-environment happy-dom
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRawSnippet } from 'svelte';
+import { readFileSync } from 'node:fs';
+import { resolve as resolvePath } from 'node:path';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
@@ -682,12 +685,18 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 	// midnight from their Tallinn day, on the two 2026 transition days
 	// (spring-forward 2026-03-29, fall-back 2026-10-25): a formatter that
 	// drops the Europe/Tallinn zone renders the previous day's date.
-	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', () => {
+	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', async () => {
 		const recent = [
 			item('spring', '2026-03-28T23:30:00.000Z'), // 01:30 EET, Sun 2026-03-29 (DST starts 03:00)
 			item('fall', '2026-10-24T22:30:00.000Z') // 01:30 EEST, Sun 2026-10-25 (DST ends 04:00)
 		];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
+
+		// #471 — only the first recent card renders until asked; 'fall' is the
+		// second array entry, so reveal the rest before reading its date cell.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 
 		const dateOf = (id: string) =>
 			container
@@ -1037,8 +1046,134 @@ describe('#466 whole card opens the event', () => {
 	});
 });
 
+// ── #471 — Recent shows one card until asked ─────────────────────────────────
+//
+// Mihkel (issue body): show only the most recent past card; a 'show more'
+// button bottom right of that card; pressing it shows the other past events
+// too and hides the button. Gama's defaults: nothing folds, no card changes
+// shape; the button does not come back on this visit (a reload starts over);
+// with one past event there is no button; season summary and Upcoming are
+// untouched. The button is a control in #466's sense — CARD_CONTROLS catches
+// a bare <button>, so pressing it never opens the event.
+describe('#471 Recent shows one card until asked', () => {
+	const gotoMock = vi.mocked(goto);
+	beforeEach(() => {
+		gotoMock.mockClear();
+	});
+
+	// Reverse-chron ARRAY ORDER, exactly as conductorLogic.recentEvents() hands
+	// it over: index 0 is the most recent past event.
+	const threeRecent = [
+		item('p1', '2026-06-10T16:00:00.000Z'),
+		item('p2', '2026-06-03T16:00:00.000Z'),
+		item('p3', '2026-05-27T16:00:00.000Z')
+	];
+
+	const rowIds = (container: Element) =>
+		[...container.querySelectorAll('[data-testid^="agenda-recent-row-"]')].map((el) =>
+			el.getAttribute('data-testid')
+		);
+
+	it('three recent items → exactly one card (recentItems[0]) carrying the button; the press reveals all three in order, removes the button, and never navigates', async () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
+
+		// Collapsed: ONE row, and it is recentItems[0].
+		expect(rowIds(container)).toEqual(['agenda-recent-row-p1']);
+
+		// The button sits INSIDE that one card and renders via the paraglide key
+		// (this file's mock resolves unknown keys to '[key]').
+		const row = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
+		const button = row.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(button, 'show-more button inside the one visible card').not.toBeNull();
+		expect(button!.textContent?.trim()).toBe('[agenda_recent_show_more]');
+
+		await fireEvent.click(button!);
+
+		// All three render, in array order; the button is gone.
+		expect(rowIds(container)).toEqual([
+			'agenda-recent-row-p1',
+			'agenda-recent-row-p2',
+			'agenda-recent-row-p3'
+		]);
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
+
+		// The press is a control tap, never a card tap.
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	it('one past event → no button', () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: [threeRecent[0]]
+		});
+		expect(rowIds(container)).toEqual(['agenda-recent-row-p1']);
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
+	});
+
+	it('zero recent items + recentEmptyState → the empty state renders unchanged, no rows, no button', () => {
+		const probe = createRawSnippet(() => ({
+			render: () => '<p data-testid="recent-empty-probe">nothing this season yet</p>'
+		}));
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: [],
+			recentEmptyState: probe
+		});
+		expect(container.querySelector('[data-testid="recent-empty-probe"]')).not.toBeNull();
+		expect(rowIds(container)).toEqual([]);
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
+	});
+
+	it('Upcoming rows are unaffected in both states (count + first id)', async () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
+		const upcomingIds = () =>
+			[...container.querySelectorAll('[data-testid^="agenda-row-"]')].map((el) =>
+				el.getAttribute('data-testid')
+			);
+
+		expect(upcomingIds()).toEqual(['agenda-row-r1', 'agenda-row-r2']);
+
+		const button = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(button, 'show-more button').not.toBeNull();
+		await fireEvent.click(button!);
+
+		expect(upcomingIds()).toEqual(['agenda-row-r1', 'agenda-row-r2']);
+	});
+
+	it('a fresh render starts collapsed again — the expansion is never persisted', async () => {
+		const first = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
+		const button = first.container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(button, 'show-more button').not.toBeNull();
+		await fireEvent.click(button!);
+		expect(rowIds(first.container)).toHaveLength(3);
+		first.unmount();
+
+		const second = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
+		expect(rowIds(second.container)).toEqual(['agenda-recent-row-p1']);
+	});
+});
+
+// #471 — the button's copy ships in all four locales alongside agenda_recent.
+describe('#471 i18n — agenda_recent_show_more in all four locales', () => {
+	const messages = (locale: string) =>
+		JSON.parse(
+			readFileSync(resolvePath(process.cwd(), 'messages', `${locale}.json`), 'utf-8')
+		) as Record<string, string>;
+
+	it('en and et carry the ruled copy; lv and uk carry a non-empty translation', () => {
+		expect(messages('en').agenda_recent_show_more).toBe('Show earlier');
+		expect(messages('et').agenda_recent_show_more).toBe('Näita varasemaid');
+		for (const locale of ['lv', 'uk']) {
+			const value = messages(locale).agenda_recent_show_more;
+			expect(typeof value, `${locale}.json agenda_recent_show_more`).toBe('string');
+			expect(value.trim(), `${locale}.json agenda_recent_show_more is empty`).not.toBe('');
+		}
+	});
+});
+
 // (*MVOX:Byrd*)
 // (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
 // (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)
 // (*MVOX:Josquin* — #101 TE.1 review fix F2: row-link accessible name)
 // (*MVOX:Tallis* — #466 whole-card-opens-event RED)
+// (*MVOX:Tallis* — #471 recent-shows-one-card-until-asked RED)

@@ -33,7 +33,7 @@
 //   event.start_datetime remains the row's primary time, sort key and
 //   day-grouping basis — schedule items are display-additive and never move
 //   a row or its group (#246 formula disqualification carries).
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
@@ -211,12 +211,17 @@ describe('#262 — upcoming rows: the compact times line', () => {
 });
 
 describe('#262 — Recent rows carry the SAME line (PO ruling 5558026158: both families)', () => {
-	it("a recent row with items shows the times line inside the Recent template's row", () => {
+	it("a recent row with items shows the times line inside the Recent template's row", async () => {
 		const { container } = render(AgendaList, {
 			items: [R1],
 			recentItems: [P1, P2],
 			scheduleItemsByEventId: { p1: P1_SCHEDULE }
 		});
+		// #471 — only the first recent card renders until asked; press show-more
+		// so this test keeps exercising the full two-row Recent list.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		const recentRow = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
 		const timesLine = line(container as HTMLElement, 'p1');
 		expect(timesLine, 'the Recent row must carry the times line').not.toBeNull();
@@ -235,12 +240,17 @@ describe('#262 — Recent rows carry the SAME line (PO ruling 5558026158: both f
 		expect(recentLine.className).toBe(upcomingLine.className);
 	});
 
-	it('recent rows with no items stay line-free (the other half of the both-families fence)', () => {
+	it('recent rows with no items stay line-free (the other half of the both-families fence)', async () => {
 		const { container } = render(AgendaList, {
 			items: [],
 			recentItems: [P1, P2],
 			scheduleItemsByEventId: { p1: P1_SCHEDULE }
 		});
+		// #471 — p2's row only exists after show-more; without the press the
+		// line-free check would pass vacuously against an absent row.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 		// Positive first (RED trips here): p1's line renders…
 		expect(line(container as HTMLElement, 'p1')).not.toBeNull();
 		// …p2's bare row stays byte-unchanged.

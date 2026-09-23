@@ -20,7 +20,7 @@
 //     shows its raw value
 //   - eventType '' → NO badge in that row (nothing invented)
 //   - the component never filters by type: a concert renders as a full row
-import { render, cleanup } from '@testing-library/svelte';
+import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
@@ -185,6 +185,12 @@ describe('AgendaList — event type badge COLORS (#211)', () => {
 				item('past-s', '2026-06-02T18:00:00.000Z', { eventType: 'social' })
 			]
 		});
+
+		// #471 — only the first recent card renders until asked; past-s is the
+		// second array entry, so reveal the rest before reading its badge.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 
 		const rehearsalBadge = rowBadge(container, 'agenda-recent-row-past-r', 'past-r')!;
 		expect(rehearsalBadge).not.toBeNull();

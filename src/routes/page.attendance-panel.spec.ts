@@ -45,6 +45,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
+		// #471 — the Recent section's show-more button; this mock enumerates
+		// every key the rendered page needs, so the new key lands here too. The
+		// collective-switch fixture below renders the picker, hence its label.
+		agenda_recent_show_more: () => 'Show earlier',
+		agenda_switch_collective: () => 'Switch collective',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
 		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
@@ -431,6 +436,11 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
 
+		// #471 — past-2's row only exists after show-more; reveal it up front.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
+
 		// Open event A (past-1), tap m1 present — the write fires and hangs (deferred).
 		await fireEvent.click(
 			container.querySelector('[data-testid="agenda-recent-row-past-1"] [data-testid="take-attendance-btn"]')!
@@ -639,5 +649,62 @@ describe('+page — the attendance panel states a truncated roster (#321 review 
 	});
 });
 
+// ── #471 — a collective switch resets Recent to one card ─────────────────────
+//
+// The page wraps its single <AgendaList> call site in {#key current?.db}: a
+// collective switch REMOUNTS the list, so a pressed show-more never leaks one
+// collective's expansion onto another. Keyed on the db, NOT on the items'
+// identity — a type-filter tap makes a new filtered array and must not
+// collapse an expanded list.
+describe('#471 — a collective switch resets Recent to one card ({#key current?.db})', () => {
+	function setTwoCollectivesFixture() {
+		setTwoConductedRecentEventsFixture();
+		// Widen the auth/collective stores to a second db; the agenda mock
+		// already answers for any db.
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { sampledb: 'person-p', otherdb: 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
+				{ db: 'otherdb', name: 'Otherdb', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+	}
+
+	it('after pressing show-more, switching the selected collective renders one card again with the button back', async () => {
+		setTwoCollectivesFixture();
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
+		});
+
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471: show-more on the one visible recent card').not.toBeNull();
+		await fireEvent.click(showMore!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent-row-past-2"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
+
+		// Switch. The button's RETURN is the switch's own distinguishing content
+		// (it was absent on the stale pre-switch DOM), so waiting on it cannot
+		// resolve against the old render.
+		selectedCollectiveDbStore.set('otherdb');
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).not.toBeNull();
+		});
+		const rows = [...container.querySelectorAll('[data-testid^="agenda-recent-row-"]')].map(
+			(el) => el.getAttribute('data-testid')
+		);
+		expect(rows).toEqual(['agenda-recent-row-past-1']);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — #321 review F2: the panel's closed-set roster notice)
+// (*MVOX:Tallis* — #471 collective-switch reset RED)
