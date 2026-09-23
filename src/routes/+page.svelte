@@ -44,9 +44,10 @@
 	import { loadRoster } from '$lib/roster/rosterData';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	// #255 done-when 3 — the season summary's history-keeps-its-subject fix
-	// reads the inactive roster ALONGSIDE the active one (see
-	// `handleExpandSeasonSummary` below).
-	import { loadInactiveRoster } from '$lib/roster/memberLifecycle';
+	// reads the archived members ALONGSIDE the active ones; #469 review F1 —
+	// through ONE producer, so the real-names overlay runs once for the whole
+	// table (see `handleExpandSeasonSummary` below).
+	import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 	import {
 		listAttendance,
 		listMyAttendance,
@@ -3260,21 +3261,30 @@
 		const thisRequestSnapshot = requestId; // guard against a collective switch mid-load
 		seasonRatesLoading = true;
 		seasonRatesError = false;
-		// #255 done-when 3 — `loadInactiveRoster` runs ALONGSIDE `loadRoster`, not
-		// instead of it: a deactivated member's history must keep its subject on
-		// this surface (the reason deactivate beat delete), so her row is unioned
-		// in below rather than silently dropping the moment she is deactivated.
-		// A failed inactive read fails the WHOLE surface loud (Promise.all, not
-		// allSettled) — the alternative (fall back to active-only) would render a
-		// roster-only list as if it were complete, exactly the silent regression
-		// this fix exists to close.
+		// #255 done-when 3 — the ARCHIVED members are read ALONGSIDE the active
+		// ones, not instead of them: a deactivated member's history must keep its
+		// subject on this surface (the reason deactivate beat delete), so her row
+		// is unioned in below rather than silently dropping the moment she is
+		// deactivated. A failed archived read fails the WHOLE surface loud (one
+		// rejecting producer, not allSettled) — the alternative (fall back to
+		// active-only) would render a roster-only list as if it were complete,
+		// exactly the silent regression this fix exists to close.
+		//   #469 review F1 — ONE producer (`loadActiveAndArchivedRosters`), not
+		// `loadRoster` + `loadInactiveRoster` side by side: each of those overlays
+		// real names itself, so the pair spent the toggle read and the bulk
+		// `admin_member_record` read TWICE per panel open, and their overlays could
+		// degrade independently — a table mixing real names for active members with
+		// profile names for archived ones, indistinguishable from "she has no
+		// record". The two halves come back separately because they render
+		// differently (rate row vs count-only row), overlaid as one set.
 		Promise.all([
-			loadRoster(cfg),
-			loadInactiveRoster(cfg),
+			loadActiveAndArchivedRosters(cfg),
 			Promise.all(events.map((event) => listAttendance(cfg, event.id)))
 		])
-			.then(([rosterRead, inactiveRead, perEventRecords]) => {
+			.then(([rosters, perEventRecords]) => {
 				if (thisRequestSnapshot !== requestId) return;
+				const rosterRead = rosters.active;
+				const inactiveRead = rosters.inactive;
 				// #321 (PO ruling 2026-09-11, second pass) — the rate table SAYS it.
 				// Either read short-changes the same thing: a singer with no row here
 				// is missing from a comparison the others are being judged in.

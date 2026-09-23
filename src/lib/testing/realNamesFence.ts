@@ -21,6 +21,9 @@
 //   - answers the toggle read with `roster_show_real_names` (true by default,
 //     false on request — the key is always PRESENT, so "off" is a read answer,
 //     never a degrade),
+//   - serves an ARCHIVED member (`status.string=archived`) DISTINCT from the
+//     active two, so a surface that reads both halves (the agenda's season-rate
+//     table) can be pinned on rows the active read can never produce,
 //   - serves NAMED `admin_member_record`s for every member in BOTH states (an
 //     off-toggle tree that still fetched records would render them and fail
 //     LOUDLY rather than pass on an empty response),
@@ -37,10 +40,16 @@ export const MEMBER_PERSON: Record<string, string> = {
 	m2: 'person-q'
 };
 
+/** The `status.string=archived` half — a member NO active read can produce. */
+export const ARCHIVED_MEMBER_PERSON: Record<string, string> = {
+	m9: 'person-z'
+};
+
 /** What every surface MUST render with the toggle OFF. */
 export const PROFILE_NAMES = {
 	m1: 'Alice Alto',
-	m2: 'Berta Bass'
+	m2: 'Berta Bass',
+	m9: 'Gone Girl'
 } as const;
 
 /** What every surface MUST render with the toggle ON (#469). Deliberately
@@ -48,8 +57,15 @@ export const PROFILE_NAMES = {
  *  displayed name stays observable. */
 export const REAL_NAMES = {
 	m1: 'Zoe Zeta',
-	m2: 'Aaron Aardvark'
+	m2: 'Aaron Aardvark',
+	m9: 'Rita Real'
 } as const;
+
+/** Active + archived, the one list the record/profile reads answer over. */
+const ALL_MEMBER_PERSON: Array<[string, string]> = [
+	...Object.entries(MEMBER_PERSON),
+	...Object.entries(ARCHIVED_MEMBER_PERSON)
+];
 
 function json(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -72,7 +88,7 @@ export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeo
 		// The overlay's bulk read — served in both toggle states (see header).
 		if (url.includes('_type.string=admin_member_record')) {
 			return json({
-				entities: Object.entries(MEMBER_PERSON).map(([memberId, personId]) => ({
+				entities: ALL_MEMBER_PERSON.map(([memberId, personId]) => ({
 					_id: `rec-${memberId}`,
 					person: [{ reference: personId }],
 					name: [{ string: REAL_NAMES[memberId as keyof typeof REAL_NAMES] }]
@@ -110,8 +126,14 @@ export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeo
 		}
 
 		if (url.includes('_type.string=member')) {
+			// The archived half is its OWN list: an active read never produces m9,
+			// and the archived read never produces m1/m2 (the two queries are
+			// disjoint on the wire — `status.string=active` vs `=archived`).
+			const roster = url.includes('status.string=archived')
+				? Object.entries(ARCHIVED_MEMBER_PERSON)
+				: Object.entries(MEMBER_PERSON);
 			return json({
-				entities: Object.entries(MEMBER_PERSON).map(([memberId, personId]) => ({
+				entities: roster.map(([memberId, personId]) => ({
 					_id: memberId,
 					person: [{ reference: personId }],
 					_parent: [
@@ -130,7 +152,7 @@ export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeo
 		if (url.includes('_type.string=profile')) {
 			const match = /_parent\.reference=([^&]+)/.exec(url);
 			const personId = match ? decodeURIComponent(match[1]) : '';
-			const memberId = Object.keys(MEMBER_PERSON).find((id) => MEMBER_PERSON[id] === personId);
+			const memberId = ALL_MEMBER_PERSON.find(([, pid]) => pid === personId)?.[0];
 			if (!memberId) return json({ entities: [] });
 			return json({
 				entities: [
@@ -152,3 +174,4 @@ export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeo
 
 // (*MVOX:Palestrina* — #269 review F1/F2: scope-fence wire fixture)
 // (*MVOX:Tallis* — #469 RED: both toggle states + the join-state read; fence flipped to the conditional contract)
+// (*MVOX:Palestrina* — #469 review F1: an archived member, for the surfaces that read both halves)

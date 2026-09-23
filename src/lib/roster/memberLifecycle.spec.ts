@@ -38,6 +38,7 @@ import {
 	listInactiveMembers,
 	loadInactiveRoster,
 	loadRosterIncludingArchived,
+	loadActiveAndArchivedRosters,
 	listDeactivateBlockers
 } from './memberLifecycle';
 
@@ -782,7 +783,145 @@ describe('#469 — loadRosterIncludingArchived overlays ONCE over the union', ()
 	});
 });
 
+// ── #469 review F1 — the season panel's one-pass producer ──────────────────────
+//
+// The agenda's season-rate table needs the two halves SEPARATELY (active rows
+// carry a rate, archived rows a count only) and used to get them by calling
+// `loadRoster` + `loadInactiveRoster` side by side — two overlays, so two
+// database resolves, two toggle reads and two `admin_member_record?limit=500`
+// reads for one table, with the two halves free to degrade independently into a
+// table mixing real names with profile names. `loadActiveAndArchivedRosters` is
+// `loadRosterIncludingArchived`'s read stopped one step earlier: ONE overlay
+// over both halves, partitioned back by the active read's ids.
+describe('#469 review F1 — loadActiveAndArchivedRosters: one overlay, two halves', () => {
+	beforeEach(() => {
+		listMyProfilesMock.mockReset();
+	});
+
+	const profilesByPerson: Record<string, unknown[]> = {
+		'person-a': [
+			{ _id: 'prof-a', _sharing: 'domain', name: 'Ada Lovelace', email: 'ada@example.com' }
+		],
+		'person-9': [{ _id: 'prof-9', _sharing: 'domain', name: 'Gone Girl', email: 'gone@example.com' }]
+	};
+
+	it('toggle ON: both halves carry REAL names from ONE toggle GET and ONE records GET, each half sorted by the displayed name, profileName untouched', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			active: [{ _id: 'member-1', person: 'person-a' }],
+			archived: [{ _id: 'member-9', person: 'person-9' }],
+			toggle: true,
+			records: [
+				{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' },
+				{ _id: 'rec-9', person: 'person-9', name: 'Real Rita' }
+			]
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		expect(active).toEqual({
+			items: [
+				{
+					memberId: 'member-1',
+					personId: 'person-a',
+					name: 'Zoe Zed',
+					profileName: 'Ada Lovelace',
+					email: 'ada@example.com',
+					sectionIds: [],
+					ownerIds: []
+				}
+			],
+			total: 1,
+			truncated: false
+		});
+		expect(inactive).toEqual({
+			items: [
+				{
+					memberId: 'member-9',
+					personId: 'person-9',
+					name: 'Real Rita',
+					profileName: 'Gone Girl',
+					email: 'gone@example.com',
+					sectionIds: []
+				}
+			],
+			total: 1,
+			truncated: false
+		});
+		// THE pin this function exists for: ONE of each, for BOTH halves — the
+		// side-by-side shape it replaces spent two of each per panel open.
+		const all = requestedUrls(fetchImpl);
+		expect(all.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('_type.string=database'))).toHaveLength(1);
+	});
+
+	it('toggle OFF: profile names in BOTH halves, the toggle read spent once, ZERO records reads', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			active: [{ _id: 'member-1', person: 'person-a' }],
+			archived: [{ _id: 'member-9', person: 'person-9' }],
+			toggle: false,
+			records: [
+				{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' },
+				{ _id: 'rec-9', person: 'person-9', name: 'Real Rita' }
+			]
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		expect(active.items.map((r) => r.name)).toEqual(['Ada Lovelace']);
+		expect(inactive.items.map((r) => r.name)).toEqual(['Gone Girl']);
+		const all = requestedUrls(fetchImpl);
+		expect(all.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
+	});
+
+	it('ACTIVE WINS a memberId collision: a status flip mid-flight puts her in the active half only, never twice in one table', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			active: [{ _id: 'member-1', person: 'person-a' }],
+			archived: [{ _id: 'member-1', person: 'person-a' }],
+			toggle: 'absent'
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		expect(active.items.map((r) => r.memberId)).toEqual(['member-1']);
+		expect(inactive.items).toEqual([]);
+	});
+
+	it('a truncated half marks BOTH halves: one overlay, one table, one statement about it', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const u = String(url);
+			if (u.includes('_type.string=member') && u.includes('status.string=archived')) {
+				// 812 on the server, one row on the wire — short.
+				return Promise.resolve(
+					json({ count: 812, entities: [{ _id: 'member-9', person: [{ reference: 'person-9' }] }] })
+				);
+			}
+			if (u.includes('_type.string=member')) {
+				return Promise.resolve(
+					json({ count: 1, entities: [{ _id: 'member-1', person: [{ reference: 'person-a' }] }] })
+				);
+			}
+			return Promise.resolve(json({ entities: [] }));
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		expect(active.truncated).toBe(true);
+		expect(inactive.truncated).toBe(true);
+		// `total` stays per-half: each read's own server count.
+		expect(active.total).toBe(1);
+		expect(inactive.total).toBe(812);
+	});
+});
+
+
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #467 RED: archived-mirror _created widening, author dropped)
 // (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)
 // (*MVOX:Tallis* — #469 RED: archived producers obey the real-names setting, one overlay pass)
+// (*MVOX:Palestrina* — #469 review F1: loadActiveAndArchivedRosters, one overlay for the season table)

@@ -255,13 +255,20 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: loadRosterMock
 }));
-// #255 done-when 3 — the season-summary expand handler now unions in the
-// inactive roster too (memberLifecycle.loadInactiveRoster). This file isn't
-// exercising deactivation at all, so an empty inactive roster keeps every
-// existing assertion in this suite exactly as it was (that union is pinned
-// separately in page.season-summary-inactive.spec.ts).
+// #255 done-when 3 — the season-summary expand handler unions in the archived
+// members too; #469 review F1 — through ONE producer
+// (`loadActiveAndArchivedRosters`), so the real-names overlay runs once per
+// panel open. This file isn't exercising deactivation at all, so the archived
+// half stays empty and the active half is whatever `loadRoster` answers here —
+// every existing assertion in this suite (including the rejecting-read one)
+// keeps its exact shape. The union itself is pinned separately in
+// page.season-summary-inactive.spec.ts.
 vi.mock('$lib/roster/memberLifecycle', () => ({
-	loadInactiveRoster: vi.fn().mockResolvedValue([])
+	loadInactiveRoster: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
+	loadActiveAndArchivedRosters: vi.fn(async (...args: unknown[]) => ({
+		active: await loadRosterMock(...args),
+		inactive: { items: [], total: 0, truncated: false }
+	}))
 }));
 // NOTE: ./attendanceSummary is deliberately NOT mocked — the page must run the
 // REAL derive functions; these route tests cover the wiring end to end.

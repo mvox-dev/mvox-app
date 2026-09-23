@@ -284,15 +284,16 @@ export async function loadInactiveRoster(
  * active row is the answer that matches what the rest of the app shows.
  *
  * #469 — the real-names overlay runs ONCE, over the UNIONED rows, not once per
- * sub-list: this function unions the two RAW reads (`loadRosterRead` from
- * rosterData.ts and this module's own `loadInactiveRosterRead`, neither of
- * which touches `roster_show_real_names`) and applies `applyRealNames` to the
- * combined set. Calling `loadRoster` + `loadInactiveRoster` here instead — each
- * already overlaid — would spend the toggle read and the bulk records read
- * TWICE for one page load; rosterData.realNames.spec.ts pins "exactly ONE
- * records query for the whole roster" for the shared producer, and this
- * function's own contract (memberLifecycle.spec.ts) pins the same discipline
- * for the union.
+ * sub-list: the read itself is `loadActiveAndArchivedRosters` (below), which
+ * unions the two RAW reads (`loadRosterRead` from rosterData.ts and this
+ * module's own `loadInactiveRosterRead`, neither of which touches
+ * `roster_show_real_names`) and applies `applyRealNames` to the combined set;
+ * this function only merges the two overlaid halves back together. Calling
+ * `loadRoster` + `loadInactiveRoster` instead — each already overlaid — would
+ * spend the toggle read and the bulk records read TWICE for one page load;
+ * rosterData.realNames.spec.ts pins "exactly ONE records query for the whole
+ * roster" for the shared producer, and this function's own contract
+ * (memberLifecycle.spec.ts) pins the same discipline for the union.
  *
  * #321 — `truncated` is the OR of the two RAW reads (either one short means
  * this list is missing people, same as before #469) and `total` their sum; the
@@ -303,19 +304,90 @@ export async function loadRosterIncludingArchived(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ListRead<RosterRow>> {
+	const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+	return {
+		items: [...active.items, ...inactive.items].sort((a, b) => a.name.localeCompare(b.name)),
+		total: active.total + inactive.total,
+		// Both halves already carry the SAME combined flag (see
+		// `loadActiveAndArchivedRosters`); the OR is kept so this line still
+		// reads as the statement it makes — either half short means this list
+		// is missing people.
+		truncated: active.truncated || inactive.truncated
+	};
+}
+
+/** The two halves of one membership read — see `loadActiveAndArchivedRosters`. */
+export interface ActiveAndArchivedRosters {
+	/** `status.string=active` rows, overlaid. */
+	active: ListRead<RosterRow>;
+	/** `status.string=archived` rows, overlaid, minus any id the active half claims. */
+	inactive: ListRead<RosterRow>;
+}
+
+/**
+ * #469 review F1 — the ONE-PASS producer for a surface that needs the active
+ * and the archived rows SEPARATELY (the agenda's season-rate table: active
+ * members get a rate, archived ones a count-only row — attendanceSummary.ts).
+ *
+ * It is `loadRosterIncludingArchived`'s read, stopped one step earlier: the two
+ * RAW reads in parallel, ONE `applyRealNames` over their concatenation, then the
+ * overlaid rows partitioned back by the active read's memberId set. The caller
+ * that wants them unioned (`loadRosterIncludingArchived`, above) merges the two
+ * halves itself.
+ *
+ * Why this exists rather than `loadRoster(cfg)` + `loadInactiveRoster(cfg)` side
+ * by side — the shape the season panel used before this fix: each of those
+ * overlays ITSELF, so one panel open spent TWO database resolves, TWO
+ * `roster_show_real_names` reads and TWO `admin_member_record?limit=500` reads
+ * (the PII-bearing bulk read) for one table. Worse, the two overlays degrade
+ * INDEPENDENTLY: one leg's records read failing while the other's succeeds
+ * renders a single table mixing real names with profile names, which the
+ * overlay's own doc calls byte-indistinguishable from "she has no record". One
+ * overlay over both halves makes that split impossible — the table is all real
+ * names or all profile names, never half of each.
+ *
+ * ACTIVE WINS on a memberId collision, exactly as in
+ * `loadRosterIncludingArchived`: a duplicate means a status flip landed between
+ * the two requests, and the row is dropped from the `inactive` half so no member
+ * appears twice in one table.
+ *
+ * `truncated` is the SAME combined flag on both halves: one overlay serves both,
+ * so a short records read is a fact about the whole table, and the two RAW reads
+ * are loaded as one thing a reader sees as one list. `total` stays per-half (each
+ * read's own server count).
+ */
+export async function loadActiveAndArchivedRosters(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ActiveAndArchivedRosters> {
 	const [active, inactive] = await Promise.all([
 		loadRosterRead(cfg, fetchImpl),
 		loadInactiveRosterRead(cfg, fetchImpl)
 	]);
 	const activeIds = new Set(active.items.map((r) => r.memberId));
-	const union: ListRead<RosterRow> = {
-		items: [...active.items, ...inactive.items.filter((r) => !activeIds.has(r.memberId))].sort(
-			(a, b) => a.name.localeCompare(b.name)
-		),
-		total: active.total + inactive.total,
-		truncated: active.truncated || inactive.truncated
+	const archivedOnly = inactive.items.filter((r) => !activeIds.has(r.memberId));
+	const overlaid = await applyRealNames(
+		cfg,
+		{
+			items: [...active.items, ...archivedOnly],
+			total: active.total + inactive.total,
+			truncated: active.truncated || inactive.truncated
+		},
+		fetchImpl
+	);
+	const byName = (a: RosterRow, b: RosterRow) => a.name.localeCompare(b.name);
+	return {
+		active: {
+			items: overlaid.items.filter((r) => activeIds.has(r.memberId)).sort(byName),
+			total: active.total,
+			truncated: overlaid.truncated
+		},
+		inactive: {
+			items: overlaid.items.filter((r) => !activeIds.has(r.memberId)).sort(byName),
+			total: inactive.total,
+			truncated: overlaid.truncated
+		}
 	};
-	return applyRealNames(cfg, union, fetchImpl);
 }
 
 /** One manageable grant that blocks deactivation (refusal names the remedy). */
