@@ -4,6 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
+import type { AttendancePanel } from '$lib/attendance/types';
+import { goto } from '$app/navigation';
+
+// #466 — AgendaList itself calls goto() for whole-card taps; mocked so a
+// component-level render never reaches SvelteKit's real client router (this
+// file had no $app/navigation mock before — the root '/' page specs already
+// carry one, e.g. page.agenda-presence-badges.spec.ts).
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
@@ -849,7 +857,188 @@ describe('#220 — AM/PM preference on agenda times', () => {
 	});
 });
 
+// ── #466 — the whole agenda card opens the event ─────────────────────────────
+// Tapping anywhere on a card OUTSIDE an in-card control opens /event/{id}
+// (programmatically, via goto — the card is NOT wrapped in an anchor); every
+// in-card control keeps its own behaviour and never navigates. The two #101
+// TE.1 anchors stay byte-identical: the accessible name link remains the row's
+// ONLY tab stop, so the row div gains no tabindex and no role.
+describe('#466 whole card opens the event', () => {
+	const gotoMock = vi.mocked(goto);
+	beforeEach(() => {
+		gotoMock.mockClear();
+	});
+
+	const recentP9 = item('p9', '2026-06-01T16:00:00.000Z', { location: 'Old Hall' });
+
+	// (a) — taps on the row's non-interactive body navigate, exactly once.
+
+	it("(a) upcoming: a tap on the row div's own body calls goto('/event/r1') exactly once", async () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
+		await fireEvent.click(row);
+		expect(gotoMock).toHaveBeenCalledTimes(1);
+		expect(gotoMock).toHaveBeenCalledWith('/event/r1');
+	});
+
+	it("(a) upcoming: a tap on the location span (non-interactive body) opens that row's own event", async () => {
+		const { container } = render(AgendaList, { items: itemSameDay });
+		const loc = container.querySelector(
+			'[data-testid="agenda-row-r2"] [data-testid="row-location"]'
+		)!;
+		await fireEvent.click(loc);
+		expect(gotoMock).toHaveBeenCalledTimes(1);
+		expect(gotoMock).toHaveBeenCalledWith('/event/r2');
+	});
+
+	it("(a) recent: a tap on the recent row div's own body calls goto('/event/p9') exactly once", async () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: [recentP9] });
+		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
+		await fireEvent.click(row);
+		expect(gotoMock).toHaveBeenCalledTimes(1);
+		expect(gotoMock).toHaveBeenCalledWith('/event/p9');
+	});
+
+	// (b) — every in-card control keeps working and NEVER opens the event.
+
+	it('(b) upcoming: an RSVP tap fires onrsvpchange and does NOT navigate', async () => {
+		const onrsvpchange = vi.fn();
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			canRsvp: 'editor',
+			onrsvpchange
+		});
+		const btn = container.querySelector(
+			'[data-testid="agenda-row-r2"] [data-testid="rsvp-btn-late"]'
+		)!;
+		await fireEvent.click(btn);
+		expect(onrsvpchange).toHaveBeenCalledTimes(1);
+		expect(onrsvpchange).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }), 'late');
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	it('(b) recent: the take-attendance tap fires ontakeattendance and does NOT navigate', async () => {
+		const ontakeattendance = vi.fn();
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: [recentP9],
+			conductorEventIds: new Set(['p9']),
+			ontakeattendance
+		});
+		const btn = container.querySelector(
+			'[data-testid="agenda-recent-row-p9"] [data-testid="take-attendance-btn"]'
+		)!;
+		await fireEvent.click(btn);
+		expect(ontakeattendance).toHaveBeenCalledTimes(1);
+		expect(ontakeattendance).toHaveBeenCalledWith(expect.objectContaining({ id: 'p9' }));
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	it('(b) recent: attendance-panel buttons keep working, and the panel surface itself (gaps between its buttons) never navigates', async () => {
+		const ontoggle = vi.fn();
+		const onclose = vi.fn();
+		const panel: AttendancePanel = {
+			item: recentP9,
+			members: [
+				{ memberId: 'm1', personId: 'pp1', name: 'Alto One', email: 'alto@example.invalid' }
+			],
+			attendanceByMemberId: {},
+			rsvpByMemberId: {},
+			loading: false,
+			error: false,
+			pendingMemberIds: new Set(),
+			failedMemberIds: new Set(),
+			savedMemberIds: new Set(),
+			membersPartial: false,
+			ontoggle,
+			onclose
+		};
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: [recentP9],
+			attendancePanel: panel
+		});
+		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
+		// a real button inside the panel does its own job…
+		await fireEvent.click(row.querySelector('[data-testid="attendance-toggle-m1-present"]')!);
+		expect(ontoggle).toHaveBeenCalledTimes(1);
+		// …the panel's own body (the gap between buttons) is a control surface,
+		// not a tap target…
+		await fireEvent.click(row.querySelector('[data-testid="attendance-panel"]')!);
+		// …and the collapse button closes, never navigates.
+		await fireEvent.click(row.querySelector('[data-testid="attendance-collapse-btn"]')!);
+		expect(onclose).toHaveBeenCalledTimes(1);
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	it('(b) recent: the works-line toggle and the PDF button keep working and never navigate', async () => {
+		const onpdfclick = vi.fn();
+		const worksByEventId = {
+			p9: [
+				{
+					id: 'ri-1',
+					kind: 'repertoire' as const,
+					workId: 'work-1',
+					editionId: 'ed-1',
+					workName: 'Spem in alium',
+					composer: 'Thomas Tallis',
+					status: 'active' as const,
+					editionName: '40-part original',
+					ordinal: null,
+					fileId: 'file-1',
+					fileName: '',
+					externalLinks: [],
+					canBorrow: false,
+					notes: ''
+				}
+			]
+		};
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: [recentP9],
+			worksByEventId,
+			onpdfclick
+		});
+		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
+		await fireEvent.click(row.querySelector('[data-testid="works-line"]')!);
+		await fireEvent.click(row.querySelector('[data-testid="work-link-pdf"]')!);
+		expect(onpdfclick).toHaveBeenCalledWith('file-1');
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	// (c) — the accessible name link is the anchor's own business: the row
+	// handler must ignore it (SvelteKit intercepts internal <a> clicks in the
+	// real app; a goto() here would navigate twice).
+
+	it('(c) a tap on the accessible name link never reaches goto — both families', async () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: [recentP9] });
+		for (const rowId of ['agenda-row-r1', 'agenda-recent-row-p9']) {
+			const link = container.querySelector(
+				`[data-testid="${rowId}"] a[href^="/event/"][aria-label]`
+			)!;
+			expect(link, `${rowId} accessible link`).not.toBeNull();
+			await fireEvent.click(link);
+		}
+		expect(gotoMock).not.toHaveBeenCalled();
+	});
+
+	// (d) — structural pins: no second tab stop, no role/tabindex on the row.
+
+	it('(d) exactly one focusable event link per row; the row div gains no tabindex and no role', () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: [recentP9] });
+		for (const rowId of ['agenda-row-r1', 'agenda-row-r2', 'agenda-recent-row-p9']) {
+			const row = container.querySelector(`[data-testid="${rowId}"]`)!;
+			const anchors = [...row.querySelectorAll('a[href^="/event/"]')];
+			const focusable = anchors.filter((a) => a.getAttribute('tabindex') !== '-1');
+			expect(focusable.length, `${rowId}: focusable event links`).toBe(1);
+			expect(row.hasAttribute('tabindex'), `${rowId}: row tabindex`).toBe(false);
+			expect(row.hasAttribute('role'), `${rowId}: row role`).toBe(false);
+		}
+	});
+});
+
 // (*MVOX:Byrd*)
 // (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
 // (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)
 // (*MVOX:Josquin* — #101 TE.1 review fix F2: row-link accessible name)
+// (*MVOX:Tallis* — #466 whole-card-opens-event RED)
