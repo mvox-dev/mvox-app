@@ -178,21 +178,22 @@ async function renderReady(): Promise<HTMLElement> {
 
 describe('/roster on DATABASE-parented data (#161)', () => {
 	it("renders the member read off a database-parented member row, and a TOP-LEVEL create threads the DATABASE entity id: createSection(cfg, { name, parentId: null, dbEntityId: <database entity> })", async () => {
+		// #470 — the picker's inline create form is RETIRED; the db-scoping pin
+		// re-drives through the page-level `roster-new-section` entry (Arrange).
 		const container = await renderReady();
 
-		// Open the picker on the (unassigned) member and start a top-level create.
-		await fireEvent.click(q(container, 'section-picker-trigger-m-pete') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
 		await waitFor(() => {
-			expect(q(container, 'section-picker-menu-m-pete')).not.toBeNull();
+			expect(q(container, 'roster-arrange-list')).not.toBeNull();
 		});
-		await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
 		await waitFor(() => {
-			expect(q(container, 'section-create-form')).not.toBeNull();
+			expect(q(container, 'roster-new-section-form')).not.toBeNull();
 		});
-		await fireEvent.input(q(container, 'section-create-name') as HTMLElement, {
+		await fireEvent.input(q(container, 'roster-new-section-name') as HTMLElement, {
 			target: { value: 'Tenor' }
 		});
-		await fireEvent.click(q(container, 'section-create-submit') as HTMLElement);
+		await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
 
 		await waitFor(() => {
 			expect(createSectionMock).toHaveBeenCalledTimes(1);
@@ -216,3 +217,5 @@ describe('/roster on DATABASE-parented data (#161)', () => {
 });
 
 // (*MVOX:Tallis* — #161 RED)
+// (*MVOX:Tallis* — #470: db-scoping pin re-driven through roster-new-section;
+//  the picker's inline create form is retired)

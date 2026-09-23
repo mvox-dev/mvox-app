@@ -1,36 +1,66 @@
 // @vitest-environment happy-dom
 //
-// TS.2/#96 RED — SectionPicker.svelte, unit. The component is PRESENTATIONAL
-// (no fetch, no cfg): the write dispatch + optimistic state live in the roster
-// page's wiring (page.roster-picker.spec.ts), same split as the attendance
-// panel. These specs pin the component's own contract:
+// #470 RED — SectionPicker.svelte REWRITTEN contract: NATIVE single-choice
+// pickers, one per membership, plus a [+]. The custom listbox popup (trigger /
+// menu / role="option" / toggle-onpick) is RETIRED — this file supersedes the
+// TS.2/#96 popup pins wholesale. The component stays PRESENTATIONAL (no fetch,
+// no cfg): the write dispatch + optimistic state live in the roster page
+// (page.roster-picker.spec.ts), same split as before.
 //
-//   props: { memberId, sections (tree from listSections), selectedIds
-//            (current section ids, [] = unassigned), onpick(id | null) }
+// Props (the contract this file pins; the shape CHANGES this slice, hence the
+// deliberate render-time cast below):
 //
-// Pinned testid contract (GREEN must implement):
-//   section-picker-trigger-<memberId>   trigger button; aria-expanded; label =
-//                                       current section names (', '-joined) or
-//                                       m.roster_unassigned() when none
-//   section-picker-menu-<memberId>      open menu (absent while closed)
-//   section-picker-option-<sectionId>   one per section, flattened PRE-ORDER
-//                                       over the tree; data-depth="<n>";
-//                                       role="option", aria-selected = currently
-//                                       assigned (several may be selected —
-//                                       multi-section; #99/TS.5 — supersedes the
-//                                       original aria-pressed pin here, an
-//                                       invalid ARIA mix on role="option")
-//   section-picker-option-unassigned    LAST option; fires onpick(null)
+//   memberId      string
+//   memberName    string — names every control ("whose sections?"); the CALLER
+//                 picks which name is in scope (the roster page passes the
+//                 PROFILE name — see page.roster-real-names.spec.ts)
+//   sections      SectionNode[] — the tree from listSections
+//   selectedIds   string[] — the member's CURRENT section entity ids
+//   busy          boolean — freeze: every select AND the [+] disabled, root
+//                 aria-busy (Mihkel: "the controls get freezed while entu
+//                 syncs"); nothing visual beyond the native disabled state
+//   onassign(sectionId)        blank picker chose a section
+//   onunassign(sectionId)      a held section's picker chose Määramata ('')
+//   onmove(fromId, toId)       a held section's picker chose another section
 //
-// Toggle semantics: tapping ANY section option fires onpick(sectionId) — the
-// CALLER maps it to assign (not in selectedIds) or unassign (already in). The
-// menu closes after every pick (per-tap immediate write, no select-then-save).
+// Pinned markup contract (GREEN must implement):
+//   - root: flex column, aria-busy={busy}
+//   - one native <select data-testid="section-picker-select-<memberId>-<sectionId>">
+//     PER HELD SECTION, value = that section id; options = Määramata (value '',
+//     m.roster_unassigned()) + that section + every section NOT held by this
+//     member, labels depth-indented (NBSP — the parentOptionLabel shape)
+//   - Mihkel 1a/1b/1c: no section → just the [+]; the [+] opens ONE blank
+//     <select data-testid="section-picker-select-<memberId>-blank"> valued '',
+//     options = Määramata + the sections she is NOT in (nothing to gain by
+//     choosing one twice — Gama); choosing one fires onassign(id)
+//   - the [+] `section-picker-add-<memberId>`: native <button type="button">,
+//     aria-label m.roster_section_add_label({ name }), matching title, inline
+//     aria-hidden SVG; HIDDEN while a blank picker is open (Mihkel's rule)
+//   - one-way `value=` + explicit `onchange`, NOT bind:value (InviteSurface's
+//     controlled-select house shape)
+//   - every select carries a visually-hidden <label> naming the member (and
+//     the section) — native controls with real labels, the standing rule
+//   - NO listbox, NO popup, NO create form, NO oncreate prop: creation left
+//     the assignment flow entirely (`roster-new-section` in arrange mode is
+//     the only entry — #124/#155, untouched)
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ComponentProps } from 'svelte';
 
-// Lenient message mock — any key resolves to itself; real copy is Comenius's.
+// Param-echoing message mock — labels must carry the member's NAME, so the
+// mock renders "<key> <json-params>"; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_target, key) => () => String(key) })
+	m: new Proxy(
+		{},
+		{
+			get:
+				(_target, key) =>
+				(params?: Record<string, unknown>) =>
+					params && Object.keys(params).length > 0
+						? `${String(key)} ${JSON.stringify(params)}`
+						: String(key)
+		}
+	)
 }));
 
 import SectionPicker from './SectionPicker.svelte';
@@ -40,7 +70,7 @@ afterEach(() => {
 	cleanup();
 });
 
-// Soprano (order 1) ▸ Soprano 1; Alto (order 2) — same shape as the TS.1 specs.
+// Soprano (order 1) ▸ Soprano 1; Alto (order 2) — same tree as the TS.1 specs.
 function fixtureTree(): SectionNode[] {
 	const sop1: SectionNode = {
 		id: 'sec-sop1',
@@ -56,166 +86,264 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-function renderPicker(selectedIds: string[], onpick = vi.fn()) {
+interface PickerProps {
+	memberId: string;
+	memberName: string;
+	sections: SectionNode[];
+	selectedIds: string[];
+	busy: boolean;
+	onassign: (sectionId: string) => void;
+	onunassign: (sectionId: string) => void;
+	onmove: (fromId: string, toId: string) => void;
+}
+
+// The Props interface changes shape THIS slice (selectedIds+onpick+oncreate →
+// per-membership handlers + busy) — the cast keeps `pnpm check` honest about
+// everything else while these specs stay RED against the old component.
+function renderPicker(overrides: Partial<PickerProps> = {}) {
+	const props: PickerProps = {
+		memberId: 'm-1',
+		memberName: 'Ada Lovelace',
+		sections: fixtureTree(),
+		selectedIds: [],
+		busy: false,
+		onassign: vi.fn(),
+		onunassign: vi.fn(),
+		onmove: vi.fn(),
+		...overrides
+	};
 	const { container } = render(SectionPicker, {
-		props: { memberId: 'm-1', sections: fixtureTree(), selectedIds, onpick }
+		props: props as unknown as ComponentProps<typeof SectionPicker>
 	});
-	return { container, onpick };
+	return { container, props };
 }
 
-function trigger(container: HTMLElement): HTMLElement {
-	return container.querySelector('[data-testid="section-picker-trigger-m-1"]') as HTMLElement;
+function q(container: HTMLElement, testid: string): HTMLElement | null {
+	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-function menu(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[data-testid="section-picker-menu-m-1"]');
+function selectFor(container: HTMLElement, sectionId: string): HTMLSelectElement | null {
+	return q(container, `section-picker-select-m-1-${sectionId}`) as HTMLSelectElement | null;
 }
 
-async function open(container: HTMLElement): Promise<void> {
-	await fireEvent.click(trigger(container));
+function blankSelect(container: HTMLElement): HTMLSelectElement | null {
+	return q(container, 'section-picker-select-m-1-blank') as HTMLSelectElement | null;
 }
 
-describe('SectionPicker — closed state and trigger label', () => {
-	it('renders CLOSED by default: trigger present with aria-expanded="false", menu absent', () => {
-		const { container } = renderPicker(['sec-sop']);
-		const t = trigger(container);
-		expect(t).not.toBeNull();
-		expect(t.getAttribute('aria-expanded')).toBe('false');
-		expect(menu(container)).toBeNull();
+function addButton(container: HTMLElement): HTMLButtonElement | null {
+	return q(container, 'section-picker-add-m-1') as HTMLButtonElement | null;
+}
+
+function allSelects(container: HTMLElement): HTMLSelectElement[] {
+	return Array.from(
+		container.querySelectorAll<HTMLSelectElement>('[data-testid^="section-picker-select-"]')
+	);
+}
+
+function optionValues(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
+function optionLabels(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.textContent ?? '');
+}
+
+/** The select's accessible name, resolved the way AT would: aria-label,
+ *  aria-labelledby, a `label[for]`, or a wrapping <label>. */
+function accessibleName(el: HTMLElement): string {
+	const aria = el.getAttribute('aria-label');
+	if (aria) return aria;
+	const labelledby = el.getAttribute('aria-labelledby');
+	if (labelledby) {
+		return labelledby
+			.split(/\s+/)
+			.map((id) => el.ownerDocument.getElementById(id)?.textContent ?? '')
+			.join(' ')
+			.trim();
+	}
+	const id = el.getAttribute('id');
+	if (id) {
+		const label = el.ownerDocument.querySelector(`label[for="${id}"]`);
+		if (label) return (label.textContent ?? '').trim();
+	}
+	return (el.closest('label')?.textContent ?? '').trim();
+}
+
+// ── 1a: no section — a [+] alone, expanding to one blank picker ─────────────────
+
+describe('SectionPicker #470 — 1a: a member in NO section shows only the [+]', () => {
+	it('renders the [+] and NO select at all', () => {
+		const { container } = renderPicker({ selectedIds: [] });
+		expect(addButton(container), 'the [+] control').not.toBeNull();
+		expect(allSelects(container)).toEqual([]);
 	});
 
-	it("trigger label shows ALL current section names for a multi-section member (', '-joined)", () => {
-		const { container } = renderPicker(['sec-sop', 'sec-alto']);
-		const label = trigger(container).textContent ?? '';
-		expect(label).toContain('Soprano');
-		expect(label).toContain('Alto');
-	});
+	it('the [+] click opens ONE blank select valued "" whose options are Määramata + ALL sections (depth-indented labels, pre-order) — and the [+] itself is gone while it is open', async () => {
+		const { container } = renderPicker({ selectedIds: [] });
+		await fireEvent.click(addButton(container) as HTMLElement);
 
-	it('trigger label falls back to m.roster_unassigned() (the EXISTING TS.1 key — no new key) when selectedIds is empty', () => {
-		const { container } = renderPicker([]);
-		expect(trigger(container).textContent).toContain('roster_unassigned');
-	});
-});
-
-describe('SectionPicker — open menu: hierarchical options, Unassigned last', () => {
-	it('clicking the trigger opens the menu (aria-expanded="true") with one option per section in PRE-ORDER plus Unassigned LAST', async () => {
-		const { container } = renderPicker(['sec-sop']);
-		await open(container);
-
-		expect(trigger(container).getAttribute('aria-expanded')).toBe('true');
-		expect(menu(container)).not.toBeNull();
-		const optionIds = [...container.querySelectorAll('[data-testid^="section-picker-option-"]')].map(
-			(el) => el.getAttribute('data-testid')
-		);
-		expect(optionIds).toEqual([
-			'section-picker-option-sec-sop',
-			'section-picker-option-sec-sop1',
-			'section-picker-option-sec-alto',
-			'section-picker-option-unassigned'
+		const blank = blankSelect(container);
+		expect(blank, 'the blank picker').not.toBeNull();
+		expect(blank!.value).toBe('');
+		expect(optionValues(blank!)).toEqual(['', 'sec-sop', 'sec-sop1', 'sec-alto']);
+		// Depth is carried in the option LABELS (NBSP-indent — <option> can't be
+		// styled portably; the parentOptionLabel shape carries over).
+		expect(optionLabels(blank!)).toEqual([
+			'roster_unassigned',
+			'Soprano',
+			'  Soprano 1',
+			'Alto'
 		]);
+		// Mihkel: "[+] control is hidden, if there is an unassigned picker".
+		expect(addButton(container)).toBeNull();
 	});
 
-	it('sub-sections carry data-depth (0 / 1 / 0) — indentation is DATA the DOM exposes, and option labels show the section names', async () => {
-		const { container } = renderPicker([]);
-		await open(container);
-		const opt = (id: string) =>
-			container.querySelector(`[data-testid="section-picker-option-${id}"]`) as HTMLElement;
-		expect(opt('sec-sop').getAttribute('data-depth')).toBe('0');
-		expect(opt('sec-sop1').getAttribute('data-depth')).toBe('1');
-		expect(opt('sec-alto').getAttribute('data-depth')).toBe('0');
-		expect(opt('sec-sop').textContent).toContain('Soprano');
-		expect(opt('sec-sop1').textContent).toContain('Soprano 1');
-		expect(opt('sec-alto').textContent).toContain('Alto');
-	});
+	it("choosing a section in the blank picker fires onassign(thatId) ONCE — no unassign, no move — and the blank picker closes (the [+] returns)", async () => {
+		const { container, props } = renderPicker({ selectedIds: [] });
+		await fireEvent.click(addButton(container) as HTMLElement);
+		await fireEvent.change(blankSelect(container) as HTMLElement, {
+			target: { value: 'sec-sop' }
+		});
 
-	it('CURRENT sections are pre-selected — role="option" with aria-selected="true" on EVERY selected id (member may have several), "false" on the rest (#99/TS.5 — supersedes the original aria-pressed pin)', async () => {
-		const { container } = renderPicker(['sec-sop', 'sec-alto']);
-		await open(container);
-		const option = (id: string) =>
-			container.querySelector(`[data-testid="section-picker-option-${id}"]`) as HTMLElement;
-		expect(option('sec-sop').getAttribute('role')).toBe('option');
-		expect(option('sec-sop').getAttribute('aria-selected')).toBe('true');
-		expect(option('sec-alto').getAttribute('aria-selected')).toBe('true');
-		expect(option('sec-sop1').getAttribute('aria-selected')).toBe('false');
+		expect(props.onassign).toHaveBeenCalledTimes(1);
+		expect(props.onassign).toHaveBeenCalledWith('sec-sop');
+		expect(props.onunassign).not.toHaveBeenCalled();
+		expect(props.onmove).not.toHaveBeenCalled();
+		expect(blankSelect(container), 'the blank picker closes once it chose').toBeNull();
+		expect(addButton(container), 'the [+] returns').not.toBeNull();
 	});
 });
 
-describe('SectionPicker — onpick payloads and close-after-pick', () => {
-	it('tapping an UNSELECTED section fires onpick(thatSectionId) once and closes the menu', async () => {
-		const { container, onpick } = renderPicker(['sec-sop']);
-		await open(container);
-		await fireEvent.click(
-			container.querySelector('[data-testid="section-picker-option-sec-alto"]') as HTMLElement
-		);
-		expect(onpick).toHaveBeenCalledTimes(1);
-		expect(onpick).toHaveBeenCalledWith('sec-alto');
-		expect(menu(container)).toBeNull();
-		expect(trigger(container).getAttribute('aria-expanded')).toBe('false');
+// ── 1b: one section — its picker (with unassign) + the [+] ──────────────────────
+
+describe('SectionPicker #470 — 1b: a member in ONE section shows that picker + the [+]', () => {
+	it('renders one select valued with the held section: options Määramata + the held section + the non-held sections; plus the [+]', () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop'] });
+		const held = selectFor(container, 'sec-sop');
+		expect(held, 'the held membership select').not.toBeNull();
+		expect(held!.value).toBe('sec-sop');
+		expect(optionValues(held!)).toEqual(['', 'sec-sop', 'sec-sop1', 'sec-alto']);
+		expect(allSelects(container)).toHaveLength(1);
+		expect(addButton(container)).not.toBeNull();
 	});
 
-	it('tapping an ALREADY-SELECTED section fires onpick(thatSectionId) too — toggle semantics; the caller maps it to unassign', async () => {
-		const { container, onpick } = renderPicker(['sec-sop']);
-		await open(container);
-		await fireEvent.click(
-			container.querySelector('[data-testid="section-picker-option-sec-sop"]') as HTMLElement
-		);
-		expect(onpick).toHaveBeenCalledTimes(1);
-		expect(onpick).toHaveBeenCalledWith('sec-sop');
-		expect(menu(container)).toBeNull();
+	it("changing the held select to '' (Määramata) fires onunassign(thatSectionId) once", async () => {
+		const { container, props } = renderPicker({ selectedIds: ['sec-sop'] });
+		await fireEvent.change(selectFor(container, 'sec-sop') as HTMLElement, {
+			target: { value: '' }
+		});
+
+		expect(props.onunassign).toHaveBeenCalledTimes(1);
+		expect(props.onunassign).toHaveBeenCalledWith('sec-sop');
+		expect(props.onassign).not.toHaveBeenCalled();
+		expect(props.onmove).not.toHaveBeenCalled();
 	});
 
-	it('tapping Unassigned fires onpick(null) and closes the menu', async () => {
-		const { container, onpick } = renderPicker(['sec-sop', 'sec-alto']);
-		await open(container);
-		await fireEvent.click(
-			container.querySelector('[data-testid="section-picker-option-unassigned"]') as HTMLElement
-		);
-		expect(onpick).toHaveBeenCalledTimes(1);
-		expect(onpick).toHaveBeenCalledWith(null);
-		expect(menu(container)).toBeNull();
-	});
-});
+	it('changing the held select to ANOTHER section fires onmove(fromId, toId) once — never a bare assign or unassign', async () => {
+		const { container, props } = renderPicker({ selectedIds: ['sec-sop'] });
+		await fireEvent.change(selectFor(container, 'sec-sop') as HTMLElement, {
+			target: { value: 'sec-alto' }
+		});
 
-describe('SectionPicker — F2 code-review fix: non-destructive dismissal', () => {
-	it('Escape closes the open menu WITHOUT firing onpick (every option is an immediate live write — there must be a way out that writes nothing)', async () => {
-		const { container, onpick } = renderPicker(['sec-sop']);
-		await open(container);
-		expect(menu(container)).not.toBeNull();
-
-		await fireEvent.keyDown(document.body, { key: 'Escape' });
-
-		expect(menu(container)).toBeNull();
-		expect(trigger(container).getAttribute('aria-expanded')).toBe('false');
-		expect(onpick).not.toHaveBeenCalled();
-	});
-
-	it('a click OUTSIDE the picker closes the open menu without firing onpick', async () => {
-		const { container, onpick } = renderPicker(['sec-sop']);
-		await open(container);
-
-		await fireEvent.click(document.body);
-
-		expect(menu(container)).toBeNull();
-		expect(onpick).not.toHaveBeenCalled();
-	});
-
-	it('a click INSIDE the menu that is not an option (the menu container itself) leaves it open', async () => {
-		const { container, onpick } = renderPicker(['sec-sop']);
-		await open(container);
-
-		await fireEvent.click(menu(container) as HTMLElement);
-
-		expect(menu(container)).not.toBeNull();
-		expect(onpick).not.toHaveBeenCalled();
-	});
-
-	it('Escape while CLOSED is a no-op (handler is registered unconditionally; it must not do anything)', async () => {
-		const { container, onpick } = renderPicker([]);
-		await fireEvent.keyDown(document.body, { key: 'Escape' });
-		expect(menu(container)).toBeNull();
-		expect(trigger(container).getAttribute('aria-expanded')).toBe('false');
-		expect(onpick).not.toHaveBeenCalled();
+		expect(props.onmove).toHaveBeenCalledTimes(1);
+		expect(props.onmove).toHaveBeenCalledWith('sec-sop', 'sec-alto');
+		expect(props.onassign).not.toHaveBeenCalled();
+		expect(props.onunassign).not.toHaveBeenCalled();
 	});
 });
 
-// (*MVOX:Tallis* — TS.2/#96 RED)
+// ── 1c: several sections — one picker each + the [+] ────────────────────────────
+
+describe('SectionPicker #470 — 1c: a member in SEVERAL sections shows one picker per membership + the [+]', () => {
+	it('renders one select per held section, each valued with its own section, plus the [+]', () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop', 'sec-alto'] });
+		const sop = selectFor(container, 'sec-sop');
+		const alto = selectFor(container, 'sec-alto');
+		expect(sop).not.toBeNull();
+		expect(alto).not.toBeNull();
+		expect(sop!.value).toBe('sec-sop');
+		expect(alto!.value).toBe('sec-alto');
+		expect(allSelects(container)).toHaveLength(2);
+		expect(addButton(container)).not.toBeNull();
+	});
+
+	it('the blank picker EXCLUDES the held sections — full option list: Määramata + only the sections she is not in', async () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop', 'sec-alto'] });
+		await fireEvent.click(addButton(container) as HTMLElement);
+		const blank = blankSelect(container);
+		expect(blank).not.toBeNull();
+		// Gama: "a blank picker lists only sections she is not in".
+		expect(optionValues(blank!)).toEqual(['', 'sec-sop1']);
+		expect(optionLabels(blank!)).toEqual(['roster_unassigned', '  Soprano 1']);
+	});
+});
+
+// ── busy: the per-member freeze ─────────────────────────────────────────────────
+
+describe('SectionPicker #470 — busy=true freezes THIS member’s controls', () => {
+	it('every select and the [+] carry disabled, and the root carries aria-busy="true"', () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop', 'sec-alto'], busy: true });
+		for (const select of allSelects(container)) {
+			expect(select.disabled, select.getAttribute('data-testid') ?? '').toBe(true);
+		}
+		expect(allSelects(container)).toHaveLength(2);
+		const add = addButton(container);
+		expect(add).not.toBeNull();
+		expect(add!.disabled).toBe(true);
+		const busyRoot = container.querySelector('[aria-busy="true"]');
+		expect(busyRoot, 'root aria-busy while syncing').not.toBeNull();
+		expect(busyRoot!.contains(allSelects(container)[0])).toBe(true);
+	});
+
+	it('busy=false: nothing is disabled and no aria-busy="true" root exists', () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop'], busy: false });
+		expect((selectFor(container, 'sec-sop') as HTMLSelectElement).disabled).toBe(false);
+		expect((addButton(container) as HTMLButtonElement).disabled).toBe(false);
+		expect(container.querySelector('[aria-busy="true"]')).toBeNull();
+	});
+});
+
+// ── the [+] itself, labels, and what must NOT exist ─────────────────────────────
+
+describe('SectionPicker #470 — native controls with real labels; creation is GONE', () => {
+	it('the [+] is a native <button type="button"> with an aria-label naming the member (m.roster_section_add_label({name})), a matching title, and an aria-hidden glyph', () => {
+		const { container } = renderPicker({ selectedIds: [] });
+		const add = addButton(container);
+		expect(add).not.toBeNull();
+		expect(add!.tagName).toBe('BUTTON');
+		expect(add!.type).toBe('button');
+		const label = add!.getAttribute('aria-label') ?? '';
+		expect(label).toContain('roster_section_add_label');
+		expect(label).toContain('Ada Lovelace');
+		expect(add!.getAttribute('title')).toBe(label);
+		const glyph = add!.querySelector('svg');
+		expect(glyph, 'inline SVG plus glyph').not.toBeNull();
+		expect(glyph!.getAttribute('aria-hidden')).toBe('true');
+	});
+
+	it('EVERY select (held ones and the blank one) has an accessible name that names the member', async () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop'] });
+		await fireEvent.click(addButton(container) as HTMLElement);
+		const selects = allSelects(container);
+		expect(selects.length).toBe(2); // held + blank
+		for (const select of selects) {
+			const name = accessibleName(select);
+			expect(name, `${select.getAttribute('data-testid')} must be named`).not.toBe('');
+			expect(name, `${select.getAttribute('data-testid')} names the member`).toContain(
+				'Ada Lovelace'
+			);
+		}
+	});
+
+	it('no element with testid section-picker-new or section-create-form renders in ANY state — creating a section is not this control’s business anymore', async () => {
+		const { container } = renderPicker({ selectedIds: ['sec-sop'] });
+		expect(q(container, 'section-picker-new')).toBeNull();
+		expect(q(container, 'section-create-form')).toBeNull();
+		await fireEvent.click(addButton(container) as HTMLElement);
+		expect(q(container, 'section-picker-new')).toBeNull();
+		expect(q(container, 'section-create-form')).toBeNull();
+	});
+});
+
+// (*MVOX:Tallis* — #470 RED: native per-membership pickers + [+]; supersedes the
+//  TS.2/#96 popup-listbox contract)

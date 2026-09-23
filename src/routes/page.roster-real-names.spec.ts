@@ -483,11 +483,12 @@ describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 // ── (4) scope — roster rows ONLY ────────────────────────────────────────────
 
 describe('#469 scope — profileName surfaces keep the PROFILE name; the archived panel obeys the toggle (supersedes the #269 roster-only ruling)', () => {
-	// #269 review F1 — anchored on the LISTBOX's pre-existing aria-label (#99
-	// review F1), NOT on the trigger: the trigger's accessible name is its own
-	// visible section-list text and #269 must not touch it. Zero production
-	// change is needed to satisfy this scope pin.
-	it('SectionPicker names the member by her PROFILE name in its listbox aria-label even while her row displays the real name (stated choice — section-assignment action, out of the contracted surface; flag for live review)', async () => {
+	// #269 review F1, re-anchored by #470: the listbox popup is RETIRED — the
+	// picker is native controls now, and the PROFILE-name scope choice carries
+	// over onto their labels (the [+]'s aria-label and every select's
+	// visually-hidden label; roster_section_picker_label / the new
+	// roster_section_add_label both take {name} = the profile name).
+	it('SectionPicker names the member by her PROFILE name in its control labels even while her row displays the real name (stated choice — section-assignment action, out of the contracted surface; flag for live review)', async () => {
 		// #468 — the reader must own the row for the picker to render at all.
 		const fx = sampledbFixture(true);
 		fx.viewerPersonId = 'person-p';
@@ -495,15 +496,10 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		const { container } = await renderRosterAs('admin');
 		// The row displays the real name…
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
-		// …while the picker's accessible name keeps the profile name.
-		const trigger = q(container, 'section-picker-trigger-m2')!;
-		expect(trigger).not.toBeNull();
-		// The trigger keeps announcing WHICH SECTIONS she is in — its visible
-		// text IS its accessible name, unchanged by #269.
-		expect(trigger.getAttribute('aria-label')).toBeNull();
-		await fireEvent.click(trigger);
-		await waitFor(() => expect(q(container, 'section-picker-listbox-m2')).not.toBeNull());
-		const ariaLabel = q(container, 'section-picker-listbox-m2')!.getAttribute('aria-label') ?? '';
+		// …while the [+]'s accessible name keeps the profile name.
+		const add = q(container, 'section-picker-add-m2');
+		expect(add, "the [+] renders on m2's row").not.toBeNull();
+		const ariaLabel = add!.getAttribute('aria-label') ?? '';
 		expect(ariaLabel).toContain('Berta Bass');
 		expect(ariaLabel).not.toContain('Aaron Aardvark');
 	});

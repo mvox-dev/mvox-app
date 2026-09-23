@@ -1,12 +1,11 @@
 // @vitest-environment happy-dom
 //
-// TS.3/#97 F5 code-review fix — the /roster page's NEW-SECTION FAILURE paths.
-// The happy path is pinned by page.roster-create-section.spec.ts; this file
-// covers what used to be INVISIBLE: the picker closes synchronously on a valid
-// submit (its pinned contract), so a rejected createSection — or a createSection
-// that resolves followed by a rejected assignMemberSection — left the user with a
-// vanished dropdown, an unchanged roster and nothing but a console line. Same
-// mocking seams as the happy-path spec.
+// TS.3/#97 F5 — a failed section CREATE is SAID, not just logged. RE-DRIVEN
+// through the page-level `roster-new-section` entry (#470: the picker's inline
+// create form is RETIRED — "drop the new section creation" — and with it the
+// create+assign coupling; the page-level create has no member context, so the
+// old "created but assign failed" case dies with the entry). Same mocking
+// seams as the other page-level create specs.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,9 +22,7 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createSectio
 		unassignMock: vi.fn(),
 		createSectionMock: vi.fn()
 	}));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+// #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -53,24 +50,16 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
+const ORG_1 = 'org-1';
+
 function fixtureTree(): SectionNode[] {
-	const sop1: SectionNode = {
-		id: 'sec-sop1',
-		name: 'Soprano 1',
-		displayOrder: 1,
-		parentId: 'sec-sop',
-		depth: 1,
-		children: []
-	};
 	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [sop1] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] }
+		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_1, depth: 0, children: [] },
+		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_1, depth: 0, children: [] }
 	];
 }
 
-// #468 — every fixture row carries the READER's person id ('person-p') in
-// `ownerIds` so the picker gate stays open for this file's own (unrelated)
-// create-failure concern.
+/** The viewer ('person-p') has her own row → `currentDbEntityId` = ORG_1. */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -79,15 +68,15 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: ['sec-sop'],
-			ownerIds: ['person-p']
+			dbEntityId: ORG_1
 		},
 		{
 			memberId: 'm-pete',
-			personId: 'p-pete',
+			personId: 'person-p',
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			ownerIds: ['person-p']
+			dbEntityId: ORG_1
 		}
 	];
 }
@@ -131,118 +120,74 @@ afterEach(() => {
 	resetAdmin();
 });
 
-async function renderReady() {
-	setAuthedWithOneCollective();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
-	});
-	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
-	// this file's picker triggers, don't render until expanded); this file's
-	// concern is the create/assign FAILURE path, not the collapse default, so
-	// expand everything up front via the same toggle-all control #9 shipped.
-	const toggleAll = container.querySelector('[data-testid="roster-view-chip-expanded"]') as HTMLElement | null;
-	if (toggleAll) {
-		await fireEvent.click(toggleAll);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid^="roster-row-"]')).not.toBeNull();
-		});
-	}
-	return container;
-}
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-async function createFor(container: HTMLElement, memberId: string, name: string): Promise<void> {
-	await fireEvent.click(q(container, `section-picker-trigger-${memberId}`) as HTMLElement);
+async function renderArrangeReady(): Promise<HTMLElement> {
+	setAuthedWithOneCollective();
+	adminStore.set('admin');
+	const { container } = render(Page);
 	await waitFor(() => {
-		expect(q(container, `section-picker-menu-${memberId}`)).not.toBeNull();
+		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
-	await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
+	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
 	await waitFor(() => {
-		expect(q(container, 'section-create-form')).not.toBeNull();
+		expect(q(container, 'roster-arrange-list')).not.toBeNull();
 	});
-	await fireEvent.input(q(container, 'section-create-name') as HTMLElement, {
-		target: { value: name }
-	});
-	await fireEvent.click(q(container, 'section-create-submit') as HTMLElement);
+	return container;
 }
 
-describe('/roster — a failed createSection is SAID, not just logged', () => {
-	it("createSection rejects: the member's row shows a role=alert create-failed message, and no section group is invented", async () => {
-		createSectionMock.mockRejectedValue(new Error('boom'));
-		const container = await renderReady();
+async function createNamed(container: HTMLElement, name: string): Promise<void> {
+	if (!q(container, 'roster-new-section-form')) {
+		await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-new-section-form')).not.toBeNull();
+		});
+	}
+	await fireEvent.input(q(container, 'roster-new-section-name') as HTMLElement, {
+		target: { value: name }
+	});
+	await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
+}
 
-		await createFor(container, 'm-pete', 'Tenor');
+describe('/roster — a failed createSection is SAID, not just logged (re-driven through roster-new-section per #470)', () => {
+	it('createSection rejects: a role=alert create-failed message renders in the form, and no section row is invented; no member is assigned', async () => {
+		createSectionMock.mockRejectedValue(new Error('boom'));
+		const container = await renderArrangeReady();
+
+		await createNamed(container, 'Tenor');
 
 		const error = await waitFor(() => {
-			const el = q(container, 'section-write-error-m-pete');
+			const el = q(container, 'roster-new-section-error');
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
 		expect(error.getAttribute('role')).toBe('alert');
 		expect(error.textContent).toContain('roster_section_create_failed');
 		// Nothing was written, so nothing was added to the tree either.
-		expect(q(container, 'section-group-sec-new-1')).toBeNull();
+		expect(q(container, 'arrange-row-sec-new-1')).toBeNull();
 		expect(assignMock).not.toHaveBeenCalled();
-	});
-
-	it('the error is scoped to the member who attempted it — other rows stay clean', async () => {
-		createSectionMock.mockRejectedValue(new Error('boom'));
-		const container = await renderReady();
-
-		await createFor(container, 'm-pete', 'Tenor');
-
-		await waitFor(() => {
-			expect(q(container, 'section-write-error-m-pete')).not.toBeNull();
-		});
-		expect(q(container, 'section-write-error-m-ada')).toBeNull();
 	});
 
 	it('a later successful create clears the previous failure message', async () => {
 		createSectionMock.mockRejectedValueOnce(new Error('boom'));
-		const container = await renderReady();
+		const container = await renderArrangeReady();
 
-		await createFor(container, 'm-pete', 'Tenor');
+		await createNamed(container, 'Tenor');
 		await waitFor(() => {
-			expect(q(container, 'section-write-error-m-pete')).not.toBeNull();
+			expect(q(container, 'roster-new-section-error')).not.toBeNull();
 		});
 
 		createSectionMock.mockResolvedValue('sec-new-1');
-		await createFor(container, 'm-pete', 'Bass');
+		await createNamed(container, 'Bass');
 		await waitFor(() => {
-			expect(q(container, 'section-group-sec-new-1')).not.toBeNull();
+			expect(q(container, 'arrange-row-sec-new-1')).not.toBeNull();
 		});
-		expect(q(container, 'section-write-error-m-pete')).toBeNull();
-	});
-});
-
-describe('/roster — a created section whose ASSIGN failed says so precisely', () => {
-	it('createSection resolves but assignMemberSection rejects: the new group is in the tree, the member is NOT in it, and the assign-failed message is shown', async () => {
-		assignMock.mockRejectedValue(new Error('nope'));
-		const container = await renderReady();
-
-		await createFor(container, 'm-pete', 'Tenor');
-
-		const error = await waitFor(() => {
-			const el = q(container, 'section-write-error-m-pete');
-			expect(el).not.toBeNull();
-			return el as HTMLElement;
-		});
-		expect(error.textContent).toContain('roster_section_assign_failed');
-		// The create genuinely happened server-side — the section stays in the tree.
-		expect(q(container, 'section-group-sec-new-1')).not.toBeNull();
-		expect(
-			q(container, 'section-group-sec-new-1')?.querySelector('[data-testid="roster-row-m-pete"]')
-		).toBeNull();
-		// ...and the member is still where they were.
-		expect(
-			q(container, 'section-group-unassigned')?.querySelector('[data-testid="roster-row-m-pete"]')
-		).not.toBeNull();
+		expect(q(container, 'roster-new-section-error')).toBeNull();
 	});
 });
 
 // (*MVOX:Palestrina* — TS.3/#97 F5 code-review fixes)
+// (*MVOX:Tallis* — #470: re-driven through the page-level roster-new-section
+//  entry; the create+assign coupling died with the picker's create form)

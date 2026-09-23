@@ -333,21 +333,20 @@ async function openPageCreateForm(container: HTMLElement, name: string) {
 	});
 }
 
-// Drives a member row's SectionPicker inline create (the `handleCreate` entry):
-// open picker → "+ New section" → name → submit. Top-level (no parent picked).
-async function pickerCreate(container: HTMLElement, memberId: string, name: string) {
-	await fireEvent.click(q(container, `section-picker-trigger-${memberId}`) as HTMLElement);
+// #470 — the picker's inline create form (the `handleCreate` UI entry) is
+// RETIRED, and with it the stale-settle / late-clobber cases that could only be
+// driven through it (the page-level create's switch guards are pinned by the
+// CLASS A/B suites above and below). The `sectionWriteError` reset pin
+// survives — that banner now belongs to the native pickers' ASSIGN path, so it
+// is driven through the #470 controls: [+] → blank select → a section.
+async function failedAssign(container: HTMLElement, memberId: string, sectionId: string) {
+	await fireEvent.click(q(container, `section-picker-add-${memberId}`) as HTMLElement);
 	await waitFor(() => {
-		expect(q(container, 'section-picker-new')).not.toBeNull();
+		expect(q(container, `section-picker-select-${memberId}-blank`)).not.toBeNull();
 	});
-	await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'section-create-name')).not.toBeNull();
+	await fireEvent.change(q(container, `section-picker-select-${memberId}-blank`) as HTMLElement, {
+		target: { value: sectionId }
 	});
-	await fireEvent.input(q(container, 'section-create-name') as HTMLElement, {
-		target: { value: name }
-	});
-	await fireEvent.click(q(container, 'section-create-submit') as HTMLElement);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
@@ -476,91 +475,21 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 	});
 });
 
-describe('/roster — #299 CLASS A: handleCreate (picker create) has no collective-switch guard at all', () => {
-	it("STALE SETTLE: A's picker create resolving after the switch must not touch B's tree, and must not fire the follow-on assign", async () => {
-		const gate = deferred<string>();
-		createMock.mockImplementationOnce(() => gate.promise);
-		const container = await renderGroupsRoster();
-
-		// Ada's inline "+ New section" on A — HOLD the create.
-		await pickerCreate(container, 'm-ada', 'Chorus');
-		await waitFor(() => {
-			expect(createMock).toHaveBeenCalledTimes(1);
-		});
-		expect(assignMock).not.toHaveBeenCalled();
-
-		await switchToOtherChoirGroups(container);
-
-		gate.resolve('sec-created');
-		await flush();
-
-		// Pre-fix `sections = insertSectionNode(...)` pollutes B's tree state.
-		// (The #124/F3 own-org filter happens to hide the stale root from B's
-		// VIEW — its dbEntityId is A's org — so the DOM assertion alone would
-		// stay green by accident of that filter. The DOM stays pinned anyway,
-		// and the leak's observable half is the follow-on write below.)
-		expect(
-			q(container, 'section-toggle-sec-created'),
-			"a section created on collective A must not appear in collective B's tree"
-		).toBeNull();
-		expect(q(container, 'section-toggle-sec-b1')).not.toBeNull();
-		expect(q(container, 'section-toggle-sec-b2')).not.toBeNull();
-
-		// THE red driver: pre-fix, handleCreate barrels on past the stale settle
-		// into `assignMemberSection(cfgA, 'm-ada', 'sec-created')`. Once
-		// superseded, the handler must write — and fire — nothing further.
-		expect(
-			assignMock,
-			"a create superseded by a collective switch must not fire its follow-on member-assign"
-		).not.toHaveBeenCalled();
-	});
-
-	it("LATE-SETTLE CLOBBER: A's create rejecting after B's own genuine create failure must not replace B's error banner", async () => {
-		const gateA = deferred<string>();
-		createMock
-			.mockImplementationOnce(() => gateA.promise)
-			.mockImplementationOnce(() => Promise.reject(new Error('boom-b')));
-		const container = await renderGroupsRoster();
-
-		// Ada's create on A — HELD.
-		await pickerCreate(container, 'm-ada', 'Chorus A');
-		await waitFor(() => {
-			expect(createMock).toHaveBeenCalledTimes(1);
-		});
-
-		await switchToOtherChoirGroups(container);
-
-		// A GENUINE create on B that fails fast: Bob's row shows its own banner.
-		await pickerCreate(container, 'm-bob', 'Chorus B');
-		await waitFor(() => {
-			expect(q(container, 'section-write-error-m-bob')).not.toBeNull();
-		});
-
-		// NOW A's stale create rejects. Pre-fix its catch writes
-		// `sectionWriteError = { memberId: 'm-ada', … }` unconditionally —
-		// there is ONE error slot, so B's genuine banner unmounts.
-		gateA.reject(new Error('stale-a'));
-		await flush();
-
-		expect(
-			q(container, 'section-write-error-m-bob'),
-			"B's own failure banner must survive A's stale settle"
-		).not.toBeNull();
-		expect(q(container, 'section-write-error-m-ada')).toBeNull();
-	});
-
-	it('sectionWriteError clears on a collective switch: a failure from a previous visit must not still be on screen after leaving and returning', async () => {
-		// No held promise here — this pins the reset half (#299 done-when:
-		// `sectionWriteError` cleared on switch), independent of the settle
-		// guard the two tests above force.
-		createMock.mockImplementationOnce(() => Promise.reject(new Error('boom-a')));
+describe('/roster — #299/#470: sectionWriteError clears on a collective switch', () => {
+	it('an assign failure from a previous visit must not still be on screen after leaving and returning', async () => {
+		// #299 done-when: `sectionWriteError` cleared on switch. The banner's
+		// producer moved with #470 — a failed ASSIGN through the native blank
+		// picker sets it now (the picker create path is retired).
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		assignMock.mockRejectedValueOnce(new Error('boom-a'));
 		const container = await renderGroupsRoster();
 
 		// A genuine, same-collective failure on A: Ada's banner renders. Correct.
-		await pickerCreate(container, 'm-ada', 'Chorus');
+		await failedAssign(container, 'm-ada', 'sec-sop');
 		await waitFor(() => {
 			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
 		});
+		consoleSpy.mockRestore();
 
 		// Leave for B, come back to A.
 		await switchToOtherChoirGroups(container);
@@ -577,7 +506,7 @@ describe('/roster — #299 CLASS A: handleCreate (picker create) has no collecti
 		// stale banner from the PREVIOUS visit re-renders as if it just happened.
 		expect(
 			q(container, 'section-write-error-m-ada'),
-			'a create failure from a previous visit to this collective must not resurface after a round-trip switch'
+			'an assign failure from a previous visit to this collective must not resurface after a round-trip switch'
 		).toBeNull();
 	});
 });
@@ -698,3 +627,6 @@ describe("/roster — #299 handleRemoveSection's terminal failure writes", () =>
 //  the Class B lying-parent pin asserts the SUBMITTED parent, per the PO
 //  amendment on the issue; harness/fixtures/switch drivers from
 //  page.roster-pending-collective-switch.spec.ts)
+// (*MVOX:Tallis* — #470: the picker-create (handleCreate) stale-settle cases
+//  died with the picker's create entry; the sectionWriteError reset pin is
+//  re-driven through the native pickers' assign path)

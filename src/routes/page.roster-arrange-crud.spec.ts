@@ -422,25 +422,21 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 		}
 		expect(q(container, 'roster-row-m-bea')).not.toBeNull();
 
-		// #155/S4 review F4 — SCOPE, pinned so it stops being invisible to this
-		// gate. "Display only — no add/rename/delete" is about the SECTION-TREE
-		// management controls that used to hang off every section header, plus the
-		// page-level "+ New section"; all of those moved to Arrange. The
-		// member→section PICKER is a different concern (assignment), it has no home
-		// in arrange mode at all (arrange renders no member rows), and its inline
-		// create entry stays WITH it so an admin assigning a member to a
-		// not-yet-existing section can make it in place (#111/#120). See the scope
-		// comment at the `<SectionPicker>` render site in roster/+page.svelte.
+		// #155/S4 review F4 scope, AMENDED by #470: the member→section CONTROLS
+		// (assignment) still live on the member row in Expanded view — but the
+		// picker's inline create entry is RETIRED (Mihkel: "drop the new section
+		// creation"). Creating a section is reachable ONLY through the page-level
+		// `roster-new-section` entry in Arrange mode (#124/#155, untouched):
+		// NOTHING in Expanded can create a section anymore.
 		expect(
-			q(container, 'section-picker-trigger-m-bea'),
-			'the member→section picker stays on the member row in Expanded view'
+			q(container, 'section-picker-add-m-bea'),
+			'the member→section controls stay on the member row in Expanded view'
 		).not.toBeNull();
-		// …and its inline create entry opens from inside it (the picker menu is
-		// closed until the trigger is tapped).
-		await fireEvent.click(q(container, 'section-picker-trigger-m-bea') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'section-picker-new')).not.toBeNull();
-		});
+		expect(
+			q(container, 'section-picker-new'),
+			"the picker's create entry does not survive #470"
+		).toBeNull();
+		expect(q(container, 'section-create-form')).toBeNull();
 		// The PAGE-LEVEL add entry, by contrast, is arrange-only.
 		expect(q(container, 'roster-new-section')).toBeNull();
 	});

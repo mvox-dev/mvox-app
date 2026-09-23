@@ -1,74 +1,80 @@
 // @vitest-environment happy-dom
 //
-// TS.2/#96 RED — the /roster page's SECTION PICKER wiring (integration). These
-// tests render the ACTUAL page route component — the whole reason this file
-// exists is the "partial assertions hide bugs" lesson: a unit-covered
-// SectionPicker plus a unit-covered sectionActions with NOTHING joining them to
-// the page ships an unreachable feature. Here `groupBySection` runs REAL and
-// only the fetching/writing seams are mocked, so GREEN cannot pass without
-// genuinely wiring the picker into the member rows and the writes into the
-// picker's taps.
+// #470 RED — the /roster page's NATIVE SECTION PICKER wiring (integration).
+// These tests render the ACTUAL page route component ("partial assertions hide
+// bugs": a unit-covered SectionPicker with nothing joining it to the page ships
+// an unreachable feature). `groupBySection` runs REAL, and — new this slice —
+// so do assignMemberSection/unassignMemberSection: the WIRE is the seam
+// (`entuFetch` stubbed), because the contract under test is a wire-ORDER
+// contract (a move's POST must resolve before its DELETE is issued), which a
+// mocked sectionActions call log cannot pin.
 //
 // Pinned wiring contract (GREEN must implement):
-//   - OWNER GATE (#468, superseding the launch-era admin gate): the picker
-//     trigger renders on a member row ONLY when the row's `ownerIds` (the
-//     member entity's own `_owner` grant references, read off the list query)
-//     contain the READER's own person id for this db (`selected?.personId`).
-//     `$adminStore` no longer decides it — the grant on the target entity
-//     does (#454's lesson; ER-14: a move deletes a `_parent`, owner-gated).
-//     `ownerIds: []` (withheld private bucket or no grant) hides it — FAIL
-//     CLOSED. `!sectionsError` stays: no section tree → nothing to pick (F2).
-//   - POSITION (#468): the picker floats upper right on the card — wrapper
-//     `absolute top-1 right-1`, NO z-index, written AFTER the card activator
-//     inside the same `relative` <li> (the #302 F1 lift discipline).
-//   - Tapping a section NOT in the row's sectionIds → assignMemberSection(cfg,
-//     memberId, sectionId); tapping one ALREADY in it → unassignMemberSection
-//     (toggle). Tapping "(Unassigned)" → unassignMemberSection ONCE PER
-//     currently-assigned section (removes ALL section parents).
-//   - PER-TAP OPTIMISTIC-AND-RECONCILE: the row moves group(s) IMMEDIATELY
-//     (before the write resolves); on write failure it REVERTS (and the
-//     failure is logged); on success it stays — NO roster refetch (loadRoster
-//     is called exactly once, at load; per-tap writes are not batch-saves and
-//     not reload-the-world).
-//   - The menu closes after every pick.
+//   - OWNER GATE (#468 — NOT touched by #470): the controls render on a member
+//     row ONLY when `row.ownerIds` contain the reader's person id
+//     (`selected?.personId`); `ownerIds: []` fails closed; `!sectionsError`
+//     stays. Asserted here by testid PREFIX so the gate pin is agnostic to the
+//     control's inner shape.
+//   - POSITION (#468 — NOT touched): wrapper `absolute top-1 right-1`, no
+//     z-index, written after the card activator inside the same relative <li>.
+//   - ASSIGN (blank picker → section): `POST entity/{memberId}` with the single
+//     `_parent` reference; optimistic — the row moves and shows the NEW select
+//     immediately; that member's controls are FROZEN (disabled) until the write
+//     lands; failure takes the membership back AND says so on the section-write
+//     banner (today's path only console.errors — the fail-loudly gap).
+//   - UNASSIGN (held picker → Määramata): GET `entity/{memberId}?props=_parent`
+//     + `DELETE property/{valueId}`; the picker goes away at once, the member's
+//     remaining controls freeze while Entu syncs, unfreeze after;
+//     SectionMembershipMissing = the server already agrees → removal sticks,
+//     NO banner; a real failure brings the membership back + banner.
+//   - MOVE (held picker → another section): assign S2 FIRST, then unassign S1
+//     (Gama). A failed add changes nothing; a failed delete leaves her visibly
+//     in BOTH (never in none) — and both failures reach the banner.
+//   - The freeze is PER MEMBER: another row stays usable.
+//   - A blank picker left at Määramata writes nothing.
+//   - No refetch: loadRoster runs exactly once, at load.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_target, key) => () => String(key) })
+	m: new Proxy(
+		{},
+		{
+			get:
+				(_target, key) =>
+				(params?: Record<string, unknown>) =>
+					params && Object.keys(params).length > 0
+						? `${String(key)} ${JSON.stringify(params)}`
+						: String(key)
+		}
+	)
 }));
 
-const { loadRosterMock, listSectionsMock, assignMock, unassignMock } = vi.hoisted(() => ({
+const { loadRosterMock, listSectionsMock, entuFetchMock } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
-	assignMock: vi.fn(),
-	unassignMock: vi.fn()
+	entuFetchMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
 	return { ...actual, listSections: listSectionsMock };
 });
-// The WRITE seam — the picker taps must land here, with the page's cfg.
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock
-}));
-// Severs the entu-config → $env/dynamic/public import under happy-dom (same
-// pattern as page.roster-sections.spec.ts).
+// The WIRE seam — sectionActions run REAL through this, so the POST/GET/DELETE
+// shapes and their ORDER are what the assertions read.
+vi.mock('$lib/entu/request', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/entu/request')>();
+	return { ...actual, entuFetch: entuFetchMock };
+});
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
-// NOT mocked (unlike `sectionActions`) — the page imports the discriminator from
-// this module precisely so the vi.mock above can't blank it out.
-import { SectionMembershipMissingError } from '$lib/sections/sectionErrors';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -80,9 +86,9 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── fixtures (same shape as page.roster-sections.spec.ts) ───────────────────────
-// Soprano (order 1) ▸ Soprano 1; Alto (order 2). Ada+Carol in Soprano, Eva in
-// Soprano 1, Bea in Alto, Pete unassigned.
+// ── fixtures ────────────────────────────────────────────────────────────────────
+// Soprano (order 1) ▸ Soprano 1; Alto (order 2). Ada in Soprano, Bea in Alto,
+// Pete unassigned, Mia in BOTH roots.
 
 function fixtureTree(): SectionNode[] {
 	const sop1: SectionNode = {
@@ -99,23 +105,20 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-// #468 — every default fixture row carries the READER's person id ('person-p',
-// per setAuthedWithOneCollective's personIdByDb) in `ownerIds`, alongside an
-// inherited db-level owner: the wiring suites below all open pickers, and under
-// the owner gate a picker only exists on a row the reader may actually move.
+// #468 — every default row carries the READER's person id ('person-p') in
+// `ownerIds`: under the owner gate the controls only exist on a row the reader
+// may actually move.
 function fixtureRows(): RosterRow[] {
 	return [
 		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
 		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], ownerIds: ['person-db-owner', 'person-p'] },
-		{ memberId: 'm-carol', personId: 'p-carol', name: 'Carol Williams', email: 'carol@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], ownerIds: ['person-db-owner', 'person-p'] },
-		{ memberId: 'm-pete', personId: 'p-pete', name: 'Pete Wilson', email: 'pete@x.com', sectionIds: [], ownerIds: ['person-db-owner', 'person-p'] }
+		{ memberId: 'm-pete', personId: 'p-pete', name: 'Pete Wilson', email: 'pete@x.com', sectionIds: [], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-multi', personId: 'p-multi', name: 'Mia Multi', email: 'mia@x.com', sectionIds: ['sec-sop', 'sec-alto'], ownerIds: ['person-db-owner', 'person-p'] }
 	];
 }
 
-// #468 gate fixtures — one row the reader OWNS (inherited value first: wire
-// order, inherited included), one owned only by somebody else, one whose
-// private bucket the read withheld (`ownerIds: []`).
+// #468 gate fixtures — one row the reader OWNS, one owned only by somebody
+// else, one whose private bucket the read withheld.
 function gateRows(): RosterRow[] {
 	return [
 		{ memberId: 'm-owned', personId: 'p-owned', name: 'Otto Owned', email: 'otto@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
@@ -123,8 +126,6 @@ function gateRows(): RosterRow[] {
 		{ memberId: 'm-withheld', personId: 'p-withheld', name: 'Willa Withheld', email: 'willa@x.com', sectionIds: [], ownerIds: [] }
 	];
 }
-
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -152,19 +153,89 @@ function deferred<T>() {
 	return { promise, resolve, reject };
 }
 
+// ── the wire: recorded calls + a per-test-overridable router ────────────────────
+
+interface WireCall {
+	db: string;
+	path: string;
+	token: string;
+	method: string;
+	body: unknown;
+}
+
+const wire: WireCall[] = [];
+
+function json(body: unknown, status = 200): Response {
+	return new Response(JSON.stringify(body), {
+		status,
+		headers: { 'Content-Type': 'application/json' }
+	});
+}
+
+/** The member entities' `_parent` values the unassign GET reads back —
+ *  keyed by memberId; value `_id`s are what the DELETEs must target. */
+let parentValuesByMember: Record<
+	string,
+	Array<{ _id: string; reference: string; entity_type: string }>
+> = {};
+
+function defaultRouter(call: WireCall): Response | Promise<Response> {
+	if (call.method === 'GET' && /^entity\/[^/?]+\?props=_parent$/.test(call.path)) {
+		const memberId = call.path.slice('entity/'.length).split('?')[0];
+		return json({ entity: { _parent: parentValuesByMember[memberId] ?? [] } });
+	}
+	if (call.method === 'POST') return json({ _id: 'prop-appended' });
+	if (call.method === 'DELETE') return json({ deleted: true });
+	return json({ entities: [], count: 0 });
+}
+
+let router: (call: WireCall) => Response | Promise<Response>;
+
+const posts = () => wire.filter((c) => c.method === 'POST');
+const deletes = () => wire.filter((c) => c.method === 'DELETE');
+const parentGets = () =>
+	wire.filter((c) => c.method === 'GET' && c.path.includes('props=_parent'));
+
 beforeEach(() => {
+	wire.length = 0;
+	router = defaultRouter;
+	parentValuesByMember = {
+		'm-ada': [
+			{ _id: 'pv-ada-org', reference: 'org-1', entity_type: 'database' },
+			{ _id: 'pv-ada-sop', reference: 'sec-sop', entity_type: 'section' }
+		],
+		'm-bea': [
+			{ _id: 'pv-bea-org', reference: 'org-1', entity_type: 'database' },
+			{ _id: 'pv-bea-alto', reference: 'sec-alto', entity_type: 'section' }
+		],
+		'm-multi': [
+			{ _id: 'pv-multi-org', reference: 'org-1', entity_type: 'database' },
+			{ _id: 'pv-multi-sop', reference: 'sec-sop', entity_type: 'section' },
+			{ _id: 'pv-multi-alto', reference: 'sec-alto', entity_type: 'section' }
+		]
+	};
+	entuFetchMock.mockImplementation(
+		(db: string, path: string, token: string, opts: RequestInit = {}) => {
+			const call: WireCall = {
+				db,
+				path,
+				token,
+				method: opts.method ?? 'GET',
+				body: typeof opts.body === 'string' ? JSON.parse(opts.body) : null
+			};
+			wire.push(call);
+			return Promise.resolve(router(call));
+		}
+	);
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
-	assignMock.mockResolvedValue(undefined);
-	unassignMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
 	cleanup();
 	loadRosterMock.mockReset();
 	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
+	entuFetchMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -178,12 +249,11 @@ async function renderReady(admin: AdminState = 'admin') {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
 	});
-	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
-	// this file's picker triggers, don't render until expanded); this file's
-	// concern is picker WIRING, not the collapse default (that is
-	// page.roster-sections-ux.spec.ts's / page.roster-sections.spec.ts's job),
-	// so expand everything up front via the same toggle-all control #9 shipped.
-	const toggleAll = container.querySelector('[data-testid="roster-view-chip-expanded"]') as HTMLElement | null;
+	// Sections default COLLAPSED (TU.2/#110 #9) — member rows (and their section
+	// controls) only render expanded; this file's concern is the WIRING.
+	const toggleAll = container.querySelector(
+		'[data-testid="roster-view-chip-expanded"]'
+	) as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
 		await waitFor(() => {
@@ -197,52 +267,76 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-async function openPicker(container: HTMLElement, memberId: string): Promise<void> {
-	await fireEvent.click(q(container, `section-picker-trigger-${memberId}`) as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, `section-picker-menu-${memberId}`)).not.toBeNull();
-	});
+function sel(
+	container: HTMLElement,
+	memberId: string,
+	sectionId: string
+): HTMLSelectElement | null {
+	return q(container, `section-picker-select-${memberId}-${sectionId}`) as HTMLSelectElement | null;
 }
 
-// ── owner gate (#468 — supersedes the launch-era admin gate) ───────────────────
+function addBtn(container: HTMLElement, memberId: string): HTMLButtonElement | null {
+	return q(container, `section-picker-add-${memberId}`) as HTMLButtonElement | null;
+}
 
-describe('/roster — picker owner gate (#468, integration: actual page route)', () => {
-	// The gate is the member's own `_owner` grant, read off the entity onto
-	// `row.ownerIds` and compared against the READER's person id for this db
-	// (`selected?.personId` — 'person-p' here). No app-computed role decides it.
-	it("a row whose ownerIds carry the reader's person id renders the trigger INSIDE that row — even with adminStore 'not-admin' (the grant decides, not the role)", async () => {
+/** Every section control this member's row currently offers (selects + [+]). */
+function memberControls(container: HTMLElement, memberId: string): Array<HTMLSelectElement | HTMLButtonElement> {
+	return Array.from(
+		container.querySelectorAll<HTMLSelectElement | HTMLButtonElement>(
+			`[data-testid^="section-picker-select-${memberId}-"], [data-testid="section-picker-add-${memberId}"]`
+		)
+	);
+}
+
+function allFrozen(els: Array<HTMLSelectElement | HTMLButtonElement>): boolean {
+	return els.length > 0 && els.every((el) => el.disabled);
+}
+
+function allUsable(els: Array<HTMLSelectElement | HTMLButtonElement>): boolean {
+	return els.length > 0 && els.every((el) => !el.disabled);
+}
+
+async function openBlank(container: HTMLElement, memberId: string): Promise<HTMLSelectElement> {
+	const add = addBtn(container, memberId);
+	expect(add, `the [+] for ${memberId}`).not.toBeNull();
+	await fireEvent.click(add as HTMLElement);
+	await waitFor(() => {
+		expect(sel(container, memberId, 'blank')).not.toBeNull();
+	});
+	return sel(container, memberId, 'blank') as HTMLSelectElement;
+}
+
+// ── owner gate (#468 — unchanged by #470; pinned by PREFIX, shape-agnostic) ─────
+
+describe('/roster — section-control owner gate (#468, integration: actual page route)', () => {
+	function controlsIn(row: HTMLElement | null): number {
+		return row ? row.querySelectorAll('[data-testid^="section-picker-"]').length : 0;
+	}
+
+	it("a row whose ownerIds carry the reader's person id renders section controls INSIDE that row — even with adminStore 'not-admin' (the grant decides, not the role)", async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		const container = await renderReady('not-admin');
 		const row = q(container, 'roster-row-m-owned');
 		expect(row, 'owned row renders').not.toBeNull();
-		expect(
-			row?.querySelector('[data-testid="section-picker-trigger-m-owned"]'),
-			'trigger inside the owned row'
-		).not.toBeNull();
-		// Her neighbours without the reader's grant render NOTHING there.
-		expect(q(container, 'section-picker-trigger-m-foreign')).toBeNull();
-		expect(q(container, 'section-picker-trigger-m-withheld')).toBeNull();
+		expect(controlsIn(row), 'controls inside the owned row').toBeGreaterThan(0);
+		expect(controlsIn(q(container, 'roster-row-m-foreign'))).toBe(0);
+		expect(controlsIn(q(container, 'roster-row-m-withheld'))).toBe(0);
 	});
 
-	it("a row WITHOUT the reader in ownerIds renders NO trigger even with adminStore 'admin' — the collective-wide role no longer opens every row", async () => {
+	it("a row WITHOUT the reader in ownerIds renders NO section control even with adminStore 'admin'", async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		const container = await renderReady('admin');
-		expect(q(container, 'section-picker-trigger-m-foreign')).toBeNull();
-		// The owned row still gets its trigger — the absence above is the gate
-		// working, not a picker-wide regression.
-		expect(q(container, 'section-picker-trigger-m-owned')).not.toBeNull();
+		expect(controlsIn(q(container, 'roster-row-m-foreign'))).toBe(0);
+		expect(controlsIn(q(container, 'roster-row-m-owned'))).toBeGreaterThan(0);
 	});
 
-	it("ownerIds: [] (withheld private bucket — no `_owner` in the read) → NO trigger, fail closed, even with adminStore 'admin'", async () => {
+	it('ownerIds: [] (withheld private bucket) → NO control, fail closed', async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		const container = await renderReady('admin');
-		expect(q(container, 'section-picker-trigger-m-withheld')).toBeNull();
+		expect(controlsIn(q(container, 'roster-row-m-withheld'))).toBe(0);
 	});
 
-	// Green before AND after #468 by design — under the old gate 'not-admin'
-	// hid it, under the new one `!sectionsError` must keep hiding it for a
-	// reader who DOES hold `_owner` (F2: no section tree → nothing to pick).
-	it('sectionsError still hides the picker even for a reader who holds _owner on the row', async () => {
+	it('sectionsError still hides the controls even for a reader who holds _owner on the row', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listSectionsMock.mockRejectedValue(new Error('sections boom'));
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
@@ -252,31 +346,26 @@ describe('/roster — picker owner gate (#468, integration: actual page route)',
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();
 		});
-		expect(container.querySelector('[data-testid^="section-picker-trigger-"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="section-picker-"]')).toBeNull();
 		consoleSpy.mockRestore();
 	});
 });
 
-// ── position (#468 — floating upper right, the #302 F1 lift discipline) ────────
+// ── position (#468 — unchanged by #470) ─────────────────────────────────────────
 
-describe('/roster — picker position (#468): upper right on the card, lifted by tree order alone', () => {
-	// The wrapper is the <li>'s DIRECT CHILD holding the picker — walk up from
-	// the trigger to it (never assume how many component-internal layers sit
-	// between).
+describe('/roster — control position (#468): upper right on the card, lifted by tree order alone', () => {
 	function pickerWrapper(container: HTMLElement, memberId: string): HTMLElement {
 		const li = q(container, `roster-row-${memberId}`) as HTMLElement;
 		expect(li, `row li ${memberId}`).not.toBeNull();
-		const trigger = q(container, `section-picker-trigger-${memberId}`) as HTMLElement;
-		expect(trigger, `trigger ${memberId}`).not.toBeNull();
-		let wrapper: HTMLElement = trigger;
+		const control = li.querySelector('[data-testid^="section-picker-"]') as HTMLElement;
+		expect(control, `section control in ${memberId}`).not.toBeNull();
+		let wrapper: HTMLElement = control;
 		while (wrapper.parentElement && wrapper.parentElement !== li) wrapper = wrapper.parentElement;
 		expect(wrapper.parentElement, 'wrapper is a direct child of the row <li>').toBe(li);
 		return wrapper;
 	}
 
 	it('the wrapper is `absolute top-1 right-1` with NO z- class, and FOLLOWS the roster-row-card activator in tree order inside the same (already-relative) <li>', async () => {
-		// 'admin' so the collapsed-card activator renders alongside the picker —
-		// the exact overlay the lift discipline exists for.
 		const container = await renderReady('admin');
 		const li = q(container, 'roster-row-m-ada') as HTMLElement;
 		const wrapper = pickerWrapper(container, 'm-ada');
@@ -284,47 +373,19 @@ describe('/roster — picker position (#468): upper right on the card, lifted by
 		expect(classes).toContain('absolute');
 		expect(classes).toContain('top-1');
 		expect(classes).toContain('right-1');
-		// NO z-index — positioned + written after the activator wins by tree
-		// order; a z-index would make the wrapper a stacking context and trap
-		// the picker's own `absolute z-10` menu under the following rows (#302 F1).
 		expect(classes.some((c) => c.startsWith('z-'))).toBe(false);
-		// The <li> is already `relative` (the activator's containing block) —
-		// the corner offsets anchor to IT; no second positioned wrapper appears.
 		expect(li.className.split(/\s+/)).toContain('relative');
 		const card = q(container, 'roster-row-card-m-ada') as HTMLElement;
 		expect(card, 'collapsed card activator').not.toBeNull();
 		expect(
 			card.compareDocumentPosition(wrapper) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the lifted picker wrapper must FOLLOW the activator in tree order'
+			'the lifted wrapper must FOLLOW the activator in tree order'
 		).toBeTruthy();
 		expect(li.contains(card)).toBe(true);
 		expect(li.contains(wrapper)).toBe(true);
 	});
 
-	it('the open menu is `absolute right-0` — right-aligned to the corner-anchored trigger so it extends INTO the card, not off its right edge', async () => {
-		// #468 review F1. The wrapper above is `absolute top-1 right-1`, i.e. the
-		// trigger sits in the card's upper-right corner; a menu with no horizontal
-		// offset is left-anchored there and `min-w-40` of it hangs off the card at
-		// phone width. `right-0` anchors the right edges together instead.
-		//
-		// This asserts CLASS PRESENCE, which is the whole of what this DOM test
-		// environment can see: happy-dom parses no Tailwind stylesheet and lays
-		// nothing out, so it cannot report a geometric overflow. The real fit is a
-		// browser check at ~390px viewport width — that is the confirmation this
-		// test stands in for, not one it replaces.
-		const container = await renderReady('admin');
-		await openPicker(container, 'm-ada');
-		const menu = q(container, 'section-picker-menu-m-ada') as HTMLElement;
-		expect(menu, 'open picker menu').not.toBeNull();
-		const classes = menu.className.split(/\s+/);
-		expect(classes).toContain('absolute');
-		expect(classes).toContain('right-0');
-		// No competing left anchor — `left-*` alongside `right-0` would stretch the
-		// menu across both edges instead of right-aligning it.
-		expect(classes.some((c) => c.startsWith('left-'))).toBe(false);
-	});
-
-	it('a row WITHOUT the picker still shows the section name in rowInfo (flat view) — the information is already on screen; nothing else on the card moves', async () => {
+	it('a row WITHOUT the controls still shows the section name in rowInfo (flat view) — nothing else on the card moves', async () => {
 		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
 		const container = await renderReady('admin');
 		await fireEvent.click(q(container, 'roster-sort-toggle') as HTMLElement);
@@ -336,380 +397,304 @@ describe('/roster — picker position (#468): upper right on the card, lifted by
 		const section = li.querySelector('[data-testid="roster-row-section"]');
 		expect(section, 'section name text stays in rowInfo').not.toBeNull();
 		expect(section?.textContent).toContain('Alto');
-		expect(li.querySelector('[data-testid="section-picker-trigger-m-foreign"]')).toBeNull();
+		expect(li.querySelector('[data-testid^="section-picker-"]')).toBeNull();
 	});
 });
 
-// ── per-tap assign: optimistic move, reconcile, revert ─────────────────────────
+// ── assign: blank picker → POST, optimistic + frozen, loud on failure ───────────
 
-describe('/roster — tap assigns per-tap with optimistic-and-reconcile', () => {
-	it('unassigned member + tap a section → assignMemberSection(cfg, memberId, sectionId) fires; the row moves into that group IMMEDIATELY (write still pending); on success it STAYS and loadRoster is NOT refetched; menu closed', async () => {
-		const write = deferred<void>();
-		assignMock.mockReturnValue(write.promise);
-		const container = await renderReady('admin');
+describe('/roster — assign via the blank picker (#470)', () => {
+	it('choosing a section POSTs entity/{memberId} with the single _parent reference; the row moves and shows the NEW select IMMEDIATELY (write pending, that member frozen); on success it stays, unfreezes, and loadRoster is NOT refetched', async () => {
+		const post = deferred<Response>();
+		router = (call) => (call.method === 'POST' ? post.promise : defaultRouter(call));
+		const container = await renderReady();
 
-		await openPicker(container, 'm-pete');
-		await fireEvent.click(q(container, 'section-picker-option-sec-alto') as HTMLElement);
+		const blank = await openBlank(container, 'm-pete');
+		await fireEvent.change(blank, { target: { value: 'sec-alto' } });
 
-		expect(assignMock).toHaveBeenCalledTimes(1);
-		expect(assignMock).toHaveBeenCalledWith(CFG, 'm-pete', 'sec-alto');
+		expect(posts()).toHaveLength(1);
+		expect(posts()[0]).toMatchObject({ db: 'sampledb', path: 'entity/m-pete', token: 'jwt-abc' });
+		expect(posts()[0].body).toEqual([{ type: '_parent', reference: 'sec-alto' }]);
 
-		// OPTIMISTIC — the write has not resolved yet, and the row already moved.
+		// OPTIMISTIC — the write has not resolved, and the row already moved and
+		// shows its new per-membership select…
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]')
-			).not.toBeNull();
+			expect(sel(container, 'm-pete', 'sec-alto')).not.toBeNull();
 		});
+		expect(
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]')
+		).not.toBeNull();
 		expect(
 			q(container, 'section-group-unassigned')?.querySelector('[data-testid="roster-row-m-pete"]') ??
 				null
 		).toBeNull();
-		expect(q(container, 'section-picker-menu-m-pete')).toBeNull();
+		// …FROZEN while Entu syncs (disabled — nothing visual beyond that).
+		expect(allFrozen(memberControls(container, 'm-pete'))).toBe(true);
 
-		// RECONCILE on success — it stays, and nothing re-fetches the world.
-		write.resolve();
+		post.resolve(json({ _id: 'prop-appended' }));
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]')
-			).not.toBeNull();
+			expect(allUsable(memberControls(container, 'm-pete'))).toBe(true);
 		});
+		expect(
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]')
+		).not.toBeNull();
+		expect(q(container, 'section-write-error-m-pete')).toBeNull();
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 	});
 
-	it('assign FAILURE → the row REVERTS to its original group and the failure is logged (optimistic never silently sticks)', async () => {
+	it('a blank picker left at Määramata writes NOTHING — no POST, no DELETE, no unassign lookup, no select invented', async () => {
+		const container = await renderReady();
+		const blank = await openBlank(container, 'm-pete');
+
+		await fireEvent.change(blank, { target: { value: '' } });
+
+		expect(posts()).toHaveLength(0);
+		expect(deletes()).toHaveLength(0);
+		expect(parentGets()).toHaveLength(0);
+		expect(
+			container.querySelectorAll('[data-testid^="section-picker-select-m-pete-"]:not([data-testid$="-blank"])')
+		).toHaveLength(0);
+	});
+
+	it('assign FAILURE (403) → the optimistic membership is taken back (row returns to Unassigned, the new select goes) AND the section-write banner shows — never console-only', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const write = deferred<void>();
-		assignMock.mockReturnValue(write.promise);
-		const container = await renderReady('admin');
+		router = (call) => (call.method === 'POST' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
 
-		await openPicker(container, 'm-pete');
-		await fireEvent.click(q(container, 'section-picker-option-sec-alto') as HTMLElement);
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]')
-			).not.toBeNull();
+		const blank = await openBlank(container, 'm-pete');
+		await fireEvent.change(blank, { target: { value: 'sec-alto' } });
+
+		const banner = await waitFor(() => {
+			const el = q(container, 'section-write-error-m-pete');
+			expect(el, 'the failure must be SAID').not.toBeNull();
+			return el as HTMLElement;
 		});
-
-		write.reject(new Error('assign boom'));
+		expect(banner.getAttribute('role')).toBe('alert');
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-unassigned')?.querySelector(
-					'[data-testid="roster-row-m-pete"]'
-				)
-			).not.toBeNull();
-		});
-		// Palestrina/GREEN fix: the revert's `rows` write is a single, correct,
-		// synchronous state update (verified directly — the reverted `rows`/
-		// `groups` are right the instant the catch runs); the unassigned-group
-		// MOUNT (`{#if unassignedGroup}`, previously absent) and the sec-alto
-		// LIST SHRINK are two effects off that one update, and this harness
-		// (Svelte 5 + happy-dom + testing-library) can observe them settle one
-		// mutation-observer tick apart. Wrapped in its own `waitFor` rather than
-		// asserted bare, same as the mount-detection waitFor just above —
-		// tolerates that harness-level lag without weakening what's checked.
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]') ??
-					null
-			).toBeNull();
-		});
-		expect(consoleSpy).toHaveBeenCalled();
-		consoleSpy.mockRestore();
-	});
-
-	it('assigning a SECOND section ADDS membership (multi-section, never replaces): Ada (Soprano) + tap Alto → she renders in BOTH groups; unassignMemberSection NOT called', async () => {
-		const container = await renderReady('admin');
-
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-option-sec-alto') as HTMLElement);
-
-		expect(assignMock).toHaveBeenCalledWith(CFG, 'm-ada', 'sec-alto');
-		expect(unassignMock).not.toHaveBeenCalled();
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-ada"]')
-			).not.toBeNull();
-		});
-		// STILL in Soprano — assignment appends a membership, it does not move her.
-		expect(
-			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
-		).not.toBeNull();
-	});
-});
-
-// ── toggle-unassign and "(Unassigned)" ──────────────────────────────────────────
-
-describe('/roster — tapping a CURRENT section unassigns it; "(Unassigned)" removes ALL section parents', () => {
-	it('tap the already-assigned section → unassignMemberSection(cfg, memberId, thatSectionId); the row leaves the group and (now section-less) lands in Unassigned', async () => {
-		const container = await renderReady('admin');
-
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-option-sec-sop') as HTMLElement);
-
-		expect(unassignMock).toHaveBeenCalledTimes(1);
-		expect(unassignMock).toHaveBeenCalledWith(CFG, 'm-ada', 'sec-sop');
-		expect(assignMock).not.toHaveBeenCalled();
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-unassigned')?.querySelector(
-					'[data-testid="roster-row-m-ada"]'
-				)
-			).not.toBeNull();
+			expect(sel(container, 'm-pete', 'sec-alto')).toBeNull();
 		});
 		expect(
-			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]') ??
-				null
-		).toBeNull();
-	});
-
-	it('multi-section member + tap "(Unassigned)" → unassignMemberSection fires ONCE PER current section; the row ends up ONLY in Unassigned', async () => {
-		loadRosterMock.mockResolvedValue(toListRead([
-			...fixtureRows(),
-			{
-				memberId: 'm-multi',
-				personId: 'p-multi',
-				name: 'Mia Multi',
-				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto'],
-				ownerIds: ['person-db-owner', 'person-p']
-			}
-		]));
-		const container = await renderReady('admin');
-
-		await openPicker(container, 'm-multi');
-		await fireEvent.click(q(container, 'section-picker-option-unassigned') as HTMLElement);
-
-		const calls = unassignMock.mock.calls.map((c) => [c[1], c[2]]).sort();
-		expect(calls).toEqual([
-			['m-multi', 'sec-alto'],
-			['m-multi', 'sec-sop']
-		]);
-		for (const call of unassignMock.mock.calls) expect(call[0]).toEqual(CFG);
-		expect(assignMock).not.toHaveBeenCalled();
-
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-unassigned')?.querySelector(
-					'[data-testid="roster-row-m-multi"]'
-				)
-			).not.toBeNull();
-		});
-		expect(
-			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-multi"]') ??
-				null
-		).toBeNull();
-		expect(
-			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-multi"]') ??
-				null
-		).toBeNull();
-	});
-});
-
-// ── code-review fixes: targeted reconcile + degraded-tree gate ─────────────────
-
-describe('/roster — F1 code-review fix: a revert undoes ONLY the membership its own call owned', () => {
-	it('"(Unassigned)" with a PARTIAL failure → only the section whose unassign REJECTED comes back; the one that succeeded stays gone (no whole-snapshot restore)', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockResolvedValue(toListRead([
-			...fixtureRows(),
-			{
-				memberId: 'm-multi',
-				personId: 'p-multi',
-				name: 'Mia Multi',
-				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto'],
-				ownerIds: ['person-db-owner', 'person-p']
-			}
-		]));
-		// Soprano 403s, Alto succeeds — the server ends up holding Soprano only.
-		unassignMock.mockImplementation((_cfg, _memberId, sectionId) =>
-			sectionId === 'sec-sop' ? Promise.reject(new Error('403')) : Promise.resolve()
-		);
-		const container = await renderReady('admin');
-
-		await openPicker(container, 'm-multi');
-		await fireEvent.click(q(container, 'section-picker-option-unassigned') as HTMLElement);
-
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-multi"]')
-			).not.toBeNull();
-		});
-		// The successful unassign is NOT undone, and she is no longer section-less.
-		expect(
-			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-multi"]') ??
-				null
-		).toBeNull();
-		expect(
-			q(container, 'section-group-unassigned')?.querySelector(
-				'[data-testid="roster-row-m-multi"]'
-			) ?? null
-		).toBeNull();
-		expect(consoleSpy).toHaveBeenCalled();
-		consoleSpy.mockRestore();
-	});
-
-	it('two concurrent taps on ONE member: the first tap FAILING must not discard the second tap`s already-persisted assignment', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const first = deferred<void>();
-		assignMock.mockImplementation((_cfg, _memberId, sectionId) =>
-			sectionId === 'sec-alto' ? first.promise : Promise.resolve()
-		);
-		const container = await renderReady('admin');
-
-		// Tap A — Alto (write left pending).
-		await openPicker(container, 'm-pete');
-		await fireEvent.click(q(container, 'section-picker-option-sec-alto') as HTMLElement);
-		// Tap B — Soprano, resolves immediately.
-		await openPicker(container, 'm-pete');
-		await fireEvent.click(q(container, 'section-picker-option-sec-sop') as HTMLElement);
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-pete"]')
-			).not.toBeNull();
-		});
-
-		// Tap A now fails: Alto must go, Soprano must SURVIVE.
-		first.reject(new Error('assign boom'));
-		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]') ??
-					null
-			).toBeNull();
-		});
-		expect(
-			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-pete"]')
+			q(container, 'section-group-unassigned')?.querySelector('[data-testid="roster-row-m-pete"]')
 		).not.toBeNull();
 		expect(
-			q(container, 'section-group-unassigned')?.querySelector('[data-testid="roster-row-m-pete"]') ??
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-pete"]') ??
 				null
 		).toBeNull();
-		expect(consoleSpy).toHaveBeenCalled();
 		consoleSpy.mockRestore();
 	});
 });
 
-describe('/roster — F2 code-review fix: no picker while the section tree is unreadable', () => {
-	it('sections load REJECTS → admin sees the flat list + banner but NO picker trigger (its only reachable option would be the destructive clear-all)', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		listSectionsMock.mockRejectedValue(new Error('sections boom'));
-		setAuthedWithOneCollective();
-		adminStore.set('admin');
+// ── unassign: Määramata → GET+DELETE, freeze in between ─────────────────────────
 
-		const { container } = render(Page);
+describe('/roster — unassign via Määramata (#470)', () => {
+	it('GET entity/{memberId}?props=_parent then DELETE property/{valueId}; the chosen picker disappears at once; the member’s REMAINING controls are disabled while the DELETE is pending and enabled after; no banner', async () => {
+		const del = deferred<Response>();
+		router = (call) => (call.method === 'DELETE' ? del.promise : defaultRouter(call));
+		const container = await renderReady();
+
+		const held = sel(container, 'm-multi', 'sec-sop');
+		expect(held, "Mia's Soprano select").not.toBeNull();
+		await fireEvent.change(held as HTMLElement, { target: { value: '' } });
+
+		// Optimistic: that picker goes away immediately.
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();
+			expect(sel(container, 'm-multi', 'sec-sop')).toBeNull();
 		});
-		expect(container.querySelector('[data-testid="roster-sections-load-error"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid^="section-picker-trigger-"]')).toBeNull();
-		consoleSpy.mockRestore();
+		// Wire: lookup then the targeted delete.
+		await waitFor(() => {
+			expect(deletes()).toHaveLength(1);
+		});
+		expect(parentGets().some((c) => c.path === 'entity/m-multi?props=_parent')).toBe(true);
+		expect(deletes()[0].path).toBe('property/pv-multi-sop');
+		// FROZEN in between — her other membership's select and the [+].
+		expect(sel(container, 'm-multi', 'sec-alto'), 'the other membership stays visible').not.toBeNull();
+		expect(allFrozen(memberControls(container, 'm-multi'))).toBe(true);
+
+		del.resolve(json({ deleted: true }));
+		await waitFor(() => {
+			expect(allUsable(memberControls(container, 'm-multi'))).toBe(true);
+		});
+		expect(q(container, 'section-write-error-m-multi')).toBeNull();
 	});
-});
 
-describe('/roster — F1(b) code-review fix: "membership already gone server-side" reconciles FORWARD, never reverts', () => {
-	it('toggle-unassign rejecting with SectionMembershipMissingError → the removal STICKS (server and UI already agree) and is logged; reverting would pin a phantom membership on a page that never refetches', async () => {
+	it('membership ALREADY GONE server-side (no matching _parent value) → the removal STICKS, no DELETE fires, NO banner — server and UI already agree', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		unassignMock.mockRejectedValue(new SectionMembershipMissingError('m-ada', 'sec-sop'));
-		const container = await renderReady('admin');
+		parentValuesByMember['m-ada'] = [
+			{ _id: 'pv-ada-org', reference: 'org-1', entity_type: 'database' }
+		];
+		const container = await renderReady();
 
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-option-sec-sop') as HTMLElement);
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: '' }
+		});
 
+		await waitFor(() => {
+			expect(sel(container, 'm-ada', 'sec-sop')).toBeNull();
+		});
 		await waitFor(() => {
 			expect(
 				q(container, 'section-group-unassigned')?.querySelector('[data-testid="roster-row-m-ada"]')
 			).not.toBeNull();
 		});
-		// Still gone from Soprano AFTER the rejection settled — no addBack.
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]') ??
-					null
-			).toBeNull();
+			expect(allUsable(memberControls(container, 'm-ada'))).toBe(true);
 		});
-		expect(consoleSpy).toHaveBeenCalled();
+		expect(deletes()).toHaveLength(0);
+		expect(q(container, 'section-write-error-m-ada')).toBeNull();
 		consoleSpy.mockRestore();
 	});
 
-	it('a REAL unassign failure (403) still REVERTS — the forward-reconcile branch must not swallow genuine write failures', async () => {
+	it('a REAL unassign failure (DELETE 403) → the membership COMES BACK (its select re-renders, the row returns to its group) + the banner shows', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		unassignMock.mockRejectedValue(new Error('403'));
-		const container = await renderReady('admin');
+		router = (call) => (call.method === 'DELETE' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
 
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-option-sec-sop') as HTMLElement);
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: '' }
+		});
 
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
-			).not.toBeNull();
+			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
 		});
-		expect(consoleSpy).toHaveBeenCalled();
-		consoleSpy.mockRestore();
-	});
-
-	it('"(Unassigned)": a section whose unassign says ALREADY-GONE does not come back, while a genuinely failing one does', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockResolvedValue(toListRead([
-			...fixtureRows(),
-			{
-				memberId: 'm-multi',
-				personId: 'p-multi',
-				name: 'Mia Multi',
-				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto'],
-				ownerIds: ['person-db-owner', 'person-p']
-			}
-		]));
-		// Soprano: already gone server-side (stale row). Alto: a real 403.
-		unassignMock.mockImplementation((_cfg, memberId, sectionId) =>
-			sectionId === 'sec-sop'
-				? Promise.reject(new SectionMembershipMissingError(memberId, sectionId))
-				: Promise.reject(new Error('403'))
-		);
-		const container = await renderReady('admin');
-
-		await openPicker(container, 'm-multi');
-		await fireEvent.click(q(container, 'section-picker-option-unassigned') as HTMLElement);
-
-		// Alto's write genuinely failed → back it comes.
 		await waitFor(() => {
-			expect(
-				q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-multi"]')
-			).not.toBeNull();
+			expect(sel(container, 'm-ada', 'sec-sop')).not.toBeNull();
 		});
-		// Soprano was already absent server-side → it stays off the row.
 		expect(
-			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-multi"]') ??
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
+		consoleSpy.mockRestore();
+	});
+});
+
+// ── move: assign FIRST, then unassign (Gama's write order) ──────────────────────
+
+describe('/roster — move S1→S2 (#470): the POST resolves BEFORE the DELETE is issued', () => {
+	it('holding the POST holds the whole move: no lookup, no DELETE, row unchanged; resolving it releases GET+DELETE in order; final state = only the new membership', async () => {
+		const post = deferred<Response>();
+		router = (call) => (call.method === 'POST' ? post.promise : defaultRouter(call));
+		const container = await renderReady();
+
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: 'sec-alto' }
+		});
+
+		await waitFor(() => {
+			expect(posts()).toHaveLength(1);
+		});
+		expect(posts()[0].path).toBe('entity/m-ada');
+		expect(posts()[0].body).toEqual([{ type: '_parent', reference: 'sec-alto' }]);
+		// Nothing of the delete half may exist while the add is unconfirmed —
+		// this is the order that can never leave her in NO section.
+		expect(parentGets()).toHaveLength(0);
+		expect(deletes()).toHaveLength(0);
+		expect(sel(container, 'm-ada', 'sec-alto'), 'nothing changed while the add is pending').toBeNull();
+
+		post.resolve(json({ _id: 'prop-appended' }));
+		await waitFor(() => {
+			expect(deletes()).toHaveLength(1);
+		});
+		expect(deletes()[0].path).toBe('property/pv-ada-sop');
+		const postIdx = wire.findIndex((c) => c.method === 'POST');
+		const getIdx = wire.findIndex(
+			(c) => c.method === 'GET' && c.path === 'entity/m-ada?props=_parent'
+		);
+		const delIdx = wire.findIndex((c) => c.method === 'DELETE');
+		expect(postIdx).toBeGreaterThanOrEqual(0);
+		expect(getIdx).toBeGreaterThan(postIdx);
+		expect(delIdx).toBeGreaterThan(getIdx);
+
+		await waitFor(() => {
+			expect(sel(container, 'm-ada', 'sec-alto')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(sel(container, 'm-ada', 'sec-sop')).toBeNull();
+		});
+		expect(
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]') ??
 				null
 		).toBeNull();
-		expect(consoleSpy).toHaveBeenCalled();
+		expect(q(container, 'section-write-error-m-ada')).toBeNull();
+	});
+
+	it('move with a FAILED add (POST 403) → NOTHING changed: no lookup, no DELETE, she stays exactly where she was — and the banner says so', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		router = (call) => (call.method === 'POST' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
+
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: 'sec-alto' }
+		});
+
+		await waitFor(() => {
+			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
+		});
+		expect(parentGets()).toHaveLength(0);
+		expect(deletes()).toHaveLength(0);
+		expect(sel(container, 'm-ada', 'sec-sop')).not.toBeNull();
+		expect(sel(container, 'm-ada', 'sec-alto')).toBeNull();
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
+		expect(
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-ada"]') ??
+				null
+		).toBeNull();
+		consoleSpy.mockRestore();
+	});
+
+	it('move with a FAILED delete → she stays visibly in BOTH sections (never in none) + the banner shows', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		router = (call) => (call.method === 'DELETE' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
+
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: 'sec-alto' }
+		});
+
+		await waitFor(() => {
+			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
+		});
+		// Visible and fixable: BOTH memberships on screen, not neither.
+		expect(sel(container, 'm-ada', 'sec-sop')).not.toBeNull();
+		expect(sel(container, 'm-ada', 'sec-alto')).not.toBeNull();
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
+		expect(
+			q(container, 'section-group-sec-alto')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
 		consoleSpy.mockRestore();
 	});
 });
 
-describe('/roster — F2 code-review fix: only one picker menu is ever on screen', () => {
-	it("opening member B's picker CLOSES member A's (absolutely-positioned menus must not stack over neighbouring rows)", async () => {
-		const container = await renderReady('admin');
+// ── the freeze is per member ────────────────────────────────────────────────────
 
-		await openPicker(container, 'm-ada');
-		expect(q(container, 'section-picker-menu-m-ada')).not.toBeNull();
+describe('/roster — the freeze is scoped to the syncing member alone (#470)', () => {
+	it("while one member's DELETE is pending, ANOTHER member's controls stay enabled", async () => {
+		const del = deferred<Response>();
+		router = (call) => (call.method === 'DELETE' ? del.promise : defaultRouter(call));
+		const container = await renderReady();
 
-		await openPicker(container, 'm-bea');
-
-		await waitFor(() => {
-			expect(q(container, 'section-picker-menu-m-ada')).toBeNull();
+		await fireEvent.change(sel(container, 'm-multi', 'sec-sop') as HTMLElement, {
+			target: { value: '' }
 		});
-		expect(q(container, 'section-picker-menu-m-bea')).not.toBeNull();
-		// Nothing was written — dismissal is non-destructive.
-		expect(assignMock).not.toHaveBeenCalled();
-		expect(unassignMock).not.toHaveBeenCalled();
+		await waitFor(() => {
+			expect(deletes()).toHaveLength(1);
+		});
+		expect(allFrozen(memberControls(container, 'm-multi')), "Mia's controls freeze").toBe(true);
+		expect(allUsable(memberControls(container, 'm-ada')), "Ada's controls stay usable").toBe(true);
+		expect(allUsable(memberControls(container, 'm-bea')), "Bea's controls stay usable").toBe(true);
+
+		del.resolve(json({ deleted: true }));
+		await waitFor(() => {
+			expect(allUsable(memberControls(container, 'm-multi'))).toBe(true);
+		});
 	});
 });
 
-// (*MVOX:Tallis* — TS.2/#96 RED)
-// (*MVOX:Palestrina* — GREEN fix: wrap the revert's sec-alto assertion in its own
-// waitFor, tolerating a one-tick harness lag between the unassigned-group mount
-// and the sec-alto list shrink; see comment at the assertion, TS.2/#96)
-// (*MVOX:Tallis* — #468 RED: owner gate replaces the admin gate; corner-position
-// pin; fixtures carry per-member ownerIds)
+// (*MVOX:Tallis* — #470 RED: native per-membership wiring, wire-order move
+//  contract, per-member freeze, fail-loudly banner; owner gate + position pins
+//  re-derived from #468 shape-agnostically)
