@@ -93,6 +93,27 @@ body::-webkit-scrollbar,
  * arbitrary text-[Npx] below 16px. Both prongs are enforced by src/ios-form-zoom.spec.ts.
  */
 @layer base {
+	/* #474 review F1 — the app's paper floor, on the ONLY full-bleed element
+	 * there is. Removing the desk-surface component took away a full-width
+	 * wrapper that painted the whole content area; the paint that replaced it
+	 * (`bg-paper` on the agenda's centered `max-w-md` column) is 28rem wide, so
+	 * on any viewport wider than that the front page rendered a paper strip on
+	 * the browser's default white. Nothing else in the chain paints: app.html
+	 * sets no body style, +layout.svelte none, NavShell's .nav-content is
+	 * layout-only, and Tailwind preflight leaves body transparent.
+	 *
+	 * Painting `body` fixes it once for every route instead of per page, and a
+	 * body background with no html background propagates to the canvas — so the
+	 * iOS rubber-band overscroll gutter is paper too, matching the
+	 * `<meta name="theme-color" content="#f7f1e1">` app.html already ships.
+	 *
+	 * Inside @layer base (not unlayered, and not a second @layer base block
+	 * before this one — ios-form-zoom.spec.ts brace-matches the FIRST one) so a
+	 * deliberate bg-* utility still wins, per the #151 note above. */
+	body {
+		background-color: var(--color-paper);
+	}
+
 	input,
 	select,
 	textarea {

@@ -148,7 +148,15 @@ const SWEEP_NEEDLES = [
 	WOOD_CLASS,
 	'--' + 'dx1', // first of the six offset custom properties
 	'data' + '-desk',
-	'@' + 'property', // the CSS custom-property registrations
+	// #474 review F2 — NARROWED (and, like every needle here, concatenated so
+	// this file does not match itself). The bare at-rule name alone also spells
+	// the standard JSDoc/TSDoc tag, so the first unrelated typedef comment
+	// anywhere under src/ would have failed this suite with a message about a
+	// desk background — misleading enough to invite deleting the guard rather
+	// than reading it. All six registrations we sweep for declared offset
+	// custom properties whose names start with the two letters below, so the
+	// needle carries that prefix and a JSDoc tag can no longer trip it.
+	'@' + 'property ' + '--d', // the CSS custom-property registrations
 	'wood' + '-orbit'
 ];
 
@@ -189,6 +197,69 @@ describe('#474 — the front page agenda sits on plain paper (integration)', () 
 	it('the agenda list still renders on the paper surface', async () => {
 		const container = await mountAgenda();
 		expect(container.querySelector('[data-testid="agenda-list"]')).not.toBeNull();
+	});
+});
+
+describe('#474 review F1 — the paper paint is full-bleed, not column-width', () => {
+	// The regression this pins: `bg-paper` moved from the removed surface's
+	// `w-full` wrapper onto the agenda's centered `max-w-md` column, which is
+	// 28rem — so every viewport wider than that showed a paper strip on the
+	// browser's default white, and `/` became the only route not fully on paper
+	// (every HOUSE_SHELL route paints a full-width `min-h-screen bg-paper`
+	// <main>). Asserting only that SOME element carries bg-paper cannot see
+	// that, so assert the full-bleed painter itself.
+	//
+	// The full-bleed element in a SPA with no server-rendered shell is <body>:
+	// app.html ships no style on it, +layout.svelte paints nothing, and
+	// NavShell's .nav-content is order/flex/overflow-y only. So the guard reads
+	// app.css. jsdom/happy-dom never applies the stylesheet, which is exactly
+	// why this has to be a source assertion rather than a computed-style one.
+	const css = readFileSync(join(process.cwd(), 'src', 'app.css'), 'utf-8').replace(
+		/\/\*[\s\S]*?\*\//g,
+		''
+	);
+
+	/** Body of the FIRST top-level `@layer <name> { … }` block, brace-matched. */
+	function layerBody(source: string, name: string): string | null {
+		const open = source.search(new RegExp(`@layer\\s+${name}\\s*\\{`));
+		if (open === -1) return null;
+		const start = source.indexOf('{', open);
+		let depth = 0;
+		for (let i = start; i < source.length; i++) {
+			if (source[i] === '{') depth++;
+			else if (source[i] === '}' && --depth === 0) return source.slice(start + 1, i);
+		}
+		return null;
+	}
+
+	function bodyPaperRules(source: string): string[] {
+		return [...source.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+			.filter(([, selector, decls]) => {
+				const s = selector.split(/[{}]/).pop() ?? selector;
+				if (!/(^|[,\s])body(?![-\w])/.test(s)) return false;
+				return /background(-color)?\s*:[^;]*var\(\s*--color-paper\s*\)/.test(decls);
+			})
+			.map(([whole]) => whole);
+	}
+
+	it('app.css paints <body> with the house paper token', () => {
+		expect(
+			bodyPaperRules(css).length,
+			'#474: the paper paint must sit on a full-bleed element. bg-paper on the ' +
+				'centered max-w-md column only paints 448px, leaving browser-default white ' +
+				'either side on any wider viewport.'
+		).toBeGreaterThan(0);
+	});
+
+	it('that body rule sits inside @layer base, so a bg-* utility can still win', () => {
+		const base = layerBody(css, 'base');
+		expect(base, 'expected app.css to declare an @layer base block').not.toBeNull();
+		expect(
+			bodyPaperRules(base ?? '').length,
+			'unlayered CSS outranks every Tailwind utility (all of which live in ' +
+				'@layer utilities), so an unlayered body background would pin the page ' +
+				'even where a future bg-* is deliberate — see the #151 note in app.css'
+		).toBeGreaterThan(0);
 	});
 });
 
