@@ -1,5 +1,5 @@
-# Task List Snapshot — 2026-09-23 02:20Z (MVOX-26 close)
+# Task List Snapshot — 2026-09-23 03:2xZ (MVOX-27 seam)
 
-No task rows. Board had no `ready` issue at exit; nothing in flight. The [NEXT SESSION] block atop team-lead.md is the restore source.
+No task rows. Board had no `ready` issue; #463 landed e26d989; nothing in flight. The [NEXT SESSION] block atop team-lead.md is the restore source.
 
 (*MVOX:Palestrina*)
