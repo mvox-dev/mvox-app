@@ -162,7 +162,10 @@ function accessibleName(el: HTMLElement): string {
 			.trim();
 	}
 	const id = el.getAttribute('id');
-	if (id) {
+	// Faithful to how a browser resolves `label[for]`: the label attaches to the
+	// FIRST element carrying that id, so an element whose id is a duplicate has no
+	// label at all — the failure mode #470's per-membership rows exposed.
+	if (id && el.ownerDocument.getElementById(id) === el) {
 		const label = el.ownerDocument.querySelector(`label[for="${id}"]`);
 		if (label) return (label.textContent ?? '').trim();
 	}
@@ -252,6 +255,48 @@ describe('SectionPicker #470 — 1b: a member in ONE section shows that picker +
 	});
 });
 
+// ── the DOM value never outruns `selectedIds` ──────────────────────────────────
+
+describe('SectionPicker #470 — a select shows the membership it REPRESENTS, never the choice the parent refused', () => {
+	it('after a move choice the held select is back on its own section: `selectedIds` alone decides what is displayed (F1 review fix — the parent may legitimately not patch)', async () => {
+		// The parent owns the optimistic state; when its write fails it patches
+		// nothing and re-renders with the SAME selectedIds. `value={sectionId}` is
+		// one-way and `sectionId` never changes, so without the component putting
+		// the value back the user's own DOM change would stand forever — showing a
+		// section she is not in, and (the value already being the target) blocking
+		// the very retry the page's error banner invites.
+		const { container, props } = renderPicker({ selectedIds: ['sec-sop'] });
+		const held = selectFor(container, 'sec-sop') as HTMLSelectElement;
+
+		await fireEvent.change(held, { target: { value: 'sec-alto' } });
+
+		expect(props.onmove).toHaveBeenCalledWith('sec-sop', 'sec-alto');
+		expect(held.value, 'the select re-asserts its own membership').toBe('sec-sop');
+		expect(held.selectedOptions[0]?.textContent?.trim()).toBe('Soprano');
+	});
+
+	it("after an unassign choice the held select is back on its own section too (the parent removes it only once the DELETE lands)", async () => {
+		const { container, props } = renderPicker({ selectedIds: ['sec-sop'] });
+		const held = selectFor(container, 'sec-sop') as HTMLSelectElement;
+
+		await fireEvent.change(held, { target: { value: '' } });
+
+		expect(props.onunassign).toHaveBeenCalledWith('sec-sop');
+		expect(held.value).toBe('sec-sop');
+	});
+
+	it('a blank picker left at Määramata stays at Määramata, and one that chose is gone — either way nothing lingers on a value the parent did not land', async () => {
+		const { container, props } = renderPicker({ selectedIds: [] });
+		await fireEvent.click(addButton(container) as HTMLElement);
+		const blank = blankSelect(container) as HTMLSelectElement;
+
+		await fireEvent.change(blank, { target: { value: '' } });
+		expect(props.onassign).not.toHaveBeenCalled();
+		expect(blank.value).toBe('');
+		expect(blankSelect(container), 'it stays open — nothing was chosen').not.toBeNull();
+	});
+});
+
 // ── 1c: several sections — one picker each + the [+] ────────────────────────────
 
 describe('SectionPicker #470 — 1c: a member in SEVERAL sections shows one picker per membership + the [+]', () => {
@@ -321,7 +366,7 @@ describe('SectionPicker #470 — native controls with real labels; creation is G
 		expect(glyph!.getAttribute('aria-hidden')).toBe('true');
 	});
 
-	it('EVERY select (held ones and the blank one) has an accessible name that names the member', async () => {
+	it('EVERY select (held ones and the blank one) has an accessible name that names the member — carried on the element itself (aria-label), NOT via an id the roster can render twice', async () => {
 		const { container } = renderPicker({ selectedIds: ['sec-sop'] });
 		await fireEvent.click(addButton(container) as HTMLElement);
 		const selects = allSelects(container);
@@ -332,7 +377,16 @@ describe('SectionPicker #470 — native controls with real labels; creation is G
 			expect(name, `${select.getAttribute('data-testid')} names the member`).toContain(
 				'Ada Lovelace'
 			);
+			// F2 review fix: the grouped roster mounts this component once per
+			// MEMBERSHIP, so a document-unique `id` + `<label for>` pair cannot name
+			// the later copies (label[for] resolves to the first match). The name has
+			// to live on the control.
+			expect(
+				select.getAttribute('aria-label'),
+				`${select.getAttribute('data-testid')} names itself, not through an id`
+			).not.toBeNull();
 		}
+		expect(container.querySelector('label'), 'no <label for> pairing left').toBeNull();
 	});
 
 	it('no element with testid section-picker-new or section-create-form renders in ANY state — creating a section is not this control’s business anymore', async () => {

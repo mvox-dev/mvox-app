@@ -283,7 +283,10 @@ function accessibleName(el: HTMLElement): string {
 			.trim();
 	}
 	const id = el.getAttribute('id');
-	if (id) {
+	// Faithful to how a browser resolves `label[for]`: the label attaches to the
+	// FIRST element carrying that id, so an element whose id is a duplicate has no
+	// label at all — the failure mode #470's per-membership rows exposed.
+	if (id && el.ownerDocument.getElementById(id) === el) {
 		const label = el.ownerDocument.querySelector(`label[for="${id}"]`);
 		if (label) return (label.textContent ?? '').trim();
 	}
@@ -504,6 +507,58 @@ describe('#470 — a11y: native per-membership selects + a labelled [+], no cust
 		expect(name).toContain('Uma Uus');
 	});
 
+	it('a member in TWO sections renders one row per membership — and EVERY select in the document is named, not just the first (F2 review fix)', async () => {
+		// groupBySection puts a member into every section she holds, so the grouped
+		// view (the default) mounts her row — and her whole SectionPicker — once per
+		// membership. An `id` + `<label for>` pairing cannot survive that: the id is
+		// duplicated and label resolution takes the first match, leaving every later
+		// row's controls unnamed to a screen reader — in exactly the multi-section
+		// case #470 is about.
+		loadRosterMock.mockResolvedValue(
+			toListRead([
+				...fixtureRows(),
+				{
+					memberId: 'm-multi',
+					personId: 'p-multi',
+					name: 'Mia Multi',
+					email: 'mia@x.com',
+					sectionIds: ['sec-sop', 'sec-alto'],
+					ownerIds: ['person-p']
+				}
+			])
+		);
+		const container = await renderReady();
+
+		expect(
+			container.querySelectorAll('[data-testid="roster-row-m-multi"]').length,
+			'one row per membership'
+		).toBe(2);
+		const hers = Array.from(
+			container.querySelectorAll<HTMLSelectElement>(
+				'[data-testid="section-picker-select-m-multi-sec-sop"]'
+			)
+		);
+		expect(hers.length, 'her Soprano select exists on BOTH of her rows').toBe(2);
+
+		const selects = Array.from(
+			container.querySelectorAll<HTMLSelectElement>('[data-testid^="section-picker-select-"]')
+		);
+		for (const select of selects) {
+			expect(
+				accessibleName(select),
+				`${select.getAttribute('data-testid')} must be named wherever it renders`
+			).not.toBe('');
+		}
+		// The names must not rest on document-unique ids either.
+		const ids = selects
+			.map((el) => el.getAttribute('id'))
+			.filter((id): id is string => id !== null);
+		expect(
+			ids.filter((id, i) => ids.indexOf(id) !== i),
+			'no duplicated id is used to name a control'
+		).toEqual([]);
+	});
+
 	it('nothing of the custom widget survives: no role="listbox", no role="option", no aria-haspopup trigger, no picker menu testid', async () => {
 		const container = await renderReady();
 		expect(container.querySelector('[role="listbox"]')).toBeNull();
@@ -663,3 +718,5 @@ describe('#99 review R2/F3 — the reorder live region is present from first ren
 // (*MVOX:Palestrina* — #155/S4: collapsed-view drag/remove coverage retired, superseded by arrange-mode specs)
 // (*MVOX:Tallis* — #470: popup-listbox a11y retired for native controls; create-form
 //  a11y re-driven through the page-level roster-new-section form)
+// (*MVOX:Palestrina* — #470 review F2: the grouped view mounts a picker per
+//  membership, so every control names itself; a duplicated id cannot)

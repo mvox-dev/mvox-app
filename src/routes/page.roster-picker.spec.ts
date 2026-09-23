@@ -23,10 +23,13 @@
 //     lands; failure takes the membership back AND says so on the section-write
 //     banner (today's path only console.errors — the fail-loudly gap).
 //   - UNASSIGN (held picker → Määramata): GET `entity/{memberId}?props=_parent`
-//     + `DELETE property/{valueId}`; the picker goes away at once, the member's
-//     remaining controls freeze while Entu syncs, unfreeze after;
-//     SectionMembershipMissing = the server already agrees → removal sticks,
-//     NO banner; a real failure brings the membership back + banner.
+//     + `DELETE property/{valueId}`; NOT optimistic — done-when 4 (Mihkel: "the
+//     controls get freezed while entu syncs. as soon as synced, the unassigned
+//     picker goes away"): that member's controls freeze with the chosen picker
+//     STILL THERE, and it disappears only once the DELETE lands;
+//     SectionMembershipMissing = the server already agrees → removal goes
+//     through, NO banner; a real failure leaves the membership exactly where it
+//     was (it never left) + banner.
 //   - MOVE (held picker → another section): assign S2 FIRST, then unassign S1
 //     (Gama). A failed add changes nothing; a failed delete leaves her visibly
 //     in BOTH (never in none) — and both failures reach the banner.
@@ -487,7 +490,7 @@ describe('/roster — assign via the blank picker (#470)', () => {
 // ── unassign: Määramata → GET+DELETE, freeze in between ─────────────────────────
 
 describe('/roster — unassign via Määramata (#470)', () => {
-	it('GET entity/{memberId}?props=_parent then DELETE property/{valueId}; the chosen picker disappears at once; the member’s REMAINING controls are disabled while the DELETE is pending and enabled after; no banner', async () => {
+	it('GET entity/{memberId}?props=_parent then DELETE property/{valueId}; the chosen picker STAYS, frozen, while the DELETE is pending and goes away only once it lands (done-when 4); no banner', async () => {
 		const del = deferred<Response>();
 		router = (call) => (call.method === 'DELETE' ? del.promise : defaultRouter(call));
 		const container = await renderReady();
@@ -496,24 +499,37 @@ describe('/roster — unassign via Määramata (#470)', () => {
 		expect(held, "Mia's Soprano select").not.toBeNull();
 		await fireEvent.change(held as HTMLElement, { target: { value: '' } });
 
-		// Optimistic: that picker goes away immediately.
-		await waitFor(() => {
-			expect(sel(container, 'm-multi', 'sec-sop')).toBeNull();
-		});
 		// Wire: lookup then the targeted delete.
 		await waitFor(() => {
 			expect(deletes()).toHaveLength(1);
 		});
 		expect(parentGets().some((c) => c.path === 'entity/m-multi?props=_parent')).toBe(true);
 		expect(deletes()[0].path).toBe('property/pv-multi-sop');
-		// FROZEN in between — her other membership's select and the [+].
+		// Mihkel's order: freeze FIRST, disappear after. The chosen picker is still
+		// on screen (and still reading Soprano, not a value nothing has written
+		// yet), frozen along with every other control on her row.
+		const pending = sel(container, 'm-multi', 'sec-sop');
+		expect(pending, 'the chosen picker is still there while Entu syncs').not.toBeNull();
+		expect(pending!.value).toBe('sec-sop');
 		expect(sel(container, 'm-multi', 'sec-alto'), 'the other membership stays visible').not.toBeNull();
 		expect(allFrozen(memberControls(container, 'm-multi'))).toBe(true);
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-multi"]'),
+			'she is still in Soprano until the DELETE lands'
+		).not.toBeNull();
 
 		del.resolve(json({ deleted: true }));
+		// Synced → the unassigned picker goes away, and the freeze lifts.
+		await waitFor(() => {
+			expect(sel(container, 'm-multi', 'sec-sop')).toBeNull();
+		});
 		await waitFor(() => {
 			expect(allUsable(memberControls(container, 'm-multi'))).toBe(true);
 		});
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-multi"]') ??
+				null
+		).toBeNull();
 		expect(q(container, 'section-write-error-m-multi')).toBeNull();
 	});
 
@@ -544,24 +560,29 @@ describe('/roster — unassign via Määramata (#470)', () => {
 		consoleSpy.mockRestore();
 	});
 
-	it('a REAL unassign failure (DELETE 403) → the membership COMES BACK (its select re-renders, the row returns to its group) + the banner shows', async () => {
+	it('a REAL unassign failure (DELETE 403) → the membership NEVER LEFT: the same select is still there, still reading its section, the row never flicked out of its group + the banner shows', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		router = (call) => (call.method === 'DELETE' ? json({}, 403) : defaultRouter(call));
 		const container = await renderReady();
 
-		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
-			target: { value: '' }
-		});
+		const held = sel(container, 'm-ada', 'sec-sop') as HTMLSelectElement;
+		await fireEvent.change(held, { target: { value: '' } });
 
 		await waitFor(() => {
 			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
 		});
-		await waitFor(() => {
-			expect(sel(container, 'm-ada', 'sec-sop')).not.toBeNull();
-		});
+		// The SAME element — not a re-mounted replacement: nothing was dropped and
+		// put back, so the row never flickered through Unassigned and home again.
+		expect(sel(container, 'm-ada', 'sec-sop'), 'the very same select').toBe(held);
+		expect(held.value, 'and it still reads the section she is still in').toBe('sec-sop');
 		expect(
 			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
 		).not.toBeNull();
+		expect(
+			q(container, 'section-group-unassigned')?.querySelector(
+				'[data-testid="roster-row-m-ada"]'
+			) ?? null
+		).toBeNull();
 		consoleSpy.mockRestore();
 	});
 });
@@ -670,6 +691,63 @@ describe('/roster — move S1→S2 (#470): the POST resolves BEFORE the DELETE i
 	});
 });
 
+// ── a refused write leaves the control truthful and retryable ───────────────────
+
+describe('/roster — after a refused write the select still shows the membership it represents (#470 F1)', () => {
+	it('move FAILURE (POST 403): the select snaps back to Soprano — state and screen agree — and the retry the banner invites goes through', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		router = (call) => (call.method === 'POST' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
+
+		const held = sel(container, 'm-ada', 'sec-sop') as HTMLSelectElement;
+		await fireEvent.change(held, { target: { value: 'sec-alto' } });
+
+		await waitFor(() => {
+			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
+		});
+		// The page deliberately patched nothing (she is still in Soprano). The
+		// DOM must say the same thing — otherwise the row sits under "Soprano"
+		// while its own control reads "Alto".
+		expect(held.value, 'the select re-asserts the membership it represents').toBe('sec-sop');
+		expect(held.selectedOptions[0]?.textContent?.trim()).toBe('Soprano');
+		expect(
+			q(container, 'section-group-sec-sop')?.querySelector('[data-testid="roster-row-m-ada"]')
+		).not.toBeNull();
+
+		// And because the value really is back on Soprano, choosing Alto again is a
+		// genuine change in a real browser (a select whose value is already the
+		// target fires no `change` at all — the dead end this pin exists to catch).
+		// Here it also has to reach the wire a second time.
+		expect(posts()).toHaveLength(1);
+		await fireEvent.change(held, { target: { value: 'sec-alto' } });
+		await waitFor(() => {
+			expect(posts()).toHaveLength(2);
+		});
+		expect(posts()[1].body).toEqual([{ type: '_parent', reference: 'sec-alto' }]);
+		consoleSpy.mockRestore();
+	});
+
+	it('move with a FAILED delete: she is in BOTH sections, and BOTH selects read their own section (the old one is not left pointing at the new)', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		router = (call) => (call.method === 'DELETE' ? json({}, 403) : defaultRouter(call));
+		const container = await renderReady();
+
+		await fireEvent.change(sel(container, 'm-ada', 'sec-sop') as HTMLElement, {
+			target: { value: 'sec-alto' }
+		});
+
+		await waitFor(() => {
+			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
+		});
+		await waitFor(() => {
+			expect(sel(container, 'm-ada', 'sec-alto')).not.toBeNull();
+		});
+		expect(sel(container, 'm-ada', 'sec-sop')!.value).toBe('sec-sop');
+		expect(sel(container, 'm-ada', 'sec-alto')!.value).toBe('sec-alto');
+		consoleSpy.mockRestore();
+	});
+});
+
 // ── the freeze is per member ────────────────────────────────────────────────────
 
 describe('/roster — the freeze is scoped to the syncing member alone (#470)', () => {
@@ -698,3 +776,6 @@ describe('/roster — the freeze is scoped to the syncing member alone (#470)', 
 // (*MVOX:Tallis* — #470 RED: native per-membership wiring, wire-order move
 //  contract, per-member freeze, fail-loudly banner; owner gate + position pins
 //  re-derived from #468 shape-agnostically)
+// (*MVOX:Palestrina* — #470 review F1/F3: the unassign pin flipped to
+//  freeze-then-disappear per done-when 4, and the refused-write suite added —
+//  a select that keeps a value nobody wrote is both a lie and a dead end)

@@ -27,6 +27,15 @@
 	//     Left at Määramata, it writes nothing.
 	//   - `busy` freezes EVERY control on THIS picker (disabled + aria-busy) —
 	//     nothing visual beyond the native disabled state (no "saving…" text).
+	//   - Every control names itself with `aria-label` — NOT an `id` + `<label
+	//     for>` pair. F2 review fix: the roster's grouped view renders one row
+	//     per MEMBERSHIP (groupBySection puts a member in every section she
+	//     holds), so a two-section member mounts this component twice with the
+	//     same `memberId`; an id built from memberId+sectionId was then
+	//     duplicated in the document and `label[for]` resolved to the first
+	//     match only, leaving every later row's select unnamed. aria-label
+	//     carries the name on the element itself, so it survives any number of
+	//     instances.
 	import { m } from '$lib/paraglide/messages.js';
 	import type { SectionNode } from './sectionData';
 
@@ -122,15 +131,29 @@
 <div class="flex flex-col items-end gap-1" aria-busy={busy}>
 	{#each selectedIds as sectionId (sectionId)}
 		{@const node = flatSections.find((n) => n.id === sectionId)}
-		<label for="section-picker-select-{memberId}-{sectionId}" class="sr-only">
-			{pickerLabel}{node ? `: ${node.name}` : ''}
-		</label>
 		<select
-			id="section-picker-select-{memberId}-{sectionId}"
 			data-testid="section-picker-select-{memberId}-{sectionId}"
+			aria-label={node ? `${pickerLabel}: ${node.name}` : pickerLabel}
 			value={sectionId}
 			disabled={busy}
-			onchange={(e) => chooseHeld(sectionId, (e.currentTarget as HTMLSelectElement).value)}
+			onchange={(e) => {
+				// F1 review fix — RE-ASSERT the DOM value from state before
+				// delegating. `value={sectionId}` is one-way and `sectionId` is this
+				// {#each} block's own key, so it never changes: Svelte's select-value
+				// effect never re-runs and the user's own DOM change is the ONLY thing
+				// that can move this select. When the parent's write fails it
+				// deliberately patches nothing, and the select was left showing a
+				// section the member is not in — a lie the user then could not even
+				// retry away (re-picking the same target fires no `change`). Resetting
+				// here makes the parent's optimistic state the single source of what is
+				// on screen: on a successful move this select unmounts anyway, so the
+				// reset is invisible; on a failure the select stays truthful and the
+				// same choice can be made again.
+				const el = e.currentTarget as HTMLSelectElement;
+				const chosen = el.value;
+				el.value = sectionId;
+				chooseHeld(sectionId, chosen);
+			}}
 			class="border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
 		>
 			<option value="">{m.roster_unassigned()}</option>
@@ -140,15 +163,20 @@
 		</select>
 	{/each}
 	{#if blankOpen}
-		<label for="section-picker-select-{memberId}-blank" class="sr-only">
-			{pickerLabel}
-		</label>
 		<select
-			id="section-picker-select-{memberId}-blank"
 			data-testid="section-picker-select-{memberId}-blank"
+			aria-label={pickerLabel}
 			value=""
 			disabled={busy}
-			onchange={(e) => chooseBlank((e.currentTarget as HTMLSelectElement).value)}
+			onchange={(e) => {
+				// Same re-assert as the held selects above: a blank picker that stays
+				// open (Määramata chosen, or an assign the parent could not land) must
+				// show Määramata, not the section it failed to enter.
+				const el = e.currentTarget as HTMLSelectElement;
+				const chosen = el.value;
+				el.value = '';
+				chooseBlank(chosen);
+			}}
 			class="border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
 		>
 			<option value="">{m.roster_unassigned()}</option>
