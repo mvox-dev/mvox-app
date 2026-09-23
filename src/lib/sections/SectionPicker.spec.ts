@@ -15,7 +15,16 @@
 //                 picks which name is in scope (the roster page passes the
 //                 PROFILE name — see page.roster-real-names.spec.ts)
 //   sections      SectionNode[] — the tree from listSections
-//   selectedIds   string[] — the member's CURRENT section entity ids
+//   selectedIds   string[] — the member's CURRENT section entity ids, ALL of
+//                 them; the set every option list subtracts
+//   renderIds     string[] — which of `selectedIds` THIS instance draws a
+//                 select for (the roster's grouped view passes one card's
+//                 single membership; the flat list passes the whole set).
+//                 Review round 3: separate from `selectedIds`, because a
+//                 scoped exclusion set makes her other held section look free
+//                 — see page.roster-picker.spec.ts's option-list suite. These
+//                 unit cases are the UNSCOPED shape, so `renderIds` defaults
+//                 to `selectedIds` in `renderPicker` below
 //   busy          boolean — freeze: every select AND the [+] disabled, root
 //                 aria-busy (Mihkel: "the controls get freezed while entu
 //                 syncs"); nothing visual beyond the native disabled state
@@ -91,6 +100,7 @@ interface PickerProps {
 	memberName: string;
 	sections: SectionNode[];
 	selectedIds: string[];
+	renderIds: string[];
 	busy: boolean;
 	onassign: (sectionId: string) => void;
 	onunassign: (sectionId: string) => void;
@@ -101,11 +111,16 @@ interface PickerProps {
 // per-membership handlers + busy) — the cast keeps `pnpm check` honest about
 // everything else while these specs stay RED against the old component.
 function renderPicker(overrides: Partial<PickerProps> = {}) {
+	const selectedIds = overrides.selectedIds ?? [];
 	const props: PickerProps = {
 		memberId: 'm-1',
 		memberName: 'Ada Lovelace',
 		sections: fixtureTree(),
-		selectedIds: [],
+		selectedIds,
+		// unscoped by default: these cases are the flat-list shape, one card
+		// carrying every membership. A case that wants the grouped view's
+		// per-card scope passes `renderIds` explicitly.
+		renderIds: selectedIds,
 		busy: false,
 		onassign: vi.fn(),
 		onunassign: vi.fn(),

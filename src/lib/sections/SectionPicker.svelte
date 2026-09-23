@@ -18,8 +18,10 @@
 	//   - The [+] opens ONE blank select valued '' (Määramata); Mihkel: the [+]
 	//     is HIDDEN while a blank picker is open.
 	//   - A held select's options: Määramata + that section + every section NOT
-	//     held by this member. Choosing Määramata fires onunassign(thatId);
-	//     choosing another section fires onmove(thatId, newId).
+	//     held by this member — "not held" reads the member's WHOLE membership
+	//     (`selectedIds`), never just what this instance draws (`renderIds`).
+	//     Choosing Määramata fires onunassign(thatId); choosing another section
+	//     fires onmove(thatId, newId).
 	//   - The blank select's options: Määramata + every section NOT held by
 	//     this member (Gama: "a blank picker lists only sections she is not
 	//     in" — nothing to gain by choosing one twice). Choosing a section
@@ -32,7 +34,8 @@
 	//     per MEMBERSHIP (groupBySection puts a member in every section she
 	//     holds), so a two-section member mounts this component twice with the
 	//     same `memberId` — each instance now scoped to its own card's section
-	//     (the page filters `selectedIds`), but both still carrying the [+],
+	//     (the page passes that card's id as `renderIds`), but both still
+	//     carrying the [+],
 	//     whose testid and name are keyed by member alone. An id built from
 	//     memberId would be duplicated in the document and `label[for]` would
 	//     resolve to the first match only, leaving the second card's controls
@@ -48,8 +51,21 @@
 		memberName: string;
 		/** The section tree, as returned by listSections. */
 		sections: SectionNode[];
-		/** The member's CURRENT section entity ids ([] = unassigned). */
+		/** The member's CURRENT section entity ids, ALL of them ([] =
+		 *  unassigned) — the EXCLUSION set. Every option list below is built by
+		 *  subtracting this, so a section she already holds is never offered
+		 *  anywhere. Pass the WHOLE membership even when this instance renders
+		 *  only one of them (see `renderIds`). */
 		selectedIds: string[];
+		/** Which of `selectedIds` THIS instance renders a select for — the
+		 *  per-card scope. The roster's grouped view mounts one picker per
+		 *  MEMBERSHIP (a card belongs to ONE section), so it passes that card's
+		 *  single id; the flat list passes the whole set. Kept separate from
+		 *  `selectedIds` because the two answer different questions — "what do I
+		 *  draw here" vs "what does she already hold" — and conflating them is
+		 *  exactly the #470 review-3 defect: a scoped list made her OTHER held
+		 *  section look free, and choosing it POSTed a duplicate `_parent`. */
+		renderIds: string[];
 		/** Freeze: every select AND the [+] disabled, root aria-busy — Mihkel:
 		 *  "the controls get freezed while entu syncs". */
 		busy: boolean;
@@ -61,8 +77,17 @@
 		onmove: (fromId: string, toId: string) => void;
 	}
 
-	const { memberId, memberName, sections, selectedIds, busy, onassign, onunassign, onmove }: Props =
-		$props();
+	const {
+		memberId,
+		memberName,
+		sections,
+		selectedIds,
+		renderIds,
+		busy,
+		onassign,
+		onunassign,
+		onmove
+	}: Props = $props();
 
 	/** One blank (Määramata-valued) picker open at a time — Mihkel's [+] rule. */
 	let blankOpen = $state(false);
@@ -89,19 +114,30 @@
 
 	/** A held picker's own option list: Määramata + that section + every
 	 *  section NOT held by this member (the held section is kept even though
-	 *  it IS held — it is THIS select's own current value). */
+	 *  it IS held — it is THIS select's own current value).
+	 *
+	 *  Review round 3 (#470): this filter reads `selectedIds` — the member's
+	 *  FULL membership — and NOT `renderIds`. While the grouped view passed one
+	 *  scoped list for both jobs, Mia's Soprano card offered her Alto (absent
+	 *  from that card's list, so it looked free); choosing it fired
+	 *  onmove(sop → alto), POSTing a `_parent` she already had, and the row's
+	 *  optimistic ids then carried 'sec-alto' twice — Svelte's keyed {#each}
+	 *  threw each_key_duplicate. Exclusion is a question about the MEMBER;
+	 *  rendering is a question about the CARD. */
 	function heldOptions(thisId: string): SectionNode[] {
 		return flatSections.filter((node) => node.id === thisId || !selectedIds.includes(node.id));
 	}
 
 	/** The blank picker's option list: Määramata + every section NOT held —
-	 *  Gama: "a blank picker lists only sections she is not in". */
+	 *  Gama: "a blank picker lists only sections she is not in". Same
+	 *  `selectedIds` (whole-membership) read as `heldOptions` above. */
 	const blankOptions = $derived(flatSections.filter((node) => !selectedIds.includes(node.id)));
 
 	// Closes the blank picker the moment its own choice fires (synchronous —
 	// the [+] returns without waiting on the parent's optimistic prop update)
 	// AND, redundantly, whenever `selectedIds` itself grows while a blank
-	// picker is still open (a belt-and-braces close for any path that lands a
+	// picker is still open — the FULL membership, so an assign made on the
+	// member's other group card closes this one's blank picker too (a belt-and-braces close for any path that lands a
 	// new membership without going through `chooseBlank` below — e.g. a
 	// second control on the same row).
 	let prevSelectedCount = -1;
@@ -131,7 +167,7 @@
 </script>
 
 <div class="flex flex-col items-end gap-1" aria-busy={busy}>
-	{#each selectedIds as sectionId (sectionId)}
+	{#each renderIds as sectionId (sectionId)}
 		{@const node = flatSections.find((n) => n.id === sectionId)}
 		<select
 			data-testid="section-picker-select-{memberId}-{sectionId}"

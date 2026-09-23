@@ -4175,15 +4175,26 @@
      nothing else; the [+] (which adds a membership, not a section-scoped thing)
      stays on every card. `null` = no group scope — the flat list, where one card
      is the member's only card and carries all her memberships, and the
-     Unassigned group, where she holds no known section at all. -->
+     Unassigned group, where she holds no known section at all.
+
+     Review round 3 (#470) — the scoped list is passed as `renderIds` ONLY, and
+     the member's FULL `sectionIds` goes to `selectedIds`. The picker uses the
+     two for different jobs: `renderIds` decides which selects are drawn here,
+     `selectedIds` is subtracted from every option list. Handing the scoped list
+     to both made a held section that this card does not draw look unheld: Mia's
+     Soprano card offered Alto, choosing it POSTed a `_parent` she already had,
+     and the optimistic `sectionIds` then carried 'sec-alto' twice — a keyed
+     {#each} over duplicate ids throws each_key_duplicate. Verified on the live
+     page by review, pinned by page.roster-picker.spec.ts's option-list suite. -->
 {#snippet memberRow(row: RosterRow, showSection: boolean, groupSectionId: string | null)}
 	{@const rowSectionNames = (row.sectionIds ?? [])
 		.map((id) => sectionNameById.get(id))
 		.filter((name): name is string => Boolean(name))}
-	{@const pickerSelectedIds =
+	{@const memberSectionIds = row.sectionIds ?? []}
+	{@const pickerRenderIds =
 		groupSectionId === null
-			? (row.sectionIds ?? [])
-			: (row.sectionIds ?? []).filter((id) => id === groupSectionId)}
+			? memberSectionIds
+			: memberSectionIds.filter((id) => id === groupSectionId)}
 	<!-- #302 review F1 — `relative` is what makes the card activator below a
 	     STRETCHED OVERLAY (`absolute inset-0`) rather than a strip of its own:
 	     the whole card area activates while the name/email/chip stay plain,
@@ -4652,7 +4663,8 @@
 					memberId={row.memberId}
 					memberName={row.profileName ?? row.name}
 					{sections}
-					selectedIds={pickerSelectedIds}
+					selectedIds={memberSectionIds}
+					renderIds={pickerRenderIds}
 					busy={sectionBusyIds.has(row.memberId)}
 					onassign={(sectionId) => handleAssign(row.memberId, sectionId)}
 					onunassign={(sectionId) => handleUnassign(row.memberId, sectionId)}

@@ -869,6 +869,82 @@ describe('/roster — a group card shows ITS OWN membership, not every membershi
 		expect(selectIdsIn(altoCard)).toEqual(['section-picker-select-m-multi-sec-alto']);
 		expect(q(container, 'section-write-error-m-multi')).toBeNull();
 	});
+
+	function optionValues(select: HTMLSelectElement): string[] {
+		return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+	}
+
+	// ── review round 3: the option lists exclude her WHOLE membership ──────────
+	// The F2 fix above scoped each card to its own membership with ONE prop, and
+	// the picker used that same prop to build its option lists. So Mia's Soprano
+	// card — which does not draw her Alto select — also stopped counting Alto as
+	// held, and offered it: choosing it fired onmove(sop → alto), POSTed a
+	// `_parent` she already had, and the row's optimistic ids carried 'sec-alto'
+	// twice, at which point the keyed {#each} threw each_key_duplicate. Verified
+	// on the live page. Exclusion is about the MEMBER, rendering about the CARD.
+	it("Mia's Soprano card offers Soprano and the free Soprano 1 only — her Alto membership is excluded even though this card never draws it", async () => {
+		const container = await renderReady();
+
+		const sopSelect = cardIn(container, 'sec-sop', 'm-multi').querySelector(
+			'[data-testid="section-picker-select-m-multi-sec-sop"]'
+		) as HTMLSelectElement;
+		expect(optionValues(sopSelect)).toEqual(['', 'sec-sop', 'sec-sop1']);
+
+		// the mirror image: her Alto card keeps its own value and excludes Soprano
+		const altoSelect = cardIn(container, 'sec-alto', 'm-multi').querySelector(
+			'[data-testid="section-picker-select-m-multi-sec-alto"]'
+		) as HTMLSelectElement;
+		// pre-order, so the free Soprano 1 sits before her own Alto
+		expect(optionValues(altoSelect)).toEqual(['', 'sec-sop1', 'sec-alto']);
+
+		// The contrast that makes Alto's absence above mean something: Ada sits on
+		// the SAME Soprano card and IS offered Alto, because she is not in it. The
+		// lists differ by exactly the membership each member holds elsewhere.
+		expect(optionValues(sel(container, 'm-ada', 'sec-sop') as HTMLSelectElement)).toEqual([
+			'',
+			'sec-sop',
+			'sec-sop1',
+			'sec-alto'
+		]);
+	});
+
+	it('the [+] on a group card offers only the section she is in NEITHER of — and no control anywhere can re-pick a section she already holds', async () => {
+		const container = await renderReady();
+
+		const sopCard = cardIn(container, 'sec-sop', 'm-multi');
+		await fireEvent.click(
+			sopCard.querySelector('[data-testid="section-picker-add-m-multi"]') as HTMLElement
+		);
+		const blank = await waitFor(() => {
+			const el = sopCard.querySelector(
+				'[data-testid="section-picker-select-m-multi-blank"]'
+			) as HTMLSelectElement | null;
+			expect(el, 'the [+] opened a blank picker on this card').not.toBeNull();
+			return el as HTMLSelectElement;
+		});
+		expect(optionValues(blank)).toEqual(['', 'sec-sop1']);
+
+		// The general statement the two lists above are instances of: sweep EVERY
+		// section control Mia has anywhere in the document; the only held id any of
+		// them offers is that select's own current value. A duplicate `_parent` is
+		// therefore unreachable by picking, and nothing can drive her `sectionIds`
+		// into the duplicate key that crashed the render.
+		const held = ['sec-sop', 'sec-alto'];
+		const offendingOptions = Array.from(
+			container.querySelectorAll<HTMLSelectElement>(
+				'[data-testid^="section-picker-select-m-multi-"]'
+			)
+		).flatMap((select) =>
+			optionValues(select)
+				.filter((value) => held.includes(value) && value !== select.value)
+				.map((value) => `${select.getAttribute('data-testid')} → ${value}`)
+		);
+		expect(offendingOptions).toEqual([]);
+		expect(
+			container.querySelectorAll('[data-testid^="section-picker-select-m-multi-"]').length,
+			'two held selects + the open blank one — the sweep above saw all three'
+		).toBe(3);
+	});
 });
 
 // (*MVOX:Tallis* — #470 RED: native per-membership wiring, wire-order move
@@ -879,3 +955,6 @@ describe('/roster — a group card shows ITS OWN membership, not every membershi
 //  a select that keeps a value nobody wrote is both a lie and a dead end)
 // (*MVOX:Palestrina* — #470 review F1/F2: the banner's copy pinned (not just its
 //  node) and the grouped-card scope suite added — one card, one membership)
+// (*MVOX:Josquin* — #470 review round 3: the option-list suite — a card's scope
+//  decides what it DRAWS, the member's whole membership decides what it OFFERS;
+//  the sweep pins that no pick can reach a section she already holds)
