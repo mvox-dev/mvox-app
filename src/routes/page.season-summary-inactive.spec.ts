@@ -5,7 +5,9 @@
 // (active-only) at +page.svelte's expand handler, so today her rows VANISH
 // (row-drop, census read 6) — silently violating "past attendance keeps its
 // subject", the reason deactivate beat delete. This spec forces the page to
-// ALSO read the inactive roster (memberLifecycle.loadInactiveRoster) and to
+// ALSO read the archived members (memberLifecycle — `loadInactiveRoster` at
+// first, `loadActiveAndArchivedRosters` since #469 review F1, which folds both
+// halves into one read so the real-names overlay runs once) and to
 // render her as a marked, count-only, rate-free row. The derive mechanics are
 // pinned in attendanceSummary.inactive.spec.ts; this file pins the wiring.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
@@ -28,7 +30,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadRosterMock,
-	loadInactiveRosterMock,
+	loadActiveAndArchivedRostersMock,
 	listAttendanceMock,
 	listMyAttendanceMock,
 	listAllRsvpsForEventMock
@@ -39,7 +41,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	loadInactiveRosterMock: vi.fn(),
+	loadActiveAndArchivedRostersMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn()
@@ -76,7 +78,10 @@ vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),
-	loadInactiveRoster: loadInactiveRosterMock,
+	loadInactiveRoster: vi.fn(),
+	// #469 review F1 — the season panel reads the active AND archived halves
+	// through ONE producer, so the real-names overlay runs once per panel open.
+	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: vi.fn(),
 	listDeactivateBlockers: vi.fn()
 }));
@@ -158,13 +163,18 @@ beforeEach(() => {
 	listMyAttendanceMock.mockResolvedValue(toListRead([]));
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	// ACTIVE roster: Alice only. Gone Girl (m9) is deactivated — she exists only
-	// in the inactive read and in the attendance records.
+	// in the archived half of the read and in the attendance records.
 	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
 	]));
-	loadInactiveRosterMock.mockResolvedValue(toListRead([
-		{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: ['sec-alto'] }
-	]));
+	loadActiveAndArchivedRostersMock.mockResolvedValue({
+		active: toListRead([
+			{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
+		]),
+		inactive: toListRead([
+			{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: ['sec-alto'] }
+		])
+	});
 	listAttendanceMock.mockImplementation((_cfg: unknown, eventId: string) => {
 		if (eventId === 'past-1') {
 			return Promise.resolve([
@@ -224,8 +234,8 @@ describe('season summary — a deactivated member keeps her rows (done-when 3, i
 		expect(row?.textContent).toContain('[attendance_member_rate {"attended":1,"total":2}]');
 	});
 
-	it('the inactive read failing does not silently drop her: the surface reports the load error instead of rendering a roster-only list as if complete', async () => {
-		loadInactiveRosterMock.mockRejectedValue(new Error('boom'));
+	it('the membership read failing does not silently drop her: the surface reports the load error instead of rendering a roster-only list as if complete', async () => {
+		loadActiveAndArchivedRostersMock.mockRejectedValue(new Error('boom'));
 		const utils = render(Page);
 		setAuthedWithOneCollective();
 		await waitFor(() =>
@@ -273,10 +283,17 @@ describe('season summary — the rate table states a truncated member read (#321
 	const NOTICE = '[data-testid="season-summary-partial-notice"]';
 
 	it('a truncated ACTIVE roster read renders the shared visible role="status" notice above the rows', async () => {
-		loadRosterMock.mockResolvedValue({
-			items: [{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }],
-			total: 500,
-			truncated: true
+		loadActiveAndArchivedRostersMock.mockResolvedValue({
+			active: {
+				items: [
+					{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
+				],
+				total: 500,
+				truncated: true
+			},
+			inactive: toListRead([
+				{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: [] }
+			])
 		});
 		const { container } = await renderExpandedSummary();
 
@@ -292,10 +309,17 @@ describe('season summary — the rate table states a truncated member read (#321
 	});
 
 	it('a truncated ARCHIVED read raises the same notice — the history half drops singers too', async () => {
-		loadInactiveRosterMock.mockResolvedValue({
-			items: [{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: [] }],
-			total: 812,
-			truncated: true
+		loadActiveAndArchivedRostersMock.mockResolvedValue({
+			active: toListRead([
+				{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
+			]),
+			inactive: {
+				items: [
+					{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: [] }
+				],
+				total: 812,
+				truncated: true
+			}
 		});
 		const { container } = await renderExpandedSummary();
 

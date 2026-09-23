@@ -70,7 +70,7 @@ const {
 	updateMemberRecordMock: vi.fn(),
 	listMyProfilesMock: vi.fn()
 }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: deactivateMemberMock,
 	reinstateMember: reinstateMemberMock,

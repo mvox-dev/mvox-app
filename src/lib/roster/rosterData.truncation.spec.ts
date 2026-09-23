@@ -30,7 +30,7 @@
 //     truncation, and a roster with NO presentable member must still report one.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
-import { listActiveMembers, loadRoster, loadRosterWithRealNames } from './rosterData';
+import { listActiveMembers, loadRoster } from './rosterData';
 import { listInactiveMembers, loadInactiveRoster } from './memberLifecycle';
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
@@ -258,9 +258,9 @@ describe('loadRoster — the shared producer REPORTS the flag (#321)', () => {
 	});
 });
 
-describe('loadRosterWithRealNames — the /roster producer reports both reads (#321)', () => {
+describe('loadRoster — the shared producer reports both reads (#321; overlay folded in by #469)', () => {
 	it('a truncated MEMBER read → truncated, total is that read\'s count', async () => {
-		const read = await loadRosterWithRealNames(
+		const read = await loadRoster(
 			cfg,
 			makeFetch({
 				members: [{ _id: 'member-1', person: 'person-a' }],
@@ -274,7 +274,7 @@ describe('loadRosterWithRealNames — the /roster producer reports both reads (#
 	});
 
 	it('a truncated RECORDS read → truncated, even though the member read is complete (the overlay silently reverts rows to profile names)', async () => {
-		const read = await loadRosterWithRealNames(
+		const read = await loadRoster(
 			cfg,
 			makeFetch({
 				members: [{ _id: 'member-1', person: 'person-a' }],
@@ -300,14 +300,14 @@ describe('loadRosterWithRealNames — the /roster producer reports both reads (#
 			records: [{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' }],
 			recordCount: 900
 		});
-		const read = await loadRosterWithRealNames(cfg, fetchImpl);
+		const read = await loadRoster(cfg, fetchImpl);
 		expect(read.truncated).toBe(false);
 		const requested = (fetchImpl.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
 		expect(requested.some((u) => u.includes('_type.string=admin_member_record'))).toBe(false);
 	});
 
 	it('the orphan/duplicate drops in the records join never fabricate a truncation (RAW wire length, not map size)', async () => {
-		const read = await loadRosterWithRealNames(
+		const read = await loadRoster(
 			cfg,
 			makeFetch({
 				members: [{ _id: 'member-1', person: 'person-a' }],
@@ -328,7 +328,7 @@ describe('loadRosterWithRealNames — the /roster producer reports both reads (#
 	});
 
 	it('NO presentable member and a truncated read → the flag still travels (the notice matters most here)', async () => {
-		const read = await loadRosterWithRealNames(
+		const read = await loadRoster(
 			cfg,
 			makeFetch({
 				members: [{ _id: 'member-8', person: 'person-y' }], // no profile name → #28 drops her
@@ -359,7 +359,7 @@ describe('loadRosterWithRealNames — the /roster producer reports both reads (#
 				return Promise.resolve(json({ entities: [domainProfile('Ada Lovelace')] }));
 			return Promise.resolve(json({ entities: [] }));
 		});
-		const read = await loadRosterWithRealNames(cfg, fetchImpl);
+		const read = await loadRoster(cfg, fetchImpl);
 		expect(read.items.map((r) => r.name)).toEqual(['Ada Lovelace']);
 		expect(read.truncated).toBe(false);
 		expect(errSpy).toHaveBeenCalled();

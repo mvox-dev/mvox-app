@@ -209,20 +209,26 @@ function toRolePersons(ownOwners: RightsValue[], ownEditors: RightsValue[]): Rol
  * read only backfills `string` once its own indexing catches up, so
  * `toRolePersons`' fallback (`name: v.reference`) shows the raw entity id
  * until then. The roster (already loaded for the person-picker native
- * <select>, #209) is a ready-made id→name lookup — every row whose `name`
- * still equals its
- * `id` (i.e. never resolved a display name off the rights value itself) gets
- * a second chance against it. A person absent from the roster (e.g. no
- * longer an active member) keeps the id fallback — never a blank row.
+ * <select>, #209) is a ready-made id→name lookup.
+ *
+ * #469 review F1 — the roster WINS outright; it is no longer a fallback
+ * consulted only for rows still showing a raw id. The rights value's own
+ * `string` is a name Entu baked at grant time and never refreshes, so
+ * honouring it made the Admins/Librarians lists the one place on the app
+ * that ignored the name the rest of the page had already resolved. Whatever
+ * the roster says for a person is what these lists say about her.
+ *
+ * Accepted side effect: with the real-names toggle OFF the roster carries
+ * profile names, so the role lists now read the profile name rather than the
+ * person entity's `string` — which is precisely what every other surface
+ * does with the toggle off. A person absent from the roster (no longer an
+ * active member) keeps whatever the rights value gave, name or id fallback —
+ * never a blank row.
  */
 function resolveNamesFromRoster(persons: RolePerson[], roster: RosterRow[]): RolePerson[] {
 	if (roster.length === 0) return persons;
 	const byPersonId = new Map(roster.map((r) => [r.personId, r.name]));
-	return persons.map((p) => {
-		if (p.name !== p.id) return p;
-		const rosterName = byPersonId.get(p.id);
-		return rosterName ? { ...p, name: rosterName } : p;
-	});
+	return persons.map((p) => ({ ...p, name: byPersonId.get(p.id) ?? p.name }));
 }
 
 /**

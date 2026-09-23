@@ -84,12 +84,20 @@ vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 	listAllRsvpsForEvent: listAllRsvpsForEventMock
 }));
 // `loadRoster` is a spy — the card's names MUST come through this one chain
-// (called once per open, never per row). `listActiveMembers` and the rest of
-// rosterData stay REAL: the future tally join and the not-responded
-// subtraction run against the wire stub's active-members read.
+// (called once per open, never once per row). #469 — `loadRosterIncludingArchived`
+// (memberLifecycle.ts, real here) no longer calls `loadRoster` for its active
+// leg (that would double the real-names overlay read); it calls the internal
+// `loadRosterRead` directly, imported fresh, so THAT export is spied with the
+// SAME mock too — a self-call inside `loadRoster` to its own module-local
+// `loadRosterRead` is not visible to `vi.mock`'s override, so `loadRoster`
+// needs its own entry to stay a canned, overlay-free read for this file's
+// FUTURE-event cases. `listActiveMembers` and the rest of rosterData stay
+// REAL: the future tally join and the not-responded subtraction run against
+// the wire stub's active-members read.
 vi.mock('$lib/roster/rosterData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/rosterData')>()),
-	loadRoster: loadRosterMock
+	loadRoster: loadRosterMock,
+	loadRosterRead: loadRosterMock
 }));
 
 import Page from './+page.svelte';

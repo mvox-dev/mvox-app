@@ -1987,11 +1987,15 @@ type ComposeFixtures = Fixtures & {
 	 *  complete, the shape every pre-#321 fixture here describes. */
 	memberCount?: number;
 	attendance?: AttendanceRaw[];
-	/** #269 review F1/F2 — serve the "the real-names overlay WOULD fire" wire:
-	 *  a resolvable database entity, `roster_show_real_names: true`, and named
-	 *  `admin_member_record`s for every member. Off by default (this page has no
-	 *  business asking for any of it — see the scope-fence describe below). */
-	realNames?: boolean;
+	/** #469 (was #269's fence lever) — serve the real-names wire: a resolvable
+	 *  database entity, the `roster_show_real_names` toggle and named
+	 *  `admin_member_record`s. `true` → the toggle answers true; `'off'` → the
+	 *  toggle answers FALSE while the records stay on offer (a tree that
+	 *  wrongly fetches them renders them and fails loudly). Absent → no
+	 *  real-names routes at all (the database entity does not resolve; the
+	 *  overlay degrades to profile names by itself — pre-#469 fixtures keep
+	 *  passing unchanged). */
+	realNames?: boolean | 'off';
 };
 
 /** #269 — the collective entity id the real-names wire resolves to. */
@@ -2036,8 +2040,9 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 		.map((r) => ({ _id: r._id, _parent: [{ reference: 'ev1' }], status: r.status }));
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
-		// #269 review F1/F2 — the "overlay would fire" branches, first so they
-		// outrank the generic ones below. Only served when a test opts in.
+		// #469 (was #269's fence branches) — the real-names routes, first so they
+		// outrank the generic ones below. Only served when a test opts in;
+		// `'off'` answers the toggle FALSE while keeping the records on offer.
 		if (fixtures.realNames) {
 			if (url.includes('_type.string=admin_member_record')) {
 				return json({
@@ -2055,7 +2060,9 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 				return json({
 					entity: {
 						_id: RN_DB_ENTITY,
-						roster_show_real_names: [{ _id: 'v-toggle', boolean: true }]
+						roster_show_real_names: [
+							{ _id: 'v-toggle', boolean: fixtures.realNames !== 'off' }
+						]
 					}
 				});
 			}
@@ -2521,21 +2528,23 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		).toBe('true');
 	});
 
-	// ── #269 review F1/F2 — the SCOPE FENCE ───────────────────────────────────
+	// ── #469 — obeys roster_show_real_names (supersedes the #269 roster-only
+	//    ruling) ────────────────────────────────────────────────────────────────
 	//
-	// Henry's 2026-09-06 scope ruling fences the real-names overlay to /roster:
-	// "Every other place a member's name appears — pickers, chips, the agenda,
-	// event pages, the library — keeps profile names, and this slice must not
-	// quietly extend to them." The first #269 GREEN put the overlay inside the
-	// SHARED `loadRoster`, which THIS page calls for its attendance panel — so
-	// the panel silently started naming members by their admin_member_record.
+	// HISTORY, named not deleted: this block was the #269 SCOPE FENCE under
+	// Henry's 2026-09-06 roster-only ruling ("Every other place a member's name
+	// appears — pickers, chips, the agenda, event pages, the library — keeps
+	// profile names"). Mihkel's #469 word (2026-09-23, issue body: "all places
+	// we are showing member names and they all must obey the admin setting")
+	// SUPERSEDES it, so the fence flips to the conditional contract: the
+	// attendance panel (and the RSVP tally card below) obeys the toggle.
 	//
-	// `realNames: true` makes the fixture non-vacuous: the database entity
-	// RESOLVES, the toggle answers true, and named records are on the wire. A
-	// fence spec without that database stub would pass on a leaking tree
-	// (`resolveDatabaseEntityId` → null → the overlay degrades to off by itself).
-	it("the attendance panel keeps PROFILE names even with the toggle ON and named records on the wire, and never asks for a record (#269 scope fence)", async () => {
-		// #356 — event `_editor` added so the panel this fence opens stays
+	// `realNames: true`/`'off'` keeps the fixture non-vacuous either way: the
+	// database entity RESOLVES, the toggle is a real read answer, and named
+	// records are on the wire. Without the database stub the overlay would
+	// degrade to off by itself and the off side would pass on a broken tree.
+	it("the attendance panel shows REAL names with the toggle ON — one toggle read, one records read, profile name gone (#469, supersedes the #269 roster-only ruling)", async () => {
+		// #356 — event `_editor` added so the panel this test opens stays
 		// reachable under the rights gate (see the open-flow test above).
 		const { container, fetchStub } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
@@ -2545,12 +2554,95 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 		});
+		// #469 review F3 — the read discipline is measured as the DELTA across the
+		// panel open, not as an absolute count over the whole page: since the
+		// review the HEADER's conductor line obeys the toggle too, from its own
+		// read on page load (a conductor is a person who may not be a member at
+		// all, so she cannot be resolved off a roster read). The claim this test
+		// makes is about the PANEL's read discipline — never one read per member —
+		// and a per-surface delta says exactly that, where an absolute count would
+		// quietly turn into a count of how many surfaces this page has.
+		const before = fetchStub.mock.calls.length;
 		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
 		});
 
-		// The PROFILE name, not the record name.
+		// The RECORD name, not the profile name.
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
+			).toContain(RN_RECORD_NAMES['p-viewer']);
+		});
+		const panel = container.querySelector('[data-testid="attendance-panel"]')!;
+		expect(panel.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
+		expect(panel.textContent).not.toContain('Viewer Vera');
+
+		// ONE toggle read and ONE bulk records read ride the panel's one loadRoster
+		// call — never one per member.
+		const opened = fetchStub.mock.calls.slice(before).map((c) => String(c[0]));
+		expect(opened.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(opened.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+
+	// #469 review F3 — the header's conductor line was the last profile-only
+	// member surface left on this page: the attendance panel and the RSVP tally
+	// card obeyed the toggle while the header two sections above them named the
+	// SAME person by her profile name, and the agenda's conductor chips (which
+	// read the overlaid roster rows) disagreed with the header too.
+	it('the header names the conductors by their REAL names with the toggle ON (#469 review F3)', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: conductorSeason(),
+			realNames: true
+		});
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
+			return el!;
+		});
+		expect(line.textContent).toContain(RN_RECORD_NAMES['p-viewer']);
+		expect(line.textContent).not.toContain('Mihkel Putrinš');
+		expect(line.textContent).not.toContain('Viewer Vera');
+	});
+
+	it('the header keeps the conductors\' PROFILE names with the toggle OFF, spending no records read (#469 review F3)', async () => {
+		const { container, fetchStub } = renderComposePage({
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: conductorSeason(),
+			realNames: 'off'
+		});
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain('Mihkel Putrinš');
+			return el!;
+		});
+		for (const recordName of Object.values(RN_RECORD_NAMES)) {
+			expect(line.textContent).not.toContain(recordName);
+		}
+		expect(
+			fetchStub.mock.calls
+				.map((c) => String(c[0]))
+				.filter((u) => u.includes('admin_member_record'))
+		).toEqual([]);
+	});
+
+	it("the attendance panel keeps PROFILE names with the toggle OFF — the toggle is read (once), no records request is ever issued (#469)", async () => {
+		const { container, fetchStub } = renderComposePage({
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: conductorSeason(),
+			realNames: 'off'
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
+		});
+
 		expect(
 			container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
 		).toContain('Viewer Vera');
@@ -2558,11 +2650,44 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 			expect(container.textContent).not.toContain(recordName);
 		}
 
-		// The exposure fence, checked on the network rather than only the screen:
-		// no record data is pulled into this page's client at all.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toEqual([]);
+		// #469 review F3 — TWO toggle reads on this page now, one per name-bearing
+		// surface that resolves independently: the header's conductor line (page
+		// load) and this panel (its own open). Neither spends a records read while
+		// the toggle is off, which is the claim that matters here.
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(2);
+	});
+
+	// #469 — the RSVP tally card is the event page's RSVP LIST and obeys too.
+	// A PAST event resolves its names over `loadRosterIncludingArchived`
+	// (#344 F1), so this is also the route-level pin that the ARCHIVED-aware
+	// producer applies the overlay — and that the card renders the row's
+	// DISPLAYED name (`row.name`), not the profileName bypass it carried while
+	// the #269 fence stood.
+	it('the RSVP tally card names a PAST event\'s respondents by their REAL names with the toggle ON — resolved via loadRosterIncludingArchived (#469)', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			realNames: true
+		});
+		// The tally line is the activator (#344); it renders for any member.
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-tally-toggle"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="event-detail-tally-toggle"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-tally-card"]')).not.toBeNull();
+		});
+
+		const card = container.querySelector('[data-testid="event-detail-tally-card"]')!;
+		// member-1 (p-viewer) answered 'going' — her card entry shows the record
+		// name, and her profile name appears nowhere on the card.
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-detail-tally-card-group-going"]')!.textContent
+			).toContain(RN_RECORD_NAMES['p-viewer']);
+		});
+		expect(card.textContent).not.toContain('Viewer Vera');
 	});
 
 	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {

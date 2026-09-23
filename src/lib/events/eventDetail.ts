@@ -15,13 +15,18 @@
 //
 // Conductor NAMES: the SAME domain-or-public scan `toRosterRow` inlines
 // (rosterData.ts) — never `resolveField`, never a private-tier name, domain
-// preferred when both tiers hold one. A conductor with neither tier's name is
-// DROPPED from `conductorNames` (never a raw entity id — "Entity IDs need names"
-// cuts both ways), while `conductorIds` keeps every resolved id regardless.
+// preferred when both tiers hold one — OVERLAID (#469 review F3) with the
+// collective's real name for that person when `roster_show_real_names` is on
+// and she has an `admin_member_record`, through the same single decision point
+// every roster surface uses (`resolveRealNameByPerson`, rosterData.ts). A
+// conductor with neither a record name nor a profile name is DROPPED from
+// `conductorNames` (never a raw entity id — "Entity IDs need names" cuts both
+// ways), while `conductorIds` keeps every resolved id regardless.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
+import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 /**
@@ -286,8 +291,47 @@ export async function loadEventDetail(
 			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl));
 		})
 	);
+	// #469 review F3 — the header's conductor line obeys `roster_show_real_names`
+	// too. It used to be the last profile-name-only member surface on this page:
+	// the attendance panel and the RSVP tally card both went through `loadRoster`
+	// / `loadRosterIncludingArchived` and so picked the overlay up from #469,
+	// while the header two sections above them kept naming the SAME person by her
+	// profile name — and the agenda's conductor chips, which read the overlaid
+	// roster rows, disagreed with the header as well.
+	//
+	// A conductor is a PERSON reference, not a member reference: a guest
+	// conductor may hold no `member` entity and therefore no
+	// `admin_member_record` at all. That needs no new rule — it is exactly the
+	// per-row rule `applyRealNames` already applies to every roster row: show the
+	// record name when this person HAS one, keep the profile name when she does
+	// not. So the map is consulted per conductor and the profile name is the
+	// fallback, never a hole. A conductor with NEITHER is still DROPPED (module
+	// doc, "Entity IDs need names") — the overlay only ever adds a name, it never
+	// takes one away.
+	//
+	// No conductors to name → no toggle read and no records read, the same guard
+	// `applyRealNames` puts on an empty row list.
+	//
+	// #469 review F2, ruled: the event page keeps THREE INDEPENDENT OVERLAYS —
+	// this header resolve, the attendance panel's own `loadRoster`, and the
+	// tally card's. They are not consolidated into one shared read. Each reads
+	// the same toggle and the same records, so they agree on every normal load;
+	// they can disagree only in a transport window, where one of the three
+	// record reads fails while another succeeds and the page shows a real name
+	// in one place and a profile name in another for the same person. That is
+	// accepted for this slice: each surface already degrades to the profile name
+	// on its own (never to a hole or a raw id), and a shared read would couple
+	// three independently-mounted regions to one failure. Revisit only with a
+	// case where the split is visible to a user in practice.
+	const recordNameByPerson =
+		conductorIds.length === 0
+			? new Map<string, string>()
+			: (await resolveRealNameByPerson(cfg, fetchImpl)).byPerson;
 	const conductorNames = conductorIds
-		.map((id) => domainOrPublicName(profilesById.get(id) ?? []))
+		.map((id) => {
+			const recordName = recordNameByPerson.get(id)?.trim();
+			return recordName ? recordName : domainOrPublicName(profilesById.get(id) ?? []);
+		})
 		.filter((resolvedName) => resolvedName !== '');
 
 	// 0 is a real, representable capacity — only an ABSENT prop means "unset".

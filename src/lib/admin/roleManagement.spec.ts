@@ -314,9 +314,36 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
-	it('#146: a row with a REAL display name off the rights value is never overwritten by the roster, even if it disagrees', async () => {
+	// #469 review F1 INVERTS this case. It used to assert that the rights
+	// value's own `string` was never overwritten; the ruling makes the roster
+	// the winner, because `string` is a name Entu baked at grant time and never
+	// refreshes, while the roster carries what the rest of the page has already
+	// resolved — and what the real-names toggle says to show. The disagreement
+	// between the two is still the whole point of the fixture; only the winner
+	// changed.
+	it('#469 F1: a row WITH a display name off the rights value is overwritten by the roster when the two disagree — the roster wins', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER] })));
-		const roster = [{ memberId: 'm-1', personId: 'p-anna', name: 'Stale Roster Name', email: '' }];
+		const roster = [
+			{ memberId: 'm-1', personId: 'p-anna', name: 'Roster Says Otherwise', email: '' }
+		];
+
+		const result = await listAdmins(cfg, 'org-1', 'p-anna', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-anna', name: 'Roster Says Otherwise', role: 'owner', valueIds: ['pv-own-anna'] }
+		]);
+	});
+
+	// #469 F1, the other half of the same rule: the roster wins WHERE IT HAS A
+	// ROW, it does not replace unconditionally. Someone can hold rights here
+	// and appear in no roster at all — an archived conductor who keeps her
+	// admin grant, a technical admin who was never a singing member. She keeps
+	// the rights value's own name. The `?? p.name` tail is what makes that fall
+	// through; a bare `byPersonId.get(p.id)` would blank her row instead. The
+	// case below covers the same fall-through when there is no `string` either,
+	// where the tail lands on the id.
+	it('#469 F1: a person WITH a rights-value name but NO roster row keeps that name — the roster wins only where it has a row', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER] })));
+		const roster = [{ memberId: 'm-1', personId: 'p-other', name: 'Someone Else', email: '' }];
 
 		const result = await listAdmins(cfg, 'org-1', 'p-anna', fetchImpl, roster);
 		expect(result.persons).toEqual([

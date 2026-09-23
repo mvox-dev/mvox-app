@@ -1,25 +1,26 @@
 // @vitest-environment happy-dom
 //
-// #269 review F1/F2 — the SCOPE FENCE on the AGENDA (`src/routes/+page.svelte`).
+// #469 — the AGENDA (`src/routes/+page.svelte`) obeys `roster_show_real_names`.
 //
-// Henry's 2026-09-06 scope ruling: "Every other place a member's name appears —
-// pickers, chips, the agenda, event pages, the library — keeps profile names,
-// and this slice must not quietly extend to them." The first #269 GREEN put the
-// real-names overlay inside the SHARED `loadRoster`, so the agenda — which
-// reaches it through `getRoster` and then feeds `rosterRows` to the attendance
-// panel, the conductor chips and all three conductor pickers, AND caches the
-// resulting rows for `ROSTER_CACHE_TTL_MS` — silently inherited it. This file is
-// the boundary spec that makes that leak visible.
+// HISTORY, named not deleted: this file was the #269 SCOPE FENCE under Henry's
+// 2026-09-06 roster-only ruling ("Every other place a member's name appears —
+// pickers, chips, the agenda, event pages, the library — keeps profile names").
+// Mihkel's #469 word (2026-09-23, issue body: "all places we are showing member
+// names and they all must obey the admin setting") SUPERSEDES that ruling, so
+// the fence FLIPS to the conditional contract. The agenda reaches the shared
+// `loadRoster` through `getRoster` and feeds `rosterRows` to the attendance
+// panel, the conductor chips and all three conductor pickers — one producer,
+// so pinning the panel pins them all.
 //
-// Pinned here, with the toggle ON and named `admin_member_record`s present on
-// the wire (NOT a vacuous fixture: `_type.string=database` resolves, so
-// `resolveDatabaseEntityId` returns an id and `readRosterNamesSetting` would
-// succeed if the agenda asked):
-//   1. the attendance panel's member rows show the PROFILE names;
-//   2. ZERO `admin_member_record` requests are issued by an agenda load + panel
-//      open — the exposure fence, checked on the network, not just the screen;
-//   3. ZERO toggle reads either (`roster_show_real_names`): the agenda has no
-//      business asking what the roster-names setting is.
+// Pinned here, on the non-vacuous wire (`_type.string=database` resolves, the
+// toggle is a REAL read answer, named `admin_member_record`s are served in both
+// states):
+//   1. toggle ON → the attendance panel's member rows show the REAL names and
+//      the profile names appear nowhere in it; ONE toggle read and ONE records
+//      read for the whole load + panel open (`getRoster` is one read);
+//   2. toggle OFF → the reverse: profile names, ZERO `admin_member_record`
+//      requests — the off side is a read answer, never a skipped ask, so the
+//      toggle itself IS read exactly once.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -179,46 +180,65 @@ function setConductedRecentFixture() {
 	setAuthedWithOneCollective('person-p');
 }
 
-describe('#269 scope fence — the AGENDA keeps profile names and never reads member records', () => {
-	it('with the toggle ON and named records on the wire, the attendance panel names members by their PROFILE names', async () => {
+async function openAttendancePanel(container: HTMLElement): Promise<HTMLElement> {
+	await waitFor(() => {
+		expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+	});
+	await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
+	await waitFor(() => {
+		expect(container.querySelector('[data-testid="attendance-row-m1"]')).not.toBeNull();
+	});
+	return container.querySelector('[data-testid="attendance-panel"]') as HTMLElement;
+}
+
+describe('#469 — the AGENDA obeys roster_show_real_names (supersedes the #269 roster-only ruling)', () => {
+	it('toggle ON: the attendance panel names members by their REAL names — the profile names appear nowhere in it', async () => {
 		realNamesWire();
 		setConductedRecentFixture();
 		const { container } = render(Page);
+		const panel = await openAttendancePanel(container);
 
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
+			const text = panel.textContent ?? '';
+			expect(text).toContain(REAL_NAMES.m1);
+			expect(text).toContain(REAL_NAMES.m2);
 		});
-		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="attendance-row-m1"]')).not.toBeNull();
-		});
-
-		const panel = container.querySelector('[data-testid="attendance-panel"]')!;
 		const text = panel.textContent ?? '';
-		expect(text).toContain(PROFILE_NAMES.m1);
-		expect(text).toContain(PROFILE_NAMES.m2);
-		// The overlay's names must not appear ANYWHERE on the agenda.
-		expect(container.textContent).not.toContain(REAL_NAMES.m1);
-		expect(container.textContent).not.toContain(REAL_NAMES.m2);
+		expect(text).not.toContain(PROFILE_NAMES.m1);
+		expect(text).not.toContain(PROFILE_NAMES.m2);
 	});
 
-	it('issues ZERO admin_member_record requests and ZERO roster_show_real_names reads across the whole load + panel open', async () => {
+	it('toggle ON: ONE roster_show_real_names read and ONE admin_member_record read across the whole load + panel open — getRoster is one read, the overlay rides it', async () => {
 		const fetchMock = realNamesWire();
 		setConductedRecentFixture();
 		const { container } = render(Page);
-
+		const panel = await openAttendancePanel(container);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="attendance-row-m1"]')).not.toBeNull();
+			expect(panel.textContent ?? '').toContain(REAL_NAMES.m1);
 		});
 
 		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(urls.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+
+	it('toggle OFF: profile names everywhere, the record names appear nowhere on the agenda, ZERO admin_member_record requests — and the toggle itself IS read (once): off is an answer, not a skipped ask', async () => {
+		const fetchMock = realNamesWire({ toggle: false });
+		setConductedRecentFixture();
+		const { container } = render(Page);
+		const panel = await openAttendancePanel(container);
+
+		const text = panel.textContent ?? '';
+		expect(text).toContain(PROFILE_NAMES.m1);
+		expect(text).toContain(PROFILE_NAMES.m2);
+		expect(container.textContent).not.toContain(REAL_NAMES.m1);
+		expect(container.textContent).not.toContain(REAL_NAMES.m2);
+
+		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toEqual([]);
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
 	});
 });
 
 // (*MVOX:Palestrina* — #269 review F1/F2: agenda scope fence)
+// (*MVOX:Tallis* — #469 RED: fence flipped to the conditional contract)

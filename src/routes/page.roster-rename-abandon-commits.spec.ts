@@ -102,7 +102,7 @@ const {
 	mintSelfLinkInviteMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
-vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
 	return { ...actual, listSections: listSectionsMock };

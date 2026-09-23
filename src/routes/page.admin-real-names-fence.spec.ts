@@ -1,23 +1,27 @@
 // @vitest-environment happy-dom
 //
-// #269 review F1/F2 — the SCOPE FENCE on the ADMIN ROLES page
-// (`src/routes/admin/+page.svelte`).
+// #469 — the ADMIN ROLES page (`src/routes/admin/+page.svelte`) obeys
+// `roster_show_real_names`.
 //
-// Henry's 2026-09-06 scope ruling fences the real-names overlay to /roster.
-// This page consumes the SHARED `loadRoster` too — its rows feed
-// `rosterOrder(roster, sections)` for both person <select>s and ride along into
-// `listAdmins`/`listLibrarians` as the id→name lookup — so the first #269 GREEN
-// (overlay inside `loadRoster`) leaked real names into the admin pickers.
+// HISTORY, named not deleted: this file was the #269 SCOPE FENCE under Henry's
+// 2026-09-06 roster-only ruling. Mihkel's #469 word (2026-09-23, issue body:
+// "all places we are showing member names and they all must obey the admin
+// setting") SUPERSEDES that ruling, so the fence FLIPS to the conditional
+// contract. This page consumes the SHARED `loadRoster`: its rows feed
+// `rosterOrder(roster, sections)` for the add-admin/add-librarian <select>s and
+// ride into `<InviteSurface roster={roster}>` whose person select renders
+// `p.name` per option — one producer, three pickers.
 //
-// The wire here is the "overlay would fire" fixture ($lib/testing/realNamesFence):
-// `_type.string=database` RESOLVES, the toggle answers true, and named
-// `admin_member_record`s are on offer. A fence spec without that database stub
-// would be vacuous — `resolveDatabaseEntityId` would answer null, the overlay
-// would degrade to off by itself, and the test would pass on a leaking tree.
+// The wire ($lib/testing/realNamesFence) keeps both sides non-vacuous:
+// `_type.string=database` RESOLVES, the toggle is a REAL read answer (true or
+// false), named `admin_member_record`s are served either way, and the person
+// join-state read answers 'absent' so the invite person select renders.
 //
-// Pinned: (a) the add-admin picker's option labels are the PROFILE names;
-// (b) ZERO `admin_member_record` requests and ZERO `roster_show_real_names`
-// reads across the whole page load.
+// Pinned: (a) toggle ON → the add-admin picker's AND the invite person
+// picker's option labels are the REAL names, in displayed-name order, with the
+// profile names nowhere on the page; ONE toggle read + ONE records read for the
+// whole load; (b) toggle OFF → the reverse: profile names, ZERO
+// `admin_member_record` requests, the toggle itself read once.
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -29,6 +33,7 @@ const h = vi.hoisted(() => ({
 	listAdminsMock: vi.fn(),
 	listLibrariansMock: vi.fn(),
 	resolveAdminMock: vi.fn(),
+	resolveOwnerTierMock: vi.fn(),
 	resolveLibrarianMock: vi.fn(),
 	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
@@ -52,7 +57,10 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => ({
 }));
 vi.mock('$lib/nav/adminStore', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/nav/adminStore')>()),
-	resolveAdmin: h.resolveAdminMock
+	resolveAdmin: h.resolveAdminMock,
+	// #469 — InviteSurface's person select renders only for a confirmed owner;
+	// the tier itself is out of this file's scope, so it is mocked to 'owner'.
+	resolveOwnerTier: h.resolveOwnerTierMock
 }));
 vi.mock('$lib/library/librarianStore', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/library/librarianStore')>()),
@@ -83,7 +91,13 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { realNamesWire, PROFILE_NAMES, REAL_NAMES, DB_ENTITY_ID } from '$lib/testing/realNamesFence';
+import {
+	realNamesWire,
+	PROFILE_NAMES,
+	REAL_NAMES,
+	DB_ENTITY_ID,
+	MEMBER_PERSON
+} from '$lib/testing/realNamesFence';
 
 function selectSampledb() {
 	setToken('jwt-admin');
@@ -98,6 +112,7 @@ function selectSampledb() {
 
 beforeEach(() => {
 	h.resolveAdminMock.mockResolvedValue('admin');
+	h.resolveOwnerTierMock.mockResolvedValue('owner');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
@@ -134,30 +149,164 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-describe('#269 scope fence — the ADMIN ROLES page keeps profile names and never reads member records', () => {
-	it('with the toggle ON and named records on the wire, the add-admin picker offers PROFILE names', async () => {
+function addAdminLabels(container: HTMLElement): string[] {
+	const select = container.querySelector(
+		'[data-testid="admin-add-admin-select"]'
+	) as HTMLSelectElement;
+	return [...select.querySelectorAll('option')]
+		.map((o) => (o.textContent ?? '').trim())
+		.filter((t) => t !== '' && !t.startsWith('admin_roles_') && !t.startsWith('picker_'));
+}
+
+function invitePersonLabels(container: HTMLElement): string[] {
+	const select = container.querySelector(
+		'[data-testid="invite-person-select"]'
+	) as HTMLSelectElement;
+	return [...select.querySelectorAll('option')]
+		.map((o) => (o.textContent ?? '').trim())
+		.filter((t) => t !== '' && t !== 'admin_invite_person_new');
+}
+
+describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes the #269 roster-only ruling)', () => {
+	it('toggle ON: the add-admin picker AND the invite person picker offer the REAL names, in displayed-name order — the profile names appear nowhere on the page', async () => {
 		realNamesWire();
 		const container = await renderReady();
 
-		const select = container.querySelector(
-			'[data-testid="admin-add-admin-select"]'
-		) as HTMLSelectElement;
-		const labels = [...select.querySelectorAll('option')]
-			.map((o) => (o.textContent ?? '').trim())
-			.filter((t) => t !== '' && !t.startsWith('admin_roles_') && !t.startsWith('picker_'));
-		expect(labels).toEqual([PROFILE_NAMES.m1, PROFILE_NAMES.m2]);
-		expect(container.textContent).not.toContain(REAL_NAMES.m1);
-		expect(container.textContent).not.toContain(REAL_NAMES.m2);
+		// Displayed-name order: Aaron Aardvark (m2) sorts before Zoe Zeta (m1) —
+		// profile order (Alice, Berta) would have kept m1 first, so the order
+		// itself proves the rows were re-sorted by what they display.
+		expect(addAdminLabels(container)).toEqual([REAL_NAMES.m2, REAL_NAMES.m1]);
+
+		// The invite person select renders the SAME rows (roster prop → p.name).
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-person-select"]')).not.toBeNull();
+		});
+		expect(invitePersonLabels(container)).toEqual([REAL_NAMES.m2, REAL_NAMES.m1]);
+
+		expect(container.textContent).not.toContain(PROFILE_NAMES.m1);
+		expect(container.textContent).not.toContain(PROFILE_NAMES.m2);
 	});
 
-	it('issues ZERO admin_member_record requests and ZERO roster_show_real_names reads across the whole load', async () => {
+	it('toggle ON: ONE roster_show_real_names read and ONE admin_member_record read across the whole load — the overlay rides the page\'s one loadRoster call', async () => {
 		const fetchMock = realNamesWire();
-		await renderReady();
+		const container = await renderReady();
+		expect(addAdminLabels(container)).toEqual([REAL_NAMES.m2, REAL_NAMES.m1]);
+
+		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(urls.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+
+	it('toggle OFF: both pickers keep the PROFILE names, the record names appear nowhere, ZERO admin_member_record requests — and the toggle itself IS read (once)', async () => {
+		const fetchMock = realNamesWire({ toggle: false });
+		const container = await renderReady();
+
+		expect(addAdminLabels(container)).toEqual([PROFILE_NAMES.m1, PROFILE_NAMES.m2]);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="invite-person-select"]')).not.toBeNull();
+		});
+		expect(invitePersonLabels(container)).toEqual([PROFILE_NAMES.m1, PROFILE_NAMES.m2]);
+		expect(container.textContent).not.toContain(REAL_NAMES.m1);
+		expect(container.textContent).not.toContain(REAL_NAMES.m2);
 
 		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toEqual([]);
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+	});
+
+	// ── #469 review F1: the Admins LIST itself, not just the pickers ──────────
+	//
+	// Every test above mocks `listAdmins` outright, so the page renders whatever
+	// the mock hands back and the name-resolution code never runs. Asserting a
+	// rendered Admins row against that mock would pin the mock, not the app.
+	// These two delegate to the REAL `listAdmins` and feed it a rights read
+	// whose baked `.string` is a name the row must NOT end up showing — so the
+	// row can only read correctly if `resolveNamesFromRoster` overrode `.string`
+	// with what the page's own overlaid roster says.
+	//
+	// `bakedName` is a parameter because the two sides need DIFFERENT bait. With
+	// the toggle on, the profile name is bait enough. With it off, the roster
+	// itself carries the profile name, so baking the profile name would let a
+	// future "`.string` wins when the toggle is off" regression pass both cases
+	// (Bentham, #469 round 2). A third, distinct string has no other way onto
+	// the page, so asserting its absence pins the override as unconditional.
+	//
+	// The viewer's own `_owner` value rides along so `canManage` stays true and
+	// the pickers still render; it is not a roster member, so it changes no
+	// option list.
+	const STALE_GRANT_NAME = 'Bakhed Atgranttime';
+
+	async function delegateListAdminsToReal(bakedName: string): Promise<void> {
+		const actual =
+			await vi.importActual<typeof import('$lib/admin/roleManagement')>(
+				'$lib/admin/roleManagement'
+			);
+		const rightsFetch = (async () =>
+			new Response(
+				JSON.stringify({
+					entity: {
+						_owner: [
+							{ _id: 'v-viewer', reference: 'admin-p', entity_type: 'person' },
+							{
+								_id: 'v-m1',
+								reference: MEMBER_PERSON.m1,
+								string: bakedName,
+								entity_type: 'person'
+							}
+						]
+					}
+				}),
+				{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			)) as unknown as typeof fetch;
+		h.listAdminsMock.mockImplementation(
+			(
+				cfg: Parameters<typeof actual.listAdmins>[0],
+				dbEntityId: string,
+				viewerId: string,
+				_fetchImpl: typeof fetch,
+				roster: Parameters<typeof actual.listAdmins>[4]
+			) => actual.listAdmins(cfg, dbEntityId, viewerId, rightsFetch, roster)
+		);
+	}
+
+	function adminRow(container: HTMLElement): HTMLElement | null {
+		return container.querySelector(`[data-testid="admin-entry-${MEMBER_PERSON.m1}"]`);
+	}
+
+	// THE discriminating case: `.string` says Alice, the roster says Zoe, and
+	// the row must say Zoe. Drop the override and this is the test that fails.
+	it('toggle ON: the Admins row is named from the overlaid roster, NOT from the rights value\'s baked `.string`', async () => {
+		await delegateListAdminsToReal(PROFILE_NAMES.m1);
+		realNamesWire();
+		const container = await renderReady();
+
+		const row = adminRow(container);
+		expect(row, 'Admins row for m1').not.toBeNull();
+		expect(row?.textContent).toContain(REAL_NAMES.m1);
+		expect(row?.textContent).not.toContain(PROFILE_NAMES.m1);
+	});
+
+	// The accepted side effect — and, with a distinct baked name, a real
+	// discriminator rather than characterization: the rights value says
+	// "Bakhed Atgranttime", the roster (toggle off) says Alice, and the row must
+	// say Alice. Asserting the baked name's ABSENCE is what rules out `.string`
+	// precedence returning on the toggle-off path specifically, which a fixture
+	// baking the profile name could never have caught.
+	it('toggle OFF: the same Admins row reads the PROFILE name — the roster wins unconditionally, it just carries profile names now', async () => {
+		await delegateListAdminsToReal(STALE_GRANT_NAME);
+		realNamesWire({ toggle: false });
+		const container = await renderReady();
+
+		const row = adminRow(container);
+		expect(row, 'Admins row for m1').not.toBeNull();
+		expect(row?.textContent).toContain(PROFILE_NAMES.m1);
+		expect(row?.textContent).not.toContain(REAL_NAMES.m1);
+		expect(row?.textContent).not.toContain(MEMBER_PERSON.m1);
+		// The bait: reachable ONLY through the rights value's `.string`.
+		expect(row?.textContent).not.toContain(STALE_GRANT_NAME);
+		expect(container.textContent).not.toContain(STALE_GRANT_NAME);
 	});
 });
 
 // (*MVOX:Palestrina* — #269 review F1/F2: admin-roles scope fence)
+// (*MVOX:Tallis* — #469 RED: fence flipped to the conditional contract, invite picker pinned too)

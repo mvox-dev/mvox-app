@@ -82,6 +82,7 @@ const {
 	deactivateMemberMock,
 	reinstateMemberMock,
 	loadInactiveRosterMock,
+	loadActiveAndArchivedRostersMock,
 	listInactiveMembersMock,
 	listDeactivateBlockersMock,
 	createInviteMock,
@@ -100,6 +101,7 @@ const {
 	deactivateMemberMock: vi.fn(),
 	reinstateMemberMock: vi.fn(),
 	loadInactiveRosterMock: vi.fn(),
+	loadActiveAndArchivedRostersMock: vi.fn(),
 	listInactiveMembersMock: vi.fn(),
 	listDeactivateBlockersMock: vi.fn(),
 	createInviteMock: vi.fn(),
@@ -107,7 +109,7 @@ const {
 	loadMemberRecordMock: vi.fn()
 }));
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
-vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
 	return { ...actual, listSections: listSectionsMock };
@@ -125,6 +127,7 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: deactivateMemberMock,
 	reinstateMember: reinstateMemberMock,
 	loadInactiveRoster: loadInactiveRosterMock,
+	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: listDeactivateBlockersMock
 }));
@@ -249,6 +252,21 @@ beforeEach(() => {
 	loadInactiveRosterMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(toListRead(cfg.db === 'sampledb' ? inactiveA() : inactiveB()))
 	);
+	// #469 review F1 — /roster reads BOTH member lists through the ONE-PASS
+	// producer `loadActiveAndArchivedRosters` (one real-names overlay for the two
+	// lists it can have on screen at once), not `loadRoster` + `loadInactiveRoster`
+	// side by side. This double COMPOSES the two per-half mocks the tests here
+	// already drive, so each half is still steered and counted exactly as before:
+	// `loadInactiveRosterMock` IS the archived half's read. The real producer
+	// reports truncation per half (its own raw read OR'd with the overlay's); a
+	// double has no overlay, so each half simply keeps its own flag.
+	loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => {
+		const [active, inactive] = await Promise.all([
+			loadRosterMock(cfg),
+			loadInactiveRosterMock(cfg)
+		]);
+		return { active, inactive };
+	});
 	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 	listDeactivateBlockersMock.mockResolvedValue([]);
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');

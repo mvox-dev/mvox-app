@@ -1,27 +1,35 @@
 // src/lib/testing/realNamesFence.ts
 //
-// #269 review F1/F2 — the shared wire fixture behind the SCOPE FENCE specs.
+// The shared wire fixture behind the real-names ROUTE specs.
 //
-// Henry's 2026-09-06 scope ruling fences the real-names overlay to the /roster
-// page: "Every other place a member's name appears — pickers, chips, the agenda,
-// event pages, the library — keeps profile names, and this slice must not
-// quietly extend to them." Three production routes consume the SHARED
-// `loadRoster` (the agenda, the event detail page and the admin roles page), so
-// each needs a boundary spec proving it stays on profile names.
+// HISTORY, named not deleted: this wire was built for #269's scope-FENCE specs
+// under Henry's 2026-09-06 roster-only ruling ("Every other place a member's
+// name appears — pickers, chips, the agenda, event pages, the library — keeps
+// profile names"). Mihkel's #469 word (2026-09-23: "all places we are showing
+// member names ... must obey the admin setting") SUPERSEDES that ruling, so the
+// same route specs now pin the CONDITIONAL contract instead: toggle on → real
+// names, toggle off → profile names. The wire therefore serves BOTH toggle
+// states (`realNamesWire({ toggle: false })` for the off side).
 //
-// The point of THIS module is that those specs are not vacuous. A fence test
-// that simply forgets to stub `_type.string=database` proves nothing: with no
-// visible database entity `resolveDatabaseEntityId` answers null,
+// The point of THIS module is unchanged: those specs must not be vacuous. A
+// spec that simply forgets to stub `_type.string=database` proves nothing: with
+// no visible database entity `resolveDatabaseEntityId` answers null,
 // `readRosterNamesSetting` throws, and the overlay degrades to off all by
-// itself — the test would pass on a tree that leaks. So this wire:
+// itself — the off side would pass on a broken tree. So this wire:
 //
 //   - RESOLVES the database entity (`_type.string=database` → DB_ENTITY_ID),
-//   - answers the toggle read with `roster_show_real_names: true`,
-//   - serves NAMED `admin_member_record`s for every member,
-//
-// i.e. it is the exact wire on which the overlay WOULD fire. A route that
-// renders `PROFILE_NAMES` on it, and issues no `admin_member_record` request, is
-// genuinely fenced.
+//   - answers the toggle read with `roster_show_real_names` (true by default,
+//     false on request — the key is always PRESENT, so "off" is a read answer,
+//     never a degrade),
+//   - serves an ARCHIVED member (`status.string=archived`) DISTINCT from the
+//     active two, so a surface that reads both halves (the agenda's season-rate
+//     table) can be pinned on rows the active read can never produce,
+//   - serves NAMED `admin_member_record`s for every member in BOTH states (an
+//     off-toggle tree that still fetched records would render them and fail
+//     LOUDLY rather than pass on an empty response),
+//   - answers the person join-state read (the linked-identities projection)
+//     as readable-absent (both members uninvited), so InviteSurface's person
+//     select renders over this wire and its option labels can be pinned too.
 import { vi } from 'vitest';
 
 export const DB_ENTITY_ID = 'db-ent-fence';
@@ -32,18 +40,32 @@ export const MEMBER_PERSON: Record<string, string> = {
 	m2: 'person-q'
 };
 
-/** What every out-of-scope surface MUST render. */
+/** The `status.string=archived` half — a member NO active read can produce. */
+export const ARCHIVED_MEMBER_PERSON: Record<string, string> = {
+	m9: 'person-z'
+};
+
+/** What every surface MUST render with the toggle OFF. */
 export const PROFILE_NAMES = {
 	m1: 'Alice Alto',
-	m2: 'Berta Bass'
+	m2: 'Berta Bass',
+	m9: 'Gone Girl'
 } as const;
 
-/** What the overlay would render if it leaked past /roster. Deliberately
- *  unlike the profile names in both spelling and sort order. */
+/** What every surface MUST render with the toggle ON (#469). Deliberately
+ *  unlike the profile names in both spelling and sort order, so sorting by the
+ *  displayed name stays observable. */
 export const REAL_NAMES = {
 	m1: 'Zoe Zeta',
-	m2: 'Aaron Aardvark'
+	m2: 'Aaron Aardvark',
+	m9: 'Rita Real'
 } as const;
+
+/** Active + archived, the one list the record/profile reads answer over. */
+const ALL_MEMBER_PERSON: Array<[string, string]> = [
+	...Object.entries(MEMBER_PERSON),
+	...Object.entries(ARCHIVED_MEMBER_PERSON)
+];
 
 function json(body: unknown, status = 200): Response {
 	return new Response(JSON.stringify(body), {
@@ -53,19 +75,20 @@ function json(body: unknown, status = 200): Response {
 }
 
 /**
- * Stub `globalThis.fetch` with the "overlay would fire" wire described above and
- * return the mock so a spec can assert on the request URLs. Call
+ * Stub `globalThis.fetch` with the wire described above and return the mock so
+ * a spec can assert on the request URLs. `toggle` picks the
+ * `roster_show_real_names` answer (default true — the on side). Call
  * `vi.unstubAllGlobals()` in `afterEach`.
  */
-export function realNamesWire(): ReturnType<typeof vi.fn> {
+export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeof vi.fn> {
+	const toggle = opts.toggle ?? true;
 	const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
 
-		// The overlay's bulk read — served, so a leaking tree gets real names and
-		// the fence assertion fails LOUDLY rather than on an empty response.
+		// The overlay's bulk read — served in both toggle states (see header).
 		if (url.includes('_type.string=admin_member_record')) {
 			return json({
-				entities: Object.entries(MEMBER_PERSON).map(([memberId, personId]) => ({
+				entities: ALL_MEMBER_PERSON.map(([memberId, personId]) => ({
 					_id: `rec-${memberId}`,
 					person: [{ reference: personId }],
 					name: [{ string: REAL_NAMES[memberId as keyof typeof REAL_NAMES] }]
@@ -74,7 +97,7 @@ export function realNamesWire(): ReturnType<typeof vi.fn> {
 		}
 
 		// The collective identity — resolved, so `readRosterNamesSetting` can
-		// legitimately succeed (see module header: without this the fence is vacuous).
+		// legitimately succeed (see module header: without this the off side is vacuous).
 		if (url.includes('_type.string=database')) {
 			return json({ entities: [{ _id: DB_ENTITY_ID }] });
 		}
@@ -82,14 +105,35 @@ export function realNamesWire(): ReturnType<typeof vi.fn> {
 			return json({
 				entity: {
 					_id: DB_ENTITY_ID,
-					roster_show_real_names: [{ _id: 'v-toggle', boolean: true }]
+					roster_show_real_names: [{ _id: 'v-toggle', boolean: toggle }]
+				}
+			});
+		}
+
+		// The person join-state read (listLinkedIdentities projects the identity
+		// property plus `_viewer`): readable (`_viewer` present) with no
+		// identities and no pending invites (the identity key simply absent) →
+		// 'absent' → InviteSurface counts her uninvited. Matched on the
+		// `_viewer` projection — no other roster-adjacent read carries it — so
+		// this helper never names the invite-mint literal
+		// (singleInviteMechanism.spec.ts scans every non-spec src/ file for it).
+		if (url.includes('props=') && url.includes('_viewer')) {
+			return json({
+				entity: {
+					_viewer: [{ _id: 'gr-fence', reference: 'p-reader', property_type: '_owner' }]
 				}
 			});
 		}
 
 		if (url.includes('_type.string=member')) {
+			// The archived half is its OWN list: an active read never produces m9,
+			// and the archived read never produces m1/m2 (the two queries are
+			// disjoint on the wire — `status.string=active` vs `=archived`).
+			const roster = url.includes('status.string=archived')
+				? Object.entries(ARCHIVED_MEMBER_PERSON)
+				: Object.entries(MEMBER_PERSON);
 			return json({
-				entities: Object.entries(MEMBER_PERSON).map(([memberId, personId]) => ({
+				entities: roster.map(([memberId, personId]) => ({
 					_id: memberId,
 					person: [{ reference: personId }],
 					_parent: [
@@ -108,7 +152,7 @@ export function realNamesWire(): ReturnType<typeof vi.fn> {
 		if (url.includes('_type.string=profile')) {
 			const match = /_parent\.reference=([^&]+)/.exec(url);
 			const personId = match ? decodeURIComponent(match[1]) : '';
-			const memberId = Object.keys(MEMBER_PERSON).find((id) => MEMBER_PERSON[id] === personId);
+			const memberId = ALL_MEMBER_PERSON.find(([, pid]) => pid === personId)?.[0];
 			if (!memberId) return json({ entities: [] });
 			return json({
 				entities: [
@@ -129,3 +173,5 @@ export function realNamesWire(): ReturnType<typeof vi.fn> {
 }
 
 // (*MVOX:Palestrina* — #269 review F1/F2: scope-fence wire fixture)
+// (*MVOX:Tallis* — #469 RED: both toggle states + the join-state read; fence flipped to the conditional contract)
+// (*MVOX:Palestrina* — #469 review F1: an archived member, for the surfaces that read both halves)

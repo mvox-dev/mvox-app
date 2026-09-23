@@ -47,7 +47,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadRosterMock,
-	loadInactiveRosterMock,
+	loadActiveAndArchivedRostersMock,
 	listAttendanceMock,
 	listMyAttendanceMock,
 	listAllRsvpsForEventMock
@@ -58,7 +58,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	loadInactiveRosterMock: vi.fn(),
+	loadActiveAndArchivedRostersMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn()
@@ -95,7 +95,9 @@ vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),
-	loadInactiveRoster: loadInactiveRosterMock,
+	loadInactiveRoster: vi.fn(),
+	// #469 review F1 — the season panel reads both halves through ONE producer.
+	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: vi.fn(),
 	listDeactivateBlockers: vi.fn()
 }));
@@ -189,7 +191,12 @@ beforeEach(() => {
 	loadRosterMock.mockResolvedValue(
 		toListRead([{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }])
 	);
-	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	loadActiveAndArchivedRostersMock.mockResolvedValue({
+		active: toListRead([
+			{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
+		]),
+		inactive: toListRead([])
+	});
 	listAttendanceMock.mockResolvedValue([{ attendanceId: 'x1', memberId: 'm1', status: 'present' }]);
 });
 
