@@ -24,12 +24,14 @@
 //      toggle-less behavior on THIS tree (pencil included), records present
 //      server-side notwithstanding — and NO admin_member_record request at
 //      all. The explicit negative.
-//   4. SCOPE — roster page rows ONLY. SectionPicker keeps the PROFILE name
-//      (DECISION pinned: its aria strings name the member for a
-//      section-assignment action, out of #269's contracted surface; stated
-//      choice, flagged for the live round). The INACTIVE panel stays
-//      profile-names in v1 (separate span, separate inactiveRows path —
-//      deliberate letter-first boundary, flagged in the delivery report).
+//   4. SCOPE (#469 rewrote this pin) — the DISPLAYED name obeys the toggle on
+//      every roster surface, the ARCHIVED panel included: Mihkel's #469 word
+//      (2026-09-23, "all places we are showing member names ... must obey the
+//      admin setting") supersedes both the #269 roster-only ruling and the old
+//      "inactive panel stays profile-names in v1" boundary. What stays
+//      profile-named is the profileName SURFACES: SectionPicker's aria label
+//      and the #268 record-editor prefill read `row.profileName`, never the
+//      displayed name (pinned below, unchanged).
 //   5. SORTING follows the DISPLAYED name at the page's sort sites: grouped
 //      per-group order AND the flat list (fixture where real-name order
 //      differs from profile-name order). No search exists on this page.
@@ -466,7 +468,7 @@ describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 
 // ── (4) scope — roster rows ONLY ────────────────────────────────────────────
 
-describe('#269 scope — every other member-name surface keeps the PROFILE name', () => {
+describe('#469 scope — profileName surfaces keep the PROFILE name; the archived panel obeys the toggle (supersedes the #269 roster-only ruling)', () => {
 	// #269 review F1 — anchored on the LISTBOX's pre-existing aria-label (#99
 	// review F1), NOT on the trigger: the trigger's accessible name is its own
 	// visible section-list text and #269 must not touch it. Zero production
@@ -511,18 +513,24 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 		expect((q(container, 'roster-record-name') as HTMLInputElement).value).toBe('Berta Bass');
 	});
 
-	it('the INACTIVE panel stays profile-names in v1 (deliberate letter-first boundary): an archived member with a named record still lists under her profile name', async () => {
+	// #469 — FLIPPED from the old "inactive panel stays profile-names in v1"
+	// boundary pin: "The same holds for archived members wherever they are
+	// listed" (issue #469 done-when 4). The archived panel reads
+	// `loadInactiveRoster`, which now applies the same overlay.
+	it('the ARCHIVED panel obeys the toggle too (#469, supersedes the v1 profile-only boundary): an archived member with a named record lists under her REAL name', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
-		// RED anchor on the contracted surface first:
+		// Anchor on the active surface first:
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-inactive-list')).not.toBeNull());
 		const inactiveRow = q(container, 'inactive-member-row-m3')!;
 		expect(inactiveRow).not.toBeNull();
-		expect(inactiveRow.textContent).toContain('Carla Cantus');
-		expect(inactiveRow.textContent).not.toContain('Xena Xylophone');
+		await waitFor(() => {
+			expect(q(container, 'inactive-member-row-m3')!.textContent).toContain('Xena Xylophone');
+		});
+		expect(q(container, 'inactive-member-row-m3')!.textContent).not.toContain('Carla Cantus');
 	});
 });
 

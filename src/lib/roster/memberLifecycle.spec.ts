@@ -37,6 +37,7 @@ import {
 	reinstateMember,
 	listInactiveMembers,
 	loadInactiveRoster,
+	loadRosterIncludingArchived,
 	listDeactivateBlockers
 } from './memberLifecycle';
 
@@ -378,7 +379,7 @@ describe('loadInactiveRoster', () => {
 		listMyProfilesMock.mockReset();
 	});
 
-	it('FULL SHAPE: resolves names via the shared-profile read + toRosterRow (#28 gate), carrying sectionIds through — the surface must show her section', async () => {
+	it('FULL SHAPE: resolves names via the shared-profile read + toRosterRow (#28 gate), carrying sectionIds through — the surface must show her section; #469: profileName is set like loadRoster sets it', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
@@ -402,6 +403,10 @@ describe('loadInactiveRoster', () => {
 				memberId: 'member-9',
 				personId: 'person-9',
 				name: 'Gone Girl',
+				// #469 — the archived producer emits the SAME one row shape as
+				// loadRoster: profileName set on every row (the old "inactive rows
+				// never carry profileName" v1 boundary is superseded by #469).
+				profileName: 'Gone Girl',
 				email: 'gone@example.com',
 				sectionIds: ['sec-alto'],
 				dbEntityId: 'db-1'
@@ -566,6 +571,218 @@ describe('#467 — listInactiveMembers requests and threads the member _created 
 	});
 });
 
+// ── #469 — the ARCHIVED producers obey roster_show_real_names ─────────────────
+//
+// Mihkel (issue #469, 2026-09-23): "all places we are showing member names ...
+// must obey the admin setting" — SUPERSEDING both the 2026-09-06 #269
+// roster-only ruling AND the 'deliberate v1 boundary' that kept
+// loadInactiveRoster from ever resolving real names. The overlay is the SAME
+// `applyRealNames` loadRoster now runs (exported from rosterData.ts — one
+// overlay, not a re-implementation): toggle read via readRosterNamesSetting,
+// ONE bulk admin_member_record read, refuse-to-guess on duplicates, fail-soft
+// with the console.error breadcrumb, re-sort by displayed name, truncated OR.
+//
+// `loadRosterIncludingArchived` overlays ONCE over the UNION: two raw member
+// reads, union (active wins), then ONE toggle GET + ONE records GET per call —
+// never one overlay per sub-list (that would double both reads).
+
+/** One wire for the #469 cases: active + archived member lists, the database
+ *  resolve, the toggle and the bulk records read. Profiles stay on
+ *  `listMyProfilesMock` like the rest of this file. */
+function makeRealNamesWire(opts: {
+	active?: Array<{ _id: string; person: string }>;
+	archived?: Array<{ _id: string; person: string }>;
+	toggle?: boolean | 'absent';
+	records?: Array<{ _id: string; person?: string; name?: string }>;
+}) {
+	const { active = [], archived = [], toggle = 'absent', records = [] } = opts;
+	const wireMembers = (list: Array<{ _id: string; person: string }>) =>
+		json({ entities: list.map((m) => ({ _id: m._id, person: [{ reference: m.person }] })) });
+	return vi.fn().mockImplementation((url: string) => {
+		const u = String(url);
+		if (u.includes('_type.string=admin_member_record')) {
+			return Promise.resolve(
+				json({
+					entities: records.map((r) => ({
+						_id: r._id,
+						...(r.person !== undefined ? { person: [{ reference: r.person }] } : {}),
+						...(r.name !== undefined ? { name: [{ string: r.name }] } : {})
+					}))
+				})
+			);
+		}
+		if (u.includes('_type.string=member') && u.includes('status.string=archived')) {
+			return Promise.resolve(wireMembers(archived));
+		}
+		if (u.includes('_type.string=member')) {
+			return Promise.resolve(wireMembers(active));
+		}
+		if (u.includes('_type.string=database')) {
+			return Promise.resolve(json({ entities: [{ _id: 'db-ent-9' }] }));
+		}
+		if (u.includes('entity/db-ent-9') && u.includes('roster_show_real_names')) {
+			return Promise.resolve(
+				json({
+					entity: {
+						_id: 'db-ent-9',
+						...(toggle === 'absent'
+							? {}
+							: { roster_show_real_names: [{ _id: 'v-toggle', boolean: toggle }] })
+					}
+				})
+			);
+		}
+		return Promise.resolve(json({ entities: [] }));
+	});
+}
+
+function requestedUrls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
+	return (fetchImpl.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
+}
+
+describe('#469 — loadInactiveRoster obeys roster_show_real_names (supersedes the v1 profile-only boundary)', () => {
+	beforeEach(() => {
+		listMyProfilesMock.mockReset();
+	});
+
+	const profilesByPerson: Record<string, unknown[]> = {
+		'person-9': [{ _id: 'prof-9', _sharing: 'domain', name: 'Gone Girl', email: 'gone@example.com' }],
+		'person-8': [{ _id: 'prof-8', _sharing: 'domain', name: 'Away Anna', email: 'anna@example.com' }]
+	};
+
+	it('toggle ON: the record-backed archived row shows the REAL name, profileName carries the profile resolution, rows re-sort by the displayed name — full ListRead shape, ONE toggle GET, ONE records GET', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			archived: [
+				{ _id: 'member-9', person: 'person-9' },
+				{ _id: 'member-8', person: 'person-8' }
+			],
+			toggle: true,
+			// Profile order: Away Anna, Gone Girl. Displayed order after the
+			// overlay: Away Anna, Zoe Zed — member-9 moves BEHIND member-8's
+			// unchanged row only if sorting keys off the displayed name.
+			records: [{ _id: 'rec-9', person: 'person-9', name: 'Zoe Zed' }]
+		});
+		const read = await loadInactiveRoster(cfg, fetchImpl);
+		expect(read).toEqual({
+			items: [
+				{
+					memberId: 'member-8',
+					personId: 'person-8',
+					name: 'Away Anna',
+					profileName: 'Away Anna',
+					email: 'anna@example.com',
+					sectionIds: []
+				},
+				{
+					memberId: 'member-9',
+					personId: 'person-9',
+					name: 'Zoe Zed',
+					profileName: 'Gone Girl',
+					email: 'gone@example.com',
+					sectionIds: []
+				}
+			],
+			total: 2,
+			truncated: false
+		});
+		const all = requestedUrls(fetchImpl);
+		expect(all.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+
+	it('toggle OFF: profile names everywhere, profileName still set, the toggle read spent once, ZERO records reads', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			archived: [{ _id: 'member-9', person: 'person-9' }],
+			toggle: false,
+			records: [{ _id: 'rec-9', person: 'person-9', name: 'Zoe Zed' }]
+		});
+		const read = await loadInactiveRoster(cfg, fetchImpl);
+		expect(read.items).toEqual([
+			{
+				memberId: 'member-9',
+				personId: 'person-9',
+				name: 'Gone Girl',
+				profileName: 'Gone Girl',
+				email: 'gone@example.com',
+				sectionIds: []
+			}
+		]);
+		const all = requestedUrls(fetchImpl);
+		expect(all.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
+	});
+});
+
+describe('#469 — loadRosterIncludingArchived overlays ONCE over the union', () => {
+	beforeEach(() => {
+		listMyProfilesMock.mockReset();
+	});
+
+	it('toggle ON: union rows (active wins) overlaid in ONE pass — exactly ONE toggle GET and ONE records GET for the whole call, full ListRead shape sorted by displayed name', async () => {
+		const profilesByPerson: Record<string, unknown[]> = {
+			'person-a': [
+				{ _id: 'prof-a', _sharing: 'domain', name: 'Ada Lovelace', email: 'ada@example.com' }
+			],
+			'person-9': [
+				{ _id: 'prof-9', _sharing: 'domain', name: 'Gone Girl', email: 'gone@example.com' }
+			]
+		};
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = makeRealNamesWire({
+			active: [{ _id: 'member-1', person: 'person-a' }],
+			archived: [{ _id: 'member-9', person: 'person-9' }],
+			toggle: true,
+			records: [
+				{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' },
+				{ _id: 'rec-9', person: 'person-9', name: 'Real Rita' }
+			]
+		});
+		const read = await loadRosterIncludingArchived(cfg, fetchImpl);
+		// Displayed order: Real Rita (archived member-9) before Zoe Zed (active
+		// member-1) — profile order (Ada, Gone) would have put member-1 first, so
+		// this order is only reachable through the overlaid union sort.
+		expect(read).toEqual({
+			items: [
+				{
+					memberId: 'member-9',
+					personId: 'person-9',
+					name: 'Real Rita',
+					profileName: 'Gone Girl',
+					email: 'gone@example.com',
+					sectionIds: []
+				},
+				{
+					memberId: 'member-1',
+					personId: 'person-a',
+					name: 'Zoe Zed',
+					profileName: 'Ada Lovelace',
+					email: 'ada@example.com',
+					sectionIds: [],
+					ownerIds: []
+				}
+			],
+			total: 2,
+			truncated: false
+		});
+		// THE one-pass pin: one toggle read and one records read PER CALL — the
+		// naive shape (each sub-producer overlaying its own rows) would double
+		// both, and rosterData.realNames.spec.ts pins "exactly ONE records query
+		// for the whole roster" for the shared producer.
+		const all = requestedUrls(fetchImpl);
+		expect(all.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(all.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #467 RED: archived-mirror _created widening, author dropped)
 // (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)
+// (*MVOX:Tallis* — #469 RED: archived producers obey the real-names setting, one overlay pass)
