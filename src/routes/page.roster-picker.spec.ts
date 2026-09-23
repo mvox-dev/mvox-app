@@ -926,9 +926,13 @@ describe('/roster — a group card shows ITS OWN membership, not every membershi
 
 		// The general statement the two lists above are instances of: sweep EVERY
 		// section control Mia has anywhere in the document; the only held id any of
-		// them offers is that select's own current value. A duplicate `_parent` is
-		// therefore unreachable by picking, and nothing can drive her `sectionIds`
-		// into the duplicate key that crashed the render.
+		// them offers is that select's own current value. So no PICK can reach a
+		// duplicate `_parent` — which is all this suite shows, and a smaller claim
+		// than "her sectionIds can never hold a duplicate". A repeat can arrive
+		// without any UI path at all (`assignMemberSection` POSTs `_parent` with no
+		// `_id`, so a second admin's assign appends alongside the first), and the
+		// guard for that lives at the extraction boundary — pinned by
+		// rosterData.spec.ts's distinct-section-ids case, not here.
 		const held = ['sec-sop', 'sec-alto'];
 		const offendingOptions = Array.from(
 			container.querySelectorAll<HTMLSelectElement>(

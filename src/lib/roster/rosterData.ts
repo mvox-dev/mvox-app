@@ -175,9 +175,24 @@ export async function listActiveMembers(
 		// PO ruling 2026-08-11 (#95/#80) — every `_parent` entry that is a section
 		// is a section this member belongs to; [] when she has none. Sole source,
 		// no current_section fallback. F1: kept ALL matches, not just the first.
-		const sectionIds = (raw._parent ?? [])
-			.filter((p) => p.entity_type === 'section')
-			.map((p) => p.reference);
+		//
+		// #470 review round 3 — DISTINCT, first-seen order. The roster's section
+		// pickers render a keyed `{#each}` over these ids, and a repeated key makes
+		// Svelte throw `each_key_duplicate` (in production as well as DEV): the
+		// whole roster stops rendering, and the member cannot be unassigned through
+		// a row that will not draw. A repeat needs no bug to arrive —
+		// `assignMemberSection` POSTs `_parent` with no `_id`, which Entu appends
+		// alongside any existing value (entu-www src/api/properties/index.md:92),
+		// so two admins or two tabs assigning the same section both land, and
+		// neither sees the other because this page never refetches. The guard sits
+		// at this boundary, where foreign data enters, because the next writer of a
+		// duplicate need not be a UI path — the optimistic appends in the page are
+		// belt-and-braces over it, not a substitute.
+		const sectionIds = [
+			...new Set(
+				(raw._parent ?? []).filter((p) => p.entity_type === 'section').map((p) => p.reference)
+			)
+		];
 		// #161 — the FIRST `_parent` entry that is the DATABASE entity is the
 		// member's collective; undefined when none is visible to this reader
 		// (never a throw — visibility must not gate the roster) OR when the only

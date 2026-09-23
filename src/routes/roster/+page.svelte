@@ -934,8 +934,18 @@
 		return rows.find((r) => r.memberId === memberId)?.sectionIds ?? [];
 	}
 
+	// #470 review round 3 — belt-and-braces over the extraction-boundary dedupe
+	// in `listActiveMembers`. Both optimistic adds (`handleAssign`, and
+	// `handleMove`'s server-confirmed half) are bare spreads onto the live row,
+	// and these ids are the KEY of the section pickers' `{#each}`: a repeat makes
+	// Svelte throw `each_key_duplicate` and the roster stops rendering. One
+	// distinct-ing here covers every writer at the single choke point, including
+	// the next one. It is NOT the load-bearing guard — a duplicate can arrive
+	// from Entu without any UI path (see the rosterData.ts comment) — so it must
+	// never be read as making the boundary one redundant.
 	function patchMemberSectionIds(memberId: string, sectionIds: string[]): void {
-		rows = rows.map((r) => (r.memberId === memberId ? { ...r, sectionIds } : r));
+		const distinct = [...new Set(sectionIds)];
+		rows = rows.map((r) => (r.memberId === memberId ? { ...r, sectionIds: distinct } : r));
 	}
 
 	// F1 code-review fix: a membership edit must touch EXACTLY THE ONE MEMBERSHIP

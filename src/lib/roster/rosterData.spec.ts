@@ -134,6 +134,48 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		]);
 	});
 
+	// #470 review round 3 (RED-470.1) — the roster's section pickers render a
+	// KEYED {#each} over these ids, and Svelte throws each_key_duplicate (in
+	// production too) when a key repeats, taking out the whole roster render: a
+	// member nobody can then unassign, because her row will not draw. A repeated
+	// section reference needs no bug to arrive — `assignMemberSection` POSTs
+	// `_parent` with no `_id`, and Entu appends a new value alongside the
+	// existing ones (entu-www src/api/properties/index.md:92), so two admins or
+	// two tabs assigning the same section both land. Neither sees the other: the
+	// page never refetches. So the guard belongs HERE, at the boundary where
+	// foreign data enters, not on a UI path — the next writer of a duplicate is
+	// not a UI path.
+	it('review round 3: the same section reference twice on one member collapses to ONE id — a keyed render cannot be handed a duplicate key', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_parent: [
+							{ reference: 'sec-sop', entity_type: 'section' },
+							{ reference: 'org-1', entity_type: 'database' },
+							{ reference: 'sec-sop', entity_type: 'section' },
+							{ reference: 'sec-lead', entity_type: 'section' }
+						]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		// FULL array, not a uniqueness predicate: first-seen wire order survives the
+		// dedupe, so 'sec-sop' keeps its original position ahead of 'sec-lead'.
+		expect(members.items).toEqual<ActiveMember[]>([
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: ['sec-sop', 'sec-lead'],
+				dbEntityId: 'org-1',
+				ownerIds: []
+			}
+		]);
+	});
+
 	it('URL: _type.string=member, status.string=active, props=person,_parent, explicit limit=500', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
 		await listActiveMembers(cfg, fetchImpl);
