@@ -73,6 +73,16 @@
 // behaviour assertions are untouched — EXCEPT the joined-badge existence
 // pins, which #302 item 2 falsifies by design (joined = no chip at all) and
 // which are rewritten here against the new display contract.
+//
+// #467 (Mihkel 2026-09-23): the chip becomes ONE DATED STATUS LINE and block
+// (A) is rewritten again — four display states (absent/invited/expired/
+// joined, `expired` computed display-only from invited + INVITE_LIFETIME_MS),
+// joined UN-silenced ("member since <date>"), dates from the member's
+// `_created` (absent) or the entu_user value's `created.at` via
+// listJoinStateDetails (invited/expired/joined). The producer record the page
+// reads is now `listJoinStateDetails`; the bare 3-value `joinStates` the
+// CONTROLS route on is DERIVED from that one answer — the controls contract
+// (B)–(I) is byte-unchanged, and an expired-by-time invite routes as invited.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -98,6 +108,7 @@ const {
 	mintSelfLinkInviteMock,
 	withdrawInviteMock,
 	listJoinStatesMock,
+	listJoinStateDetailsMock,
 	resolveOwnerTierMock,
 	loadMemberRecordMock
 } = vi.hoisted(() => ({
@@ -112,6 +123,7 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStatesMock: vi.fn(),
+	listJoinStateDetailsMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn(),
 	loadMemberRecordMock: vi.fn()
 }));
@@ -133,9 +145,14 @@ vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	mintSelfLinkInvite: mintSelfLinkInviteMock,
 	withdrawInvite: withdrawInviteMock
 }));
+// #467 — the page reads through listJoinStateDetails (state + dated stamp,
+// ONE round of reads) and derives the bare `joinStates` record from the same
+// result for the owner-controls routing; both producers are mocked so either
+// read path is observable.
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
-	listJoinStates: listJoinStatesMock
+	listJoinStates: listJoinStatesMock,
+	listJoinStateDetails: listJoinStateDetailsMock
 }));
 vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
@@ -172,6 +189,9 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+// #467 — the dated lines' formatter: en-CA yyyy-mm-dd, NO timeZone argument
+// (the InviteSurface.svelte:160 convention, #207 rule 7).
+import { isoDateFormatter } from '$lib/preferences/timeFormat';
 
 // ── two collectives (the #287 bug class: per-row state must not survive a
 //    switch), disjoint fixtures ─────────────────────────────────────────────
@@ -182,18 +202,31 @@ const ORG_B = 'org-b';
 // m1 is the VIEWER's own membership; m2 joined, m3 invited-unredeemed, m4
 // never invited — one row per state, all unassigned (rows live under the
 // Unassigned toggle; groups default collapsed).
+//
+// #467 — every row carries the member record's own `_created` datetime as
+// `createdAt` (threaded by rosterData.ts): the DATE SOURCE for the absent
+// state's "not invited since" line. Cast per-row while RosterRow gains the
+// field at GREEN (the joinStates.spec dynamic-shape idiom, type-level).
+const CREATED_AT: Record<string, string> = {
+	m1: '2026-05-02T12:00:00.000Z',
+	m2: '2026-05-03T12:00:00.000Z',
+	m3: '2026-05-04T12:00:00.000Z',
+	m4: '2026-08-15T12:00:00.000Z',
+	'm-bob': '2026-07-01T12:00:00.000Z'
+};
+
 function rowsA(): RosterRow[] {
 	return [
-		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: ORG_A },
-		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: ORG_A },
-		{ memberId: 'm3', personId: 'pp-3', name: 'Carl Cantor', email: 'carl@example.com', sectionIds: [], dbEntityId: ORG_A },
-		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: ORG_A }
+		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: ORG_A, createdAt: CREATED_AT.m1 } as RosterRow,
+		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: ORG_A, createdAt: CREATED_AT.m2 } as RosterRow,
+		{ memberId: 'm3', personId: 'pp-3', name: 'Carl Cantor', email: 'carl@example.com', sectionIds: [], dbEntityId: ORG_A, createdAt: CREATED_AT.m3 } as RosterRow,
+		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: ORG_A, createdAt: CREATED_AT.m4 } as RosterRow
 	];
 }
 
 function rowsB(): RosterRow[] {
 	return [
-		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B }
+		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B, createdAt: CREATED_AT['m-bob'] } as RosterRow
 	];
 }
 
@@ -210,10 +243,30 @@ function treeB(): SectionNode[] {
 }
 
 type JoinState = 'absent' | 'invited' | 'joined';
+// #467 — the dated producer's per-person answer (state + the property value's
+// created.at; absent never carries `at` — its display date is row.createdAt).
+type JoinStateDetail = { state: JoinState; at?: string };
 
 // Mutable per-test join-state fixture: action tests flip a person's state here
 // and the pinned REFRESH re-read makes the row follow the CONTENTS.
 let joinStatesByDb: Record<string, Record<string, JoinState>>;
+// #467 — the invited/joined stamp per person (placeholder's / identity's
+// created.at). Mutable alongside joinStatesByDb so a flipped state finds its
+// date. m3's default is RELATIVE (1 h ago): a fixed past instant would read
+// as EXPIRED under the 24 h lifetime, which is its own dedicated test below.
+let joinDatesByDb: Record<string, Record<string, string>>;
+
+/** The detail record the mocked listJoinStateDetails answers with, derived
+ *  from the same mutable fixtures the bare-state mock reads. */
+function detailsFor(db: string, personIds: string[]): Record<string, JoinStateDetail> {
+	return Object.fromEntries(
+		personIds.map((id) => {
+			const state = joinStatesByDb[db]?.[id] ?? 'absent';
+			const at = state === 'absent' ? undefined : joinDatesByDb[db]?.[id];
+			return [id, at === undefined ? { state } : { state, at }];
+		})
+	);
+}
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');
@@ -239,6 +292,17 @@ beforeEach(() => {
 		sampledb: { 'person-p': 'joined', 'pp-2': 'joined', 'pp-3': 'invited', 'pp-4': 'absent' },
 		'other-choir': { 'p-bob': 'absent' }
 	};
+	// #467 — a stamp for EVERY person, so any state an action test flips to
+	// still finds its date (absent rows never read from here, see detailsFor).
+	joinDatesByDb = {
+		sampledb: {
+			'person-p': '2026-05-06T12:00:00.000Z',
+			'pp-2': '2026-09-10T12:00:00.000Z',
+			'pp-3': new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1 h ago — invited, NOT expired
+			'pp-4': new Date(Date.now() - 60 * 60 * 1000).toISOString()
+		},
+		'other-choir': { 'p-bob': new Date(Date.now() - 60 * 60 * 1000).toISOString() }
+	};
 	loadRosterMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
 	);
@@ -251,6 +315,12 @@ beforeEach(() => {
 				personIds.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent'])
 			)
 		)
+	);
+	// #467 — the dated sibling reads the SAME fixtures, so every existing
+	// action/routing test keeps its state flips regardless of which producer
+	// the page calls.
+	listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
+		Promise.resolve(detailsFor(cfg.db, personIds))
 	);
 	resolveOwnerTierMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok-fresh-1' });
@@ -356,50 +426,32 @@ async function openCard(container: HTMLElement, memberId: string) {
 
 // ═════════════════════════════════════════════════════════════════════════════
 
-describe('(A) three-state display — the read is the gate, contents not presence', () => {
-	// #302 item 2 REWRITE (the one assertion class this issue falsifies by
-	// design): joined is the SILENT default — no chip at all — while
-	// not-invited and invited-awaiting keep their distinct chips. The old
-	// existence pin on m2's 'joined' badge is replaced, not weakened: the
-	// distinguishability claim #294 made now lives in the two chips that stay.
-	it('an owner-admin sees chips read from entu_user CONTENTS on the non-joined rows — and NO chip on a joined row', async () => {
-		const { container } = await renderRoster();
-		await waitFor(() =>
-			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
-		);
-		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
-		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
-		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
-	});
+describe('(A) dated status lines — #467: one line per row, four display states, the read still the gate', () => {
+	// #467 REWRITE (the assertion class this issue falsifies by design): the
+	// three-state CHIP becomes ONE dated status line, and the #302 "joined is
+	// the silent default" rule INVERTS — joined now renders "member since
+	// <date>". Four DISPLAY states (absent/invited/expired/joined); `expired`
+	// is DISPLAY-ONLY, computed as invited + at older than INVITE_LIFETIME_MS
+	// (24 h — docs/architecture/invite-flow.md §7, live figure authoritative),
+	// never a fourth producer value: the owner-controls block keeps branching
+	// on the bare 3-value JoinState exactly as before.
+	//
+	// Date per state: absent → the row's own member `_created` (row.createdAt);
+	// invited/expired → the placeholder value's created.at (detail.at);
+	// joined → the identity value's created.at (detail.at). A row the answer
+	// omits (withheld bucket) renders NOTHING; a state whose date is undefined
+	// renders NOTHING for that row — no guessed line, no bare label (#467
+	// done-when 3). Dates format via isoDateFormatter() — en-CA yyyy-mm-dd,
+	// NO timeZone argument, the InviteSurface.svelte:160 convention (#207 rule
+	// 7: ISO calendar date, never browser locale).
 
-	it('the presence-check trap, pinned at the surface: an invited-but-never-joined member renders INVITED, never joined', async () => {
-		// The issue body's premise failed exactly here — every invited person HAS
-		// an entu_user entry. m3 (placeholder, no uid) is the population the
-		// controls exist for; a presence check would badge her "joined".
-		const { container } = await renderRoster();
-		await waitFor(() =>
-			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
-		);
-		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
-		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).not.toBe('joined');
-	});
+	const fmtDate = isoDateFormatter();
 
-	it('an EDITOR-admin sees the same chips — the read is the gate (#454, Mihkel 2026-09-22): the chip renders because listJoinStates returned a state, not because of any admin tier (#302: readiness gate repointed at a chip that still renders)', async () => {
-		const { container } = await renderRoster({ tier: 'editor' });
-		await waitFor(() =>
-			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
-		);
-		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
-		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
-		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
-	});
+	/** The paraglide-mock rendering of a dated line: `[key {"date":"…"}]`. */
+	function lineLabel(display: 'absent' | 'invited' | 'expired' | 'joined', at: string): string {
+		return `[roster_member_join_state_${display} ${JSON.stringify({ date: fmtDate.format(new Date(at)) })}]`;
+	}
 
-	// ── #454 (Mihkel 2026-09-22, supersedes the 2026-09-09 role framing for the
-	//    DISPLAY): the read is the gate. listJoinStates already runs for every
-	//    reader; a state in its answer renders the chip, a missing key (Entu
-	//    refused the read) renders nothing. No app-computed role decides the
-	//    chip. The exact-set helper below pins testids AND labels so a count
-	//    can't pass while the wrong rows carry chips. ─────────────────────────
 	function chipSet(container: HTMLElement): Record<string, { state: string | null; label: string }> {
 		return Object.fromEntries(
 			[...container.querySelectorAll('[data-testid^="roster-row-join-state-"]')].map((el) => [
@@ -409,55 +461,131 @@ describe('(A) three-state display — the read is the gate, contents not presenc
 		);
 	}
 
-	const EXPECTED_CHIPS_SAMPLEDB = {
-		'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' },
-		'roster-row-join-state-m4': { state: 'absent', label: '[roster_member_join_state_absent]' }
-	};
+	/** The full sampledb expectation, computed from the LIVE fixtures so the
+	 *  relative invited stamp stays honest. ALL FOUR rows render — m1/m2
+	 *  (joined) included, where #302 rendered nothing. */
+	function expectedLinesSampledb(): Record<string, { state: string; label: string }> {
+		return {
+			'roster-row-join-state-m1': {
+				state: 'joined',
+				label: lineLabel('joined', joinDatesByDb.sampledb['person-p'])
+			},
+			'roster-row-join-state-m2': {
+				state: 'joined',
+				label: lineLabel('joined', joinDatesByDb.sampledb['pp-2'])
+			},
+			'roster-row-join-state-m3': {
+				state: 'invited',
+				label: lineLabel('invited', joinDatesByDb.sampledb['pp-3'])
+			},
+			'roster-row-join-state-m4': {
+				state: 'absent',
+				label: lineLabel('absent', CREATED_AT.m4)
+			}
+		};
+	}
 
-	it('#454: a NON-admin reader whose read returned states sees EXACTLY the chips an admin sees — the read is the gate, not the role', async () => {
-		// The same fixture an admin renders against; only the app role differs.
+	it('an owner-admin sees ONE dated line on EVERY readable row — all four states, exact text with the yyyy-mm-dd date; a 1 h-old invite reads INVITED, and joined now RENDERS (member since)', async () => {
+		const { container } = await renderRoster();
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(chipSet(container)).toEqual(expectedLinesSampledb());
+	});
+
+	it('the presence-check trap, still pinned: an invited-but-never-joined member renders INVITED (dated), never member-since', async () => {
+		const { container } = await renderRoster();
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
+		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).not.toBe('joined');
+	});
+
+	it("EXPIRED is display-only: a placeholder minted 25 h ago renders data-join-state='expired' with the expired copy — while the OWNER CONTROLS still route it exactly as invited (saada uuesti + tühista kutse, no kutsu)", async () => {
+		// 25 h > INVITE_LIFETIME_MS (24 h). A wrong lifetime (the pinned
+		// source's 7 d) would render this as a live invite.
+		const at25hAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
+		joinDatesByDb.sampledb['pp-3'] = at25hAgo;
+		const { container } = await renderRoster();
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('expired');
+		expect(q(container, 'roster-row-join-state-m3')!.textContent?.trim()).toBe(
+			lineLabel('expired', at25hAgo)
+		);
+		// The controls block branches on the UNWIDENED 3-value JoinState — an
+		// expired-by-time invite is still 'invited' to it. Anything else strands
+		// an admin with no reinvite/withdraw on exactly the rows that need them.
+		await openCard(container, 'm3');
+		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
+		expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull();
+		expect(q(container, 'roster-member-invite-m3')).toBeNull();
+	});
+
+	it('#454: a NON-admin reader whose read returned states sees EXACTLY the lines an admin sees — the read is the gate, not the role (joined included)', async () => {
 		const admin = await renderRoster();
 		await waitFor(() => expect(q(admin.container, 'roster-row-join-state-m3')).not.toBeNull());
-		expect(chipSet(admin.container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+		const adminLines = chipSet(admin.container);
+		expect(adminLines).toEqual(expectedLinesSampledb());
 		cleanup();
 
 		const { container } = await renderRoster({ admin: 'not-admin' });
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
-		expect(chipSet(container)).toEqual(EXPECTED_CHIPS_SAMPLEDB);
+		expect(chipSet(container)).toEqual(adminLines);
 	});
 
-	// The PAGE-level half of the rule, stated as such: the chip condition is
-	// `joinStates[row.personId] !== undefined` and nothing else, so a personId
-	// the answer does not carry gets NO chip. Since #454 this is a shape the
-	// producer really emits — `listJoinStates` omits any person whose private
-	// bucket was withheld — and the next test drives it through the real
-	// producer over the wire body that causes it.
-	it('#454 PAGE guard: a personId missing from the answer renders NO chip, while the keys that ARE present render theirs — never a guessed one', async () => {
-		// Hand the page an answer with no key for pp-4 (Dora, m4).
-		listJoinStatesMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
-			Promise.resolve(
-				Object.fromEntries(
-					personIds
-						.filter((id) => id !== 'pp-4')
-						.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent'])
-				)
-			)
+	it('#454 PAGE guard: a personId the detail record OMITS (withheld bucket) renders NO line, while the keys present render theirs — never a guessed one', async () => {
+		listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
+			Promise.resolve(detailsFor(cfg.db, personIds.filter((id) => id !== 'pp-4')))
 		);
 		const { container } = await renderRoster({ admin: 'not-admin' });
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		const expected = expectedLinesSampledb();
+		delete (expected as Record<string, unknown>)['roster-row-join-state-m4'];
+		expect(chipSet(container)).toEqual(expected);
+	});
+
+	it('#467 done-when 3, absent shape: a row with NO readable member _created (createdAt undefined) renders NOTHING — no bare label, no guessed date; the other rows keep their lines', async () => {
+		loadRosterMock.mockImplementation((cfg: { db: string }) =>
+			Promise.resolve(
+				toListRead(
+					cfg.db === 'sampledb'
+						? rowsA().map((r) =>
+								r.memberId === 'm4'
+									? ({ ...r, createdAt: undefined } as RosterRow)
+									: r
+							)
+						: rowsB()
+				)
+			)
+		);
+		const { container } = await renderRoster();
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+		expect(q(container, 'roster-row-m4'), 'the row itself still renders').not.toBeNull();
+		const expected = expectedLinesSampledb();
+		delete (expected as Record<string, unknown>)['roster-row-join-state-m4'];
+		expect(chipSet(container)).toEqual(expected);
+	});
+
+	it('#467 done-when 3, invited shape: an invited row whose property stamp could not be read (detail.at undefined) renders NOTHING — the state alone is not a line', async () => {
+		delete joinDatesByDb.sampledb['pp-3'];
+		const { container } = await renderRoster();
+		await waitFor(() => expect(q(container, 'roster-row-join-state-m4')).not.toBeNull());
+		expect(q(container, 'roster-row-m3'), 'the row itself still renders').not.toBeNull();
+		// Built inline: the shared helper would format m3's now-deleted stamp.
 		expect(chipSet(container)).toEqual({
-			'roster-row-join-state-m3': { state: 'invited', label: '[roster_member_join_state_invited]' }
+			'roster-row-join-state-m1': {
+				state: 'joined',
+				label: lineLabel('joined', joinDatesByDb.sampledb['person-p'])
+			},
+			'roster-row-join-state-m2': {
+				state: 'joined',
+				label: lineLabel('joined', joinDatesByDb.sampledb['pp-2'])
+			},
+			'roster-row-join-state-m4': {
+				state: 'absent',
+				label: lineLabel('absent', CREATED_AT.m4)
+			}
 		});
 	});
 
-	it('#454 WIRE refusal, the REACHABLE shape: HTTP 200 with the private bucket withheld — driven through the REAL producer — leaves every row chip-less while the rows render', async () => {
-		// The answer an ordinary member's browser actually receives for a
-		// teammate's domain-shared `person`: 200, `{ entity: { _id } }`, the
-		// `entu_user` property (and the `_viewer` tell alongside it) filtered
-		// out by the bucket selection. NOTHING rejects here — the catch below
-		// never runs, which is exactly why the page cannot be left to infer the
-		// refusal from an error. The REAL `listJoinStates` runs over this wire
-		// body so the omission is the producer's own, not the mock's.
+	it('#454 WIRE refusal, the REACHABLE shape: HTTP 200 with the private bucket withheld — driven through the REAL dated producer — leaves every row line-less while the rows render', async () => {
 		const actual =
 			await vi.importActual<typeof import('$lib/profile/linkedIdentities')>(
 				'$lib/profile/linkedIdentities'
@@ -468,30 +596,36 @@ describe('(A) three-state display — the read is the gate, contents not presenc
 				new Response(JSON.stringify({ entity: { _id: id } }), { status: 200 })
 			);
 		}) as unknown as typeof fetch;
+		// Route BOTH module boundaries through the real producers over the
+		// withheld wire body, so whichever read the page issues is the
+		// producer's own omission, not the mock's.
 		listJoinStatesMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
 			actual.listJoinStates(cfg, ids, withheldFetch)
 		);
+		listJoinStateDetailsMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
+			(
+				actual as unknown as {
+					listJoinStateDetails: (
+						cfg: { db: string; token: string },
+						ids: string[],
+						fetchImpl?: typeof fetch
+					) => Promise<Record<string, JoinStateDetail>>;
+				}
+			).listJoinStateDetails(cfg, ids, withheldFetch)
+		);
 
 		const { container } = await renderRoster({ admin: 'not-admin' });
-		// Readiness: the rows only render once `load()` has run the join-state
-		// fan-out to completion (`status` flips to 'ready' after it), so the
-		// emptiness below is the SETTLED state, not an unresolved load. The row
-		// existence check keeps this a claim about CHIPS, not about a page that
-		// failed to render anything at all.
 		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
 		expect(withheldFetch, 'the real producer must have issued the reads').toHaveBeenCalled();
 		expect(chipSet(container)).toEqual({});
 	});
 
-	it('#454 WIRE refusal, the LOUD shape: an HTTP failure rejects the whole fan-out and the page carries NO chip on any row', async () => {
-		// The second refusal shape, kept because it is real (the #294 probe saw
-		// a clean total 403 against a `_sharing: private` entity): `Promise.all`
-		// rejects whole on the first refused person (linkedIdentities.ts, FAIL
-		// LOUD by design), and the page's catch sets `joinStates = {}`
-		// (+page.svelte:517-520). Every chip goes — no row shows a state this
-		// reader never observed.
+	it('#454 WIRE refusal, the LOUD shape: an HTTP failure rejects the whole fan-out and the page carries NO line on any row', async () => {
 		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listJoinStatesMock.mockRejectedValue(
+			new Error('listLinkedIdentities: identity read failed: HTTP 403')
+		);
+		listJoinStateDetailsMock.mockRejectedValue(
 			new Error('listLinkedIdentities: identity read failed: HTTP 403')
 		);
 		const { container } = await renderRoster({ admin: 'not-admin' });
@@ -501,23 +635,35 @@ describe('(A) three-state display — the read is the gate, contents not presenc
 		errSpy.mockRestore();
 	});
 
-	it('#454: the joined state still renders no chip for a NON-admin — silence stays contents-derived, not role-derived', async () => {
-		const { container } = await renderRoster({ admin: 'not-admin' });
-		// Readiness: the fan-out landed (an invited row's chip is on screen), so
-		// the absences below are the CONTRACT, not an unresolved load.
-		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
-		expect(q(container, 'roster-row-join-state-m1')).toBeNull();
-		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
-	});
-
-	it("INTEGRATION: the route calls listJoinStates with the selected collective's cfg and the rendered rows' personIds", async () => {
+	it("INTEGRATION: the route reads through listJoinStateDetails — called with the selected collective's cfg and the rendered rows' personIds — and derives BOTH records from that ONE result (listJoinStates is never called by the page)", async () => {
 		await renderRoster();
-		await waitFor(() => expect(listJoinStatesMock).toHaveBeenCalled());
-		const matching = listJoinStatesMock.mock.calls.some((call) => {
+		await waitFor(() => expect(listJoinStateDetailsMock).toHaveBeenCalled());
+		const matching = listJoinStateDetailsMock.mock.calls.some((call) => {
 			const [cfg, ids] = call as [{ db: string }, string[]];
 			return cfg.db === 'sampledb' && ['pp-2', 'pp-3', 'pp-4'].every((id) => ids.includes(id));
 		});
 		expect(matching).toBe(true);
+		// One round of reads, not two: the bare 3-value record the controls
+		// branch on is DERIVED from the same answer.
+		expect(listJoinStatesMock).not.toHaveBeenCalled();
+	});
+
+	it('INTEGRATION: the post-mint refresh re-reads through listJoinStateDetails for THAT person (the one-result derivation covers the refresh path too)', async () => {
+		const { container } = await renderRoster();
+		await openCard(container, 'm4');
+		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
+		listJoinStateDetailsMock.mockClear();
+		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
+		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		await waitFor(() =>
+			expect(
+				listJoinStateDetailsMock.mock.calls.some((call) => {
+					const [cfg, ids] = call as [{ db: string }, string[]];
+					return cfg.db === 'sampledb' && ids.length === 1 && ids[0] === 'pp-4';
+				})
+			).toBe(true)
+		);
+		expect(listJoinStatesMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -772,12 +918,16 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		expect(
 			container.querySelectorAll('[data-testid^="roster-invite-copy-status-"]')
 		).toHaveLength(0);
+		// #467 — B's join read goes through whichever producer the page calls
+		// (the dated sibling once GREEN lands); either way it must be B's cfg.
 		await waitFor(() =>
 			expect(
-				listJoinStatesMock.mock.calls.some((call) => {
-					const [cfg, ids] = call as [{ db: string }, string[]];
-					return cfg.db === 'other-choir' && ids.includes('p-bob');
-				})
+				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(
+					(call) => {
+						const [cfg, ids] = call as [{ db: string }, string[]];
+						return cfg.db === 'other-choir' && ids.includes('p-bob');
+					}
+				)
 			).toBe(true)
 		);
 
@@ -842,13 +992,29 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 				Object.fromEntries(personIds.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent']))
 			);
 		});
+		// #467 — the SAME hold on the dated sibling: whichever producer the page
+		// reads through, A's tail stays open until settleA. A resolving tail maps
+		// the bare states through the standard detail fixture.
+		listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) => {
+			if (cfg.db === 'sampledb') {
+				return new Promise<Record<string, JoinStateDetail>>((resolve, reject) => {
+					settleA = aTail(
+						(states) => resolve(detailsFor(cfg.db, Object.keys(states))),
+						reject
+					);
+				});
+			}
+			return Promise.resolve(detailsFor(cfg.db, personIds));
+		});
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
 		adminStore.set('admin');
 		// A's fan-out is now in flight and blocking A's own load body.
 		await waitFor(() =>
 			expect(
-				listJoinStatesMock.mock.calls.some((c) => (c[0] as { db: string }).db === 'sampledb')
+				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(
+					(c) => (c[0] as { db: string }).db === 'sampledb'
+				)
 			).toBe(true)
 		);
 		// Switch to B and let it complete END TO END — rows, join states, controls.
@@ -993,3 +1159,6 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 // (*MVOX:Tallis* — #346 RED: D/E now pin the COMPOSED absolute URL on both
 //  producers, and (G) pins that the per-row copy state joins the same
 //  collective-switch resets as the link map itself)
+// (*MVOX:Tallis* — #467 RED: (A) rewritten to dated status lines — four display
+//  states, display-only `expired`, joined un-silenced, per-state date sources,
+//  page reads through listJoinStateDetails and derives the controls' record)

@@ -583,5 +583,104 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 	});
 });
 
+// ── #467 — the member's own `_created` stamp rides the SAME list read ─────────
+//
+// "Not invited since <yyyy-mm-dd>" reads the member record's `_created`, which
+// (unlike a regular value's `created` sub-object) DOES embed into the entity
+// read when named in `props=` (probe-property-author-filter-2026-09-21, step
+// q4a: key set [_id, datetime, entity_type, property_type, reference, string]).
+// Only `.datetime` may leave this reader — `.reference` is the AUTHOR, a person
+// id with a PII-bearing `.string` alongside (ER-26): dropped at extraction,
+// never carried onto the row.
+
+describe('#467 — listActiveMembers requests and threads the member _created stamp', () => {
+	it('URL: props widened to person,_parent,_created — the stamp rides the existing read, no extra request', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listActiveMembers(cfg, fetchImpl);
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('props=person,_parent,_created');
+	});
+
+	it('createdAt = _created[0].datetime; the author `.reference` (and its baked `.string`) is NOT present anywhere on the row (ER-26)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_parent: [{ reference: 'org-1', entity_type: 'database' }],
+						_created: [
+							{
+								_id: 'cr-1',
+								datetime: '2026-06-01T09:00:00.000Z',
+								reference: 'author-9',
+								string: 'Author Name',
+								entity_type: 'member',
+								property_type: '_created'
+							}
+						]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect(members.items).toEqual([
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: [],
+				dbEntityId: 'org-1',
+				createdAt: '2026-06-01T09:00:00.000Z'
+			}
+		]);
+		const flat = JSON.stringify(members.items);
+		expect(flat).not.toContain('author-9');
+		expect(flat).not.toContain('Author Name');
+	});
+
+	it('missing _created → createdAt undefined — fail-soft per row (no fabrication, no warn, row kept)', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [{ _id: 'member-1', person: [{ reference: 'person-a' }] }]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect(members.items).toHaveLength(1);
+		expect(members.items[0].memberId).toBe('member-1');
+		expect((members.items[0] as { createdAt?: string }).createdAt).toBeUndefined();
+		expect(warnSpy).not.toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+});
+
+describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', () => {
+	const memberWithStamp = {
+		memberId: 'm-1',
+		personId: 'p-1',
+		sectionIds: [],
+		dbEntityId: undefined,
+		createdAt: '2026-06-01T09:00:00.000Z'
+	} as unknown as ActiveMember;
+
+	it('carries createdAt through', () => {
+		const row = toRosterRow(memberWithStamp, [profile('domain', 'Ada', 'a@x.ee')]);
+		expect((row as unknown as { createdAt?: string })?.createdAt).toBe(
+			'2026-06-01T09:00:00.000Z'
+		);
+	});
+
+	it('absent on the member → absent on the row (undefined, never a guessed stamp)', () => {
+		const bare = {
+			memberId: 'm-2',
+			personId: 'p-2',
+			sectionIds: [],
+			dbEntityId: undefined
+		} as ActiveMember;
+		const row = toRosterRow(bare, [profile('domain', 'Bea', 'b@x.ee')]);
+		expect((row as unknown as { createdAt?: string })?.createdAt).toBeUndefined();
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #268 fence pins)
+// (*MVOX:Tallis* — #467 RED: _created widening + createdAt threading, author dropped)
