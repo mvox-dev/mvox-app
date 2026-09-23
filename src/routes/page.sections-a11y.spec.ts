@@ -29,6 +29,13 @@
 // on all three error surfaces, aria-invalid + aria-describedby on the create
 // form, Escape dismissal, native buttons, locale key parity) so GREEN can't
 // regress it.
+//
+// #470 AMENDMENT: the custom picker popup is RETIRED (native per-membership
+// <select>s + a [+]; creation left the assignment flow for the arrange-mode
+// `roster-new-section` entry). Section 3 pins the native controls; the
+// create-form a11y guards re-drive through the page-level form; every pin on
+// the popup's own plumbing (listbox roles, arrow nav, dismissal, focus
+// restore) is retired — the browser owns a native control's semantics.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -66,8 +73,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_name_label: () => 'Section name',
 		roster_section_parent_label: () => 'Parent section',
 		roster_section_create_failed: () => "The section couldn't be created — nothing was saved.",
-		roster_section_assign_failed: () =>
-			"The section was created, but the member couldn't be added to it."
+		roster_section_write_failed: () => "The section change couldn't be saved."
 	};
 	const m = new Proxy(known, {
 		get(target, prop) {
@@ -247,23 +253,54 @@ async function expand(container: HTMLElement, id: string): Promise<void> {
 	});
 }
 
-/** Open member `memberId`'s picker and return its menu element (the POPUP
- *  wrapper — it holds the listbox AND the "+ New section…" button beside it;
- *  see `listboxOf` for the role="listbox" element itself). */
-async function openPicker(container: HTMLElement, memberId: string): Promise<HTMLElement> {
-	const trigger = q(container, `section-picker-trigger-${memberId}`) as HTMLElement;
-	expect(trigger, `picker trigger for ${memberId}`).not.toBeNull();
-	await fireEvent.click(trigger);
-	const menu = q(container, `section-picker-menu-${memberId}`) as HTMLElement;
-	expect(menu, `picker menu for ${memberId}`).not.toBeNull();
-	return menu;
+// #470 — the custom picker popup (trigger/menu/listbox) is RETIRED: the member
+// row carries NATIVE per-membership <select>s plus a [+]. The old
+// `openPicker`/`listboxOf` helpers went with it.
+
+/** #470 — open member `memberId`'s BLANK picker via the [+]. */
+async function openBlankPicker(container: HTMLElement, memberId: string): Promise<HTMLSelectElement> {
+	const add = q(container, `section-picker-add-${memberId}`) as HTMLElement;
+	expect(add, `the [+] for ${memberId}`).not.toBeNull();
+	await fireEvent.click(add);
+	await waitFor(() => {
+		expect(q(container, `section-picker-select-${memberId}-blank`)).not.toBeNull();
+	});
+	return q(container, `section-picker-select-${memberId}-blank`) as HTMLSelectElement;
 }
 
-/** The role="listbox" element inside member `memberId`'s open popup. */
-function listboxOf(container: HTMLElement, memberId: string): HTMLElement {
-	const listbox = q(container, `section-picker-listbox-${memberId}`) as HTMLElement;
-	expect(listbox, `picker listbox for ${memberId}`).not.toBeNull();
-	return listbox;
+/** An element's accessible name, resolved the way AT would: aria-label,
+ *  aria-labelledby, a `label[for]`, or a wrapping <label>. */
+function accessibleName(el: HTMLElement): string {
+	const aria = el.getAttribute('aria-label');
+	if (aria) return aria;
+	const labelledby = el.getAttribute('aria-labelledby');
+	if (labelledby) {
+		return labelledby
+			.split(/\s+/)
+			.map((id) => el.ownerDocument.getElementById(id)?.textContent ?? '')
+			.join(' ')
+			.trim();
+	}
+	const id = el.getAttribute('id');
+	// Faithful to how a browser resolves `label[for]`: the label attaches to the
+	// FIRST element carrying that id, so an element whose id is a duplicate has no
+	// label at all — the failure mode #470's per-membership rows exposed.
+	if (id && el.ownerDocument.getElementById(id) === el) {
+		const label = el.ownerDocument.querySelector(`label[for="${id}"]`);
+		if (label) return (label.textContent ?? '').trim();
+	}
+	return (el.closest('label')?.textContent ?? '').trim();
+}
+
+// #470 — the page-level create form lives in Arrange mode (#155/S4); the
+// create-form a11y guards below re-drive through it.
+async function renderArrangeReady(): Promise<HTMLElement> {
+	const container = await renderReady();
+	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
+	await waitFor(() => {
+		expect(q(container, 'roster-arrange-list')).not.toBeNull();
+	});
+	return container;
 }
 
 // ---------------------------------------------------------------------------
@@ -437,70 +474,108 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 });
 
 // ---------------------------------------------------------------------------
-// 3 — section picker: listbox semantics
+// 3 — #470: the section controls are NATIVE, labelled form controls
 // ---------------------------------------------------------------------------
-describe("#99 — a11y: the section picker menu is a listbox (role='listbox', aria-selected)", () => {
-	it("the open menu presents a role='listbox' — a bare <div> of buttons announces no selection widget at all", async () => {
+// Supersedes the #99 popup-listbox suite wholesale: the custom listbox is
+// retired, and with it every role/aria-selected/haspopup pin — the browser
+// owns a native <select>'s semantics entirely. What remains OURS to pin is
+// that the controls really are native, and really are named.
+describe('#470 — a11y: native per-membership selects + a labelled [+], no custom widget left', () => {
+	it("a member's held section renders a NATIVE <select> with an accessible name that names her", async () => {
 		const container = await renderReady();
-		const menu = await openPicker(container, 'm-ada');
-		// #99 review (round 2) F4: the listbox is an element INSIDE the popup rather
-		// than the popup itself, so it can own options ONLY — the "+ New section…"
-		// action sits beside it instead of masquerading as an option. Still one
-		// listbox, still inside the open menu.
-		const listbox = listboxOf(container, 'm-ada');
-		expect(listbox.getAttribute('role')).toBe('listbox');
-		expect(menu.contains(listbox)).toBe(true);
+		const select = q(container, 'section-picker-select-m-ada-sec-sop') as HTMLSelectElement;
+		expect(select, "Ada's Soprano select").not.toBeNull();
+		expect(select.tagName).toBe('SELECT');
+		const name = accessibleName(select);
+		expect(name, 'the select must be named').not.toBe('');
+		expect(name).toContain('Ada Lovelace');
 	});
 
-	it("the trigger announces its popup: aria-haspopup='listbox' alongside the existing aria-expanded", async () => {
+	it('the [+] is a native, labelled <button type="button"> naming the member; the blank picker it opens is a named native <select> too', async () => {
 		const container = await renderReady();
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
-		expect(trigger.getAttribute('aria-expanded')).toBe('false');
-		await fireEvent.click(trigger);
-		expect(trigger.getAttribute('aria-expanded')).toBe('true');
+		const add = q(container, 'section-picker-add-m-uma') as HTMLButtonElement;
+		expect(add, "Uma's [+]").not.toBeNull();
+		expect(add.tagName).toBe('BUTTON');
+		expect(add.type).toBe('button');
+		expect(add.getAttribute('aria-label') ?? '').toContain('Uma Uus');
+
+		const blank = await openBlankPicker(container, 'm-uma');
+		expect(blank.tagName).toBe('SELECT');
+		const name = accessibleName(blank);
+		expect(name, 'the blank picker must be named').not.toBe('');
+		expect(name).toContain('Uma Uus');
 	});
 
-	it("every section option carries role='option' with aria-selected reflecting the member's CURRENT sections — true on every assigned id, false on the rest", async () => {
+	it('a member in TWO sections renders one row per membership — and EVERY select in the document is named, not just the first (F2 review fix)', async () => {
+		// groupBySection puts a member into every section she holds, so the grouped
+		// view (the default) mounts her row — and her whole SectionPicker — once per
+		// membership. An `id` + `<label for>` pairing cannot survive that: the id is
+		// duplicated and label resolution takes the first match, leaving every later
+		// row's controls unnamed to a screen reader — in exactly the multi-section
+		// case #470 is about.
+		loadRosterMock.mockResolvedValue(
+			toListRead([
+				...fixtureRows(),
+				{
+					memberId: 'm-multi',
+					personId: 'p-multi',
+					name: 'Mia Multi',
+					email: 'mia@x.com',
+					sectionIds: ['sec-sop', 'sec-alto'],
+					ownerIds: ['person-p']
+				}
+			])
+		);
 		const container = await renderReady();
-		await openPicker(container, 'm-ada'); // Ada is in sec-sop only
-		for (const [sectionId, selected] of [
-			['sec-sop', 'true'],
-			['sec-sop1', 'false'],
-			['sec-alto', 'false'],
-			['sec-tenor', 'false']
-		] as const) {
-			const option = q(container, `section-picker-option-${sectionId}`) as HTMLElement;
-			expect(option, `option ${sectionId}`).not.toBeNull();
-			expect(option.getAttribute('role'), `option ${sectionId} role`).toBe('option');
-			expect(option.getAttribute('aria-selected'), `option ${sectionId} aria-selected`).toBe(selected);
+
+		expect(
+			container.querySelectorAll('[data-testid="roster-row-m-multi"]').length,
+			'one row per membership'
+		).toBe(2);
+		// F2 review fix — each of her cards shows ITS OWN membership only (the
+		// Soprano card her Soprano select, the Alto card her Alto select), so the
+		// select testids are document-unique again. The [+] is not section-scoped,
+		// so it still renders on both cards under one memberId-keyed testid — which
+		// is why the names may not rest on ids.
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-select-m-multi-sec-sop"]').length,
+			'her Soprano select renders once, on her Soprano card'
+		).toBe(1);
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-select-m-multi-sec-alto"]').length,
+			'her Alto select renders once, on her Alto card'
+		).toBe(1);
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-add-m-multi"]').length,
+			'the [+] rides on both of her cards'
+		).toBe(2);
+
+		const selects = Array.from(
+			container.querySelectorAll<HTMLSelectElement>('[data-testid^="section-picker-select-"]')
+		);
+		for (const select of selects) {
+			expect(
+				accessibleName(select),
+				`${select.getAttribute('data-testid')} must be named wherever it renders`
+			).not.toBe('');
 		}
+		// The names must not rest on document-unique ids either.
+		const ids = selects
+			.map((el) => el.getAttribute('id'))
+			.filter((id): id is string => id !== null);
+		expect(
+			ids.filter((id, i) => ids.indexOf(id) !== i),
+			'no duplicated id is used to name a control'
+		).toEqual([]);
 	});
 
-	it("the Unassigned option is role='option' too, aria-selected='true' exactly when the member has NO sections", async () => {
+	it('nothing of the custom widget survives: no role="listbox", no role="option", no aria-haspopup trigger, no picker menu testid', async () => {
 		const container = await renderReady();
-
-		// Ada (assigned): Unassigned not selected.
-		await openPicker(container, 'm-ada');
-		let unassigned = q(container, 'section-picker-option-unassigned') as HTMLElement;
-		expect(unassigned.getAttribute('role')).toBe('option');
-		expect(unassigned.getAttribute('aria-selected')).toBe('false');
-		await fireEvent.keyDown(document.body, { key: 'Escape' });
-
-		// Uma (no sections): Unassigned selected.
-		await openPicker(container, 'm-uma');
-		unassigned = q(container, 'section-picker-option-unassigned') as HTMLElement;
-		expect(unassigned.getAttribute('role')).toBe('option');
-		expect(unassigned.getAttribute('aria-selected')).toBe('true');
-	});
-
-	it("options must NOT carry aria-pressed — pressed-state on role='option' is an invalid ARIA mix (supersedes the TS.2 aria-pressed pin; GREEN updates SectionPicker.spec.ts / page.roster-picker.spec.ts to aria-selected)", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const withPressed = Array.from(
-			container.querySelectorAll('[data-testid^="section-picker-option-"][aria-pressed]')
-		).map((el) => el.getAttribute('data-testid'));
-		expect(withPressed).toEqual([]);
+		expect(container.querySelector('[role="listbox"]')).toBeNull();
+		expect(container.querySelector('[role="option"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="section-picker-trigger-"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="section-picker-menu-"]')).toBeNull();
+		expect(container.querySelector('[data-testid^="section-picker-listbox-"]')).toBeNull();
 	});
 });
 
@@ -513,38 +588,40 @@ describe("#99 — a11y: the section picker menu is a listbox (role='listbox', ar
 // 5 — form errors: role='alert' + field association
 // ---------------------------------------------------------------------------
 describe("#99 — a11y: every sections error surface is a live region (role='alert')", () => {
-	it("guard: the create form's validation error has role='alert', and the name input carries aria-invalid + aria-describedby resolving to it", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
-		await fireEvent.click(q(container, 'section-create-submit') as HTMLElement); // empty name
+	it("guard (#470: re-driven through the page-level roster-new-section form): the validation error has role='alert', and the name input carries aria-invalid + aria-describedby resolving to it", async () => {
+		const container = await renderArrangeReady();
+		await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-new-section-form')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement); // empty name
 
-		const error = q(container, 'section-create-error') as HTMLElement;
+		const error = q(container, 'roster-new-section-error') as HTMLElement;
 		expect(error, 'validation error must render').not.toBeNull();
 		expect(error.getAttribute('role')).toBe('alert');
 		expect(error.textContent).toContain('Section name is required.');
 
-		const input = q(container, 'section-create-name') as HTMLElement;
+		const input = q(container, 'roster-new-section-name') as HTMLElement;
 		expect(input.getAttribute('aria-invalid')).toBe('true');
 		const describedby = input.getAttribute('aria-describedby');
 		expect(describedby, 'name input must reference its error').toBeTruthy();
 		expect(input.ownerDocument.getElementById(describedby!)).toBe(error);
 	});
 
-	it("guard: a failed create write surfaces role='alert' inline in the member's row", async () => {
-		createMock.mockRejectedValue(new Error('403'));
+	it("guard (#470: the banner's producer is the ASSIGN path now): a failed assign through the blank picker surfaces role='alert' inline in the member's row", async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		assignMock.mockRejectedValue(new Error('403'));
 		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
-		const input = q(container, 'section-create-name') as HTMLInputElement;
-		await fireEvent.input(input, { target: { value: 'Bass' } });
-		await fireEvent.click(q(container, 'section-create-submit') as HTMLElement);
+
+		const blank = await openBlankPicker(container, 'm-uma');
+		await fireEvent.change(blank, { target: { value: 'sec-alto' } });
 
 		await waitFor(() => {
-			const error = q(container, 'section-write-error-m-ada') as HTMLElement;
+			const error = q(container, 'section-write-error-m-uma') as HTMLElement;
 			expect(error).not.toBeNull();
 			expect(error.getAttribute('role')).toBe('alert');
 		});
+		consoleSpy.mockRestore();
 	});
 
 	it("guard: the section-tree load failure banner has role='alert'", async () => {
@@ -577,61 +654,22 @@ describe("#99 — a11y: every sections error surface is a live region (role='ale
 // 6 — keyboard navigation on all interactive elements
 // ---------------------------------------------------------------------------
 describe('#99 — a11y: keyboard operability across the sections surfaces', () => {
-	it('guard: trigger, every option, the new-section entry and both form actions are native <button type="button">s — keyboard-operable for free', async () => {
+	it('guard (#470): the section controls are NATIVE elements — the [+] a <button type="button">, every picker a <select> — keyboard-operable for free, no arrow-key plumbing of ours left to break', async () => {
 		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const testids = [
-			'section-picker-trigger-m-ada',
-			'section-picker-option-sec-sop',
-			'section-picker-option-unassigned',
-			'section-picker-new'
-		];
-		for (const testid of testids) {
-			const el = q(container, testid) as HTMLButtonElement;
-			expect(el, testid).not.toBeNull();
-			expect(el.tagName, testid).toBe('BUTTON');
-			expect(el.type, testid).toBe('button');
+		const add = q(container, 'section-picker-add-m-ada') as HTMLButtonElement;
+		expect(add, "Ada's [+]").not.toBeNull();
+		expect(add.tagName).toBe('BUTTON');
+		expect(add.type).toBe('button');
+		const selects = Array.from(
+			container.querySelectorAll<HTMLElement>('[data-testid^="section-picker-select-"]')
+		);
+		expect(selects.length, 'one select per membership renders').toBeGreaterThan(0);
+		for (const select of selects) {
+			expect(select.tagName, select.getAttribute('data-testid') ?? '').toBe('SELECT');
 		}
-		await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
-		for (const testid of ['section-create-submit', 'section-create-cancel']) {
-			const el = q(container, testid) as HTMLButtonElement;
-			expect(el.tagName, testid).toBe('BUTTON');
-			expect(el.type, testid).toBe('button');
-		}
-	});
-
-	it('guard: Escape closes the open picker without firing any write', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		await fireEvent.keyDown(document.body, { key: 'Escape' });
-		expect(q(container, 'section-picker-menu-m-ada')).toBeNull();
+		// Merely rendering (and opening nothing) writes nothing.
 		expect(assignMock).not.toHaveBeenCalled();
 		expect(unassignMock).not.toHaveBeenCalled();
-	});
-
-	it('ArrowDown moves focus from the trigger/first option down the listbox; ArrowUp moves it back — the listbox pattern requires arrow navigation, Tab alone is not it', async () => {
-		const container = await renderReady();
-		const menu = await openPicker(container, 'm-ada');
-		const first = q(container, 'section-picker-option-sec-sop') as HTMLElement;
-		const second = q(container, 'section-picker-option-sec-sop1') as HTMLElement;
-
-		first.focus();
-		await fireEvent.keyDown(first, { key: 'ArrowDown' });
-		expect(menu.ownerDocument.activeElement).toBe(second);
-
-		await fireEvent.keyDown(second, { key: 'ArrowUp' });
-		expect(menu.ownerDocument.activeElement).toBe(first);
-	});
-
-	it('ArrowDown on the LAST actionable entry does not wrap out of the widget — focus stays inside the listbox', async () => {
-		const container = await renderReady();
-		const menu = await openPicker(container, 'm-ada');
-		const last = q(container, 'section-picker-new') as HTMLElement;
-		last.focus();
-		await fireEvent.keyDown(last, { key: 'ArrowDown' });
-		const active = menu.ownerDocument.activeElement as HTMLElement | null;
-		expect(active, 'focus must stay on an element').not.toBeNull();
-		expect(menu.contains(active), 'focus escaped the listbox on ArrowDown at the end').toBe(true);
 	});
 
 	it('guard: the sort toggle and section collapse toggles are native <button>s (keyboard-operable), and the sort toggle reports its state via aria-pressed', async () => {
@@ -649,173 +687,15 @@ describe('#99 — a11y: keyboard operability across the sections surfaces', () =
 });
 
 // ---------------------------------------------------------------------------
-// 7 — #99 CODE-REVIEW FIXES (F1–F5). Each block pins a defect the first GREEN
-//     pass shipped; all render the real page, same as everything above.
+// 7 — #99 code-review-fix regression cover (F1–F3) and round 2 (R2/F1, R2/F4)
+//     RETIRED by #470: focus-restore-on-dismiss, arrow-nav-from-the-trigger,
+//     listbox-owns-only-options, the named listbox / honest aria-haspopup and
+//     the "'+ New section…' is a button" pins all guarded OUR custom popup's
+//     plumbing. The popup is gone — a native <select> has no dismissal, no
+//     focus hand-off and no popup semantics of ours to regress. What replaced
+//     them is pinned in section 3 above (#470 native controls) and in
+//     SectionPicker.spec.ts.
 // ---------------------------------------------------------------------------
-describe('#99 review F1 — dismissing the picker RESTORES focus to its trigger', () => {
-	it('Escape with an option focused puts focus back on the trigger — an unmounted activeElement drops focus to <body> and the next Tab restarts at the top of the document', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		const option = q(container, 'section-picker-option-sec-sop') as HTMLElement;
-
-		option.focus();
-		expect(option.ownerDocument.activeElement).toBe(option);
-		await fireEvent.keyDown(option, { key: 'Escape' });
-
-		expect(q(container, 'section-picker-menu-m-ada')).toBeNull();
-		expect(trigger.ownerDocument.activeElement).toBe(trigger);
-	});
-
-	it('PICKING an option puts focus back on the trigger too — the write path drops focus exactly like Escape did', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		const option = q(container, 'section-picker-option-sec-alto') as HTMLElement;
-
-		option.focus();
-		await fireEvent.click(option);
-
-		await waitFor(() => {
-			expect(q(container, 'section-picker-menu-m-ada')).toBeNull();
-		});
-		expect(trigger.ownerDocument.activeElement).toBe(trigger);
-	});
-
-	it('an OUTSIDE click does NOT yank focus back — opening another member’s picker must not pull focus onto the dismissed one’s trigger', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const adaTrigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		(q(container, 'section-picker-option-sec-sop') as HTMLElement).focus();
-
-		await fireEvent.click(q(container, 'section-picker-trigger-m-bea') as HTMLElement);
-
-		expect(q(container, 'section-picker-menu-m-ada')).toBeNull();
-		expect(q(container, 'section-picker-menu-m-bea')).not.toBeNull();
-		expect(adaTrigger.ownerDocument.activeElement).not.toBe(adaTrigger);
-	});
-});
-
-describe('#99 review F2 — arrow navigation is reachable FROM THE TRIGGER', () => {
-	it('ArrowDown on the open trigger enters the list at the first option — focus stays on the trigger when the menu opens, so a menu-only keydown handler never fires at all', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-
-		trigger.focus();
-		await fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-
-		expect(trigger.ownerDocument.activeElement).toBe(q(container, 'section-picker-option-sec-sop'));
-	});
-
-	it('ArrowUp on the open trigger enters the list at the LAST entry', async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-
-		trigger.focus();
-		await fireEvent.keyDown(trigger, { key: 'ArrowUp' });
-
-		expect(trigger.ownerDocument.activeElement).toBe(q(container, 'section-picker-new'));
-	});
-
-	it('ArrowDown on a CLOSED trigger opens the listbox and lands on the first option (the canonical listbox behaviour)', async () => {
-		const container = await renderReady();
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		trigger.focus();
-
-		await fireEvent.keyDown(trigger, { key: 'ArrowDown' });
-
-		await waitFor(() => {
-			expect(q(container, 'section-picker-menu-m-ada')).not.toBeNull();
-		});
-		await waitFor(() => {
-			expect(trigger.ownerDocument.activeElement).toBe(
-				q(container, 'section-picker-option-sec-sop')
-			);
-		});
-	});
-});
-
-describe('#99 review F3 — the listbox owns only options', () => {
-	it("every DIRECT CHILD of role='listbox' carries role='option' — a listbox may only own option/group, and AT is entitled to drop any other child from the accessibility tree", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const listbox = listboxOf(container, 'm-ada');
-		expect(listbox.getAttribute('role')).toBe('listbox');
-
-		const strays = Array.from(listbox.children)
-			.filter((child) => child.getAttribute('role') !== 'option')
-			.map((child) => child.getAttribute('data-testid'));
-		expect(strays).toEqual([]);
-	});
-});
-
-// #155/S4 — the collapsed-view non-sibling drop refusal and the handle's own
-// role='button' pin that used to live here are GONE with the handle itself;
-// the sibling-only drop rule is still exercised (on `arrange-row-*`) by
-// page.roster-arrange-reorder.spec.ts.
-
-// ---------------------------------------------------------------------------
-// 8 — #99 CODE-REVIEW FIXES, ROUND 2. Same discipline as section 7: every block
-//     pins a defect the first round of review fixes shipped.
-// ---------------------------------------------------------------------------
-describe('#99 review R2/F1 — the listbox is NAMED, and the trigger names what it controls', () => {
-	it("the listbox carries an accessible name identifying the MEMBER — role='listbox' is Name From: author with a name REQUIRED, and a roster renders one picker per row", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const listbox = listboxOf(container, 'm-ada');
-
-		const label = listbox.getAttribute('aria-label');
-		const labelledby = listbox.getAttribute('aria-labelledby');
-		expect(label ?? labelledby, 'listbox must be named (aria-label or aria-labelledby)').toBeTruthy();
-		if (label !== null) {
-			expect(label, 'the name must say WHOSE sections this listbox edits').toContain('Ada Lovelace');
-		} else {
-			expect(listbox.ownerDocument.getElementById(labelledby!)).not.toBeNull();
-		}
-	});
-
-	it("the trigger's aria-controls resolves to the listbox while open — and is ABSENT while closed, never a dangling IDREF (the #86 SeasonSummary ruling)", async () => {
-		const container = await renderReady();
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		expect(trigger.getAttribute('aria-controls'), 'closed trigger must not dangle').toBeNull();
-
-		await openPicker(container, 'm-ada');
-		const controls = trigger.getAttribute('aria-controls');
-		expect(controls, 'open trigger must name its popup').toBeTruthy();
-		expect(trigger.ownerDocument.getElementById(controls!)).toBe(listboxOf(container, 'm-ada'));
-	});
-
-	it("with the create form showing, the trigger no longer advertises a listbox popup — the listbox is GONE, so aria-haspopup='listbox' described a widget that does not exist", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const trigger = q(container, 'section-picker-trigger-m-ada') as HTMLElement;
-		expect(trigger.getAttribute('aria-haspopup')).toBe('listbox');
-
-		await fireEvent.click(q(container, 'section-picker-new') as HTMLElement);
-		expect(q(container, `section-picker-listbox-m-ada`), 'the listbox is replaced by the form').toBeNull();
-		expect(trigger.getAttribute('aria-haspopup')).not.toBe('listbox');
-		const controls = trigger.getAttribute('aria-controls');
-		expect(controls, 'the trigger must point at the form it now pops up').toBeTruthy();
-		expect(trigger.ownerDocument.getElementById(controls!)).toBe(q(container, 'section-create-form'));
-	});
-});
-
-describe("#99 review R2/F4 — '+ New section…' is a BUTTON, not a fake option", () => {
-	it("it carries no role='option'/aria-selected — inside a multi-selectable listbox that announced it as an unselected CHOICE, when activating it replaces the whole list with a form", async () => {
-		const container = await renderReady();
-		await openPicker(container, 'm-ada');
-		const entry = q(container, 'section-picker-new') as HTMLElement;
-
-		expect(entry.tagName).toBe('BUTTON');
-		expect(entry.getAttribute('role')).toBeNull();
-		expect(entry.getAttribute('aria-selected')).toBeNull();
-		expect(listboxOf(container, 'm-ada').contains(entry), 'it must sit OUTSIDE the listbox').toBe(
-			false
-		);
-	});
-});
 
 // #155/S4 — "a failed reorder is SAID" and "a successful move announces
 // itself" used to be pinned here via the collapsed-view drag handle; both are
@@ -846,3 +726,7 @@ describe('#99 review R2/F3 — the reorder live region is present from first ren
 // (*MVOX:Palestrina* — section 7, #99 code-review fix regression cover)
 // (*MVOX:Palestrina* — section 8, #99 code-review fix regression cover, round 2)
 // (*MVOX:Palestrina* — #155/S4: collapsed-view drag/remove coverage retired, superseded by arrange-mode specs)
+// (*MVOX:Tallis* — #470: popup-listbox a11y retired for native controls; create-form
+//  a11y re-driven through the page-level roster-new-section form)
+// (*MVOX:Palestrina* — #470 review F2: the grouped view mounts a picker per
+//  membership, so every control names itself; a duplicated id cannot)

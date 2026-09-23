@@ -1,204 +1,99 @@
 <script lang="ts">
-	// TS.2/#96 GREEN — PRESENTATIONAL component, no fetch, no cfg: the write
-	// dispatch + optimistic state live in the roster page's wiring (same split as
-	// the attendance panel: component fires callbacks, page calls the data
-	// layer).
+	// #470 GREEN — REWRITTEN from the TS.2/#96 popup-listbox into NATIVE
+	// single-choice pickers, one per membership, plus a [+]. The custom listbox
+	// (trigger/menu/role="option"/toggle-onpick) and the inline "+ New
+	// section…" create form are RETIRED — creation left the assignment flow
+	// entirely (the page-level `roster-new-section` entry in arrange mode is
+	// the only create surface now, #124/#155, untouched). This file supersedes
+	// the whole previous contract; see SectionPicker.spec.ts.
+	//
+	// Still PRESENTATIONAL (no fetch, no cfg): the write dispatch + optimistic
+	// state + per-member freeze live in the roster page's wiring
+	// (handleAssign/handleUnassign/handleMove, page.roster-picker.spec.ts).
 	//
 	// CONTRACT (pinned by SectionPicker.spec.ts):
-	//
-	//   - Trigger button `section-picker-trigger-<memberId>`, `aria-expanded` +
-	//     `aria-haspopup="listbox"`; label shows the current section NAMES
-	//     (', '-joined; a member can be in several) or `m.roster_unassigned()`
-	//     when selectedIds is empty.
-	//   - Open menu `section-picker-menu-<memberId>` — the roleless POPUP wrapper —
-	//     holds `section-picker-listbox-<memberId>` (`role="listbox"`, named after
-	//     the member) and, as its SIBLING, the "+ New section…" button. One
-	//     `role="option"` button per section, `section-picker-option-<sectionId>`,
-	//     flattened PRE-ORDER over the tree with `data-depth`, plus
-	//     `section-picker-option-unassigned` LAST. Current sections carry
-	//     `aria-selected="true"` (toggle semantics — multiple may be selected at
-	//     once; #99/TS.5 — supersedes the earlier `aria-pressed` pin, which is an
-	//     invalid ARIA mix on `role="option"`). ArrowDown/ArrowUp walk the
-	//     options + the "+ New section…" entry (the listbox pattern); Tab alone
-	//     is not sufficient keyboard support for a listbox.
-	//   - DISMISSABLE without writing (F2 code-review fix): Escape, or a click
-	//     anywhere outside this component, closes the menu. Previously the only
-	//     ways out were picking an option (an immediate live write — a mistaken
-	//     tap is not undoable from the menu) or re-tapping the SAME trigger, so
-	//     opening member B's picker left member A's absolutely-positioned menu
-	//     stacked over neighbouring roster rows.
-	//   - Tapping ANY section option fires `onpick(sectionId)` — the CALLER maps
-	//     it to assign (id not in selectedIds) or unassign (id already in
-	//     selectedIds). Tapping Unassigned fires `onpick(null)`. The menu closes
-	//     after every pick (per-tap immediate write, no multi-select-then-save).
-	import { tick } from 'svelte';
+	//   - Mihkel 1a/1b/1c: no held section → just the [+]; one held section →
+	//     its own select (with an unassign choice) + the [+]; several → one
+	//     select each + the [+].
+	//   - The [+] opens ONE blank select valued '' (Määramata); Mihkel: the [+]
+	//     is HIDDEN while a blank picker is open.
+	//   - A held select's options: Määramata + that section + every section NOT
+	//     held by this member — "not held" reads the member's WHOLE membership
+	//     (`selectedIds`), never just what this instance draws (`renderIds`).
+	//     Choosing Määramata fires onunassign(thatId); choosing another section
+	//     fires onmove(thatId, newId).
+	//   - The blank select's options: Määramata + every section NOT held by
+	//     this member (Gama: "a blank picker lists only sections she is not
+	//     in" — nothing to gain by choosing one twice). Choosing a section
+	//     fires onassign(newId) and the blank picker closes (the [+] returns).
+	//     Left at Määramata, it writes nothing.
+	//   - `busy` freezes EVERY control on THIS picker (disabled + aria-busy) —
+	//     nothing visual beyond the native disabled state (no "saving…" text).
+	//   - Every control names itself with `aria-label` — NOT an `id` + `<label
+	//     for>` pair. F2 review fix: the roster's grouped view renders one row
+	//     per MEMBERSHIP (groupBySection puts a member in every section she
+	//     holds), so a two-section member mounts this component twice with the
+	//     same `memberId` — each instance now scoped to its own card's section
+	//     (the page passes that card's id as `renderIds`), but both still
+	//     carrying the [+],
+	//     whose testid and name are keyed by member alone. An id built from
+	//     memberId would be duplicated in the document and `label[for]` would
+	//     resolve to the first match only, leaving the second card's controls
+	//     unnamed. aria-label carries the name on the element itself, so it
+	//     survives any number of instances.
 	import { m } from '$lib/paraglide/messages.js';
 	import type { SectionNode } from './sectionData';
 
 	interface Props {
 		memberId: string;
-		/**
-		 * #99 review F1 — the member's display name, used ONLY to name the listbox
-		 * ("Sections for Ada Lovelace"). `role="listbox"` is "Name From: author" with
-		 * an accessible name REQUIRED, and a roster renders one picker per row: an
-		 * unnamed one announces a bare "list box, multi-selectable, 6 items" with
-		 * nothing saying whose sections it edits. Optional in type only so TS.2-era
-		 * call sites stay type-clean — without it the listbox falls back to
-		 * `aria-labelledby` on the trigger, which at least names the current sections.
-		 *
-		 * #269 review F1 — deliberately NOT also an `aria-label` on the TRIGGER.
-		 * The trigger's accessible name is its own visible `triggerLabel` (the
-		 * member's current section names, or "Unassigned"); an `aria-label` would
-		 * REPLACE that — dropping the very information the visible text exists to
-		 * convey, breaking WCAG 2.5.3 Label in Name (a voice-control user saying
-		 * the visible "Soprano, Alt" would no longer match the control), and naming
-		 * the member twice while the picker is open. The caller still passes
-		 * whichever name is in scope for THIS surface — the roster page deliberately
-		 * passes the PROFILE name here even when the row's visible text shows a real
-		 * one (roster-only scope ruling: this is a section-assignment action, not the
-		 * contracted `roster-row-name` span). If a trigger-level accessible name is
-		 * ever wanted it is a separate commission, and it must CONTAIN the visible
-		 * text (e.g. "{name}: {sections}"), never replace it.
-		 */
-		memberName?: string;
+		/** Names every control ("whose sections is this?") — the caller picks
+		 *  which name is in scope; the roster page passes the PROFILE name. */
+		memberName: string;
 		/** The section tree, as returned by listSections. */
 		sections: SectionNode[];
-		/** The member's CURRENT section entity ids ([] = unassigned). */
+		/** The member's CURRENT section entity ids, ALL of them ([] =
+		 *  unassigned) — the EXCLUSION set. Every option list below is built by
+		 *  subtracting this, so a section she already holds is never offered
+		 *  anywhere. Pass the WHOLE membership even when this instance renders
+		 *  only one of them (see `renderIds`). */
 		selectedIds: string[];
-		/**
-		 * #161 (collective = database) — the member's OWN collective id
-		 * (`RosterRow.dbEntityId`, the database entity). Used for ONE thing: scoping the
-		 * TOP-LEVEL duplicate check to this collective's own roots. `sections` is
-		 * the whole db's section tree; without the collective id, every root is a
-		 * "sibling" of every other one (this may simplify further in a
-		 * single-collective database, but the scoping stays correct either way).
-		 * Undefined/null = collective unknown → the check falls back to comparing all
-		 * roots (conservative: a possible false duplicate beats a wrong create).
-		 */
-		dbEntityId?: string | null;
-		/** Fired per tap: a section id, or null for "(Unassigned)". */
-		onpick: (sectionId: string | null) => void;
-		/**
-		 * TS.3/#97 — fired ONCE on a VALID "Create + assign" submit of the inline
-		 * new-section form: `{ name }` trimmed, `parentId` a section id or null for
-		 * "(top level)". The CALLER does the two writes (createSection, then
-		 * assignMemberSection with the returned id) — this component stays
-		 * presentational. Contract pinned by SectionPicker.create.spec.ts.
-		 * OPTIONAL in type only so TS.2-era call sites stay type-clean — the
-		 * /roster page MUST pass it (pinned by page.roster-create-section.spec.ts).
-		 */
-		oncreate?: (input: { name: string; parentId: string | null }) => void;
+		/** Which of `selectedIds` THIS instance renders a select for — the
+		 *  per-card scope. The roster's grouped view mounts one picker per
+		 *  MEMBERSHIP (a card belongs to ONE section), so it passes that card's
+		 *  single id; the flat list passes the whole set. Kept separate from
+		 *  `selectedIds` because the two answer different questions — "what do I
+		 *  draw here" vs "what does she already hold" — and conflating them is
+		 *  exactly the #470 review-3 defect: a scoped list made her OTHER held
+		 *  section look free, and choosing it POSTed a duplicate `_parent`. */
+		renderIds: string[];
+		/** Freeze: every select AND the [+] disabled, root aria-busy — Mihkel:
+		 *  "the controls get freezed while entu syncs". */
+		busy: boolean;
+		/** A blank picker chose a section. */
+		onassign: (sectionId: string) => void;
+		/** A held section's picker chose Määramata. */
+		onunassign: (sectionId: string) => void;
+		/** A held section's picker chose ANOTHER section. */
+		onmove: (fromId: string, toId: string) => void;
 	}
 
-	const { memberId, memberName, sections, selectedIds, dbEntityId, onpick, oncreate }: Props = $props();
+	const {
+		memberId,
+		memberName,
+		sections,
+		selectedIds,
+		renderIds,
+		busy,
+		onassign,
+		onunassign,
+		onmove
+	}: Props = $props();
 
-	let open = $state(false);
-	/** The component root — the "inside" an outside-click is measured against. */
-	let root: HTMLElement | null = null;
-	/** The trigger button — focus goes back here when the menu is dismissed. */
-	let triggerEl: HTMLButtonElement | null = null;
+	/** One blank (Määramata-valued) picker open at a time — Mihkel's [+] rule. */
+	let blankOpen = $state(false);
 
-	// TS.3/#97 — the inline "+ New section…" form. `creating` TRANSFORMS the open
-	// menu (section options + Unassigned are replaced by the form, not stacked
-	// alongside it); `createName`/`createParentId` are the form's own local
-	// state, reset fresh every time the form is (re)opened so Cancel → reopen
-	// never leaks a previously typed name. `createError` holds the localized
-	// message key currently shown (null = no error region at all, per spec).
-	let creating = $state(false);
-	let createName = $state('');
-	let createParentId = $state('');
-	let createError = $state<(() => string) | null>(null);
-	let nameInput = $state<HTMLInputElement | null>(null);
-	/** The open menu — the "widget" arrow-key navigation (below) is scoped to. */
-	let menuEl = $state<HTMLElement | null>(null);
-
-	// Per-member so a roster full of pickers never mints duplicate DOM ids — the
-	// name input's aria-describedby points at exactly ITS OWN error paragraph.
-	const errorId = $derived(`section-create-error-${memberId}`);
-	// #99 review F1 — the same per-member discipline for the three ids the
-	// trigger's `aria-controls` has to resolve against: the trigger itself (the
-	// listbox's fallback name), the listbox, and the create form.
-	const triggerId = $derived(`section-picker-trigger-${memberId}`);
-	const listboxId = $derived(`section-picker-listbox-${memberId}`);
-	const formId = $derived(`section-create-form-${memberId}`);
-
-	function openCreateForm(): void {
-		createName = '';
-		createParentId = '';
-		createError = null;
-		creating = true;
-	}
-
-	function closeCreateForm(): void {
-		creating = false;
-		createName = '';
-		createParentId = '';
-		createError = null;
-	}
-
-	function submitCreateForm(): void {
-		const name = createName.trim();
-		if (!name) {
-			createError = m.roster_section_name_required;
-			return;
-		}
-		const parentId = createParentId === '' ? null : createParentId;
-		// TU.1/#109 (finding #10 root cause B) — SIBLING-scoped, not global: the
-		// live tree holds every standard voice name SOMEWHERE across four test
-		// orgs, so a global check refused every real-world create. Siblings are
-		// the chosen parent's DIRECT CHILDREN (or the top-level roots when
-		// parentId is null) — see SectionPicker.create.spec.ts /
-		// SectionPicker.create-live-shape.spec.ts.
-		//
-		// TU.1/#109 review — and at TOP LEVEL, "sibling" also means SAME ORG.
-		// `sections` is the whole db's tree; the live db's 16 sections are FOUR
-		// orgs' roots, so parent-scoping alone still lumped them into one sibling
-		// set (that same fixture carries three "Bass" and two "Baritone" roots —
-		// proof they are not siblings). A root of another org is skipped. Both
-		// orgs must be KNOWN to skip: an unknown org falls back to the previous
-		// conservative behaviour rather than silently allowing a real duplicate.
-		const isDuplicate = flatSections.some((node) => {
-			if (node.parentId !== parentId) return false;
-			if (parentId === null && dbEntityId && node.dbEntityId && node.dbEntityId !== dbEntityId) return false;
-			return node.name.toLowerCase() === name.toLowerCase();
-		});
-		if (isDuplicate) {
-			createError = m.roster_section_duplicate;
-			return;
-		}
-		oncreate?.({ name, parentId });
-		// Close-after-action — the WHOLE picker closes, same semantics as onpick
-		// (via closeMenu, so the submit button's focus lands back on the trigger
-		// rather than on <body> — see closeMenu).
-		closeMenu();
-	}
-
-	// F5 code-review fix: the name input is auto-focused, so "type the name, press
-	// Enter" is the natural interaction — it previously did nothing (this is a
-	// <div> of buttons, not a <form>, so there is no implicit submit) and the user
-	// had to reach for the mouse. Kept as a plain keydown on the input rather than
-	// wrapping the picker in a <form>: this component renders inside the roster
-	// row's own markup, and a nested <form> is invalid HTML wherever a caller
-	// already has one. Escape is NOT handled here — the window handler below
-	// already routes it to closeMenu.
-	function onNameKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		submitCreateForm();
-	}
-
-	/**
-	 * F5 code-review fix: the parent <select> rendered every section flush-left, so
-	 * "Soprano 1" looked like a sibling of the root "Soprano" and the tree shape was
-	 * lost — while the option BUTTONS above already convey depth via padding-left.
-	 * `<option>` can't be styled portably, so indent the label text itself; NBSP,
-	 * because leading ordinary spaces collapse in rendered option labels.
-	 */
-	function parentOptionLabel(node: SectionNode): string {
-		return '\u00a0\u00a0'.repeat(node.depth) + node.name;
-	}
-
-	/** Flatten the tree PRE-ORDER — each node's own depth rides along already. */
+	/** Flatten the tree PRE-ORDER — each node's own depth rides along already
+	 *  (same shape as the old component's `flatten`/`parentOptionLabel`). */
 	function flatten(nodes: SectionNode[]): SectionNode[] {
 		const out: SectionNode[] = [];
 		for (const node of nodes) {
@@ -210,332 +105,139 @@
 
 	const flatSections = $derived(flatten(sections));
 
-	const nameById = $derived.by(() => {
-		const map = new Map<string, string>();
-		for (const node of flatSections) map.set(node.id, node.name);
-		return map;
-	});
-
-	// F2 code-review fix: an id the tree can't name used to be DROPPED, so a member
-	// whose sections all failed to resolve (e.g. the tree load failed and `sections`
-	// is []) got '' — a zero-width, unlabeled, still-clickable button. Fall back to
-	// the raw id instead: never silently drops a membership from the label, and the
-	// control is never invisible. Resolvable ids render exactly as before.
-	const triggerLabel = $derived.by(() => {
-		if (selectedIds.length === 0) return m.roster_unassigned();
-		return selectedIds.map((id) => nameById.get(id) ?? id).join(', ');
-	});
-
-	function pick(sectionId: string | null): void {
-		onpick(sectionId);
-		closeMenu();
+	/** `<option>` can't be styled portably — depth is carried in the label text
+	 *  itself via NBSP indent (ordinary leading spaces collapse in rendered
+	 *  option labels). */
+	function optionLabel(node: SectionNode): string {
+		return '  '.repeat(node.depth) + node.name;
 	}
 
-	/** Tears the picker down — menu AND the inline create form — without touching focus. */
-	function dismiss(): void {
-		open = false;
-		closeCreateForm();
-	}
-
-	/**
-	 * Fully closes the picker AND returns focus to the trigger.
+	/** A held picker's own option list: Määramata + that section + every
+	 *  section NOT held by this member (the held section is kept even though
+	 *  it IS held — it is THIS select's own current value).
 	 *
-	 * #99 review F1 — every dismissal used to DROP focus to <body>: Escape and a
-	 * pick both unmount the menu while an option still holds focus, and an
-	 * unmounted activeElement is not focus, it is nothing. A keyboard user who
-	 * opened a picker halfway down the roster lost their place, and the next Tab
-	 * restarted at the top of the document (WCAG 2.4.3 Focus Order).
-	 *
-	 * The `hadFocus` guard keeps the restore honest: only pull focus back if it
-	 * was actually inside THIS picker. (The outside-click path deliberately does
-	 * not come through here at all — see `onWindowClick`.)
-	 */
-	function closeMenu(): void {
-		const hadFocus = root?.contains(document.activeElement) ?? false;
-		dismiss();
-		if (hadFocus) triggerEl?.focus();
+	 *  Review round 3 (#470): this filter reads `selectedIds` — the member's
+	 *  FULL membership — and NOT `renderIds`. While the grouped view passed one
+	 *  scoped list for both jobs, Mia's Soprano card offered her Alto (absent
+	 *  from that card's list, so it looked free); choosing it fired
+	 *  onmove(sop → alto), POSTing a `_parent` she already had, and the row's
+	 *  optimistic ids then carried 'sec-alto' twice — Svelte's keyed {#each}
+	 *  threw each_key_duplicate. Exclusion is a question about the MEMBER;
+	 *  rendering is a question about the CARD. */
+	function heldOptions(thisId: string): SectionNode[] {
+		return flatSections.filter((node) => node.id === thisId || !selectedIds.includes(node.id));
 	}
 
-	// F2 code-review fix — non-destructive dismissal. Both handlers are registered
-	// unconditionally (`<svelte:window>` can't live inside an `{#if}`) and bail
-	// immediately while closed, so a roster full of pickers costs one no-op
-	// comparison per event.
-	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!open) return;
-		if (event.key === 'Escape') closeMenu();
-	}
+	/** The blank picker's option list: Määramata + every section NOT held —
+	 *  Gama: "a blank picker lists only sections she is not in". Same
+	 *  `selectedIds` (whole-membership) read as `heldOptions` above. */
+	const blankOptions = $derived(flatSections.filter((node) => !selectedIds.includes(node.id)));
 
-	// Click, not pointerdown/mousedown: the trigger's own `onclick` toggles on the
-	// SAME event, and by the time it bubbles to the window `root.contains(target)`
-	// keeps the just-opened menu open. A click on ANOTHER member's trigger is
-	// outside this root, so it closes this menu while opening that one.
-	function onWindowClick(event: MouseEvent): void {
-		if (!open) return;
-		const target = event.target;
-		if (root && target instanceof Node) {
-			// #124 F1 root cause — a TRUSTED click's window leg arrives after
-			// Svelte's microtask flush, which may have already unmounted the
-			// tapped element (e.g. "+ New section…" swapping for the create
-			// form). A detached target is not evidence of an outside click —
-			// it was inside `root` at the moment the user actually tapped, and
-			// only left the DOM as a RESULT of that same tap. Treat it as
-			// inside rather than misreading the flush as a dismissal.
-			if (!target.isConnected) return;
-			if (root.contains(target)) return;
-		}
-		// `dismiss`, NOT `closeMenu`: the click that dismissed this menu has already
-		// put focus where the user pointed it (typically another member's trigger).
-		// Yanking focus back to THIS trigger would fight the user's own click.
-		dismiss();
-	}
-
-	function toggleTrigger(): void {
-		if (open) closeMenu();
-		else open = true;
-	}
-
-	/** The keyboard-navigable entries of the open list, in DOM order. */
-	function menuItems(): HTMLElement[] {
-		if (!menuEl) return [];
-		return Array.from(
-			menuEl.querySelectorAll<HTMLElement>(
-				'[data-testid^="section-picker-option-"], [data-testid="section-picker-new"]'
-			)
-		);
-	}
-
-	// #99/TS.5 — the listbox pattern requires ArrowDown/ArrowUp navigation, not
-	// just Tab: focus moves through the section options, the Unassigned option,
-	// and the "+ New section…" entry, in DOM order. Clamped at both ends — an
-	// ArrowDown on the last entry stays put rather than escaping the widget.
-	//
-	// #99 review F2 — this is bound to the TRIGGER as well as to every list entry.
-	// The menu is a SIBLING of the trigger, not a descendant, and focus stays on
-	// the trigger when the menu opens, so a menu-only handler never saw a single
-	// keystroke: the whole arrow-key path was unreachable from the keyboard, and
-	// bailed at `idx === -1` even if it had been reached. From the trigger,
-	// ArrowDown enters the list at the first entry and ArrowUp at the last — and
-	// on a CLOSED trigger both open the list first (canonical listbox).
-	async function onMenuKeydown(event: KeyboardEvent): Promise<void> {
-		if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
-		const down = event.key === 'ArrowDown';
-		const active = document.activeElement;
-
-		if (active === triggerEl) {
-			// While the inline create form is showing there is no list to enter.
-			if (open && creating) return;
-			event.preventDefault();
-			if (!open) {
-				open = true;
-				await tick(); // let the menu mount before reaching into it
-			}
-			const items = menuItems();
-			(down ? items[0] : items[items.length - 1])?.focus();
-			return;
-		}
-
-		// Inside the open list: walk it. Keystrokes from the create form's own
-		// controls (input, select) land here too — they are not list entries, so
-		// `idx === -1` leaves their native arrow behaviour alone.
-		if (!open || creating) return;
-		const items = menuItems();
-		const idx = active instanceof HTMLElement ? items.indexOf(active) : -1;
-		if (idx === -1) return;
-		event.preventDefault();
-		const nextIdx = down ? Math.min(idx + 1, items.length - 1) : Math.max(idx - 1, 0);
-		items[nextIdx]?.focus();
-	}
-
-	// Auto-focus the name input the instant the inline form appears (TS.3/#97
-	// contract). Runs after every DOM update; the `creating` read is what gates
-	// it, so it's a no-op on renders that don't just-opened the form.
+	// Closes the blank picker the moment its own choice fires (synchronous —
+	// the [+] returns without waiting on the parent's optimistic prop update)
+	// AND, redundantly, whenever `selectedIds` itself grows while a blank
+	// picker is still open — the FULL membership, so an assign made on the
+	// member's other group card closes this one's blank picker too (a belt-and-braces close for any path that lands a
+	// new membership without going through `chooseBlank` below — e.g. a
+	// second control on the same row).
+	let prevSelectedCount = -1;
 	$effect(() => {
-		if (creating && nameInput) nameInput.focus();
+		const count = selectedIds.length;
+		if (prevSelectedCount !== -1 && blankOpen && count > prevSelectedCount) blankOpen = false;
+		prevSelectedCount = count;
 	});
+
+	function chooseHeld(sectionId: string, newValue: string): void {
+		if (newValue === '') onunassign(sectionId);
+		else onmove(sectionId, newValue);
+	}
+
+	function chooseBlank(newValue: string): void {
+		if (newValue === '') return; // left at Määramata — writes nothing
+		onassign(newValue);
+		blankOpen = false;
+	}
+
+	function openBlank(): void {
+		blankOpen = true;
+	}
+
+	const addLabel = $derived(m.roster_section_add_label({ name: memberName }));
+	const pickerLabel = $derived(m.roster_section_picker_label({ name: memberName }));
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} onclick={onWindowClick} />
-
-<div bind:this={root} class="relative inline-block">
-	<button
-		type="button"
-		bind:this={triggerEl}
-		id={triggerId}
-		data-testid="section-picker-trigger-{memberId}"
-		aria-expanded={open}
-		aria-haspopup={creating ? 'dialog' : 'listbox'}
-		aria-controls={open ? (creating ? formId : listboxId) : undefined}
-		class="text-xs text-ink-2 underline decoration-dotted hover:text-ink"
-		onclick={toggleTrigger}
-		onkeydown={onMenuKeydown}
-	>
-		{triggerLabel}
-	</button>
-	{#if open}
-		<!-- The POPUP WRAPPER — deliberately roleless, and deliberately WITHOUT a
-		     keydown handler of its own (a static <div> that listens for keys is
-		     exactly what `a11y_no_static_element_interactions` flags). It is the
-		     query root for arrow-key navigation (`menuEl`, which must reach BOTH the
-		     options and the "+ New section…" entry beside them) and the
-		     outside-click boundary; the ARIA listbox is the inner element below, and
-		     `onMenuKeydown` rides on the focusable ENTRIES themselves. -->
-		<!-- `right-0` (#468 review F1): the menu right-aligns to its trigger and
-		     extends LEFTWARD. The trigger's wrapper is `absolute top-1 right-1` in
-		     the roster card's upper-right corner, so a leftward-anchored menu (no
-		     horizontal offset, the default) starts at the corner and runs off the
-		     card's right edge at phone width. Anchoring the right edges instead
-		     puts the whole `min-w-40` menu back inside the card. -->
-		<div
-			bind:this={menuEl}
-			data-testid="section-picker-menu-{memberId}"
-			class="absolute right-0 z-10 mt-1 flex min-w-40 flex-col border border-ink bg-paper py-1 shadow-sm"
+<div class="flex flex-col items-end gap-1" aria-busy={busy}>
+	{#each renderIds as sectionId (sectionId)}
+		{@const node = flatSections.find((n) => n.id === sectionId)}
+		<select
+			data-testid="section-picker-select-{memberId}-{sectionId}"
+			aria-label={node ? `${pickerLabel}: ${node.name}` : pickerLabel}
+			value={sectionId}
+			disabled={busy}
+			onchange={(e) => {
+				// F1 review fix — RE-ASSERT the DOM value from state before
+				// delegating. `value={sectionId}` is one-way and `sectionId` is this
+				// {#each} block's own key, so it never changes: Svelte's select-value
+				// effect never re-runs and the user's own DOM change is the ONLY thing
+				// that can move this select. When the parent's write fails it
+				// deliberately patches nothing, and the select was left showing a
+				// section the member is not in — a lie the user then could not even
+				// retry away (re-picking the same target fires no `change`). Resetting
+				// here makes the parent's optimistic state the single source of what is
+				// on screen: on a successful move this select unmounts anyway, so the
+				// reset is invisible; on a failure the select stays truthful and the
+				// same choice can be made again.
+				const el = e.currentTarget as HTMLSelectElement;
+				const chosen = el.value;
+				el.value = sectionId;
+				chooseHeld(sectionId, chosen);
+			}}
+			class="border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
 		>
-			{#if !creating}
-				<!-- #99 review F1/F4 — the listbox is its OWN element, wrapping ONLY the
-				     options. Two things fall out of that:
-				       - it can carry the accessible name `role="listbox"` requires
-				         (Name From: author, name REQUIRED) — a roster renders one picker
-				         per row, so "which member?" has to be in the announcement;
-				       - "+ New section…" is no longer inside it, so it no longer has to
-				         masquerade as a permanently-unselected `role="option"` (announced
-				         "not selected, 6 of 6" inside a multi-selectable list) to keep the
-				         listbox's children valid. It is a button that opens a form, and it
-				         now says so. -->
-				<div
-					id={listboxId}
-					data-testid="section-picker-listbox-{memberId}"
-					role="listbox"
-					aria-multiselectable="true"
-					aria-label={memberName ? m.roster_section_picker_label({ name: memberName }) : undefined}
-					aria-labelledby={memberName ? undefined : triggerId}
-					class="flex flex-col"
-				>
-					{#each flatSections as node (node.id)}
-						<button
-							type="button"
-							data-testid="section-picker-option-{node.id}"
-							data-depth={node.depth}
-							role="option"
-							aria-selected={selectedIds.includes(node.id)}
-							class="px-2 py-1 text-left text-xs text-ink hover:bg-ink-5"
-							style="padding-left: {0.5 + node.depth}rem"
-							onclick={() => pick(node.id)}
-							onkeydown={onMenuKeydown}
-						>
-							{node.name}
-						</button>
-					{/each}
-					<button
-						type="button"
-						data-testid="section-picker-option-unassigned"
-						role="option"
-						aria-selected={selectedIds.length === 0}
-						class="border-t border-dashed border-ink-5 px-2 py-1 text-left text-xs text-ink-2 hover:bg-ink-5"
-						onclick={() => pick(null)}
-						onkeydown={onMenuKeydown}
-					>
-						{m.roster_unassigned()}
-					</button>
-				</div>
-				<button
-					type="button"
-					data-testid="section-picker-new"
-					class="border-t border-dashed border-ink-5 px-2 py-1 text-left text-xs text-ink-2 hover:bg-ink-5"
-					onclick={openCreateForm}
-					onkeydown={onMenuKeydown}
-				>
-					{m.roster_new_section()}
-				</button>
-			{:else}
-				<!-- #99 review F1 — role="dialog" (non-modal) so the trigger's
-				     `aria-haspopup="dialog"` + `aria-controls={formId}` describe what is
-				     actually on screen. While `creating` the listbox is GONE, so a
-				     trigger still advertising a listbox popup named a widget that no
-				     longer existed. -->
-				<div
-					id={formId}
-					data-testid="section-create-form"
-					role="dialog"
-					aria-label={m.roster_new_section_form_label()}
-					class="flex flex-col gap-1.5 px-2 py-1.5"
-				>
-					<!-- F5 code-review fix: BOTH controls were nameless — a screen reader
-					     announced a bare "edit text" / "combo box". i18n `aria-label`s,
-					     matching the inline-control convention on the library page
-					     (bulk-checkout + inline-checkout selects). The name field also
-					     carries the same string as a visible placeholder, so sighted users
-					     get the "Name:" hint the #97 widget sketch asked for without
-					     spending a row of the narrow dropdown on a <label>. -->
-					<input
-						type="text"
-						data-testid="section-create-name"
-						bind:this={nameInput}
-						aria-label={m.roster_section_name_label()}
-						placeholder={m.roster_section_name_label()}
-						aria-invalid={createError ? true : undefined}
-						aria-describedby={createError ? errorId : undefined}
-						value={createName}
-						oninput={(e) => (createName = (e.currentTarget as HTMLInputElement).value)}
-						onkeydown={onNameKeydown}
-						class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-					/>
-					<!-- One-way `value=` + explicit `onchange` (not `bind:value`) — same fix
-					     as admin/invite/+page.svelte's `invite-db` select: `bind:value`'s
-					     controlled-select sync effect raced this form's own state updates in
-					     testing, landing on the wrong option. -->
-					<select
-						data-testid="section-create-parent"
-						aria-label={m.roster_section_parent_label()}
-						value={createParentId}
-						onchange={(e) => (createParentId = (e.currentTarget as HTMLSelectElement).value)}
-						class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-					>
-						<option value="">{m.roster_new_section_top_level()}</option>
-						{#each flatSections as node (node.id)}
-							<option value={node.id}>{parentOptionLabel(node)}</option>
-						{/each}
-					</select>
-					{#if createError}
-						<!-- F5 code-review fix: `role="alert"` — the error appears only in
-						     response to a submit, so without a live region a screen-reader
-						     user gets silence and a form that just refuses to close. Paired
-						     with the input's aria-invalid + aria-describedby above. -->
-						<p id={errorId} role="alert" data-testid="section-create-error" class="text-xs text-red-700">
-							{createError()}
-						</p>
-					{/if}
-					<div class="flex gap-2">
-						<button
-							type="button"
-							data-testid="section-create-submit"
-							class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
-							onclick={submitCreateForm}
-						>
-							{m.roster_create_assign()}
-						</button>
-						<button
-							type="button"
-							data-testid="section-create-cancel"
-							class="px-2 py-1 text-xs text-ink-2 hover:text-ink"
-							onclick={closeCreateForm}
-						>
-							{m.roster_cancel()}
-						</button>
-					</div>
-				</div>
-			{/if}
-		</div>
+			<option value="">{m.roster_unassigned()}</option>
+			{#each heldOptions(sectionId) as opt (opt.id)}
+				<option value={opt.id}>{optionLabel(opt)}</option>
+			{/each}
+		</select>
+	{/each}
+	{#if blankOpen}
+		<select
+			data-testid="section-picker-select-{memberId}-blank"
+			aria-label={pickerLabel}
+			value=""
+			disabled={busy}
+			onchange={(e) => {
+				// Same re-assert as the held selects above: a blank picker that stays
+				// open (Määramata chosen, or an assign the parent could not land) must
+				// show Määramata, not the section it failed to enter.
+				const el = e.currentTarget as HTMLSelectElement;
+				const chosen = el.value;
+				el.value = '';
+				chooseBlank(chosen);
+			}}
+			class="border border-ink-5 bg-paper px-1.5 py-0.5 text-ink"
+		>
+			<option value="">{m.roster_unassigned()}</option>
+			{#each blankOptions as opt (opt.id)}
+				<option value={opt.id}>{optionLabel(opt)}</option>
+			{/each}
+		</select>
+	{:else}
+		<button
+			type="button"
+			data-testid="section-picker-add-{memberId}"
+			aria-label={addLabel}
+			title={addLabel}
+			disabled={busy}
+			class="flex h-5 w-5 items-center justify-center rounded text-ink-2 hover:bg-ink-5 hover:text-ink disabled:cursor-default disabled:opacity-60"
+			onclick={openBlank}
+		>
+			<svg aria-hidden="true" viewBox="0 0 16 16" class="h-3.5 w-3.5 fill-current">
+				<path d="M7 2h2v5h5v2H9v5H7V9H2V7h5z" />
+			</svg>
+		</button>
 	{/if}
 </div>
 
-<!-- (*MVOX:Tallis* — RED stub + props contract, TS.2/#96) -->
-<!-- (*MVOX:Palestrina* — GREEN implementation, TS.2/#96) -->
-<!-- (*MVOX:Tallis* — RED oncreate prop contract, TS.3/#97) -->
-<!-- (*MVOX:Palestrina* — GREEN inline create form, TS.3/#97) -->
-<!-- (*MVOX:Palestrina* — GREEN a11y pass: listbox semantics, arrow-key nav, TS.5/#99) -->
-<!-- (*MVOX:Palestrina* — #99 review fixes: focus restore on dismiss, arrow-nav from
-     the trigger, valid listbox children) -->
-<!-- (*MVOX:Palestrina* — #99 review fixes round 2: named listbox + aria-controls,
-     honest aria-haspopup, "+ New section…" is a button again) -->
-<!-- (*MVOX:Palestrina* — TU.1/#109 review: top-level duplicate check scoped to the
-     member's OWN org, so another org's root is no longer a "sibling") -->
+<!-- (*MVOX:Palestrina* — #470 GREEN: native per-membership pickers + [+],
+     replacing the TS.2/#96 popup-listbox + inline create form wholesale) -->

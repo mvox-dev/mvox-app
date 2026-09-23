@@ -8,6 +8,10 @@
 	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
 	// `toRosterRow` — this component only renders whatever the roster producer returns.
 	import { tick, untrack } from 'svelte';
+	// #470 — the per-member section-write freeze set (AttendanceSurface's
+	// `pendingMemberIds` precedent, reactive-native here rather than a plain
+	// prop-threaded Set: this page owns the writes, so it owns the freeze).
+	import { SvelteSet } from 'svelte/reactivity';
 	import { m } from '$lib/paraglide/messages.js';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
@@ -180,19 +184,26 @@
 	// visible banner — still loud (console.error + banner), never silent.
 	let sectionsError = $state(false);
 
-	// F5 code-review fix: a failed "Create + assign" used to be INVISIBLE. The
-	// picker closes synchronously on a valid submit (its pinned contract), and
-	// both writes then failed into a bare console.error — the user tapped, the
-	// dropdown vanished, and nothing appeared: no group, no error, no reopened
-	// form. There is no optimistic state to revert here either (unlike a pick,
-	// where the row visibly snaps back), so the failure has to be SAID. Rendered
-	// inline in the member's own row rather than as a page-top banner: that is
-	// where the user is looking, and a long roster can scroll a top banner out of
-	// sight entirely.
-	//   'create' — createSection rejected (or there was no cfg): nothing was written.
-	//   'assign' — the section WAS created (it is in the tree) but the member could
-	//              not be put into it.
-	let sectionWriteError = $state<{ memberId: string; kind: 'create' | 'assign' } | null>(null);
+	// F5 code-review fix: a failed section write used to be INVISIBLE — the
+	// control settled back and the failure went to a bare console.error, so the
+	// user tapped and nothing appeared: no group, no error. The failure has to be
+	// SAID. Rendered inline in the member's own row rather than as a page-top
+	// banner: that is where the user is looking, and a long roster can scroll a
+	// top banner out of sight entirely.
+	// #470 F4 review fix — this used to carry a `kind: 'create' | 'assign'`
+	// discriminator for the picker's own inline create form. That form is gone
+	// (creating a section left the assignment flow entirely; the page-level
+	// `roster-new-section` entry owns creation and reports through
+	// `pageCreateError`), so every writer of this slot is an assign/unassign/move
+	// failure and the member id is the whole payload.
+	let sectionWriteError = $state<{ memberId: string } | null>(null);
+
+	// #470 — per-member freeze: a memberId sits in here from the moment one of
+	// handleAssign/handleUnassign/handleMove fires its optimistic patch until
+	// the write(s) settle. The SectionPicker on THAT row reads it as `busy`;
+	// every OTHER row's picker is unaffected — same "own one row's writes"
+	// discipline as `pendingRemoveId`/`renamingSectionId` above.
+	let sectionBusyIds = new SvelteSet<string>();
 
 	// TS.1/#95 — grouped ↔ flat toggle, default grouped. groupBySection is the
 	// GENUINE data-layer function (sectionData.ts) — the page never re-derives
@@ -239,7 +250,7 @@
 			// alongside the reorder pair, for the same reason.
 			removeError = null;
 			pendingRemoveId = null;
-			// #299 — `sectionWriteError` (the picker-create per-member error) and
+			// #299 — `sectionWriteError` (the per-member section-write error) and
 			// `pageCreateError` (the page-level create's error) are the same shape
 			// as `removeError` immediately above: each names a member/section the
 			// next tree may not even contain. Neither was in this callback at all
@@ -248,6 +259,11 @@
 			// resurface as if it just happened.
 			sectionWriteError = null;
 			pageCreateError = null;
+			// #470 — a freeze armed for the OLD collective's write must not leave
+			// the NEW collective's pickers permanently disabled; each handler's own
+			// `finally` is separately guarded against a late settle (below), same
+			// split as `reorderPending`/`removePending` above.
+			sectionBusyIds.clear();
 			// #287 — a section-remove write armed/in-flight for the OLD collective
 			// must not keep the NEW collective's structural controls disabled via
 			// `structuralWritePending`; its own `finally` is separately
@@ -918,12 +934,22 @@
 		return rows.find((r) => r.memberId === memberId)?.sectionIds ?? [];
 	}
 
+	// #470 review round 3 — belt-and-braces over the extraction-boundary dedupe
+	// in `listActiveMembers`. Both optimistic adds (`handleAssign`, and
+	// `handleMove`'s server-confirmed half) are bare spreads onto the live row,
+	// and these ids are the KEY of the section pickers' `{#each}`: a repeat makes
+	// Svelte throw `each_key_duplicate` and the roster stops rendering. One
+	// distinct-ing here covers every writer at the single choke point, including
+	// the next one. It is NOT the load-bearing guard — a duplicate can arrive
+	// from Entu without any UI path (see the rosterData.ts comment) — so it must
+	// never be read as making the boundary one redundant.
 	function patchMemberSectionIds(memberId: string, sectionIds: string[]): void {
-		rows = rows.map((r) => (r.memberId === memberId ? { ...r, sectionIds } : r));
+		const distinct = [...new Set(sectionIds)];
+		rows = rows.map((r) => (r.memberId === memberId ? { ...r, sectionIds: distinct } : r));
 	}
 
-	// F1 code-review fix: a revert must UNDO EXACTLY THE ONE MEMBERSHIP its own
-	// call owned, computed against the row as it is NOW — never restore a
+	// F1 code-review fix: a membership edit must touch EXACTLY THE ONE MEMBERSHIP
+	// its own call owns, computed against the row as it is NOW — never restore a
 	// whole-array pre-tap snapshot. Two bugs the snapshot restore had:
 	//   - partial failure: "(Unassigned)" on a two-section member where one DELETE
 	//     succeeds and the other 403s restored BOTH sections, permanently diverging
@@ -931,14 +957,10 @@
 	//   - concurrent taps on one member: a later tap's already-persisted change was
 	//     silently discarded when an earlier tap's write failed and overwrote the
 	//     row with its own stale snapshot.
-	// `addBack`/`dropBack` therefore read the LIVE row and touch one id only.
-	function addBack(memberId: string, sectionIds: string[]): void {
-		const live = currentSectionIds(memberId);
-		const restored = [...live];
-		for (const id of sectionIds) if (!restored.includes(id)) restored.push(id);
-		patchMemberSectionIds(memberId, restored);
-	}
-
+	// `dropBack` therefore reads the LIVE row and touches one id only. (Its
+	// `addBack` twin went with #470's F3 fix: the only caller was the unassign
+	// revert, and unassign no longer patches before the write lands, so there is
+	// nothing to put back.)
 	function dropBack(memberId: string, sectionId: string): void {
 		patchMemberSectionIds(
 			memberId,
@@ -946,62 +968,142 @@
 		);
 	}
 
-	async function handlePick(memberId: string, sectionId: string | null): Promise<void> {
+	// #470 — replaces `handlePick` (the toggle-onpick popup wiring) with three
+	// handlers, one per SectionPicker callback. Each owns exactly one member's
+	// `sectionBusyIds` entry for its own duration (`finally`, so a thrown/early
+	// return can never leave that row stuck disabled) and, on a genuine write
+	// failure, sets `sectionWriteError` — that banner used to fire only from the
+	// retired picker-create's assign half; the assign/unassign path only
+	// console.errored, the fail-loudly gap this slice closes.
+
+	/** Blank picker → a section: optimistic add, frozen until the POST lands. */
+	async function handleAssign(memberId: string, sectionId: string): Promise<void> {
+		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
-			// F3 code-review fix: a tap that writes nothing and says nothing is exactly
-			// the silent degradation the project's fail-loudly rule targets.
-			console.error('roster: section pick with no cfg', memberId, sectionId);
+			console.error('roster: section assign with no cfg', memberId, sectionId);
+			// F4 review fix — the retired `handleCreate` set the banner in exactly
+			// this branch; dropping the function dropped the line with it, leaving
+			// the one path where the user picks a section and NOTHING happens on
+			// screen. "Fail loudly over fallbacks" applies here too.
+			// DEFENSIVE, and knowingly unspecced: no page path reaches it today —
+			// member rows render only while `status === 'ready'`, and every
+			// callback that nulls `currentCfg` (`onNoCollective`, `onNoToken`)
+			// leaves the page off 'ready', so a test could only get here by
+			// hand-setting state. The same three lines guard all three handlers.
+			sectionWriteError = { memberId };
 			return;
 		}
-		const before = currentSectionIds(memberId);
-
-		if (sectionId === null) {
-			// "(Unassigned)" — clear ALL current section parents, one unassign call
-			// per currently-assigned section. allSettled, not all: each call has its
-			// own fate, and only the ones that REJECTED come back onto the row.
-			if (before.length === 0) return;
-			patchMemberSectionIds(memberId, []);
-			const results = await Promise.allSettled(
-				before.map((id) => unassignMemberSection(cfg, memberId, id))
-			);
-			const failed: string[] = [];
-			results.forEach((result, i) => {
-				if (result.status === 'rejected') {
-					console.error('roster: clearing section assignment failed', before[i], result.reason);
-					// F1(b) code-review fix: "the membership was already gone server-side"
-					// is NOT a failed write — the server already holds what the optimistic
-					// removal shows. Re-adding it would be the divergence, and permanent
-					// (this page never refetches). Log it, keep the removal, revert only
-					// genuine write failures.
-					if (!isSectionMembershipMissing(result.reason)) failed.push(before[i]);
-				}
-			});
-			if (failed.length > 0) addBack(memberId, failed);
-			return;
-		}
-
-		// Toggle: already assigned → unassign; not assigned → assign. Assigning
-		// never replaces — a member can hold several sections at once.
-		const isCurrent = before.includes(sectionId);
-		const after = isCurrent ? before.filter((id) => id !== sectionId) : [...before, sectionId];
-		patchMemberSectionIds(memberId, after);
+		// #299 / F3 review fix — captured before the only await, same idiom as
+		// `submitPageCreate` and `handleRemoveSection`. A write that settles after
+		// the user switched collectives must touch NOTHING: the row patches would
+		// aim at a roster that no longer exists and the banner would pin a foreign
+		// member id into `sectionWriteError`.
+		const g = routeLoad.generation;
+		sectionBusyIds.add(memberId);
+		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), sectionId]);
 		try {
-			if (isCurrent) {
-				await unassignMemberSection(cfg, memberId, sectionId);
-			} else {
-				await assignMemberSection(cfg, memberId, sectionId);
-			}
+			await assignMemberSection(cfg, memberId, sectionId);
 		} catch (e) {
-			console.error('roster: section assignment change failed', e);
-			// F1(b) code-review fix: an unassign that failed BECAUSE the membership
-			// was already absent server-side means UI and server now agree — keep the
-			// optimistic removal (logged just above for visibility). Only real write
-			// failures (network, 4xx/5xx) get undone.
-			if (isSectionMembershipMissing(e)) return;
-			// Undo just this call's one membership, against the live row.
-			if (isCurrent) addBack(memberId, [sectionId]);
-			else dropBack(memberId, sectionId);
+			console.error('roster: section assign failed', memberId, sectionId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			dropBack(memberId, sectionId);
+			sectionWriteError = { memberId };
+		} finally {
+			sectionBusyIds.delete(memberId);
+		}
+	}
+
+	/** Held picker → Määramata: NOT optimistic — the picker stays on screen,
+	 *  frozen, until the GET+DELETE lands, and only then disappears. #470
+	 *  done-when 4 verbatim (Mihkel): "the controls get freezed while entu
+	 *  syncs. as soon as synced, the unassigned picker goes away." F3 review
+	 *  fix — dropping first showed the opposite: the select vanished at once,
+	 *  so on a single-section member the freeze had nothing left to freeze, and
+	 *  a refused DELETE flicked her row out of its group and back in. Optimism
+	 *  buys nothing here anyway: one DELETE, no follow-up write waiting on it.
+	 *  `isSectionMembershipMissing` = the server already agrees (the F1(b)
+	 *  reconcile-forward rule the old `handlePick` pinned) — the removal goes
+	 *  through, no banner. */
+	async function handleUnassign(memberId: string, sectionId: string): Promise<void> {
+		sectionWriteError = null;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section unassign with no cfg', memberId, sectionId);
+			sectionWriteError = { memberId }; // F4 review fix — never silently
+			return;
+		}
+		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
+		sectionBusyIds.add(memberId);
+		try {
+			await unassignMemberSection(cfg, memberId, sectionId);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			dropBack(memberId, sectionId);
+		} catch (e) {
+			console.error('roster: section unassign failed', memberId, sectionId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (isSectionMembershipMissing(e)) {
+				dropBack(memberId, sectionId);
+			} else {
+				sectionWriteError = { memberId };
+			}
+		} finally {
+			sectionBusyIds.delete(memberId);
+		}
+	}
+
+	/** Held picker → another section: Gama's write order — assign the NEW
+	 *  section FIRST, only then unassign the OLD one. A failed add changes
+	 *  nothing (no patch, no lookup, no delete): the member was never in
+	 *  danger of losing her only section. A failed delete leaves her visibly
+	 *  in BOTH (never in neither) — fixable, never silently lost. */
+	async function handleMove(memberId: string, fromId: string, toId: string): Promise<void> {
+		sectionWriteError = null;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section move with no cfg', memberId, fromId, toId);
+			sectionWriteError = { memberId }; // F4 review fix — never silently
+			return;
+		}
+		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
+		sectionBusyIds.add(memberId);
+		try {
+			try {
+				await assignMemberSection(cfg, memberId, toId);
+			} catch (e) {
+				console.error('roster: move — assigning the new section failed', memberId, fromId, toId, e);
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				sectionWriteError = { memberId };
+				return; // nothing changed yet: no patch, no lookup, no delete
+			}
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			// Server-confirmed add — safe to show it optimistically now.
+			patchMemberSectionIds(memberId, [...currentSectionIds(memberId), toId]);
+			try {
+				await unassignMemberSection(cfg, memberId, fromId);
+			} catch (e) {
+				console.error(
+					'roster: move — unassigning the old section failed',
+					memberId,
+					fromId,
+					toId,
+					e
+				);
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				if (isSectionMembershipMissing(e)) {
+					// Server already agrees the old membership is gone — same
+					// reconcile-forward rule as handleUnassign, no banner.
+					dropBack(memberId, fromId);
+					return;
+				}
+				// Gama: a failed delete must never leave her in NONE — keep BOTH.
+				sectionWriteError = { memberId };
+				return;
+			}
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			dropBack(memberId, fromId);
+		} finally {
+			sectionBusyIds.delete(memberId);
 		}
 	}
 
@@ -1042,8 +1144,8 @@
 	// TU.2/#110 (finding #7) — "Remove" wiring. `canRemove` in `sectionGroup`
 	// already enforces admin-only + zero-members + zero-children before this
 	// control even renders, so this handler trusts its `id` argument the same
-	// way `handleCreate`'s `assignMemberSection` call trusts its just-created
-	// section id. Optimistic-and-reconcile, same shape as `performReorder`: the
+	// way `submitPageCreate`'s tree insertion trusts its just-created section
+	// id. Optimistic-and-reconcile, same shape as `performReorder`: the
 	// LOCAL tree is patched immediately (no roster/section refetch anywhere on
 	// this page), and a rejected write reverts the WHOLE snapshot taken before
 	// the patch — safe here (unlike the per-membership reverts above) because a
@@ -2176,7 +2278,7 @@
 	// query for it runs.
 	async function armRemove(id: string): Promise<void> {
 		// A fresh attempt owns the error slot — a previous failure's message must
-		// not outlive the retry that fixed it (same discipline as `handleCreate`
+		// not outlive the retry that fixed it (same discipline as `submitPageCreate`
 		// and `performReorder`).
 		removeError = null;
 		pendingRemoveId = id;
@@ -2460,83 +2562,6 @@
 		}
 	}
 
-	async function handleCreate(
-		memberId: string,
-		input: { name: string; parentId: string | null }
-	): Promise<void> {
-		// A fresh attempt owns the error slot — a previous failure's message must not
-		// outlive the retry that fixed it.
-		sectionWriteError = null;
-		const cfg = currentCfg;
-		if (!cfg) {
-			console.error('roster: section create with no cfg', memberId, input);
-			sectionWriteError = { memberId, kind: 'create' };
-			return;
-		}
-		// #299 — captured before the FIRST await (there are two: `createSection`
-		// below and `assignMemberSection` further down), same #155/S4 idiom as
-		// `handleRemoveSection`'s `g`. Neither await previously had any guard at
-		// all — a create confirmed on this collective but settling after the user
-		// switched away must not touch the new collective's tree or state.
-		const g = routeLoad.generation;
-
-		// TU.1/#109 (finding #10 root cause A) — the page threads the MEMBER'S OWN
-		// org id into every create (the data layer ignores it when parentId is
-		// set, so uniform threading is correct and simplest — see
-		// page.roster-create-section-org.spec.ts). The page already knows it
-		// (RosterRow.dbEntityId, carried from the member's `_parent`) — never let the
-		// data layer fall back to its `limit=1` guess, which live-verifiably
-		// returns the umbrella federation, not the collective.
-		const dbEntityId = rows.find((r) => r.memberId === memberId)?.dbEntityId;
-
-		let newId: string;
-		try {
-			newId = await createSection(cfg, { ...input, dbEntityId });
-		} catch (e) {
-			console.error('roster: section create failed', memberId, input, e);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-			sectionWriteError = { memberId, kind: 'create' };
-			return;
-		}
-		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-
-		const depth = input.parentId ? (findSectionNode(sections, input.parentId)?.depth ?? 0) + 1 : 0;
-		const newNode: SectionNode = {
-			id: newId,
-			name: input.name,
-			displayOrder: Number.POSITIVE_INFINITY,
-			parentId: input.parentId,
-			// TU.1/#109 review — mirror what `listSections` would read back for it: a
-			// top-level section is parented to THIS member's org, a sub-section is
-			// section-parented and carries no org `_parent` at all (v4E
-			// `parentConstraint: 'exactly_one_of'`). Without this the just-created
-			// root would have an unknown org and the next top-level create in the
-			// same session couldn't tell it apart from another org's roots.
-			dbEntityId: input.parentId ? null : (dbEntityId ?? null),
-			depth,
-			children: []
-		};
-		// The section itself was genuinely created server-side — it belongs in the
-		// tree regardless of how the assign below goes.
-		sections = insertSectionNode(sections, newNode, input.parentId);
-		// TU.2/#110 (finding #9) — a freshly created section starts EXPANDED (not
-		// the new collapsed-by-default), so the member the caller is about to be
-		// assigned into it is visible immediately, no manual toggle needed.
-		expandedIds = new Set(expandedIds).add(newId);
-
-		try {
-			await assignMemberSection(cfg, memberId, newId);
-		} catch (e) {
-			console.error('roster: assigning the newly-created section failed', memberId, newId, e);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-			// The section itself is real and already in the tree — say precisely that,
-			// so the user doesn't retry the create and end up with a duplicate.
-			sectionWriteError = { memberId, kind: 'assign' };
-			return;
-		}
-		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), newId]);
-	}
 
 	// #124 (F1+F2) — page-level "+ New section" entry point. SEPARATE from the
 	// inline SectionPicker's own create form above (kept as-is; its own specs
@@ -2641,7 +2666,7 @@
 			pageCreateError = m.roster_section_create_failed;
 			return;
 		}
-		// #299 — captured before the ONLY await, same idiom as `handleCreate`
+		// #299 — captured before the ONLY await, same idiom as `handleRemoveSection`
 		// above. This function previously carried no guard of any kind.
 		const g = routeLoad.generation;
 
@@ -2656,7 +2681,7 @@
 		}
 		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 
-		// LOCAL insertion — same "never refetch" contract as `handleCreate` above.
+		// LOCAL insertion — the page's "never refetch" contract.
 		// There is no MEMBER context here (this is the page-level control, not a
 		// picker pinned to one row) — `assignMemberSection` never fires.
 		const depth = parentId ? (findSectionNode(sections, parentId)?.depth ?? 0) + 1 : 0;
@@ -4151,10 +4176,35 @@
 	{/if}
 {/snippet}
 
-{#snippet memberRow(row: RosterRow, showSection: boolean)}
+<!-- `groupSectionId` — F2 review fix (#470). In the GROUPED view `groupBySection`
+     emits one row per MEMBERSHIP: a member in Soprano and Alto renders a card
+     under each. Handing every one of those cards her FULL `sectionIds` put all
+     her selects on all her cards (4 selects + 2 [+] for a two-section member,
+     with the same `section-picker-select-<member>-<section>` testid twice in the
+     document). A card belongs to ONE section, so it shows THAT membership and
+     nothing else; the [+] (which adds a membership, not a section-scoped thing)
+     stays on every card. `null` = no group scope — the flat list, where one card
+     is the member's only card and carries all her memberships, and the
+     Unassigned group, where she holds no known section at all.
+
+     Review round 3 (#470) — the scoped list is passed as `renderIds` ONLY, and
+     the member's FULL `sectionIds` goes to `selectedIds`. The picker uses the
+     two for different jobs: `renderIds` decides which selects are drawn here,
+     `selectedIds` is subtracted from every option list. Handing the scoped list
+     to both made a held section that this card does not draw look unheld: Mia's
+     Soprano card offered Alto, choosing it POSTed a `_parent` she already had,
+     and the optimistic `sectionIds` then carried 'sec-alto' twice — a keyed
+     {#each} over duplicate ids throws each_key_duplicate. Verified on the live
+     page by review, pinned by page.roster-picker.spec.ts's option-list suite. -->
+{#snippet memberRow(row: RosterRow, showSection: boolean, groupSectionId: string | null)}
 	{@const rowSectionNames = (row.sectionIds ?? [])
 		.map((id) => sectionNameById.get(id))
 		.filter((name): name is string => Boolean(name))}
+	{@const memberSectionIds = row.sectionIds ?? []}
+	{@const pickerRenderIds =
+		groupSectionId === null
+			? memberSectionIds
+			: memberSectionIds.filter((id) => id === groupSectionId)}
 	<!-- #302 review F1 — `relative` is what makes the card activator below a
 	     STRETCHED OVERLAY (`absolute inset-0`) rather than a strip of its own:
 	     the whole card area activates while the name/email/chip stay plain,
@@ -4584,12 +4634,10 @@
 			     pair, so owner is the gate for the whole control, not just half of it).
 			     `admin`/`$adminStore` no longer decides this control; its other
 			     consumers on this page are untouched. -->
-			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
-			     picker's option list would hold only "(Unassigned)" (its sole reachable
-			     action being the destructive clear-all) and its trigger label — built
-			     from names the empty tree can't resolve — would collapse to a
-			     zero-width unlabeled button. The section-load-error banner above
-			     already explains the absence; hide the write control rather than
+			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. Every
+			     select's option list would hold only "(Unassigned)", its sole reachable
+			     action being the destructive clear-all. The section-load-error banner
+			     above already explains the absence; hide the write control rather than
 			     offer one whose options are known-incomplete. -->
 			<!-- #155/S4 review F4 — SCOPE CALL, recorded so code and acceptance text
 			     agree. S4's "collapsed/expanded are display-only — no add/rename/
@@ -4599,31 +4647,24 @@
 			     different thing: MEMBER→section ASSIGNMENT, which has no home in
 			     arrange mode at all (arrange renders no member rows), so it stays on
 			     the member row in Expanded view.
-			     Its inline `section-picker-new` → `section-create-form` create entry
-			     stays WITH it, deliberately: it exists so an admin assigning a member
-			     to a section that doesn't exist yet can make it in place (#111/#120),
-			     and pulling it out would mean leaving the assignment flow, switching
-			     view mode, creating, and coming back. The S4 acceptance wording is
-			     therefore read as "the PAGE-LEVEL add entry moved to arrange mode";
-			     the picker's assignment-scoped create is out of that scope.
-			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts this
-			     explicitly (present in Expanded, absent in Collapsed where no member
-			     rows render) so the choice is visible to the gate rather than
-			     invisible to it. -->
+			     #470 — the picker's own inline create entry (`section-picker-new` →
+			     `section-create-form`) is RETIRED; creation lives only in arrange
+			     mode's `roster-new-section`, so S4's wording now holds literally.
+			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts the
+			     assignment control's placement explicitly (present in Expanded, absent
+			     in Collapsed where no member rows render) so the choice is visible to
+			     the gate rather than invisible to it. -->
 			<!-- #302 review F1 / #468 — `absolute top-1 right-1` wrapper, floating the
 			     picker upper right on the card (deliberately NO z-index). The picker
 			     renders on every COLLAPSED row an owner may move, where the card
 			     activator is an `absolute inset-0` overlay across the whole <li>;
-			     unlifted, the picker's trigger would sit under it and a tap meant for
-			     "assign a section" would open the record editor instead. The enclosing
-			     <li> is already `relative` (its containing block for these offsets —
-			     no second positioned wrapper needed); this block and the overlay are
-			     both positioned with `z-index: auto`, so they paint in TREE order and
-			     this block — written after the activator — wins. A z-index here would
-			     be actively wrong: it would make each row a stacking context, and the
-			     picker's own `absolute z-10` menu (which must hang over the FOLLOWING
-			     rows) would be trapped inside it, painting under the next row's
-			     contents. Same reason the deactivate block above uses bare `relative`.
+			     unlifted, the selects and the [+] would sit under it and a tap meant
+			     for "assign a section" would open the record editor instead. The
+			     enclosing <li> is already `relative` (its containing block for these
+			     offsets — no second positioned wrapper needed); this block and the
+			     overlay are both positioned with `z-index: auto`, so they paint in TREE
+			     order and this block — written after the activator — wins. Same reason
+			     the deactivate block above uses bare `relative`.
 			     The wrapper rather than a prop keeps SectionPicker presentational, and
 			     keeps the roster off the assumption that the component's own root
 			     happens to be positioned. -->
@@ -4632,16 +4673,19 @@
 					memberId={row.memberId}
 					memberName={row.profileName ?? row.name}
 					{sections}
-					selectedIds={row.sectionIds ?? []}
-					dbEntityId={row.dbEntityId}
-					onpick={(sectionId) => handlePick(row.memberId, sectionId)}
-					oncreate={(input) => handleCreate(row.memberId, input)}
+					selectedIds={memberSectionIds}
+					renderIds={pickerRenderIds}
+					busy={sectionBusyIds.has(row.memberId)}
+					onassign={(sectionId) => handleAssign(row.memberId, sectionId)}
+					onunassign={(sectionId) => handleUnassign(row.memberId, sectionId)}
+					onmove={(fromId, toId) => handleMove(row.memberId, fromId, toId)}
 				/>
 			</div>
 			{#if sectionWriteError?.memberId === row.memberId}
-				<!-- F5 code-review fix — the create path's loud failure (see
-				     `sectionWriteError` above). role="alert" because it appears after the
-				     picker has already closed, with nothing else on screen changing.
+				<!-- F5 code-review fix — the section-write path's loud failure (see
+				     `sectionWriteError` above). role="alert" because it appears with
+				     nothing else on screen necessarily changing (a refused move leaves
+				     the row exactly where it was).
 				     #468 review F1 — this alert is an IN-FLOW child of the <li>, deliberately
 				     OUTSIDE the `absolute top-1 right-1` wrapper above. That wrapper is out of
 				     flow with `right` set and `left: auto`, so its used width is shrink-to-fit
@@ -4661,9 +4705,7 @@
 					role="alert"
 					class="relative text-xs text-red-700"
 				>
-					{sectionWriteError.kind === 'create'
-						? m.roster_section_create_failed()
-						: m.roster_section_assign_failed()}
+					{m.roster_section_write_failed()}
 				</p>
 			{/if}
 		{/if}
@@ -4739,7 +4781,7 @@
 			<div id="section-region-{node.id}" class="contents">
 				<ul class="flex flex-col pl-5">
 					{#each group?.members ?? [] as row (row.memberId)}
-						{@render memberRow(row, false)}
+						{@render memberRow(row, false, node.id)}
 					{/each}
 				</ul>
 				{#each node.children as child (child.id)}
@@ -5750,7 +5792,7 @@
 								{#if isExpanded}
 									<ul id="section-region-unassigned" class="flex flex-col pl-5">
 										{#each unassignedGroup.members as row (row.memberId)}
-											{@render memberRow(row, false)}
+											{@render memberRow(row, false, null)}
 										{/each}
 									</ul>
 								{/if}
@@ -5761,7 +5803,7 @@
 			{:else}
 				<ul data-testid="roster-flat-list" class="flex flex-col">
 					{#each flatRows as row (row.memberId)}
-						{@render memberRow(row, true)}
+						{@render memberRow(row, true, null)}
 					{/each}
 				</ul>
 			{/if}

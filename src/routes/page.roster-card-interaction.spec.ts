@@ -358,7 +358,9 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
-		const trigger = q(container, 'section-picker-trigger-m2');
+		// #470 — queried by PREFIX: the lift/position mechanics are #468's and
+		// survive the picker's internals changing (popup trigger → native controls).
+		const trigger = li.querySelector('[data-testid^="section-picker-"]') as HTMLElement | null;
 		expect(trigger, 'the picker renders on a collapsed admin row').not.toBeNull();
 		const lifted = trigger!.closest('.absolute');
 		expect(lifted, 'the picker must sit inside a positioned wrapper').not.toBeNull();
