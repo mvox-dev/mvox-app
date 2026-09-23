@@ -84,6 +84,24 @@ export interface ActiveMember {
 	 * reader cannot see it — fail-soft, no fabricated date.
 	 */
 	createdAt?: string;
+	/**
+	 * #468 — every `_owner` grant's `.reference` on the member entity, in wire
+	 * order, INHERITED values included. Verified 2026-09-23 by a read-only probe
+	 * (scripts/migrations/probes/probe-468-member-owner-list-vs-single-2026-09-23.ts,
+	 * which names the db it ran against and refuses to run against any other),
+	 * its run recorded at scripts/migrations/seed-results/probe-468-member-
+	 * owner-list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
+	 * inherited `_owner` values, flagged `inherited: true`, in the same shape a
+	 * single-entity GET returns (`shapeMatch: "IDENTICAL"` in that ledger). An
+	 * inherited owner may move the member exactly as a direct one may, so
+	 * nothing is filtered out. The baked `.string` (a person name — PII, ER-26)
+	 * is dropped at extraction, never threaded onto the row. `[]` when the read carries no
+	 * `_owner` — a withheld private bucket and a genuinely empty grant list
+	 * both honestly read "this reader holds/sees no grant" (fail closed).
+	 * Optional at the type level for pre-GREEN fixtures only; the producer
+	 * always sets it.
+	 */
+	ownerIds?: string[];
 }
 
 /**
@@ -122,7 +140,7 @@ export async function listActiveMembers(
 ): Promise<ListRead<ActiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=member&status.string=active&props=person,_parent,_created&limit=500',
+		'entity?_type.string=member&status.string=active&props=person,_parent,_created,_owner&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -135,6 +153,7 @@ export async function listActiveMembers(
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
 			_created?: Array<{ datetime?: string }>;
+			_owner?: Array<{ reference: string }>;
 		}>;
 	};
 	const raws = body.entities ?? [];
@@ -169,13 +188,24 @@ export async function listActiveMembers(
 		// → a fabricated 1970-01-01. Absent is the honest answer for both.
 		const rawCreatedAt = raw._created?.[0]?.datetime;
 		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
+		// #468 — every `_owner` `.reference`, inherited included, wire order kept.
+		// Verified 2026-09-23 by probes/probe-468-member-owner-list-vs-single-
+		// 2026-09-23.ts, run recorded at seed-results/probe-468-member-owner-
+		// list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
+		// inherited `_owner` values, so this extraction sees them here and not
+		// only on a per-entity GET. The baked `.string` (a person name, PII —
+		// ER-26) never leaves this extraction.
+		// No `_owner` in the read (withheld private bucket or a
+		// genuinely empty grant list) → [] — fail closed, never undefined.
+		const ownerIds = (raw._owner ?? []).map((o) => o.reference);
 		return [
 			{
 				memberId: raw._id,
 				personId,
 				sectionIds,
 				dbEntityId,
-				createdAt
+				createdAt,
+				ownerIds
 			}
 		];
 	});
@@ -254,6 +284,16 @@ export interface RosterRow {
 	 * cannot see it (fail-soft, no fabricated date).
 	 */
 	createdAt?: string;
+	/**
+	 * #468 — carried through verbatim from `ActiveMember.ownerIds` (see its
+	 * doc): every `_owner` `.reference` on the member entity, inherited values
+	 * included, `.string` never. The roster page's section-picker gate reads
+	 * the reader's own person id out of THIS list — the grant on the target
+	 * entity, not an app-computed role (#454's lesson; ER-14: a move deletes a
+	 * `_parent`, owner-gated). `[]` = no visible grant → no picker (fail
+	 * closed). Optional at the type level for pre-#468 fixtures.
+	 */
+	ownerIds?: string[];
 }
 
 /**
@@ -302,7 +342,9 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.dbEntityId doc.
 		dbEntityId: member.dbEntityId,
 		// #467 — carried through verbatim, see RosterRow.createdAt doc.
-		createdAt: member.createdAt
+		createdAt: member.createdAt,
+		// #468 — carried through verbatim, see RosterRow.ownerIds doc.
+		ownerIds: member.ownerIds
 	};
 }
 

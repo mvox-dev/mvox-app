@@ -78,7 +78,11 @@ function wireRouter(path: string): Response {
 					person: [{ reference: 'p-pete' }],
 					// The member's collective is its DATABASE `_parent` — there is no
 					// organization entry anymore.
-					_parent: [{ reference: DB_ENTITY, entity_type: 'database' }]
+					_parent: [{ reference: DB_ENTITY, entity_type: 'database' }],
+					// #468 — the reader ('p-pete', her own row) holds `_owner` on
+					// herself, so the picker gate stays open for this file's own
+					// (unrelated) database-parenting concern.
+					_owner: [{ reference: 'p-pete' }]
 				}
 			],
 			count: 1

@@ -169,16 +169,19 @@ function treeB(): SectionNode[] {
 // Every member UNASSIGNED: rows live under the Unassigned group's toggle, and
 // each row renders its SectionPicker (the inline create entry `handleCreate`
 // is reached through). All personIds differ from both viewers'.
+// #468 — each collective's rows carry ITS OWN reader's person id in
+// `ownerIds` (person-p for sampledb, person-q for other-choir) so the picker
+// gate stays open regardless of which collective is selected.
 function rowsA(): RosterRow[] {
 	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: 'bea@x.com', sectionIds: [], dbEntityId: ORG_A }
+		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A, ownerIds: ['person-p'] },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: 'bea@x.com', sectionIds: [], dbEntityId: ORG_A, ownerIds: ['person-p'] }
 	];
 }
 
 function rowsB(): RosterRow[] {
 	return [
-		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B }
+		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B, ownerIds: ['person-q'] }
 	];
 }
 

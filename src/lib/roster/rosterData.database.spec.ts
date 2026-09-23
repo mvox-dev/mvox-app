@@ -47,7 +47,8 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 					memberId: 'm-ada',
 					personId: 'p-ada',
 					sectionIds: ['sec-sop'],
-					dbEntityId: DB_ENTITY
+					dbEntityId: DB_ENTITY,
+					ownerIds: []
 				}
 			],
 			total: 1,

@@ -146,12 +146,16 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
+// #468 — every fixture row carries the READER's person id ('person-p', per
+// setAuthedWithOneCollective's personIdByDb below) in `ownerIds`, so the picker
+// gate (the reader's own grant on the row) stays open for this file's a11y
+// coverage of the picker itself, unaffected by the ownership question.
 function fixtureRows(): RosterRow[] {
 	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'] },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'] },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'] },
-		{ memberId: 'm-uma', personId: 'p-uma', name: 'Uma Uus', email: 'uma@x.com', sectionIds: [] }
+		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-p'] },
+		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], ownerIds: ['person-p'] },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], ownerIds: ['person-p'] },
+		{ memberId: 'm-uma', personId: 'p-uma', name: 'Uma Uus', email: 'uma@x.com', sectionIds: [], ownerIds: ['person-p'] }
 	];
 }
 

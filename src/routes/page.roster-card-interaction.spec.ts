@@ -146,13 +146,15 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 // line-before-section-name placement pin (flat view renders section names).
 // #467 — m4's own `createdAt` is the date source for its "not invited since"
 // line; the others' dates come from `listJoinStateDetailsMock` below.
+// #468 — every row carries the READER's person id ('person-p') in `ownerIds` so
+// the picker gate stays open throughout this file's own (unrelated) concerns.
 function rows(): RosterRow[] {
 	return [
-		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'org-a' },
-		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'org-a' },
-		{ memberId: 'm3', personId: 'pp-3', name: 'Carl Cantor', email: 'carl@example.com', sectionIds: [], dbEntityId: 'org-a' },
-		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: 'org-a', createdAt: '2026-08-15T12:00:00.000Z' },
-		{ memberId: 'm5', personId: 'pp-5', name: 'Elsa Echo', email: 'elsa@example.com', sectionIds: ['sec-alto'], dbEntityId: 'org-a' }
+		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'org-a', ownerIds: ['person-p'] },
+		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'org-a', ownerIds: ['person-p'] },
+		{ memberId: 'm3', personId: 'pp-3', name: 'Carl Cantor', email: 'carl@example.com', sectionIds: [], dbEntityId: 'org-a', ownerIds: ['person-p'] },
+		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: 'org-a', createdAt: '2026-08-15T12:00:00.000Z', ownerIds: ['person-p'] },
+		{ memberId: 'm5', personId: 'pp-5', name: 'Elsa Echo', email: 'elsa@example.com', sectionIds: ['sec-alto'], dbEntityId: 'org-a', ownerIds: ['person-p'] }
 	];
 }
 
@@ -340,22 +342,25 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		expect(cls.some((c) => c.startsWith('focus-visible:'))).toBe(true);
 	});
 
-	// #302 review F1 — the overlay covers the WHOLE row, so anything still
-	// interactive on a collapsed row has to be lifted above it or it is dead to
-	// the pointer. Two things can: the SectionPicker (every admin row) and an
-	// armed/in-flight deactivate pair (the armed-pair exception). Both are
-	// lifted with a bare `relative` and both are written AFTER the activator —
-	// positioned siblings at `z-index: auto` paint in tree order, so that is the
-	// whole mechanism. Deliberately NOT `z-10`: a z-index would make each row a
-	// stacking context and trap the picker's `absolute z-10` drop-down, which
-	// must hang over the FOLLOWING rows, inside its own row.
+	// #302 review F1 / #468 — the overlay covers the WHOLE row, so anything
+	// still interactive on a collapsed row has to be lifted above it or it is
+	// dead to the pointer. Two things can: the SectionPicker (every row its
+	// reader may move) and an armed/in-flight deactivate pair (the armed-pair
+	// exception). The deactivate pair is lifted with a bare `relative`; the
+	// picker (#468) is lifted AND corner-positioned with `absolute top-1
+	// right-1`, anchored to the already-`relative` <li> — both are written
+	// AFTER the activator, so positioned siblings at `z-index: auto` paint in
+	// tree order, which is the whole mechanism. Deliberately NOT `z-10`: a
+	// z-index would make each row a stacking context and trap the picker's own
+	// `absolute z-10` drop-down, which must hang over the FOLLOWING rows,
+	// inside its own row.
 	it('the SectionPicker on a collapsed row is lifted above the overlay, and comes after it in tree order', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
 		const trigger = q(container, 'section-picker-trigger-m2');
 		expect(trigger, 'the picker renders on a collapsed admin row').not.toBeNull();
-		const lifted = trigger!.closest('.relative');
+		const lifted = trigger!.closest('.absolute');
 		expect(lifted, 'the picker must sit inside a positioned wrapper').not.toBeNull();
 		expect(lifted!.className.split(/\s+/)).not.toContain('z-10');
 		expect(

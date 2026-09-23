@@ -10,9 +10,17 @@
 // picker's taps.
 //
 // Pinned wiring contract (GREEN must implement):
-//   - ADMIN GATE: the picker trigger renders on member rows ONLY when
-//     `$adminStore === 'admin'` ($lib/nav/adminStore — resolved by the root
-//     layout). 'not-admin', 'loading' and 'error' all hide it — FAIL CLOSED.
+//   - OWNER GATE (#468, superseding the launch-era admin gate): the picker
+//     trigger renders on a member row ONLY when the row's `ownerIds` (the
+//     member entity's own `_owner` grant references, read off the list query)
+//     contain the READER's own person id for this db (`selected?.personId`).
+//     `$adminStore` no longer decides it — the grant on the target entity
+//     does (#454's lesson; ER-14: a move deletes a `_parent`, owner-gated).
+//     `ownerIds: []` (withheld private bucket or no grant) hides it — FAIL
+//     CLOSED. `!sectionsError` stays: no section tree → nothing to pick (F2).
+//   - POSITION (#468): the picker floats upper right on the card — wrapper
+//     `absolute top-1 right-1`, NO z-index, written AFTER the card activator
+//     inside the same `relative` <li> (the #302 F1 lift discipline).
 //   - Tapping a section NOT in the row's sectionIds → assignMemberSection(cfg,
 //     memberId, sectionId); tapping one ALREADY in it → unassignMemberSection
 //     (toggle). Tapping "(Unassigned)" → unassignMemberSection ONCE PER
@@ -91,13 +99,28 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
+// #468 — every default fixture row carries the READER's person id ('person-p',
+// per setAuthedWithOneCollective's personIdByDb) in `ownerIds`, alongside an
+// inherited db-level owner: the wiring suites below all open pickers, and under
+// the owner gate a picker only exists on a row the reader may actually move.
 function fixtureRows(): RosterRow[] {
 	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'] },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'] },
-		{ memberId: 'm-carol', personId: 'p-carol', name: 'Carol Williams', email: 'carol@x.com', sectionIds: ['sec-sop'] },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'] },
-		{ memberId: 'm-pete', personId: 'p-pete', name: 'Pete Wilson', email: 'pete@x.com', sectionIds: [] }
+		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-carol', personId: 'p-carol', name: 'Carol Williams', email: 'carol@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-pete', personId: 'p-pete', name: 'Pete Wilson', email: 'pete@x.com', sectionIds: [], ownerIds: ['person-db-owner', 'person-p'] }
+	];
+}
+
+// #468 gate fixtures — one row the reader OWNS (inherited value first: wire
+// order, inherited included), one owned only by somebody else, one whose
+// private bucket the read withheld (`ownerIds: []`).
+function gateRows(): RosterRow[] {
+	return [
+		{ memberId: 'm-owned', personId: 'p-owned', name: 'Otto Owned', email: 'otto@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-db-owner', 'person-p'] },
+		{ memberId: 'm-foreign', personId: 'p-foreign', name: 'Fanny Foreign', email: 'fanny@x.com', sectionIds: ['sec-alto'], ownerIds: ['person-db-owner'] },
+		{ memberId: 'm-withheld', personId: 'p-withheld', name: 'Willa Withheld', email: 'willa@x.com', sectionIds: [], ownerIds: [] }
 	];
 }
 
@@ -181,28 +204,140 @@ async function openPicker(container: HTMLElement, memberId: string): Promise<voi
 	});
 }
 
-// ── admin gate ──────────────────────────────────────────────────────────────────
+// ── owner gate (#468 — supersedes the launch-era admin gate) ───────────────────
 
-describe('/roster — picker admin gate (integration: actual page route)', () => {
-	it('admin: EVERY member row carries its section-picker trigger, INSIDE the row element', async () => {
-		const container = await renderReady('admin');
-		for (const id of ['m-ada', 'm-bea', 'm-carol', 'm-eva', 'm-pete']) {
-			const row = q(container, `roster-row-${id}`);
-			expect(row, `row ${id}`).not.toBeNull();
-			expect(
-				row?.querySelector(`[data-testid="section-picker-trigger-${id}"]`),
-				`trigger inside row ${id}`
-			).not.toBeNull();
-		}
+describe('/roster — picker owner gate (#468, integration: actual page route)', () => {
+	// The gate is the member's own `_owner` grant, read off the entity onto
+	// `row.ownerIds` and compared against the READER's person id for this db
+	// (`selected?.personId` — 'person-p' here). No app-computed role decides it.
+	it("a row whose ownerIds carry the reader's person id renders the trigger INSIDE that row — even with adminStore 'not-admin' (the grant decides, not the role)", async () => {
+		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
+		const container = await renderReady('not-admin');
+		const row = q(container, 'roster-row-m-owned');
+		expect(row, 'owned row renders').not.toBeNull();
+		expect(
+			row?.querySelector('[data-testid="section-picker-trigger-m-owned"]'),
+			'trigger inside the owned row'
+		).not.toBeNull();
+		// Her neighbours without the reader's grant render NOTHING there.
+		expect(q(container, 'section-picker-trigger-m-foreign')).toBeNull();
+		expect(q(container, 'section-picker-trigger-m-withheld')).toBeNull();
 	});
 
-	it.each(['not-admin', 'loading', 'error'] as const)(
-		'%s: NO picker trigger anywhere — read-only roster, fail closed on unresolved/errored rights',
-		async (state) => {
-			const container = await renderReady(state);
-			expect(container.querySelector('[data-testid^="section-picker-trigger-"]')).toBeNull();
-		}
-	);
+	it("a row WITHOUT the reader in ownerIds renders NO trigger even with adminStore 'admin' — the collective-wide role no longer opens every row", async () => {
+		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
+		const container = await renderReady('admin');
+		expect(q(container, 'section-picker-trigger-m-foreign')).toBeNull();
+		// The owned row still gets its trigger — the absence above is the gate
+		// working, not a picker-wide regression.
+		expect(q(container, 'section-picker-trigger-m-owned')).not.toBeNull();
+	});
+
+	it("ownerIds: [] (withheld private bucket — no `_owner` in the read) → NO trigger, fail closed, even with adminStore 'admin'", async () => {
+		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
+		const container = await renderReady('admin');
+		expect(q(container, 'section-picker-trigger-m-withheld')).toBeNull();
+	});
+
+	// Green before AND after #468 by design — under the old gate 'not-admin'
+	// hid it, under the new one `!sectionsError` must keep hiding it for a
+	// reader who DOES hold `_owner` (F2: no section tree → nothing to pick).
+	it('sectionsError still hides the picker even for a reader who holds _owner on the row', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		listSectionsMock.mockRejectedValue(new Error('sections boom'));
+		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
+		setAuthedWithOneCollective();
+		adminStore.set('not-admin');
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid^="section-picker-trigger-"]')).toBeNull();
+		consoleSpy.mockRestore();
+	});
+});
+
+// ── position (#468 — floating upper right, the #302 F1 lift discipline) ────────
+
+describe('/roster — picker position (#468): upper right on the card, lifted by tree order alone', () => {
+	// The wrapper is the <li>'s DIRECT CHILD holding the picker — walk up from
+	// the trigger to it (never assume how many component-internal layers sit
+	// between).
+	function pickerWrapper(container: HTMLElement, memberId: string): HTMLElement {
+		const li = q(container, `roster-row-${memberId}`) as HTMLElement;
+		expect(li, `row li ${memberId}`).not.toBeNull();
+		const trigger = q(container, `section-picker-trigger-${memberId}`) as HTMLElement;
+		expect(trigger, `trigger ${memberId}`).not.toBeNull();
+		let wrapper: HTMLElement = trigger;
+		while (wrapper.parentElement && wrapper.parentElement !== li) wrapper = wrapper.parentElement;
+		expect(wrapper.parentElement, 'wrapper is a direct child of the row <li>').toBe(li);
+		return wrapper;
+	}
+
+	it('the wrapper is `absolute top-1 right-1` with NO z- class, and FOLLOWS the roster-row-card activator in tree order inside the same (already-relative) <li>', async () => {
+		// 'admin' so the collapsed-card activator renders alongside the picker —
+		// the exact overlay the lift discipline exists for.
+		const container = await renderReady('admin');
+		const li = q(container, 'roster-row-m-ada') as HTMLElement;
+		const wrapper = pickerWrapper(container, 'm-ada');
+		const classes = wrapper.className.split(/\s+/);
+		expect(classes).toContain('absolute');
+		expect(classes).toContain('top-1');
+		expect(classes).toContain('right-1');
+		// NO z-index — positioned + written after the activator wins by tree
+		// order; a z-index would make the wrapper a stacking context and trap
+		// the picker's own `absolute z-10` menu under the following rows (#302 F1).
+		expect(classes.some((c) => c.startsWith('z-'))).toBe(false);
+		// The <li> is already `relative` (the activator's containing block) —
+		// the corner offsets anchor to IT; no second positioned wrapper appears.
+		expect(li.className.split(/\s+/)).toContain('relative');
+		const card = q(container, 'roster-row-card-m-ada') as HTMLElement;
+		expect(card, 'collapsed card activator').not.toBeNull();
+		expect(
+			card.compareDocumentPosition(wrapper) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the lifted picker wrapper must FOLLOW the activator in tree order'
+		).toBeTruthy();
+		expect(li.contains(card)).toBe(true);
+		expect(li.contains(wrapper)).toBe(true);
+	});
+
+	it('the open menu is `absolute right-0` — right-aligned to the corner-anchored trigger so it extends INTO the card, not off its right edge', async () => {
+		// #468 review F1. The wrapper above is `absolute top-1 right-1`, i.e. the
+		// trigger sits in the card's upper-right corner; a menu with no horizontal
+		// offset is left-anchored there and `min-w-40` of it hangs off the card at
+		// phone width. `right-0` anchors the right edges together instead.
+		//
+		// This asserts CLASS PRESENCE, which is the whole of what this DOM test
+		// environment can see: happy-dom parses no Tailwind stylesheet and lays
+		// nothing out, so it cannot report a geometric overflow. The real fit is a
+		// browser check at ~390px viewport width — that is the confirmation this
+		// test stands in for, not one it replaces.
+		const container = await renderReady('admin');
+		await openPicker(container, 'm-ada');
+		const menu = q(container, 'section-picker-menu-m-ada') as HTMLElement;
+		expect(menu, 'open picker menu').not.toBeNull();
+		const classes = menu.className.split(/\s+/);
+		expect(classes).toContain('absolute');
+		expect(classes).toContain('right-0');
+		// No competing left anchor — `left-*` alongside `right-0` would stretch the
+		// menu across both edges instead of right-aligning it.
+		expect(classes.some((c) => c.startsWith('left-'))).toBe(false);
+	});
+
+	it('a row WITHOUT the picker still shows the section name in rowInfo (flat view) — the information is already on screen; nothing else on the card moves', async () => {
+		loadRosterMock.mockResolvedValue(toListRead(gateRows()));
+		const container = await renderReady('admin');
+		await fireEvent.click(q(container, 'roster-sort-toggle') as HTMLElement);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="roster-flat-list"]')).not.toBeNull();
+		});
+		const li = q(container, 'roster-row-m-foreign') as HTMLElement;
+		expect(li).not.toBeNull();
+		const section = li.querySelector('[data-testid="roster-row-section"]');
+		expect(section, 'section name text stays in rowInfo').not.toBeNull();
+		expect(section?.textContent).toContain('Alto');
+		expect(li.querySelector('[data-testid="section-picker-trigger-m-foreign"]')).toBeNull();
+	});
 });
 
 // ── per-tap assign: optimistic move, reconcile, revert ─────────────────────────
@@ -335,7 +470,8 @@ describe('/roster — tapping a CURRENT section unassigns it; "(Unassigned)" rem
 				personId: 'p-multi',
 				name: 'Mia Multi',
 				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto']
+				sectionIds: ['sec-sop', 'sec-alto'],
+				ownerIds: ['person-db-owner', 'person-p']
 			}
 		]));
 		const container = await renderReady('admin');
@@ -381,7 +517,8 @@ describe('/roster — F1 code-review fix: a revert undoes ONLY the membership it
 				personId: 'p-multi',
 				name: 'Mia Multi',
 				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto']
+				sectionIds: ['sec-sop', 'sec-alto'],
+				ownerIds: ['person-db-owner', 'person-p']
 			}
 		]));
 		// Soprano 403s, Alto succeeds — the server ends up holding Soprano only.
@@ -520,7 +657,8 @@ describe('/roster — F1(b) code-review fix: "membership already gone server-sid
 				personId: 'p-multi',
 				name: 'Mia Multi',
 				email: 'mia@x.com',
-				sectionIds: ['sec-sop', 'sec-alto']
+				sectionIds: ['sec-sop', 'sec-alto'],
+				ownerIds: ['person-db-owner', 'person-p']
 			}
 		]));
 		// Soprano: already gone server-side (stale row). Alto: a real 403.
@@ -573,3 +711,5 @@ describe('/roster — F2 code-review fix: only one picker menu is ever on screen
 // (*MVOX:Palestrina* — GREEN fix: wrap the revert's sec-alto assertion in its own
 // waitFor, tolerating a one-tick harness lag between the unassigned-group mount
 // and the sec-alto list shrink; see comment at the assertion, TS.2/#96)
+// (*MVOX:Tallis* — #468 RED: owner gate replaces the admin gate; corner-position
+// pin; fixtures carry per-member ownerIds)

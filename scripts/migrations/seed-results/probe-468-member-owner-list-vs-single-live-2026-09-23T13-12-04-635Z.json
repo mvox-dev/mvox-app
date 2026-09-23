@@ -1,0 +1,91 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#468 review finding F2 — does a member LIST read fold inherited _owner grants into each row, and does the shape differ from a single-entity GET?",
+  "query": "entity?_type.string=member&status.string=active&props=person,_owner&limit=5",
+  "callerId": "69bcfd8e9c031ab8e6ce8079",
+  "callerRole": "db-root",
+  "listCount": 2,
+  "rows": [
+    {
+      "memberId": "6a8967f0ac0a9c7d5f122dc3",
+      "personRef": "6a2fc05e4cd971291c5d5ddc",
+      "owners": [
+        {
+          "_id": "69bd0b0827c417eed6f8a64b",
+          "reference": "69bcfd8e9c031ab8e6ce807a",
+          "property_type": "_owner",
+          "entity_type": "database",
+          "inherited": true
+        },
+        {
+          "_id": "6a8968f5ac0a9c7d5f122dd6",
+          "reference": "6a2fc05e4cd971291c5d5ddc",
+          "property_type": "_owner",
+          "entity_type": "person",
+          "inherited": true
+        },
+        {
+          "_id": "6a8967f1ac0a9c7d5f122dca",
+          "reference": "69bcfd8e9c031ab8e6ce8079",
+          "property_type": "_owner",
+          "entity_type": "person"
+        }
+      ],
+      "callerAppearsInOwner": true
+    },
+    {
+      "memberId": "6a8967f1ac0a9c7d5f122dcc",
+      "personRef": "69bcfd8e9c031ab8e6ce8079",
+      "owners": [
+        {
+          "_id": "69bd0b0827c417eed6f8a64b",
+          "reference": "69bcfd8e9c031ab8e6ce807a",
+          "property_type": "_owner",
+          "entity_type": "database",
+          "inherited": true
+        },
+        {
+          "_id": "6a8968f5ac0a9c7d5f122dd6",
+          "reference": "6a2fc05e4cd971291c5d5ddc",
+          "property_type": "_owner",
+          "entity_type": "person",
+          "inherited": true
+        },
+        {
+          "_id": "6a8967f2ac0a9c7d5f122dd3",
+          "reference": "69bcfd8e9c031ab8e6ce8079",
+          "property_type": "_owner",
+          "entity_type": "person"
+        }
+      ],
+      "callerAppearsInOwner": true
+    }
+  ],
+  "singleReadId": "6a8967f0ac0a9c7d5f122dc3",
+  "singleOwners": [
+    {
+      "_id": "69bd0b0827c417eed6f8a64b",
+      "reference": "69bcfd8e9c031ab8e6ce807a",
+      "property_type": "_owner",
+      "entity_type": "database",
+      "inherited": true
+    },
+    {
+      "_id": "6a8968f5ac0a9c7d5f122dd6",
+      "reference": "6a2fc05e4cd971291c5d5ddc",
+      "property_type": "_owner",
+      "entity_type": "person",
+      "inherited": true
+    },
+    {
+      "_id": "6a8967f1ac0a9c7d5f122dca",
+      "reference": "69bcfd8e9c031ab8e6ce8079",
+      "property_type": "_owner",
+      "entity_type": "person"
+    }
+  ],
+  "shapeMatch": "IDENTICAL",
+  "authorizedBy": "team-lead dispatch 2026-09-23 — read-only GETs, no mutation, no live-run authorization gate applicable"
+}
