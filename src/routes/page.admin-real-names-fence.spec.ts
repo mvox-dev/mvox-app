@@ -220,14 +220,23 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 	// the mock hands back and the name-resolution code never runs. Asserting a
 	// rendered Admins row against that mock would pin the mock, not the app.
 	// These two delegate to the REAL `listAdmins` and feed it a rights read
-	// whose baked `.string` is deliberately the PROFILE name — so the row can
-	// only read a real name if `resolveNamesFromRoster` overrode `.string` with
-	// what the page's own overlaid roster says.
+	// whose baked `.string` is a name the row must NOT end up showing — so the
+	// row can only read correctly if `resolveNamesFromRoster` overrode `.string`
+	// with what the page's own overlaid roster says.
+	//
+	// `bakedName` is a parameter because the two sides need DIFFERENT bait. With
+	// the toggle on, the profile name is bait enough. With it off, the roster
+	// itself carries the profile name, so baking the profile name would let a
+	// future "`.string` wins when the toggle is off" regression pass both cases
+	// (Bentham, #469 round 2). A third, distinct string has no other way onto
+	// the page, so asserting its absence pins the override as unconditional.
 	//
 	// The viewer's own `_owner` value rides along so `canManage` stays true and
 	// the pickers still render; it is not a roster member, so it changes no
 	// option list.
-	async function delegateListAdminsToReal(): Promise<void> {
+	const STALE_GRANT_NAME = 'Bakhed Atgranttime';
+
+	async function delegateListAdminsToReal(bakedName: string): Promise<void> {
 		const actual =
 			await vi.importActual<typeof import('$lib/admin/roleManagement')>(
 				'$lib/admin/roleManagement'
@@ -241,7 +250,7 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 							{
 								_id: 'v-m1',
 								reference: MEMBER_PERSON.m1,
-								string: PROFILE_NAMES.m1,
+								string: bakedName,
 								entity_type: 'person'
 							}
 						]
@@ -267,7 +276,7 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 	// THE discriminating case: `.string` says Alice, the roster says Zoe, and
 	// the row must say Zoe. Drop the override and this is the test that fails.
 	it('toggle ON: the Admins row is named from the overlaid roster, NOT from the rights value\'s baked `.string`', async () => {
-		await delegateListAdminsToReal();
+		await delegateListAdminsToReal(PROFILE_NAMES.m1);
 		realNamesWire();
 		const container = await renderReady();
 
@@ -277,14 +286,14 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 		expect(row?.textContent).not.toContain(PROFILE_NAMES.m1);
 	});
 
-	// The accepted side effect, pinned as characterization rather than as a
-	// discriminator: here `.string` and the roster BOTH say Alice, so this row
-	// reads the same with or without the override. What it holds down is that
-	// the role list tracks the toggle like every other surface — no real name
-	// leaks through the rights value when the toggle is off, and no raw id
-	// appears in place of a name.
-	it('toggle OFF: the same Admins row reads the PROFILE name — the roster still wins, it just carries profile names now', async () => {
-		await delegateListAdminsToReal();
+	// The accepted side effect — and, with a distinct baked name, a real
+	// discriminator rather than characterization: the rights value says
+	// "Bakhed Atgranttime", the roster (toggle off) says Alice, and the row must
+	// say Alice. Asserting the baked name's ABSENCE is what rules out `.string`
+	// precedence returning on the toggle-off path specifically, which a fixture
+	// baking the profile name could never have caught.
+	it('toggle OFF: the same Admins row reads the PROFILE name — the roster wins unconditionally, it just carries profile names now', async () => {
+		await delegateListAdminsToReal(STALE_GRANT_NAME);
 		realNamesWire({ toggle: false });
 		const container = await renderReady();
 
@@ -293,6 +302,9 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 		expect(row?.textContent).toContain(PROFILE_NAMES.m1);
 		expect(row?.textContent).not.toContain(REAL_NAMES.m1);
 		expect(row?.textContent).not.toContain(MEMBER_PERSON.m1);
+		// The bait: reachable ONLY through the rights value's `.string`.
+		expect(row?.textContent).not.toContain(STALE_GRANT_NAME);
+		expect(container.textContent).not.toContain(STALE_GRANT_NAME);
 	});
 });
 
