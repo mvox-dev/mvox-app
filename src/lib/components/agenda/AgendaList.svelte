@@ -3,6 +3,9 @@
 	import type { Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
+	// #466 — the whole card opens the event; goto() is the row's own tap
+	// handler (the row is deliberately NOT wrapped in an <a>, see below).
+	import { goto } from '$app/navigation';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -374,6 +377,22 @@
 			return { ...group, relative, gapWeeks: gap };
 		});
 	});
+
+	// #466 — every element a tap on the row must NOT hand to goto(): the two
+	// #101 TE.1 <a>s navigate on their own; every other in-card control (RSVP
+	// toolbar, take-attendance button, the attendance panel via its
+	// data-card-controls wrapper, RepertoireElement's buttons/anchors/selects)
+	// keeps its own behaviour. `closest()` is read off `event.target` itself,
+	// so it matches immediately when the target IS a control, before any
+	// Svelte event-flush timing could detach it.
+	const CARD_CONTROLS =
+		'a, button, input, select, textarea, label, [role="button"], [role="toolbar"], [data-card-controls]';
+
+	function openEventOnCardTap(event: MouseEvent, id: string) {
+		const target = event.target as HTMLElement | null;
+		if (target?.closest(CARD_CONTROLS)) return;
+		void goto(`/event/${id}`);
+	}
 </script>
 
 <!-- #90 TR.2 / #91 TR.3 — ONE definition of the per-event Works element, shared
@@ -450,10 +469,16 @@
 			{@render recentEmptyState()}
 		{/if}
 		{#each recentItems as item (item.id)}
+			<!-- #466 — tapping anywhere on the card opens the event; keyboard and
+			     screen-reader users already reach it through the accessible name
+			     link below (#101 TE.1), so the row itself gains no tabindex/role. -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
 				data-testid="agenda-recent-row-{item.id}"
 				class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
 				class:bg-highlight={item.id === justCreatedEventId}
+				onclick={(event) => openEventOnCardTap(event, item.id)}
 			>
 				{#if item.id === justCreatedEventId}
 					<!-- #244 — purely decorative: `event-create-status` (sr-only)
@@ -521,20 +546,25 @@
 					     page never hands two rows a match, since `attendanceItem` is a
 					     single value). -->
 					{#if attendancePanel && attendancePanel.item.id === item.id}
-						<AttendanceSurface
-							item={attendancePanel.item}
-							members={attendancePanel.members}
-							attendanceByMemberId={attendancePanel.attendanceByMemberId}
-							rsvpByMemberId={attendancePanel.rsvpByMemberId}
-							loading={attendancePanel.loading}
-							error={attendancePanel.error}
-							pendingMemberIds={attendancePanel.pendingMemberIds}
-							failedMemberIds={attendancePanel.failedMemberIds}
-							savedMemberIds={attendancePanel.savedMemberIds}
-							membersPartial={attendancePanel.membersPartial}
-							ontoggle={attendancePanel.ontoggle}
-							onclose={attendancePanel.onclose}
-						/>
+						<!-- #466 — the whole panel, including the gaps between its
+						     buttons, is a control surface: it must never hand a tap to
+						     the row's own goto() handler above. -->
+						<div data-card-controls>
+							<AttendanceSurface
+								item={attendancePanel.item}
+								members={attendancePanel.members}
+								attendanceByMemberId={attendancePanel.attendanceByMemberId}
+								rsvpByMemberId={attendancePanel.rsvpByMemberId}
+								loading={attendancePanel.loading}
+								error={attendancePanel.error}
+								pendingMemberIds={attendancePanel.pendingMemberIds}
+								failedMemberIds={attendancePanel.failedMemberIds}
+								savedMemberIds={attendancePanel.savedMemberIds}
+								membersPartial={attendancePanel.membersPartial}
+								ontoggle={attendancePanel.ontoggle}
+								onclose={attendancePanel.onclose}
+							/>
+						</div>
 					{/if}
 				</div>
 			</div>
@@ -611,10 +641,17 @@
 					<span>{group.header}</span>
 				</div>
 				{#each group.rows as item (item.id)}
+					<!-- #466 — tapping anywhere on the card opens the event; keyboard
+					     and screen-reader users already reach it through the accessible
+					     name link below (#101 TE.1), so the row itself gains no
+					     tabindex/role. -->
+					<!-- svelte-ignore a11y_no_static_element_interactions -->
+					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
 						data-testid="agenda-row-{item.id}"
 						class="grid grid-cols-[60px_1fr] gap-3 border-b border-dashed border-ink-5 py-2 last:border-b-0"
 						class:bg-highlight={item.id === justCreatedEventId}
+						onclick={(event) => openEventOnCardTap(event, item.id)}
 					>
 						{#if item.id === justCreatedEventId}
 							<!-- #244 — see the Recent row's identical marker above for the
