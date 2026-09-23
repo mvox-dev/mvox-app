@@ -311,6 +311,18 @@ export async function loadEventDetail(
 	//
 	// No conductors to name → no toggle read and no records read, the same guard
 	// `applyRealNames` puts on an empty row list.
+	//
+	// #469 review F2, ruled: the event page keeps THREE INDEPENDENT OVERLAYS —
+	// this header resolve, the attendance panel's own `loadRoster`, and the
+	// tally card's. They are not consolidated into one shared read. Each reads
+	// the same toggle and the same records, so they agree on every normal load;
+	// they can disagree only in a transport window, where one of the three
+	// record reads fails while another succeeds and the page shows a real name
+	// in one place and a profile name in another for the same person. That is
+	// accepted for this slice: each surface already degrades to the profile name
+	// on its own (never to a hole or a raw id), and a shared read would couple
+	// three independently-mounted regions to one failure. Revisit only with a
+	// case where the split is visible to a user in practice.
 	const recordNameByPerson =
 		conductorIds.length === 0
 			? new Map<string, string>()

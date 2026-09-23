@@ -91,7 +91,13 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { realNamesWire, PROFILE_NAMES, REAL_NAMES, DB_ENTITY_ID } from '$lib/testing/realNamesFence';
+import {
+	realNamesWire,
+	PROFILE_NAMES,
+	REAL_NAMES,
+	DB_ENTITY_ID,
+	MEMBER_PERSON
+} from '$lib/testing/realNamesFence';
 
 function selectSampledb() {
 	setToken('jwt-admin');
@@ -206,6 +212,87 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
 		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+	});
+
+	// ── #469 review F1: the Admins LIST itself, not just the pickers ──────────
+	//
+	// Every test above mocks `listAdmins` outright, so the page renders whatever
+	// the mock hands back and the name-resolution code never runs. Asserting a
+	// rendered Admins row against that mock would pin the mock, not the app.
+	// These two delegate to the REAL `listAdmins` and feed it a rights read
+	// whose baked `.string` is deliberately the PROFILE name — so the row can
+	// only read a real name if `resolveNamesFromRoster` overrode `.string` with
+	// what the page's own overlaid roster says.
+	//
+	// The viewer's own `_owner` value rides along so `canManage` stays true and
+	// the pickers still render; it is not a roster member, so it changes no
+	// option list.
+	async function delegateListAdminsToReal(): Promise<void> {
+		const actual =
+			await vi.importActual<typeof import('$lib/admin/roleManagement')>(
+				'$lib/admin/roleManagement'
+			);
+		const rightsFetch = (async () =>
+			new Response(
+				JSON.stringify({
+					entity: {
+						_owner: [
+							{ _id: 'v-viewer', reference: 'admin-p', entity_type: 'person' },
+							{
+								_id: 'v-m1',
+								reference: MEMBER_PERSON.m1,
+								string: PROFILE_NAMES.m1,
+								entity_type: 'person'
+							}
+						]
+					}
+				}),
+				{ status: 200, headers: { 'Content-Type': 'application/json' } }
+			)) as unknown as typeof fetch;
+		h.listAdminsMock.mockImplementation(
+			(
+				cfg: Parameters<typeof actual.listAdmins>[0],
+				dbEntityId: string,
+				viewerId: string,
+				_fetchImpl: typeof fetch,
+				roster: Parameters<typeof actual.listAdmins>[4]
+			) => actual.listAdmins(cfg, dbEntityId, viewerId, rightsFetch, roster)
+		);
+	}
+
+	function adminRow(container: HTMLElement): HTMLElement | null {
+		return container.querySelector(`[data-testid="admin-entry-${MEMBER_PERSON.m1}"]`);
+	}
+
+	// THE discriminating case: `.string` says Alice, the roster says Zoe, and
+	// the row must say Zoe. Drop the override and this is the test that fails.
+	it('toggle ON: the Admins row is named from the overlaid roster, NOT from the rights value\'s baked `.string`', async () => {
+		await delegateListAdminsToReal();
+		realNamesWire();
+		const container = await renderReady();
+
+		const row = adminRow(container);
+		expect(row, 'Admins row for m1').not.toBeNull();
+		expect(row?.textContent).toContain(REAL_NAMES.m1);
+		expect(row?.textContent).not.toContain(PROFILE_NAMES.m1);
+	});
+
+	// The accepted side effect, pinned as characterization rather than as a
+	// discriminator: here `.string` and the roster BOTH say Alice, so this row
+	// reads the same with or without the override. What it holds down is that
+	// the role list tracks the toggle like every other surface — no real name
+	// leaks through the rights value when the toggle is off, and no raw id
+	// appears in place of a name.
+	it('toggle OFF: the same Admins row reads the PROFILE name — the roster still wins, it just carries profile names now', async () => {
+		await delegateListAdminsToReal();
+		realNamesWire({ toggle: false });
+		const container = await renderReady();
+
+		const row = adminRow(container);
+		expect(row, 'Admins row for m1').not.toBeNull();
+		expect(row?.textContent).toContain(PROFILE_NAMES.m1);
+		expect(row?.textContent).not.toContain(REAL_NAMES.m1);
+		expect(row?.textContent).not.toContain(MEMBER_PERSON.m1);
 	});
 });
 
