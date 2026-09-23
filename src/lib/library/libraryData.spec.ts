@@ -344,9 +344,52 @@ function profile(sharing: MyProfile['_sharing'], name: string): MyProfile {
 	return { _id: `p-${sharing}`, name, email: '', _sharing: sharing };
 }
 
+/**
+ * #469 review F2 — the real-names wire every borrower-name test now has to
+ * answer, because this producer consults `roster_show_real_names` like every
+ * other member-name surface. `records: null` means the toggle answers FALSE
+ * (and the records read must then never be issued at all); a records array
+ * means the toggle is ON and those `admin_member_record` rows are on offer.
+ * Returns `undefined` for any url it does not own, so each test's own routes
+ * stay in charge.
+ */
+const RN_DB_ENTITY = 'db-ent-lib';
+function realNamesRoute(
+	url: string,
+	records: Array<{ person?: string; name?: string }> | null
+): Promise<Response> | undefined {
+	if (url.includes('_type.string=admin_member_record')) {
+		return Promise.resolve(
+			json({
+				entities: (records ?? []).map((r, i) => ({
+					_id: `rec-${i}`,
+					...(r.person !== undefined ? { person: [{ reference: r.person }] } : {}),
+					...(r.name !== undefined ? { name: [{ string: r.name }] } : {})
+				}))
+			})
+		);
+	}
+	if (url.includes('_type.string=database')) {
+		return Promise.resolve(json({ entities: [{ _id: RN_DB_ENTITY }] }));
+	}
+	if (url.includes(`entity/${RN_DB_ENTITY}`) && url.includes('roster_show_real_names')) {
+		return Promise.resolve(
+			json({
+				entity: {
+					_id: RN_DB_ENTITY,
+					roster_show_real_names: [{ _id: 'v-toggle', boolean: records !== null }]
+				}
+			})
+		);
+	}
+	return undefined;
+}
+
 describe('resolveBorrowerNames', () => {
 	it('resolves member → person → domain-or-public name; dedupes repeated memberIds to one fetch pair', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const rn = realNamesRoute(url, null);
+			if (rn) return rn;
 			if (url.includes('entity/member-1')) {
 				return Promise.resolve(json({ entity: { person: [{ reference: 'person-a' }] } }));
 			}
@@ -370,6 +413,8 @@ describe('resolveBorrowerNames', () => {
 
 	it("domain name preferred over public when both present (matches rosterData.ts's toRosterRow rule)", async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const rn = realNamesRoute(url, null);
+			if (rn) return rn;
 			if (url.includes('entity/member-2')) {
 				return Promise.resolve(json({ entity: { person: [{ reference: 'person-b' }] } }));
 			}
@@ -388,6 +433,8 @@ describe('resolveBorrowerNames', () => {
 
 	it("no domain or public name resolvable → '' (page renders the fallback label, not this function)", async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const rn = realNamesRoute(url, null);
+			if (rn) return rn;
 			if (url.includes('entity/member-3')) {
 				return Promise.resolve(json({ entity: { person: [{ reference: 'person-c' }] } }));
 			}
@@ -400,6 +447,107 @@ describe('resolveBorrowerNames', () => {
 	it('fails loud as a whole if any member lookup 500s', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		await expect(resolveBorrowerNames(cfg, ['member-4'], fetchImpl)).rejects.toThrow(/500/);
+	});
+	// ── #469 review F2 — the library obeys roster_show_real_names ─────────────
+	//
+	// HISTORY, named not deleted: the library is the surface Henry's 2026-09-06
+	// #269 scope ruling named BY NAME as keeping profile names ("pickers, chips,
+	// the agenda, event pages, the library"). Mihkel's #469 word (2026-09-23:
+	// "all places we are showing member names ... must obey the admin setting")
+	// supersedes it — the lending rows and the bulk-checkout member picker are
+	// both fed from this map, and a collective with the toggle on can no longer
+	// read 'Gone Girl' here while the roster, agenda and event page say
+	// 'Rita Real'.
+	function twoBorrowerWire(records: Array<{ person?: string; name?: string }> | null) {
+		return vi.fn().mockImplementation((url: string) => {
+			const rn = realNamesRoute(url, records);
+			if (rn) return rn;
+			if (url.includes('entity/member-a')) {
+				return Promise.resolve(json({ entity: { person: [{ reference: 'person-a' }] } }));
+			}
+			if (url.includes('entity/member-b')) {
+				return Promise.resolve(json({ entity: { person: [{ reference: 'person-b' }] } }));
+			}
+			if (url.includes('_parent.reference=person-a')) {
+				return Promise.resolve(
+					json({
+						entities: [
+							{ _id: 'prof-a', name: [{ string: 'Ada Profile' }], _sharing: [{ string: 'domain' }] }
+						]
+					})
+				);
+			}
+			if (url.includes('_parent.reference=person-b')) {
+				return Promise.resolve(
+					json({
+						entities: [
+							{ _id: 'prof-b', name: [{ string: 'Bea Profile' }], _sharing: [{ string: 'domain' }] }
+						]
+					})
+				);
+			}
+			throw new Error(`unexpected url ${url}`);
+		});
+	}
+
+	it('toggle ON: a borrower WITH a record is named by it; one without keeps her profile name', async () => {
+		const fetchImpl = twoBorrowerWire([{ person: 'person-a', name: 'Rita Real' }]);
+		const names = await resolveBorrowerNames(cfg, ['member-a', 'member-b'], fetchImpl);
+		expect(names.get('member-a')).toBe('Rita Real');
+		expect(names.get('member-b')).toBe('Bea Profile');
+	});
+
+	it('toggle OFF: profile names, and the records read is never issued', async () => {
+		const fetchImpl = twoBorrowerWire(null);
+		const names = await resolveBorrowerNames(cfg, ['member-a', 'member-b'], fetchImpl);
+		expect(names.get('member-a')).toBe('Ada Profile');
+		expect(names.get('member-b')).toBe('Bea Profile');
+		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u: string) => u.includes('admin_member_record'))).toEqual([]);
+	});
+
+	it('ONE toggle read and ONE records read for the whole batch — never one per borrower', async () => {
+		const fetchImpl = twoBorrowerWire([{ person: 'person-a', name: 'Rita Real' }]);
+		await resolveBorrowerNames(cfg, ['member-a', 'member-b', 'member-a'], fetchImpl);
+		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
+		expect(urls.filter((u: string) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(urls.filter((u: string) => u.includes('admin_member_record'))).toHaveLength(1);
+		expect(urls.filter((u: string) => u.includes('_type.string=database'))).toHaveLength(1);
+	});
+
+	it('no borrowers to name → no toggle read and no records read at all', async () => {
+		const fetchImpl = twoBorrowerWire(null);
+		expect(await resolveBorrowerNames(cfg, [], fetchImpl)).toEqual(new Map());
+		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
+	// The overlay degrades fail-SOFT while the base resolution stays fail-loud:
+	// an unreadable `admin_member_record` must not make a lending row
+	// unresolvable, only un-overlaid — the direction every real-names degrade
+	// takes, and never the reverse.
+	it('an unreadable records read degrades to PROFILE names instead of rejecting', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('_type.string=admin_member_record')) {
+				return Promise.resolve(json({}, 503));
+			}
+			const rn = realNamesRoute(url, []);
+			if (rn) return rn;
+			if (url.includes('entity/member-a')) {
+				return Promise.resolve(json({ entity: { person: [{ reference: 'person-a' }] } }));
+			}
+			return Promise.resolve(
+				json({
+					entities: [
+						{ _id: 'prof-a', name: [{ string: 'Ada Profile' }], _sharing: [{ string: 'domain' }] }
+					]
+				})
+			);
+		});
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const names = await resolveBorrowerNames(cfg, ['member-a'], fetchImpl);
+		expect(names.get('member-a')).toBe('Ada Profile');
+		expect(errSpy).toHaveBeenCalled();
+		errSpy.mockRestore();
 	});
 });
 

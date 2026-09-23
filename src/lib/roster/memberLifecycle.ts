@@ -249,6 +249,18 @@ async function loadInactiveRosterRead(
  * module's old "archived rows never resolve real names" v1 boundary: the
  * reinstatement panel now obeys `roster_show_real_names` exactly like every
  * other roster surface.
+ *
+ * #469 review F1 — DO NOT reach for this beside `loadRoster` on a surface that
+ * shows the active AND the archived list at the same time. Each of the two runs
+ * its OWN overlay, so the pair spends the database resolve, the
+ * `roster_show_real_names` read and the PII-bearing `admin_member_record`
+ * read TWICE for one refresh, and the two overlays can degrade INDEPENDENTLY —
+ * real names in one list directly above profile names in the other, which
+ * `applyRealNames`' own doc calls byte-indistinguishable from "she has no
+ * record". `loadActiveAndArchivedRosters` (below) is the one-pass answer for
+ * that shape; both of the app's two-list surfaces (the agenda's season-rate
+ * table and the /roster page) go through it. This wrapper is the archived list
+ * ALONE — correct only where nothing else on the surface is naming members.
  */
 export async function loadInactiveRoster(
 	cfg: EntuCfg,
@@ -308,10 +320,9 @@ export async function loadRosterIncludingArchived(
 	return {
 		items: [...active.items, ...inactive.items].sort((a, b) => a.name.localeCompare(b.name)),
 		total: active.total + inactive.total,
-		// Both halves already carry the SAME combined flag (see
-		// `loadActiveAndArchivedRosters`); the OR is kept so this line still
-		// reads as the statement it makes — either half short means this list
-		// is missing people.
+		// Each half carries its OWN raw read's flag OR the overlay's (see
+		// `loadActiveAndArchivedRosters`), and this function's answer is ONE list
+		// made of both: either half short means this list is missing people.
 		truncated: active.truncated || inactive.truncated
 	};
 }
@@ -351,10 +362,24 @@ export interface ActiveAndArchivedRosters {
  * the two requests, and the row is dropped from the `inactive` half so no member
  * appears twice in one table.
  *
- * `truncated` is the SAME combined flag on both halves: one overlay serves both,
- * so a short records read is a fact about the whole table, and the two RAW reads
- * are loaded as one thing a reader sees as one list. `total` stays per-half (each
- * read's own server count).
+ * `truncated` is PER-HALF, plus the overlay's own: each half carries its OWN raw
+ * member read's flag OR'd with the records read's, because those two shortnesses
+ * are facts about different things. A short records read reverts SOME rows to
+ * profile names wherever they are shown, so it marks BOTH halves; a short
+ * `status.string=archived` read means the ARCHIVED list is missing people and
+ * says nothing about the active one. `total` likewise stays per-half (each read's
+ * own server count).
+ *
+ * #469 review F1 shipped this as a single combined flag on both halves, on the
+ * reasoning that the season-rate table is ONE table and one overlay serves it.
+ * That is the season table's own statement to make — and it makes it, by OR-ing
+ * the two halves at the call site (+page.svelte). A caller with TWO
+ * independently-closable lists (the /roster page: the active roster, plus the
+ * archived panel) cannot recover the per-half fact from a pre-combined flag, and
+ * a combined flag left a truncation detected in the archived panel standing over
+ * the ACTIVE roster after the panel closed — the exact claim-about-a-list-that-is
+ * -no-longer-on-screen #321 review F3 removed. So the producer reports the facts
+ * and each surface combines them for what it actually shows.
  */
 export async function loadActiveAndArchivedRosters(
 	cfg: EntuCfg,
@@ -371,7 +396,13 @@ export async function loadActiveAndArchivedRosters(
 		{
 			items: [...active.items, ...archivedOnly],
 			total: active.total + inactive.total,
-			truncated: active.truncated || inactive.truncated
+			// Deliberately NOT `active.truncated || inactive.truncated`: this is an
+			// intermediate nobody renders, and starting it at false makes
+			// `overlaid.truncated` the RECORDS read's own flag alone — the one piece
+			// of truncation that belongs to both halves and cannot be recovered
+			// afterwards if it is pre-OR'd with the member reads'. Each raw read's
+			// own flag is re-applied per half below, unchanged.
+			truncated: false
 		},
 		fetchImpl
 	);
@@ -380,12 +411,12 @@ export async function loadActiveAndArchivedRosters(
 		active: {
 			items: overlaid.items.filter((r) => activeIds.has(r.memberId)).sort(byName),
 			total: active.total,
-			truncated: overlaid.truncated
+			truncated: active.truncated || overlaid.truncated
 		},
 		inactive: {
 			items: overlaid.items.filter((r) => !activeIds.has(r.memberId)).sort(byName),
 			total: inactive.total,
-			truncated: overlaid.truncated
+			truncated: inactive.truncated || overlaid.truncated
 		}
 	};
 }

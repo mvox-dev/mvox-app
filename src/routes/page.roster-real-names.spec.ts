@@ -85,6 +85,12 @@ interface DbWire {
 	/** When set, the admin_member_record response is HELD until this resolves
 	 *  (the deterministic collective-switch race lever). */
 	recordsGate?: Promise<void>;
+	/** #469 review F1 — when set, the Nth (0-based) and every LATER bulk
+	 *  `admin_member_record` read answers 503 instead of the rows. The lever for
+	 *  the mixed-degrade proof: with two independent overlays the first
+	 *  (already-rendered) list keeps its real names while the second falls back
+	 *  to profile names, and the page shows both at once. */
+	bulkRecordsFailFrom?: number;
 	/** #269 review F2 — when set, the PER-PERSON record lookup
 	 *  (`person.reference=…`, loadMemberRecord) answers with THIS list instead of
 	 *  `records`. Lets a test express the live-reachable skew where the roster's
@@ -127,6 +133,9 @@ function wireMember(fx: DbWire, m: { id: string; person: string }) {
 }
 
 function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
+	/** #469 review F1 — per-fixture count of BULK records reads served, so
+	 *  `bulkRecordsFailFrom` can fail the second one and later. */
+	const bulkRecordReads = new Map<DbWire, number>();
 	const fetchMock = vi.fn().mockImplementation(async (url: string) => {
 		const u = String(url);
 		const dbMatch = /invalid\/([^/]+)\//.exec(u);
@@ -154,6 +163,11 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 		}
 		if (u.includes('_type.string=admin_member_record')) {
 			if (fx.recordsGate) await fx.recordsGate;
+			if (!u.includes('person.reference=') && fx.bulkRecordsFailFrom !== undefined) {
+				const seen = bulkRecordReads.get(fx) ?? 0;
+				bulkRecordReads.set(fx, seen + 1);
+				if (seen >= fx.bulkRecordsFailFrom) return jsonRes({}, 503);
+			}
 			const rows =
 				u.includes('person.reference=') && fx.lookupRecords !== undefined
 					? fx.lookupRecords
@@ -531,6 +545,68 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 			expect(q(container, 'inactive-member-row-m3')!.textContent).toContain('Xena Xylophone');
 		});
 		expect(q(container, 'inactive-member-row-m3')!.textContent).not.toContain('Carla Cantus');
+	});
+
+	// ── #469 review F1 — ONE overlay for the two lists this page can show ─────
+	//
+	// The page used to run the overlay TWICE whenever the archived panel was
+	// open: `loadRoster` for the active list and `loadInactiveRoster` for the
+	// panel, each resolving the database entity, reading the toggle and pulling
+	// the PII-bearing `admin_member_record?limit=500` for itself. Two costs, and
+	// the worse one is not the reads: the two overlays degraded INDEPENDENTLY,
+	// so one leg's records read failing while the other's succeeded rendered real
+	// names in the active roster directly above profile names in the archived
+	// panel — byte-indistinguishable, per the overlay's own doc, from "she has
+	// no record". Both lists now come from `loadActiveAndArchivedRosters`: all
+	// real names or all profile names, never half of each.
+	it('a records read that fails on the panel-open pass takes BOTH lists back to profile names together — never real names above profile names', async () => {
+		const fx = sampledbFixture(true);
+		// The page-load pass succeeds; the panel-open pass 503s.
+		fx.bulkRecordsFailFrom = 1;
+		stubWire({ sampledb: fx });
+		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { container } = await renderRosterAs('admin');
+		// Non-vacuous: the first pass really did overlay the active list.
+		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
+
+		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
+		await waitFor(() => expect(q(container, 'roster-inactive-list')).not.toBeNull());
+
+		// The archived row degraded to her profile name — and so did the ACTIVE
+		// row above it. Pre-fix the active row still read 'Aaron Aardvark' while
+		// the panel read 'Carla Cantus', one screen, two contradicting answers to
+		// "does this collective show real names".
+		await waitFor(() => {
+			expect(q(container, 'inactive-member-row-m3')!.textContent).toContain('Carla Cantus');
+		});
+		expect(q(container, 'inactive-member-row-m3')!.textContent).not.toContain('Xena Xylophone');
+		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
+		errSpy.mockRestore();
+	});
+
+	it('opening the panel spends ONE toggle read and ONE bulk records read for BOTH lists', async () => {
+		const fetchMock = stubWire({ sampledb: sampledbFixture(true) });
+		const { container } = await renderRosterAs('admin');
+		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
+
+		const urls = () => (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
+		const before = urls().length;
+		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
+		await waitFor(() => expect(q(container, 'inactive-member-row-m3')).not.toBeNull());
+		await waitFor(() => {
+			expect(q(container, 'inactive-member-row-m3')!.textContent).toContain('Xena Xylophone');
+		});
+
+		const opened = urls().slice(before);
+		expect(opened.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(
+			opened.filter((u) => u.includes('admin_member_record') && !u.includes('person.reference='))
+		).toHaveLength(1);
+		// ...and the ACTIVE list was re-read in that same pass, which is what makes
+		// the two lists one overlay rather than two.
+		expect(
+			opened.filter((u) => u.includes('_type.string=member') && !u.includes('status.string=archived'))
+		).toHaveLength(1);
 	});
 });
 

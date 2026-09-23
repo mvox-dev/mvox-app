@@ -891,7 +891,15 @@ describe('#469 review F1 — loadActiveAndArchivedRosters: one overlay, two halv
 		expect(inactive.items).toEqual([]);
 	});
 
-	it('a truncated half marks BOTH halves: one overlay, one table, one statement about it', async () => {
+	// #469 review F1 (second round) — truncation is PER-HALF, because the two
+	// shortnesses are facts about different things. This function shipped with ONE
+	// combined flag on both halves; the /roster page (two independently-closable
+	// lists) cannot recover the per-half fact from it, and a short ARCHIVED read
+	// left its notice standing over the ACTIVE roster after the panel closed —
+	// the claim-about-a-list-no-longer-on-screen #321 review F3 removed. The
+	// season-rate table's "one table, one statement" is still exactly right, and
+	// it is still made — by the table, OR-ing the two halves at its call site.
+	it('a short ARCHIVED member read marks the ARCHIVED half only — it says nothing about the active list', async () => {
 		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
 			Promise.resolve(profilesByPerson[personId] ?? [])
 		);
@@ -911,11 +919,84 @@ describe('#469 review F1 — loadActiveAndArchivedRosters: one overlay, two halv
 			return Promise.resolve(json({ entities: [] }));
 		});
 		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
-		expect(active.truncated).toBe(true);
+		expect(active.truncated).toBe(false);
 		expect(inactive.truncated).toBe(true);
 		// `total` stays per-half: each read's own server count.
 		expect(active.total).toBe(1);
 		expect(inactive.total).toBe(812);
+	});
+
+	it('a short ACTIVE member read marks the ACTIVE half only — the mirror image', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const u = String(url);
+			if (u.includes('_type.string=member') && u.includes('status.string=archived')) {
+				return Promise.resolve(
+					json({ count: 1, entities: [{ _id: 'member-9', person: [{ reference: 'person-9' }] }] })
+				);
+			}
+			if (u.includes('_type.string=member')) {
+				return Promise.resolve(
+					json({ count: 640, entities: [{ _id: 'member-1', person: [{ reference: 'person-a' }] }] })
+				);
+			}
+			return Promise.resolve(json({ entities: [] }));
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		expect(active.truncated).toBe(true);
+		expect(inactive.truncated).toBe(false);
+	});
+
+	// The one shortness that DOES belong to both: the records read is the single
+	// overlay serving both halves, and a short one reverts SOME rows to profile
+	// names wherever they are shown — byte-indistinguishable from "she has no
+	// record", in either list.
+	it('a short RECORDS read marks BOTH halves — one overlay, one degrade, two lists affected', async () => {
+		listMyProfilesMock.mockImplementation((_cfg: unknown, personId: string) =>
+			Promise.resolve(profilesByPerson[personId] ?? [])
+		);
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			const u = String(url);
+			if (u.includes('_type.string=admin_member_record')) {
+				// 900 on the server, one row on the wire — short.
+				return Promise.resolve(
+					json({
+						count: 900,
+						entities: [
+							{ _id: 'rec-a', person: [{ reference: 'person-a' }], name: [{ string: 'Zoe Zed' }] }
+						]
+					})
+				);
+			}
+			if (u.includes('_type.string=member') && u.includes('status.string=archived')) {
+				return Promise.resolve(
+					json({ count: 1, entities: [{ _id: 'member-9', person: [{ reference: 'person-9' }] }] })
+				);
+			}
+			if (u.includes('_type.string=member')) {
+				return Promise.resolve(
+					json({ count: 1, entities: [{ _id: 'member-1', person: [{ reference: 'person-a' }] }] })
+				);
+			}
+			if (u.includes('_type.string=database')) {
+				return Promise.resolve(json({ entities: [{ _id: 'db-ent-9' }] }));
+			}
+			if (u.includes('entity/db-ent-9') && u.includes('roster_show_real_names')) {
+				return Promise.resolve(
+					json({
+						entity: { _id: 'db-ent-9', roster_show_real_names: [{ _id: 'v-toggle', boolean: true }] }
+					})
+				);
+			}
+			return Promise.resolve(json({ entities: [] }));
+		});
+		const { active, inactive } = await loadActiveAndArchivedRosters(cfg, fetchImpl);
+		// Non-vacuous: the overlay really did run and really did rename her.
+		expect(active.items.map((r) => r.name)).toEqual(['Zoe Zed']);
+		expect(active.truncated).toBe(true);
+		expect(inactive.truncated).toBe(true);
 	});
 });
 

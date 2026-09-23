@@ -520,7 +520,7 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 		// The toggle never resolved true, so no records read was even attempted.
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toEqual([]);
 		expect(errorSpy).toHaveBeenCalledWith(
-			'applyRealNames: real-names overlay unavailable, showing profile names',
+			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
 			expect.any(Error)
 		);
 		errorSpy.mockRestore();
@@ -565,7 +565,7 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 		// The toggle DID resolve true here — the read was made and failed; no retry.
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
 		expect(errorSpy).toHaveBeenCalledWith(
-			'applyRealNames: real-names overlay unavailable, showing profile names',
+			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
 			expect.any(Error)
 		);
 		errorSpy.mockRestore();

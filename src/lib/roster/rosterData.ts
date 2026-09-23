@@ -515,6 +515,53 @@ export async function loadRosterRead(
 }
 
 /**
+ * #469 review F2/F3 — the real-names DECISION, without the rows: read the
+ * collective's `roster_show_real_names` toggle and, only when it is on, the ONE
+ * bulk `admin_member_record` read, and answer with a personId → record-name map
+ * (empty when the toggle is off or the overlay is unavailable).
+ *
+ * `applyRealNames` below is this function plus the row rewrite, and stays the
+ * entry point for every producer that HAS `RosterRow`s. This lower layer exists
+ * for the two name surfaces that do not: the library's borrower/picker names,
+ * which are a memberId → name map built from its own member → person → profile
+ * chain (libraryData.ts), and the event header's conductor names, which are
+ * PERSON ids that may not be members at all (eventDetail.ts). Both used to be
+ * profile-name-only — the #269 fence named the library explicitly, and #469
+ * (Mihkel, 2026-09-23: "all places we are showing member names ... must obey
+ * the admin setting") supersedes that fence. Routing them through this map
+ * rather than a second toggle/records chain keeps ONE policy: one place decides
+ * whether real names are shown, what a duplicate record means, and what a
+ * failure degrades to.
+ *
+ * The degrade is the SAME one `applyRealNames`' doc states in full and for the
+ * same reason — ANY failure (no visible database entity, a non-2xx toggle read,
+ * a non-2xx records read) returns an EMPTY map with a loud `console.error`,
+ * never a rejection: losing the overlay must not take down the surface it was
+ * decorating, and the degrade can only show FEWER real names, never leak one
+ * while the toggle is off. `truncated` is the records read's own flag (false
+ * whenever the map is empty — a read that threw, or never ran, says nothing
+ * about its own completeness).
+ */
+export async function resolveRealNameByPerson(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<{ byPerson: Map<string, string>; truncated: boolean }> {
+	try {
+		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl);
+		if (!showRealNames) return { byPerson: new Map(), truncated: false };
+		const records = await listRecordNamesByPerson(cfg, fetchImpl);
+		return { byPerson: records.byPerson, truncated: records.truncated };
+	} catch (e) {
+		// See doc above — an unresolvable overlay degrades to "toggle off", never
+		// takes the surface it decorates down with it, and says so loudly in the
+		// console (#269 review F3): a silent degrade here would hide a live
+		// collective ignoring its own roster_show_real_names setting.
+		console.error('resolveRealNameByPerson: real-names overlay unavailable, showing profile names', e);
+		return { byPerson: new Map(), truncated: false };
+	}
+}
+
+/**
  * #269, widened by #469 — the real-names overlay, extracted as its own reusable
  * step so every roster producer can apply it to its own already-resolved rows
  * instead of re-implementing it. Takes an already-built `ListRead<RosterRow>`
@@ -580,27 +627,8 @@ export async function applyRealNames(
 	// the read was partial" is precisely when the notice matters most.
 	if (base.items.length === 0) return base;
 
-	let recordNameByPerson = new Map<string, string>();
-	let recordsTruncated = false;
-	try {
-		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl);
-		if (showRealNames) {
-			const records = await listRecordNamesByPerson(cfg, fetchImpl);
-			recordNameByPerson = records.byPerson;
-			recordsTruncated = records.truncated;
-		}
-	} catch (e) {
-		// See doc above — an unresolvable overlay degrades to "toggle off", never
-		// takes the base roster down with it, and says so loudly in the console
-		// (#269 review F3): a silent degrade here would hide a live collective
-		// ignoring its own roster_show_real_names setting.
-		console.error(
-			'applyRealNames: real-names overlay unavailable, showing profile names',
-			e
-		);
-		recordNameByPerson = new Map();
-		recordsTruncated = false;
-	}
+	const { byPerson: recordNameByPerson, truncated: recordsTruncated } =
+		await resolveRealNameByPerson(cfg, fetchImpl);
 	const truncated = base.truncated || recordsTruncated;
 	// Toggle off, or nothing to apply: the base rows are already the answer,
 	// already carrying `profileName` and already sorted by the displayed name.

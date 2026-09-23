@@ -18,6 +18,7 @@
 	// detail, admin roles) obeys `roster_show_real_names` the same way. See
 	// rosterData.ts's `loadRoster`/`applyRealNames` docs for the contract.
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import type { ListRead } from '$lib/entu/listRead';
 	// #294 — join-state read (per-row, three states) + the two write producers
 	// the roster's controls reuse verbatim: mintSelfLinkInvite serves BOTH
 	// `kutsu` and `saada uuesti` (sweep-then-mint is the atomic replace), and
@@ -52,7 +53,7 @@
 	import {
 		deactivateMember,
 		reinstateMember,
-		loadInactiveRoster,
+		loadActiveAndArchivedRosters,
 		listDeactivateBlockers,
 		type DeactivateBlocker
 	} from '$lib/roster/memberLifecycle';
@@ -110,7 +111,9 @@
 	//                       record" — see that producer's doc). Re-derived on every
 	//                       load, cleared in `reset` alongside the other per-load
 	//                       facts so it cannot outlive the list it describes.
-	//   `inactivePartial` — `loadInactiveRoster`: the archived-member panel, which
+	//   `inactivePartial` — the archived half of `readRosterHalves` (#469 review
+	//                       F1: the same one-pass read that produces the active
+	//                       rows while the panel is open) — the panel, which
 	//                       only ever grows (deactivate never deletes). Cleared
 	//                       under `isSwitch` alongside `inactiveRows`, the same
 	//                       scoping that panel's own state follows — and (#321
@@ -480,7 +483,7 @@
 			// in STYLE (Promise.all, one read per row), not in literal parallelism
 			// with the row list itself.
 			const [rowResult, sectionResult, ownerTierResult] = await Promise.allSettled([
-				loadRoster(cfg),
+				readRosterHalves(cfg),
 				listSections(cfg),
 				resolveOwnerTier(cfg, selected.personId)
 			]);
@@ -500,10 +503,7 @@
 				status = 'load-error';
 				return;
 			}
-			rows = rowResult.value.items;
-			// #321 — set from the SAME read that produced the rows, so the notice can
-			// never describe a different load's list.
-			membersPartial = rowResult.value.truncated;
+			applyRosterHalves(rowResult.value);
 
 			// #294 — the owner-tier read is a DIFFERENT admin-boundary question from
 			// the roster/section reads above (see `ownerTier`'s own doc comment) and
@@ -569,6 +569,95 @@
 
 	function loadForSelected(): Promise<void> {
 		return routeLoad.loadForSelected();
+	}
+
+	/** The two member lists THIS page can have on screen at once, plus whether the
+	 *  archived half was asked for and failed. `inactive: null` means "not asked
+	 *  for" (the panel is closed), never "empty". */
+	type RosterHalves = {
+		active: ListRead<RosterRow>;
+		inactive: ListRead<RosterRow> | null;
+		archivedFailed: boolean;
+	};
+
+	/**
+	 * #469 review F1 — the page's ONE roster read, and therefore ONE real-names
+	 * overlay per refresh however many member lists are on screen.
+	 *
+	 * Before this fix the page ran the overlay TWICE whenever the archived panel
+	 * was open: `loadRoster` for the active list and `loadInactiveRoster` for the
+	 * panel, each of which resolves the database entity, reads
+	 * `roster_show_real_names` and pulls the PII-bearing
+	 * `admin_member_record?limit=500` for itself. That is the exact shape the F1
+	 * round removed from the agenda's season-rate table, and it cost the same two
+	 * things here: the bulk records read twice for one action, and — worse — two
+	 * INDEPENDENT degrades. One leg's records read returning non-2xx while the
+	 * other's succeeded rendered real names in the active roster directly above
+	 * profile names in the archived panel, which `applyRealNames`' own doc calls
+	 * byte-indistinguishable from "she has no record".
+	 *
+	 * `loadActiveAndArchivedRosters` (memberLifecycle.ts) is the one-pass producer
+	 * for exactly this: the two RAW reads in parallel, ONE `applyRealNames` over
+	 * their concatenation, then the overlaid rows partitioned back into the two
+	 * halves. So the two lists on screen are all real names or all profile names,
+	 * never half of each.
+	 *
+	 * The archived half is still LAZY: with the panel closed this is `loadRoster`
+	 * alone, unchanged — the archived read is the collective's whole membership
+	 * history and is not a read to pay for when nothing shows its answer (the
+	 * reasoning `loadRosterIncludingArchived`'s doc gives for future events).
+	 *
+	 * FALLBACK, not fail-loud: `loadActiveAndArchivedRosters` rejects if EITHER
+	 * raw read fails, and a failed ARCHIVED read must not take the active roster
+	 * down with it (pre-#469 a failed panel refresh only logged). So an archived
+	 * failure retries the active list alone and reports `archivedFailed`, which
+	 * puts the PANEL into its own error state. If it was the ACTIVE read that
+	 * failed, this second `loadRoster` fails too and the rejection reaches the
+	 * load body's error classification exactly as before. The extra read is paid
+	 * on the failure path only, and it cannot reintroduce the mixed-name window:
+	 * a failed panel shows an error, not names.
+	 */
+	async function readRosterHalves(cfg: EntuCfg): Promise<RosterHalves> {
+		// `untrack()`, for the same reason `reset`'s rename-commit needs it (see
+		// there): the load body's first statements run SYNCHRONOUSLY inside the
+		// page's `$effect`, so reading `showInactive` bare would make the effect
+		// DEPEND on it — and `toggleInactive` writes it, so every panel open would
+		// re-fire `loadForSelected()`, blank the page back to 'loading' and spend a
+		// second overlay. Exactly the double this function exists to remove.
+		const wantArchived = untrack(() => showInactive);
+		if (!wantArchived) {
+			return { active: await loadRoster(cfg), inactive: null, archivedFailed: false };
+		}
+		try {
+			const both = await loadActiveAndArchivedRosters(cfg);
+			return { active: both.active, inactive: both.inactive, archivedFailed: false };
+		} catch (e) {
+			console.error('roster: archived half failed, loading the active list alone', e);
+			return { active: await loadRoster(cfg), inactive: null, archivedFailed: true };
+		}
+	}
+
+	/** Writes both halves from ONE read — see `readRosterHalves`. Callers must
+	 *  have checked their own staleness guard first (this only writes state). */
+	function applyRosterHalves(read: RosterHalves): void {
+		rows = read.active.items;
+		// #321 — set from the SAME read that produced the rows, so the notice can
+		// never describe a different load's list.
+		membersPartial = read.active.truncated;
+		if (read.inactive) {
+			inactiveRows = read.inactive.items;
+			// #321 — re-derived from THIS read, so a panel that has just shrunk back
+			// under the cap stops claiming to be partial.
+			inactivePartial = read.inactive.truncated;
+			inactiveLoadError = false;
+		} else if (read.archivedFailed) {
+			// The panel is open and its own half is unreadable. A failed read says
+			// nothing about completeness — drop the claim with the rows rather than
+			// leave it standing over an empty panel.
+			inactiveRows = [];
+			inactivePartial = false;
+			inactiveLoadError = true;
+		}
 	}
 
 	$effect(() => {
@@ -1305,40 +1394,22 @@
 			// She drops out of every active-scoped read — re-derive from the
 			// server rather than patch a local delta (same discipline the section
 			// remove/reorder paths already follow on this page).
-			await loadForSelected();
 			// #255 review r3 F2 — and she drops INTO the inactive panel, so an open
-			// panel is stale the moment this write lands. `handleReinstate` already
-			// refreshes it for the mirror-image reason; the two lifecycle paths have
-			// to agree. Its own try/catch: a stale panel is not a failed deactivate
-			// and must not raise the deactivate's alert over a write that landed.
+			// panel is stale the moment this write lands; both halves have to be
+			// re-read, and `handleReinstate` does the mirror image.
 			//
-			// #259 (filed from #255 r4 review) — this reload's cfg was captured
-			// well before this await, and the await can outlive a mid-flight
-			// collective switch: the #255 switch-reset above closes and empties
-			// the panel, then this stale settle would silently repopulate
-			// `inactiveRows` with the OLD collective's members, so the next open
-			// on the NEW collective renders foreign rows with live Reinstate
-			// buttons. Guarded via the route-load machine's external co-guard
-			// seam (`generation`/`isCurrent` — same shape as this page's four
-			// structural-write reconciles). Captured HERE, after
-			// `loadForSelected()` above, not at function entry: that call bumps
-			// the generation unconditionally, so an entry-captured guard would
-			// already read stale and silently skip this refresh on every
-			// ORDINARY deactivate with the panel open.
-			const g = routeLoad.generation;
-			if (showInactive) {
-				try {
-					const read = await loadInactiveRoster(cfg);
-					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-					inactiveRows = read.items;
-					// #321 — re-derived from THIS read, so a panel that has just shrunk
-					// back under the cap stops claiming to be partial.
-					inactivePartial = read.truncated;
-				} catch (e) {
-					if (!routeLoad.isCurrent(g)) return;
-					console.error('roster: inactive roster reload after deactivate failed', e);
-				}
-			}
+			// #469 review F1 — that panel refresh USED TO BE a second
+			// `loadInactiveRoster(cfg)` right here, after this `loadForSelected()`:
+			// two reads, two real-names overlays, two `admin_member_record?limit=500`
+			// reads for one deactivate, and a window where the active list above and
+			// the panel below could disagree about whether this collective shows
+			// real names. `loadForSelected()` now reads BOTH halves in one pass when
+			// the panel is open (`readRosterHalves`), so this write's refresh is
+			// exactly the line above and nothing more — including the #259
+			// stale-settle guard, which lives inside the load body's own
+			// `isCurrent()` checks rather than needing a post-`loadForSelected()`
+			// generation capture out here.
+			await loadForSelected();
 		} catch (e) {
 			// FAIL-CLOSED (Gama binding): a rejected rights read, or a rejected
 			// write, must never leave the deactivate looking like it went through.
@@ -1412,20 +1483,38 @@
 		// next open renders the wrong collective's members with live
 		// Reinstate buttons aimed at foreign ids. Guarded via the route-load
 		// machine's external co-guard seam (`generation`/`isCurrent`). This
-		// function never calls `loadForSelected()` itself, so entry-capture
-		// is correct here — contrast `handleDeactivateConfirm`/
-		// `handleReinstate` below, which must capture AFTER their own
-		// `loadForSelected()` call because that call bumps the generation.
+		// function never calls `loadForSelected()` itself, so entry-capture is
+		// correct here. (Before #469 review F1 the two lifecycle handlers needed
+		// a capture of their own, taken AFTER their own `loadForSelected()` call
+		// because that call bumps the generation; their panel refresh is now
+		// inside that load, guarded by the load body's own `isCurrent()`.)
 		const g = routeLoad.generation;
+		// #469 review F1 — the open reads BOTH halves and replaces BOTH lists, so
+		// the two member lists now on screen together come out of ONE real-names
+		// overlay. Reading only the archived half here (what this did before) left
+		// the panel's names resolved by a different, later overlay pass than the
+		// active list already rendered above it: two `admin_member_record` reads
+		// for one panel open, and — when only one of them degraded — real names in
+		// one list directly above profile names in the other, which the overlay's
+		// own doc calls byte-indistinguishable from "she has no record". The
+		// active half is not waste: it is the same read the next refresh would do
+		// anyway, and it is what makes the panel and the roster agree.
+		//
+		// The join-state fan-out (`listJoinStateDetails`) is deliberately NOT
+		// re-run here — it is 2 reads per member and its answers are keyed by
+		// personId, so every row already on screen keeps its badge and controls. A
+		// member added by another admin since the last full load renders without
+		// them until the next load: the template already guards on
+		// `joinStates[row.personId] !== undefined`, so that is a missing control,
+		// never a wrong one — the same degrade that read's own failure path takes.
 		try {
 			inactiveLoadError = false;
-			const read = await loadInactiveRoster(cfg);
+			const read = await readRosterHalves(cfg);
 			if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-			inactiveRows = read.items;
 			// #321 — the archived-member list only grows (deactivate never deletes),
 			// so this is the roster read most likely to hit its cap; the page-level
-			// roster-partial-notice covers it.
-			inactivePartial = read.truncated;
+			// roster-partial-notice covers it (re-derived inside `applyRosterHalves`).
+			applyRosterHalves(read);
 		} catch (e) {
 			if (!routeLoad.isCurrent(g)) return;
 			console.error('roster: inactive roster load failed', e);
@@ -1458,43 +1547,28 @@
 		// #296 — captured at FUNCTION ENTRY, before `reinstatePending` is even
 		// set, mirroring the placement `handleDeactivateConfirm`'s `gEntry`
 		// (#287) established: this handler had NO usable capture at all before
-		// this fix — the only existing `const g = routeLoad.generation` below
-		// is captured AFTER `loadForSelected()` has already bumped the
-		// generation, so it is scoped narrowly to the inner inactive-panel
-		// reload and cannot guard the outer flag or the catch without falling
-		// into the same always-true trap #287 rejected there. `gEntry` guards
-		// the catch-write and the `finally` clear; it is deliberately a
-		// DIFFERENT capture from `g` further down, same reasoning as
-		// `handleDeactivateConfirm`.
+		// this fix. `gEntry` guards the catch-write and the `finally` clear.
+		// (Until #469 review F1 there was a SECOND, narrower capture below,
+		// scoped to an inner inactive-panel reload that no longer exists — the
+		// panel is refreshed by `loadForSelected()` itself now.)
 		const gEntry = routeLoad.generation;
 		reinstatePending = memberId;
 		deactivateActionError = null;
 		try {
 			await reinstateMember(cfg, memberId);
-			// Back in the active reads — the page re-reads rather than patching,
-			// same discipline as `handleDeactivateConfirm` above.
+			// Back in the active reads AND out of the open panel — the page
+			// re-reads rather than patching, same discipline as
+			// `handleDeactivateConfirm` above.
+			//
+			// #469 review F1 — the panel half used to be a SECOND
+			// `loadInactiveRoster(cfg)` here, with its own real-names overlay and
+			// its own `admin_member_record?limit=500`: two overlays per reinstate,
+			// able to degrade independently and show the two lists disagreeing
+			// about whether this collective shows real names. `loadForSelected()`
+			// reads both halves in one pass when the panel is open
+			// (`readRosterHalves`), including the #259 stale-settle guard, so this
+			// one line is the whole refresh.
 			await loadForSelected();
-			// #259 (filed from #255 r4 review) — same guard as
-			// `handleDeactivateConfirm`'s mirror-image reload above: captured
-			// AFTER `loadForSelected()`, not at function entry, because that
-			// call bumps the route-load machine's generation unconditionally
-			// and an entry-captured guard would already read stale and
-			// silently skip this refresh on every ORDINARY reinstate with the
-			// panel open.
-			const g = routeLoad.generation;
-			if (showInactive) {
-				try {
-					const read = await loadInactiveRoster(cfg);
-					if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-					inactiveRows = read.items;
-					// #321 — re-derived from THIS read, exactly as the deactivate path
-					// above does.
-					inactivePartial = read.truncated;
-				} catch (e) {
-					if (!routeLoad.isCurrent(g)) return;
-					console.error('roster: inactive roster reload after reinstate failed', e);
-				}
-			}
 		} catch (e) {
 			// #255 review F2 — a failed reinstate produces NO visible change at all
 			// otherwise (the row is already in the inactive panel and stays there),
@@ -1668,8 +1742,9 @@
 	// and pencil tap the stale displayed name would resurrect the deleted real
 	// name into the new one. `row.profileName` is unchanged by #269 and is what
 	// R4's "prefill from the profile display name" actually means; the `?? row.name`
-	// fallback covers only pre-#269 row shapes (`toRosterRow`'s bare output and
-	// `loadInactiveRoster`'s rows), where the two are equal by construction.
+	// fallback covers only pre-#269 row shapes (`toRosterRow`'s bare output),
+	// where the two are equal by construction — every producer this page reads
+	// has carried `profileName` on BOTH halves since #469.
 	let recordEditorMemberId = $state<string | null>(null);
 	let recordEditorLookup = $state<MemberRecordLookup | null>(null);
 	let recordForm = $state<{

@@ -34,11 +34,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	})
 }));
 
-const { loadRosterMock, listSectionsMock, loadInactiveRosterMock, listInactiveMembersMock } =
+const { loadRosterMock, listSectionsMock, loadInactiveRosterMock, listInactiveMembersMock, loadActiveAndArchivedRostersMock } =
 	vi.hoisted(() => ({
 		loadRosterMock: vi.fn(),
 		listSectionsMock: vi.fn(),
 		loadInactiveRosterMock: vi.fn(),
+		loadActiveAndArchivedRostersMock: vi.fn(),
 		listInactiveMembersMock: vi.fn()
 	}));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
@@ -46,6 +47,7 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),
 	loadInactiveRoster: loadInactiveRosterMock,
+	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: vi.fn().mockResolvedValue([])
 }));
@@ -141,6 +143,21 @@ beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rows));
 	listSectionsMock.mockResolvedValue([]);
 	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
+	// #469 review F1 — /roster reads BOTH member lists through the ONE-PASS
+	// producer `loadActiveAndArchivedRosters` (one real-names overlay for the two
+	// lists it can have on screen at once), not `loadRoster` + `loadInactiveRoster`
+	// side by side. This double COMPOSES the two per-half mocks the tests here
+	// already drive, so each half is still steered and counted exactly as before:
+	// `loadInactiveRosterMock` IS the archived half's read. The real producer
+	// reports truncation per half (its own raw read OR'd with the overlay's); a
+	// double has no overlay, so each half simply keeps its own flag.
+	loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => {
+		const [active, inactive] = await Promise.all([
+			loadRosterMock(cfg),
+			loadInactiveRosterMock(cfg)
+		]);
+		return { active, inactive };
+	});
 	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 });
 

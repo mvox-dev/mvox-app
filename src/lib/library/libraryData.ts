@@ -1,6 +1,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
+import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // T6.3/#58(TBD) — the library READ data layer. Read-only throughout: no
@@ -353,7 +354,7 @@ async function resolveBorrowerName(
 	cfg: EntuCfg,
 	memberId: string,
 	fetchImpl: typeof fetch = fetch
-): Promise<string> {
+): Promise<{ personId: string; profileName: string }> {
 	const res = await entuFetch(cfg.db, `entity/${memberId}?props=person`, cfg.token, {}, fetchImpl);
 	if (!res.ok) throw new Error(`resolveBorrowerName: member ${memberId} lookup failed: ${res.status}`);
 	const body = (await res.json()) as { entity?: { person?: Array<{ reference: string }> } };
@@ -369,7 +370,7 @@ async function resolveBorrowerName(
 		if (p._sharing === 'domain' && p.name.trim() !== '') domain = p.name.trim();
 		else if (p._sharing === 'public' && p.name.trim() !== '') pub = p.name.trim();
 	}
-	return domain !== '' ? domain : pub;
+	return { personId, profileName: domain !== '' ? domain : pub };
 }
 
 /**
@@ -377,6 +378,27 @@ async function resolveBorrowerName(
  * loadRoster's Promise.all semantics, rosterData.ts:188-199) — a resolution
  * failure rejects the whole batch rather than silently showing an unresolved
  * copy as available or unattributed.
+ *
+ * #469 review F2 — and the resolved names now obey `roster_show_real_names`,
+ * exactly as every roster surface does. The library was the surface the
+ * superseded #269 fence named BY NAME as out of scope; #469 (Mihkel,
+ * 2026-09-23: "all places we are showing member names ... must obey the admin
+ * setting") supersedes that fence, so the lending rows and the bulk-checkout
+ * member picker — both fed from this map — can no longer show 'Gone Girl'
+ * while the roster, agenda and event page show 'Rita Real' for the same person.
+ *
+ * ONE overlay for the whole batch, not one per borrower: the personId → record
+ * name map comes from `resolveRealNameByPerson` (rosterData.ts), the same
+ * single decision point `applyRealNames` uses, read ONCE here after the member
+ * → person → profile fan-out has produced every personId to look up. Its
+ * degrade is fail-SOFT by design (empty map + a loud console.error on any
+ * failure), which is deliberately WEAKER than this function's own fail-loud
+ * contract: an unreadable `admin_member_record` must not make a lending row
+ * unresolvable, it must only make it show the profile name — the same
+ * direction every other overlay degrades in, and never the reverse.
+ *
+ * No borrowers to name → no toggle read, no records read (the same guard
+ * `applyRealNames` puts on an empty row list).
  */
 export async function resolveBorrowerNames(
 	cfg: EntuCfg,
@@ -384,10 +406,17 @@ export async function resolveBorrowerNames(
 	fetchImpl: typeof fetch = fetch
 ): Promise<Map<string, string>> {
 	const unique = [...new Set(memberIds)];
+	if (unique.length === 0) return new Map();
 	const pairs = await Promise.all(
 		unique.map(async (id) => [id, await resolveBorrowerName(cfg, id, fetchImpl)] as const)
 	);
-	return new Map(pairs);
+	const { byPerson } = await resolveRealNameByPerson(cfg, fetchImpl);
+	return new Map(
+		pairs.map(([id, { personId, profileName }]) => {
+			const recordName = byPerson.get(personId)?.trim();
+			return [id, recordName ? recordName : profileName] as const;
+		})
+	);
 }
 
 /**

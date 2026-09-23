@@ -2554,6 +2554,15 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 		});
+		// #469 review F3 — the read discipline is measured as the DELTA across the
+		// panel open, not as an absolute count over the whole page: since the
+		// review the HEADER's conductor line obeys the toggle too, from its own
+		// read on page load (a conductor is a person who may not be a member at
+		// all, so she cannot be resolved off a roster read). The claim this test
+		// makes is about the PANEL's read discipline — never one read per member —
+		// and a per-surface delta says exactly that, where an absolute count would
+		// quietly turn into a count of how many surfaces this page has.
+		const before = fetchStub.mock.calls.length;
 		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
@@ -2569,12 +2578,55 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(panel.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
 		expect(panel.textContent).not.toContain('Viewer Vera');
 
-		// The read discipline, checked on the network: ONE toggle read and ONE
-		// bulk records read ride the panel's one loadRoster call — never one per
-		// member.
-		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-		expect(urls.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+		// ONE toggle read and ONE bulk records read ride the panel's one loadRoster
+		// call — never one per member.
+		const opened = fetchStub.mock.calls.slice(before).map((c) => String(c[0]));
+		expect(opened.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		expect(opened.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
+	});
+
+	// #469 review F3 — the header's conductor line was the last profile-only
+	// member surface left on this page: the attendance panel and the RSVP tally
+	// card obeyed the toggle while the header two sections above them named the
+	// SAME person by her profile name, and the agenda's conductor chips (which
+	// read the overlaid roster rows) disagreed with the header too.
+	it('the header names the conductors by their REAL names with the toggle ON (#469 review F3)', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: conductorSeason(),
+			realNames: true
+		});
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
+			return el!;
+		});
+		expect(line.textContent).toContain(RN_RECORD_NAMES['p-viewer']);
+		expect(line.textContent).not.toContain('Mihkel Putrinš');
+		expect(line.textContent).not.toContain('Viewer Vera');
+	});
+
+	it('the header keeps the conductors\' PROFILE names with the toggle OFF, spending no records read (#469 review F3)', async () => {
+		const { container, fetchStub } = renderComposePage({
+			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: conductorSeason(),
+			realNames: 'off'
+		});
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain('Mihkel Putrinš');
+			return el!;
+		});
+		for (const recordName of Object.values(RN_RECORD_NAMES)) {
+			expect(line.textContent).not.toContain(recordName);
+		}
+		expect(
+			fetchStub.mock.calls
+				.map((c) => String(c[0]))
+				.filter((u) => u.includes('admin_member_record'))
+		).toEqual([]);
 	});
 
 	it("the attendance panel keeps PROFILE names with the toggle OFF — the toggle is read (once), no records request is ever issued (#469)", async () => {
@@ -2600,7 +2652,11 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
+		// #469 review F3 — TWO toggle reads on this page now, one per name-bearing
+		// surface that resolves independently: the header's conductor line (page
+		// load) and this panel (its own open). Neither spends a records read while
+		// the toggle is off, which is the claim that matters here.
+		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(2);
 	});
 
 	// #469 — the RSVP tally card is the event page's RSVP LIST and obeys too.
