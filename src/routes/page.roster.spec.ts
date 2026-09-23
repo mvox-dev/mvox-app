@@ -43,7 +43,7 @@ const { loadRosterMock, listSectionsMock } = vi.hoisted(() => ({
 // #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
 // profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
 // (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
-vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 // TS.1/#95 — the page now ALSO loads the section tree; this file's concerns
 // (loading/ready/empty/error/no-collective/staleness) are section-agnostic, so
 // listSections is pinned to an empty tree (every member renders under Unassigned;

@@ -41,7 +41,7 @@ const { loadRosterMock, listSectionsMock, loadInactiveRosterMock, listInactiveMe
 		loadInactiveRosterMock: vi.fn(),
 		listInactiveMembersMock: vi.fn()
 	}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRosterWithRealNames: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),

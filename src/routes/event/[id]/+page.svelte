@@ -1086,10 +1086,12 @@
 	}
 
 	/** #344 — the card's ONE name-resolution chain: `loadRoster` (rosterData.ts),
-	 *  the same producer the attendance panel already reuses (Henry's
-	 *  2026-09-06 fence: event pages keep profile names, no RedactedField, no
-	 *  second chain). Runs ONCE per open, never once per row — the whole
-	 *  card's memberId → name map comes back from this ONE read.
+	 *  the same producer the attendance panel already reuses. #469 (Mihkel,
+	 *  2026-09-23, supersedes Henry's 2026-09-06 roster-only fence): this card
+	 *  IS the event page's RSVP list, so it now obeys `roster_show_real_names`
+	 *  through the SAME shared producer — no second chain, no opt-out. Runs
+	 *  ONCE per open, never once per row — the whole card's memberId → name map
+	 *  comes back from this ONE read.
 	 *
 	 *  #344 review F1 — on a PAST event the ids to name are NOT active-only.
 	 *  `loadTally` deliberately leaves a past tally unjoined (#255 D: the
@@ -1118,7 +1120,10 @@
 			.then((rosterRead) => {
 				if (g !== generation || detail?.id !== evId) return;
 				const names: Record<string, string> = {};
-				for (const row of rosterRead.items) names[row.memberId] = row.profileName ?? row.name;
+				// #469 — `row.name` (the overlaid displayed name), never
+				// `row.profileName`: this card is the event page's RSVP list and
+				// must obey roster_show_real_names too.
+				for (const row of rosterRead.items) names[row.memberId] = row.name;
 				tallyCardNames = names;
 				// #321 — carried through, not discarded: a truncated member read
 				// drops people out of this card, and "not on the list" reads as

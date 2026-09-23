@@ -1,7 +1,13 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listAdmins, listLibrarians } from '$lib/admin/roleManagement';
-import { listProfilesForPerson, loadRoster, toRosterRow, type RosterRow } from './rosterData';
+import {
+	applyRealNames,
+	listProfilesForPerson,
+	loadRosterRead,
+	toRosterRow,
+	type RosterRow
+} from './rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
 // #255 — the member LIFECYCLE write layer (deactivate / reinstate) plus the
@@ -28,7 +34,10 @@ import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 //     write-path change).
 //   - `loadInactiveRoster`: orchestration mirror of `loadRoster` — profile
 //     fan-out via listProfilesForPerson + toRosterRow, so inactive members
-//     resolve to displayable names under the same #28 completeness gate.
+//     resolve to displayable names under the same #28 completeness gate, then
+//     the SAME real-names overlay `loadRoster` runs (`applyRealNames`,
+//     rosterData.ts — #469, Mihkel 2026-09-23, supersedes this module's old
+//     "archived rows never resolve real names" v1 boundary).
 //   - `listDeactivateBlockers`: the REFUSAL read (accepted rec 1 — deactivate
 //     REFUSES while the person holds a manageable `_owner`/`_editor` grant;
 //     demotion stays a separate admin action). Built on listAdmins /
@@ -197,14 +206,18 @@ export async function listInactiveMembers(
 }
 
 /**
- * `loadRoster`'s orchestration over `listInactiveMembers` — rows with names.
+ * `loadRoster`'s orchestration over `listInactiveMembers` — rows with names,
+ * PROFILE-resolved and un-overlaid. Not exported: `loadInactiveRoster` below
+ * overlays it once; `loadRosterIncludingArchived` unions it with the active
+ * equivalent (`loadRosterRead`, rosterData.ts) and overlays the union once —
+ * see that function's doc for why the overlay must not run per sub-list.
  *
  * #321 — carries the member read's `truncated` through unchanged. `total` is that
  * read's server count, NOT the row count: the #28 completeness gate in
  * `toRosterRow` drops nameless members, so the two legitimately differ and only
  * `truncated` answers "is this list missing people the server has".
  */
-export async function loadInactiveRoster(
+async function loadInactiveRosterRead(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ListRead<RosterRow>> {
@@ -218,10 +231,31 @@ export async function loadInactiveRoster(
 	return {
 		items: rows
 			.filter((r): r is RosterRow => r !== null)
+			// #469 — profileName set here exactly as loadRosterRead sets it
+			// (rosterData.ts): the ONE row shape every producer emits, so
+			// applyRealNames' per-row-surface guarantee (profileName untouched)
+			// holds for archived rows too.
+			.map((row) => ({ ...row, profileName: row.name }))
 			.sort((a, b) => a.name.localeCompare(b.name)),
 		total: members.total,
 		truncated: members.truncated
 	};
+}
+
+/**
+ * #469 (Mihkel, 2026-09-23: "all places we are showing member names ... must
+ * obey the admin setting") — `loadInactiveRosterRead` PLUS the same real-names
+ * overlay `loadRoster` runs (`applyRealNames`, rosterData.ts). Supersedes this
+ * module's old "archived rows never resolve real names" v1 boundary: the
+ * reinstatement panel now obeys `roster_show_real_names` exactly like every
+ * other roster surface.
+ */
+export async function loadInactiveRoster(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<ListRead<RosterRow>> {
+	const base = await loadInactiveRosterRead(cfg, fetchImpl);
+	return applyRealNames(cfg, base, fetchImpl);
 }
 
 /**
@@ -249,26 +283,39 @@ export async function loadInactiveRoster(
  * entity changed status mid-flight between the two requests; naming her by the
  * active row is the answer that matches what the rest of the app shows.
  *
- * #321 — `truncated` is the OR of the two reads (either one short means this
- * list is missing people) and `total` their sum, the same combining rule
- * `loadRosterWithRealNames` applies to its own two reads.
+ * #469 — the real-names overlay runs ONCE, over the UNIONED rows, not once per
+ * sub-list: this function unions the two RAW reads (`loadRosterRead` from
+ * rosterData.ts and this module's own `loadInactiveRosterRead`, neither of
+ * which touches `roster_show_real_names`) and applies `applyRealNames` to the
+ * combined set. Calling `loadRoster` + `loadInactiveRoster` here instead — each
+ * already overlaid — would spend the toggle read and the bulk records read
+ * TWICE for one page load; rosterData.realNames.spec.ts pins "exactly ONE
+ * records query for the whole roster" for the shared producer, and this
+ * function's own contract (memberLifecycle.spec.ts) pins the same discipline
+ * for the union.
+ *
+ * #321 — `truncated` is the OR of the two RAW reads (either one short means
+ * this list is missing people, same as before #469) and `total` their sum; the
+ * overlay's own `truncated` (a records read that itself came back short) folds
+ * in on top via `applyRealNames`.
  */
 export async function loadRosterIncludingArchived(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ListRead<RosterRow>> {
 	const [active, inactive] = await Promise.all([
-		loadRoster(cfg, fetchImpl),
-		loadInactiveRoster(cfg, fetchImpl)
+		loadRosterRead(cfg, fetchImpl),
+		loadInactiveRosterRead(cfg, fetchImpl)
 	]);
 	const activeIds = new Set(active.items.map((r) => r.memberId));
-	return {
+	const union: ListRead<RosterRow> = {
 		items: [...active.items, ...inactive.items.filter((r) => !activeIds.has(r.memberId))].sort(
 			(a, b) => a.name.localeCompare(b.name)
 		),
 		total: active.total + inactive.total,
 		truncated: active.truncated || inactive.truncated
 	};
+	return applyRealNames(cfg, union, fetchImpl);
 }
 
 /** One manageable grant that blocks deactivation (refusal names the remedy). */
@@ -318,3 +365,4 @@ export async function listDeactivateBlockers(
 
 // (*MVOX:Josquin*)
 // (*MVOX:Josquin* — #467 review F1: _created[0].datetime validated as a string)
+// (*MVOX:Palestrina* — #469 GREEN: archived producers overlay via applyRealNames, union overlaid once)

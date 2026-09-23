@@ -12,11 +12,12 @@
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	// #269 review F1/F2 — the REAL-NAMES producer, opt-in and called from THIS
-	// route alone. The shared `loadRoster` stays profile-names-only for its three
-	// other consumers (agenda, event detail, admin roles) per Henry's 2026-09-06
-	// roster-only scope ruling; see rosterData.ts for both functions' contracts.
-	import { loadRosterWithRealNames, type RosterRow } from '$lib/roster/rosterData';
+	// #469 (Mihkel, 2026-09-23, supersedes Henry's 2026-09-06 roster-only
+	// ruling) — `loadRoster` is now the ONE shared producer and carries the
+	// real-names overlay itself; every consumer (this route, agenda, event
+	// detail, admin roles) obeys `roster_show_real_names` the same way. See
+	// rosterData.ts's `loadRoster`/`applyRealNames` docs for the contract.
+	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	// #294 — join-state read (per-row, three states) + the two write producers
 	// the roster's controls reuse verbatim: mintSelfLinkInvite serves BOTH
 	// `kutsu` and `saada uuesti` (sweep-then-mint is the atomic replace), and
@@ -102,7 +103,7 @@
 	// #321 — true when one of THIS page's member reads came back partial (server
 	// count > the raw entities array on that read's own request — see
 	// $lib/entu/listRead). Two independent facts, one notice:
-	//   `membersPartial`  — `loadRosterWithRealNames`: the active-member list, OR
+	//   `membersPartial`  — `loadRoster`: the active-member list, OR
 	//                       the `admin_member_record` overlay read behind the real
 	//                       names (a truncated overlay silently reverts SOME rows
 	//                       to profile names, indistinguishable on screen from "no
@@ -473,13 +474,13 @@
 			// personId (never on `rows`), so it runs in the SAME parallel batch as
 			// the roster/section reads rather than after them — one fewer
 			// sequential round-trip. `listJoinStates` (below) is different: its
-			// input is the set of personIds `loadRosterWithRealNames` resolves, so
+			// input is the set of personIds `loadRoster` resolves, so
 			// it structurally CANNOT start until `rows` is known — the fan-out
 			// mirrors `loadRoster`'s own per-member profile fan-out (rosterData.ts)
 			// in STYLE (Promise.all, one read per row), not in literal parallelism
 			// with the row list itself.
 			const [rowResult, sectionResult, ownerTierResult] = await Promise.allSettled([
-				loadRosterWithRealNames(cfg),
+				loadRoster(cfg),
 				listSections(cfg),
 				resolveOwnerTier(cfg, selected.personId)
 			]);
@@ -512,7 +513,7 @@
 
 			// #294 — join-state fan-out, now that `rows` (and therefore every row's
 			// personId) is known. Degrades on failure rather than taking the whole
-			// roster down with it — same precedent `loadRosterWithRealNames`'s own
+			// roster down with it — same precedent `loadRoster`'s own real-names
 			// overlay sets (rosterData.ts): the base roster (names/emails, already
 			// resolved above) is the critical read; the join-state badge/controls
 			// are supplementary admin information layered over it. A failed read

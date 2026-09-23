@@ -803,9 +803,10 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 		expect(row?.ownerIds).toEqual(['person-db-owner', 'person-p']);
 	});
 
-	it('loadRoster: wire `_owner` references reach the final row — one member-list read plus the profile fan-out, NO extra rights request', async () => {
+	it('loadRoster: wire `_owner` references reach the final row — one member-list read, the profile fan-out, and #469s toggle read, NO extra rights request', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string) => {
-			if (url.includes('_type.string=member')) {
+			const u = String(url);
+			if (u.includes('_type.string=member')) {
 				return Promise.resolve(
 					json({
 						entities: [
@@ -820,6 +821,15 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 						]
 					})
 				);
+			}
+			// #469 — loadRoster now runs applyRealNames unconditionally: resolve
+			// the database entity, then the toggle — absent here, same as no
+			// setting configured, so NO admin_member_record read is ever spent.
+			if (u.includes('_type.string=database')) {
+				return Promise.resolve(json({ entities: [{ _id: 'db-ent-1' }] }));
+			}
+			if (u.includes('entity/db-ent-1') && u.includes('roster_show_real_names')) {
+				return Promise.resolve(json({ entity: { _id: 'db-ent-1' } }));
 			}
 			return Promise.resolve(
 				json({
@@ -850,8 +860,13 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 		const flat = JSON.stringify(rows);
 		expect(flat).not.toContain('Olga Owner');
 		expect(flat).not.toContain('Paula Person');
-		// ONE list read + ONE profile read — the gate added no per-row fetch.
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
+		// ONE list read + ONE profile read + ONE database resolve + ONE toggle
+		// read (#469) — the gate added no per-row fetch, and the toggle being
+		// absent means NO admin_member_record read at all.
+		expect(fetchImpl).toHaveBeenCalledTimes(4);
+		expect(
+			fetchImpl.mock.calls.map((c) => String(c[0])).some((u) => u.includes('admin_member_record'))
+		).toBe(false);
 	});
 });
 
