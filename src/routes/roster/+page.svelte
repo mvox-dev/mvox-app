@@ -8,6 +8,10 @@
 	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
 	// `toRosterRow` — this component only renders whatever the roster producer returns.
 	import { tick, untrack } from 'svelte';
+	// #470 — the per-member section-write freeze set (AttendanceSurface's
+	// `pendingMemberIds` precedent, reactive-native here rather than a plain
+	// prop-threaded Set: this page owns the writes, so it owns the freeze).
+	import { SvelteSet } from 'svelte/reactivity';
 	import { m } from '$lib/paraglide/messages.js';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
@@ -194,6 +198,13 @@
 	//              not be put into it.
 	let sectionWriteError = $state<{ memberId: string; kind: 'create' | 'assign' } | null>(null);
 
+	// #470 — per-member freeze: a memberId sits in here from the moment one of
+	// handleAssign/handleUnassign/handleMove fires its optimistic patch until
+	// the write(s) settle. The SectionPicker on THAT row reads it as `busy`;
+	// every OTHER row's picker is unaffected — same "own one row's writes"
+	// discipline as `pendingRemoveId`/`renamingSectionId` above.
+	let sectionBusyIds = new SvelteSet<string>();
+
 	// TS.1/#95 — grouped ↔ flat toggle, default grouped. groupBySection is the
 	// GENUINE data-layer function (sectionData.ts) — the page never re-derives
 	// grouping/counts ad hoc. Declared here (not near its other UI derivations
@@ -248,6 +259,11 @@
 			// resurface as if it just happened.
 			sectionWriteError = null;
 			pageCreateError = null;
+			// #470 — a freeze armed for the OLD collective's write must not leave
+			// the NEW collective's pickers permanently disabled; each handler's own
+			// `finally` is separately guarded against a late settle (below), same
+			// split as `reorderPending`/`removePending` above.
+			sectionBusyIds.clear();
 			// #287 — a section-remove write armed/in-flight for the OLD collective
 			// must not keep the NEW collective's structural controls disabled via
 			// `structuralWritePending`; its own `finally` is separately
@@ -946,62 +962,107 @@
 		);
 	}
 
-	async function handlePick(memberId: string, sectionId: string | null): Promise<void> {
+	// #470 — replaces `handlePick` (the toggle-onpick popup wiring) with three
+	// handlers, one per SectionPicker callback. Each owns exactly one member's
+	// `sectionBusyIds` entry for its own duration (`finally`, so a thrown/early
+	// return can never leave that row stuck disabled) and, on a genuine write
+	// failure, sets `sectionWriteError` — the banner used to fire only from
+	// `handleCreate`'s own assign half; today's assign/unassign path only
+	// console.errored, the fail-loudly gap this slice closes.
+
+	/** Blank picker → a section: optimistic add, frozen until the POST lands. */
+	async function handleAssign(memberId: string, sectionId: string): Promise<void> {
+		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
-			// F3 code-review fix: a tap that writes nothing and says nothing is exactly
-			// the silent degradation the project's fail-loudly rule targets.
-			console.error('roster: section pick with no cfg', memberId, sectionId);
+			console.error('roster: section assign with no cfg', memberId, sectionId);
 			return;
 		}
-		const before = currentSectionIds(memberId);
-
-		if (sectionId === null) {
-			// "(Unassigned)" — clear ALL current section parents, one unassign call
-			// per currently-assigned section. allSettled, not all: each call has its
-			// own fate, and only the ones that REJECTED come back onto the row.
-			if (before.length === 0) return;
-			patchMemberSectionIds(memberId, []);
-			const results = await Promise.allSettled(
-				before.map((id) => unassignMemberSection(cfg, memberId, id))
-			);
-			const failed: string[] = [];
-			results.forEach((result, i) => {
-				if (result.status === 'rejected') {
-					console.error('roster: clearing section assignment failed', before[i], result.reason);
-					// F1(b) code-review fix: "the membership was already gone server-side"
-					// is NOT a failed write — the server already holds what the optimistic
-					// removal shows. Re-adding it would be the divergence, and permanent
-					// (this page never refetches). Log it, keep the removal, revert only
-					// genuine write failures.
-					if (!isSectionMembershipMissing(result.reason)) failed.push(before[i]);
-				}
-			});
-			if (failed.length > 0) addBack(memberId, failed);
-			return;
-		}
-
-		// Toggle: already assigned → unassign; not assigned → assign. Assigning
-		// never replaces — a member can hold several sections at once.
-		const isCurrent = before.includes(sectionId);
-		const after = isCurrent ? before.filter((id) => id !== sectionId) : [...before, sectionId];
-		patchMemberSectionIds(memberId, after);
+		sectionBusyIds.add(memberId);
+		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), sectionId]);
 		try {
-			if (isCurrent) {
-				await unassignMemberSection(cfg, memberId, sectionId);
-			} else {
-				await assignMemberSection(cfg, memberId, sectionId);
-			}
+			await assignMemberSection(cfg, memberId, sectionId);
 		} catch (e) {
-			console.error('roster: section assignment change failed', e);
-			// F1(b) code-review fix: an unassign that failed BECAUSE the membership
-			// was already absent server-side means UI and server now agree — keep the
-			// optimistic removal (logged just above for visibility). Only real write
-			// failures (network, 4xx/5xx) get undone.
-			if (isSectionMembershipMissing(e)) return;
-			// Undo just this call's one membership, against the live row.
-			if (isCurrent) addBack(memberId, [sectionId]);
-			else dropBack(memberId, sectionId);
+			console.error('roster: section assign failed', memberId, sectionId, e);
+			dropBack(memberId, sectionId);
+			sectionWriteError = { memberId, kind: 'assign' };
+		} finally {
+			sectionBusyIds.delete(memberId);
+		}
+	}
+
+	/** Held picker → Määramata: optimistic drop, frozen until the GET+DELETE
+	 *  lands. `isSectionMembershipMissing` = the server already agrees (the
+	 *  F1(b) reconcile-forward rule the old `handlePick` pinned) — the removal
+	 *  sticks, no banner. */
+	async function handleUnassign(memberId: string, sectionId: string): Promise<void> {
+		sectionWriteError = null;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section unassign with no cfg', memberId, sectionId);
+			return;
+		}
+		sectionBusyIds.add(memberId);
+		dropBack(memberId, sectionId);
+		try {
+			await unassignMemberSection(cfg, memberId, sectionId);
+		} catch (e) {
+			console.error('roster: section unassign failed', memberId, sectionId, e);
+			if (!isSectionMembershipMissing(e)) {
+				addBack(memberId, [sectionId]);
+				sectionWriteError = { memberId, kind: 'assign' };
+			}
+		} finally {
+			sectionBusyIds.delete(memberId);
+		}
+	}
+
+	/** Held picker → another section: Gama's write order — assign the NEW
+	 *  section FIRST, only then unassign the OLD one. A failed add changes
+	 *  nothing (no patch, no lookup, no delete): the member was never in
+	 *  danger of losing her only section. A failed delete leaves her visibly
+	 *  in BOTH (never in neither) — fixable, never silently lost. */
+	async function handleMove(memberId: string, fromId: string, toId: string): Promise<void> {
+		sectionWriteError = null;
+		const cfg = currentCfg;
+		if (!cfg) {
+			console.error('roster: section move with no cfg', memberId, fromId, toId);
+			return;
+		}
+		sectionBusyIds.add(memberId);
+		try {
+			try {
+				await assignMemberSection(cfg, memberId, toId);
+			} catch (e) {
+				console.error('roster: move — assigning the new section failed', memberId, fromId, toId, e);
+				sectionWriteError = { memberId, kind: 'assign' };
+				return; // nothing changed yet: no patch, no lookup, no delete
+			}
+			// Server-confirmed add — safe to show it optimistically now.
+			patchMemberSectionIds(memberId, [...currentSectionIds(memberId), toId]);
+			try {
+				await unassignMemberSection(cfg, memberId, fromId);
+			} catch (e) {
+				console.error(
+					'roster: move — unassigning the old section failed',
+					memberId,
+					fromId,
+					toId,
+					e
+				);
+				if (isSectionMembershipMissing(e)) {
+					// Server already agrees the old membership is gone — same
+					// reconcile-forward rule as handleUnassign, no banner.
+					dropBack(memberId, fromId);
+					return;
+				}
+				// Gama: a failed delete must never leave her in NONE — keep BOTH.
+				sectionWriteError = { memberId, kind: 'assign' };
+				return;
+			}
+			dropBack(memberId, fromId);
+		} finally {
+			sectionBusyIds.delete(memberId);
 		}
 	}
 
@@ -4633,9 +4694,10 @@
 					memberName={row.profileName ?? row.name}
 					{sections}
 					selectedIds={row.sectionIds ?? []}
-					dbEntityId={row.dbEntityId}
-					onpick={(sectionId) => handlePick(row.memberId, sectionId)}
-					oncreate={(input) => handleCreate(row.memberId, input)}
+					busy={sectionBusyIds.has(row.memberId)}
+					onassign={(sectionId) => handleAssign(row.memberId, sectionId)}
+					onunassign={(sectionId) => handleUnassign(row.memberId, sectionId)}
+					onmove={(fromId, toId) => handleMove(row.memberId, fromId, toId)}
 				/>
 			</div>
 			{#if sectionWriteError?.memberId === row.memberId}

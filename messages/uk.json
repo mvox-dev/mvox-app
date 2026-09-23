@@ -220,6 +220,7 @@
 	"roster_section_parent_label": "Батьківська партія",
 	"roster_section_create_failed": "Не вдалося створити партію — нічого не збережено.",
 	"roster_section_picker_label": "Партії для {name}",
+	"roster_section_add_label": "Додати партію для {name}",
 	"roster_new_section_form_label": "Нова партія",
 	"roster_section_reorder_failed": "Не вдалося зберегти порядок партій — показано порядок, збережений на сервері.",
 	"roster_section_reparent_partial": "Партія перемістилася, але не вдалося зберегти її нову позицію — показано порядок, збережений на сервері.",
