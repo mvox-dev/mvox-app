@@ -4132,10 +4132,18 @@
 			     nested interactive content (WCAG 4.1.2). The two controls that
 			     can render on a COLLAPSED row — the SectionPicker and an
 			     armed/in-flight deactivate pair — are lifted above the overlay
-			     at their own render sites with a bare `relative` (positioned,
-			     `z-index: auto`, written AFTER this button, so tree order puts
-			     them on top — no z-index, which would make each row a stacking
-			     context and trap the picker's drop-down menu inside it).
+			     at their own render sites, but NOT with the same class: the
+			     deactivate pair (and its refusal/failure alerts) uses a bare
+			     `relative`, staying in flow; the SectionPicker uses `absolute
+			     top-1 right-1` (#468 floats it in the card's upper-right corner),
+			     taking its offsets from this same already-`relative` <li>. Copy
+			     the INVARIANT, not either class: be POSITIONED at `z-index: auto`
+			     and be written AFTER this button, so tree order puts you on top —
+			     no z-index, which would make each row a stacking context and trap
+			     the picker's drop-down menu inside it. Which of the two shapes to
+			     copy is a layout question: `absolute` takes the control out of
+			     flow (shrink-to-fit, so keep prose out of it — #468 review F1),
+			     `relative` leaves it in the <li>'s flex column.
 			     Anything else added to a collapsed row needs the same lift, and
 			     must be written after this button, or it becomes unclickable.
 			     The resting border is the affordance the retired ✎ glyph used
@@ -4553,21 +4561,35 @@
 					onpick={(sectionId) => handlePick(row.memberId, sectionId)}
 					oncreate={(input) => handleCreate(row.memberId, input)}
 				/>
-				{#if sectionWriteError?.memberId === row.memberId}
-					<!-- F5 code-review fix — the create path's loud failure (see
-					     `sectionWriteError` above). role="alert" because it appears after the
-					     picker has already closed, with nothing else on screen changing. -->
-					<p
-						data-testid="section-write-error-{row.memberId}"
-						role="alert"
-						class="text-xs text-red-700"
-					>
-						{sectionWriteError.kind === 'create'
-							? m.roster_section_create_failed()
-							: m.roster_section_assign_failed()}
-					</p>
-				{/if}
 			</div>
+			{#if sectionWriteError?.memberId === row.memberId}
+				<!-- F5 code-review fix — the create path's loud failure (see
+				     `sectionWriteError` above). role="alert" because it appears after the
+				     picker has already closed, with nothing else on screen changing.
+				     #468 review F1 — this alert is an IN-FLOW child of the <li>, deliberately
+				     OUTSIDE the `absolute top-1 right-1` wrapper above. That wrapper is out of
+				     flow with `right` set and `left: auto`, so its used width is shrink-to-fit
+				     over its contents: the picker's short inline-block trigger. A
+				     full-sentence alert inside it would widen the box to the message's width
+				     the moment a write failed — painting red text across the row's own
+				     name/email (in flow at the left of the same <li>) and visibly dragging the
+				     left-aligned trigger sideways, at the exact moment the user needs the
+				     control to stay put for a retry. In flow here it wraps under the row text
+				     like the deactivate alerts above, and the corner wrapper keeps the
+				     trigger's width. `relative` for the same reason those alerts carry it: an
+				     alert on a COLLAPSED row sits under the full-card `absolute inset-0`
+				     activator, where its text is unselectable and clicks on it fall through to
+				     "open the record editor". -->
+				<p
+					data-testid="section-write-error-{row.memberId}"
+					role="alert"
+					class="relative text-xs text-red-700"
+				>
+					{sectionWriteError.kind === 'create'
+						? m.roster_section_create_failed()
+						: m.roster_section_assign_failed()}
+				</p>
+			{/if}
 		{/if}
 	</li>
 {/snippet}
