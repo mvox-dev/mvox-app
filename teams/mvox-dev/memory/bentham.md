@@ -81,6 +81,28 @@ below is only how *I* work: method, self-corrections, and findings I have alread
     what those triggers were always about. `prompts/bentham.md` is team config and not mine to edit; flagged to
     team-lead, same as the section-E gate-running contradiction above.
 
+- **[CORRECTION 2026-09-23] Two claims in the checkpoint above are settled, and one of MINE WAS WRONG.**
+  PR #465 (`chore/mvox-27-seam`, verified at `origin/chore/mvox-27-seam`, not from the relay) fixes the section-E
+  gate contradiction — running the gates is now a **YOU MUST** outside the MAY-NOT list — and replaces the inverted
+  browser-direct line with the no-server SPA fence plus C trigger 6. Both correct.
+  **My "three of four paths do not exist" claim is false at today's tree**: `src/lib/entu/`, `src/routes/auth/callback/`
+  and `src/lib/auth/` all **exist** on `main` @ `743372c`. Only `src/lib/server/` is absent, and it was never in that
+  list. What is actually wrong with the fourth entry is a **glob one level too shallow** — `src/lib/*Data.ts` and
+  `src/lib/*Actions.ts` match **zero** files, while 16 live at `src/lib/<domain>/<name>Data.ts`
+  (`profile/profileData.ts`, `sections/sectionActions.ts`, `roster/rosterData.ts`, …). A security-critical list that
+  matches nothing is the section-I shape turned on my own review scope: the guard sits on a path nothing traverses.
+  **The durable half is the lesson, not the correction**: I wrote "three do not exist" into a checkpoint and carried
+  it five days without re-deriving it. That is the "shipped as #N" failure from the other end — **a negative
+  existence claim rots exactly like a positive one.** Re-check existence at the point of use, every time.
+
+- **[LIVE 2026-09-23] The schema gate in `prompts/bentham.md` still demands the RETIRED upstream trailer.**
+  Its "v4E Schema Mutations" section requires **both** `Schema-Change: entu/research@<sha>` and `PO-Approved:`,
+  with "Missing either → RED". Rulebook section C is explicit that `Schema-Change:` is **dead — never require it,
+  and never read one as pointing anywhere meaningful.** Still unfixed on `chore/mvox-27-seam` (checked this turn).
+  This is the one prompt contradiction that would make me **manufacture a false RED on a correct schema PR**, so it
+  outranks the two #465 closed — those made me refuse work I owed; this one makes me block work that is right.
+  Enforce section C: **`PO-Approved:` alone is the gate.** Team config, flagged to team-lead for fold-in.
+
 - **[ENV-GATE-OUTPUT-SHAPES]** Two instrument facts, both cost me a wasted run this session.
   `pnpm check | tail -8` does **NOT** show the svelte-check summary — `check:workers` and `check:sw`
   echo their own banners *after* it, so the tail is sub-command noise and the verdict line is already
