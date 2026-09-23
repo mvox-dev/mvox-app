@@ -117,7 +117,12 @@ function liveShapedTree(): SectionNode[] {
 	];
 }
 
-/** Rows carry the member's org (TU.1 contract — rosterData.org.spec.ts). */
+/**
+ * Rows carry the member's org (TU.1 contract — rosterData.org.spec.ts).
+ * #468 — every row also carries the READER's person id ('person-p') in
+ * `ownerIds` so the picker gate stays open for this file's own (unrelated)
+ * org-scoped create concern.
+ */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -126,7 +131,8 @@ function fixtureRows(): RosterRow[] {
 			name: 'Ada Lovelace',
 			email: 'ada@x.com',
 			sectionIds: [EFK_SOPRANO],
-			dbEntityId: ORG_EFK
+			dbEntityId: ORG_EFK,
+			ownerIds: ['person-p']
 		},
 		{
 			memberId: 'm-pete',
@@ -134,7 +140,8 @@ function fixtureRows(): RosterRow[] {
 			name: 'Pete Wilson',
 			email: 'pete@x.com',
 			sectionIds: [],
-			dbEntityId: ORG_EFK
+			dbEntityId: ORG_EFK,
+			ownerIds: ['person-p']
 		}
 	];
 }

@@ -112,7 +112,10 @@ function liveSectionsWire(): unknown {
 /** Multi-org rows, exactly as the live unscoped member query yields them: the
  *  ALPHABETICALLY-FIRST member belongs to the FOREIGN org (live: rows span five
  *  orgs, so whoever sorts first sets `currentDbEntityId` under the current code —
- *  that arbitrariness IS finding F3). The viewer ('person-p') is an EFK member. */
+ *  that arbitrariness IS finding F3). The viewer ('person-p') is an EFK member.
+ *  #468 — every row carries the READER's person id ('person-p') in `ownerIds`
+ *  so the picker gate stays open for this file's own (unrelated) trusted-event
+ *  timing concern. */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -121,7 +124,8 @@ function fixtureRows(): RosterRow[] {
 			name: 'Aabel Tamm',
 			email: 'aabel@x.com',
 			sectionIds: [TAM_TENOR],
-			dbEntityId: ORG_TAM
+			dbEntityId: ORG_TAM,
+			ownerIds: ['person-p']
 		},
 		{
 			memberId: 'm-efk-mari',
@@ -129,7 +133,8 @@ function fixtureRows(): RosterRow[] {
 			name: 'Mari Mets',
 			email: 'mari@x.com',
 			sectionIds: [EFK_SOPRANO],
-			dbEntityId: ORG_EFK
+			dbEntityId: ORG_EFK,
+			ownerIds: ['person-p']
 		},
 		{
 			memberId: 'm-viewer',
@@ -137,7 +142,8 @@ function fixtureRows(): RosterRow[] {
 			name: 'Zelda Viewer',
 			email: 'zelda@x.com',
 			sectionIds: [],
-			dbEntityId: ORG_EFK
+			dbEntityId: ORG_EFK,
+			ownerIds: ['person-p']
 		}
 	];
 }

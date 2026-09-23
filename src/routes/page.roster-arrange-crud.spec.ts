@@ -131,11 +131,14 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
+// #468 — every fixture row carries the READER's person id ('person-p') in
+// `ownerIds` so the picker gate stays open for this file's own concern (Arrange
+// mode strips the picker, unrelated to ownership).
 function fixtureRows(): RosterRow[] {
 	return [
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'] },
-		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop2'] },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'] }
+		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], ownerIds: ['person-p'] },
+		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop2'], ownerIds: ['person-p'] },
+		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'], ownerIds: ['person-p'] }
 	];
 }
 

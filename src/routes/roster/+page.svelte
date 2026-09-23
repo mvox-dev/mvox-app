@@ -4491,7 +4491,15 @@
 				</p>
 			{/if}
 		{/if}
-		{#if admin === 'admin' && !sectionsError}
+		{#if row.ownerIds?.includes(selected?.personId ?? '') && !sectionsError}
+			<!-- #468 — the gate is the member's own `_owner` grant, read off the
+			     entity (`row.ownerIds`, threaded from `listActiveMembers`'s wire read),
+			     NOT an app-computed role: whoever the reader's own person id shows up
+			     for on THIS row may actually move the member (ER-14: a move deletes a
+			     `_parent`, owner-gated — reparenting is unconditionally a delete+add
+			     pair, so owner is the gate for the whole control, not just half of it).
+			     `admin`/`$adminStore` no longer decides this control; its other
+			     consumers on this page are untouched. -->
 			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. The
 			     picker's option list would hold only "(Unassigned)" (its sole reachable
 			     action being the destructive clear-all) and its trigger label — built
@@ -4518,21 +4526,24 @@
 			     explicitly (present in Expanded, absent in Collapsed where no member
 			     rows render) so the choice is visible to the gate rather than
 			     invisible to it. -->
-			<!-- #302 review F1 — `relative` wrapper (deliberately NO z-index). The
-			     picker renders on every COLLAPSED admin row, where the card activator
-			     is an `absolute inset-0` overlay across the whole <li>; unlifted, the
-			     picker's trigger would sit under it and a tap meant for "assign a
-			     section" would open the record editor instead. `relative` alone is
-			     enough: both this and the overlay are positioned with `z-index: auto`,
-			     so they paint in TREE order and this block — written after the
-			     activator — wins. A z-index here would be actively wrong: it would make
-			     each row a stacking context, and the picker's own `absolute z-10` menu
-			     (which must hang over the FOLLOWING rows) would be trapped inside it,
-			     painting under the next row's contents. Same reason the deactivate
-			     block above uses bare `relative`. The wrapper rather than a prop keeps
-			     SectionPicker presentational, and keeps the roster off the assumption
-			     that the component's own root happens to be positioned. -->
-			<div class="relative flex flex-col gap-0.5">
+			<!-- #302 review F1 / #468 — `absolute top-1 right-1` wrapper, floating the
+			     picker upper right on the card (deliberately NO z-index). The picker
+			     renders on every COLLAPSED row an owner may move, where the card
+			     activator is an `absolute inset-0` overlay across the whole <li>;
+			     unlifted, the picker's trigger would sit under it and a tap meant for
+			     "assign a section" would open the record editor instead. The enclosing
+			     <li> is already `relative` (its containing block for these offsets —
+			     no second positioned wrapper needed); this block and the overlay are
+			     both positioned with `z-index: auto`, so they paint in TREE order and
+			     this block — written after the activator — wins. A z-index here would
+			     be actively wrong: it would make each row a stacking context, and the
+			     picker's own `absolute z-10` menu (which must hang over the FOLLOWING
+			     rows) would be trapped inside it, painting under the next row's
+			     contents. Same reason the deactivate block above uses bare `relative`.
+			     The wrapper rather than a prop keeps SectionPicker presentational, and
+			     keeps the roster off the assumption that the component's own root
+			     happens to be positioned. -->
+			<div class="absolute top-1 right-1">
 				<SectionPicker
 					memberId={row.memberId}
 					memberName={row.profileName ?? row.name}

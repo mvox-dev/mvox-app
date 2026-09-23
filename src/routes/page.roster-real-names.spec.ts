@@ -89,6 +89,14 @@ interface DbWire {
 	 *  bulk read saw a record but the pencil's own lookup no longer does (the
 	 *  record was deleted in between). */
 	lookupRecords?: Array<{ id: string; person?: string; name?: string }>;
+	/** #468 — when set, every member wire row carries this person id as its
+	 *  `_owner`, opening the picker gate. UNSET by default (`ownerIds: []`,
+	 *  picker closed) — this file's DOM-shape-parity tests deliberately render
+	 *  with NO admin controls, and the ownership gate is now independent of
+	 *  `$adminStore`, so a blanket grant would reopen the picker under
+	 *  'not-admin' too. Set only on the one fixture that exercises the picker
+	 *  itself (the #269 scope test). */
+	viewerPersonId?: string;
 }
 
 function jsonRes(body: unknown, status = 200) {
@@ -110,7 +118,9 @@ function wireMember(fx: DbWire, m: { id: string; person: string }) {
 				string: 'Collective',
 				entity_type: 'database'
 			}
-		]
+		],
+		// #468 — see DbWire.viewerPersonId's doc.
+		_owner: fx.viewerPersonId ? [{ reference: fx.viewerPersonId }] : []
 	};
 }
 
@@ -462,7 +472,10 @@ describe('#269 scope — every other member-name surface keeps the PROFILE name'
 	// visible section-list text and #269 must not touch it. Zero production
 	// change is needed to satisfy this scope pin.
 	it('SectionPicker names the member by her PROFILE name in its listbox aria-label even while her row displays the real name (stated choice — section-assignment action, out of the contracted surface; flag for live review)', async () => {
-		stubWire({ sampledb: sampledbFixture(true) });
+		// #468 — the reader must own the row for the picker to render at all.
+		const fx = sampledbFixture(true);
+		fx.viewerPersonId = 'person-p';
+		stubWire({ sampledb: fx });
 		const { container } = await renderRosterAs('admin');
 		// The row displays the real name…
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');

@@ -119,7 +119,13 @@ describe('listActiveMembers — count-based truncation detection (#321)', () => 
 		});
 		expect(await listActiveMembers(cfg, fetchImpl)).toEqual({
 			items: [
-				{ memberId: 'member-1', personId: 'person-a', sectionIds: [], dbEntityId: undefined }
+				{
+					memberId: 'member-1',
+					personId: 'person-a',
+					sectionIds: [],
+					dbEntityId: undefined,
+					ownerIds: []
+				}
 			],
 			total: 640,
 			truncated: true
@@ -139,7 +145,13 @@ describe('listActiveMembers — count-based truncation detection (#321)', () => 
 		});
 		expect(await listActiveMembers(cfg, fetchImpl)).toEqual({
 			items: [
-				{ memberId: 'member-1', personId: 'person-a', sectionIds: [], dbEntityId: undefined }
+				{
+					memberId: 'member-1',
+					personId: 'person-a',
+					sectionIds: [],
+					dbEntityId: undefined,
+					ownerIds: []
+				}
 			],
 			total: 1,
 			truncated: false
@@ -150,7 +162,13 @@ describe('listActiveMembers — count-based truncation detection (#321)', () => 
 		const fetchImpl = makeFetch({ members: [{ _id: 'member-1', person: 'person-a' }] });
 		expect(await listActiveMembers(cfg, fetchImpl)).toEqual({
 			items: [
-				{ memberId: 'member-1', personId: 'person-a', sectionIds: [], dbEntityId: undefined }
+				{
+					memberId: 'member-1',
+					personId: 'person-a',
+					sectionIds: [],
+					dbEntityId: undefined,
+					ownerIds: []
+				}
 			],
 			total: 1,
 			truncated: false

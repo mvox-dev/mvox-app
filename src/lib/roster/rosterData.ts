@@ -136,7 +136,7 @@ export async function listActiveMembers(
 ): Promise<ListRead<ActiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=member&status.string=active&props=person,_parent,_created&limit=500',
+		'entity?_type.string=member&status.string=active&props=person,_parent,_created,_owner&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -149,6 +149,7 @@ export async function listActiveMembers(
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
 			_created?: Array<{ datetime?: string }>;
+			_owner?: Array<{ reference: string }>;
 		}>;
 	};
 	const raws = body.entities ?? [];
@@ -183,13 +184,19 @@ export async function listActiveMembers(
 		// → a fabricated 1970-01-01. Absent is the honest answer for both.
 		const rawCreatedAt = raw._created?.[0]?.datetime;
 		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
+		// #468 — every `_owner` `.reference`, inherited included, wire order kept;
+		// the baked `.string` (a person name, PII — ER-26) never leaves this
+		// extraction. No `_owner` in the read (withheld private bucket or a
+		// genuinely empty grant list) → [] — fail closed, never undefined.
+		const ownerIds = (raw._owner ?? []).map((o) => o.reference);
 		return [
 			{
 				memberId: raw._id,
 				personId,
 				sectionIds,
 				dbEntityId,
-				createdAt
+				createdAt,
+				ownerIds
 			}
 		];
 	});
@@ -326,7 +333,9 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.dbEntityId doc.
 		dbEntityId: member.dbEntityId,
 		// #467 — carried through verbatim, see RosterRow.createdAt doc.
-		createdAt: member.createdAt
+		createdAt: member.createdAt,
+		// #468 — carried through verbatim, see RosterRow.ownerIds doc.
+		ownerIds: member.ownerIds
 	};
 }
 

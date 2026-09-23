@@ -168,7 +168,8 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				name: 'Zoe Zed',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 	});
@@ -207,7 +208,8 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				name: 'Bella Boone',
 				profileName: 'Bella Boone',
 				email: 'bella@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-c',
@@ -215,7 +217,8 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				name: 'Cora Crane',
 				profileName: 'Cora Crane',
 				email: 'cora@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-d',
@@ -223,7 +226,8 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				name: 'Dora Dunn',
 				profileName: 'Dora Dunn',
 				email: 'dora@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-a',
@@ -231,7 +235,8 @@ describe('#269 loadRosterWithRealNames — resolution rule: toggle AND non-empty
 				name: 'Zoe Zed',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 	});
@@ -273,7 +278,8 @@ describe('#269 loadRosterWithRealNames — toggle read and the toggle-off negati
 				name: 'Ada Lovelace',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 		const all = urls(fetchImpl);
@@ -491,7 +497,8 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 				name: 'Ada Lovelace',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-b',
@@ -499,7 +506,8 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 				name: 'Bella Boone',
 				profileName: 'Bella Boone',
 				email: 'bella@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 		// The toggle never resolved true, so no records read was even attempted.
@@ -534,7 +542,8 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 				name: 'Ada Lovelace',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-b',
@@ -542,7 +551,8 @@ describe('#269 loadRosterWithRealNames — a failing overlay degrades to profile
 				name: 'Bella Boone',
 				profileName: 'Bella Boone',
 				email: 'bella@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 		// The toggle DID resolve true here — the read was made and failed; no retry.
@@ -595,7 +605,8 @@ describe('#269 loadRoster (shared producer) — profile names only, no overlay r
 				name: 'Ada Lovelace',
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			},
 			{
 				memberId: 'member-b',
@@ -603,7 +614,8 @@ describe('#269 loadRoster (shared producer) — profile names only, no overlay r
 				name: 'Bella Boone',
 				profileName: 'Bella Boone',
 				email: 'bella@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 		// The exposure fence: no record data is pulled, and the collective is

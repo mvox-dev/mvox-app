@@ -66,8 +66,14 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		// #321 — the reader returns `{ items, total, truncated }`; the MAPPING is what
 		// this file pins, the read shape itself lives in rosterData.truncation.spec.ts.
 		expect(members.items).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: undefined },
-			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: ['sec-sop'],
+				dbEntityId: undefined,
+				ownerIds: []
+			},
+			{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1', ownerIds: [] }
 		]);
 	});
 
@@ -89,7 +95,13 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		const members = await listActiveMembers(cfg, fetchImpl);
 		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
 		expect(members.items).toEqual<ActiveMember[]>([
-			{ memberId: 'member-1', personId: 'person-a', sectionIds: ['sec-sop'], dbEntityId: 'org-1' }
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: ['sec-sop'],
+				dbEntityId: 'org-1',
+				ownerIds: []
+			}
 		]);
 	});
 
@@ -116,7 +128,8 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 				memberId: 'member-1',
 				personId: 'person-a',
 				sectionIds: ['sec-sop', 'sec-lead'],
-				dbEntityId: 'org-1'
+				dbEntityId: 'org-1',
+				ownerIds: []
 			}
 		]);
 	});
@@ -187,9 +200,16 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 						memberId: 'member-1',
 						personId: 'person-a',
 						sectionIds: ['sec-sop'],
-						dbEntityId: undefined
+						dbEntityId: undefined,
+						ownerIds: []
 					},
-					{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
+					{
+						memberId: 'member-2',
+						personId: 'person-b',
+						sectionIds: [],
+						dbEntityId: 'org-1',
+						ownerIds: []
+					}
 				],
 				total: 3,
 				truncated: false
@@ -229,9 +249,16 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 						memberId: 'member-1',
 						personId: 'person-a',
 						sectionIds: ['sec-sop'],
-						dbEntityId: undefined
+						dbEntityId: undefined,
+						ownerIds: []
 					},
-					{ memberId: 'member-2', personId: 'person-b', sectionIds: [], dbEntityId: 'org-1' }
+					{
+						memberId: 'member-2',
+						personId: 'person-b',
+						sectionIds: [],
+						dbEntityId: 'org-1',
+						ownerIds: []
+					}
 				],
 				total: 2,
 				truncated: false
@@ -454,7 +481,8 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				// wired into this fixture's toggle read).
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: []
+				sectionIds: [],
+				ownerIds: []
 			}
 		]);
 	});
@@ -493,7 +521,8 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				// #269 — see the previous test's note.
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
-				sectionIds: ['sec-sop', 'sec-lead']
+				sectionIds: ['sec-sop', 'sec-lead'],
+				ownerIds: []
 			}
 		]);
 	});
@@ -629,7 +658,8 @@ describe('#467 — listActiveMembers requests and threads the member _created st
 				personId: 'person-a',
 				sectionIds: [],
 				dbEntityId: 'org-1',
-				createdAt: '2026-06-01T09:00:00.000Z'
+				createdAt: '2026-06-01T09:00:00.000Z',
+				ownerIds: []
 			}
 		]);
 		const flat = JSON.stringify(members.items);
