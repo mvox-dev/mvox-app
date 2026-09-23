@@ -1,0 +1,12 @@
+{
+  "dryRun": false,
+  "db": "polyphony",
+  "sensitive": false,
+  "purpose": "mvox-app#470 review — find member rows whose _parent array carries the same section/org id more than once (roster render failure).",
+  "query": "entity?_type.string=member&status.string=active&props=person,_parent&limit=2000",
+  "listCount": 2,
+  "returned": 2,
+  "duplicateCount": 0,
+  "duplicates": [],
+  "authorizedBy": "team-lead dispatch 2026-09-24 — read-only GET, no mutation, no live-run authorization gate applicable"
+}

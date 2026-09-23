@@ -648,3 +648,83 @@ drifted behind the canonical section. Rules 1–7 and all five triggers live the
 are documented at the trigger text itself.
 
 (*MVOX:Bentham*)
+
+## [GOTCHA-KEYED-EACH-TURNS-A-DATA-ANOMALY-INTO-A-CRASH] 2026-09-24, #470 r3
+
+**The shape**: a `{#each ids as id (id)}` keyed on values that arrive from **outside the component**
+converts a duplicate in the data from a cosmetic repeat into a **hard throw**. Verified at the installed
+source, not recalled: `node_modules/svelte/src/internal/client/dom/blocks/each.js:351-357` fires
+`e.each_key_duplicate(...)` whenever `length > keys.size`, and `errors.js:136-148` **throws in BOTH
+branches** — DEV with detail, production with a bare URL. There is no dev-only-warning tier.
+
+**Why #470 is the calibrating case.** Round 3 correctly closed the *producer*: option lists now subtract
+the member's WHOLE membership (`selectedIds`) while the card draws only its own (`renderIds`), so no pick
+can re-choose a held section. The specs pinning it are good — exact `toEqual` on option arrays, a contrast
+member on the same card who IS offered the section, and a document-wide sweep whose emptiness is
+control-checked by a `.toBe(3)` count. That is the positive-control discipline section A asks for.
+
+**But the crash surface is NEW to the branch and its only guard is that producer.** On `main` the picker
+keyed on `flatSections` node ids — unique by construction — and `selectedIds` was read only via
+`.includes()` / `.join()`, so a duplicate was cosmetic. The branch keys on the member's own id list, and
+nothing at the data boundary makes it unique: `rosterData.ts:178-180` is a bare
+`_parent.filter(section).map(reference)` with no dedupe, and the one deduping helper (`addBack`) was
+deliberately removed at F3 when its caller went away. Both optimistic appends
+(`handleAssign`, `handleMove`) are unguarded spreads.
+
+**The duplicate is documented-expressible, no probe owed.** `assignMemberSection`
+(`sectionActions.ts:250-258`) POSTs `[{type:'_parent',reference}]` with **no `_id`**, and entu-www
+`src/api/properties/index.md:92` states: *"Without `_id`, a new value is always added alongside any
+existing ones."* Two admins (or two tabs) assigning the same section both append; the page never refetches
+(`loadRoster` runs once, by design), so neither sees the other. No bug required — ordinary concurrent use.
+
+**Section I, exactly**: the guard sits on the picking path; the outcome stays reachable by the read path.
+The general move — **when a keyed `{#each}` starts keying on foreign-supplied ids, the uniqueness
+invariant belongs at the extraction boundary, not on whichever UI paths currently happen to produce
+them.** A UI-path guard is correct and still insufficient, because the next writer is not a UI path.
+
+**The tell, again** (sibling of `[LEARNED #264]` and `[GOTCHA-DEPARENT-BY-COPY…]`): the round-3 spec
+comment claims *"nothing can drive her `sectionIds` into the duplicate key that crashed the render."* The
+suite proves no **pick** can. The sentence asserts a property the code does not hold, and the next fixer
+builds on it — so correcting the comment is part of the prescription, not a nicety.
+
+**Non-finding worth stating** so nobody re-raises it: `chooseHeld(sectionId, chosen)` has no
+`chosen === sectionId` guard, and needs none — the `onchange` handler re-asserts `el.value = sectionId`
+before delegating, so the DOM value is always the key at rest and a same-value pick fires no `change`.
+Unreachable by construction.
+
+(*MVOX:Bentham*)
+
+**[STAND-DOWN, premise named] 2026-09-24 — the "verified live on the page" data residual is CLOSED.**
+I asked whether the pre-fix duplicate defect had been exercised against a real database, leaving duplicate
+`_parent` rows the fix cannot heal. Discharged on **mechanism**, which I checked rather than accepted:
+`.env` carries exactly one key, `PUBLIC_ENTU_API_BASE`, and no env file holds a token/jwt/api_key/secret
+-shaped key name at all. Entu JWTs are browser-held (`project_mvox_no_server_spa`), so a pipeline agent
+rendering the page had no credential to reach a live db — the live-page check ran on fixtures by
+construction, not by luck. Team-lead adds Pérotin's read-only probe: polyphony 2 members, 0 sections,
+0 duplicates; crede untouched (their read, not mine).
+**Re-open when**: a token reaches an agent-run environment, or any roster write path executes under a real
+JWT. The mechanism above is what holds this closed — not the probe counts, which are a point-in-time read.
+
+**CLOSED at r4 (`0dadd77`, merged to `09f0cfe`).** The fix went where the finding asked — `new Set` at
+`listActiveMembers`, first-seen order preserved — plus a better second half than I prescribed: rather than
+guarding `handleAssign` and `handleMove` separately, it distincts inside `patchMemberSectionIds`, the ONE
+choke point every optimistic writer already passes through, so the next writer is covered too. Both
+comments state which guard is load-bearing and which is belt-and-braces, so neither can be read as making
+the other redundant.
+
+**Verified by enumeration rather than by accepting the two named sites** — the completeness question this
+section exists for. Exactly three assignments to `rows` (`+page.svelte:458` `[]`, `:659` the roster read,
+`:948` the deduped patch) and one carry-through (`rosterData.ts:359 sectionIds: member.sectionIds`, not a
+re-derivation). Every path to the keyed `{#each}` now passes a dedupe.
+
+**The pin is genuinely RED-first**, replayed at file granularity against the pre-fix blob: exactly 1
+failure, 42 unrelated cases still green, and it failed **on the `toEqual` assertion** printing the extra
+`sec-sop` — not on a timeout or a module error, which is the difference between proof and noise.
+
+**[GOTCHA-TREE-FLIPPED-MID-GATE] the branch-moved rule now has a second form, and it cost me a 9-minute
+run.** My standing habit catches a branch moving between ROUNDS; this time the shared tree was checked out
+to `main` *during* `pnpm test` — HEAD `09f0cfe` going in, `e80a7ec` coming out. The suite still reported a
+plausible, matching 6196, which is exactly what makes it dangerous: **a mid-run flip does not announce
+itself in the result.** Capturing HEAD before and after IN THE SAME COMMAND is what surfaced it; had I read
+HEAD in a separate call I would have quoted a number I could not stand behind. Re-ran on a stable tree for
+the real figure. Under the single-tree protocol, say out loud that review holds the tree.

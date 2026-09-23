@@ -1,5 +1,5 @@
-# Task List Snapshot — 2026-09-23 21:3xZ (MVOX-27 close)
+# Task List Snapshot — 2026-09-23 22:5xZ (MVOX-28 seam)
 
-One row: #470 `in process`, branch feat/470-native-section-pickers pushed @ 44b61f3, halted at review RED after fix cap — hand fix round next session (see team-lead.md [NEXT SESSION]). Nothing else in flight.
+Empty: #470 CLOSED 5fdc5dc (PR #484). No `ready` issue on the board; #483 and #477 unlabelled (Gama's).
 
 (*MVOX:Palestrina*)
