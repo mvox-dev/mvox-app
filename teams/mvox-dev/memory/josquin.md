@@ -4,6 +4,29 @@ Personal notes. Only Josquin writes here.
 
 ---
 
+## [CHECKPOINT] 2026-09-23 #468 — picker owner-gate fix round; merged 68de3ac (PR 478)
+
+Three commits on `feat/468-picker-owner-gate`: `58f9a60` (F1, menu `right-0`), `8c17fc7` (F2, comments cite the probe), `5bed5a3` (F3, ledger + Perotin's ledger-writer edit). Squash on main `68de3ac`. CI `check + test` 2m47s, Pages pass.
+
+### [GOTCHA load-bearing] The #407 fence forbids naming the polyphony db in `src/` — probe citations go BY PATH
+Team-lead's dispatch asked for the literal wording "verified 2026-09-23 against <db> (probe-...)" in two `rosterData.ts` comments. That REDs `src/polyphony-history-fence.spec.ts`: it walks every tracked file, classifies BY REFERENT not by string, and `src/` has no dated-citation escape (the scoped line exclusion `{path: /^docs\/architecture\//, line: /20\d{2}-\d{2}-\d{2}/}` covers docs/architecture ONLY). Cost a full ~7min suite run to discover. **Shape that works:** cite the probe and ledger BY PATH and let the probe's own header name the db — `scripts/migrations/probes/` and `scripts/migrations/seed-results/` are both whole-dir allowlisted, so the evidence trail is intact and the fence stays green. Deviating from a dispatch's literal words here is correct; say so in the commit body and in the report.
+
+### [PATTERN] Gate the spec as an instrument before trusting its GREEN
+The F1 spec asserts class presence (`right-0`) — happy-dom parses no Tailwind and lays nothing out, so it CANNOT see the overflow it stands in for. Before reporting green I removed the class, watched the case fail, restored it, watched it pass. A class-presence assertion that was never seen to fail is indistinguishable from a typo'd selector. The spec comment says in-band what the test can and cannot see, and names the ~390px browser check it substitutes for.
+
+### [PATTERN] Commit the emitting code with the emitted artefact
+Dispatch said "git add the ledger". Perotin had also modified the probe script (the `writeLedger` wiring that produces it). Committing the output while leaving its producer uncommitted leaves the two out of step, so both went in one commit, stated in the body and reported. Staged by explicit path ONLY — `bentham.md` was dirty in the shared tree throughout; verified post-merge that the squash carries no `teams/`, no `scratchpad/`, no crede path.
+
+### [GOTCHA] Shared-tree flip ate an uncommitted edit again, and the revert had an author
+Mid-round my two comment re-wraps vanished with a CLEAN tree matching HEAD. Not corruption — Bentham had the file in a worktree and discarded the wrapping. Confirm against `git show HEAD:<file>` + `git status` before re-doing anything; and check whether a peer is holding the file before calling it a harness fault. The re-wrap was unnecessary anyway: that file already carries pre-existing 150- and 207-char lines, so 133 is within its norms.
+
+### [STATE] Evidence limit recorded in the PR body, not just the ledger
+`seed-results/probe-468-member-owner-list-vs-single-live-2026-09-23T13-12-04-635Z.json`: 2 rows, 3 `_owner` values each (2 `inherited: true` + 1 direct), `shapeMatch: "IDENTICAL"`. Caller is db-root = omniscient, so the run proves the SHAPE half only. The identity half (an ordinary member seeing her own id in `ownerIds`) is unverifiable while there is no second real seat to test with (Perotin's standing limit, his scratchpad) — the PR body states this explicitly rather than implying coverage. Perotin confirmed the framing.
+
+(*MVOX:Josquin*)
+
+---
+
 ## [CHECKPOINT] 2026-09-15 MVOX-23 — 6 merges (#351, #353, ER-26, ER-27, #357, #381); the rights-doc pin machinery + ruling-is-not-mechanism
 
 Merges, in order: #351 `bb19dfe` · #353 `b4961ad` · #369/ER-26 `6aad0a7` · #372/ER-27 `725ad26` · #357 `d1891fb` · #381 `ef42821`. Four stale branches swept (#350, #352, #353, #357-marker) — each only after proving subsumption, never on "looks landed".
