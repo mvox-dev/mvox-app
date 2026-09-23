@@ -92,7 +92,10 @@ describe('listLinkedIdentities — bound identities vs masked placeholders', () 
 				{ _id: 'eu-2', uid: '38510170212', provider: 'mobile-id', email: '38510170212' }
 			],
 			pendingInvites: 1,
-			readable: true
+			readable: true,
+			// #467 — the placeholder's own value _id, surfaced for the roster's
+			// dated join read (listJoinStateDetails) to follow up on.
+			pendingInviteId: 'eu-3'
 		});
 	});
 

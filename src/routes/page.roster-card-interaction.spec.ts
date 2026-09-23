@@ -17,11 +17,11 @@
 //       interactive controls are never nested inside an interactive parent
 //       (the arrange-row WCAG 4.1.2 lesson, roster/+page.svelte:4630+). The
 //       record editor keeps NO self-row exclusion: the admin's own card opens.
-//   (2) CHIPS — the join-state badge moves DIRECTLY under name+email (before
-//       the section name). Joined is the SILENT default: no chip at all.
-//       Not-invited and invited-awaiting keep DISTINCT chips — if both were
-//       silent, the two states #294 exists to distinguish would collapse into
-//       one. Still contents-derived via listJoinStates, still every admin.
+//   (2) CHIPS — the join-state line moves DIRECTLY under name+email (before
+//       the section name). #467 (Mihkel 2026-09-23): the chip became ONE
+//       DATED status line — joined now RENDERS ("member since <date>"), never
+//       silent; not-invited and invited-awaiting keep their own dated lines.
+//       Still contents-derived via listJoinStateDetails, still every admin.
 //   (3) RELOCATION — the invite controls (kutsu / saada uuesti / tühista
 //       kutse, owner-only, routed purely off state) and the deactivate
 //       armed-pair render ONLY inside an opened record editor. The self-row
@@ -65,6 +65,7 @@ const {
 	mintSelfLinkInviteMock,
 	withdrawInviteMock,
 	listJoinStatesMock,
+	listJoinStateDetailsMock,
 	resolveOwnerTierMock,
 	loadMemberRecordMock
 } = vi.hoisted(() => ({
@@ -79,6 +80,7 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStatesMock: vi.fn(),
+	listJoinStateDetailsMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn(),
 	loadMemberRecordMock: vi.fn()
 }));
@@ -97,9 +99,13 @@ vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	mintSelfLinkInvite: mintSelfLinkInviteMock,
 	withdrawInvite: withdrawInviteMock
 }));
+// #467 — the page reads through `listJoinStateDetails`; mocked alongside the
+// bare producer so the invite/reinvite/withdraw routing this suite exercises
+// still works (both answer the SAME fixture states).
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
-	listJoinStates: listJoinStatesMock
+	listJoinStates: listJoinStatesMock,
+	listJoinStateDetails: listJoinStateDetailsMock
 }));
 vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
@@ -137,13 +143,15 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 
 // m1 is the VIEWER's own membership (person-p); m2 joined, m3 invited, m4
 // never invited — all unassigned. m5 is invited AND carries a section, for the
-// badge-before-section-name placement pin (flat view renders section names).
+// line-before-section-name placement pin (flat view renders section names).
+// #467 — m4's own `createdAt` is the date source for its "not invited since"
+// line; the others' dates come from `listJoinStateDetailsMock` below.
 function rows(): RosterRow[] {
 	return [
 		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'org-a' },
 		{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'org-a' },
 		{ memberId: 'm3', personId: 'pp-3', name: 'Carl Cantor', email: 'carl@example.com', sectionIds: [], dbEntityId: 'org-a' },
-		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: 'org-a' },
+		{ memberId: 'm4', personId: 'pp-4', name: 'Dora Descant', email: 'dora@example.com', sectionIds: [], dbEntityId: 'org-a', createdAt: '2026-08-15T12:00:00.000Z' },
 		{ memberId: 'm5', personId: 'pp-5', name: 'Elsa Echo', email: 'elsa@example.com', sectionIds: ['sec-alto'], dbEntityId: 'org-a' }
 	];
 }
@@ -183,6 +191,21 @@ beforeEach(() => {
 					] ?? 'absent'
 				])
 			)
+		)
+	);
+	// #467 — the SAME fixture states, dated. m3/m5 (invited) get a
+	// RELATIVE recent stamp — a fixed past instant would read as EXPIRED
+	// under the 24h lifetime, which is not what this file pins.
+	const JOIN_DATE: Record<string, { state: 'absent' | 'invited' | 'joined'; at?: string }> = {
+		'person-p': { state: 'joined', at: '2026-05-06T12:00:00.000Z' },
+		'pp-2': { state: 'joined', at: '2026-09-10T12:00:00.000Z' },
+		'pp-3': { state: 'invited', at: new Date(Date.now() - 60 * 60 * 1000).toISOString() },
+		'pp-4': { state: 'absent' },
+		'pp-5': { state: 'invited', at: new Date(Date.now() - 60 * 60 * 1000).toISOString() }
+	};
+	listJoinStateDetailsMock.mockImplementation((_cfg: unknown, personIds: string[]) =>
+		Promise.resolve(
+			Object.fromEntries(personIds.map((id) => [id, JOIN_DATE[id] ?? { state: 'absent' }]))
 		)
 	);
 	resolveOwnerTierMock.mockResolvedValue('owner');
@@ -412,23 +435,25 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	});
 });
 
-describe('(2) chips — joined is silent; not-invited and invited-awaiting stay distinct; directly under name+email', () => {
-	it('a JOINED member shows NO chip at all (m1, m2)', async () => {
+describe('(2) dated status lines — #467: joined RENDERS, every state keeps its own dated line, directly under name+email', () => {
+	it('a JOINED member now shows a dated line (m1, m2) — silence is gone', async () => {
 		const { container } = await renderRosterAs('admin');
-		// Readiness: an invited row's chip is on screen, so the fan-out landed.
+		// Readiness: an invited row's line is on screen, so the fan-out landed.
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
-		expect(q(container, 'roster-row-join-state-m1')).toBeNull();
-		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
+		expect(q(container, 'roster-row-join-state-m1')).not.toBeNull();
+		expect(q(container, 'roster-row-join-state-m1')!.getAttribute('data-join-state')).toBe('joined');
+		expect(q(container, 'roster-row-join-state-m2')).not.toBeNull();
+		expect(q(container, 'roster-row-join-state-m2')!.getAttribute('data-join-state')).toBe('joined');
 	});
 
-	it('not-invited and invited-awaiting each keep a DISTINCT chip — silent-both would collapse the two states #294 distinguishes', async () => {
+	it('not-invited and invited-awaiting each keep a DISTINCT dated line — collapsing them would erase what #294/#467 distinguish', async () => {
 		const { container } = await renderRosterAs('admin');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
 	});
 
-	it('the chip renders directly under name+email: after the email, BEFORE the section name', async () => {
+	it('the line renders directly under name+email: after the email, BEFORE the section name', async () => {
 		const { container } = await renderRosterAs('admin');
 		// Flat view renders every row with its section name (m5: Alto, invited).
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
@@ -436,26 +461,26 @@ describe('(2) chips — joined is silent; not-invited and invited-awaiting stay 
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m5')).not.toBeNull());
 		const li = rowLi(container, 'm5');
 		const email = li.querySelector('[data-testid="roster-row-email"]')!;
-		const badge = q(container, 'roster-row-join-state-m5')!;
+		const line = q(container, 'roster-row-join-state-m5')!;
 		const section = li.querySelector('[data-testid="roster-row-section"]')!;
 		expect(email, 'email span must render on m5').not.toBeNull();
 		expect(section, 'section span must render on m5 in flat view').not.toBeNull();
 		expect(
-			email.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the chip must come AFTER the email'
+			email.compareDocumentPosition(line) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the line must come AFTER the email'
 		).toBeTruthy();
 		expect(
-			badge.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
-			'the chip must come BEFORE the section name'
+			line.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING,
+			'the line must come BEFORE the section name'
 		).toBeTruthy();
 	});
 
-	it('an EDITOR-admin still sees the chips — the read is the gate (#454, Mihkel 2026-09-22), only joined went silent', async () => {
+	it('an EDITOR-admin still sees the SAME dated lines — the read is the gate (#454, Mihkel 2026-09-22), not the role', async () => {
 		const { container } = await renderRosterAs('admin', 'editor');
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m3')!.getAttribute('data-join-state')).toBe('invited');
 		expect(q(container, 'roster-row-join-state-m4')!.getAttribute('data-join-state')).toBe('absent');
-		expect(q(container, 'roster-row-join-state-m2')).toBeNull();
+		expect(q(container, 'roster-row-join-state-m2')!.getAttribute('data-join-state')).toBe('joined');
 	});
 });
 

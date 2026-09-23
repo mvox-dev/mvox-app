@@ -130,6 +130,8 @@ export interface InactiveMember {
 	/** Section `_parent` entries — NOT cleared on deactivate (done-when 1). */
 	sectionIds: string[];
 	dbEntityId?: string;
+	/** #467 — mirror of `ActiveMember.createdAt`, see its doc (rosterData.ts). */
+	createdAt?: string;
 }
 
 /**
@@ -150,7 +152,7 @@ export async function listInactiveMembers(
 ): Promise<ListRead<InactiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=member&status.string=archived&props=person,_parent&limit=500',
+		'entity?_type.string=member&status.string=archived&props=person,_parent,_created&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -162,6 +164,7 @@ export async function listInactiveMembers(
 			_id: string;
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
+			_created?: Array<{ datetime?: string }>;
 		}>;
 	};
 	const raws = body.entities ?? [];
@@ -180,7 +183,12 @@ export async function listInactiveMembers(
 			.filter((p) => p.entity_type === 'section')
 			.map((p) => p.reference);
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
-		return [{ memberId: raw._id, personId, sectionIds, dbEntityId }];
+		// #467 — `.datetime` only; the author is dropped at extraction (ER-26).
+		// #467 review F1 — `typeof` guards the wire, mirroring rosterData.ts: a
+		// non-string (JSON `null`) must not ride through typed `string`.
+		const rawCreatedAt = raw._created?.[0]?.datetime;
+		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
+		return [{ memberId: raw._id, personId, sectionIds, dbEntityId, createdAt }];
 	});
 	// RAW length, not `items.length` — the mapper drops rather than throws, but
 	// the contract is the wire array before any client-side filtering
@@ -309,3 +317,4 @@ export async function listDeactivateBlockers(
 }
 
 // (*MVOX:Josquin*)
+// (*MVOX:Josquin* — #467 review F1: _created[0].datetime validated as a string)

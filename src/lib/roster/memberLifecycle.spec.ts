@@ -492,4 +492,80 @@ describe('listDeactivateBlockers', () => {
 	});
 });
 
+// ── #467 — the SAME _created widening as listActiveMembers, on the archived
+//    mirror (two files, one shape — grep both before calling this done) ───────
+
+describe('#467 — listInactiveMembers requests and threads the member _created stamp', () => {
+	it('URL: props widened to person,_parent,_created — same shape as listActiveMembers', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listInactiveMembers(cfg, fetchImpl);
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('props=person,_parent,_created');
+	});
+
+	it('createdAt = _created[0].datetime; the author `.reference`/`.string` never reaches the item (ER-26)', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-9',
+						person: [{ reference: 'person-9' }],
+						_parent: [{ reference: 'db-1', entity_type: 'database' }],
+						_created: [
+							{
+								_id: 'cr-9',
+								datetime: '2026-05-05T08:00:00.000Z',
+								reference: 'author-7',
+								string: 'Author Seven',
+								entity_type: 'member',
+								property_type: '_created'
+							}
+						]
+					}
+				]
+			})
+		);
+		const read = await listInactiveMembers(cfg, fetchImpl);
+		expect(read.items).toEqual([
+			{
+				memberId: 'member-9',
+				personId: 'person-9',
+				sectionIds: [],
+				dbEntityId: 'db-1',
+				createdAt: '2026-05-05T08:00:00.000Z'
+			}
+		]);
+		const flat = JSON.stringify(read.items);
+		expect(flat).not.toContain('author-7');
+		expect(flat).not.toContain('Author Seven');
+	});
+
+	it('missing _created → createdAt undefined — fail-soft per row, no warn, row kept', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({ entities: [{ _id: 'member-9', person: [{ reference: 'person-9' }] }] })
+		);
+		const read = await listInactiveMembers(cfg, fetchImpl);
+		expect(read.items).toHaveLength(1);
+		expect((read.items[0] as { createdAt?: string }).createdAt).toBeUndefined();
+		expect(warnSpy).not.toHaveBeenCalled();
+		warnSpy.mockRestore();
+	});
+
+	// #467 review F1 — mirrors rosterData.spec.ts: a non-string datetime is the
+	// same absence, never a null riding through typed `string`.
+	it('_created[0].datetime = null (non-string) → createdAt undefined', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{ _id: 'member-9', person: [{ reference: 'person-9' }], _created: [{ datetime: null }] }
+				]
+			})
+		);
+		const read = await listInactiveMembers(cfg, fetchImpl);
+		expect((read.items[0] as { createdAt?: string }).createdAt).toBeUndefined();
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Tallis* — #467 RED: archived-mirror _created widening, author dropped)
+// (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)
