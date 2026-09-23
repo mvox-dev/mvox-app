@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createRawSnippet } from 'svelte';
+import { createRawSnippet, tick } from 'svelte';
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import AgendaList from './AgendaList.svelte';
@@ -1140,6 +1140,77 @@ describe('#471 Recent shows one card until asked', () => {
 		expect(upcomingIds()).toEqual(['agenda-row-r1', 'agenda-row-r2']);
 	});
 
+	// ── review F1 — the past-dated create that lands BEHIND the button ───────
+	//
+	// The page confirms a create by scrolling to, and highlighting,
+	// `[data-testid="agenda-recent-row-<id>"]` (+page.svelte). A past-dated
+	// create that is not the most recent past event is inside `recentItems`
+	// but not in the DOM while collapsed, so that confirmation silently
+	// no-ops. The list must open itself for it.
+	it('justCreatedEventId pointing at a hidden recent row opens the list (all rows render, button gone)', async () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: threeRecent,
+			justCreatedEventId: 'p3'
+		});
+
+		await waitFor(() => {
+			expect(rowIds(container)).toEqual([
+				'agenda-recent-row-p1',
+				'agenda-recent-row-p2',
+				'agenda-recent-row-p3'
+			]);
+		});
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
+		// The row the page addresses is now genuinely reachable, carrying its
+		// highlight mark.
+		expect(
+			container.querySelector('[data-testid="agenda-recent-row-p3"] [data-testid="agenda-row-created-mark"]')
+		).not.toBeNull();
+	});
+
+	it('justCreatedEventId pointing at the VISIBLE first recent row leaves the list collapsed', async () => {
+		const { container } = render(AgendaList, {
+			items: itemSameDay,
+			recentItems: threeRecent,
+			justCreatedEventId: 'p1'
+		});
+		await tick();
+		expect(rowIds(container)).toEqual(['agenda-recent-row-p1']);
+		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).not.toBeNull();
+	});
+
+	// ── review F2 — the press must not drop focus to <body> ──────────────────
+	//
+	// The button deletes itself on activation; a keyboard user who tabbed to it
+	// would otherwise restart the next Tab at the top of the document, well
+	// above the section they were reading — and hear nothing about the rows
+	// that just appeared.
+	it('pressing the button with the keyboard lands focus on the first newly revealed row, not <body>', async () => {
+		const { container } = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
+		const button = container.querySelector<HTMLElement>(
+			'[data-testid="agenda-recent-show-more"]'
+		)!;
+		button.focus();
+		expect(document.activeElement).toBe(button);
+
+		await fireEvent.click(button);
+
+		await waitFor(() => {
+			const revealed = container.querySelector('[data-testid="agenda-recent-row-p2"]')!;
+			expect(revealed.contains(document.activeElement), 'focus inside the revealed row').toBe(
+				true
+			);
+		});
+		expect(document.activeElement).not.toBe(document.body);
+		// The focused element is the row's ACCESSIBLE named link (#101 TE.1),
+		// never the aria-hidden decorative twin.
+		expect((document.activeElement as HTMLElement).getAttribute('aria-hidden')).toBeNull();
+		expect((document.activeElement as HTMLElement).getAttribute('aria-label')).toBe(
+			'View details for Rehearsal p2'
+		);
+	});
+
 	it('a fresh render starts collapsed again — the expansion is never persisted', async () => {
 		const first = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
 		const button = first.container.querySelector('[data-testid="agenda-recent-show-more"]');
@@ -1177,3 +1248,4 @@ describe('#471 i18n — agenda_recent_show_more in all four locales', () => {
 // (*MVOX:Josquin* — #101 TE.1 review fix F2: row-link accessible name)
 // (*MVOX:Tallis* — #466 whole-card-opens-event RED)
 // (*MVOX:Tallis* — #471 recent-shows-one-card-until-asked RED)
+// (*MVOX:Josquin* — #471 review fixes F1 (hidden just-created row) + F2 (focus after the press))
