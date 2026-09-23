@@ -50,7 +50,7 @@ import { HOUSE_SHELL, findShellViolations, type RouteFile } from './page-shell';
 const ALLOWLIST: ReadonlyMap<string, string> = new Map([
 	[
 		'/',
-		'agenda — wraps itself in DeskSurface, a deliberately different surface; its root is also conditional ({#if auth.status === ...}), with a separate centered <main> for the no-collectives state'
+		'agenda — its root is conditional ({#if auth.status === …}), with a separate centered <main> for the no-collectives state'
 	],
 	[
 		'/auth/[provider]',
