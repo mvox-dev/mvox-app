@@ -84,6 +84,20 @@ export interface ActiveMember {
 	 * reader cannot see it — fail-soft, no fabricated date.
 	 */
 	createdAt?: string;
+	/**
+	 * #468 — every `_owner` grant's `.reference` on the member entity, in wire
+	 * order, INHERITED values included: Entu's aggregate view folds a parent's
+	 * grant in (a db-level owner holds an inherited `_owner` on each member —
+	 * the same shape `fetchRights` reads, roleManagement.ts), and an inherited
+	 * owner may move the member exactly as a direct one may, so nothing is
+	 * filtered out. The baked `.string` (a person name — PII, ER-26) is dropped
+	 * at extraction, never threaded onto the row. `[]` when the read carries no
+	 * `_owner` — a withheld private bucket and a genuinely empty grant list
+	 * both honestly read "this reader holds/sees no grant" (fail closed).
+	 * Optional at the type level for pre-GREEN fixtures only; the producer
+	 * always sets it.
+	 */
+	ownerIds?: string[];
 }
 
 /**
@@ -254,6 +268,16 @@ export interface RosterRow {
 	 * cannot see it (fail-soft, no fabricated date).
 	 */
 	createdAt?: string;
+	/**
+	 * #468 — carried through verbatim from `ActiveMember.ownerIds` (see its
+	 * doc): every `_owner` `.reference` on the member entity, inherited values
+	 * included, `.string` never. The roster page's section-picker gate reads
+	 * the reader's own person id out of THIS list — the grant on the target
+	 * entity, not an app-computed role (#454's lesson; ER-14: a move deletes a
+	 * `_parent`, owner-gated). `[]` = no visible grant → no picker (fail
+	 * closed). Optional at the type level for pre-#468 fixtures.
+	 */
+	ownerIds?: string[];
 }
 
 /**

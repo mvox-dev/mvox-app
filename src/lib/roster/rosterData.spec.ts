@@ -700,7 +700,133 @@ describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', (
 	});
 });
 
+// ── #468 — the member's own _owner grant rides the list read (picker gate) ─────
+
+describe('#468 — listActiveMembers requests and threads member _owner references (the section-picker gate source)', () => {
+	it('URL: props widened to person,_parent,_created,_owner — the gate rides the ONE existing list read, no per-row fetchRights fan-out', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
+		await listActiveMembers(cfg, fetchImpl);
+		expect(String(fetchImpl.mock.calls[0][0])).toContain('props=person,_parent,_created,_owner');
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it('ownerIds = every _owner `.reference` in wire order, INHERITED values included (a db-level owner holds an inherited _owner on each member — never filtered out); the baked `.string` (PII, ER-26) is NOT present anywhere on the row; full row shape pinned', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_parent: [{ reference: 'org-1', entity_type: 'database' }],
+						_created: [{ datetime: '2026-06-01T09:00:00.000Z' }],
+						_owner: [
+							// Inherited from the database entity — Entu's aggregate view
+							// flags it (see fetchRights, roleManagement.ts) but the gate
+							// keeps it: an inherited owner may move the member too.
+							{ reference: 'person-db-owner', string: 'Olga Owner', inherited: true },
+							{ reference: 'person-direct', string: 'Dora Direct' }
+						]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		// FULL toEqual — the partial-assertions-hide-bugs rule: the row carries the
+		// references and NOTHING else rode along (no `.string`, no tier objects).
+		expect(members.items).toEqual([
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				sectionIds: [],
+				dbEntityId: 'org-1',
+				createdAt: '2026-06-01T09:00:00.000Z',
+				ownerIds: ['person-db-owner', 'person-direct']
+			}
+		]);
+		const flat = JSON.stringify(members.items);
+		expect(flat).not.toContain('Olga Owner');
+		expect(flat).not.toContain('Dora Direct');
+	});
+
+	it('no _owner in the read (withheld private bucket OR genuinely no grant) → ownerIds: [] — an honest empty list, never undefined, row kept', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [{ _id: 'member-1', person: [{ reference: 'person-a' }] }]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect(members.items).toHaveLength(1);
+		expect(members.items[0].ownerIds).toEqual([]);
+	});
+});
+
+describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
+	it('toRosterRow carries ownerIds through', () => {
+		const member = {
+			memberId: 'm-1',
+			personId: 'p-1',
+			sectionIds: [],
+			dbEntityId: undefined,
+			ownerIds: ['person-db-owner', 'person-p']
+		} as ActiveMember;
+		const row = toRosterRow(member, [profile('domain', 'Ada', 'a@x.ee')]);
+		expect(row?.ownerIds).toEqual(['person-db-owner', 'person-p']);
+	});
+
+	it('loadRoster: wire `_owner` references reach the final row — one member-list read plus the profile fan-out, NO extra rights request', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string) => {
+			if (url.includes('_type.string=member')) {
+				return Promise.resolve(
+					json({
+						entities: [
+							{
+								_id: 'member-1',
+								person: [{ reference: 'person-a' }],
+								_owner: [
+									{ reference: 'person-db-owner', string: 'Olga Owner', inherited: true },
+									{ reference: 'person-p', string: 'Paula Person' }
+								]
+							}
+						]
+					})
+				);
+			}
+			return Promise.resolve(
+				json({
+					entities: [
+						{
+							_id: 'prof-domain',
+							name: [{ string: 'Ada Lovelace' }],
+							email: [{ string: 'ada@x.ee' }],
+							_sharing: [{ string: 'domain' }]
+						}
+					]
+				})
+			);
+		});
+		const rows = (await loadRoster(cfg, fetchImpl)).items;
+		expect(rows).toEqual<RosterRow[]>([
+			{
+				memberId: 'member-1',
+				personId: 'person-a',
+				name: 'Ada Lovelace',
+				profileName: 'Ada Lovelace',
+				email: 'ada@x.ee',
+				sectionIds: [],
+				ownerIds: ['person-db-owner', 'person-p']
+			}
+		]);
+		// ER-26 — the baked person names never leave the extraction.
+		const flat = JSON.stringify(rows);
+		expect(flat).not.toContain('Olga Owner');
+		expect(flat).not.toContain('Paula Person');
+		// ONE list read + ONE profile read — the gate added no per-row fetch.
+		expect(fetchImpl).toHaveBeenCalledTimes(2);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #268 fence pins)
 // (*MVOX:Tallis* — #467 RED: _created widening + createdAt threading, author dropped)
 // (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)
+// (*MVOX:Tallis* — #468 RED: _owner widening + ownerIds threading, .string dropped)
