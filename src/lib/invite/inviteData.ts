@@ -27,6 +27,12 @@ import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collect
 // invitee's email is never sent to Entu.
 export const INVITE_MINT_TRIGGER = 'trigger invite token';
 
+// #467 — the ONE invite-lifetime constant. docs/architecture/invite-flow.md §7:
+// the pinned entu-api source signs `expiresIn: '7d'`, but the LIVE deployment
+// measured 24h twice (2026-08-07, 2026-09-09) and the doc rules the live
+// figure authoritative until re-pinned. No other lifetime literal may exist.
+export const INVITE_LIFETIME_MS = 24 * 60 * 60 * 1000;
+
 type InviteCreatePhase =
 	| 'type-resolve'
 	| 'person-parent-resolve'

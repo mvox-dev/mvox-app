@@ -23,8 +23,20 @@
 	// withdrawInvite is that sweep WITHOUT the mint (`tühista kutse`). The
 	// roster NEVER calls createInvite — that mints a SECOND person+member,
 	// and every row here already has a person.
-	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
-	import { mintSelfLinkInvite, withdrawInvite } from '$lib/invite/inviteData';
+	// #467 — the page reads through `listJoinStateDetails` (state + the dated
+	// stamp, ONE round of reads) and derives the bare 3-value `JoinState`
+	// record the owner-controls block routes on from that SAME answer — never
+	// a second call to `listJoinStates`.
+	import {
+		listJoinStateDetails,
+		type JoinState,
+		type JoinStateDetail
+	} from '$lib/profile/linkedIdentities';
+	import { mintSelfLinkInvite, withdrawInvite, INVITE_LIFETIME_MS } from '$lib/invite/inviteData';
+	// #467 — the dated lines' formatter: en-CA yyyy-mm-dd, NO timeZone argument
+	// (the InviteSurface.svelte:160 convention, #207 rule 7: ISO calendar date,
+	// never browser locale).
+	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	// #346 — the token this row mints is a bearer secret; the row must hand an
 	// ADMIN a real URL (scheme + host + /invite/<token>), never a bare JWT (a
 	// bare JWT pasted into a browser is a search query). `buildInviteUrl` is
@@ -115,6 +127,11 @@
 	// "which button" flag, so a mint/withdraw success routes the row to its
 	// next control set for free the moment the record is re-read.
 	let joinStates = $state<Record<string, JoinState>>({});
+	// #467 — the SAME answer's dated half: state + the linked-identity
+	// property value's own `created.at` (invited/joined). `joinStates` above
+	// is DERIVED from this on every read, never fetched separately — one
+	// round of reads.
+	let joinStateDetails = $state<Record<string, JoinStateDetail>>({});
 	// The DISPLAY gates on the READ alone (#454, Mihkel 2026-09-22, superseding
 	// the 2026-09-09 every-admin framing for this half): a chip renders iff
 	// this record carries a state for the row. The three CONTROLS
@@ -433,6 +450,7 @@
 			currentCfg = null;
 			// #294 — no collective, no rights/state to claim.
 			joinStates = {};
+			joinStateDetails = {};
 			ownerTier = 'loading';
 			inviteLinkByMemberId = {};
 			inviteErrorByMemberId = {};
@@ -511,13 +529,19 @@
 			// superseded load's FAILURE must not blank the current collective's
 			// states (nor log about a page nobody is looking at — matching
 			// `handleDeactivate`'s stale-failure convention below).
+			// #467 — ONE round of reads: `listJoinStateDetails` answers state PLUS
+			// the dated stamp, and `joinStates` (the bare 3-value record the
+			// owner-controls block routes on, byte-unchanged) is DERIVED from
+			// that same answer — never a second call to `listJoinStates`.
 			try {
-				const states = await listJoinStates(cfg, rows.map((r) => r.personId));
+				const details = await listJoinStateDetails(cfg, rows.map((r) => r.personId));
 				if (!isCurrent()) return;
-				joinStates = states;
+				joinStateDetails = details;
+				joinStates = bareJoinStates(details);
 			} catch (e) {
 				if (!isCurrent()) return;
 				console.error('roster: join-state load failed, showing no join-state badges', e);
+				joinStateDetails = {};
 				joinStates = {};
 			}
 
@@ -1504,9 +1528,10 @@
 	 *  successful mint/withdraw so the row's controls follow the CONTENTS,
 	 *  never an optimistic local guess. */
 	async function refreshJoinState(cfg: EntuCfg, personId: string, g: number): Promise<void> {
-		const updated = await listJoinStates(cfg, [personId]);
+		const updated = await listJoinStateDetails(cfg, [personId]);
 		if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-		joinStates = { ...joinStates, ...updated };
+		joinStateDetails = { ...joinStateDetails, ...updated };
+		joinStates = { ...joinStates, ...bareJoinStates(updated) };
 	}
 
 	/** `kutsu` (absent → invited) AND `saada uuesti` (invited → invited, atomic
@@ -1725,19 +1750,54 @@
 		id_code: m.roster_record_id_code_label
 	};
 
-	// #294 — the three-state badge, same lookup-table-keyed-by-state idiom as
-	// the event/library badges (event/[id]/+page.svelte, library/+page.svelte)
-	// rather than an ad hoc conditional chain.
-	const JOIN_STATE_LABEL: Record<JoinState, () => string> = {
+	// #467 — the chip becomes ONE DATED STATUS LINE, four DISPLAY states.
+	// `expired` is DISPLAY-ONLY (invited + past INVITE_LIFETIME_MS) — it is
+	// never a fifth producer value and never reaches the owner-controls block,
+	// which keeps routing on the bare 3-value `JoinState` exactly as before.
+	type JoinDisplayState = 'absent' | 'invited' | 'expired' | 'joined';
+
+	const JOIN_STATE_LABEL: Record<JoinDisplayState, (params: { date: string }) => string> = {
 		absent: m.roster_member_join_state_absent,
 		invited: m.roster_member_join_state_invited,
+		expired: m.roster_member_join_state_expired,
 		joined: m.roster_member_join_state_joined
 	};
-	const JOIN_STATE_BADGE_CLASS: Record<JoinState, string> = {
+	const JOIN_STATE_BADGE_CLASS: Record<JoinDisplayState, string> = {
 		joined: 'border-emerald-700 text-emerald-700',
 		invited: 'border-amber-700 text-amber-700',
+		expired: 'border-red-700 text-red-700',
 		absent: 'border-ink-4 text-ink-2'
 	};
+	// en-CA yyyy-mm-dd, NO timeZone argument — the InviteSurface.svelte:160
+	// convention (#207 rule 7).
+	const joinStateDateFmt = isoDateFormatter();
+
+	/** #467 — the ONE line to render for a row, or undefined to render
+	 *  NOTHING (withheld bucket, or the date for that state could not be
+	 *  read — no guessed line, ever). Date source per state: absent → the
+	 *  row's own member `_created` (row.createdAt); invited/expired/joined →
+	 *  the linked-identity property value's `created.at` (detail.at). */
+	function joinStateLine(row: RosterRow): { display: JoinDisplayState; at: string } | undefined {
+		const detail = joinStateDetails[row.personId];
+		if (detail === undefined) return undefined;
+		if (detail.state === 'absent') {
+			return row.createdAt === undefined ? undefined : { display: 'absent', at: row.createdAt };
+		}
+		if (detail.at === undefined) return undefined;
+		if (detail.state === 'invited') {
+			const expired = Date.parse(detail.at) + INVITE_LIFETIME_MS < Date.now();
+			return { display: expired ? 'expired' : 'invited', at: detail.at };
+		}
+		return { display: 'joined', at: detail.at };
+	}
+
+	/** The bare 3-value record the owner-controls block routes on — derived
+	 *  from the SAME `listJoinStateDetails` answer the dated line reads, never
+	 *  a second fetch. Function declaration (hoisted) so `load()`'s use above
+	 *  its lexical position in the file still resolves. */
+	function bareJoinStates(details: Record<string, JoinStateDetail>): Record<string, JoinState> {
+		return Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.state]));
+	}
 
 	/** Pencil tap: (re)loads the ONE db-scoped record lookup for `row` and opens
 	 *  its editor in place — closing whichever row's editor was open before (see
@@ -3967,37 +4027,32 @@
 </script>
 
 {#snippet rowInfo(row: RosterRow, showSection: boolean, rowSectionNames: string[])}
-	<!-- #302 item 2 — the join-state badge moved here, directly under name +
-	     email, BEFORE the section name. Joined is the SILENT default (no chip
-	     at all); not-invited and invited-awaiting keep DISTINCT chips — if both
-	     were silent the two states #294 exists to distinguish would collapse
-	     into one. Still contents-derived via `listJoinStates` (never presence).
-	     The read is the gate (#454, Mihkel 2026-09-22): no app-computed role
-	     decides the chip, only whether the read returned a state for the row.
-	     `listJoinStates` omits any person whose auth-identity property the
-	     caller was not admitted to read, so the `!== undefined` check below is
-	     the reader's own gate (THE WITHHELD-BUCKET TELL,
-	     lib/profile/linkedIdentities.ts). Shared between the collapsed card
-	     (rendered as this snippet's caller, wrapped in the activator button)
-	     and the non-admin/open-editor callers, so the info itself is defined
-	     exactly once regardless of which state renders it. -->
+	<!-- #467 — one DATED status line, directly under name + email, BEFORE the
+	     section name. Four display states (absent/invited/expired/joined);
+	     `expired` is display-only, `joined` now RENDERS ("member since
+	     <date>", silent no longer). The read is still the gate (#454, Mihkel
+	     2026-09-22): `joinStateLine` returns undefined — no line at all — for
+	     a row `listJoinStateDetails` omitted (THE WITHHELD-BUCKET TELL,
+	     lib/profile/linkedIdentities.ts) or whose date could not be read
+	     (#467 done-when 3: no guessed line, ever). Shared between the
+	     collapsed card (rendered as this snippet's caller, wrapped in the
+	     activator button) and the non-admin/open-editor callers, so the info
+	     itself is defined exactly once regardless of which state renders it. -->
 	<span data-testid="roster-row-name" class="text-sm text-ink">{row.name}</span>
 	{#if row.email}
 		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
 	{/if}
-	{#if joinStates[row.personId] !== undefined}
-		{@const state = joinStates[row.personId]}
-		{#if state !== 'joined'}
-			<span
-				data-testid="roster-row-join-state-{row.memberId}"
-				data-join-state={state}
-				class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {JOIN_STATE_BADGE_CLASS[
-					state
-				]}"
-			>
-				{JOIN_STATE_LABEL[state]()}
-			</span>
-		{/if}
+	{#if joinStateLine(row) !== undefined}
+		{@const line = joinStateLine(row)!}
+		<span
+			data-testid="roster-row-join-state-{row.memberId}"
+			data-join-state={line.display}
+			class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {JOIN_STATE_BADGE_CLASS[
+				line.display
+			]}"
+		>
+			{JOIN_STATE_LABEL[line.display]({ date: joinStateDateFmt.format(new Date(line.at)) })}
+		</span>
 	{/if}
 	{#if showSection && rowSectionNames.length > 0}
 		<span data-testid="roster-row-section" class="text-xs text-ink-2">{rowSectionNames.join(', ')}</span>

@@ -65,6 +65,7 @@ const {
 	mintSelfLinkInviteMock,
 	withdrawInviteMock,
 	listJoinStatesMock,
+	listJoinStateDetailsMock,
 	resolveOwnerTierMock,
 	loadMemberRecordMock,
 	createCopierSpy
@@ -80,6 +81,7 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	withdrawInviteMock: vi.fn(),
 	listJoinStatesMock: vi.fn(),
+	listJoinStateDetailsMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn(),
 	loadMemberRecordMock: vi.fn(),
 	createCopierSpy: vi.fn()
@@ -109,9 +111,13 @@ vi.mock('$lib/invite/copy-invite-link', async (importActual) => {
 	createCopierSpy.mockImplementation(actual.createInviteLinkCopier);
 	return { ...actual, createInviteLinkCopier: createCopierSpy };
 });
+// #467 — the page now reads through `listJoinStateDetails`; mocked alongside
+// the bare producer so the invite/reinvite/withdraw controls this suite
+// exercises still route (both mocks answer the SAME fixture states).
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
-	listJoinStates: listJoinStatesMock
+	listJoinStates: listJoinStatesMock,
+	listJoinStateDetails: listJoinStateDetailsMock
 }));
 vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
@@ -205,6 +211,13 @@ beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rowsA()));
 	listSectionsMock.mockResolvedValue(treeA());
 	listJoinStatesMock.mockResolvedValue({ 'person-p': 'joined', 'pp-3': 'invited', 'pp-4': 'absent' });
+	// #467 — the SAME states, dated (this suite never asserts the date line
+	// itself, only the copy-button controls the bare state routes).
+	listJoinStateDetailsMock.mockResolvedValue({
+		'person-p': { state: 'joined', at: '2026-05-06T12:00:00.000Z' },
+		'pp-3': { state: 'invited', at: '2026-09-10T12:00:00.000Z' },
+		'pp-4': { state: 'absent' }
+	});
 	resolveOwnerTierMock.mockResolvedValue('owner');
 	mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: FRESH_TOKEN });
 	withdrawInviteMock.mockResolvedValue(undefined);

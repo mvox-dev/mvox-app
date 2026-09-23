@@ -35,6 +35,13 @@ export interface LinkedIdentitiesResult {
 	 * result alone cannot tell "no identities" from "not allowed to look".
 	 */
 	readable: boolean;
+	/**
+	 * #467 — the live invite placeholder's own value `_id`, when one exists.
+	 * `sweepStaleInvitePlaceholders` (inviteData.ts) runs before every mint, so
+	 * at most one live placeholder ever exists on a person at a time — a bare
+	 * `_id`, not an array, is the honest shape. Undefined when there is none.
+	 */
+	pendingInviteId?: string;
 }
 
 interface StoredEntuUserEntry {
@@ -85,9 +92,11 @@ export async function listLinkedIdentities(
 
 	const identities: LinkedIdentity[] = [];
 	let pendingInvites = 0;
+	let pendingInviteId: string | undefined;
 	for (const entry of entries) {
 		if (typeof entry.invite === 'string') {
 			pendingInvites += 1;
+			pendingInviteId = entry._id;
 			continue;
 		}
 		identities.push({
@@ -98,7 +107,7 @@ export async function listLinkedIdentities(
 		});
 	}
 
-	return { identities, pendingInvites, readable };
+	return { identities, pendingInvites, readable, pendingInviteId };
 }
 
 // ── #294 — the roster's three-state join read ───────────────────────────────
@@ -151,6 +160,83 @@ export async function listJoinStates(
 	return result;
 }
 
+// ── #467 — the roster's DATED join read ──────────────────────────────────────
+//
+// Same `entity/{personId}?props=entu_user,_viewer` read as `listJoinStates`
+// (via `listLinkedIdentities` — no duplicate fetch path), but a caller who is
+// 'invited' or 'joined' gets a follow-up `GET /property/{_id}` naming the
+// value that state came from: the placeholder's own `_id` when invited, the
+// bound identity's own `_id` when joined (precedence unchanged — an identity
+// beats a stale placeholder, so the read targets the identity). 'absent'
+// issues no follow-up read at all — its display date is the MEMBER entity's
+// own `_created`, which rosterData.ts threads separately; this producer only
+// ever answers for the `entu_user` property.
+//
+// Failure split (#456 shape): the entity read still FAILS LOUD (unchanged
+// `listLinkedIdentities` throw) — a refused read is not this producer's to
+// paper over. A failed or empty property read is different: it names ONE
+// value among several, so it skips-and-warns per row (`readPropertyCreatedAt`
+// below) rather than sinking every other row's answer.
+export type JoinStateDetail = { state: JoinState; at?: string };
+
+export async function listJoinStateDetails(
+	cfg: EntuCfg,
+	personIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<Record<string, JoinStateDetail>> {
+	const entries = await Promise.all(
+		personIds.map(async (personId) => {
+			const { identities, pendingInvites, pendingInviteId, readable } =
+				await listLinkedIdentities(cfg, personId, fetchImpl);
+			if (!readable) return [personId, undefined] as const;
+			if (identities.length > 0) {
+				const at = await readPropertyCreatedAt(cfg, identities[0]._id, fetchImpl);
+				return [personId, { state: 'joined', at } as JoinStateDetail] as const;
+			}
+			if (pendingInvites > 0 && pendingInviteId !== undefined) {
+				const at = await readPropertyCreatedAt(cfg, pendingInviteId, fetchImpl);
+				return [personId, { state: 'invited', at } as JoinStateDetail] as const;
+			}
+			return [personId, { state: 'absent' } as JoinStateDetail] as const;
+		})
+	);
+	const result: Record<string, JoinStateDetail> = {};
+	for (const [personId, detail] of entries) {
+		if (detail !== undefined) result[personId] = detail;
+	}
+	return result;
+}
+
+/**
+ * Reads ONE property VALUE's `created.at` — the only place Entu returns it
+ * (the entity read never does; probe-property-value-created-stamp-2026-09-21).
+ * Same `property/{id}` GET shape as `fileUrls.ts`'s `signFileUrl`, but
+ * skip-and-warn rather than fail-loud (#456 shape): one bad or missing stamp
+ * must not sink the whole roster's dates. `created.by` (the author, a person
+ * reference) is deliberately never read out — PII, ER-26.
+ */
+export async function readPropertyCreatedAt(
+	cfg: EntuCfg,
+	propertyId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<string | undefined> {
+	const res = await entuFetch(cfg.db, `property/${propertyId}`, cfg.token, {}, fetchImpl);
+	if (!res.ok) {
+		console.warn(
+			`readPropertyCreatedAt: property ${propertyId} read failed: HTTP ${res.status}`
+		);
+		return undefined;
+	}
+	const body = (await res.json()) as { created?: { at?: string } };
+	const at = body.created?.at;
+	if (at === undefined) {
+		console.warn(`readPropertyCreatedAt: property ${propertyId} carries no created.at`);
+		return undefined;
+	}
+	return at;
+}
+
 // (*MVOX:Josquin* — #193 GREEN: linked-identities display producer)
 // (*MVOX:Palestrina* — #294 GREEN: listJoinStates, reusing listLinkedIdentities)
 // (*MVOX:Josquin* — #454 GREEN: a withheld private bucket is not an observation)
+// (*MVOX:Josquin* — #467 GREEN: listJoinStateDetails/readPropertyCreatedAt, the dated sibling)

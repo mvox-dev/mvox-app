@@ -73,6 +73,17 @@ export interface ActiveMember {
 	 * rosterData.database.spec.ts.
 	 */
 	dbEntityId?: string;
+	/**
+	 * #467 — the member entity's OWN `_created.datetime`, the date source for
+	 * the roster's "not invited since <date>" line. UNLIKE a regular value's
+	 * `created` sub-object, `_created` embeds directly into the entity read
+	 * when named in `props=` (probe-property-author-filter-2026-09-21, step
+	 * q4a) — no extra request. Only `.datetime` ever leaves this reader; the
+	 * author `.reference` (and its baked `.string`) is PII (ER-26) and is
+	 * dropped at extraction, never threaded onto the row. Undefined when this
+	 * reader cannot see it — fail-soft, no fabricated date.
+	 */
+	createdAt?: string;
 }
 
 /**
@@ -111,7 +122,7 @@ export async function listActiveMembers(
 ): Promise<ListRead<ActiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
-		'entity?_type.string=member&status.string=active&props=person,_parent&limit=500',
+		'entity?_type.string=member&status.string=active&props=person,_parent,_created&limit=500',
 		cfg.token,
 		{},
 		fetchImpl
@@ -123,6 +134,7 @@ export async function listActiveMembers(
 			_id: string;
 			person?: Array<{ reference: string }>;
 			_parent?: Array<{ reference: string; entity_type?: string }>;
+			_created?: Array<{ datetime?: string }>;
 		}>;
 	};
 	const raws = body.entities ?? [];
@@ -150,12 +162,16 @@ export async function listActiveMembers(
 		// non-section entry is a LEGACY `organization` parent (see
 		// rosterData.database.spec.ts).
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
+		// #467 — `.datetime` only; the author `.reference`/`.string` is dropped
+		// at extraction (ER-26), never threaded past this point.
+		const createdAt = raw._created?.[0]?.datetime;
 		return [
 			{
 				memberId: raw._id,
 				personId,
 				sectionIds,
-				dbEntityId
+				dbEntityId,
+				createdAt
 			}
 		];
 	});
@@ -227,6 +243,13 @@ export interface RosterRow {
 	 * module).
 	 */
 	profileName?: string;
+	/**
+	 * #467 — carried through verbatim from `ActiveMember.createdAt` (see its
+	 * doc): the member entity's own `_created.datetime`, the date source for
+	 * the roster's "not invited since <date>" line. Undefined when this reader
+	 * cannot see it (fail-soft, no fabricated date).
+	 */
+	createdAt?: string;
 }
 
 /**
@@ -273,7 +296,9 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
 		// tree and place a multi-section member in every matching group.
 		sectionIds: member.sectionIds,
 		// TU.1/#109 (finding #10) — carried through verbatim, see RosterRow.dbEntityId doc.
-		dbEntityId: member.dbEntityId
+		dbEntityId: member.dbEntityId,
+		// #467 — carried through verbatim, see RosterRow.createdAt doc.
+		createdAt: member.createdAt
 	};
 }
 
