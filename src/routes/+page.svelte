@@ -112,7 +112,6 @@
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
-	import DeskSurface from '$lib/components/DeskSurface.svelte';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	// #247 — the month overview sibling, rendered instead of AgendaList when
 	// the view-mode toggle is set to 'month'; the day-list branch above stays
@@ -6594,8 +6593,7 @@
 
 {#if auth.status === 'authenticated'}
 	{#if collectives.status === 'ready' && selected}
-		<DeskSurface>
-			<div class="mx-auto flex min-h-screen w-full max-w-md flex-col gap-2 px-4 py-6">
+			<div class="mx-auto flex min-h-screen w-full max-w-md flex-col gap-2 bg-paper px-4 py-6">
 				<!-- #248 -- shared suggestion source for series-create-location and
 				     event-create-location (native <datalist>, no custom dropdown). -->
 				<datalist id={LOCATION_SUGGESTIONS_ID}>
@@ -8868,7 +8866,6 @@
 					{/if}
 				</div>
 			</div>
-		</DeskSurface>
 	{:else}
 		<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
 			<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_in()}</p>
