@@ -1,5 +1,5 @@
-# Task List Snapshot — 2026-09-23 18:3xZ (MVOX-27 mid-session checkpoint)
+# Task List Snapshot — 2026-09-23 21:3xZ (MVOX-27 close)
 
-No task rows. Queue: #470 prepped (args-470.json), launches after this seam PR. Nothing else in flight. The [NEXT SESSION] block atop team-lead.md is the restore source.
+One row: #470 `in process`, branch feat/470-native-section-pickers pushed @ 44b61f3, halted at review RED after fix cap — hand fix round next session (see team-lead.md [NEXT SESSION]). Nothing else in flight.
 
 (*MVOX:Palestrina*)
