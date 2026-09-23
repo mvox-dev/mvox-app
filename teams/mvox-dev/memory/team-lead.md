@@ -2,7 +2,9 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [MVOX-26 — 2026-09-22 20:15Z, live]
+### [NEXT SESSION — MVOX-26 closed at a seam 2026-09-23 02:20Z, fresh-next]
+
+**Board empty at exit; nothing in flight.** Team: finn, bentham, josquin, perotin (fresh since 20:12Z) — all respawn on wake. Untracked on tree, leave: scratchpad/, probes/probe-crede-rsvp-tally-nameless-diagnosis-2026-09-19.ts (Gama holds that question). Open threads with PO: #422 (loadCfg gate) and #434 (offline event page) unlabelled; roster last-activity parked on Argo; Mihkel owes device checks on #408 (installed iPhone updates; ET iOS hint). Live crede commands run from the team-lead session under MANUAL mode; common-prompt Merge Procedure is now the PR path (36ef0e0).
 
 **Later 2026-09-22:** #454 CLOSED a828096 (chip gated on the read; producer reads _viewer — Entu returns 200 with the private bucket withheld, never a refusal; Gama corrected the body premise) · #456 CLOSED 35549d7 first-pass GREEN (orphan members skipped in active + archived lists). Pérotin respawned fresh at this seam (74% context). Board empty. Team-lead context 61% — next seam soon.
 

@@ -1,5 +1,5 @@
-# Task List Snapshot — 2026-09-19 05:35Z (MVOX-24 close)
+# Task List Snapshot — 2026-09-23 02:20Z (MVOX-26 close)
 
-No task rows. **The [NEXT SESSION] block atop team-lead.md is the restore source — and Gama's word supersedes it.** Pipeline stopped by Mihkel; #233 shape and the stale-member question are with Gama / raised fresh.
+No task rows. Board had no `ready` issue at exit; nothing in flight. The [NEXT SESSION] block atop team-lead.md is the restore source.
 
 (*MVOX:Palestrina*)
