@@ -4,6 +4,61 @@ Personal notes. Only Josquin writes here.
 
 ---
 
+## [CHECKPOINT] 2026-09-24 #470 — review round 3, the two-jobs prop; `31b57b9` on feat/470-native-section-pickers
+
+### [GOTCHA load-bearing] One prop doing two jobs is how a scoping fix grows a data defect
+Round 2 scoped each grouped roster card to its own membership by filtering the
+ids handed to `SectionPicker`. The component used that same `selectedIds` both
+to render the selects and to subtract the sections already held, so the scoped
+list made the member's OTHER held section look free: her Soprano card offered
+Alto, the pick POSTed a `_parent` she already had, and the optimistic ids then
+carried it twice — keyed `{#each}` → `each_key_duplicate`. Fix: `selectedIds` is
+always the WHOLE membership (exclusion), new `renderIds` is the per-card scope
+(rendering). Before adding a prop to a presentational component, ask which
+question each existing one answers; "what do I draw" and "what does she already
+have" are not the same question even when the arrays usually match.
+
+### [PATTERN] Run a new regression spec against the defect before reporting it green
+Both new cases were run with the page temporarily re-wired to the bug
+(`selectedIds={pickerRenderIds}`): both failed, and NO pre-existing case did —
+which is the measurement of why the blocker reached review at all. Worth
+recording the second half in the commit body: it says what the suite could not
+see, not just what it now can.
+
+### [GOTCHA load-bearing] Moving a keyed `{#each}` onto foreign data is a new failure surface, and it is not DEV-only
+Round 3 re-keyed the pickers from section-tree node ids (unique by
+construction) onto the member's own `sectionIds`, which come off the wire.
+Svelte's `each_key_duplicate` throws in PRODUCTION too (each.js:351-357 →
+errors.js:136-148, checked at the installed source by Bentham), so one repeated
+id takes out the whole roster render — and the member cannot be unassigned
+through a row that will not draw. The repeat needs no bug: `assignMemberSection`
+POSTs `_parent` with no `_id` and Entu appends alongside the existing value
+(entu-www src/api/properties/index.md:92), so two admins or two tabs assigning
+the same section both land, unseen by each other since the page never refetches.
+Guard went at the EXTRACTION boundary (`listActiveMembers` distincts, first-seen
+order), with `patchMemberSectionIds` distincting as belt-and-braces. Rule:
+whenever a key moves from derived/local data to wire data, the uniqueness that
+was structural has to become explicit, and at the boundary — a UI-path guard
+cannot hold a writer that is not a UI path.
+
+### [PATTERN] A suite's comment must claim exactly what the suite shows
+My sweep comment said "nothing can drive her sectionIds into the duplicate key".
+The sweep shows only that no PICK can. Bentham RED'd the sentence, not the code:
+the next reader builds on the stated property, so an over-claim in a comment is
+a defect with a long fuse. Narrowed to picking, with a pointer to the mapper pin
+that carries the rest.
+
+### [GOTCHA] Fixture-derived expectations: write them from the producer, not from the brief
+The option lists are pre-order flattened, so Mia's Alto select reads
+`['', 'sec-sop1', 'sec-alto']`, not alphabetical/held-first. And the intended
+contrast row (Ada, same card) is offered Alto precisely BECAUSE she does not
+hold it — my first draft asserted the opposite. Two red runs on the assertions,
+zero on the fix.
+
+(*MVOX:Josquin*)
+
+---
+
 ## [CHECKPOINT] 2026-09-23 #468 — picker owner-gate fix round; merged 68de3ac (PR 478)
 
 Three commits on `feat/468-picker-owner-gate`: `58f9a60` (F1, menu `right-0`), `8c17fc7` (F2, comments cite the probe), `5bed5a3` (F3, ledger + Perotin's ledger-writer edit). Squash on main `68de3ac`. CI `check + test` 2m47s, Pages pass.
