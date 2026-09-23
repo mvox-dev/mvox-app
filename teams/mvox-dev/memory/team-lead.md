@@ -2,13 +2,15 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-27 checkpoint 2026-09-23 18:3xZ, mid-session]
+### [NEXT SESSION — MVOX-27 closed at a seam 2026-09-23 21:3xZ on Mihkel's word ("at next seam, lets restart")]
 
-**Board:** #470 (native section pickers, one per membership + [+]; args-470.json, `prepped`) is the last queued slice — launch it if not `in process`. Everything else landed today: #463, #466, #467, #471, #474, #468, #469 (seven merges) + seam PRs #465/#479. Team: finn, bentham, perotin, josquin up. Untracked on tree, leave: scratchpad/, probes/probe-crede-rsvp-tally-nameless-diagnosis-2026-09-19.ts. Findings log: ~/workspace/scratchpad/findings-mvox-27.md; research digests + args per issue in the same dir.
+**FIRST: finish #470.** Pipeline halted at review RED after fix cap; branch `feat/470-native-section-pickers` is PUSHED @ 44b61f3 (4 commits, gates green, 6193 tests), tree back on main. One blocker, fix shape known — read the last #470 entry in ~/workspace/scratchpad/findings-mvox-27.md (split SectionPicker's `selectedIds` into full-held-set for exclusion + `renderIds` for the per-card {#each}; two specs on the m-multi fixture). Pattern: spawn Josquin, fix round on the branch → Bentham verdict → Josquin PR via /mvox-merge with `Closes #470`. Issue #470 is `ready,in process`. Not a re-run of the pipeline (cache is prompt-keyed; the branch is the state).
 
-**Rules this session (memory):** research and dev run in parallel — never hold a prepped issue to pack it (Mihkel); /mvox-merge skill = one command per Bash call (chained merges get classifier-blocked); a mid-turn operator question reaches running workflow agents and derailed a research run (#468 run 1) — relaunch with a nonce prefix; the research-pack labels agent (haiku) once split "468" into 4/6/8 — template fix pending: pass issue numbers as `#N` tokens. Pipelines halted at YELLOW after fix cap three times (#468, #469): pattern = Josquin fix round → Bentham verdict → Josquin PR via /mvox-merge; scope widenings ruled explicitly in the findings log, never absorbed.
+**Landed 2026-09-23 (seven):** #463 e26d989 · #466 e73406b · #467 c5a5024 · #471 57d7de4 · #474 74f91dc · #468 68de3ac · #469 a8422b0; seam PRs #465, #479, #481, and this one. Team at exit: finn, bentham, perotin, josquin — all respawn on wake. Untracked on tree, leave: scratchpad/, probes/probe-crede-rsvp-tally-nameless-diagnosis-2026-09-19.ts.
 
-**Live-pass residuals for Mihkel:** #468 — see the section picker as an ordinary member on cards she owns (identity half of the inherited-_owner premise; probe was db-root); #408 device checks still owed. Open unlabelled: #422, #434. #361's surface list grows after #469.
+**Rules this session (all in memory):** research and dev run in parallel, never hold a prepped issue to pack it; /mvox-merge = one command per Bash call; a mid-turn operator question derails running workflow agents (relaunch with a nonce); research-pack labels agent split "468" into 4/6/8 → template fix pending (pass `#N` tokens); pipelines halting at YELLOW/RED after fix cap → hand fix round, scope widenings ruled explicitly in the findings log.
+
+**Live-pass residuals for Mihkel:** #468 — see the section picker as an ordinary member on cards she owns; #408 device checks. Open unlabelled: #422, #434. #361's surface list grows after #469.
 
 (*MVOX:Palestrina*)
 
