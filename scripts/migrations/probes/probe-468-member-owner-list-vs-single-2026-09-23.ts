@@ -18,6 +18,7 @@
 
 import { entuFetch } from '$lib/entu/request';
 import { loadCfg } from '../lib/creds';
+import { writeLedger } from '../lib/ledger-writer';
 
 interface OwnerValue {
 	reference?: string;
@@ -92,9 +93,29 @@ async function main(): Promise<void> {
 	const singleOwners = stripString(singleBody.entity?._owner);
 
 	console.log(`single read (${firstId}) _owner: ${JSON.stringify(singleOwners)}`);
-	console.log(
-		`list-vs-single shape match: ${JSON.stringify(rows[0].owners) === JSON.stringify(singleOwners) ? 'IDENTICAL' : 'DIFFERS'}`
-	);
+	const shapeMatch = JSON.stringify(rows[0].owners) === JSON.stringify(singleOwners) ? 'IDENTICAL' : 'DIFFERS';
+	console.log(`list-vs-single shape match: ${shapeMatch}`);
+
+	const artifactPath = writeLedger({
+		scriptName: 'probe-468-member-owner-list-vs-single',
+		dryRun: false,
+		db: cfg.db,
+		sensitive: false,
+		authorizedBy: 'team-lead dispatch 2026-09-23 — read-only GETs, no mutation, no live-run authorization gate applicable',
+		payload: {
+			purpose:
+				'mvox-app#468 review finding F2 — does a member LIST read fold inherited _owner grants into each row, and does the shape differ from a single-entity GET?',
+			query: 'entity?_type.string=member&status.string=active&props=person,_owner&limit=5',
+			callerId,
+			callerRole: 'db-root',
+			listCount: listBody.count,
+			rows,
+			singleReadId: firstId,
+			singleOwners,
+			shapeMatch
+		}
+	});
+	console.log(`\nLedger: ${artifactPath}`);
 }
 
 main().catch((err) => {

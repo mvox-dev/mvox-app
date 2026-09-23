@@ -88,11 +88,14 @@ export interface ActiveMember {
 	 * #468 — every `_owner` grant's `.reference` on the member entity, in wire
 	 * order, INHERITED values included. Verified 2026-09-23 by a read-only probe
 	 * (scripts/migrations/probes/probe-468-member-owner-list-vs-single-2026-09-23.ts,
-	 * which names the db it ran against and refuses to run against any other):
-	 * list reads carry inherited `_owner` values, flagged `inherited: true`, in
-	 * the same shape a single-entity GET returns. An inherited owner may move
-	 * the member exactly as a direct one may, so nothing is filtered out. The baked `.string` (a person name — PII, ER-26) is dropped
-	 * at extraction, never threaded onto the row. `[]` when the read carries no
+	 * which names the db it ran against and refuses to run against any other),
+	 * its run recorded at scripts/migrations/seed-results/probe-468-member-
+	 * owner-list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
+	 * inherited `_owner` values, flagged `inherited: true`, in the same shape a
+	 * single-entity GET returns (`shapeMatch: "IDENTICAL"` in that ledger). An
+	 * inherited owner may move the member exactly as a direct one may, so
+	 * nothing is filtered out. The baked `.string` (a person name — PII, ER-26)
+	 * is dropped at extraction, never threaded onto the row. `[]` when the read carries no
 	 * `_owner` — a withheld private bucket and a genuinely empty grant list
 	 * both honestly read "this reader holds/sees no grant" (fail closed).
 	 * Optional at the type level for pre-GREEN fixtures only; the producer
@@ -187,9 +190,12 @@ export async function listActiveMembers(
 		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
 		// #468 — every `_owner` `.reference`, inherited included, wire order kept.
 		// Verified 2026-09-23 by probes/probe-468-member-owner-list-vs-single-
-		// 2026-09-23.ts: list reads carry inherited `_owner` values, so this
-		// extraction sees them here and not only on a per-entity GET. The baked `.string` (a person name, PII — ER-26) never leaves this
-		// extraction. No `_owner` in the read (withheld private bucket or a
+		// 2026-09-23.ts, run recorded at seed-results/probe-468-member-owner-
+		// list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
+		// inherited `_owner` values, so this extraction sees them here and not
+		// only on a per-entity GET. The baked `.string` (a person name, PII —
+		// ER-26) never leaves this extraction.
+		// No `_owner` in the read (withheld private bucket or a
 		// genuinely empty grant list) → [] — fail closed, never undefined.
 		const ownerIds = (raw._owner ?? []).map((o) => o.reference);
 		return [
