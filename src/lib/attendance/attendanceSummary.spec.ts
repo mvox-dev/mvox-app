@@ -431,6 +431,11 @@ describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-badge-past-1"]')).not.toBeNull();
 		});
+		// #471 — only past-1's card renders until asked; reveal the rest before
+		// reading their badges.
+		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
+		expect(showMore, '#471 show-more button').not.toBeNull();
+		await fireEvent.click(showMore!);
 
 		const expected: Array<[string, string, string]> = [
 			['past-1', 'present', 'Present'],

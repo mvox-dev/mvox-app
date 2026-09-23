@@ -12,6 +12,7 @@
 	"agenda_load_error": "Couldn't load the agenda.",
 	"agenda_retry": "Retry",
 	"agenda_recent": "Recent",
+	"agenda_recent_show_more": "Show earlier",
 	"agenda_take_attendance": "Take attendance",
 	"agenda_take_attendance_label": "Take attendance for {event}",
 	"agenda_onboarding_step_season": "1. Create a season",

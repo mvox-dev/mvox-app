@@ -12,6 +12,7 @@
 	"agenda_load_error": "Не вдалося завантажити порядок денний.",
 	"agenda_retry": "Повторити",
 	"agenda_recent": "Нещодавні",
+	"agenda_recent_show_more": "Показати попередні",
 	"agenda_take_attendance": "Відмітити відвідуваність",
 	"agenda_take_attendance_label": "Відмітити відвідуваність: {event}",
 	"agenda_onboarding_step_season": "1. Створіть сезон",

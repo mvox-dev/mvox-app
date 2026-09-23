@@ -226,6 +226,13 @@
 		justCreatedEventId = null
 	}: Props = $props();
 
+	// #471 — the Recent section starts collapsed to the single most recent
+	// past card; pressing the show-more button reveals the rest for THIS
+	// mount only (no persistence — a fresh render, incl. the page's own
+	// {#key current?.db} remount on a collective switch, starts collapsed
+	// again).
+	let showAllRecent = $state(false);
+
 	/** The compact times line's full text — computed as ONE string (never a
 	 *  nested per-pair span: AgendaList.spec.ts's row-span containment checks
 	 *  run over EVERY span in a row, and a bare clock-only span would be one
@@ -468,7 +475,7 @@
 			     to a filter tap was an unreviewed side effect. -->
 			{@render recentEmptyState()}
 		{/if}
-		{#each recentItems as item (item.id)}
+		{#each showAllRecent ? recentItems : recentItems.slice(0, 1) as item (item.id)}
 			<!-- #466 — tapping anywhere on the card opens the event; keyboard and
 			     screen-reader users already reach it through the accessible name
 			     link below (#101 TE.1), so the row itself gains no tabindex/role. -->
@@ -565,6 +572,20 @@
 								onclose={attendancePanel.onclose}
 							/>
 						</div>
+					{/if}
+					<!-- #471 — bottom-right of the one collapsed card; a plain <button>,
+					     so #466's CARD_CONTROLS already keeps the row's own goto() tap
+					     handler off it (see CARD_CONTROLS above — do not touch). Only
+					     renders while collapsed AND there is something more to show. -->
+					{#if !showAllRecent && recentItems.length > 1}
+						<button
+							type="button"
+							data-testid="agenda-recent-show-more"
+							class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
+							onclick={() => (showAllRecent = true)}
+						>
+							{m.agenda_recent_show_more()}
+						</button>
 					{/if}
 				</div>
 			</div>
