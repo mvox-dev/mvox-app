@@ -583,6 +583,59 @@ Method note: the bail proved load-bearing by replay at file granularity — pre-
 (`expected null not to be null`), 24 unrelated green. A timeout or a module error there would have proved
 nothing.
 
+## [STAND-DOWN, premise named] 2026-09-23, #468 — the owner gate rests on an unprobed identity
+
+**The premise**: that an ordinary member's JWT receives `_owner` at all on a member-entity list read. If
+it does not, `ownerIds` is `[]` for every reader, the picker renders for nobody, and **every unit test
+stays green** — section A exactly, since the fixtures supply a shape nobody had seen a real caller receive.
+
+**LARGELY DISCHARGED the same day — read this before re-raising it.** Team-lead supplied the missing half
+and I checked rather than accepted it. Three pieces compose, and none alone was enough:
+
+1. **Shape** (identity-independent) — the db-root probe: a member LIST read folds inherited `_owner` in,
+   flagged `inherited: true`, same shape as a single GET.
+2. **Identity** (entity-independent) — the recorded bucket rule: a reader holding ANY grant on the entity
+   reads its private bucket, rights properties included; a non-granted reader gets domain/public without
+   `_owner` (`project_entu_rights_beat_property_sharing`, observed 2026-09-08, source-verified). The list
+   endpoint applies that same access list server-side (rulebook B, `filter.access = { $in: [...] }`).
+3. **Inherited grants reach that access list** — verified at the docs, not inferred: entu-www
+   `src/overview/data-flow/index.md:15` says a write re-derives the entity so that "rights are combined
+   with any inherited from its parents, **the access list is rebuilt**". So an inherited owner sits in
+   `access` and reads the bucket — the exact case the gate's rationale rests on.
+
+**Residual re-open condition, now narrow**: a member-JWT look at the roster on the next live pass. Re-open
+only if the picker is missing for someone who holds `_owner`.
+
+**The consequence worth keeping** (it surprised me, and it is fine): because ANY grant-holder reads the
+bucket, a mere `_viewer` on a member row receives the **full `ownerIds` list** for that member, not just
+their own presence in it. The gate still behaves — it asks whether the reader's OWN id is in the list, so
+a viewer gets `false` and no picker. And `.string` is stripped at extraction, so what crosses the wire is
+person **ids**, never names (`project_entu_reference_string_bakes_pii`, followed). **Do not "tighten" this
+by filtering the list to the reader's own id** — the gate would read identically, and the fail-closed
+reasoning would get harder to follow, for no visibility gain.
+
+Why I never pressed it to RED: the failure mode was **fail-closed** (no leak, no wrong-person write path),
+and the discharge was cheap. Why it was not nothing: it was the whole positive half of the done-when.
+
+**What the committed probe does and does not buy.** `probes/probe-468-member-owner-list-vs-single-2026-09-23.ts`
+runs as **db-root** by its own header. Per rulebook B/G that identity always reads the private bucket, so
+it establishes the **shape** delta honestly — a list read folds inherited `_owner` in, flagged
+`inherited: true`, same shape as a single GET — and can establish **nothing** about a non-omniscient
+reader. Useful, correctly scoped, and not the question the gate depends on. Nearest production evidence
+is `src/lib/nav/adminStore.ts:65-67` reading `_owner,_editor` under the user's own token — but by single
+GET on the **database** entity, and its own `:85` comment records the sees-entity-but-no-rights case.
+
+### [GOTCHA-THAT-TABLE-IS-ABOUT-DELETION] — entu-www `api/properties/index.md:143`
+
+The row `` `_owner`, `_editor`, … | Requires `_owner` rights on the entity `` sits under
+**"## Deleting a Property → ### Restrictions"**. It governs **deletion**, not read visibility. I pulled it
+up as the answer to "can a non-owner read `_owner`", and it is not — I caught it only by reading 20 lines
+of surrounding context before quoting it. **#468's own issue body had already been corrected for this
+exact mistake** ("ER-11 is about rights properties, and the table is about deletion"), so the trap has now
+caught two readers in one issue. **Always print the enclosing `##`/`###` heading with any docs table row
+before citing it.** As far as I can find, entu-www states nowhere whether a rights-holder gets rights
+properties back on a read — which is what leaves the premise above open rather than answerable from docs.
+
 ## PO standing rules — pointer only
 
 **The binding text is the "PO standing rules" section of `architecture-decisions.md`. Read it there;
