@@ -651,6 +651,25 @@ describe('#467 — listActiveMembers requests and threads the member _created st
 		expect(warnSpy).not.toHaveBeenCalled();
 		warnSpy.mockRestore();
 	});
+
+	// #467 review F1 — a non-string `_created[0].datetime` (a JSON `null`) is
+	// the same absence: letting it through typed `string` is what reaches the
+	// roster's date formatter as `new Date(null)` → a fabricated 1970-01-01.
+	it('_created[0].datetime = null (non-string) → createdAt undefined, not a null typed as string', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{
+						_id: 'member-1',
+						person: [{ reference: 'person-a' }],
+						_created: [{ datetime: null }]
+					}
+				]
+			})
+		);
+		const members = await listActiveMembers(cfg, fetchImpl);
+		expect((members.items[0] as { createdAt?: string }).createdAt).toBeUndefined();
+	});
 });
 
 describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', () => {
@@ -684,3 +703,4 @@ describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', (
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #268 fence pins)
 // (*MVOX:Tallis* — #467 RED: _created widening + createdAt threading, author dropped)
+// (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)

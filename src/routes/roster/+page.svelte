@@ -1776,19 +1776,31 @@
 	 *  NOTHING (withheld bucket, or the date for that state could not be
 	 *  read — no guessed line, ever). Date source per state: absent → the
 	 *  row's own member `_created` (row.createdAt); invited/expired/joined →
-	 *  the linked-identity property value's `created.at` (detail.at). */
+	 *  the linked-identity property value's `created.at` (detail.at).
+	 *
+	 *  #467 review F1 — the ONE parse gate for every display state. Both date
+	 *  sources are unvalidated strings off the wire (`readPropertyCreatedAt`
+	 *  returns `body.created?.at`, rosterData/memberLifecycle take
+	 *  `_created[0].datetime`), so a JSON `null` or a malformed value reaches
+	 *  here typed `string`. Unguarded that is two different bugs at the render
+	 *  site: `Intl.DateTimeFormat.format(new Date('garbage'))` THROWS
+	 *  `RangeError: Invalid time value` out of the snippet and takes the whole
+	 *  roster render down (the trap #101 F1 and +page.svelte:formatSeasonDate
+	 *  already paid for), while `new Date(null)` quietly formats 1970-01-01 —
+	 *  the fabricated date done-when 3 forbids. `Date.parse` stringifies its
+	 *  argument, so `Date.parse(null)` is NaN and both cases land on the same
+	 *  "render nothing" answer. */
 	function joinStateLine(row: RosterRow): { display: JoinDisplayState; at: string } | undefined {
 		const detail = joinStateDetails[row.personId];
 		if (detail === undefined) return undefined;
-		if (detail.state === 'absent') {
-			return row.createdAt === undefined ? undefined : { display: 'absent', at: row.createdAt };
-		}
-		if (detail.at === undefined) return undefined;
+		const at = detail.state === 'absent' ? row.createdAt : detail.at;
+		if (at === undefined || Number.isNaN(Date.parse(at))) return undefined;
+		if (detail.state === 'absent') return { display: 'absent', at };
 		if (detail.state === 'invited') {
-			const expired = Date.parse(detail.at) + INVITE_LIFETIME_MS < Date.now();
-			return { display: expired ? 'expired' : 'invited', at: detail.at };
+			const expired = Date.parse(at) + INVITE_LIFETIME_MS < Date.now();
+			return { display: expired ? 'expired' : 'invited', at };
 		}
-		return { display: 'joined', at: detail.at };
+		return { display: 'joined', at };
 	}
 
 	/** The bare 3-value record the owner-controls block routes on — derived
@@ -4042,8 +4054,12 @@
 	{#if row.email}
 		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
 	{/if}
-	{#if joinStateLine(row) !== undefined}
-		{@const line = joinStateLine(row)!}
+	<!-- #467 review F1 — resolved ONCE per row: the guard and the render read
+	     the same answer (the two calls each ran their own `Date.now()`, so an
+	     invite expiring between them could have been tested as live and
+	     rendered as expired). -->
+	{@const line = joinStateLine(row)}
+	{#if line !== undefined}
 		<span
 			data-testid="roster-row-join-state-{row.memberId}"
 			data-join-state={line.display}

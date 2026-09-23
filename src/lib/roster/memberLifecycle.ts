@@ -184,7 +184,10 @@ export async function listInactiveMembers(
 			.map((p) => p.reference);
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
 		// #467 — `.datetime` only; the author is dropped at extraction (ER-26).
-		const createdAt = raw._created?.[0]?.datetime;
+		// #467 review F1 — `typeof` guards the wire, mirroring rosterData.ts: a
+		// non-string (JSON `null`) must not ride through typed `string`.
+		const rawCreatedAt = raw._created?.[0]?.datetime;
+		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
 		return [{ memberId: raw._id, personId, sectionIds, dbEntityId, createdAt }];
 	});
 	// RAW length, not `items.length` — the mapper drops rather than throws, but
@@ -314,3 +317,4 @@ export async function listDeactivateBlockers(
 }
 
 // (*MVOX:Josquin*)
+// (*MVOX:Josquin* — #467 review F1: _created[0].datetime validated as a string)

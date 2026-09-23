@@ -163,8 +163,12 @@ export async function listActiveMembers(
 		// rosterData.database.spec.ts).
 		const dbEntityId = (raw._parent ?? []).find((p) => p.entity_type === 'database')?.reference;
 		// #467 — `.datetime` only; the author `.reference`/`.string` is dropped
-		// at extraction (ER-26), never threaded past this point.
-		const createdAt = raw._created?.[0]?.datetime;
+		// at extraction (ER-26), never threaded past this point. #467 review F1 —
+		// `typeof` guards the wire: a JSON `null` would otherwise ride through
+		// typed `string` and reach the roster's date formatter as `new Date(null)`
+		// → a fabricated 1970-01-01. Absent is the honest answer for both.
+		const rawCreatedAt = raw._created?.[0]?.datetime;
+		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
 		return [
 			{
 				memberId: raw._id,
@@ -561,3 +565,4 @@ export async function loadRosterWithRealNames(
 // (*MVOX:Palestrina* — #269 GREEN: the real-names overlay)
 // (*MVOX:Palestrina* — #269 review F1/F2: the overlay is opt-in at /roster only)
 // (*MVOX:Josquin* — #321 review F2: the member + record reads report truncation)
+// (*MVOX:Josquin* — #467 review F1: _created[0].datetime validated as a string)

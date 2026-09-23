@@ -550,7 +550,22 @@ describe('#467 — listInactiveMembers requests and threads the member _created 
 		expect(warnSpy).not.toHaveBeenCalled();
 		warnSpy.mockRestore();
 	});
+
+	// #467 review F1 — mirrors rosterData.spec.ts: a non-string datetime is the
+	// same absence, never a null riding through typed `string`.
+	it('_created[0].datetime = null (non-string) → createdAt undefined', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json({
+				entities: [
+					{ _id: 'member-9', person: [{ reference: 'person-9' }], _created: [{ datetime: null }] }
+				]
+			})
+		);
+		const read = await listInactiveMembers(cfg, fetchImpl);
+		expect((read.items[0] as { createdAt?: string }).createdAt).toBeUndefined();
+	});
 });
 
 // (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #467 RED: archived-mirror _created widening, author dropped)
+// (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)

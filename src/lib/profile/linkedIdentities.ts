@@ -229,7 +229,12 @@ export async function readPropertyCreatedAt(
 	}
 	const body = (await res.json()) as { created?: { at?: string } };
 	const at = body.created?.at;
-	if (at === undefined) {
+	// #467 review F1 — `typeof`, not `=== undefined`: a JSON `null` (or any
+	// non-string) is just as unusable downstream as a missing key, and letting
+	// it through typed `string` is what reaches the roster's date formatter as
+	// `new Date(null)` → a fabricated 1970-01-01. Same skip-and-warn either
+	// way, and the warn names the property so the bad value is findable.
+	if (typeof at !== 'string') {
 		console.warn(`readPropertyCreatedAt: property ${propertyId} carries no created.at`);
 		return undefined;
 	}
@@ -240,3 +245,4 @@ export async function readPropertyCreatedAt(
 // (*MVOX:Palestrina* — #294 GREEN: listJoinStates, reusing listLinkedIdentities)
 // (*MVOX:Josquin* — #454 GREEN: a withheld private bucket is not an observation)
 // (*MVOX:Josquin* — #467 GREEN: listJoinStateDetails/readPropertyCreatedAt, the dated sibling)
+// (*MVOX:Josquin* — #467 review F1: created.at is validated as a string, not just present)

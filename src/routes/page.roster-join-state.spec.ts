@@ -585,6 +585,62 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		});
 	});
 
+	// #467 review F1 — the two UNPARSEABLE date shapes, one test per date
+	// source. Neither extractor validates (`readPropertyCreatedAt` returns
+	// `body.created?.at`; rosterData takes `_created[0].datetime`), so a JSON
+	// `null` or a malformed value reaches the page typed `string`. Unguarded
+	// they are two different bugs: `new Date(null)` formats 1970-01-01 (the
+	// fabricated date done-when 3 forbids) and `new Date('not-a-date')` makes
+	// `Intl.DateTimeFormat.format` THROW `RangeError: Invalid time value` out
+	// of the row snippet, taking the WHOLE roster render down (#101 F1's trap).
+	// Both must land where an unreadable date already lands: no line, no throw,
+	// the row itself intact.
+	for (const [shape, bad] of [
+		['a JSON null', null],
+		['a garbage string', 'not-a-date']
+	] as const) {
+		it(`#467 done-when 3, absent shape: ${shape} member _created renders NOTHING — no 1970-01-01, no RangeError, the row and every other line intact`, async () => {
+			loadRosterMock.mockImplementation((cfg: { db: string }) =>
+				Promise.resolve(
+					toListRead(
+						cfg.db === 'sampledb'
+							? rowsA().map((r) =>
+									r.memberId === 'm4' ? ({ ...r, createdAt: bad } as unknown as RosterRow) : r
+								)
+							: rowsB()
+					)
+				)
+			);
+			const { container } = await renderRoster();
+			await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
+			expect(q(container, 'roster-row-m4'), 'the row itself still renders').not.toBeNull();
+			const expected = expectedLinesSampledb();
+			delete (expected as Record<string, unknown>)['roster-row-join-state-m4'];
+			expect(chipSet(container)).toEqual(expected);
+		});
+
+		it(`#467 done-when 3, invited shape: ${shape} property stamp renders NOTHING — no 1970-01-01, no RangeError, the other rows keep their lines`, async () => {
+			joinDatesByDb.sampledb['pp-3'] = bad as unknown as string;
+			const { container } = await renderRoster();
+			await waitFor(() => expect(q(container, 'roster-row-join-state-m4')).not.toBeNull());
+			expect(q(container, 'roster-row-m3'), 'the row itself still renders').not.toBeNull();
+			expect(chipSet(container)).toEqual({
+				'roster-row-join-state-m1': {
+					state: 'joined',
+					label: lineLabel('joined', joinDatesByDb.sampledb['person-p'])
+				},
+				'roster-row-join-state-m2': {
+					state: 'joined',
+					label: lineLabel('joined', joinDatesByDb.sampledb['pp-2'])
+				},
+				'roster-row-join-state-m4': {
+					state: 'absent',
+					label: lineLabel('absent', CREATED_AT.m4)
+				}
+			});
+		});
+	}
+
 	it('#454 WIRE refusal, the REACHABLE shape: HTTP 200 with the private bucket withheld — driven through the REAL dated producer — leaves every row line-less while the rows render', async () => {
 		const actual =
 			await vi.importActual<typeof import('$lib/profile/linkedIdentities')>(
@@ -1162,3 +1218,5 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 // (*MVOX:Tallis* — #467 RED: (A) rewritten to dated status lines — four display
 //  states, display-only `expired`, joined un-silenced, per-state date sources,
 //  page reads through listJoinStateDetails and derives the controls' record)
+// (*MVOX:Josquin* — #467 review F1: unparseable dates (null, garbage) render no
+//  line and never throw out of the row snippet — both date sources)

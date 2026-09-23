@@ -250,6 +250,19 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-3'))).toBe(true);
 		warnSpy.mockRestore();
 	});
+
+	// #467 review F1 — a NON-STRING `created.at` is as unusable as a missing
+	// one, and worse if it leaks: a JSON `null` typed `string` reaches the
+	// roster's date formatter as `new Date(null)` → a fabricated 1970-01-01.
+	// Same skip-and-warn answer as the missing key.
+	it('2xx with created.at = null (non-string) → undefined + warn naming the id, never a null typed as string', async () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'v-4', created: { at: null } }));
+		const at = await readPropertyCreatedAt!(cfg, 'v-4', fetchImpl as unknown as typeof fetch);
+		expect(at).toBeUndefined();
+		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-4'))).toBe(true);
+		warnSpy.mockRestore();
+	});
 });
 
 describe('listJoinStates — the bare 3-value contract is byte-identical to today (the owner-controls block branches exhaustively on it)', () => {
@@ -281,3 +294,4 @@ describe('INVITE_LIFETIME_MS — the ONE lifetime constant (docs/architecture/in
 // (*MVOX:Tallis* — #467 RED: listJoinStateDetails/readPropertyCreatedAt contract,
 //  fetch-mock idiom from linkedIdentities.joinStates.spec.ts, property/{id} mock
 //  shape from repertoire/fileUrls.spec.ts)
+// (*MVOX:Josquin* — #467 review F1: non-string created.at is the same skip-and-warn)
