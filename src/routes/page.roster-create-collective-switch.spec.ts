@@ -511,6 +511,140 @@ describe('/roster — #299/#470: sectionWriteError clears on a collective switch
 	});
 });
 
+describe('/roster — #299/#470 F3: a section write that SETTLES after the switch touches nothing of the new collective', () => {
+	// The three #470 handlers (handleAssign/handleUnassign/handleMove) captured
+	// no `routeLoad.generation`, unlike every other async writer on the page.
+	// `sectionWriteError` is a SINGLE slot shared by every member, so a stale
+	// settle from collective A does not merely write a banner nobody can see on
+	// B — it OVERWRITES the banner B's own failed write just put on screen, and
+	// the user watching B sees her genuine failure alert vanish on its own.
+	// That is what these pins read: B's own banner, before and after the late
+	// settle. (The row patches are not observable here — member ids are
+	// db-scoped, so `patchMemberSectionIds`/`dropBack` aimed at A's ids no-op
+	// against B's rows; the guard covers them for the same reason it covers
+	// this, and `submitPageCreate`'s pins above are the same idiom.)
+
+	/** A genuine, same-collective failure on B: Bob's banner, which must survive
+	 *  anything collective A settles afterwards. */
+	async function failBobOnB(container: HTMLElement) {
+		assignMock.mockRejectedValueOnce(new Error('boom-b'));
+		await failedAssign(container, 'm-bob', 'sec-b1');
+		await waitFor(() => {
+			expect(q(container, 'section-write-error-m-bob')).not.toBeNull();
+		});
+	}
+
+	/** Collective A with Ada already in Soprano (her held select is the entry to
+	 *  the unassign and move paths). */
+	async function renderWithAdaInSoprano(): Promise<HTMLElement> {
+		loadRosterMock.mockImplementation((cfg: { db: string }) =>
+			Promise.resolve(
+				toListRead(
+					cfg.db === 'sampledb'
+						? [{ ...rowsA()[0], sectionIds: ['sec-sop'] }, rowsA()[1]]
+						: rowsB()
+				)
+			)
+		);
+		setAuthedWithTwoCollectives();
+		adminStore.set('admin');
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container, 'section-toggle-sec-sop')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'section-toggle-sec-sop') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
+		});
+		return container;
+	}
+
+	it("ASSIGN: a refused assign from collective A, settling on B, must not wipe B's own failure banner", async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const gate = deferred();
+		assignMock.mockImplementationOnce(() => gate.promise);
+		const container = await renderGroupsRoster();
+
+		await failedAssign(container, 'm-ada', 'sec-sop'); // held by the gate
+		await waitFor(() => {
+			expect(assignMock).toHaveBeenCalledTimes(1);
+		});
+
+		await switchToOtherChoirGroups(container);
+		await failBobOnB(container);
+
+		gate.reject(new Error('boom-a'));
+		await flush();
+
+		expect(
+			q(container, 'section-write-error-m-bob'),
+			"A's late assign failure must not take B's own banner off the screen"
+		).not.toBeNull();
+		expect(q(container, 'section-write-error-m-ada')).toBeNull();
+		consoleSpy.mockRestore();
+	});
+
+	it("UNASSIGN: a refused unassign from collective A, settling on B, must not wipe B's own failure banner", async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const gate = deferred();
+		unassignMock.mockImplementationOnce(() => gate.promise);
+		const container = await renderWithAdaInSoprano();
+
+		await fireEvent.change(
+			q(container, 'section-picker-select-m-ada-sec-sop') as HTMLElement,
+			{ target: { value: '' } }
+		);
+		await waitFor(() => {
+			expect(unassignMock).toHaveBeenCalledTimes(1);
+		});
+
+		await switchToOtherChoirGroups(container);
+		await failBobOnB(container);
+
+		gate.reject(new Error('boom-a'));
+		await flush();
+
+		expect(
+			q(container, 'section-write-error-m-bob'),
+			"A's late unassign failure must not take B's own banner off the screen"
+		).not.toBeNull();
+		expect(q(container, 'section-write-error-m-ada')).toBeNull();
+		consoleSpy.mockRestore();
+	});
+
+	it("MOVE: a refused move from collective A, settling on B, must not wipe B's own failure banner", async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const gate = deferred();
+		// The move's FIRST write (Gama's order: add the new section, then drop the
+		// old one) — held, then refused after the switch.
+		assignMock.mockImplementationOnce(() => gate.promise);
+		const container = await renderWithAdaInSoprano();
+
+		await fireEvent.change(
+			q(container, 'section-picker-select-m-ada-sec-sop') as HTMLElement,
+			{ target: { value: 'sec-alto' } }
+		);
+		await waitFor(() => {
+			expect(assignMock).toHaveBeenCalledTimes(1);
+		});
+
+		await switchToOtherChoirGroups(container);
+		await failBobOnB(container);
+
+		gate.reject(new Error('boom-a'));
+		await flush();
+
+		expect(
+			q(container, 'section-write-error-m-bob'),
+			"A's late move failure must not take B's own banner off the screen"
+		).not.toBeNull();
+		expect(q(container, 'section-write-error-m-ada')).toBeNull();
+		// The old membership's DELETE never fired: the add never landed.
+		expect(unassignMock).not.toHaveBeenCalled();
+		consoleSpy.mockRestore();
+	});
+});
+
 describe('/roster — #299 status regions clear on a collective switch (PO amendment)', () => {
 	// One shape, three regions. The reason is the same each time: a status
 	// region carries no collective context, so a sentence about collective A,
@@ -630,3 +764,6 @@ describe("/roster — #299 handleRemoveSection's terminal failure writes", () =>
 // (*MVOX:Tallis* — #470: the picker-create (handleCreate) stale-settle cases
 //  died with the picker's create entry; the sectionWriteError reset pin is
 //  re-driven through the native pickers' assign path)
+// (*MVOX:Palestrina* — #470 review F3: the three native-picker handlers get the
+//  stale-settle pins the page-create path already had, read off the banner B's
+//  own failed write owns)

@@ -31,11 +31,13 @@
 	//     for>` pair. F2 review fix: the roster's grouped view renders one row
 	//     per MEMBERSHIP (groupBySection puts a member in every section she
 	//     holds), so a two-section member mounts this component twice with the
-	//     same `memberId`; an id built from memberId+sectionId was then
-	//     duplicated in the document and `label[for]` resolved to the first
-	//     match only, leaving every later row's select unnamed. aria-label
-	//     carries the name on the element itself, so it survives any number of
-	//     instances.
+	//     same `memberId` — each instance now scoped to its own card's section
+	//     (the page filters `selectedIds`), but both still carrying the [+],
+	//     whose testid and name are keyed by member alone. An id built from
+	//     memberId would be duplicated in the document and `label[for]` would
+	//     resolve to the first match only, leaving the second card's controls
+	//     unnamed. aria-label carries the name on the element itself, so it
+	//     survives any number of instances.
 	import { m } from '$lib/paraglide/messages.js';
 	import type { SectionNode } from './sectionData';
 

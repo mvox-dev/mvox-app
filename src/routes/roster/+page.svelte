@@ -972,14 +972,31 @@
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section assign with no cfg', memberId, sectionId);
+			// F4 review fix — the retired `handleCreate` set the banner in exactly
+			// this branch; dropping the function dropped the line with it, leaving
+			// the one path where the user picks a section and NOTHING happens on
+			// screen. "Fail loudly over fallbacks" applies here too.
+			// DEFENSIVE, and knowingly unspecced: no page path reaches it today —
+			// member rows render only while `status === 'ready'`, and every
+			// callback that nulls `currentCfg` (`onNoCollective`, `onNoToken`)
+			// leaves the page off 'ready', so a test could only get here by
+			// hand-setting state. The same three lines guard all three handlers.
+			sectionWriteError = { memberId };
 			return;
 		}
+		// #299 / F3 review fix — captured before the only await, same idiom as
+		// `submitPageCreate` and `handleRemoveSection`. A write that settles after
+		// the user switched collectives must touch NOTHING: the row patches would
+		// aim at a roster that no longer exists and the banner would pin a foreign
+		// member id into `sectionWriteError`.
+		const g = routeLoad.generation;
 		sectionBusyIds.add(memberId);
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), sectionId]);
 		try {
 			await assignMemberSection(cfg, memberId, sectionId);
 		} catch (e) {
 			console.error('roster: section assign failed', memberId, sectionId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			dropBack(memberId, sectionId);
 			sectionWriteError = { memberId };
 		} finally {
@@ -1003,14 +1020,18 @@
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section unassign with no cfg', memberId, sectionId);
+			sectionWriteError = { memberId }; // F4 review fix — never silently
 			return;
 		}
+		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
 		sectionBusyIds.add(memberId);
 		try {
 			await unassignMemberSection(cfg, memberId, sectionId);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			dropBack(memberId, sectionId);
 		} catch (e) {
 			console.error('roster: section unassign failed', memberId, sectionId, e);
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			if (isSectionMembershipMissing(e)) {
 				dropBack(memberId, sectionId);
 			} else {
@@ -1031,17 +1052,21 @@
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section move with no cfg', memberId, fromId, toId);
+			sectionWriteError = { memberId }; // F4 review fix — never silently
 			return;
 		}
+		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
 		sectionBusyIds.add(memberId);
 		try {
 			try {
 				await assignMemberSection(cfg, memberId, toId);
 			} catch (e) {
 				console.error('roster: move — assigning the new section failed', memberId, fromId, toId, e);
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 				sectionWriteError = { memberId };
 				return; // nothing changed yet: no patch, no lookup, no delete
 			}
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			// Server-confirmed add — safe to show it optimistically now.
 			patchMemberSectionIds(memberId, [...currentSectionIds(memberId), toId]);
 			try {
@@ -1054,6 +1079,7 @@
 					toId,
 					e
 				);
+				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 				if (isSectionMembershipMissing(e)) {
 					// Server already agrees the old membership is gone — same
 					// reconcile-forward rule as handleUnassign, no banner.
@@ -1064,6 +1090,7 @@
 				sectionWriteError = { memberId };
 				return;
 			}
+			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
 			dropBack(memberId, fromId);
 		} finally {
 			sectionBusyIds.delete(memberId);
@@ -4139,10 +4166,24 @@
 	{/if}
 {/snippet}
 
-{#snippet memberRow(row: RosterRow, showSection: boolean)}
+<!-- `groupSectionId` — F2 review fix (#470). In the GROUPED view `groupBySection`
+     emits one row per MEMBERSHIP: a member in Soprano and Alto renders a card
+     under each. Handing every one of those cards her FULL `sectionIds` put all
+     her selects on all her cards (4 selects + 2 [+] for a two-section member,
+     with the same `section-picker-select-<member>-<section>` testid twice in the
+     document). A card belongs to ONE section, so it shows THAT membership and
+     nothing else; the [+] (which adds a membership, not a section-scoped thing)
+     stays on every card. `null` = no group scope — the flat list, where one card
+     is the member's only card and carries all her memberships, and the
+     Unassigned group, where she holds no known section at all. -->
+{#snippet memberRow(row: RosterRow, showSection: boolean, groupSectionId: string | null)}
 	{@const rowSectionNames = (row.sectionIds ?? [])
 		.map((id) => sectionNameById.get(id))
 		.filter((name): name is string => Boolean(name))}
+	{@const pickerSelectedIds =
+		groupSectionId === null
+			? (row.sectionIds ?? [])
+			: (row.sectionIds ?? []).filter((id) => id === groupSectionId)}
 	<!-- #302 review F1 — `relative` is what makes the card activator below a
 	     STRETCHED OVERLAY (`absolute inset-0`) rather than a strip of its own:
 	     the whole card area activates while the name/email/chip stay plain,
@@ -4611,7 +4652,7 @@
 					memberId={row.memberId}
 					memberName={row.profileName ?? row.name}
 					{sections}
-					selectedIds={row.sectionIds ?? []}
+					selectedIds={pickerSelectedIds}
 					busy={sectionBusyIds.has(row.memberId)}
 					onassign={(sectionId) => handleAssign(row.memberId, sectionId)}
 					onunassign={(sectionId) => handleUnassign(row.memberId, sectionId)}
@@ -4642,7 +4683,7 @@
 					role="alert"
 					class="relative text-xs text-red-700"
 				>
-					{m.roster_section_assign_failed()}
+					{m.roster_section_write_failed()}
 				</p>
 			{/if}
 		{/if}
@@ -4718,7 +4759,7 @@
 			<div id="section-region-{node.id}" class="contents">
 				<ul class="flex flex-col pl-5">
 					{#each group?.members ?? [] as row (row.memberId)}
-						{@render memberRow(row, false)}
+						{@render memberRow(row, false, node.id)}
 					{/each}
 				</ul>
 				{#each node.children as child (child.id)}
@@ -5729,7 +5770,7 @@
 								{#if isExpanded}
 									<ul id="section-region-unassigned" class="flex flex-col pl-5">
 										{#each unassignedGroup.members as row (row.memberId)}
-											{@render memberRow(row, false)}
+											{@render memberRow(row, false, null)}
 										{/each}
 									</ul>
 								{/if}
@@ -5740,7 +5781,7 @@
 			{:else}
 				<ul data-testid="roster-flat-list" class="flex flex-col">
 					{#each flatRows as row (row.memberId)}
-						{@render memberRow(row, true)}
+						{@render memberRow(row, true, null)}
 					{/each}
 				</ul>
 			{/if}

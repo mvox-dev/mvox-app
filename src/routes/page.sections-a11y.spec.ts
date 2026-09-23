@@ -73,8 +73,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_name_label: () => 'Section name',
 		roster_section_parent_label: () => 'Parent section',
 		roster_section_create_failed: () => "The section couldn't be created — nothing was saved.",
-		roster_section_assign_failed: () =>
-			"The section was created, but the member couldn't be added to it."
+		roster_section_write_failed: () => "The section change couldn't be saved."
 	};
 	const m = new Proxy(known, {
 		get(target, prop) {
@@ -533,12 +532,23 @@ describe('#470 — a11y: native per-membership selects + a labelled [+], no cust
 			container.querySelectorAll('[data-testid="roster-row-m-multi"]').length,
 			'one row per membership'
 		).toBe(2);
-		const hers = Array.from(
-			container.querySelectorAll<HTMLSelectElement>(
-				'[data-testid="section-picker-select-m-multi-sec-sop"]'
-			)
-		);
-		expect(hers.length, 'her Soprano select exists on BOTH of her rows').toBe(2);
+		// F2 review fix — each of her cards shows ITS OWN membership only (the
+		// Soprano card her Soprano select, the Alto card her Alto select), so the
+		// select testids are document-unique again. The [+] is not section-scoped,
+		// so it still renders on both cards under one memberId-keyed testid — which
+		// is why the names may not rest on ids.
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-select-m-multi-sec-sop"]').length,
+			'her Soprano select renders once, on her Soprano card'
+		).toBe(1);
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-select-m-multi-sec-alto"]').length,
+			'her Alto select renders once, on her Alto card'
+		).toBe(1);
+		expect(
+			container.querySelectorAll('[data-testid="section-picker-add-m-multi"]').length,
+			'the [+] rides on both of her cards'
+		).toBe(2);
 
 		const selects = Array.from(
 			container.querySelectorAll<HTMLSelectElement>('[data-testid^="section-picker-select-"]')

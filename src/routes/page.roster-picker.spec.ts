@@ -571,6 +571,16 @@ describe('/roster — unassign via Määramata (#470)', () => {
 		await waitFor(() => {
 			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
 		});
+		// F1 review fix — the COPY, not just the node. The banner used to render
+		// `roster_section_assign_failed` ("The section was created, but the member
+		// couldn't be added to it."), left over from the retired picker-CREATE
+		// flow: on a refused UNASSIGN that tells the user the exact opposite of
+		// what she just did, and claims a create that never happened. One neutral
+		// key now serves all three writers (the message mock echoes key names).
+		expect(q(container, 'section-write-error-m-ada')?.textContent).toContain(
+			'roster_section_write_failed'
+		);
+		expect(q(container, 'section-write-error-m-ada')?.textContent).not.toContain('assign_failed');
 		// The SAME element — not a re-mounted replacement: nothing was dropped and
 		// put back, so the row never flickered through Unassigned and home again.
 		expect(sel(container, 'm-ada', 'sec-sop'), 'the very same select').toBe(held);
@@ -773,9 +783,99 @@ describe('/roster — the freeze is scoped to the syncing member alone (#470)', 
 	});
 });
 
+
+// ── grouped view: one card = one membership (#470 F2 review fix) ───────────────
+
+describe('/roster — a group card shows ITS OWN membership, not every membership the member holds (#470 F2)', () => {
+	// `groupBySection` emits one row per membership, so a two-section member gets
+	// a card under each of her sections. Handing every card her FULL sectionIds
+	// put all her selects on all her cards (4 selects + 2 [+] for Mia), and
+	// duplicated the `section-picker-select-<member>-<section>` testids — which
+	// `sel()` (a querySelector) then silently read the first of.
+	function cardIn(container: HTMLElement, groupId: string, memberId: string): HTMLElement {
+		const group = q(container, `section-group-${groupId}`);
+		expect(group, `group ${groupId}`).not.toBeNull();
+		const row = (group as HTMLElement).querySelector(
+			`[data-testid="roster-row-${memberId}"]`
+		) as HTMLElement | null;
+		expect(row, `${memberId}'s card in ${groupId}`).not.toBeNull();
+		return row as HTMLElement;
+	}
+
+	function selectIdsIn(card: HTMLElement): string[] {
+		return Array.from(
+			card.querySelectorAll<HTMLElement>('[data-testid^="section-picker-select-"]')
+		).map((el) => el.getAttribute('data-testid') ?? '');
+	}
+
+	it("Mia's Soprano card carries her Soprano select and the [+] — nothing of her Alto membership; her Alto card is the mirror image", async () => {
+		const container = await renderReady();
+
+		const sopCard = cardIn(container, 'sec-sop', 'm-multi');
+		expect(selectIdsIn(sopCard)).toEqual(['section-picker-select-m-multi-sec-sop']);
+		expect(
+			sopCard.querySelectorAll('[data-testid="section-picker-add-m-multi"]').length,
+			'the [+] adds a membership, so it rides on every card'
+		).toBe(1);
+
+		const altoCard = cardIn(container, 'sec-alto', 'm-multi');
+		expect(selectIdsIn(altoCard)).toEqual(['section-picker-select-m-multi-sec-alto']);
+		expect(altoCard.querySelectorAll('[data-testid="section-picker-add-m-multi"]').length).toBe(1);
+
+		// …and so every select testid is document-unique again: `sel()` above reads
+		// the one control it names, not whichever copy came first in the DOM.
+		for (const testid of [
+			'section-picker-select-m-multi-sec-sop',
+			'section-picker-select-m-multi-sec-alto'
+		]) {
+			expect(container.querySelectorAll(`[data-testid="${testid}"]`).length, testid).toBe(1);
+		}
+	});
+
+	it('the FLAT list is the unscoped view: ONE card for Mia carrying BOTH her memberships plus the [+]', async () => {
+		const container = await renderReady();
+		await fireEvent.click(q(container, 'roster-sort-toggle') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'roster-flat-list')).not.toBeNull();
+		});
+
+		const rows = Array.from(
+			container.querySelectorAll<HTMLElement>('[data-testid="roster-row-m-multi"]')
+		);
+		expect(rows.length, 'one card only, off the section grouping').toBe(1);
+		expect(selectIdsIn(rows[0]).sort()).toEqual([
+			'section-picker-select-m-multi-sec-alto',
+			'section-picker-select-m-multi-sec-sop'
+		]);
+		expect(rows[0].querySelectorAll('[data-testid="section-picker-add-m-multi"]').length).toBe(1);
+	});
+
+	it('an unassign fired from the Soprano card takes only THAT membership: her Alto card (and its select) stay exactly where they were', async () => {
+		const container = await renderReady();
+		const fromSop = cardIn(container, 'sec-sop', 'm-multi').querySelector(
+			'[data-testid="section-picker-select-m-multi-sec-sop"]'
+		) as HTMLSelectElement;
+
+		await fireEvent.change(fromSop, { target: { value: '' } });
+
+		await waitFor(() => {
+			expect(
+				q(container, 'section-group-sec-sop')?.querySelector(
+					'[data-testid="roster-row-m-multi"]'
+				) ?? null
+			).toBeNull();
+		});
+		const altoCard = cardIn(container, 'sec-alto', 'm-multi');
+		expect(selectIdsIn(altoCard)).toEqual(['section-picker-select-m-multi-sec-alto']);
+		expect(q(container, 'section-write-error-m-multi')).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #470 RED: native per-membership wiring, wire-order move
 //  contract, per-member freeze, fail-loudly banner; owner gate + position pins
 //  re-derived from #468 shape-agnostically)
 // (*MVOX:Palestrina* — #470 review F1/F3: the unassign pin flipped to
 //  freeze-then-disappear per done-when 4, and the refused-write suite added —
 //  a select that keeps a value nobody wrote is both a lie and a dead end)
+// (*MVOX:Palestrina* — #470 review F1/F2: the banner's copy pinned (not just its
+//  node) and the grouped-card scope suite added — one card, one membership)
