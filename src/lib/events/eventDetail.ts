@@ -281,7 +281,15 @@ export async function loadEventDetail(
 
 	const seasonConductors = (season?.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
 	const eventConductors = (event.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const conductorIds = resolveConductors(seasonConductors, eventConductors);
+	// #483 — a season (or event) can hold the same person's reference twice
+	// (two racing writers each appended once). This header has no rights gate
+	// and no per-entry remove control (unlike the season-manage panel, which
+	// keeps the raw duplicate so its writer can remove one) — so it is the
+	// place distinct-by-id belongs: first-seen order, BEFORE names are
+	// resolved, so `conductorIds` and `conductorNames` below stay aligned and
+	// each conductor is named once. Distinct by id, never by name — two
+	// different people who share a display name both still show.
+	const conductorIds = [...new Set(resolveConductors(seasonConductors, eventConductors))];
 
 	// One profile read per conductor (genuinely independent, same fan-out shape
 	// as loadRoster — rosterData.ts:224-235).

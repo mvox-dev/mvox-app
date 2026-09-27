@@ -226,6 +226,15 @@ vi.mock('$lib/library/libraryData', () => ({
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: listRepertoireItemsMock
 }));
+// #483 — the page's load path (file presence + the session-wide retention
+// sweep, both pre-existing #367/#410 duties unrelated to conductors) reaches
+// persistence only through getAppByteStore(); under happy-dom (no IndexedDB)
+// that throws, and every render past the file's first logs it. Harmless noise
+// none of this file's OTHER tests spy on — but the #483 block below does spy
+// on console.error to hold the conductor-duplicate fix itself to a clean run,
+// so the same in-memory double layout.retention.spec.ts already uses stands
+// in here too.
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
 import Page from './+page.svelte';
 import {
@@ -244,6 +253,9 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+
+let fakeByteStore: FakeByteStore;
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
@@ -429,6 +441,7 @@ function setAuthedWithTwoCollectives(): void {
 }
 
 beforeEach(() => {
+	fakeByteStore = createFakeByteStore();
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	// [] = no sections → roster order degrades to the roster's own order.
