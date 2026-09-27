@@ -108,6 +108,7 @@ import {
 } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -647,8 +648,18 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// Names the member — the alert renders in a list of rows.
-		expect(alert.textContent).toContain('Berta Bass');
+		// #388 — the alert names NO member (Mihkel 2026-09-27: a capture marker
+		// cannot blank part of a sentence). The proxy renders `[key]` with no
+		// JSON when called without params; the only other text is #487's
+		// EntuRef to the MEMBER entity (the stuck record is the membership) —
+		// shortEntuId('m2') = 'm2'.
+		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_member_deactivate_failed]m2');
+		expect(alert.textContent).not.toContain('Berta Bass');
+		const links = alert.querySelectorAll('a');
+		expect(links).toHaveLength(1);
+		expect(links[0].textContent?.trim()).toBe('m2');
+		expect(links[0].getAttribute('href')).toBe('https://entu.app/sampledb/m2');
+		expect(links[0].getAttribute('title')).toBe('m2');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
 		// #286 done-when 5 — the alert stands NEXT TO the still-armed pair,
 		// re-enabled for direct retry; the rest-state trigger never returned.
@@ -753,7 +764,15 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		expect(alert.textContent).toContain('Gone Girl');
+		// #388 — names NO member; carries the EntuRef to the MEMBER entity
+		// (shortEntuId('m9') = 'm9') right after the sentence.
+		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_member_reinstate_failed]m9');
+		expect(alert.textContent).not.toContain('Gone Girl');
+		const links = alert.querySelectorAll('a');
+		expect(links).toHaveLength(1);
+		expect(links[0].textContent?.trim()).toBe('m9');
+		expect(links[0].getAttribute('href')).toBe('https://entu.app/sampledb/m9');
+		expect(links[0].getAttribute('title')).toBe('m9');
 		// She is still inactive — the row stays exactly where it was.
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).not.toBeNull();
 	});
@@ -1397,7 +1416,111 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 	});
 });
 
+// ── #388 RED — capture redaction on /roster outside the record editor ──
+//
+// (1) The inactive-members row's name renders inside the shared display
+//     marker (RedactedText → REDACT_ATTR), and the marker holds exactly the
+//     name — a wrapper around the whole row cannot pass.
+// (2) AC3: with data-redacting on <html>, a sweep of every rendered TEXT node
+//     on /roster (active rows, the inactive panel, optionally an open editor)
+//     finds each fixture member name and email ONLY inside marked elements.
+//     The list of UNMARKED occurrences must be empty; the list of values the
+//     sweep found must be the full fixture set actually rendered, so the sweep
+//     cannot pass vacuously. Attribute channels (SectionPicker's aria-label /
+//     title) are outside the marker by definition — redact.ts lists them.
+describe('#388 — capture redaction: inactive row name marked; no unexplained real name or contact value with the toggle engaged', () => {
+	const inactiveGone = [
+		{
+			memberId: 'm9',
+			personId: 'pp-9',
+			name: 'Gone Girl',
+			email: 'gone@example.com',
+			sectionIds: [],
+			dbEntityId: 'db-1'
+		}
+	];
+	const FIXTURE_VALUES = [
+		'Alice Alto',
+		'alice@example.com',
+		'Berta Bass',
+		'berta@example.com',
+		'Gone Girl',
+		'gone@example.com'
+	];
+
+	afterEach(() => {
+		document.documentElement.removeAttribute(REDACT_TOGGLE_ATTR);
+	});
+
+	async function renderWithInactiveOpen() {
+		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveGone));
+		const utils = await renderRosterAs('admin');
+		await waitFor(() =>
+			expect(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
+		);
+		await fireEvent.click(utils.container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() =>
+			expect(utils.container.querySelector('[data-testid="inactive-member-row-m9"]')).not.toBeNull()
+		);
+		return utils;
+	}
+
+	function sweep(root: Element) {
+		const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+		const unmarked: string[] = [];
+		const found = new Set<string>();
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			const text = n.textContent ?? '';
+			for (const value of FIXTURE_VALUES) {
+				if (!text.includes(value)) continue;
+				found.add(value);
+				if (!n.parentElement?.closest(`[${REDACT_ATTR}]`)) {
+					const owner = n.parentElement?.closest('[data-testid]')?.getAttribute('data-testid');
+					unmarked.push(`${value} @ ${owner ?? n.parentElement?.tagName}`);
+				}
+			}
+		}
+		return { unmarked, found: [...found].sort() };
+	}
+
+	it('the inactive-members row name sits inside a tight marker', async () => {
+		const { container } = await renderWithInactiveOpen();
+		const row = container.querySelector('[data-testid="inactive-member-row-m9"]')!;
+		const walker = document.createTreeWalker(row, NodeFilter.SHOW_TEXT);
+		const hits: Text[] = [];
+		for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+			if ((n.textContent ?? '').includes('Gone Girl')) hits.push(n as Text);
+		}
+		expect(hits.length, 'the inactive row renders her name').toBeGreaterThan(0);
+		for (const hit of hits) {
+			const marker = hit.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null;
+			expect(marker, `'Gone Girl' must sit inside a [${REDACT_ATTR}] element`).not.toBeNull();
+			expect(row.contains(marker), 'the marker is inside the row, not around the panel').toBe(true);
+			expect(marker!.textContent?.trim()).toBe('Gone Girl');
+		}
+	});
+
+	it.each([
+		['collapsed rows + inactive panel', false],
+		['with m2\'s record editor open', true]
+	] as const)('AC3 (%s): with data-redacting on <html>, every fixture name/email in a text node is inside a marked element', async (_label, openEditor) => {
+		document.documentElement.setAttribute(REDACT_TOGGLE_ATTR, '');
+		const { container } = await renderWithInactiveOpen();
+		if (openEditor) await openCard(container, 'm2');
+		expect(document.documentElement.hasAttribute(REDACT_TOGGLE_ATTR)).toBe(true);
+		const { unmarked, found } = sweep(document.body);
+		expect(unmarked).toEqual([]);
+		// Non-vacuous: every active name/email and the inactive name rendered
+		// (the inactive row shows no email today).
+		expect(found).toEqual(
+			['Alice Alto', 'Berta Bass', 'Gone Girl', 'alice@example.com', 'berta@example.com'].sort()
+		);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — fail-LOUD regression block, #255 review F2)
 // (*MVOX:Tallis* — #259 in-flight-guard RED block)
 // (*MVOX:Tallis* — #286 in-flight armed-pair RED block + stays-armed reworks)
+// (*MVOX:Tallis* — #388 RED: failure alerts name no member + EntuRef to the
+//  member; inactive row name marked; AC3 data-redacting sweep)

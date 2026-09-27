@@ -134,6 +134,7 @@ import {
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { REDACT_ATTR } from '$lib/redact/redact';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -455,7 +456,12 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 });
 
 describe('(D) damaged data — more than one record (#264: loud, no guessing, no writes)', () => {
-	it('surfaces a role=alert naming the member, renders NO editor fields, and never writes', async () => {
+	// #388 — the alert no longer NAMES the member (a capture marker cannot
+	// blank part of a sentence; Mihkel 2026-09-27): the message takes no
+	// params, and #487's EntuRef to the PERSON (duplicate detection is keyed on
+	// personId; the details to fix live on the person) sits right after the
+	// sentence, inside the same alert.
+	it('surfaces a role=alert that names NO member and carries an EntuRef to the person, renders NO editor fields, and never writes', async () => {
 		loadMemberRecordMock.mockResolvedValue({ state: 'damaged', count: 2 });
 		const { container } = await renderRosterAs('admin');
 		// #302 drive-path edit: inline (helper's waitFor on roster-record-name
@@ -467,9 +473,17 @@ describe('(D) damaged data — more than one record (#264: loud, no guessing, no
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		expect(alert.textContent).toContain('roster_record_damaged');
-		// The i18n params proxy stringifies — the member must be NAMED.
-		expect(alert.textContent).toContain('Berta Bass');
+		// The i18n params proxy stringifies params — `[roster_record_damaged]`
+		// with no JSON means the message was called with NO name. The only
+		// other text is the EntuRef's short id (shortEntuId('pp-2') = 'pp-2').
+		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_record_damaged]pp-2');
+		expect(alert.textContent).not.toContain('Berta Bass');
+		expect(alert.textContent).not.toContain('berta@example.com');
+		const links = alert.querySelectorAll('a');
+		expect(links).toHaveLength(1);
+		expect(links[0].textContent?.trim()).toBe('pp-2');
+		expect(links[0].getAttribute('href')).toBe('https://entu.app/sampledb/pp-2');
+		expect(links[0].getAttribute('title')).toBe('pp-2');
 		expect(nameInput(container)).toBeNull();
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
@@ -1799,6 +1813,67 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 });
 
+// ── #388 RED — capture redaction outside the record editor ──
+//
+// Every name and email /roster renders as ELEMENT CONTENT sits inside the
+// shared display marker (RedactedText, carrying REDACT_ATTR) — the collapsed
+// row's name and email, and the name inside the card activator's sr-only
+// label. Each marked element holds EXACTLY the personal value (tight marker:
+// the sr-only label's static copy and the row's other text stay outside), so
+// a wrapper around the whole row cannot pass. The attribute name is read off
+// $lib/redact/redact, never a literal.
+function textNodesContaining(root: Element, needle: string): Text[] {
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+	const hits: Text[] = [];
+	for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+		if ((n.textContent ?? '').includes(needle)) hits.push(n as Text);
+	}
+	return hits;
+}
+
+function expectTightlyMarked(root: Element, needle: string, where: string) {
+	const hits = textNodesContaining(root, needle);
+	expect(hits.length, `${where}: '${needle}' must render here`).toBeGreaterThan(0);
+	for (const hit of hits) {
+		const marker = hit.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null;
+		expect(marker, `${where}: '${needle}' must sit inside a [${REDACT_ATTR}] element`).not.toBeNull();
+		expect(root.contains(marker), `${where}: the marker must be INSIDE the surface, not around it`).toBe(true);
+		expect(marker!.textContent?.trim(), `${where}: the marker holds exactly the value`).toBe(needle);
+	}
+}
+
+describe('#388 — the collapsed row\'s name and email and the sr-only edit label\'s name carry the capture marker', () => {
+	it.each(['admin', 'not-admin'] as const)('%s: roster-row-name and roster-row-email each render their value inside a tight marker', async (role) => {
+		const { container } = await renderRosterAs(role);
+		for (const [memberId, name, email] of [
+			['m1', 'Alice Alto', 'alice@example.com'],
+			['m2', 'Berta Bass', 'berta@example.com']
+		] as const) {
+			const li = q(container, `roster-row-${memberId}`)!;
+			const nameEl = li.querySelector('[data-testid="roster-row-name"]');
+			const emailEl = li.querySelector('[data-testid="roster-row-email"]');
+			expect(nameEl, `${memberId} roster-row-name`).not.toBeNull();
+			expect(emailEl, `${memberId} roster-row-email`).not.toBeNull();
+			expectTightlyMarked(nameEl!, name, `${memberId} roster-row-name`);
+			expectTightlyMarked(emailEl!, email, `${memberId} roster-row-email`);
+		}
+	});
+
+	it('admin: the card activator\'s sr-only label keeps its static copy OUTSIDE the marker and the member\'s name INSIDE it', async () => {
+		const { container } = await renderRosterAs('admin');
+		const card = q(container, 'roster-row-card-m2')!;
+		expect(card).not.toBeNull();
+		const label = card.querySelector('.sr-only');
+		expect(label, 'the sr-only edit label renders inside the card').not.toBeNull();
+		expect(label!.textContent).toContain('[roster_record_edit_label]');
+		expectTightlyMarked(label!, 'Berta Bass', 'sr-only edit label');
+		// The static copy itself is not blanked.
+		const copy = textNodesContaining(label!, '[roster_record_edit_label]');
+		expect(copy).toHaveLength(1);
+		expect(copy[0].parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #268 RED, route-level)
 // (*MVOX:Josquin* — #268 review F1/F2/F3 pins)
 // (*MVOX:Josquin* — #268 review r3 pins: empty-landed failure copy, save-time
@@ -1807,3 +1882,5 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 //  weakest-rule fence)
 // (*MVOX:Tallis* — #285 RED: Isikukood fifth field + checksum guard, third in
 //  the refusal slot; over-validation canary)
+// (*MVOX:Tallis* — #388 RED: damaged alert names no member + EntuRef to the
+//  person; row name/email and sr-only label name inside the capture marker)
