@@ -43,13 +43,23 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 	// the claim reached a reader as a real exposure before the dates were checked.
 	// Same caveat: these pins prove no drift SINCE this edit, never that the edit
 	// was right.
+	//
+	// #422 repin (PO ruling, Gama 2026-09-27, on #422) — both move together
+	// again: citations of the deleted dated probe scripts become commit
+	// permalinks (ER-3/5/6/8/9/14 and the §7.1–§7.3 prose), and the guard spec
+	// repins those blocks and its doc-remainder pin. No rule text changes. Same
+	// caveat.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('abf007d4e59dd68fe9b8aa9d413055666f10d238de76f5408a6c779f49e31cc9');
+		).toBe('3af6e98a064f3b1bcc17ce9bf2a8d96344fc19d828cadd8504d0f15807024dd7');
 	});
 
+	// #422 repin: the guard spec repins ER-5/6/8/14 and its doc-remainder pin
+	// for the permalink conversion above (PO ruling, Gama 2026-09-27). Same
+	// caveat.
+	//
 	// #397 repin (Mihkel-ruled 2026-09-18, closing #364) — the guard spec's
 	// RESERVED table stops citing #364: ER-24/25 retired, never minting, their
 	// numbers permanently empty so no citation ever repoints. Same caveat as
@@ -59,7 +69,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('7b857533cc3076ebd0d33b011d5817e2b1953c15f51d2af4d698d376c2bca72a');
+		).toBe('2b1c0dccf4024d2c16a6a20518a67f31af19a7a722c43391e91493795447c9cb');
 	});
 });
 
@@ -108,14 +118,8 @@ describe('package.json: at most a generator scripts entry', () => {
 		'check',
 		'test',
 		'test:watch',
-		'migrate:t4-10:dry',
-		'migrate:t4-10:live',
-		'migrate:t3-1:dry',
-		'migrate:t3-1:live',
-		'migrate:t3-1-bundle3:dry',
-		'migrate:t3-1-bundle3:live',
-		'migrate:widen-member-refs:dry',
-		'migrate:widen-member-refs:live',
+		// #422 — the eight migrate:* entries went with the four dated scripts
+		// they ran (Mihkel 2026-09-27: delete the old scripts, don't gate them).
 		'roadmap:fetch',
 		'roadmap:render'
 	];

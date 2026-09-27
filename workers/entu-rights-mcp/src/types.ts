@@ -13,7 +13,8 @@ export interface RuleEvidence {
 	 * A token is a backticked `path.ext:<digits[,ranges]>` on an Evidence: line.
 	 */
 	sourceRefs: string[];
-	/** Probe-script paths cited, i.e. paths under scripts/migrations/probes/. */
+	/** Probe-script paths cited, i.e. paths under scripts/migrations/probes/ —
+	 * or a commit permalink to one, where the script is gone from main (#422). */
 	probeScripts: string[];
 	/** Probe result-file paths cited, i.e. paths under scripts/migrations/seed-results/. */
 	resultFiles: string[];

@@ -658,7 +658,7 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 //
 // "Not invited since <yyyy-mm-dd>" reads the member record's `_created`, which
 // (unlike a regular value's `created` sub-object) DOES embed into the entity
-// read when named in `props=` (probe-property-author-filter-2026-09-21, step
+// read when named in `props=` (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-author-filter-2026-09-21.ts, step
 // q4a: key set [_id, datetime, entity_type, property_type, reference, string]).
 // Only `.datetime` may leave this reader — `.reference` is the AUTHOR, a person
 // id with a PII-bearing `.string` alongside (ER-26): dropped at extraction,

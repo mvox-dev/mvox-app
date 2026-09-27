@@ -21,6 +21,9 @@ const PATH_TOKEN = /^[\w./-]+\.(?:js|ts|md|json)(?::[\d,-]+)?$/;
 
 const PROBE_SCRIPT_PREFIX = 'scripts/migrations/probes/';
 const RESULT_FILE_PREFIX = 'scripts/migrations/seed-results/';
+/** #422 — a cited file deleted from main is cited as a commit permalink; the
+ * token is served whole and classified by the repo path it points at. */
+const PERMALINK_PREFIX = /^https:\/\/github\.com\/mvox-dev\/mvox-app\/blob\/[0-9a-f]{40}\//;
 
 const stripMarker = (line: string): string => line.replace(/^>\s?/, '');
 
@@ -34,9 +37,10 @@ function parseEvidence(text: string): RuleEvidence {
 		const tokens = evidenceLine.match(/`([^`]+)`/g) ?? [];
 		for (const quoted of tokens) {
 			const token = quoted.slice(1, -1);
-			if (token.startsWith(PROBE_SCRIPT_PREFIX)) {
+			const repoPath = token.replace(PERMALINK_PREFIX, '');
+			if (repoPath.startsWith(PROBE_SCRIPT_PREFIX)) {
 				probeScripts.push(token);
-			} else if (token.startsWith(RESULT_FILE_PREFIX)) {
+			} else if (repoPath.startsWith(RESULT_FILE_PREFIX)) {
 				resultFiles.push(token);
 			} else if (PATH_TOKEN.test(token)) {
 				sourceRefs.push(token);

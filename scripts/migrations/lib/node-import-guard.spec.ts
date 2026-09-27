@@ -1,8 +1,9 @@
 // #107 review R2/F1 — REGRESSION GUARD: `$lib/entu/request` must stay importable
 // from plain node/tsx.
 //
-// 37 scripts under scripts/migrations/ import `entuFetch` from that module,
-// including all four shipped `pnpm migrate:*` targets and every migration probe.
+// Scripts under scripts/migrations/ import `entuFetch` from that module
+// (fewer since #422 deleted the dated loadCfg() scripts and their four
+// `pnpm migrate:*` targets, but the kept scripts still do).
 // They run OUTSIDE Vite, through `register-loader.mjs`, whose resolve hook maps
 // only `$env/dynamic/public` and `$lib/*`. Adding any `$app/*` import to
 // request.ts (or to anything in its transitive graph) is therefore an instant
