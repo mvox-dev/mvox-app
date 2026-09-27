@@ -209,7 +209,7 @@ export async function listJoinStateDetails(
 
 /**
  * Reads ONE property VALUE's `created.at` — the only place Entu returns it
- * (the entity read never does; probe-property-value-created-stamp-2026-09-21).
+ * (the entity read never does; https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-value-created-stamp-2026-09-21.ts).
  * Same `property/{id}` GET shape as `fileUrls.ts`'s `signFileUrl`, but
  * skip-and-warn rather than fail-loud (#456 shape): one bad or missing stamp
  * must not sink the whole roster's dates. `created.by` (the author, a person

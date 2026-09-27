@@ -17,7 +17,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // ── ALLOWLIST: whole files/dirs the fence never reads ──────────────────────
@@ -28,7 +28,6 @@ export const ALLOWED_PATHS: ReadonlyArray<RegExp> = [
 	// Dated, already-run probe scripts — frozen history.
 	/^scripts\/migrations\/probes\//,
 	// Dated migration scripts (filename carries the run date) — frozen history.
-	// Includes the six tidy-td* scripts once renamed with their 2026-08-12 run date.
 	// A run-date in the filename marks the file historic wherever it sits, so the
 	// lib/ subdirectory counts too (e.g. lib/menu-empty-shells-2026-08-08.ts, whose
 	// header quotes a 2026-08-07 walkthrough verbatim and must not be reworded).
@@ -108,40 +107,6 @@ export const ALLOWED_SCOPED_LINE_PATTERNS: ReadonlyArray<{
 	{ path: /^teams\/mvox-dev\/roster\.json$/, line: /"origin":/ }
 ];
 
-// The six tidy-td* migration scripts ran 2026-08-12 (their seed-results
-// ledgers prove it) but carry no date in their filenames. They become
-// historic by the filename rule: renamed with the run-date suffix, content
-// UNTOUCHED (their `?? 'polyphony'` default is then a dated historic record).
-export const TIDY_SCRIPT_RENAMES: ReadonlyArray<{
-	undated: string;
-	dated: string;
-}> = [
-	{
-		undated: 'scripts/migrations/tidy-td2-name-visibility.ts',
-		dated: 'scripts/migrations/tidy-td2-name-visibility-2026-08-12.ts'
-	},
-	{
-		undated: 'scripts/migrations/tidy-td2b-tier-alignment.ts',
-		dated: 'scripts/migrations/tidy-td2b-tier-alignment-2026-08-12.ts'
-	},
-	{
-		undated: 'scripts/migrations/tidy-td2c-rsvp-name-formula.ts',
-		dated: 'scripts/migrations/tidy-td2c-rsvp-name-formula-2026-08-12.ts'
-	},
-	{
-		undated: 'scripts/migrations/tidy-td2d-member-name-formula.ts',
-		dated: 'scripts/migrations/tidy-td2d-member-name-formula-2026-08-12.ts'
-	},
-	{
-		undated: 'scripts/migrations/tidy-td3-type-labels.ts',
-		dated: 'scripts/migrations/tidy-td3-type-labels-2026-08-12.ts'
-	},
-	{
-		undated: 'scripts/migrations/tidy-td4-entity-visibility.ts',
-		dated: 'scripts/migrations/tidy-td4-entity-visibility-2026-08-12.ts'
-	}
-];
-
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
 	encoding: 'utf8'
 }).trim();
@@ -198,13 +163,4 @@ describe('#407 polyphony history fence', () => {
 		).toBe(0);
 	});
 
-	it('the six tidy-td* scripts carry their 2026-08-12 run date in the filename', () => {
-		for (const { undated, dated } of TIDY_SCRIPT_RENAMES) {
-			expect(existsSync(join(repoRoot, dated)), `missing: ${dated}`).toBe(true);
-			expect(
-				existsSync(join(repoRoot, undated)),
-				`undated name still present: ${undated}`
-			).toBe(false);
-		}
-	});
 });

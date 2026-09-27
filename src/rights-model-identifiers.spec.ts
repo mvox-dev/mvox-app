@@ -180,7 +180,7 @@ function blockMatching(label: string, probes: RegExp[]): RuleBlock {
 // contiguous `>` run.
 const CORRECTED_ER9 = [
 	'**ER-9** — Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit grant of any other direct tier to that same caller on that same entity replaces it (ER-6) and silently demotes the creator from owner — the replace happens with no error and no notice.',
-	'Evidence: `scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.',
+	'Evidence: `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.',
 	'Corrected 2026-09-11: ranking wording removed; the claim is unchanged.'
 ].join('\n');
 
@@ -212,7 +212,7 @@ const CORRECTED_ER12 = [
 // stay unpinned — extending coverage to untouched blocks is not this slice's.
 const EDITED_ER3 = [
 	'**ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (ER-1) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.',
-	'Evidence: `scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.',
+	'Evidence: `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.',
 	'Stands on: ER-18, ER-20.'
 ].join('\n');
 
@@ -985,19 +985,26 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 	// remainder repin on every future sanctioned edit of it. This is the
 	// post-#320 residual (ER-1/ER-7 still unpinned because #320 edited and
 	// deferred) not repeated.
+	//
+	// #422 maintenance (PO ruling, Gama 2026-09-27, on #422): the dated probe
+	// scripts these blocks cite were deleted from main, so each citation now
+	// points at a commit permalink (the same path at 037ab3b). ER-5, ER-6, ER-8
+	// and ER-14 are repinned from the post-edit bytes; EDITED_ER3 and
+	// CORRECTED_ER9 carry the same conversion. Only the citation tokens moved —
+	// no rule text. Same caveat: the pins prove no drift SINCE this edit.
 	const UNTOUCHED_SHA256: Record<string, string> = {
 		'ER-2': '01cecca21a2ac74eedd7e04a0c3ff94a14f55c8d2d3ef5951016d769c4edf9dc',
 		'ER-3': sha256(EDITED_ER3),
 		'ER-4': 'd8de9757c674fbeb12c169fab48867e05e53967e76d54062e0aced194842af0e',
-		'ER-5': '0bb58d543f78e49bb144ebbbf3574b6fa61db94be1df1396180ccc3b314fbdeb',
-		'ER-6': 'da1263a637b9d80e3826cca351c9576f797152c6c8c22edcfbdc1276a2a777ab',
-		'ER-8': '7b0b4c356bd6df7eb4419e563f17a47c16168ce8a0cd848110a76916a2bb6fdf',
+		'ER-5': 'cd5f1bb4f7d08323098ee51debd2fd4a64eb663e7d0963e319fdcc3d2527495b',
+		'ER-6': '2bf3605651139a64247c6075ac24fa5db264564d57204e9a23e9cf40a9ab9907',
+		'ER-8': 'e19bdf071712336fdab1c577447bb1099c9023e74873398778bae0f9c5a2d9b4',
 		'ER-9': sha256(CORRECTED_ER9),
 		'ER-10': sha256(EDITED_ER10),
 		'ER-11': 'b2ee2bb1fdd1e2ef1527f81795d5b44450af6916f1b8b148b5485641846de4af',
 		'ER-12': sha256(CORRECTED_ER12),
 		'ER-13': '348e4b0811f6e66d5024874c32bb202c6a8cc1cff0af4718a65af2363a3e2dd5',
-		'ER-14': '665ec0affb05b5f0aeb3ead0069606c4ee7bc2b2c63af389bc89e9a6fdde4b37',
+		'ER-14': '1a861e6093591c71e985783eb614215347f5804f8f8897edaff33a19147fe4e0',
 		'ER-15': '00b855448d2750eed3be8df26576c9aadd4106f315930fe77c3cd11367fe67eb',
 		'ER-16': '874ee3f28195c10f2da3ff44fe32e8c8e4da8298f8829e79df21a12bda5af12f',
 		'ER-17': 'de114fc7b40b8bf254dbda34ab19bda2162433fc91a86b15e86b54d6e6f1be0e',
@@ -1190,7 +1197,7 @@ describe('#322: ER-9 restated direction-free — the ranking framing goes, the d
 
 	it('ER-9 keeps its probe evidence paths intact', () => {
 		const t = er9()?.text ?? '';
-		expect(t).toContain('scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts');
+		expect(t).toContain('https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts');
 		expect(t).toContain(
 			'scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json'
 		);
@@ -1450,7 +1457,13 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// no other §-prose. Re-derived from post-#411 bytes; #330's caveat rides on
 	// unchanged, so this proves no drift SINCE this edit, never that the edit was
 	// right. Provenance: mvox-app#411.
-	const DOC_MINUS_TARGETS_SHA256 = '75ce52e27b1811d1fbd1be07eacc03bce17771f16077d1bc40b54580f8cdd641';
+	//
+	// #422 maintenance (PO ruling, Gama 2026-09-27, on #422): citations of the
+	// deleted dated probe scripts become commit permalinks — inside the ER-5/6/8/14
+	// blocks (repinned in section 13) and in the §7.1–§7.3 "Probe artifacts" /
+	// "Live-confirmed" prose lines. Only the cited path tokens change. Re-derived
+	// from post-#422 bytes; #330's caveat rides on unchanged.
+	const DOC_MINUS_TARGETS_SHA256 = '0e5aa637a15887ff6bcd3169e69d5721fd57dc5a76254405d48e1fd77769c792';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();

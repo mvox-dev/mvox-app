@@ -70,7 +70,7 @@ describe('rights_rule(id): one rule, verbatim, evidence, stamp', () => {
 			evidence: {
 				sourceRefs: [],
 				probeScripts: [
-					'scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts'
+					'https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts'
 				],
 				resultFiles: [
 					'scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json'

@@ -12,7 +12,7 @@
 //
 // The dates (issue #467, Mihkel's table): every property VALUE in Entu carries
 // `created: {at, by}`, but ONLY `GET /property/{_id}` returns it — the entity
-// read never does (probe-property-value-created-stamp-2026-09-21). The value
+// read never does (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-value-created-stamp-2026-09-21.ts). The value
 // `_id`s needed are already in the `entity/{personId}?props=entu_user,_viewer`
 // response this module reads today:
 //   invited → the masked placeholder's own `_id` ({_id, invite:'***'})

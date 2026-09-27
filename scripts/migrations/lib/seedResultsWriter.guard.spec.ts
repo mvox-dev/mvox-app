@@ -63,20 +63,10 @@ import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 // filenames are correct as written; "fixing" them to `lib/…` paths would
 // silently un-exempt all twelve (the guard would then flag the real
 // writers, which live at the top level, not under `lib/`).
-const GRANDFATHERED_PRE_274_WRITERS = [
-	'config-menu-admin-only-2026-08-09.ts',
-	'db-root-owner-backfill-2026-08-09.ts',
-	'delete-corroborated-orphans-2026-08-08.ts',
-	'library-instance-tier-widen-2026-08-08.ts',
-	'library-visibility-2026-08-08.ts',
-	'member-display-config-2026-08-08.ts',
-	'menu-empty-shells-2026-08-08.ts',
-	'meta-descriptions-2026-08-09.ts',
-	'narrow-person-refs-2026-08-08.ts',
-	'orphan-115-disposition-2026-08-08.ts',
-	'retire-application-probe-bulletin-2026-08-08.ts',
-	'widen-member-refs-2026-08-07.ts'
-] as const;
+// #422 (Mihkel, 2026-09-27): all twelve were deleted with the other dated
+// loadCfg() scripts, so the list is empty. It stays closed — a new writer
+// routes through lib/ledger-writer.ts, it is never added here.
+const GRANDFATHERED_PRE_274_WRITERS: readonly string[] = [];
 
 /** The writer itself, self-exempt — same convention as C6 excluding its own file. */
 const WRITER_REL_PATH = join('lib', 'ledger-writer.ts');
@@ -89,7 +79,7 @@ function violations(): string[] {
 		const rel = relative(migrationsDir, full);
 		if (rel.endsWith('.spec.ts')) continue; // tests may reference writeFileSync in mocks/assertions
 		if (rel === WRITER_REL_PATH) continue; // the writer is the sole intended caller
-		if ((GRANDFATHERED_PRE_274_WRITERS as readonly string[]).includes(rel)) continue;
+		if (GRANDFATHERED_PRE_274_WRITERS.includes(rel)) continue;
 
 		const content = readFileSync(full, 'utf-8');
 		if (content.includes('writeFileSync') && !content.includes('ledger-writer')) {
@@ -105,17 +95,17 @@ describe('mvox-app#278 — only lib/ledger-writer.ts writes seed-results/ ledger
 			violations(),
 			'A new script bypassing lib/ledger-writer.ts was found. If this is a genuinely new pre-#274-style ' +
 				'artefact writer, route it through lib/ledger-writer.ts instead — that is the fix, not adding it ' +
-				'to GRANDFATHERED_PRE_274_WRITERS above (that list is closed; it names exactly the 12 scripts that ' +
-				'predate #274, not a place to file new exemptions).'
+				'to GRANDFATHERED_PRE_274_WRITERS above (that list is closed and, since #422, empty — ' +
+				'not a place to file new exemptions).'
 		).toEqual([]);
 	});
 
-	it('the grandfather list itself still matches reality — exactly these 12, no fewer, no more', () => {
+	it('the grandfather list itself still matches reality — every entry still bypasses the writer', () => {
 		// Guards the guard: if a grandfathered script gets migrated onto the
 		// writer (the deferred #278 hygiene item), its entry here becomes
 		// stale — this fails loudly rather than silently over-exempting.
 		const migrationsDir = join(import.meta.dirname, '..');
-		const stillBypassing = (GRANDFATHERED_PRE_274_WRITERS as readonly string[]).filter((rel) => {
+		const stillBypassing = GRANDFATHERED_PRE_274_WRITERS.filter((rel) => {
 			const content = readFileSync(join(migrationsDir, rel), 'utf-8');
 			return content.includes('writeFileSync') && !content.includes('ledger-writer');
 		});

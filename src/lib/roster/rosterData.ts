@@ -80,7 +80,7 @@ export interface ActiveMember {
 	 * #467 — the member entity's OWN `_created.datetime`, the date source for
 	 * the roster's "not invited since <date>" line. UNLIKE a regular value's
 	 * `created` sub-object, `_created` embeds directly into the entity read
-	 * when named in `props=` (probe-property-author-filter-2026-09-21, step
+	 * when named in `props=` (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-author-filter-2026-09-21.ts, step
 	 * q4a) — no extra request. Only `.datetime` ever leaves this reader; the
 	 * author `.reference` (and its baked `.string`) is PII (ER-26) and is
 	 * dropped at extraction, never threaded onto the row. Undefined when this
@@ -90,7 +90,7 @@ export interface ActiveMember {
 	/**
 	 * #468 — every `_owner` grant's `.reference` on the member entity, in wire
 	 * order, INHERITED values included. Verified 2026-09-23 by a read-only probe
-	 * (scripts/migrations/probes/probe-468-member-owner-list-vs-single-2026-09-23.ts,
+	 * (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-468-member-owner-list-vs-single-2026-09-23.ts,
 	 * which names the db it ran against and refuses to run against any other),
 	 * its run recorded at scripts/migrations/seed-results/probe-468-member-
 	 * owner-list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
@@ -207,8 +207,9 @@ export async function listActiveMembers(
 		const rawCreatedAt = raw._created?.[0]?.datetime;
 		const createdAt = typeof rawCreatedAt === 'string' ? rawCreatedAt : undefined;
 		// #468 — every `_owner` `.reference`, inherited included, wire order kept.
-		// Verified 2026-09-23 by probes/probe-468-member-owner-list-vs-single-
-		// 2026-09-23.ts, run recorded at seed-results/probe-468-member-owner-
+		// Verified 2026-09-23 by
+		// https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-468-member-owner-list-vs-single-2026-09-23.ts,
+		// run recorded at seed-results/probe-468-member-owner-
 		// list-vs-single-live-2026-09-23T13-12-04-635Z.json: list reads carry
 		// inherited `_owner` values, so this extraction sees them here and not
 		// only on a per-entity GET. The baked `.string` (a person name, PII —

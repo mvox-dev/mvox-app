@@ -121,7 +121,7 @@ export type OwnerTier = 'owner' | 'editor' | 'none' | 'error';
  * pre-empt): the roster's invite/reinvite/withdraw controls are the first
  * place mvox needs this distinction, because the platform itself enforces it
  * on the write these controls perform — the 2026-09-09 admin-cascade probe
- * (`scripts/migrations/probes/probe-294-admin-invite-cascade-2026-09-09.ts`)
+ * (`https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-294-admin-invite-cascade-2026-09-09.ts`)
  * minted an invite onto another member's person as a db-entity `_owner` (HTTP
  * 200) and was refused as a db-entity `_editor` (HTTP 403, Entu's own text:
  * "User not in _owner property"). `resolveAdmin`'s 'admin'/'not-admin' cannot

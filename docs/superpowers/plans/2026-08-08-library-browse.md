@@ -1224,7 +1224,7 @@ Manually confirm each `props=` list against the ruled set in the design spec §2
 
 ### 5.5 Live smoke check (recommended before Bentham's review — this ticket's data crossed the 3-gate-AND live, per #54's 11:56 confirmation, so a real fetch is cheap and catches wire-shape drift the mocks can't)
 
-Not a live-mutation — pure reads. No auth-gate ceremony required (read-only, matches `project_entu_probe_first` discipline: probe live directly). Confirm `listWorks`/`listEditions`/`listCopies`/`listLendings` against the polyphony db with a throwaway script under `scripts/migrations/probes/`, comparing shapes to what the raw-mapping code in `libraryData.ts` expects (mirrors `probe-55-library-fieldset-grooming-2026-08-08.ts`'s pattern) — catch a reference-vs-string wire-shape mismatch (see `project_entu_create_type_reference` memory: mocks can't catch wire-contract bugs) before it reaches the browser.
+Not a live-mutation — pure reads. No auth-gate ceremony required (read-only, matches `project_entu_probe_first` discipline: probe live directly). Confirm `listWorks`/`listEditions`/`listCopies`/`listLendings` against the polyphony db with a throwaway script under `scripts/migrations/probes/`, comparing shapes to what the raw-mapping code in `libraryData.ts` expects (mirrors `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-55-library-fieldset-grooming-2026-08-08.ts`'s pattern) — catch a reference-vs-string wire-shape mismatch (see `project_entu_create_type_reference` memory: mocks can't catch wire-contract bugs) before it reaches the browser.
 
 ### 5.6 Final commit (if 5.1–5.4 surfaced any fixes)
 

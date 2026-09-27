@@ -119,7 +119,7 @@ describe('evidence-line parse: file:line refs, probe scripts, result files', () 
 	it('ER-3 (the probe-294 known instance): probe script + live result file, full paths', () => {
 		expect(rulesById().get('ER-3')?.evidence).toEqual({
 			sourceRefs: [],
-			probeScripts: ['scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts'],
+			probeScripts: ['https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts'],
 			resultFiles: [
 				'scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json'
 			]
@@ -129,8 +129,8 @@ describe('evidence-line parse: file:line refs, probe scripts, result files', () 
 	it('ER-6: two probe scripts and two result files, all four paths', () => {
 		const ev = rulesById().get('ER-6')?.evidence;
 		expect(ev?.probeScripts).toEqual([
-			'scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts',
-			'scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts'
+			'https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-crede-editor-disappear-repro-2026-09-09.ts',
+			'https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts'
 		]);
 		expect(ev?.resultFiles).toEqual([
 			'scripts/migrations/seed-results/probe-crede-editor-disappear-repro-live-2026-09-09T16-56-49-211Z.json',
@@ -141,7 +141,7 @@ describe('evidence-line parse: file:line refs, probe scripts, result files', () 
 	it('ER-14 (the fenced _parent probe): probe-304 script + result file', () => {
 		const ev = rulesById().get('ER-14')?.evidence;
 		expect(ev?.probeScripts).toEqual([
-			'scripts/migrations/probes/probe-304-parent-rights-gate-2026-09-10.ts'
+			'https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-304-parent-rights-gate-2026-09-10.ts'
 		]);
 		expect(ev?.resultFiles).toEqual([
 			'scripts/migrations/seed-results/probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json'

@@ -11,7 +11,7 @@ import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 // copy.notes, lending.notes, edition_type, license, year, genre, edition.cost,
 // lending.renewed_at, lending.name). EXCEPTION (#89 TR.1): `edition.file` was
 // widened to domain-visible 2026-08-10; `edition.external_link` was already domain
-// (see scripts/migrations/edition-widen-junction-types-2026-08-10.ts). Both are now
+// (see https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/edition-widen-junction-types-2026-08-10.ts). Both are now
 // queried below alongside name/publisher.
 
 export interface Work {
