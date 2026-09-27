@@ -342,6 +342,27 @@ describe('removeSeasonConductor — delete ONLY the matching value', () => {
 		const { impl } = recordingFetch(() => json({}, 500));
 		await expect(removeSeasonConductor(cfg, 'season1', 'p-ada', impl)).rejects.toThrow(/500/);
 	});
+
+	// #483 — two racing writers can leave the SAME person twice on a season.
+	// Removing one copy is ONE GET + ONE DELETE of the FIRST matching value's
+	// `_id`; the identical twin survives (the panel removes one entry per click).
+	// Regression guard: the wire already does this; the panel relies on it.
+	it('#483 — the SAME person held twice: exactly one DELETE, of the first matching value; the twin and the others survive', async () => {
+		const doubled = [
+			{ _id: 'c-1', reference: 'p-ada' },
+			{ _id: 'c-2', reference: 'p-ada' },
+			{ _id: 'c-3', reference: 'p-grace' }
+		];
+		const { impl, calls } = recordingFetch((_url, method) =>
+			method === 'GET' ? json({ entity: { conductor: doubled } }) : json({})
+		);
+		await removeSeasonConductor(cfg, 'season1', 'p-ada', impl);
+
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'DELETE']);
+		expect(calls[0].url).toContain('/entity/season1');
+		expect(calls[0].url).toContain('props=conductor');
+		expect(calls[1].url).toContain('/property/c-1');
+	});
 });
 
 // ── getSeriesDefaults — the event-creation inheritance preview's source ─────────

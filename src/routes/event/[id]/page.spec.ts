@@ -3115,3 +3115,128 @@ describe('/event/[id] — the attendance panel states a truncated roster (#321 r
 // (*MVOX:Tallis* — #220 RED: AM/PM preference reaches the event-detail time line via the shared formatTime)
 // (*MVOX:Tallis* — #311 RED: the event page opts the Add Work picker into honest visibility)
 // (*MVOX:Josquin* — #321 review F2: the attendance panel's closed-set roster notice)
+
+// ── #483 — a season holding the SAME conductor twice ─────────────────────────
+//
+// Two racing writers can append the same person to a season's `conductor`
+// twice. The season panel (agenda route) shows the writer BOTH entries so she
+// can remove one; THIS page's header is where everyone else meets the
+// duplicate, and it names each conductor ONCE — for editor and reader alike,
+// with no rights read added. The dedupe is by person ID (first-seen order),
+// never by display name: two different people who share a name both show.
+//
+// Contract (GREEN): loadEventDetail makes `conductorIds` distinct by id BEFORE
+// the names are resolved, so `conductorIds` and `conductorNames` stay aligned.
+
+const DOUBLED_PROFILES: Record<string, unknown[]> = {
+	...PROFILES,
+	'p-ada': [{ _id: 'prof-ada', name: [{ string: 'Ada Lovelace' }], _sharing: [{ string: 'domain' }] }],
+	'p-grace': [
+		{ _id: 'prof-grace', name: [{ string: 'Grace Hopper' }], _sharing: [{ string: 'domain' }] }
+	],
+	// A DIFFERENT person who happens to share Ada's display name.
+	'p-other-ada': [
+		{ _id: 'prof-other-ada', name: [{ string: 'Ada Lovelace' }], _sharing: [{ string: 'domain' }] }
+	]
+};
+
+const DOUBLED_SEASON_CONDUCTORS = [
+	{ reference: 'p-ada' },
+	{ reference: 'p-ada' },
+	{ reference: 'p-grace' }
+];
+
+describe('#483 loadEventDetail — a doubled conductor reference resolves to each person ONCE', () => {
+	it('season conductors [ada, ada, grace], no event conductor → conductorIds [ada, grace], conductorNames aligned', async () => {
+		const fetchImpl = entuFetchStub({
+			season: seasonEntity({ conductor: DOUBLED_SEASON_CONDUCTORS }),
+			profiles: DOUBLED_PROFILES
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.conductorIds).toEqual(['p-ada', 'p-grace']);
+		expect(detail.conductorNames).toEqual(['Ada Lovelace', 'Grace Hopper']);
+	});
+
+	it('the doubled person is resolved (profile read) ONCE — the dedupe happens before names are resolved', async () => {
+		const fetchImpl = entuFetchStub({
+			season: seasonEntity({ conductor: DOUBLED_SEASON_CONDUCTORS }),
+			profiles: DOUBLED_PROFILES
+		});
+		await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		const profileReadsFor = (personId: string) =>
+			fetchImpl.mock.calls
+				.map((c) => String(c[0]))
+				.filter(
+					(u) => u.includes('_type.string=profile') && u.includes(`_parent.reference=${personId}&`)
+				);
+		expect(profileReadsFor('p-ada').length).toBe(1);
+		expect(profileReadsFor('p-grace').length).toBe(1);
+	});
+
+	it('event conductor values [ada, ada] (overriding a season that holds ada) → conductorIds [ada]', async () => {
+		const fetchImpl = entuFetchStub({
+			event: eventEntity({ conductor: [{ reference: 'p-ada' }, { reference: 'p-ada' }] }),
+			season: seasonEntity({ conductor: [{ reference: 'p-ada' }, { reference: 'p-grace' }] }),
+			profiles: DOUBLED_PROFILES
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.conductorIds).toEqual(['p-ada']);
+		expect(detail.conductorNames).toEqual(['Ada Lovelace']);
+	});
+
+	it('two DIFFERENT people sharing a display name both stay — distinct by id, never by name', async () => {
+		const fetchImpl = entuFetchStub({
+			season: seasonEntity({
+				conductor: [{ reference: 'p-ada' }, { reference: 'p-other-ada' }, { reference: 'p-ada' }]
+			}),
+			profiles: DOUBLED_PROFILES
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.conductorIds).toEqual(['p-ada', 'p-other-ada']);
+		expect(detail.conductorNames).toEqual(['Ada Lovelace', 'Ada Lovelace']);
+	});
+});
+
+describe('#483 /event/[id] header — a doubled season conductor is named ONCE, for everyone', () => {
+	async function conductorLine(container: HTMLElement): Promise<string> {
+		await waitFor(() => {
+			expect(
+				container.querySelector('[data-testid="event-detail-conductors"]')?.textContent
+			).toContain('Grace Hopper');
+		});
+		return (
+			container.querySelector('[data-testid="event-detail-conductors"]')?.textContent ?? ''
+		).trim();
+	}
+
+	it('a NON-editor reader sees "Ada Lovelace" exactly once', async () => {
+		const { container } = renderEventPage({
+			season: seasonEntity({ conductor: DOUBLED_SEASON_CONDUCTORS }),
+			profiles: DOUBLED_PROFILES
+		});
+		const line = await conductorLine(container);
+		// Reader: no editor affordance on the header.
+		expect(container.querySelector('[data-testid="event-edit-btn-name"]')).toBeNull();
+		expect(line).toBe('[event_detail_conductor_label]: Ada Lovelace, Grace Hopper');
+		expect(line.split('Ada Lovelace').length - 1).toBe(1);
+	});
+
+	it('an EDITOR sees "Ada Lovelace" exactly once too — the header is not the place to fix the duplicate', async () => {
+		const { container } = renderEventPage({
+			event: eventEntity({ _editor: [{ reference: 'p-viewer' }] }),
+			season: seasonEntity({
+				conductor: DOUBLED_SEASON_CONDUCTORS,
+				_editor: [{ reference: 'p-viewer' }]
+			}),
+			profiles: DOUBLED_PROFILES
+		});
+		const line = await conductorLine(container);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
+		});
+		expect(line).toBe('[event_detail_conductor_label]: Ada Lovelace, Grace Hopper');
+		expect(line.split('Ada Lovelace').length - 1).toBe(1);
+	});
+});
+
+// (*MVOX:Tallis* — #483 RED: a doubled season conductor is named once on the event page)

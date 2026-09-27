@@ -3845,6 +3845,25 @@
 		rosterPickerOptions(seasonManageConductorIds)
 	);
 
+	/** #483 — the panel's render list. `seasonManageConductorIds` is NOT
+	 *  deduped (the loader keeps every raw value on purpose: the writer who can
+	 *  remove a duplicate must see it to do so) — but Svelte's keyed `{#each}`
+	 *  needs a unique key, and two racing writers can leave the SAME person id
+	 *  twice. `key` disambiguates same-id entries by OCCURRENCE (0 for the
+	 *  first copy, 1 for the second…) without touching the underlying id list;
+	 *  index-into-`seasonManageConductorIds` is this entry's position, same
+	 *  order, used by the remove handler to drop exactly the clicked copy. */
+	const seasonManageConductorEntries = $derived(
+		(() => {
+			const seen = new Map<string, number>();
+			return seasonManageConductorIds.map((personId) => {
+				const occurrence = seen.get(personId) ?? 0;
+				seen.set(personId, occurrence + 1);
+				return { key: `${personId}#${occurrence}`, personId };
+			});
+		})()
+	);
+
 	/** Season bounds are date-ONLY (`yyyy-mm-dd`) and NUMERIC/TABULAR text — #207
 	 *  rule 7 (PO standing rule, Gama's 2026-09-02 rulings): they render as the
 	 *  ISO calendar date itself, `YYYY-MM-DD` (en-CA gives ISO date format). Still
@@ -4464,7 +4483,13 @@
 			});
 	}
 
-	function onSeasonManageConductorRemove(personId: string): void {
+	// #483 — a season can hold the SAME person twice (two racing writers each
+	// appended once). Removal must act on the clicked OCCURRENCE, never on the
+	// id: `filter((id) => id !== personId)` would drop BOTH identical values in
+	// one click. Remove-by-index instead — the panel already knows which
+	// position was clicked (`entry` below carries it) — and revert restores
+	// that exact position on failure, never just appends the id back at the end.
+	function onSeasonManageConductorRemove(personId: string, index: number): void {
 		// #325 — same wire-level refusal as the select above.
 		if (seasonManageConductorPending) return;
 		if (!selected || manageableSeasonId === null) return;
@@ -4476,7 +4501,14 @@
 		seasonManageConductorError = false;
 		seasonManageConductorStatus = '';
 		seasonManageConductorPending = true;
-		seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId); // optimistic
+		// optimistic — drop exactly the clicked occurrence, by position
+		seasonManageConductorIds = [
+			...seasonManageConductorIds.slice(0, index),
+			...seasonManageConductorIds.slice(index + 1)
+		];
+		// Server call unchanged: it GETs fresh and deletes the FIRST value whose
+		// reference matches `personId` — for identical values that is the same
+		// outcome regardless of which occurrence the writer clicked.
 		apiRemoveSeasonConductor(cfg, seasonId, personId)
 			.then(() => {
 				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
@@ -4486,7 +4518,7 @@
 			.catch((e) => {
 				if (thisSeasonManage !== seasonManageSwitchGeneration) return;
 				console.error('agenda: remove season conductor failed', personId, e);
-				seasonManageConductorIds = before;
+				seasonManageConductorIds = before; // restores this exact copy at its position
 				seasonManageConductorError = true;
 				seasonManageConductorPending = false;
 			});
@@ -7260,15 +7292,16 @@
 									<p class="text-xs tracking-wide text-ink-2 uppercase">
 										{m.season_manage_conductors_label()}
 									</p>
-									{#if seasonManageConductorIds.length > 0}
+									{#if seasonManageConductorEntries.length > 0}
 										<ul class="mt-1 flex flex-wrap gap-1.5">
-											{#each seasonManageConductorIds as personId (personId)}
+											{#each seasonManageConductorEntries as { key, personId }, entryIndex (key)}
 												<!-- #132/T6 review F2 — the chip's × is an ICON-ONLY admin control:
 												     44x44 (min-h-11/min-w-11), and the li drops its own vertical
 												     padding so the chip is exactly as tall as the hit area it now
 												     reserves rather than 44px PLUS padding. -->
 												<li
 													data-testid="season-manage-conductor-{personId}"
+													data-conductor-key={key}
 													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
 													{seasonConductorLabel(personId)}
@@ -7292,7 +7325,7 @@
 														})}
 														disabled={seasonManageConductorPending}
 														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
-														onclick={() => onSeasonManageConductorRemove(personId)}
+														onclick={() => onSeasonManageConductorRemove(personId, entryIndex)}
 													>
 														&times;
 													</button>
