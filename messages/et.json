@@ -709,5 +709,9 @@
 	"part_viewer_close": "Sulge",
 	"part_viewer_not_on_device": "See partii pole selles seadmes salvestatud.",
 	"part_viewer_page_of": "{current} / {total}",
-	"entu_ref_aria_label": "Ava Entu kirje {short} (avaneb uues vahekaardis)"
+	"entu_ref_aria_label": "Ava Entu kirje {short} (avaneb uues vahekaardis)",
+	"strokes_pen_red_aria_label": "Punane pliiats",
+	"strokes_pen_black_aria_label": "Must pliiats",
+	"strokes_erase_aria_label": "Kustuta märgid",
+	"strokes_undo_aria_label": "Võta tagasi"
 }
