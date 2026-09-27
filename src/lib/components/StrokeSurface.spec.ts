@@ -15,19 +15,34 @@
 //                    component positions over it and never touches it.
 //     naturalWidth,
 //     naturalHeight  numbers — the base's natural box (aspect).
-//     pens           {id, color}[] — default DEFAULT_PENS (red + black).
+//     pens           {id, color, label?}[] — default DEFAULT_PENS (red + black).
+//                    `label` IS the control's accessible name (review F2): the
+//                    two built-in ids fall back to the surface's own
+//                    translations, any other id names itself, and no pen ever
+//                    borrows another pen's name.
 //     strokes        $bindable StrokeData.
 //     readonly       view mode: no controls, no pointer capture, native scroll.
 //     onchange?      (strokes: StrokeData) => void, after every add/erase/undo.
 //
-//   RENDER  an absolutely positioned <svg data-testid="stroke-surface"
-//           viewBox="0 0 1 1" preserveAspectRatio="none"> over the base, one
-//           <path> per visible stroke: d = strokePath(stroke), stroke = the
-//           pen's colour. `touch-action: none` on the svg only in draw mode.
+//   RENDER  an absolutely positioned <svg data-testid="stroke-surface"> over
+//           the base, one <path> per visible stroke: d = strokePath(stroke,
+//           naturalWidth, naturalHeight), stroke = the pen's colour,
+//           stroke-width = w × naturalWidth. `touch-action: none` on the svg
+//           only in draw mode.
+//
+//           AMENDED (review F4 — the original contract said viewBox="0 0 1 1"
+//           preserveAspectRatio="none"): the surface renders in the base's
+//           NATURAL box, viewBox="0 0 {naturalWidth} {naturalHeight}" with a
+//           uniform preserveAspectRatio. Stretching a unit box scaled x by the
+//           element's width and y by its height, so one stored `w` rendered as
+//           two different thicknesses (2× apart on the 200×100 base here,
+//           ~41% on an A4 page) and round caps rendered as ellipses. Storage
+//           is unchanged — coordinates stay normalized to [0,1].
 //   POINTER pointerdown/move/up on the svg, setPointerCapture, coordinates
 //           mapped via getBoundingClientRect to [0,1], rounded to 4 decimals.
 //           `p` is recorded only for pointerType "pen" (a mouse/touch stroke
-//           carries no `p` key).
+//           carries no `p` key). The stroke under the pointer renders WHILE it
+//           is being made (review F1), not only once the pointer lifts.
 //   ERASE   stroke eraser: a pass in erase mode removes every stroke its path
 //           touches. The saved set holds visible strokes only.
 //   UNDO    in-memory history (add stroke, erase set); undo reverses the last
@@ -35,7 +50,10 @@
 //           history is never serialized.
 //   CONTROLS native <button type="button">, min-h-11 min-w-11: one per pen
 //           (aria-pressed), erase toggle (aria-pressed), undo (disabled when
-//           history empty). Picking a pen leaves erase mode.
+//           history empty). Picking a pen leaves erase mode. Each one has a
+//           VISIBLE face (review F5 — all four landed empty): the pen's own
+//           colour as a swatch, an eraser and an undo glyph, a visible pressed
+//           marker beside aria-pressed, and a visible disabled state.
 //           en aria-labels: "Red pen", "Black pen", "Erase strokes", "Undo"
 //           (keys strokes_pen_red_aria_label, strokes_pen_black_aria_label,
 //           strokes_erase_aria_label, strokes_undo_aria_label).
@@ -172,20 +190,25 @@ describe('#394 — drawing with two pens', () => {
 		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [S1, S2] });
 	});
 
-	it('one <path> per stroke: d = strokePath, stroke = the pen colour', async () => {
+	it('one <path> per stroke: d = strokePath in the base box, stroke = the pen colour, one thickness', async () => {
 		const { container } = mount();
 		await pass(container, LINE_TOP);
 		await fireEvent.click(btn('Black pen'));
 		await pass(container, LINE_BOTTOM);
 		const paths = [...surface(container).querySelectorAll('path')].map((p) => ({
 			d: p.getAttribute('d'),
-			stroke: p.getAttribute('stroke')
+			stroke: p.getAttribute('stroke'),
+			width: p.getAttribute('stroke-width')
 		}));
 		const colour = (id: string) => DEFAULT_PENS.find((p) => p.id === id)?.color;
+		// review F4: the base box (200×100), so the width is w × 200 in BOTH
+		// directions — the horizontal S1 and the vertical-capable S2 alike.
+		const width = String(DEFAULT_STROKE_WIDTH * 200);
 		expect(paths).toEqual([
-			{ d: strokePath(S1), stroke: colour('red') },
-			{ d: strokePath(S2), stroke: colour('black') }
+			{ d: strokePath(S1, 200, 100), stroke: colour('red'), width },
+			{ d: strokePath(S2, 200, 100), stroke: colour('black'), width }
 		]);
+		expect(paths[0].d).toEqual('M20 10L100 10L180 10');
 	});
 
 	it('pen colours come from the pens prop', async () => {
@@ -201,6 +224,93 @@ describe('#394 — drawing with two pens', () => {
 
 	it('default pens are red and black', () => {
 		expect(DEFAULT_PENS.map((p) => p.id)).toEqual(['red', 'black']);
+	});
+});
+
+// review F1: the stroke used to appear only on pointerup — the points lived in
+// a plain closure array the template never read, so a user marking a score saw
+// no line under the pen until they lifted it. Every assertion here runs MID-DRAG,
+// which is exactly what the original tests (all of them after a completed pass)
+// could not see.
+describe('#394 — the stroke renders while the pointer is still down', () => {
+	it('the live points render as a path before the pointer lifts, and become the committed path on up', async () => {
+		const { container, onchange } = mount();
+		const svg = surface(container);
+		await fireEvent.pointerDown(svg, { ...MOUSE, clientX: 20, clientY: 10 });
+		// one point down: a dot under the pen, already visible
+		expect(surface(container).querySelectorAll('path')).toHaveLength(1);
+
+		await fireEvent.pointerMove(svg, { ...MOUSE, clientX: 100, clientY: 10 });
+		await fireEvent.pointerMove(svg, { ...MOUSE, clientX: 180, clientY: 10 });
+		const live = [...surface(container).querySelectorAll('path')];
+		expect(live).toHaveLength(1);
+		expect(live[0].getAttribute('d')).toEqual('M20 10L100 10L180 10');
+		expect(live[0].getAttribute('stroke')).toEqual(DEFAULT_PENS[0].color);
+		expect(live[0].getAttribute('stroke-width')).toEqual(String(DEFAULT_STROKE_WIDTH * 200));
+		// nothing is stored until the pointer lifts
+		expect(onchange).not.toHaveBeenCalled();
+
+		await fireEvent.pointerUp(svg, { ...MOUSE, clientX: 180, clientY: 10 });
+		const after = [...surface(container).querySelectorAll('path')];
+		expect(after).toHaveLength(1);
+		expect(after[0].getAttribute('d')).toEqual('M20 10L100 10L180 10');
+		expect(surface(container).querySelector('[data-testid="live-stroke"]')).toBeNull();
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [S1] });
+	});
+
+	it('the live stroke takes the active pen, and an erase pass draws nothing', async () => {
+		const { container } = mount();
+		await pass(container, LINE_TOP);
+		await fireEvent.click(btn('Black pen'));
+		const svg = surface(container);
+		const liveEl = () => surface(container).querySelector('[data-testid="live-stroke"]');
+
+		await fireEvent.pointerDown(svg, { ...MOUSE, clientX: 20, clientY: 90 });
+		await fireEvent.pointerMove(svg, { ...MOUSE, clientX: 100, clientY: 90 });
+		expect(liveEl()).not.toBeNull();
+		expect((liveEl() as SVGPathElement).getAttribute('stroke')).toEqual(DEFAULT_PENS[1].color);
+		expect(surface(container).querySelectorAll('path')).toHaveLength(2);
+		await fireEvent.pointerUp(svg, { ...MOUSE, clientX: 100, clientY: 90 });
+		expect(liveEl()).toBeNull();
+
+		await fireEvent.click(btn('Erase strokes'));
+		await fireEvent.pointerDown(svg, { ...MOUSE, clientX: 100, clientY: 50 });
+		await fireEvent.pointerMove(svg, { ...MOUSE, clientX: 110, clientY: 50 });
+		expect(liveEl()).toBeNull();
+		await fireEvent.pointerUp(svg, { ...MOUSE, clientX: 110, clientY: 50 });
+	});
+});
+
+// review F2: penLabel hardcoded `id === 'black' ? black : red`, so
+// pens:[{id:'blue'},{id:'green'}] rendered two controls both named "Red pen".
+describe('#394 — the pens prop names its own controls', () => {
+	const CUSTOM = [
+		{ id: 'blue', color: '#1d4ed8' },
+		{ id: 'green', color: '#15803d' }
+	];
+	const names = (container: HTMLElement) =>
+		[...container.querySelectorAll('button')].map((b) => b.getAttribute('aria-label'));
+
+	it('custom pens carry the consumer’s own labels', () => {
+		const { container } = mount({
+			pens: CUSTOM.map((p, i) => ({ ...p, label: ['Blue pen', 'Green pen'][i] }))
+		});
+		expect(names(container)).toEqual(['Blue pen', 'Green pen', 'Erase strokes', 'Undo']);
+		expect(btn('Blue pen').getAttribute('aria-pressed')).toEqual('true');
+	});
+
+	it('an unlabelled pen names itself and never borrows another pen’s name', () => {
+		const { container } = mount({ pens: CUSTOM });
+		const found = names(container);
+		expect(found).toEqual(['blue', 'green', 'Erase strokes', 'Undo']);
+		expect(new Set(found).size, 'every control distinctly named').toEqual(found.length);
+	});
+
+	it('a third pen beside the two built-ins leaves the built-in names alone', () => {
+		const { container } = mount({
+			pens: [...DEFAULT_PENS, { id: 'blue', color: '#1d4ed8', label: 'Blue pen' }]
+		});
+		expect(names(container)).toEqual(['Red pen', 'Black pen', 'Blue pen', 'Erase strokes', 'Undo']);
 	});
 });
 
@@ -275,11 +385,28 @@ describe('#394 — render identity: same strokes → same rendering', () => {
 		expect(viewedPaths).toEqual(producedPaths);
 	});
 
-	it('the surface is a unit-box svg stretched over the base', () => {
+	// review F4: the surface used to be a unit box stretched to the element, so
+	// the x and y scales differed by the base's aspect — one stored `w` came
+	// out 2× thicker vertically than horizontally on this very 200×100 base,
+	// and round caps came out as ellipses. The natural box makes the scale
+	// uniform; the wrapper already pins the same aspect-ratio.
+	it('the surface svg is the base’s natural box, scaled uniformly', () => {
 		const { container } = mount();
 		const svg = surface(container);
-		expect(svg.getAttribute('viewBox')).toEqual('0 0 1 1');
-		expect(svg.getAttribute('preserveAspectRatio')).toEqual('none');
+		expect(svg.getAttribute('viewBox')).toEqual('0 0 200 100');
+		expect(svg.getAttribute('preserveAspectRatio')).not.toEqual('none');
+	});
+
+	it('a taller base scales strokes by ITS box, so thickness follows the same rule', async () => {
+		// A4 portrait shape (1:1.414) — the aspect where the old unit-box
+		// render was ~41% off between directions.
+		const { container, onchange } = mount({ naturalWidth: 210, naturalHeight: 297 });
+		await pass(container, LINE_TOP);
+		const stroke = lastEmitted(onchange).strokes[0];
+		const path = surface(container).querySelector('path') as SVGPathElement;
+		expect(surface(container).getAttribute('viewBox')).toEqual('0 0 210 297');
+		expect(path.getAttribute('d')).toEqual(strokePath(stroke, 210, 297));
+		expect(path.getAttribute('stroke-width')).toEqual(String(DEFAULT_STROKE_WIDTH * 210));
 	});
 });
 
@@ -353,6 +480,41 @@ describe('#394 — controls', () => {
 			expect(b.classList.contains('min-h-11')).toBe(true);
 			expect(b.classList.contains('min-w-11')).toBe(true);
 		}
+	});
+
+	// review F5: all four landed as empty <button class="min-h-11 min-w-11">
+	// — no glyph, no swatch, no pressed styling. The names were there, so the
+	// suite passed while nothing was usable by sight.
+	it('each control has a visible face: a swatch in the pen’s own colour, an eraser and an undo glyph', () => {
+		const { container } = mount();
+		for (const pen of DEFAULT_PENS) {
+			const swatch = container.querySelector(`[data-testid="pen-swatch-${pen.id}"]`);
+			expect(swatch, `${pen.id} swatch`).not.toBeNull();
+			expect((swatch as HTMLElement).getAttribute('style') ?? '').toContain(pen.color);
+			// decorative: the accessible name stays on the button
+			expect((swatch as HTMLElement).getAttribute('aria-hidden')).toEqual('true');
+		}
+		expect(btn('Erase strokes').querySelector('svg[data-icon="eraser"]')).not.toBeNull();
+		expect(btn('Undo').querySelector('svg[data-icon="undo"]')).not.toBeNull();
+	});
+
+	it('the pressed state carries a visible marker, not aria-pressed alone', async () => {
+		mount();
+		const marked = (b: HTMLButtonElement) => b.classList.contains('ring-2');
+		expect(marked(btn('Red pen'))).toBe(true);
+		expect(marked(btn('Black pen'))).toBe(false);
+		await fireEvent.click(btn('Black pen'));
+		expect(marked(btn('Red pen'))).toBe(false);
+		expect(marked(btn('Black pen'))).toBe(true);
+		await fireEvent.click(btn('Erase strokes'));
+		expect(marked(btn('Erase strokes'))).toBe(true);
+		expect(marked(btn('Black pen'))).toBe(false);
+	});
+
+	it('the undo control reads as disabled, not merely inert', () => {
+		mount();
+		expect(btn('Undo').disabled).toBe(true);
+		expect(btn('Undo').className).toContain('disabled:opacity-60');
 	});
 
 	it('aria-pressed tracks the active pen and the erase toggle; picking a pen leaves erase mode', async () => {

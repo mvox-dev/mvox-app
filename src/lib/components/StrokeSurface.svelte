@@ -6,22 +6,52 @@
 	// touches; the surface only positions an SVG over it and holds the
 	// strokes. Persistence, entity shape and feature naming stay entirely
 	// with whoever adopts this component.
+	//
+	// REVIEW ROUND (#394, four code findings):
+	//   F1 the stroke under the pen is drawn WHILE the pointer moves — the
+	//      live points are $state and the template renders them, instead of
+	//      nothing appearing until pointerup.
+	//   F2 a pen's accessible name comes from the pen data (`label`), so the
+	//      `pens` prop is an honest open API — it no longer resolves every
+	//      unknown id to "Red pen".
+	//   F4 the surface renders in the base's NATURAL box, not a unit box
+	//      stretched by preserveAspectRatio="none": one stored `w` is now one
+	//      thickness in every direction, round caps are round, and the
+	//      eraser's reach is the same distance horizontally and vertically.
+	//   F5 every control has a visible face: a colour swatch per pen, an
+	//      eraser and an undo glyph, a visible pressed marker and a visible
+	//      disabled state — four blank boxes were unusable by sight.
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import EraserIcon from './icons/EraserIcon.svelte';
+	import UndoIcon from './icons/UndoIcon.svelte';
 	import { DEFAULT_PENS, DEFAULT_STROKE_WIDTH, strokePath, type Stroke, type StrokeData } from '$lib/strokes/strokes';
 
-	type Pen = { id: string; color: string };
+	// `label` is the control's accessible name, supplied by the consumer
+	// alongside its own colours. Without one, the two built-in ids carry the
+	// surface's own translated names and any other id names itself — never
+	// another pen's name (#394 review F2).
+	type Pen = { id: string; color: string; label?: string };
 
 	// One undo step. An `add` reverses by dropping the last stroke; an
 	// `erase` remembers what it removed and where, so undo puts every
 	// erased stroke back at its original index. Never serialized.
 	type Op = { kind: 'add' } | { kind: 'erase'; removed: { index: number; stroke: Stroke }[] };
 
-	// How close an eraser pass must come to a stroke's path to remove it —
-	// a fraction of the unit box, well inside a typical stroke's own visual
-	// width and comfortably below the gap between two distinct strokes.
+	// How close an eraser pass must come to a stroke's path to remove it — a
+	// fraction of the base's WIDTH, measured in a space where one unit means
+	// the same distance in x and in y (see erasePoints), well inside a typical
+	// stroke's own visual width and comfortably below the gap between two
+	// distinct strokes.
 	const ERASE_THRESHOLD = 0.03;
+
+	// The visible pressed marker: aria-pressed alone is invisible, so an
+	// active pen and an armed eraser also carry a ring (the pressed-chip
+	// shape already used on the agenda).
+	const PRESSED_CLASS = 'border-ink bg-paper-3 ring-2 ring-ink';
+	const CONTROL_CLASS =
+		'flex min-h-11 min-w-11 items-center justify-center rounded border border-ink-4 bg-paper text-ink disabled:cursor-default disabled:opacity-60';
 
 	let {
 		base,
@@ -50,23 +80,40 @@
 
 	let svgEl: SVGSVGElement | undefined;
 
-	// Imperative pointer bookkeeping — never read by the template, so a
-	// plain closure variable, not $state.
-	let drawing = false;
+	// Pointer bookkeeping. `drawing` and `drawPts` ARE read by the template
+	// (through liveStroke), so they are $state: the stroke has to appear under
+	// the pen as it is made, not on pointerup (#394 review F1).
+	let drawing = $state(false);
+	let drawPts = $state<number[]>([]);
 	let capturedPointerId: number | null = null;
-	let drawPts: number[] = [];
 	let drawPressures: number[] | null = null;
 
 	const svgStyle = $derived(
 		`position: absolute; inset: 0; width: 100%; height: 100%;${readonly ? '' : ' touch-action: none;'}`
 	);
 
+	// y measured in the same unit as x: the stored box is [0,1]×[0,1] but the
+	// rendered box is naturalWidth × naturalHeight, so a y distance of 1 is
+	// naturalHeight/naturalWidth as far as an x distance of 1.
+	const yPerX = $derived(naturalWidth === 0 ? 1 : naturalHeight / naturalWidth);
+
+	// The stroke being made right now, rendered like any other and dropped the
+	// moment it is committed. Erase passes leave no mark, so they draw none.
+	const liveStroke = $derived<Stroke | null>(
+		drawing && !eraseMode && drawPts.length > 0
+			? { pen: activePenId, w: DEFAULT_STROKE_WIDTH, pts: drawPts }
+			: null
+	);
+
 	function penColor(id: string): string {
 		return pens.find((p) => p.id === id)?.color ?? pens[0]?.color ?? '#000000';
 	}
 
-	function penLabel(id: string): string {
-		return id === 'black' ? m.strokes_pen_black_aria_label() : m.strokes_pen_red_aria_label();
+	function penLabel(pen: Pen): string {
+		if (pen.label) return pen.label;
+		if (pen.id === 'red') return m.strokes_pen_red_aria_label();
+		if (pen.id === 'black') return m.strokes_pen_black_aria_label();
+		return pen.id;
 	}
 
 	function round4(n: number): number {
@@ -120,11 +167,24 @@
 		return Math.hypot(px - cx, py - cy);
 	}
 
+	/** Stored [0,1] pairs in the space the eraser measures in: x unchanged, y
+	 * scaled so one unit is one width-fraction in either direction — otherwise
+	 * ERASE_THRESHOLD would reach further vertically than horizontally on any
+	 * non-square base (#394 review F4). */
+	function erasePoints(pts: number[]): number[] {
+		const out = new Array<number>(pts.length);
+		for (let i = 0; i < pts.length; i += 2) {
+			out[i] = pts[i];
+			out[i + 1] = pts[i + 1] * yPerX;
+		}
+		return out;
+	}
+
 	/** Whether an eraser pass (flat x,y pairs) touches a stroke's own path —
 	 * checked both ways, so a coarse stroke crossed by a fine eraser path
-	 * and a coarse eraser pass grazing a fine stroke both register. */
-	function pathHits(stroke: Stroke, eraserPts: number[]): boolean {
-		const s = stroke.pts;
+	 * and a coarse eraser pass grazing a fine stroke both register. Both lists
+	 * are already in erasePoints space. */
+	function pathHits(s: number[], eraserPts: number[]): boolean {
 		const sCount = s.length / 2;
 		const eCount = eraserPts.length / 2;
 		for (let ei = 0; ei < eCount; ei++) {
@@ -159,10 +219,11 @@
 
 	function commitErase(): void {
 		if (drawPts.length === 0) return;
+		const eraser = erasePoints([...drawPts]);
 		const removed: { index: number; stroke: Stroke }[] = [];
 		const kept: Stroke[] = [];
 		strokes.strokes.forEach((stroke, index) => {
-			if (pathHits(stroke, drawPts)) removed.push({ index, stroke });
+			if (pathHits(erasePoints(stroke.pts), eraser)) removed.push({ index, stroke });
 			else kept.push(stroke);
 		});
 		if (removed.length === 0) return;
@@ -218,8 +279,8 @@
 		bind:this={svgEl}
 		data-testid="stroke-surface"
 		role="presentation"
-		viewBox="0 0 1 1"
-		preserveAspectRatio="none"
+		viewBox={`0 0 ${naturalWidth} ${naturalHeight}`}
+		preserveAspectRatio="xMidYMid meet"
 		style={svgStyle}
 		onpointerdown={handlePointerDown}
 		onpointermove={handlePointerMove}
@@ -227,14 +288,25 @@
 	>
 		{#each strokes.strokes as stroke, i (i)}
 			<path
-				d={strokePath(stroke)}
+				d={strokePath(stroke, naturalWidth, naturalHeight)}
 				stroke={penColor(stroke.pen)}
-				stroke-width={stroke.w}
+				stroke-width={stroke.w * naturalWidth}
 				fill="none"
 				stroke-linecap="round"
 				stroke-linejoin="round"
 			/>
 		{/each}
+		{#if liveStroke}
+			<path
+				data-testid="live-stroke"
+				d={strokePath(liveStroke, naturalWidth, naturalHeight)}
+				stroke={penColor(liveStroke.pen)}
+				stroke-width={liveStroke.w * naturalWidth}
+				fill="none"
+				stroke-linecap="round"
+				stroke-linejoin="round"
+			/>
+		{/if}
 	</svg>
 </div>
 {#if !readonly}
@@ -242,26 +314,37 @@
 		{#each pens as pen (pen.id)}
 			<button
 				type="button"
-				class="min-h-11 min-w-11"
-				aria-label={penLabel(pen.id)}
+				class="{CONTROL_CLASS} {activePenId === pen.id && !eraseMode ? PRESSED_CLASS : ''}"
+				aria-label={penLabel(pen)}
 				aria-pressed={activePenId === pen.id && !eraseMode}
 				onclick={() => selectPen(pen.id)}
-			></button>
+			>
+				<span
+					data-testid={`pen-swatch-${pen.id}`}
+					class="h-5 w-5 rounded-full border border-ink-4"
+					style={`background-color: ${pen.color};`}
+					aria-hidden="true"
+				></span>
+			</button>
 		{/each}
 		<button
 			type="button"
-			class="min-h-11 min-w-11"
+			class="{CONTROL_CLASS} {eraseMode ? PRESSED_CLASS : ''}"
 			aria-label={m.strokes_erase_aria_label()}
 			aria-pressed={eraseMode}
 			onclick={toggleErase}
-		></button>
+		>
+			<EraserIcon class="h-5 w-5" />
+		</button>
 		<button
 			type="button"
-			class="min-h-11 min-w-11"
+			class={CONTROL_CLASS}
 			aria-label={m.strokes_undo_aria_label()}
 			disabled={history.length === 0}
 			onclick={undo}
-		></button>
+		>
+			<UndoIcon class="h-5 w-5" />
+		</button>
 	</div>
 {/if}
 
