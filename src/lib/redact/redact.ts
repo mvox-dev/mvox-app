@@ -14,9 +14,9 @@ export const REDACT_ATTR = 'data-redact';
 // REDACT_TOGGLE_ATTR is the root toggle, set on <html> by a HUMAN before
 // taking a screenshot (devtools:
 // document.documentElement.setAttribute('data-redacting', '')). No shipped UI
-// control ships in this slice — #292, the real capture path, owns wiring a
-// visible engage control later. DEFAULT-INERT is load-bearing: without the
-// toggle the marker has NO rendering effect whatsoever.
+// control exists — the toggle is devtools-only, with no owning issue for a
+// visible engage control. DEFAULT-INERT is load-bearing: without the toggle
+// the marker has NO rendering effect whatsoever.
 export const REDACT_TOGGLE_ATTR = 'data-redacting';
 
 // THE LIMIT, stated where you meet it (the byteStore.ts:1-14 / page-shell.ts
@@ -36,30 +36,31 @@ export const REDACT_TOGGLE_ATTR = 'data-redacting';
 // (InviteSurface and the roster row both lost their readonly inputs), so
 // there is no rendered element to mark.
 //
-// WHAT THIS SLICE MARKS, AND WHAT IT LEAVES BARE. Marked: the five admin
-// record-editor fields (name, phone, email, birth date, id_code), all through
-// RedactedField.svelte.
+// WHAT THIS MARKS, AND WHAT IT LEAVES BARE. Marked, via RedactedField.svelte:
+// the five admin record-editor fields (name, phone, email, birth date,
+// id_code). Marked, via RedactedText.svelte (#388) — the shared marker for
+// plain element content that isn't an input: the collapsed row's own name
+// span (`roster-row-name`), the collapsed row's own email span
+// (`roster-row-email` — `row.email` is resolveField's narrower-wins result,
+// i.e. the SAME real address the editor's marked email field prefills from,
+// see the PREFILL provenance comment in routes/roster/+page.svelte), the
+// card activator's sr-only edit label's name, and the inactive-members row's
+// name.
 //
-// The list below is BY RENDERED PERSONAL VALUE, not by field type. Its first
+// The list above is BY RENDERED PERSONAL VALUE, not by field type. Its first
 // version enumerated only real NAMES, and so silently omitted the collapsed
 // row's email — a second kind of personal data on the same route, bare in the
 // same way. Anything /roster puts on screen that identifies or contacts a real
-// person belongs here, whatever its type. NOT marked, still rendered bare —
-// filed as #380, deliberately not widened into this slice:
+// person belongs here, whatever its type.
 //
-//   - the collapsed row's own name span (`roster-row-name`)
-//   - the collapsed row's own email span (`roster-row-email`) — `row.email` is
-//     resolveField's narrower-wins result, i.e. the SAME real address the
-//     editor's marked email field prefills from (see the PREFILL provenance
-//     comment in routes/roster/+page.svelte). A member list screenshotted with
-//     the toggle engaged still ships every member's address.
-//   - the deactivate dialog's `memberName`
-//   - the sr-only edit label, and the `roster_record_damaged` /
-//     `roster_member_deactivate_failed` status messages
+// NOT marked, because there is nothing to wrap: the `roster_record_damaged`,
+// `roster_member_deactivate_failed` and `roster_member_reinstate_failed`
+// status messages (#388) used to interpolate the member's name INTO a
+// sentence — the element-content marker cannot blank part of a sentence — so
+// the name left the copy entirely; each alert now names no one and carries
+// #487's EntuRef (a short id, clickable) instead.
 //
-// The first three are plain element content — a marked wrapper covers them,
-// and #380 owns doing that once in a component rather than per call site. The
-// sr-only label and the two status messages interpolate the name INTO a
-// message string, so the element-content marker cannot cover them at all
-// without blanking the whole sentence — they belong with the uncovered
-// channels above, not with the marked fields.
+// SectionPicker's `memberName` prop (fed from routes/roster/+page.svelte)
+// reaches the DOM only as an `aria-label`/`title` attribute, never as element
+// content — it belongs with the UNCOVERED CHANNELS above, not with the marked
+// fields, and no marked wrapper can cover it.

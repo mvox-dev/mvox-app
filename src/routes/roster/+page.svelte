@@ -97,6 +97,8 @@
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import RedactedField from '$lib/components/RedactedField.svelte';
+	import RedactedText from '$lib/components/RedactedText.svelte';
+	import EntuRef from '$lib/components/EntuRef.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 
 	const selected = $derived($selectedCollectiveStore);
@@ -4151,9 +4153,9 @@
 	     collapsed card (rendered as this snippet's caller, wrapped in the
 	     activator button) and the non-admin/open-editor callers, so the info
 	     itself is defined exactly once regardless of which state renders it. -->
-	<span data-testid="roster-row-name" class="text-sm text-ink">{row.name}</span>
+	<span data-testid="roster-row-name" class="text-sm text-ink"><RedactedText>{row.name}</RedactedText></span>
 	{#if row.email}
-		<span data-testid="roster-row-email" class="text-xs text-ink-2">{row.email}</span>
+		<span data-testid="roster-row-email" class="text-xs text-ink-2"><RedactedText>{row.email}</RedactedText></span>
 	{/if}
 	<!-- #467 review F1 — resolved ONCE per row: the guard and the render read
 	     the same answer (the two calls each ran their own `Date.now()`, so an
@@ -4287,22 +4289,27 @@
 				     scope ruling names the `roster-row-name` span alone); it keeps
 				     naming the member by her PROFILE name even while her row shows a
 				     real one. -->
-				<span class="sr-only">{m.roster_record_edit_label()} {row.profileName ?? row.name}</span>
+				<span class="sr-only">{m.roster_record_edit_label()} <RedactedText>{row.profileName ?? row.name}</RedactedText></span>
 			</button>
 		{/if}
 		{#if admin === 'admin' && recordEditorMemberId === row.memberId}
 			<!-- #268 — the admin member-record editor, open state. -->
 			<div class="mt-1 flex flex-col gap-2">
 				{#if recordEditorLookup?.state === 'damaged'}
-					<!-- (D) #264 — damaged data: loud, names the member, refuses to
-					     guess. No form renders; nothing is ever written from here.
-					     #269 — profile name (see the pencil label's note above). -->
+					<!-- (D) #264 — damaged data: loud, refuses to guess. No form
+					     renders; nothing is ever written from here.
+					     #388 — the alert no longer names the member (a capture
+					     marker cannot blank part of a sentence); it carries an
+					     EntuRef to the PERSON instead — duplicate detection is
+					     keyed on personId, and the details to fix live on the
+					     person. -->
 					<p
 						data-testid="roster-record-damaged-{row.memberId}"
 						role="alert"
 						class="mt-1 text-xs text-red-700"
 					>
-						{m.roster_record_damaged({ name: row.profileName ?? row.name })}
+						{m.roster_record_damaged()}
+						<EntuRef id={row.personId} />
 					</p>
 				{:else if recordEditorLookup !== null}
 					<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
@@ -4615,13 +4622,16 @@
 				     lifecycle): it stays ARMED and re-enabled next to this alert for a
 				     direct retry, so the copy's "nothing moved" claim stays honest.
 				     Gated on `pendingDeactivateId === row.memberId` for the same
-				     by-construction reason as the refusal alert above. -->
+				     by-construction reason as the refusal alert above.
+				     #388 — names no member; carries an EntuRef to the MEMBER
+				     entity instead — the stuck record is the membership. -->
 				<p
 					data-testid="member-deactivate-failed-{row.memberId}"
 					role="alert"
 					class="relative text-xs text-red-700"
 				>
-					{m.roster_member_deactivate_failed({ name: row.profileName ?? row.name })}
+					{m.roster_member_deactivate_failed()}
+					<EntuRef id={row.memberId} />
 				</p>
 			{/if}
 		{/if}
@@ -5844,7 +5854,7 @@
 									data-testid="inactive-member-row-{row.memberId}"
 									class="flex flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"
 								>
-									<span class="text-sm text-ink">{row.name}</span>
+									<span class="text-sm text-ink"><RedactedText>{row.name}</RedactedText></span>
 									{#if inactiveSectionNames.length > 0}
 										<span data-testid="inactive-member-section-{row.memberId}" class="text-xs text-ink-2">
 											{inactiveSectionNames.join(', ')}
@@ -5862,13 +5872,16 @@
 									{#if deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'reinstate'}
 										<!-- #255 review F2 — same loud-failure idiom as the deactivate
 										     alert above: a failed reinstate leaves this row exactly
-										     where it is, which on its own reads as a dead button. -->
+										     where it is, which on its own reads as a dead button.
+										     #388 — names no member; carries an EntuRef to the MEMBER
+										     entity instead — the stuck record is the membership. -->
 										<p
 											data-testid="member-reinstate-failed-{row.memberId}"
 											role="alert"
 											class="text-xs text-red-700"
 										>
-											{m.roster_member_reinstate_failed({ name: row.name })}
+											{m.roster_member_reinstate_failed()}
+											<EntuRef id={row.memberId} />
 										</p>
 									{/if}
 								</li>
