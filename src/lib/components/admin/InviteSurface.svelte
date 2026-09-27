@@ -12,6 +12,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { collectiveState } from '$lib/collectives/store';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 	import {
 		createInvite,
 		InviteCreateError,
@@ -620,9 +621,11 @@
 			     platform text — see the `submit()` catch branch. -->
 			<div data-testid="invite-mint-error" class="flex flex-col gap-1" role="alert">
 				<p class="text-sm text-red-700">
-					{personMintError.ownerOnly
-						? m.admin_invite_mint_owner_only()
-						: m.admin_invite_mint_error({ name: personMintError.name })}
+					<RedactedText
+						>{personMintError.ownerOnly
+							? m.admin_invite_mint_owner_only()
+							: m.admin_invite_mint_error({ name: personMintError.name })}</RedactedText
+					>
 				</p>
 			</div>
 		{/if}
@@ -720,7 +723,7 @@
 				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:opacity-50"
 				onclick={submit}
 			>
-				{submitLabel}
+				<RedactedText>{submitLabel}</RedactedText>
 			</button>
 		</div>
 	{/if}

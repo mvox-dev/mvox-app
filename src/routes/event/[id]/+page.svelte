@@ -161,6 +161,7 @@
 		type ScheduleItem
 	} from '$lib/schedule/scheduleData';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import PersonName from '$lib/components/PersonName.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -4343,7 +4344,10 @@
 					     the four fields that are, so it holds the same 16px body tier — a lone
 					     14px line among them would just be the old inconsistency relocated. -->
 					<p data-testid="event-detail-conductors" class="text-base text-ink-2">
-						{m.event_detail_conductor_label()}: {detail.conductorNames.join(', ')}
+						{m.event_detail_conductor_label()}:
+						{#each detail.conductorNames as conductorName, conductorIndex (conductorName + conductorIndex)}{#if conductorIndex > 0}{', '}{/if}<PersonName
+								name={conductorName}
+							/>{/each}
 					</p>
 				{/if}
 

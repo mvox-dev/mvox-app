@@ -15,6 +15,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
+	import PersonName from '$lib/components/PersonName.svelte';
 
 	interface Props {
 		myRate: { attended: number; total: number };
@@ -108,7 +109,7 @@
 								class="flex items-center justify-between gap-2 text-xs text-ink-3"
 							>
 								<span class="truncate">
-									{rate.name}
+									<PersonName name={rate.name} />
 									<span class="text-[9px] tracking-wide uppercase">{m.attendance_member_inactive_badge()}</span>
 								</span>
 								<span class="shrink-0 font-mono">
@@ -121,7 +122,7 @@
 								role="listitem"
 								class="flex items-center justify-between gap-2 text-xs"
 							>
-								<span class="truncate text-ink-2">{rate.name}</span>
+								<span class="truncate text-ink-2"><PersonName name={rate.name} /></span>
 								<span class="shrink-0 font-mono text-ink">
 									{m.attendance_member_rate({ attended: rate.attended, total: rate.total })}
 								</span>

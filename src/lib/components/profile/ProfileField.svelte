@@ -5,6 +5,7 @@
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+	import PersonName from '$lib/components/PersonName.svelte';
 
 	interface Props {
 		field: FieldKey;
@@ -284,7 +285,11 @@
 				<span class="sr-only">{EDIT_LABEL[field]()}</span>
 				<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 				<span data-testid="profile-{field}-value" class="grow truncate">
-					{displayValue}
+					{#if field === 'name'}
+						<PersonName name={displayValue} />
+					{:else}
+						{displayValue}
+					{/if}
 				</span>
 			</button>
 		</div>

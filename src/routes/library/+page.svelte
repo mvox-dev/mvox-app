@@ -8,6 +8,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
+	import PersonName from '$lib/components/PersonName.svelte';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
 		listWorks,
@@ -1325,7 +1327,7 @@
 								{@const existingLending = activeLendingForMemberInEdition(member.memberId, bulkCheckoutEditionCopyIds, lendings)}
 								{#if existingLending}
 									<div class="flex items-center gap-1 text-xs">
-										<span>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</span>
+										<span><PersonName name={memberNames.get(member.memberId) || m.library_borrower_unknown()} /></span>
 										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: formatDate(existingLending.assignedAt) })}</span>
 									</div>
 								{:else}
@@ -1339,7 +1341,7 @@
 												bulkCheckoutCheckedMembers = next;
 											}}
 										/>
-										<span>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</span>
+										<span><PersonName name={memberNames.get(member.memberId) || m.library_borrower_unknown()} /></span>
 									</label>
 								{/if}
 							{/each}
@@ -1768,12 +1770,14 @@
 																	{/if}
 																	{:else}
 																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">
-																			{m.library_copy_lent_to({
-																				name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
-																			})}
-																			{#if availability.assignedAt}
-																				· {m.library_lent_since({ date: formatDate(availability.assignedAt) })}
-																			{/if}
+																			<RedactedText
+																				>{m.library_copy_lent_to({
+																					name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
+																				})}
+																				{#if availability.assignedAt}
+																					· {m.library_lent_since({ date: formatDate(availability.assignedAt) })}
+																				{/if}</RedactedText
+																			>
 																		</span>
 																		{#if $librarianStore === 'librarian' && activeLending}
 																			<button
