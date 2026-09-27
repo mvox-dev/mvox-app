@@ -709,5 +709,9 @@
 	"part_viewer_close": "Close",
 	"part_viewer_not_on_device": "This part isn't saved on this device.",
 	"part_viewer_page_of": "{current} / {total}",
-	"entu_ref_aria_label": "Open the Entu record {short} (opens in a new tab)"
+	"entu_ref_aria_label": "Open the Entu record {short} (opens in a new tab)",
+	"strokes_pen_red_aria_label": "Red pen",
+	"strokes_pen_black_aria_label": "Black pen",
+	"strokes_erase_aria_label": "Erase strokes",
+	"strokes_undo_aria_label": "Undo"
 }

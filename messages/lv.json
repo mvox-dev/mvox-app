@@ -710,5 +710,9 @@
 	"part_viewer_close": "Aizvērt",
 	"part_viewer_not_on_device": "Šī partija nav saglabāta šajā ierīcē.",
 	"part_viewer_page_of": "{current} / {total}",
-	"entu_ref_aria_label": "Atvērt Entu ierakstu {short} (atveras jaunā cilnē)"
+	"entu_ref_aria_label": "Atvērt Entu ierakstu {short} (atveras jaunā cilnē)",
+	"strokes_pen_red_aria_label": "Sarkans zīmulis",
+	"strokes_pen_black_aria_label": "Melns zīmulis",
+	"strokes_erase_aria_label": "Dzēst iezīmes",
+	"strokes_undo_aria_label": "Atsaukt"
 }
