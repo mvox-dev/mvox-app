@@ -1165,6 +1165,266 @@ describe('agenda — season conductors are editable in the panel', () => {
 	});
 });
 
+// ── #483 — a season holding the SAME conductor twice ────────────────────────────
+//
+// Two racing writers can append the same person to `season.conductor` twice.
+// The panel keeps its writer-only gate (manageRightsFrom on the season's
+// _owner/_editor — untouched); a writer opening it must NOT hit a render error
+// (Svelte's keyed each rejects duplicate keys) and must see BOTH entries, each
+// removable on its own — the loader is NOT deduped, because hiding the
+// duplicate from the writer is hiding it from the one person who can fix it.
+//
+// Pinned (GREEN):
+//   - render list = entries {key, personId}, key = `${personId}#${occurrence}`
+//     (0 for the first copy of that id, 1 for the second…); the {#each} keys on
+//     entry.key. Each <li> keeps data-testid season-manage-conductor-{personId}
+//     and ADDS data-conductor-key={entry.key}.
+//   - removing an entry drops exactly THAT occurrence (by index, never a filter
+//     by id) optimistically; a failure restores it at its position. The server
+//     call is unchanged: removeSeasonConductor(cfg, seasonId, personId).
+
+function doubledConductorResult(conductors: string[], viewerIsEditor: boolean) {
+	const season: Season = {
+		id: SEASON_ID,
+		name: 'Season 2026',
+		startDate: SEASON_START,
+		endDate: SEASON_END,
+		conductors,
+		owners: [],
+		editors: viewerIsEditor ? ['person-p'] : []
+	};
+	return fullAgendaResult({
+		seasonId: season.id,
+		seasonConductors: season.conductors,
+		seasonOwners: season.owners,
+		seasonEditors: season.editors,
+		seasons: [season]
+	});
+}
+
+/** Every conductor entry in the panel, in DOM order. */
+function conductorEntries(container: HTMLElement): HTMLElement[] {
+	return Array.from(
+		container.querySelectorAll('[data-testid^="season-manage-conductor-"]')
+	).filter((el) => el.tagName === 'LI') as HTMLElement[];
+}
+
+function entryKeys(container: HTMLElement): (string | null)[] {
+	return conductorEntries(container).map((el) => el.getAttribute('data-conductor-key'));
+}
+
+function entryTestids(container: HTMLElement): (string | null)[] {
+	return conductorEntries(container).map((el) => el.getAttribute('data-testid'));
+}
+
+function removeButtonsFor(container: HTMLElement, personId: string): HTMLElement[] {
+	return Array.from(
+		container.querySelectorAll(`[data-testid="season-manage-conductor-remove-${personId}"]`)
+	) as HTMLElement[];
+}
+
+describe('#483 agenda — a season holding the same conductor twice', () => {
+	let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+	let windowErrors: unknown[];
+	const onWindowError = (e: ErrorEvent) => {
+		windowErrors.push(e.error ?? e.message);
+	};
+	const onRejection = (e: PromiseRejectionEvent) => {
+		windowErrors.push(e.reason);
+	};
+
+	beforeEach(() => {
+		windowErrors = [];
+		consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		window.addEventListener('error', onWindowError);
+		window.addEventListener('unhandledrejection', onRejection);
+	});
+
+	afterEach(() => {
+		window.removeEventListener('error', onWindowError);
+		window.removeEventListener('unhandledrejection', onRejection);
+		consoleErrorSpy.mockRestore();
+	});
+
+	it('a writer opens the panel WITHOUT a thrown error and sees BOTH p-ada entries (keys p-ada#0, p-ada#1) plus p-grace once', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], true)
+		);
+		const container = await renderReady();
+		const panel = await openPanel(container);
+
+		await waitFor(() => {
+			expect(entryKeys(container)).toEqual(['p-ada#0', 'p-ada#1', 'p-grace#0']);
+		});
+		// The panel really rendered (not a torn-down tree).
+		expect(panel.isConnected).toBe(true);
+		expect(conductorSelect(panel)).not.toBeNull();
+		expect(
+			Array.from(
+				container.querySelectorAll('[data-testid="season-manage-conductor-p-ada"]')
+			).map((el) => el.getAttribute('data-conductor-key'))
+		).toEqual(['p-ada#0', 'p-ada#1']);
+		expect(
+			container.querySelectorAll('[data-testid="season-manage-conductor-p-grace"]').length
+		).toBe(1);
+		expect(entryTestids(container)).toEqual([
+			'season-manage-conductor-p-ada',
+			'season-manage-conductor-p-ada',
+			'season-manage-conductor-p-grace'
+		]);
+		// Both p-ada entries carry the NAME and their own remove button.
+		for (const el of conductorEntries(container).slice(0, 2)) {
+			expect(el.textContent).toContain('Ada Lovelace');
+		}
+		expect(removeButtonsFor(container, 'p-ada').length).toBe(2);
+		expect(windowErrors).toEqual([]);
+		expect(consoleErrorSpy).not.toHaveBeenCalled();
+	});
+
+	it('removing the SECOND p-ada calls removeSeasonConductor once (cfg, seasonId, "p-ada") and leaves exactly one p-ada and one p-grace', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], true)
+		);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(removeButtonsFor(container, 'p-ada').length).toBe(2);
+		});
+
+		await fireEvent.click(removeButtonsFor(container, 'p-ada')[1]);
+
+		await waitFor(() => {
+			expect(removeSeasonConductorMock.mock.calls).toEqual([[CFG, SEASON_ID, 'p-ada']]);
+		});
+		await waitFor(() => {
+			expect(entryKeys(container)).toEqual(['p-ada#0', 'p-grace#0']);
+		});
+		expect(entryTestids(container)).toEqual([
+			'season-manage-conductor-p-ada',
+			'season-manage-conductor-p-grace'
+		]);
+		expect(q(container, 'season-manage-conductor-error')).toBeNull();
+		expect(windowErrors).toEqual([]);
+	});
+
+	it('removal is by POSITION, not by id: with [ada, grace, ada], removing the FIRST ada leaves [grace, ada]', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-grace', 'p-ada'], true)
+		);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(entryKeys(container)).toEqual(['p-ada#0', 'p-grace#0', 'p-ada#1']);
+		});
+
+		await fireEvent.click(removeButtonsFor(container, 'p-ada')[0]);
+
+		await waitFor(() => {
+			expect(removeSeasonConductorMock.mock.calls).toEqual([[CFG, SEASON_ID, 'p-ada']]);
+		});
+		await waitFor(() => {
+			expect(entryTestids(container)).toEqual([
+				'season-manage-conductor-p-grace',
+				'season-manage-conductor-p-ada'
+			]);
+		});
+		expect(entryKeys(container)).toEqual(['p-grace#0', 'p-ada#0']);
+	});
+
+	it('removal is by POSITION, not by id: with [ada, grace, ada], removing the SECOND ada leaves [ada, grace]', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-grace', 'p-ada'], true)
+		);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(removeButtonsFor(container, 'p-ada').length).toBe(2);
+		});
+
+		await fireEvent.click(removeButtonsFor(container, 'p-ada')[1]);
+
+		await waitFor(() => {
+			expect(removeSeasonConductorMock.mock.calls).toEqual([[CFG, SEASON_ID, 'p-ada']]);
+		});
+		await waitFor(() => {
+			expect(entryKeys(container)).toEqual(['p-ada#0', 'p-grace#0']);
+		});
+	});
+
+	it('a FAILED remove of the second p-ada restores BOTH p-ada entries in their original order and surfaces the error slot', async () => {
+		removeSeasonConductorMock.mockRejectedValue(new Error('boom'));
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], true)
+		);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(removeButtonsFor(container, 'p-ada').length).toBe(2);
+		});
+
+		await fireEvent.click(removeButtonsFor(container, 'p-ada')[1]);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-conductor-error')).not.toBeNull();
+		});
+		expect(removeSeasonConductorMock.mock.calls).toEqual([[CFG, SEASON_ID, 'p-ada']]);
+		expect(entryKeys(container)).toEqual(['p-ada#0', 'p-ada#1', 'p-grace#0']);
+		expect(entryTestids(container)).toEqual([
+			'season-manage-conductor-p-ada',
+			'season-manage-conductor-p-ada',
+			'season-manage-conductor-p-grace'
+		]);
+	});
+
+	it('a FAILED remove with [ada, grace, ada] restores the removed copy AT ITS POSITION', async () => {
+		removeSeasonConductorMock.mockRejectedValue(new Error('boom'));
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-grace', 'p-ada'], true)
+		);
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(removeButtonsFor(container, 'p-ada').length).toBe(2);
+		});
+
+		await fireEvent.click(removeButtonsFor(container, 'p-ada')[0]);
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-conductor-error')).not.toBeNull();
+		});
+		expect(entryKeys(container)).toEqual(['p-ada#0', 'p-grace#0', 'p-ada#1']);
+	});
+
+	it('the add guard stays: p-ada (already present) is NOT offered by the select — no third copy from this tab', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], true)
+		);
+		const container = await renderReady();
+		const panel = await openPanel(container);
+		await waitFor(() => {
+			expect(optionValues(conductorSelect(panel))).toEqual(['', 'person-p']);
+		});
+		expect(entryKeys(container)).toEqual(['p-ada#0', 'p-ada#1', 'p-grace#0']);
+	});
+
+	it('a NON-editor with the same doubled season never gets the panel (gate unchanged): no card, no conductor entries', async () => {
+		loadFullAgendaMock.mockResolvedValue(
+			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], false)
+		);
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(resolveManageRightsMock).toHaveBeenCalled();
+		});
+
+		expect(q(container, SEASON_CARD_EXPAND)).toBeNull();
+		expect(q(container, 'season-manage-gear')).toBeNull();
+		expect(q(container, 'season-manage-panel')).toBeNull();
+		expect(
+			Array.from(container.querySelectorAll('[data-testid^="season-manage-conductor-"]'))
+		).toEqual([]);
+	});
+});
+
 // ── event series + standalone events ────────────────────────────────────────────
 
 describe('agenda — the panel lists the season’s series and standalone events', () => {
@@ -2442,3 +2702,4 @@ describe('#321 review F2 — the panel\u2019s conductor picker states a truncate
 
 // (*MVOX:Josquin* — #321 review F1: the panel's own partial notice — raised from
 // the truncated series read, absent on a complete one, torn down by both switches)
+// (*MVOX:Tallis* — #483 RED: a doubled season conductor opens the panel and each copy is removable on its own)
