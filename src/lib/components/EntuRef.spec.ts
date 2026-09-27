@@ -27,7 +27,16 @@
 //   No Entu API call, no rights read. No caller in this slice — wiring into
 //   roster_record_damaged / roster_member_deactivate_failed is #388.
 import { render, cleanup } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Severs the entu-config → $env/dynamic/public import under happy-dom (same
+// pattern as page.roster.spec.ts / collectives/store.spec.ts): importing
+// $lib/collectives/store pulls in $lib/entu/auth-expired → $lib/entu-config →
+// $env/dynamic/public, which throws outside a real SvelteKit request context.
+// $app/navigation likewise can't run outside an app.
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+
 import {
 	collectiveState,
 	selectedCollectiveDbStore,

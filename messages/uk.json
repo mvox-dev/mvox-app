@@ -710,5 +710,6 @@
 	"agenda_downloads_link": "Відкрити завантажені партії",
 	"part_viewer_close": "Закрити",
 	"part_viewer_not_on_device": "Ця партія не збережена на цьому пристрої.",
-	"part_viewer_page_of": "{current} / {total}"
+	"part_viewer_page_of": "{current} / {total}",
+	"entu_ref_aria_label": "Відкрити запис Entu {short} (відкриється в новій вкладці)"
 }

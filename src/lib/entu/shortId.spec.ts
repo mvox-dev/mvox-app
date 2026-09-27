@@ -27,7 +27,10 @@ describe('#487 — shortEntuId returns the last 6 characters of an Entu _id', ()
 	it('two ids sharing a timestamp prefix get distinct short forms', () => {
 		const a = '6a9f440dca67df980f417d78';
 		const b = '6a9f4512ca67df980f417d81';
-		expect(a.slice(0, 6)).toBe(b.slice(0, 6));
+		// Fixtures share their first 5 characters (the timestamp head diverges
+		// at the 6th character for these two) — still close enough to motivate
+		// the suffix-not-prefix design the comment above describes.
+		expect(a.slice(0, 5)).toBe(b.slice(0, 5));
 		expect(shortEntuId(a)).not.toBe(shortEntuId(b));
 	});
 
