@@ -38,7 +38,10 @@ const NAME_EXPRS: ReadonlyArray<[RegExp, string]> = [
 	[/\{\s*conductor\.name\s*\}/g, '{conductor.name}'],
 	[/\{\s*memberNames\.get\(/g, '{memberNames.get(…)}'],
 	[/\{\s*seasonConductorLabel\(/g, '{seasonConductorLabel(…)}'],
-	[/\{\s*detail\.conductorNames\.join\(/g, '{detail.conductorNames.join(…)}']
+	[/\{\s*detail\.conductorNames\.join\(/g, '{detail.conductorNames.join(…)}'],
+	// #361 review F1 — the event page's RSVP tally card. Its map holds
+	// `row.name`, the same overlaid displayed name as every other site.
+	[/\{\s*tallyCardNames\[/g, '{tallyCardNames[…]}']
 ];
 
 // Sentences with the name baked in — must sit INSIDE a RedactedText. The
@@ -141,4 +144,154 @@ describe('#361 — name-bearing sentences sit whole inside a RedactedText', () =
 	});
 });
 
+// #361 review F1 — THE CLOSED RULE. Everything above enumerates the
+// expression shapes we already know leak, so it is silent on a shape nobody
+// listed: that is how the RSVP tally card's `tallyCardNames[memberId]` passed
+// a green guard. This block inverts the burden. It finds EVERY bare text
+// interpolation that reads a `name`-ish value in the listed files and demands
+// one of three things of each:
+//
+//   1. it sits inside a marker (a site converted to PersonName does not even
+//      reach here — the name moved into PersonName's `name=` ATTRIBUTE), or
+//   2. every name-ish token in it is listed below as a value that is NOT a
+//      person's name (an event's name, a season's, a file's), or
+//   3. it fails.
+//
+// So a NEW `{someone.name}` on these surfaces fails until someone either
+// wraps it or writes down, here, why it is not a person — which is #361's
+// done-when. The list is per-file on purpose: `row.name` is a schedule row on
+// the event page, but a roster row (a person) elsewhere, so a global
+// vocabulary would hand out the wrong exemption.
+const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
+	'src/routes/admin/+page.svelte': [
+		'nameMarker.name' // the collective's own name, in the admin header
+	],
+	'src/routes/+page.svelte': [
+		'selected.name', // the selected collective
+		'ms.name', // a manageable season
+		'seasonManageDeleteName', // a season, in the delete confirmation
+		'seasonManageName', // a season, in the edit field
+		'series.name', // an event series
+		'eventCreateSeriesDefaults.name' // the series an event inherits from
+	],
+	'src/routes/event/[id]/+page.svelte': [
+		'detail.name', // the event's own name
+		'row.name' // a schedule (agenda) row
+	],
+	'src/routes/library/+page.svelte': [
+		'work.name', // catalogue: a work
+		'edition.name', // catalogue: an edition
+		'copy.name', // catalogue: a physical copy
+		'copyName', // the copy label inside the my-loans sentence
+		'file.filename', // an uploaded score file
+		'broken.filename',
+		'filename'
+	],
+	'src/lib/components/attendance/AttendanceSurface.svelte': [
+		'item.name' // the AgendaItem this panel belongs to
+	],
+	'src/lib/components/attendance/SeasonSummary.svelte': [],
+	'src/lib/components/profile/ProfileField.svelte': [],
+	'src/lib/components/admin/InviteSurface.svelte': []
+};
+
+/** Does this expression read something `name`-ish at all? */
+const NAME_ISH = /(?:\.\s*names?\b|\b[A-Za-z_$][\w$]*[Nn]ames?\b|\bfilenames?\b)/;
+
+/**
+ * Every bare TEXT interpolation in `src` as [index, expression]. Attribute
+ * values (`attr={…}`) and block tags (`{#if}`, `{:else}`, `{/each}`,
+ * `{@render}`) are skipped WHOLE, so an attribute's interior never leaks in.
+ */
+function textInterpolations(src: string): Array<[number, string]> {
+	const out: Array<[number, string]> = [];
+	let i = 0;
+	while (i < src.length) {
+		if (src[i] !== '{') {
+			i += 1;
+			continue;
+		}
+		let depth = 0;
+		let j = i;
+		for (; j < src.length; j += 1) {
+			if (src[j] === '{') depth += 1;
+			else if (src[j] === '}') {
+				depth -= 1;
+				if (depth === 0) break;
+			}
+		}
+		if (j >= src.length) break; // unbalanced tail — nothing more to read
+		const isBlockTag = /^\{\s*[#/:@]/.test(src.slice(i, i + 3));
+		if (!isAttribute(src, i) && !isBlockTag) out.push([i, src.slice(i, j + 1)]);
+		i = j + 1;
+	}
+	return out;
+}
+
+/**
+ * The name-ish VALUE tokens an expression reads. Paraglide message ids are
+ * stripped first: `m.event_detail_series_field_name()` names a translation,
+ * not a person, and an id ending in `_name` is not a value at all.
+ */
+function nameTokens(expr: string): string[] {
+	const stripped = expr.replace(/\bm\.[a-z0-9_]+/g, 'm.MSG');
+	const chains = stripped.match(/[A-Za-z_$][\w$]*(?:\s*\.\s*[\w$]+)*/g) ?? [];
+	const out = new Set<string>();
+	for (const raw of chains) {
+		const chain = raw.replace(/\s+/g, '');
+		const last = chain.split('.').pop() ?? '';
+		if (/^(?:names?|filenames?)$/i.test(last) || /[Nn]ames?$/.test(last)) out.add(chain);
+	}
+	return [...out];
+}
+
+/** The name-ish text interpolations of one file, as [index, expr, tokens]. */
+function nameIshSites(file: string): Array<[number, string, string[]]> {
+	const src = markup(readFileSync(resolve(process.cwd(), file), 'utf-8'));
+	return textInterpolations(src)
+		.filter(([, expr]) => NAME_ISH.test(expr))
+		.map(([i, expr]) => [i, expr, nameTokens(expr)]);
+}
+
+describe('#361 — a name-ish interpolation is marked, or written down as not-a-person', () => {
+	for (const [file, exempt] of Object.entries(NOT_A_PERSONS_NAME)) {
+		it(`${file}: every name-ish text interpolation is marked or exempt`, () => {
+			const src = markup(readFileSync(resolve(process.cwd(), file), 'utf-8'));
+			const bare: string[] = [];
+			for (const [i, , tokens] of nameIshSites(file)) {
+				if (insideRedactedText(src, i)) continue;
+				// No name VALUE in it — an i18n label whose message id merely
+				// ends in `_name`. Nothing personal can render here.
+				if (tokens.length === 0) continue;
+				const unexplained = tokens.filter((t) => !exempt.includes(t));
+				if (unexplained.length === 0) continue;
+				bare.push(
+					`${file}:${lineOf(src, i)} reads ${unexplained.join(', ')} — wrap it in PersonName, ` +
+						`or add it to NOT_A_PERSONS_NAME with the reason it is not a person`
+				);
+			}
+			expect(bare).toEqual([]);
+		});
+	}
+
+	// NON-VACUOUS, both ways: the scanner really reads these files, and no
+	// exemption is stale. A token that no longer appears is a hole standing
+	// open for the next expression that happens to reuse the name.
+	it('the scanner matches real interpolations, and every exemption is still in use', () => {
+		const scanned = Object.keys(NOT_A_PERSONS_NAME).reduce(
+			(n, file) => n + nameIshSites(file).length,
+			0
+		);
+		expect(scanned, 'the scanner must actually match name-ish interpolations').toBeGreaterThan(15);
+
+		const stale: string[] = [];
+		for (const [file, tokens] of Object.entries(NOT_A_PERSONS_NAME)) {
+			const seen = new Set(nameIshSites(file).flatMap(([, , t]) => t));
+			for (const token of tokens) if (!seen.has(token)) stale.push(`${file}: ${token}`);
+		}
+		expect(stale, 'remove exemptions whose expression is gone').toEqual([]);
+	});
+});
+
 // (*MVOX:Tallis* — #361 RED: person-name marker guard)
+// (*MVOX:Josquin* — #361 review F1: the closed name-ish rule)

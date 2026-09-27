@@ -2692,6 +2692,31 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(card.textContent).not.toContain('Viewer Vera');
 	});
 
+	// #361 review F1 — the same card, now for the MARKER. The names above are
+	// real member names, so the open card is a screenshot leak unless each one
+	// renders through PersonName. The structural guard cannot see a shape it was
+	// not taught; this pins the rendered DOM.
+	it('the RSVP tally card renders each respondent name through the capture marker, exactly once (#361)', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			realNames: true
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-tally-toggle"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="event-detail-tally-toggle"]')!);
+		const group = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-tally-card-group-going"]');
+			expect(el).not.toBeNull();
+			// Settle on the RESOLVED name: before the roster read lands the card
+			// renders the placeholder, and a marker assertion against that would
+			// pass while saying nothing about a real name.
+			expect(el!.textContent).toContain(RN_RECORD_NAMES['p-viewer']);
+			return el!;
+		});
+		expectNameMarkedOnce(group, RN_RECORD_NAMES['p-viewer'], 'in the RSVP tally card');
+	});
+
 	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {
 		// Default season: conductors are p-mihkel + p-alice — the viewer holds no seat.
 		const { container } = renderComposePage({ event: pastEventEntity() });

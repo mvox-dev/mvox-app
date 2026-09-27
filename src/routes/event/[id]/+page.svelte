@@ -4906,9 +4906,19 @@
 														     carries no domain/public name, so the #28 completeness
 														     gate dropped her row — renders a translated placeholder
 														     instead. -->
+														<!-- #361 review F1 — `tallyCardNames` holds `row.name`, the
+														     SAME overlaid displayed name every other surface marks, so
+														     with the real-names toggle on this open card is a list of
+														     real member names a screenshot would keep. It is plain
+														     element content, so it CAN host the marker: it goes through
+														     PersonName like the rest. The placeholder branch rides the
+														     same wrapper — one code path, and nothing personal to blank
+														     when it is what renders. -->
 														<li>
-															{tallyCardNames[memberId] ??
-																m.event_detail_tally_name_unavailable()}
+															<PersonName
+																name={tallyCardNames[memberId] ??
+																	m.event_detail_tally_name_unavailable()}
+															/>
 														</li>
 													{/each}
 												</ul>
