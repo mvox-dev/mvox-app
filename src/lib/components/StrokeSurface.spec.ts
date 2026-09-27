@@ -314,6 +314,114 @@ describe('#394 — the pens prop names its own controls', () => {
 	});
 });
 
+// review round 2 — the three pointer findings. Every case here is a pointer
+// sequence the original suite never made: it always dragged inside the rect,
+// always used a single pointer, and always ended with a pointerup.
+describe('#394 — a stroke dragged off the base stays inside the stored box', () => {
+	it('points outside the rect are clamped to [0,1], and the save round-trips through parse', async () => {
+		const { container, onchange } = mount();
+		// starts inside the 200×100 base, ends well past its right-bottom corner
+		// — pointer capture keeps delivering the moves either way.
+		await pass(container, [
+			[180, 50],
+			[240, 120]
+		]);
+		const emitted = lastEmitted(onchange);
+		expect(emitted).toEqual({
+			v: 1,
+			strokes: [{ pen: 'red', w: DEFAULT_STROKE_WIDTH, pts: [0.9, 0.5, 1, 1] }]
+		});
+		for (const n of emitted.strokes[0].pts) {
+			expect(n, `pts value ${n} inside the unit box`).toBeGreaterThanOrEqual(0);
+			expect(n, `pts value ${n} inside the unit box`).toBeLessThanOrEqual(1);
+		}
+		// parse() is strict on purpose: an out-of-box value used to throw here
+		// and take every other stroke in the same save with it.
+		expect(parse(serialize(emitted))).toEqual(emitted);
+	});
+
+	it('a stroke leaving past the left/top edge clamps at 0, and earlier strokes survive the save', async () => {
+		const { container, onchange } = mount();
+		await pass(container, LINE_TOP);
+		await pass(container, [
+			[20, 10],
+			[-60, -40]
+		]);
+		const emitted = lastEmitted(onchange);
+		expect(emitted).toEqual({
+			v: 1,
+			strokes: [S1, { pen: 'red', w: DEFAULT_STROKE_WIDTH, pts: [0.1, 0.1, 0, 0] }]
+		});
+		expect(parse(serialize(emitted))).toEqual(emitted);
+	});
+});
+
+describe('#394 — a second pointer never takes over the stroke in progress', () => {
+	it('a stray touch mid-stroke contributes nothing and the drawn line still commits in full', async () => {
+		const { container, onchange } = mount();
+		const svg = surface(container);
+		const first = { pointerType: 'mouse', pointerId: 1, isPrimary: true } as const;
+		const stray = { pointerType: 'touch', pointerId: 7, isPrimary: false } as const;
+
+		await fireEvent.pointerDown(svg, { ...first, clientX: 20, clientY: 10 });
+		await fireEvent.pointerMove(svg, { ...first, clientX: 100, clientY: 10 });
+		// a second finger lands and lifts while the first is still down
+		await fireEvent.pointerDown(svg, { ...stray, clientX: 20, clientY: 90 });
+		await fireEvent.pointerUp(svg, { ...stray, clientX: 20, clientY: 90 });
+		expect(onchange, 'the stray pointer commits nothing').not.toHaveBeenCalled();
+		// the first pointer's own points are still there, live
+		expect(
+			(surface(container).querySelector('[data-testid="live-stroke"]') as SVGPathElement).getAttribute('d')
+		).toEqual('M20 10L100 10');
+
+		await fireEvent.pointerMove(svg, { ...first, clientX: 180, clientY: 10 });
+		await fireEvent.pointerUp(svg, { ...first, clientX: 180, clientY: 10 });
+		expect(onchange).toHaveBeenCalledTimes(1);
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [S1] });
+	});
+});
+
+describe('#394 — a cancelled pointer takes its live mark with it', () => {
+	const liveEl = (container: HTMLElement) =>
+		surface(container).querySelector('[data-testid="live-stroke"]');
+
+	for (const cancel of ['pointerCancel', 'lostPointerCapture'] as const) {
+		it(`${cancel} mid-stroke leaves no phantom path and commits nothing`, async () => {
+			const { container, onchange } = mount();
+			const svg = surface(container);
+			await fireEvent.pointerDown(svg, { ...MOUSE, clientX: 20, clientY: 10 });
+			await fireEvent.pointerMove(svg, { ...MOUSE, clientX: 100, clientY: 10 });
+			expect(liveEl(container)).not.toBeNull();
+
+			await fireEvent[cancel](svg, { ...MOUSE, clientX: 100, clientY: 10 });
+			expect(liveEl(container), 'the cancelled mark is gone').toBeNull();
+			expect(surface(container).querySelectorAll('path')).toHaveLength(0);
+			expect(onchange).not.toHaveBeenCalled();
+
+			// a late pointerup for the cancelled pointer commits nothing either
+			await fireEvent.pointerUp(svg, { ...MOUSE, clientX: 100, clientY: 10 });
+			expect(onchange).not.toHaveBeenCalled();
+
+			// and the next stroke starts clean — none of the cancelled points
+			await pass(container, LINE_BOTTOM);
+			expect(lastEmitted(onchange)).toEqual({
+				v: 1,
+				strokes: [{ pen: 'red', w: DEFAULT_STROKE_WIDTH, pts: S2.pts }]
+			});
+		});
+	}
+
+	it('lostpointercapture after a normal pointerup keeps the committed stroke', async () => {
+		const { container, onchange } = mount();
+		const svg = surface(container);
+		await pass(container, LINE_TOP);
+		// the browser releases capture implicitly on pointerup, then fires this
+		await fireEvent.lostPointerCapture(svg, { ...MOUSE, clientX: 180, clientY: 10 });
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [S1] });
+		expect(surface(container).querySelectorAll('path')).toHaveLength(1);
+	});
+});
+
 describe('#394 — undo', () => {
 	it('undo removes the last stroke, undo again empties, then the undo button is disabled', async () => {
 		const { container, onchange } = mount();

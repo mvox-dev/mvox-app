@@ -21,6 +21,16 @@
 	//   F5 every control has a visible face: a colour swatch per pen, an
 	//      eraser and an undo glyph, a visible pressed marker and a visible
 	//      disabled state — four blank boxes were unusable by sight.
+	//
+	// REVIEW ROUND 2 (#394, three pointer findings — all in unitPoint and the
+	// pointer handlers):
+	//   R2-F1 captured coordinates are clamped to [0,1]: a stroke dragged off
+	//         the base used to store out-of-box values that parse() then
+	//         rejected, losing the whole save.
+	//   R2-F2 a second pointer mid-stroke is ignored instead of taking the
+	//         stroke over and discarding the points drawn so far.
+	//   R2-F3 pointercancel / lostpointercapture abort the stroke, so a
+	//         cancelled pointer takes its live mark with it.
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -120,11 +130,22 @@
 		return Math.round(n * 10000) / 10000;
 	}
 
+	function clamp01(n: number): number {
+		return Math.min(1, Math.max(0, n));
+	}
+
+	/** The pointer's position in the stored [0,1] box, clamped to the box.
+	 * Pointer capture keeps delivering pointermove after the pointer leaves the
+	 * element, so a mark dragged off the base would otherwise store coordinates
+	 * outside [0,1] — which parse() rejects, taking every other stroke in the
+	 * same save down with it. A mark that runs off the base stops at the edge
+	 * instead, so the invariant parse() enforces is true at the producer
+	 * (#394 review F1: clamp at capture, never repair at parse). */
 	function unitPoint(e: PointerEvent): [number, number] {
 		const rect = (svgEl as SVGSVGElement).getBoundingClientRect();
 		const x = rect.width === 0 ? 0 : (e.clientX - rect.left) / rect.width;
 		const y = rect.height === 0 ? 0 : (e.clientY - rect.top) / rect.height;
-		return [round4(x), round4(y)];
+		return [round4(clamp01(x)), round4(clamp01(y))];
 	}
 
 	function setStrokes(list: Stroke[]): void {
@@ -247,6 +268,11 @@
 
 	function handlePointerDown(e: PointerEvent): void {
 		if (readonly) return;
+		// One stroke at a time: with `touch-action: none` the surface receives
+		// every stray finger, and a second pointer used to take over the
+		// in-progress stroke — resetting its points and orphaning the first
+		// pointer's own pointerup, so the drawn line was lost (#394 review F2).
+		if (drawing) return;
 		drawing = true;
 		capturedPointerId = e.pointerId;
 		svgEl?.setPointerCapture(e.pointerId);
@@ -262,14 +288,29 @@
 		drawPressures?.push(e.pressure);
 	}
 
-	function handlePointerUp(e: PointerEvent): void {
-		if (!drawing || e.pointerId !== capturedPointerId) return;
-		if (eraseMode) commitErase();
-		else commitDraw();
+	function endStroke(): void {
 		drawing = false;
 		capturedPointerId = null;
 		drawPts = [];
 		drawPressures = null;
+	}
+
+	function handlePointerUp(e: PointerEvent): void {
+		if (!drawing || e.pointerId !== capturedPointerId) return;
+		if (eraseMode) commitErase();
+		else commitDraw();
+		endStroke();
+	}
+
+	/** The pointer went away without a pointerup — a touch interruption, a
+	 * gesture takeover, a stylus leaving range, or capture lost to another
+	 * element. Nothing is committed and the live stroke disappears with the
+	 * pointer; without this the phantom stayed on screen, uncommittable and
+	 * un-undoable, until the next pointerdown (#394 review F3). */
+	function handlePointerAbort(e: PointerEvent): void {
+		if (!drawing || e.pointerId !== capturedPointerId) return;
+		if (svgEl?.hasPointerCapture(e.pointerId)) svgEl.releasePointerCapture(e.pointerId);
+		endStroke();
 	}
 </script>
 
@@ -285,6 +326,8 @@
 		onpointerdown={handlePointerDown}
 		onpointermove={handlePointerMove}
 		onpointerup={handlePointerUp}
+		onpointercancel={handlePointerAbort}
+		onlostpointercapture={handlePointerAbort}
 	>
 		{#each strokes.strokes as stroke, i (i)}
 			<path
