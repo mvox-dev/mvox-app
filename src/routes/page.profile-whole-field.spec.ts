@@ -50,6 +50,8 @@ import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
+import { REDACT_ATTR } from '$lib/redact/redact';
 
 // Full-fallback paraglide mock — every key renders `[key {params}]`, so the
 // sr-only assertions below can pin WHICH key the label rides on.
@@ -532,3 +534,30 @@ describe('#205 — new Paraglide keys land in ALL FOUR locales', () => {
 });
 
 // (*MVOX:Tallis* — #205 RED; review round-3 flush-on-cancel case *MVOX:Josquin*)
+
+// ── #361 — ProfileField marks the displayed NAME via PersonName ────────────
+//
+// Only the name field's displayed value routes through PersonName. The email
+// field is not a name and is not this slice's to mark — and must never carry
+// a second, nested marker (one marker per rendered value).
+describe('#361 — /profile: the displayed name value is marked', () => {
+	it('name: the display-state value sits inside exactly one marker', async () => {
+		const container = await renderSeeded();
+		const value = valueEl(container, 'name');
+		expect(value, 'profile-name-value must render').not.toBeNull();
+		expectNameMarkedOnce(value!, 'Ada', 'in the profile name display value');
+	});
+
+	it('email: the display-state value never carries nested markers', async () => {
+		const container = await renderSeeded();
+		const value = valueEl(container, 'email');
+		expect(value, 'profile-email-value must render').not.toBeNull();
+		const markers = value!.querySelectorAll(`[${REDACT_ATTR}]`);
+		for (const mk of markers) {
+			expect(mk.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
+		}
+		expect(markers.length).toBeLessThanOrEqual(1);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: profile name display value marked)

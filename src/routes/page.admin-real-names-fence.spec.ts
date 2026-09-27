@@ -98,6 +98,7 @@ import {
 	DB_ENTITY_ID,
 	MEMBER_PERSON
 } from '$lib/testing/realNamesFence';
+import { expectNameMarkedOnce, expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 
 function selectSampledb() {
 	setToken('jwt-admin');
@@ -310,3 +311,56 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 
 // (*MVOX:Palestrina* — #269 review F1/F2: admin-roles scope fence)
 // (*MVOX:Tallis* — #469 RED: fence flipped to the conditional contract, invite picker pinned too)
+
+// ── #361 — the roles lists' names carry the capture-redaction marker ────────
+//
+// The Admins and Librarians name spans route through PersonName; the Remove
+// button's text is admin_roles_remove({ name }) — a sentence with the name
+// baked in, which a marker cannot blank in part — so the WHOLE button text
+// sits in one RedactedText (the sentence blanks in a capture; the button
+// still works). ONE marker per rendered value.
+describe('#361 — admin roles lists: member names are marked', () => {
+	const ADMIN_NAME = 'Olga Owner';
+	const LIB_NAME = 'Lena Librarian';
+
+	it('Admins list: the name span is marked once, and the Remove button text sits whole in one marker', async () => {
+		h.listAdminsMock.mockResolvedValue({
+			persons: [
+				{ id: 'p-olga', name: ADMIN_NAME, role: 'editor', valueIds: ['v-o'] },
+				{ id: 'admin-p', name: 'Viewer Self', role: 'owner', valueIds: ['v-s'] }
+			],
+			canManage: true
+		});
+		realNamesWire();
+		const container = await renderReady();
+		const row = container.querySelector('[data-testid="admin-entry-p-olga"]') as HTMLElement;
+		expect(row, 'Admins row').not.toBeNull();
+		const remove = row.querySelector('[data-testid="admin-remove-p-olga"]') as HTMLElement;
+		expect(remove, 'Admins remove button').not.toBeNull();
+		// The name span (outside the button) is marked by PersonName.
+		const nameSpan = [...row.children].find((c) => c !== remove) as HTMLElement;
+		expectNameMarkedOnce(nameSpan, ADMIN_NAME, 'in the Admins name span');
+		expectWholeTextMarkedOnce(remove, 'admin-remove button');
+	});
+
+	it('Librarians list: the name span is marked once, and the Remove button text sits whole in one marker', async () => {
+		h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		h.listLibrariansMock.mockResolvedValue({
+			persons: [{ id: 'p-lena', name: LIB_NAME, role: 'editor', valueIds: ['v-l'] }],
+			canManage: true
+		});
+		realNamesWire();
+		const container = await renderReady();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-entry-p-lena"]')).not.toBeNull();
+		});
+		const row = container.querySelector('[data-testid="librarian-entry-p-lena"]') as HTMLElement;
+		const remove = row.querySelector('[data-testid="librarian-remove-p-lena"]') as HTMLElement;
+		expect(remove, 'Librarians remove button').not.toBeNull();
+		const nameSpan = [...row.children].find((c) => c !== remove) as HTMLElement;
+		expectNameMarkedOnce(nameSpan, LIB_NAME, 'in the Librarians name span');
+		expectWholeTextMarkedOnce(remove, 'librarian-remove button');
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: admin roles lists marked)

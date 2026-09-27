@@ -58,6 +58,7 @@ import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AttendanceSurface from './AttendanceSurface.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
@@ -377,3 +378,19 @@ describe('AttendanceSurface — the tally says when its counts are unconfirmed (
 });
 
 // (*MVOX:Tallis* — #327 RED)
+
+// ── #361 — the member row's name carries the capture-redaction marker ──────
+//
+// The visible name renders through PersonName. The three aria-labels that
+// carry the name (attendance_rsvp_aria_label, attendance_group_label,
+// attendance_toggle_aria_label) are attributes — no marker can cover them;
+// they are recorded in redact.ts's uncovered channels instead.
+describe('#361 — AttendanceSurface member rows: the name is marked', () => {
+	it('every member row name sits inside exactly one marker', () => {
+		const { container } = render(AttendanceSurface, baseProps());
+		expectNameMarkedOnce(container, 'Alice Alto', 'in the attendance member row');
+		expectNameMarkedOnce(container, 'Berta Bass', 'in the attendance member row');
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: attendance member row marked)

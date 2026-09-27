@@ -105,6 +105,7 @@ import {
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, PROFILE_NAMES, REAL_NAMES } from '$lib/testing/realNamesFence';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 
 function agendaItem(id: string, startDatetime: string) {
@@ -247,3 +248,24 @@ describe('#469 review F1 — the season-rate table obeys the toggle, in ONE over
 });
 
 // (*MVOX:Palestrina* — #469 review F1: the season-rate table's real-names contract)
+
+// ── #361 — the season-rate rows' names carry the capture-redaction marker ──
+//
+// Both SeasonSummary branches (the rate-bearing active row and the archived
+// "inactive" row) render rate.name through PersonName.
+describe('#361 — season-rate table: both row branches mark the member name', () => {
+	it('active rows (member-rate-*) and the archived row (member-rate-inactive-*) mark the name once', async () => {
+		const fetchMock = realNamesWire();
+		const { container } = await openSeasonSummary(fetchMock);
+		const active1 = container.querySelector('[data-testid="member-rate-m1"]') as HTMLElement;
+		const active2 = container.querySelector('[data-testid="member-rate-m2"]') as HTMLElement;
+		const inactive = container.querySelector(
+			'[data-testid="member-rate-inactive-m9"]'
+		) as HTMLElement;
+		expectNameMarkedOnce(active1, REAL_NAMES.m1, 'in the active season-rate row');
+		expectNameMarkedOnce(active2, REAL_NAMES.m2, 'in the active season-rate row');
+		expectNameMarkedOnce(inactive, REAL_NAMES.m9, 'in the archived season-rate row');
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: season-rate rows marked, both branches)

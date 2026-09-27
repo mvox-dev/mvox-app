@@ -116,6 +116,8 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
+import { REDACT_ATTR } from '$lib/redact/redact';
 import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
 import { authStore } from '$lib/auth/session';
 import {
@@ -3240,3 +3242,26 @@ describe('#483 /event/[id] header — a doubled season conductor is named ONCE, 
 });
 
 // (*MVOX:Tallis* — #483 RED: a doubled season conductor is named once on the event page)
+
+// ── #361 — the event header's conductor names carry the marker ─────────────
+//
+// Each conductor name renders through PersonName; the ', ' separators sit
+// OUTSIDE the markers, so a capture blanks each name and keeps the list
+// shape. ONE marker per name.
+describe('#361 — /event/[id] header: each conductor name is marked', () => {
+	it('each name sits in its own marker (exactly the name), the separator is outside every marker', async () => {
+		const { container } = renderEventPage();
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain('Mihkel Putrinš, Alice Smith');
+			return el as HTMLElement;
+		});
+		expectNameMarkedOnce(line, 'Mihkel Putrinš', 'in the event header conductor line');
+		expectNameMarkedOnce(line, 'Alice Smith', 'in the event header conductor line');
+		const markers = [...line.querySelectorAll(`[${REDACT_ATTR}]`)].map((e) => e.textContent);
+		expect(markers).toEqual(['Mihkel Putrinš', 'Alice Smith']);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: event header conductor names marked)
