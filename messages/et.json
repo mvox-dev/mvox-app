@@ -708,5 +708,6 @@
 	"agenda_downloads_link": "Ava allalaaditud partiid",
 	"part_viewer_close": "Sulge",
 	"part_viewer_not_on_device": "See partii pole selles seadmes salvestatud.",
-	"part_viewer_page_of": "{current} / {total}"
+	"part_viewer_page_of": "{current} / {total}",
+	"entu_ref_aria_label": "Ava Entu kirje {short} (avaneb uues vahekaardis)"
 }
