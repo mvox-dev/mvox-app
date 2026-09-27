@@ -477,6 +477,73 @@ describe('#394 — erase (stroke eraser)', () => {
 	});
 });
 
+// REVIEW ROUND 3 (#394): the eraser measured only point-to-segment distances,
+// so two coarse paths that visibly cross never met; and its reach was 7.5x the
+// stroke width, so it took out neighbouring marks. Pressure was stored at full
+// precision while pts were rounded, so an emitted stroke differed from its own
+// serialize/parse round-trip.
+describe('#394 — the eraser removes what it crosses and nothing beside it', () => {
+	it('a 2-point erase pass crossing a 2-point stroke removes it', async () => {
+		const { container, onchange } = mount();
+		await pass(container, [
+			[100, 0],
+			[100, 100]
+		]);
+		await fireEvent.click(btn('Erase strokes'));
+		await pass(container, [
+			[0, 50],
+			[200, 50]
+		]);
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [] });
+	});
+
+	it('a fast flick whose points land far either side of a stroke removes it', async () => {
+		const { container, onchange } = mount();
+		await pass(container, LINE_TOP);
+		await fireEvent.click(btn('Erase strokes'));
+		await pass(container, [
+			[60, 0],
+			[60, 40]
+		]);
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [] });
+	});
+
+	it('two strokes 2% of the base width apart: erasing one leaves exactly the other', async () => {
+		const { container, onchange } = mount();
+		await pass(container, [
+			[20, 50],
+			[180, 50]
+		]);
+		await pass(container, [
+			[20, 54],
+			[180, 54]
+		]);
+		const [first, second] = lastEmitted(onchange).strokes;
+		expect(first.pts).toEqual([0.1, 0.5, 0.9, 0.5]);
+		await fireEvent.click(btn('Erase strokes'));
+		await pass(container, [[100, 50]]);
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [second] });
+	});
+});
+
+describe('#394 — an emitted stroke equals its own round-trip', () => {
+	it('a stylus stroke with pressure that needs rounding round-trips toEqual', async () => {
+		const { container, onchange } = mount();
+		await pass(
+			container,
+			[
+				[20, 10],
+				[180, 90]
+			],
+			{ pointerType: 'pen', pointerId: 2, isPrimary: true },
+			[0.4980392156862745, 0.73333333]
+		);
+		const emitted = lastEmitted(onchange);
+		expect(emitted.strokes[0].p).toEqual([0.498, 0.7333]);
+		expect(parse(serialize(emitted))).toEqual(emitted);
+	});
+});
+
 describe('#394 — render identity: same strokes → same rendering', () => {
 	it('a readonly surface mounted from the serialized strokes renders the identical paths', async () => {
 		const producer = mount();

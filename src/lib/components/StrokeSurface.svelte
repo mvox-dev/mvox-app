@@ -31,6 +31,15 @@
 	//         stroke over and discarding the points drawn so far.
 	//   R2-F3 pointercancel / lostpointercapture abort the stroke, so a
 	//         cancelled pointer takes its live mark with it.
+	//
+	// REVIEW ROUND 3 (#394, eraser reach and pressure precision):
+	//   R3-F1 pathHits measures segment-to-segment distance, so two coarsely
+	//         sampled paths that visibly cross always meet.
+	//   R3-F2 ERASE_THRESHOLD is the stroke's half-width plus a touch
+	//         tolerance, no longer 7.5x its width — the eraser leaves a mark
+	//         2% of the page away alone.
+	//   R3-F3 pressure is clamped and round4'd at capture like pts, so an
+	//         emitted stroke equals its own serialize/parse round-trip.
 	import type { Snippet } from 'svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -49,12 +58,13 @@
 	// erased stroke back at its original index. Never serialized.
 	type Op = { kind: 'add' } | { kind: 'erase'; removed: { index: number; stroke: Stroke }[] };
 
-	// How close an eraser pass must come to a stroke's path to remove it — a
-	// fraction of the base's WIDTH, measured in a space where one unit means
-	// the same distance in x and in y (see erasePoints), well inside a typical
-	// stroke's own visual width and comfortably below the gap between two
-	// distinct strokes.
-	const ERASE_THRESHOLD = 0.03;
+	// How close an eraser pass's centre line must come to a stroke's centre
+	// line to remove it — a fraction of the base's WIDTH, measured in a space
+	// where one unit means the same distance in x and in y (see erasePoints).
+	// It is the default stroke's half-width (0.002) plus a touch tolerance of
+	// 0.004, i.e. 1.5x DEFAULT_STROKE_WIDTH: two marks 2% of the width apart
+	// (about 4mm on A4) are erased one at a time.
+	const ERASE_THRESHOLD = DEFAULT_STROKE_WIDTH / 2 + 0.004;
 
 	// The visible pressed marker: aria-pressed alone is invisible, so an
 	// active pen and an armed eraser also carry a ring (the pressed-chip
@@ -188,6 +198,49 @@
 		return Math.hypot(px - cx, py - cy);
 	}
 
+	/** Whether segment a1-a2 and segment b1-b2 cross or touch. */
+	function segmentsCross(
+		ax1: number,
+		ay1: number,
+		ax2: number,
+		ay2: number,
+		bx1: number,
+		by1: number,
+		bx2: number,
+		by2: number
+	): boolean {
+		const side = (px: number, py: number, qx: number, qy: number, rx: number, ry: number) =>
+			Math.sign((qx - px) * (ry - py) - (qy - py) * (rx - px));
+		const d1 = side(bx1, by1, bx2, by2, ax1, ay1);
+		const d2 = side(bx1, by1, bx2, by2, ax2, ay2);
+		const d3 = side(ax1, ay1, ax2, ay2, bx1, by1);
+		const d4 = side(ax1, ay1, ax2, ay2, bx2, by2);
+		// Collinear and touching cases fall to the endpoint distances in
+		// segSegDist, which are 0 there.
+		return d1 * d2 < 0 && d3 * d4 < 0;
+	}
+
+	/** Closest distance between segment a1-a2 and segment b1-b2: 0 when they
+	 * cross, otherwise the least of the four endpoint-to-segment distances. */
+	function segSegDist(
+		ax1: number,
+		ay1: number,
+		ax2: number,
+		ay2: number,
+		bx1: number,
+		by1: number,
+		bx2: number,
+		by2: number
+	): number {
+		if (segmentsCross(ax1, ay1, ax2, ay2, bx1, by1, bx2, by2)) return 0;
+		return Math.min(
+			pointSegDist(ax1, ay1, bx1, by1, bx2, by2),
+			pointSegDist(ax2, ay2, bx1, by1, bx2, by2),
+			pointSegDist(bx1, by1, ax1, ay1, ax2, ay2),
+			pointSegDist(bx2, by2, ax1, ay1, ax2, ay2)
+		);
+	}
+
 	/** Stored [0,1] pairs in the space the eraser measures in: x unchanged, y
 	 * scaled so one unit is one width-fraction in either direction — otherwise
 	 * ERASE_THRESHOLD would reach further vertically than horizontally on any
@@ -201,36 +254,32 @@
 		return out;
 	}
 
-	/** Whether an eraser pass (flat x,y pairs) touches a stroke's own path —
-	 * checked both ways, so a coarse stroke crossed by a fine eraser path
-	 * and a coarse eraser pass grazing a fine stroke both register. Both lists
-	 * are already in erasePoints space. */
+	/** Whether an eraser pass (flat x,y pairs) touches a stroke's own path:
+	 * every stroke segment against every eraser segment by true
+	 * segment-to-segment distance, so two coarse paths that visibly cross
+	 * always meet however far apart their sampled points are (#394 review
+	 * round 3). A 1-point stroke or a 1-point pass is a zero-length segment.
+	 * Both lists are already in erasePoints space. */
 	function pathHits(s: number[], eraserPts: number[]): boolean {
-		const sCount = s.length / 2;
-		const eCount = eraserPts.length / 2;
-		for (let ei = 0; ei < eCount; ei++) {
-			const ex = eraserPts[ei * 2];
-			const ey = eraserPts[ei * 2 + 1];
-			if (sCount === 1) {
-				if (Math.hypot(ex - s[0], ey - s[1]) <= ERASE_THRESHOLD) return true;
-				continue;
-			}
-			for (let si = 0; si < sCount - 1; si++) {
-				const d = pointSegDist(ex, ey, s[si * 2], s[si * 2 + 1], s[(si + 1) * 2], s[(si + 1) * 2 + 1]);
-				if (d <= ERASE_THRESHOLD) return true;
-			}
-		}
-		for (let si = 0; si < sCount; si++) {
-			const sx = s[si * 2];
-			const sy = s[si * 2 + 1];
-			for (let ei = 0; ei < eCount - 1; ei++) {
-				const d = pointSegDist(
-					sx,
-					sy,
-					eraserPts[ei * 2],
-					eraserPts[ei * 2 + 1],
-					eraserPts[(ei + 1) * 2],
-					eraserPts[(ei + 1) * 2 + 1]
+		const sSegs = Math.max(1, s.length / 2 - 1);
+		const eSegs = Math.max(1, eraserPts.length / 2 - 1);
+		// A 1-point list repeats its only point as the segment's far end.
+		const at = (pts: number[], i: number) => Math.min(i, pts.length / 2 - 1) * 2;
+		for (let si = 0; si < sSegs; si++) {
+			const s1 = at(s, si);
+			const s2 = at(s, si + 1);
+			for (let ei = 0; ei < eSegs; ei++) {
+				const e1 = at(eraserPts, ei);
+				const e2 = at(eraserPts, ei + 1);
+				const d = segSegDist(
+					s[s1],
+					s[s1 + 1],
+					s[s2],
+					s[s2 + 1],
+					eraserPts[e1],
+					eraserPts[e1 + 1],
+					eraserPts[e2],
+					eraserPts[e2 + 1]
 				);
 				if (d <= ERASE_THRESHOLD) return true;
 			}
@@ -278,14 +327,16 @@
 		svgEl?.setPointerCapture(e.pointerId);
 		const [x, y] = unitPoint(e);
 		drawPts = [x, y];
-		drawPressures = !eraseMode && e.pointerType === 'pen' ? [e.pressure] : null;
+		// Pressure is clamped and rounded at capture exactly as pts are, so the
+		// emitted stroke equals parse(serialize(emitted)) (#394 review round 3).
+		drawPressures = !eraseMode && e.pointerType === 'pen' ? [round4(clamp01(e.pressure))] : null;
 	}
 
 	function handlePointerMove(e: PointerEvent): void {
 		if (!drawing || e.pointerId !== capturedPointerId) return;
 		const [x, y] = unitPoint(e);
 		drawPts.push(x, y);
-		drawPressures?.push(e.pressure);
+		drawPressures?.push(round4(clamp01(e.pressure)));
 	}
 
 	function endStroke(): void {
