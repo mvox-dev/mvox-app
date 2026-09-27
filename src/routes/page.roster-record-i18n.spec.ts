@@ -134,14 +134,12 @@ const EXACT: Record<string, Record<string, string>> = {
 		et: 'Isikukood ei ole õige — midagi ei salvestatud. Kontrolli koodi ja salvesta uuesti.',
 		lv: 'Isikukood nav derīgs — nekas netika saglabāts. Pārbaudiet kodu un saglabājiet vēlreiz.',
 		uk: 'Isikukood недійсний — нічого не збережено. Перевірте код та збережіть ще раз.'
-	},
-	// Damaged data (#264): names the member, states that nothing was changed.
-	roster_record_damaged: {
-		en: 'The details for {name} are damaged — more than one record exists. Editing is disabled and nothing was changed.',
-		et: 'Liikme {name} andmed on kahjustatud — kirjeid on rohkem kui üks. Muutmine on keelatud ja midagi ei muudetud.',
-		lv: 'Dalībnieka {name} dati ir bojāti — ir vairāk nekā viens ieraksts. Rediģēšana ir atspējota, un nekas netika mainīts.',
-		uk: 'Дані учасника {name} пошкоджено — існує більше ніж один запис. Редагування вимкнено, нічого не змінено.'
 	}
+	// roster_record_damaged left this exact-text table with #388: it no longer
+	// names the member (Mihkel 2026-09-27) — the alert carries an EntuRef to
+	// the person instead. Its new wording is the copy pass's call; the #388
+	// block below pins the contract (present in all four locales, no
+	// placeholder, the old named text gone).
 };
 
 function localeMessages(locale: string): MessageFile {
@@ -161,15 +159,38 @@ describe('#268 — roster_record_* keys, exact text in all four locales', () => 
 });
 
 describe('#268 — placeholders survive translation', () => {
-	it.each(LOCALES)('%s: roster_record_damaged keeps {name} — the alert must name the member', (locale) => {
-		const messages = localeMessages(locale);
-		expect(messagePatterns(messages['roster_record_damaged']).join(' ')).toContain('{name}');
-	});
-
 	it.each(LOCALES)('%s: roster_record_save_partial keeps {saved} — it must say what landed', (locale) => {
 		const messages = localeMessages(locale);
 		expect(messagePatterns(messages['roster_record_save_partial']).join(' ')).toContain('{saved}');
 	});
+});
+
+// #388 RED — the three roster status messages that used to interpolate the
+// member's name stop naming anyone (Mihkel 2026-09-27): a capture marker
+// cannot blank part of a sentence, so the name leaves the copy and the alert
+// carries #487's EntuRef (short id, clickable) instead. The sentence must
+// stand alone — no {name}, no placeholder of any kind — in all four locales.
+describe('#388 — roster_record_damaged / roster_member_deactivate_failed / roster_member_reinstate_failed name no member', () => {
+	const NAMELESS_KEYS = [
+		'roster_record_damaged',
+		'roster_member_deactivate_failed',
+		'roster_member_reinstate_failed'
+	] as const;
+
+	for (const key of NAMELESS_KEYS) {
+		it.each(LOCALES)(`${key}: %s.json carries non-empty copy with NO {placeholder}`, (locale) => {
+			const messages = localeMessages(locale);
+			// Existence first — messagePatterns(undefined) is [] and would pass
+			// the no-placeholder check vacuously.
+			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
+			const patterns = messagePatterns(messages[key]);
+			expect(patterns.length, `${locale}.${key} renders at least one pattern`).toBeGreaterThan(0);
+			for (const pattern of patterns) {
+				expect(pattern.trim().length, `${locale}.${key} is not blank`).toBeGreaterThan(0);
+				expect(pattern, `${locale}.${key} must not interpolate anything`).not.toMatch(/\{[^}]*\}/);
+			}
+		});
+	}
 });
 
 describe('#268 — terminology ruling: English says "date of birth", never "birth date"/"birthdate" in user-facing copy', () => {
@@ -213,3 +234,4 @@ describe('#283/#285 — the refusal messages are STATIC: no placeholder, so no p
 // (*MVOX:Tallis* — #283 RED: phone/email refusal keys ×4 locales, static-copy pins)
 // (*MVOX:Tallis* — #285 RED: id_code label + refusal keys ×4 locales; label
 //  locale choice drafted proper-noun, flagged for the copy pass)
+// (*MVOX:Tallis* — #388 RED: the three status messages drop {name} ×4 locales)

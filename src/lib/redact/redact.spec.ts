@@ -138,3 +138,28 @@ describe('the CSS mechanism in src/app.css — pinned by literal string (the pag
 		expect(unguarded).toEqual([]);
 	});
 });
+
+// #388 RED — the doc block beside the marker stops citing issues that do not
+// own the work: #380 never existed (the owning issue is #388), and #292 is
+// gone (the toggle is devtools-only — no shipped control, no owning issue).
+// SectionPicker's `memberName` is aria-label/title only, an ATTRIBUTE channel
+// the marker cannot cover — it belongs in the uncovered list, not under
+// "plain element content", and the misnomer "the deactivate dialog's
+// `memberName`" goes (the deactivate prompt renders no name).
+describe('#388 — redact.ts header cites the owning issue and lists SectionPicker as an uncovered attribute channel', () => {
+	it("cites no '#380' and no '#292'", () => {
+		const src = redactSource();
+		expect(src).not.toContain('#380');
+		expect(src).not.toContain('#292');
+	});
+
+	it('cites #388 and names SectionPicker memberName; the deactivate-dialog misnomer is gone', () => {
+		const src = redactSource();
+		expect(src).toContain('#388');
+		expect(src).toContain('SectionPicker');
+		expect(src).toContain('memberName');
+		expect(src).not.toContain("the deactivate dialog's `memberName`");
+	});
+});
+
+// (*MVOX:Tallis* — #388 RED: redact.ts header issue cites + SectionPicker channel)
