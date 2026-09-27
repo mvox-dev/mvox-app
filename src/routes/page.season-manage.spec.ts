@@ -76,6 +76,10 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+// #483 — a SYNCHRONOUS flush is the only way a Svelte render error (e.g.
+// each_key_duplicate) lands inside an expectation instead of escaping the test
+// as an unhandled error. Used once, in the #483 block below.
+import { flushSync } from 'svelte';
 
 // Lenient message mock — structural assertions only; real copy is Comenius's.
 // Params are appended so a count threaded through an ICU message stays visible
@@ -230,10 +234,9 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 // sweep, both pre-existing #367/#410 duties unrelated to conductors) reaches
 // persistence only through getAppByteStore(); under happy-dom (no IndexedDB)
 // that throws, and every render past the file's first logs it. Harmless noise
-// none of this file's OTHER tests spy on — but the #483 block below does spy
-// on console.error to hold the conductor-duplicate fix itself to a clean run,
-// so the same in-memory double layout.retention.spec.ts already uses stands
-// in here too.
+// none of this file's OTHER tests spy on — but the #483 block below silences
+// console.error to keep its own run clean, so the same in-memory double
+// layout.retention.spec.ts already uses stands in here too.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
 import Page from './+page.svelte';
@@ -1236,6 +1239,14 @@ function removeButtonsFor(container: HTMLElement, personId: string): HTMLElement
 	) as HTMLElement[];
 }
 
+// WHAT CATCHES A REGRESSION HERE: the FIRST test's `flushSync` expectation,
+// plus the mount/key assertions in every test. A re-introduced
+// each_key_duplicate escapes an AWAITED click as an unhandled error — verified
+// against the pre-fix sources, it reaches NEITHER console.error NOR a window
+// 'error' event — so only a synchronous flush can put the throw in front of an
+// `expect`. The window/rejection listeners and the console.error spy below are
+// noise suppression plus a cheap net for unrelated errors; they are NOT the
+// duplicate-key detector.
 describe('#483 agenda — a season holding the same conductor twice', () => {
 	let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 	let windowErrors: unknown[];
@@ -1264,7 +1275,21 @@ describe('#483 agenda — a season holding the same conductor twice', () => {
 			doubledConductorResult(['p-ada', 'p-ada', 'p-grace'], true)
 		);
 		const container = await renderReady();
-		const panel = await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, SEASON_CARD_EXPAND)).not.toBeNull();
+		});
+		// THE no-throw assertion. Expanding the card inside flushSync renders the
+		// panel synchronously, so a keyed-each duplicate throws HERE instead of
+		// slipping past as an unhandled error. Deliberately not routed through
+		// openSeasonCardPanel: that helper's awaited click cannot observe this.
+		expect(() =>
+			flushSync(() => (q(container, SEASON_CARD_EXPAND) as HTMLElement).click())
+		).not.toThrow();
+		const panel = await waitFor(() => {
+			const el = q(container, 'season-manage-panel');
+			expect(el).not.toBeNull();
+			return el as HTMLElement;
+		});
 
 		await waitFor(() => {
 			expect(entryKeys(container)).toEqual(['p-ada#0', 'p-ada#1', 'p-grace#0']);
