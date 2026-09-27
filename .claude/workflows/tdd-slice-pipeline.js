@@ -33,7 +33,7 @@
  *   SPIKE:       opus-5   — comprehension checkpoint, discover what RED should assert
  *   SEED:        opus-4-6 — careful execution, schema/data mutations with ledgers
  *   PREFLIGHT:   sonnet   — constrained check, validate data prerequisites
- *   RED:         fable    — creative/lateral thinking, surprising edge-case tests + integration tests
+ *   RED:         opus-5-5 — creative/lateral thinking, surprising edge-case tests + integration tests
  *   GREEN:       sonnet   — constrained execution, tests define the goal
  *   INTEGRATION: sonnet   — wiring verification, catch "correct but unreachable" before expensive REVIEW
  *   GREEN-FIX:   sonnet   — fix wiring gaps found by INTEGRATION (cheap loop before REVIEW)
@@ -42,9 +42,9 @@
  *   MERGE:       sonnet   — mechanical git ops
  *   PROBE:       sonnet   — constrained execution, well-defined checks
  *
- * Three models, deliberately placed: opus-5 at comprehension checkpoints
+ * Four models, deliberately placed: opus-5 at comprehension checkpoints
  * (SPIKE, REVIEW, FIX), opus-4-6 at careful-execution checkpoint (SEED),
- * fable at creative checkpoint (RED), sonnet at constrained-execution
+ * opus-5-5 at creative checkpoint (RED; replaced fable, Mihkel 2026-09-27), sonnet at constrained-execution
  * and wiring checkpoints (GREEN, INTEGRATION, GREEN-FIX, PREFLIGHT, MERGE, PROBE).
  *
  * (*MVOX:Palestrina*)
@@ -58,7 +58,7 @@ export const meta = {
     { title: 'SPIKE', detail: 'Research/exploration — discover facts for RED', model: 'claude-opus-5[1m]' },
     { title: 'SEED', detail: 'Schema/data setup via Entu API', model: 'claude-opus-4-6[1m]' },
     { title: 'PREFLIGHT', detail: 'Validate data prerequisites before RED', model: 'claude-sonnet-5[1m]' },
-    { title: 'RED', detail: 'Write failing tests — creative edge cases', model: 'claude-fable-5' },
+    { title: 'RED', detail: 'Write failing tests — creative edge cases', model: 'claude-opus-5-5' },
     { title: 'GREEN', detail: 'Implement to make tests pass', model: 'claude-sonnet-5[1m]' },
     { title: 'INTEGRATION', detail: 'Wiring verification — catch unreachable features before REVIEW', model: 'claude-sonnet-5[1m]' },
     { title: 'GREEN-FIX', detail: 'Fix wiring gaps found by INTEGRATION', model: 'claude-sonnet-5[1m]' },
@@ -324,7 +324,7 @@ for (let i = 0; i < tasks.length; i++) {
 
     const red = await agentS(
       task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
-      { label: 'red-' + task.issueNumber, phase: 'RED', schema: RESULT_SCHEMA, model: 'claude-fable-5' }
+      { label: 'red-' + task.issueNumber, phase: 'RED', schema: RESULT_SCHEMA, model: 'claude-opus-5-5' }
     )
 
     if (!red || !red.success) {
