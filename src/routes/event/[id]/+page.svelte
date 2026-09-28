@@ -182,9 +182,14 @@
 	} from '$lib/schedule/scheduleData';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
+	// #434 slice 6/6 — the ONE online/offline signal; inline event editing
+	// (the six header pencils) reads it directly here, RsvpControl/
+	// AttendanceSurface read it themselves.
+	import { online } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
+	const isOffline = $derived(!$online);
 
 	// 'not-available' is a genuine 5th state, NOT a flavour of 'load-error':
 	// switching collectives with a detail page open refetches the SAME id against
@@ -3378,8 +3383,10 @@
 	function beginFieldEdit(field: EditableEventField): void {
 		// A field whose previous write is still in flight cannot be re-opened —
 		// the pencil is disabled for exactly this window, this is the backstop for
-		// a tap that beat the re-render (#104 review F1).
-		if (!detail || editWritePending[field]) return;
+		// a tap that beat the re-render (#104 review F1). #434 slice 6 — offline
+		// is the same backstop: the pencil is disabled, this is the guard for a
+		// tap that beat that re-render.
+		if (!detail || editWritePending[field] || isOffline) return;
 		editErrors = { ...editErrors, [field]: false };
 		editRangeErrors = { ...editRangeErrors, [field]: false };
 		if (field === 'start_datetime') {
@@ -3573,6 +3580,14 @@
 	 *  mid-interaction. */
 	function confirmFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		if (!selected || !detail || editingField !== field) return;
+		// #434 slice 6 — the signal dropped while this editor was open (mid-edit,
+		// not just at open time — `beginFieldEdit`'s guard only covers the tap
+		// that opens it). No write reaches the wire; this degrades exactly like
+		// an unchanged draft: close without committing.
+		if (isOffline) {
+			cancelFieldEdit(field, restoreFocus);
+			return;
+		}
 		const before = fieldValue(detail, field);
 		// #243 — duration_minutes takes its own path: the derived RAW minutes
 		// (which may be zero or negative) decide between "no change" (cancel,
@@ -4060,7 +4075,7 @@
 							type="button"
 							data-testid="event-edit-btn-event_type"
 							class="group flex min-h-11 w-fit appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left disabled:opacity-40"
-							disabled={editWritePending.event_type === true}
+							disabled={editWritePending.event_type === true || isOffline}
 							bind:this={pencilRefs.event_type}
 							onclick={() => beginFieldEdit('event_type')}
 						>
@@ -4141,7 +4156,7 @@
 							type="button"
 							data-testid="event-edit-btn-name"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
-							disabled={editWritePending.event_name === true}
+							disabled={editWritePending.event_name === true || isOffline}
 							bind:this={pencilRefs.event_name}
 							onclick={() => beginFieldEdit('event_name')}
 						>
@@ -4218,7 +4233,7 @@
 							type="button"
 							data-testid="event-edit-btn-start_datetime"
 							class="group flex min-h-11 w-full appearance-none flex-wrap items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.start_datetime === true}
+							disabled={editWritePending.start_datetime === true || isOffline}
 							bind:this={pencilRefs.start_datetime}
 							onclick={() => beginFieldEdit('start_datetime')}
 						>
@@ -4253,7 +4268,7 @@
 						type="button"
 						data-testid="event-edit-btn-start_datetime"
 						class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-xs text-ink-3 disabled:opacity-40"
-						disabled={editWritePending.start_datetime === true}
+						disabled={editWritePending.start_datetime === true || isOffline}
 						bind:this={pencilRefs.start_datetime}
 						onclick={() => beginFieldEdit('start_datetime')}
 					>
@@ -4320,7 +4335,7 @@
 							type="button"
 							data-testid="event-edit-btn-duration_minutes"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.duration_minutes === true}
+							disabled={editWritePending.duration_minutes === true || isOffline}
 							bind:this={pencilRefs.duration_minutes}
 							onclick={() => beginFieldEdit('duration_minutes')}
 						>
@@ -4380,7 +4395,7 @@
 							type="button"
 							data-testid="event-edit-btn-location"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.location === true}
+							disabled={editWritePending.location === true || isOffline}
 							bind:this={pencilRefs.location}
 							onclick={() => beginFieldEdit('location')}
 						>
@@ -4435,7 +4450,7 @@
 							type="button"
 							data-testid="event-edit-btn-description"
 							class="group mt-2 flex min-h-11 w-full appearance-none items-start gap-2 border-0 bg-transparent p-0 text-left text-base text-ink disabled:opacity-40"
-							disabled={editWritePending.description === true}
+							disabled={editWritePending.description === true || isOffline}
 							bind:this={pencilRefs.description}
 							onclick={() => beginFieldEdit('description')}
 						>
@@ -4454,6 +4469,15 @@
 				{#if editErrors.description}
 					<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
 						{m.event_edit_save_error()}
+					</p>
+				{/if}
+
+				<!-- #434 slice 6 — ONE visible reason for the whole header edit area,
+				     not one per pencil: an editor with the signal down already sees
+				     every pencil disabled, so this says why once. -->
+				{#if isEditor && isOffline}
+					<p data-testid="event-edit-write-unavailable" role="status" class="text-xs text-ink-2">
+						{m.write_unavailable_no_signal()}
 					</p>
 				{/if}
 

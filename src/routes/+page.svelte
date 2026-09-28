@@ -187,6 +187,10 @@
 	// #214 — the SAME #211 color scheme the row badges use, reused verbatim on
 	// the active filter chip (never a second hand-typed copy).
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
+	// #434 slice 6 — the ONE online/offline signal; season management and
+	// event creation are gated on it directly (RsvpControl/AttendanceSurface
+	// read it themselves, so the agenda row's RSVP needs no wiring here).
+	import { online } from '$lib/net/online';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -195,6 +199,7 @@
 	const collectives = $derived($collectiveState);
 	const selected = $derived($selectedCollectiveStore);
 	const pickerMode = $derived($pickerModeStore);
+	const isOffline = $derived(!$online);
 
 	// #338 — discovery is in flight from the error panel's retry. `hydrateCollectives`
 	// publishes no 'loading' state of its own on a retry (it only ever sets the
@@ -4389,7 +4394,7 @@
 	}
 
 	function beginSeasonFieldEdit(field: SeasonEditableField): void {
-		if (seasonEditPending[field]) return; // a write for this field is already in flight
+		if (seasonEditPending[field] || isOffline) return; // a write for this field is already in flight
 		clearSeasonFieldError(field);
 		seasonEditDraft = seasonFieldValue(field);
 		seasonEditingField = field;
@@ -4407,6 +4412,12 @@
 	 *  UNCHANGED draft degrades to a plain cancel: no wire call at all. */
 	function confirmSeasonFieldEdit(field: SeasonEditableField): void {
 		if (!selected || manageableSeasonId === null || seasonEditingField !== field) return;
+		// #434 slice 6 — the signal dropped while this editor was open. No write
+		// reaches the wire; degrades like an unchanged draft (see below).
+		if (isOffline) {
+			seasonEditingField = null;
+			return;
+		}
 		const before = seasonFieldValue(field);
 		const value = seasonEditDraft.trim();
 		seasonEditingField = null;
@@ -4509,7 +4520,7 @@
 		// state signal, so a racing pick must be refused by the handler itself,
 		// not merely by the attribute. See seasonManageConductorPending's doc
 		// for the duplicate/lost-remove race this closes.
-		if (seasonManageConductorPending) return;
+		if (seasonManageConductorPending || isOffline) return;
 		if (!selection.id || !selected || manageableSeasonId === null) return;
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
@@ -4548,8 +4559,9 @@
 	// position was clicked (`entry` below carries it) — and revert restores
 	// that exact position on failure, never just appends the id back at the end.
 	function onSeasonManageConductorRemove(personId: string, index: number): void {
-		// #325 — same wire-level refusal as the select above.
-		if (seasonManageConductorPending) return;
+		// #325 — same wire-level refusal as the select above. #434 slice 6 — the
+		// signal down is the same kind of refusal.
+		if (seasonManageConductorPending || isOffline) return;
 		if (!selected || manageableSeasonId === null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
@@ -5181,6 +5193,8 @@
 	 * every switch, exactly as it does for the cascade's own progress ticks.
 	 */
 	async function armSeasonManageSeasonDelete(): Promise<void> {
+		// #434 slice 6 — offline: nothing arms, nothing reads the live scope.
+		if (isOffline) return;
 		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
 		const seasonId = manageableSeasonId;
 		const generation = seasonManageDeleteGeneration;
@@ -5343,6 +5357,9 @@
 	function onSeasonManageSeasonDelete(): void {
 		if (!selected || manageableSeasonId === null) return;
 		if (seasonManageDeletePendingId !== null) return;
+		// #434 slice 6 — the signal may have dropped while this confirm sat
+		// armed; refuse the cascade rather than run it blind.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
 		// #236 — captured from `seasonManageDeleteName`, not the raw
@@ -5407,6 +5424,9 @@
 	 */
 	async function submitEventCreate(): Promise<void> {
 		if (eventCreateSubmitting) return; // #132/T2 review F1 shape — no duplicate creates in flight
+		// #434 slice 6 — offline: no write, nothing queued, nothing in the form
+		// is touched — the typed draft stays exactly as it was.
+		if (isOffline) return;
 
 		// A fresh attempt owns both the error slot and the status slot.
 		clearEventCreateError();
@@ -7116,6 +7136,7 @@
 													data-testid="season-manage-delete-season"
 													aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
 													class="ml-auto"
+													disabled={isOffline}
 													onclick={() => void armSeasonManageSeasonDelete()}
 													onkeydown={onSeasonManagePanelKeydown}
 												/>
@@ -7180,6 +7201,15 @@
 									     pattern), so the phrase renders exactly once whether the
 									     panel is open or not. -->
 
+									<!-- #434 slice 6 — ONE visible reason for every write control in
+									     this panel (edit pencils, conductor select/remove, delete):
+									     each is disabled while offline; this says why once. -->
+									{#if isOffline}
+										<p data-testid="season-manage-write-unavailable" class="text-xs text-ink-2">
+											{m.write_unavailable_no_signal()}
+										</p>
+									{/if}
+
 									<!-- name -->
 									<div>
 									{#if seasonEditingField === 'name'}
@@ -7215,7 +7245,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-name"
-												disabled={seasonEditPending.name === true}
+												disabled={seasonEditPending.name === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-lg text-ink disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('name')}
 											>
@@ -7280,7 +7310,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-start_date"
-												disabled={seasonEditPending.start_date === true}
+												disabled={seasonEditPending.start_date === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('start_date')}
 											>
@@ -7329,7 +7359,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-end_date"
-												disabled={seasonEditPending.end_date === true}
+												disabled={seasonEditPending.end_date === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('end_date')}
 											>
@@ -7411,7 +7441,7 @@
 														aria-label={m.season_conductor_remove({
 															name: seasonConductorLabel(personId)
 														})}
-														disabled={seasonManageConductorPending}
+														disabled={seasonManageConductorPending || isOffline}
 														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
 														onclick={() => onSeasonManageConductorRemove(personId, entryIndex)}
 													>
@@ -7430,7 +7460,8 @@
 											data-testid="season-manage-conductor-select"
 											aria-label={m.season_conductor_label()}
 											disabled={seasonManageConductorOptions.length === 0 ||
-												seasonManageConductorPending}
+												seasonManageConductorPending ||
+												isOffline}
 											value=""
 											onchange={(e) => {
 												const target = e.currentTarget as HTMLSelectElement;
@@ -8418,6 +8449,13 @@
 								class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
 								onkeydown={onEventCreateFormKeydown}
 							>
+								<!-- #434 slice 6 — the offline reason, VISIBLE, inside the form:
+								     submit is disabled while offline; this says why. -->
+								{#if isOffline}
+									<p data-testid="event-create-write-unavailable" class="text-xs text-ink-2">
+										{m.write_unavailable_no_signal()}
+									</p>
+								{/if}
 								<!-- #199 — the canonical, localized picker: same shape as
 								     series-create-type.
 								     #242 ruling — empty start, one explicit choice: a leading ''
@@ -8778,7 +8816,7 @@
 									<button
 										type="button"
 										data-testid="event-create-submit"
-										disabled={eventCreateSubmitting}
+										disabled={eventCreateSubmitting || isOffline}
 										aria-busy={eventCreateSubmitting}
 										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 										onclick={() => void submitEventCreate()}

@@ -718,5 +718,6 @@
 	"strokes_pen_red_aria_label": "Червоний олівець",
 	"strokes_pen_black_aria_label": "Чорний олівець",
 	"strokes_erase_aria_label": "Стерти позначки",
-	"strokes_undo_aria_label": "Скасувати"
+	"strokes_undo_aria_label": "Скасувати",
+	"write_unavailable_no_signal": "Немає сигналу — зараз нічого не можна зберегти."
 }

@@ -717,5 +717,6 @@
 	"strokes_pen_red_aria_label": "Sarkans zīmulis",
 	"strokes_pen_black_aria_label": "Melns zīmulis",
 	"strokes_erase_aria_label": "Dzēst iezīmes",
-	"strokes_undo_aria_label": "Atsaukt"
+	"strokes_undo_aria_label": "Atsaukt",
+	"write_unavailable_no_signal": "Nav signāla — pašlaik neko nevar saglabāt."
 }
