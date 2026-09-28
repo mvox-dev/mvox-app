@@ -4,6 +4,7 @@
 // and carry the localStorage Entu JWT (aud=IP-bound — see entu-config.ts).
 import { ENTU_API_BASE } from '$lib/entu-config';
 import { AuthExpiredError } from './auth-expired';
+import { readThroughGet } from './readCache';
 
 // #107 — Entu 401 (expired/revoked/IP-mismatched JWT; the local `exp` check in
 // guard.ts cannot catch those) recovery. This app is a pure client-side SPA
@@ -128,20 +129,29 @@ export function entuFetch(
 	init: RequestInit = {},
 	fetchImpl: typeof fetch = fetch
 ): Promise<Response> {
-	return fetchImpl(entuUrl(db, pathAndQuery), {
-		...init,
-		headers: {
-			Authorization: `Bearer ${token}`,
-			Accept: 'application/json',
-			...init.headers
-		}
-	}).then((res) => {
-		// Only a 401 is auth-expiry; every other status (incl. 5xx) and any
-		// network rejection stay exactly as they were — plain data-loading
-		// failures for callers to handle as before (regression guard).
+	const attemptFetch = () =>
+		fetchImpl(entuUrl(db, pathAndQuery), {
+			...init,
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: 'application/json',
+				...init.headers
+			}
+		});
+	// Only a 401 is auth-expiry; every other status (incl. 5xx) and any
+	// network rejection stay exactly as they were — plain data-loading
+	// failures for callers to handle as before (regression guard).
+	const checkAuthExpired = (res: Response): Response => {
 		if (res.status === 401) return handleAuthExpired401();
 		return res;
-	});
+	};
+	// #434 slice 1/6 — every GET routes through the read-cache (readCache.ts):
+	// online success stores a copy, a network rejection serves the last-seen
+	// copy when there is one. `checkAuthExpired` is folded in as `onResolved`
+	// rather than chained as a SEPARATE `.then()` afterwards — see
+	// readThroughGet's header on why the promise-chain SHAPE (one stage, not
+	// two) matters here.
+	return readThroughGet(db, pathAndQuery, init, attemptFetch, checkAuthExpired);
 }
 
 // (*MVOX:Josquin*)
