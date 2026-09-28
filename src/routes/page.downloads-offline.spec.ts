@@ -5,8 +5,9 @@
 //
 // CONTRACT (spike-353, settled):
 //   - Route: src/routes/downloads/+page.svelte. NO nav entry (NAV_ENTRIES
-//     pinned 6); the door is the agenda's offline branch (the one branch that
-//     RENDERS offline — see the structural pin below). Carries HOUSE_SHELL,
+//     pinned 6); the door is the agenda's offline branch (#434 slice 2: now
+//     the COLD-offline branch, nothing cached — a device that has seen the
+//     agenda renders it from the read cache instead; see the pins below). Carries HOUSE_SHELL,
 //     no #341 allowlist line: an ordinary top-flowed list.
 //   - IDENTITY OFFLINE (spike 3, the blocker): selectedCollectiveIdentityStore
 //     is NULL on every page with no network (collective discovery is a
@@ -370,10 +371,29 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		expect(NAV_ENTRIES.find((e) => e.route === '/downloads')).toBeUndefined();
 	});
 
-	it('the agenda\'s offline branch links here — the one surface that renders with no network (spike 3c)', () => {
+	it('the agenda\'s cold-offline branch still links here — the door for a device with nothing cached (spike 3c)', () => {
 		const agenda = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
 		expect(agenda).toContain('href="/downloads"');
 		expect(agenda).toContain('agenda_downloads_link');
+	});
+
+	// #434 slice 2 — the agenda is no longer "the one surface that renders with
+	// no network" by falling to its error branch: its readers (collective
+	// discovery, the database-entity lookup, seasons, events) opt in to the
+	// read cache, so a device that has seen the agenda online renders it again
+	// offline, with an "as of" line. The error branch (and its /downloads door)
+	// remains what a device with NOTHING cached renders.
+	it('#434 — the agenda\'s readers opt in to the read cache, so the agenda itself renders offline', () => {
+		const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
+		for (const reader of [
+			'src/lib/collectives/marker.ts',
+			'src/lib/collective/databaseEntity.ts',
+			'src/lib/seasons/entuSeasons.ts'
+		]) {
+			expect(src(reader).includes('CACHED_READ'), reader).toBe(true);
+		}
+		const agenda = src('src/routes/+page.svelte');
+		expect(agenda.includes('data-testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
 	});
 });
 
