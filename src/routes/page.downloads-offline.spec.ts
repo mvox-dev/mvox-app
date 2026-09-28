@@ -416,13 +416,26 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		const agenda = src('src/routes/+page.svelte');
 		expect(agenda.includes('<AsOfLine readAt={$servedFromCache} testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
 	});
+
+	// #434 slice 4 — the library left the "out-of-scope" set below: a device
+	// that has seen it online renders it again offline, with its own as-of
+	// line. With NOTHING cached it still takes routeLoad's load-error path —
+	// pinned end-to-end in src/routes/library/page.offline.spec.ts.
+	it('#434 — the library\'s own path opts in to the read cache, so the library renders offline', () => {
+		const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
+		expect(src('src/lib/library/libraryPageData.ts')).toContain('CACHED_READ');
+		const library = src('src/routes/library/+page.svelte');
+		expect(library.includes('<AsOfLine readAt={$servedFromCache} testid="library-as-of"'), 'library-as-of line').toBe(true);
+	});
 });
 
 describe('#353 — out-of-scope views fail LEGIBLY offline (the #331 pattern, one representative)', () => {
 	it('a no-network rejection classifies as load-error — a named state, never a hang or an empty-as-if-absent render', async () => {
 		// The real machine, driven with the exact rejection offline produces:
 		// fetch's TypeError. routeLoad wraps every out-of-scope page body
-		// (library/profile/roster/links) — this pins the mechanism they share.
+		// (profile/roster/links) — this pins the mechanism they share. #434
+		// slice 4: the library is no longer out of scope, but its NO-CACHE
+		// offline case is this same path (library/page.offline.spec.ts).
 		const statuses: string[] = [];
 		const machine = createRouteLoadMachine({
 			name: 'offline-representative',
@@ -436,7 +449,7 @@ describe('#353 — out-of-scope views fail LEGIBLY offline (the #331 pattern, on
 		expect(statuses).toEqual(['loading', 'load-error']);
 	});
 
-	it('the failure COPY exists in all four locales — the state has words, not a blank (library as the representative)', () => {
+	it('the failure COPY exists in all four locales — the state has words, not a blank (library\'s nothing-cached state as the representative)', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
