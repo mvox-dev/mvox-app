@@ -290,6 +290,11 @@ describe('#434 slice 5 — the event page links a part that is on the device', (
 		expectNoLinkFor(container, ABSENT_FILE);
 		// Exactly one part link on the page.
 		expect(container.querySelectorAll('[data-testid^="part-link-"]').length).toBe(1);
+		// Review finding 1 — ONE control per row: on the held row the link
+		// REPLACES the older `work-link-pdf` button (identical destination), it
+		// does not sit beside it. The row whose part is NOT on the device keeps
+		// the button, so exactly one button is left on this two-row list.
+		expect(container.querySelectorAll('[data-testid="work-link-pdf"]').length).toBe(1);
 	});
 
 	it('offline (after one online visit): the works list and the held part link are still there', async () => {
@@ -321,6 +326,9 @@ describe('#434 slice 5 — the event page links a part that is on the device', (
 		expectNoLinkFor(container, ABSENT_FILE);
 		expect(container.querySelectorAll('[data-testid^="part-link-"]').length).toBe(0);
 		expect(container.querySelectorAll('a[href^="/part/"]').length).toBe(0);
+		// Nothing held → nothing replaced: BOTH rows keep the PDF button they
+		// had before this slice.
+		expect(container.querySelectorAll('[data-testid="work-link-pdf"]').length).toBe(2);
 	});
 
 	it('offline, nothing on the device: the works list shows, and no part link (no dead link)', async () => {

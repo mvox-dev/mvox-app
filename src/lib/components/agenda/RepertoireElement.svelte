@@ -162,6 +162,19 @@
 		buttons[next].focus();
 	}
 
+	/** #434 slice 5 review finding 1 — ONE affordance per row. When this row
+	 *  renders the part LINK (caller opted in AND the bytes are on the device),
+	 *  the older `work-link-pdf` button must NOT also render: both went to the
+	 *  same `/part/<fileId>?db=<db>` destination, so a held row showed two
+	 *  controls with different labels and identical behaviour. The held case
+	 *  keeps the real `<a href>` (right-click, open-in-new-tab, works with no
+	 *  JS); every other row keeps the button unchanged. */
+	function isPartLinked(row: WorkRow): boolean {
+		if (partLinkDb === undefined || partLinkDb === '') return false;
+		if (row.fileId === '') return false;
+		return heldFileIds !== null && heldFileIds.has(row.fileId);
+	}
+
 	/** Repertoire the collective is NOT singing. Only a season editor ever sees
 	 *  these (`includeInactive`), and only so the status toggle is two-way. */
 	const INACTIVE_STATUSES = new Set<RepertoireStatus>(['retired', 'dropped']);
@@ -186,7 +199,9 @@
 		 *  per-caller opt-in, not a blanket addition to every RepertoireElement
 		 *  surface — the agenda's season-manage panel (routes/+page.svelte)
 		 *  passes nothing here and is unaffected. A row whose part is NOT on the
-		 *  device gets no link either way (no dead link offline). */
+		 *  device gets no link either way (no dead link offline). On a row that
+		 *  DOES get the link, the link REPLACES the `work-link-pdf` button (same
+		 *  destination — see isPartLinked). */
 		partLinkDb?: string;
 		/** Rights for the surface `context` names. */
 		manageRights?: ManageRightsState;
@@ -606,25 +621,40 @@
 			     (`partLinkDb`) AND the part is actually on the device. No dead
 			     link offline: a row not yet held renders no anchor at all, exactly
 			     like the badge above already tells her. -->
-			{#if partLinkDb && heldFileIds?.has(row.fileId)}
+			{#if isPartLinked(row)}
+				<!-- Review finding 1: this anchor REPLACES the button below on a
+				     held row (see isPartLinked) — same destination, so two
+				     controls would be two labels for one action. It stays a real
+				     link (href), and a plain left click still goes through
+				     `onpdfclick` so the #353/#427 `partLabel` handoff keeps
+				     refreshing a stale label on re-open. A modifier/middle click
+				     is left to the browser: that is the open-in-new-tab the
+				     button never had. -->
 				<a
 					data-testid="part-link-{row.fileId}"
 					href="/part/{row.fileId}?db={partLinkDb}"
 					class="text-xs text-ink underline"
 					aria-label={m.event_part_link_aria_label({ work: row.workName })}
+					onclick={(e) => {
+						if (!onpdfclick) return;
+						if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+						e.preventDefault();
+						onpdfclick(row.fileId);
+					}}
 				>
 					{m.event_part_link()}
 				</a>
+			{:else}
+				<button
+					type="button"
+					data-testid="work-link-pdf"
+					class="text-xs text-ink underline"
+					aria-label={m.repertoire_pdf_link_aria_label({ work: row.workName })}
+					onclick={() => onpdfclick?.(row.fileId)}
+				>
+					{m.repertoire_pdf_link()}
+				</button>
 			{/if}
-			<button
-				type="button"
-				data-testid="work-link-pdf"
-				class="text-xs text-ink underline"
-				aria-label={m.repertoire_pdf_link_aria_label({ work: row.workName })}
-				onclick={() => onpdfclick?.(row.fileId)}
-			>
-				{m.repertoire_pdf_link()}
-			</button>
 		{/if}
 		{#if row.canBorrow}
 			<a
