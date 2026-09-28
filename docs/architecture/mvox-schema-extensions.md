@@ -240,6 +240,10 @@ later slice) also sets `_sharing: domain` explicitly on each feedback
 instance at create time, as `admin_member_record` does on #265 — otherwise a
 feedback under a member still sitting at its own default `private` tier
 would silently stay private too (PO ruling, Gama, #395 body, 2026-09-28).
+Intended, not yet provisioned: the `feedback` type-def exists on no Entu
+database as of this writing — this slice adds the definition and the
+provisioning script only; the live crede run (separately authorized) is where
+`assertPropDefSharing` reads the tier back.
 
 **`_inheritrights: true`** — inheritance left natural (Mihkel, #390 ruling,
 quoted in the #395 body): rights on the member cascade to their feedback,
@@ -298,7 +302,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
-| `feedback`              | domain                            | domain (asserted, explicit) | screenshot, doodle_layer, description — nothing private on this type |
+| `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description — nothing private on this type |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only
@@ -306,7 +310,9 @@ probe against `program_item` (2026-09-06, part of landing this extension)
 found its actual type-def `_sharing` is `domain`, not `public` — so
 `schedule_item`'s type-def was created at `domain` to genuinely match its
 sibling, per the settled "identical rights posture to program_item" ruling.
-The federation-anonymous-visible-properties column from the original v4E
+A row whose type-def is not on any database yet says so in the cell (see
+`feedback`); the parenthetical comes off when a live read-back lands in the
+ledger. The federation-anonymous-visible-properties column from the original v4E
 README template is omitted above: mvox has no live federation-anonymous
 exposure surface yet, so a "public"-tier claim would be untested and
 potentially misleading here.
