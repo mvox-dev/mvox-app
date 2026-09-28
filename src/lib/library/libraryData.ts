@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
@@ -26,25 +26,24 @@ export interface Work {
  * request is the truncation signal — see `$lib/entu/listRead` for the full
  * contract and the two probe ledgers it rests on.
  */
-export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Work>> {
-	// #434 — NO CACHED_READ here yet, on purpose (review round 2, finding 2).
-	// The works list is one of the three screens the issue names as readable
-	// offline, but the issue's Done-when is "with 'as of <time>' on every such
-	// screen" — so the flag lands in slice 4, in the same change as the
-	// library's own "as of" line. Slice 1 is the cache core and no UI.
-	// Constraint for slice 4 (and for slices 2-3, which touch readers this page
-	// awaits alongside this one): no reader in a `listWorks` Promise.all gets
-	// the flag until the screen renders the "as of" text. Today every caller
-	// co-awaits an uncached read (listLendings, listAllEditions, listAllCopies,
-	// listRepertoireItems, resolveEventWorksBatch), so offline the whole settle
-	// rejects and nothing stale is ever painted; flipping one of those flags
-	// first is what would paint a stored copy with no age on it.
+export async function listWorks(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
+): Promise<ListRead<Work>> {
+	// #434 slice 4/6 — SHARED reader (the librarian's pickers, the post-write
+	// re-reads and every other caller listed below, alongside the library
+	// page's own load), so it hard-wires no cache flag (review round 2, finding
+	// 2). `opts` threads straight into the one `entuFetch` call, default off
+	// (readCache.optin-fence.spec.ts) — the library's own entry point
+	// (libraryPageData.ts) is what switches it on.
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=work&props=name,composer&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listWorks failed: ${res.status}`);
 	const body = (await res.json()) as {
@@ -103,18 +102,28 @@ function toEdition(raw: EditionRaw, workId?: string): Edition {
 	};
 }
 
-/** #321 — per-work, reachable (a well-catalogued work's editions). */
+/**
+ * #321 — per-work, reachable (a well-catalogued work's editions).
+ *
+ * #434 slice 4/6 — SHARED reader (the librarian pickers via listAllEditions
+ * do NOT call this one, but the page's own node-expansion load does, and so
+ * does any future caller), so it hard-wires no cache flag. `opts` threads
+ * straight into the one `entuFetch` call, default off — libraryPageData.ts's
+ * `loadLibraryEditions` is what switches it on.
+ */
 export async function listEditions(
 	cfg: EntuCfg,
 	workId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Edition>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=edition&_parent.reference=${encodeURIComponent(workId)}&props=name,publisher,external_link,file&limit=500`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listEditions failed: ${res.status}`);
 	const body = (await res.json()) as { count?: number; entities?: EditionRaw[] };
@@ -154,18 +163,26 @@ export interface Copy {
 	editionId: string;
 }
 
-/** #321 — per-edition, reachable (a well-catalogued edition's copies). */
+/**
+ * #321 — per-edition, reachable (a well-catalogued edition's copies).
+ *
+ * #434 slice 4/6 — SHARED reader, same reasoning as `listEditions` above.
+ * `opts` threads straight into the one `entuFetch` call, default off —
+ * libraryPageData.ts's `loadLibraryCopies` is what switches it on.
+ */
 export async function listCopies(
 	cfg: EntuCfg,
 	editionId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Copy>> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=copy&_parent.reference=${encodeURIComponent(editionId)}&props=name,copy_number&limit=500`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listCopies failed: ${res.status}`);
 	const body = (await res.json()) as {
@@ -222,19 +239,32 @@ export interface Lending {
 	returnedAt: string;
 }
 
-/** #321 — the collective-LIFETIME lending log: no natural ceiling (grows with
- *  every checkout ever made). `truncated` compares the server `count` against
- *  the RAW wire array length — BEFORE the #258 drop below — so a malformed
- *  row this function chooses not to show never fabricates a truncation the
- *  server never reported (see libraryData.truncation.spec.ts's dedicated
- *  pin). */
-export async function listLendings(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Lending>> {
+/**
+ * #321 — the collective-LIFETIME lending log: no natural ceiling (grows with
+ * every checkout ever made). `truncated` compares the server `count` against
+ * the RAW wire array length — BEFORE the #258 drop below — so a malformed
+ * row this function chooses not to show never fabricates a truncation the
+ * server never reported (see libraryData.truncation.spec.ts's dedicated
+ * pin).
+ *
+ * #434 slice 4/6 — SHARED reader: the library page's own load, the three
+ * post-write re-reads and the my-loans chain all call this, so it hard-wires
+ * no cache flag. `opts` threads straight into the one `entuFetch` call,
+ * default off — the default is what `refreshLibraryLendings`'s STORE-ONLY
+ * callers and the every-other uncached caller rely on.
+ */
+export async function listLendings(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
+): Promise<ListRead<Lending>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=lending&props=copy,member,assigned_at,assigned_until,returned_at&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listLendings failed: ${res.status}`);
 	const body = (await res.json()) as {
@@ -365,9 +395,10 @@ export async function resolveCopyNames(
 async function resolveBorrowerName(
 	cfg: EntuCfg,
 	memberId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<{ personId: string; profileName: string }> {
-	const res = await entuFetch(cfg.db, `entity/${memberId}?props=person`, cfg.token, {}, fetchImpl);
+	const res = await entuFetch(cfg.db, `entity/${memberId}?props=person`, cfg.token, {}, fetchImpl, opts);
 	if (!res.ok) throw new Error(`resolveBorrowerName: member ${memberId} lookup failed: ${res.status}`);
 	const body = (await res.json()) as { entity?: { person?: Array<{ reference: string }> } };
 	const personId = body.entity?.person?.[0]?.reference;
@@ -375,7 +406,7 @@ async function resolveBorrowerName(
 		throw new Error(`resolveBorrowerName: member ${memberId} carries no readable person reference`);
 	}
 
-	const profiles = await listMyProfiles(cfg, personId, fetchImpl);
+	const profiles = await listMyProfiles(cfg, personId, fetchImpl, opts);
 	let domain = '';
 	let pub = '';
 	for (const p of profiles) {
@@ -411,18 +442,26 @@ async function resolveBorrowerName(
  *
  * No borrowers to name → no toggle read, no records read (the same guard
  * `applyRealNames` puts on an empty row list).
+ *
+ * #434 slice 4/6 — a lent copy's row names its borrower through member ->
+ * person -> profile, overlaid by the real-names setting; SHARED reader, so
+ * `opts` threads all the way down (the member lookup, `listMyProfiles` AND
+ * `resolveRealNameByPerson`) rather than being named here — one un-threaded
+ * link and the offline row shows a different name than the online one
+ * (readCache.optin-fence.spec.ts pins the whole chain).
  */
 export async function resolveBorrowerNames(
 	cfg: EntuCfg,
 	memberIds: string[],
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<Map<string, string>> {
 	const unique = [...new Set(memberIds)];
 	if (unique.length === 0) return new Map();
 	const pairs = await Promise.all(
-		unique.map(async (id) => [id, await resolveBorrowerName(cfg, id, fetchImpl)] as const)
+		unique.map(async (id) => [id, await resolveBorrowerName(cfg, id, fetchImpl, opts)] as const)
 	);
-	const { byPerson } = await resolveRealNameByPerson(cfg, fetchImpl);
+	const { byPerson } = await resolveRealNameByPerson(cfg, fetchImpl, opts);
 	return new Map(
 		pairs.map(([id, { personId, profileName }]) => {
 			const recordName = byPerson.get(personId)?.trim();

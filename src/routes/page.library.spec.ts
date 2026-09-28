@@ -354,14 +354,32 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		expect(listEditionsMock).not.toHaveBeenCalled();
 
 		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
-		await waitFor(() => expect(listEditionsMock).toHaveBeenCalledWith(expect.anything(), 'work-1'));
+		// #434 slice 4/6 — the page now calls listEditions/listCopies through
+		// libraryPageData's loadLibraryEditions/loadLibraryCopies, which thread
+		// a fetchImpl and CACHED_READ opts alongside the (cfg, id) pair this
+		// test already asserted.
+		await waitFor(() =>
+			expect(listEditionsMock).toHaveBeenCalledWith(
+				expect.anything(),
+				'work-1',
+				expect.anything(),
+				expect.anything()
+			)
+		);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull();
 		});
 		expect(listCopiesMock).not.toHaveBeenCalled();
 
 		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
-		await waitFor(() => expect(listCopiesMock).toHaveBeenCalledWith(expect.anything(), 'edition-1'));
+		await waitFor(() =>
+			expect(listCopiesMock).toHaveBeenCalledWith(
+				expect.anything(),
+				'edition-1',
+				expect.anything(),
+				expect.anything()
+			)
+		);
 
 		// #128 — member view collapses the available copy (copy-1) into a
 		// summary line instead of an individual row; the lent copy (copy-2)

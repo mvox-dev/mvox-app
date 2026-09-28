@@ -12,12 +12,8 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
-		listWorks,
-		listEditions,
-		listCopies,
 		listAllEditions,
 		listAllCopies,
-		listLendings,
 		resolveBorrowerNames,
 		resolveCopyNames,
 		resolveCopyChains,
@@ -33,6 +29,19 @@
 		type LoanChain,
 		type EditionFile
 	} from '$lib/library/libraryData';
+	// #434 slice 4/6 — the library's OWN entry points (libraryPageData.ts):
+	// the mounted screen's cache-backed load/node-expansions, and the
+	// store-only post-write lending re-read. `listWorks`/`listEditions`/
+	// `listCopies`/`listLendings` stay SHARED readers, never called directly
+	// from this page (readCache.optin-fence.spec.ts pins the allowlist).
+	import {
+		loadLibraryListing,
+		loadLibraryEditions,
+		loadLibraryCopies,
+		refreshLibraryLendings
+	} from '$lib/library/libraryPageData';
+	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
+	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import { workLabel } from '$lib/repertoire/workLabel';
 	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
@@ -456,24 +465,32 @@
 			worksPartial = false;
 		},
 		async load({ cfg, selected: current, isCurrent }) {
-			const [worksRead, lendingsRead] = await Promise.all([listWorks(cfg), listLendings(cfg)]);
+			// #434 slice 4/6 — every load starts with no claim of staleness; a
+			// read this load falls back to the cache for notes its own readAt
+			// (readCache.ts), and the "as of" line below reads it back. Same
+			// placement rule as the agenda's loadForSelected (slice 2) and the
+			// event page's (slice 3) — FIRST, before any cached read starts.
+			resetServedFromCache();
+			const listing = await loadLibraryListing(cfg);
 			if (!isCurrent()) return;
-			const activeMemberIds = lendingsRead.items
-				.filter((l) => l.returnedAt === '')
-				.map((l) => l.memberId);
-			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			if (!isCurrent()) return;
-			works = worksRead.items;
-			worksPartial = worksRead.truncated;
-			lendings = lendingsRead.items;
-			lendingsPartial = lendingsRead.truncated;
-			borrowerNames = names;
+			works = listing.works.items;
+			worksPartial = listing.works.truncated;
+			lendings = listing.lendings.items;
+			lendingsPartial = listing.lendings.truncated;
+			borrowerNames = listing.borrowerNames;
 			status = 'ready';
 
-			// #73 — resolve current member for my-loans
-			findMyMemberId(cfg, current.personId).then((id) => {
-				if (isCurrent()) myMemberId = id;
-			});
+			// #73 — resolve current member for my-loans. #434 slice 4/6 — offline
+			// with nothing further to serve this rejects; caught here so it never
+			// escapes as an unhandled rejection or takes the (already-rendered)
+			// listing down.
+			findMyMemberId(cfg, current.personId)
+				.then((id) => {
+					if (isCurrent()) myMemberId = id;
+				})
+				.catch((e) => {
+					console.error('library: my-loans member resolution failed', e);
+				});
 
 			// #351 — ONE presence query for the whole file list, never a
 			// per-row get() (byteStore.ts heldFileIds doc — get() counts as an
@@ -522,7 +539,7 @@
 		if (!token) return;
 		editionNodeStatus = new Map(editionNodeStatus).set(workId, 'loading');
 		try {
-			const result = await listEditions({ db: current.db, token }, workId);
+			const result = await loadLibraryEditions({ db: current.db, token }, workId);
 			editionsByWork = new Map(editionsByWork).set(workId, result.items);
 			// #321 — a per-work notice contribution (accrued in a Set, cleared on
 			// every load — see routeLoad.reset above); a truncated edition read
@@ -714,7 +731,7 @@
 		if (!token) return;
 		copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'loading');
 		try {
-			const result = await listCopies({ db: current.db, token }, editionId);
+			const result = await loadLibraryCopies({ db: current.db, token }, editionId);
 			copiesByEdition = new Map(copiesByEdition).set(editionId, result.items);
 			// #321 — same per-node accrual as loadEditionsFor above.
 			const nextPartial = new Set(copiesPartialEditionIds);
@@ -1140,15 +1157,13 @@
 				memberId,
 				assignedAt: new Date().toISOString().slice(0, 10)
 			});
-			// Refresh lending data after successful checkout
-			const lendingsRead = await listLendings(cfg);
-			const activeMemberIds = lendingsRead.items
-				.filter((l) => l.returnedAt === '')
-				.map((l) => l.memberId);
-			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingsRead.items;
-			lendingsPartial = lendingsRead.truncated;
-			borrowerNames = names;
+			// Refresh lending data after successful checkout. #434 slice 4/6 —
+			// refreshLibraryLendings stores without serving: the live answer or
+			// a rejection, never a stored (pre-write) availability.
+			const refreshed = await refreshLibraryLendings(cfg);
+			lendings = refreshed.lendings.items;
+			lendingsPartial = refreshed.lendings.truncated;
+			borrowerNames = refreshed.borrowerNames;
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
 			const errNext = new Map(inlineCheckoutErrors);
@@ -1174,15 +1189,12 @@
 		const cfg = { db: current.db, token };
 		try {
 			await returnLending(cfg, lendingId);
-			// Refresh lending data after successful return
-			const lendingsRead = await listLendings(cfg);
-			const activeMemberIds = lendingsRead.items
-				.filter((l) => l.returnedAt === '')
-				.map((l) => l.memberId);
-			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingsRead.items;
-			lendingsPartial = lendingsRead.truncated;
-			borrowerNames = names;
+			// Refresh lending data after successful return. #434 slice 4/6 —
+			// refreshLibraryLendings stores without serving.
+			const refreshed = await refreshLibraryLendings(cfg);
+			lendings = refreshed.lendings.items;
+			lendingsPartial = refreshed.lendings.truncated;
+			borrowerNames = refreshed.borrowerNames;
 		} catch (e) {
 			console.error('library: return failed', e);
 			returnError = e instanceof Error ? e.message : 'Return failed';
@@ -1228,15 +1240,12 @@
 			if (result.failed.length > 0) {
 				bulkCheckoutError = `${result.failed.length} checkout(s) failed`;
 			}
-			// Refresh lending data
-			const lendingsRead = await listLendings(cfg);
-			const activeMemberIds = lendingsRead.items
-				.filter((l) => l.returnedAt === '')
-				.map((l) => l.memberId);
-			const names = await resolveBorrowerNames(cfg, activeMemberIds);
-			lendings = lendingsRead.items;
-			lendingsPartial = lendingsRead.truncated;
-			borrowerNames = names;
+			// Refresh lending data. #434 slice 4/6 — refreshLibraryLendings
+			// stores without serving.
+			const refreshed = await refreshLibraryLendings(cfg);
+			lendings = refreshed.lendings.items;
+			lendingsPartial = refreshed.lendings.truncated;
+			borrowerNames = refreshed.borrowerNames;
 			bulkCheckoutCheckedMembers = new Set();
 			bulkCheckoutDueDate = '';
 		} catch (e) {
@@ -1535,6 +1544,18 @@
 					</ul>
 				{/if}
 			</section>
+		{/if}
+
+		<!-- #434 slice 4/6 — the "as of, time" line: null once this load's own
+		     reads all came from the network (reset in loadForSelected, above);
+		     set to the OLDEST readAt among any that fell back to the read
+		     cache. The line itself is AsOfLine, shared with the agenda
+		     (slice 2) and the event page (slice 3). Gated on
+		     status === 'ready' (the ONLY status this page reaches once
+		     loadLibraryListing resolves) so it never renders alongside the
+		     loading/error/no-collective states. -->
+		{#if status === 'ready' && $servedFromCache}
+			<AsOfLine readAt={$servedFromCache} testid="library-as-of" class="mb-3" />
 		{/if}
 
 		{#if status === 'no-collective'}
