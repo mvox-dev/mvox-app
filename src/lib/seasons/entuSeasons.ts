@@ -1,4 +1,4 @@
-import { CACHED_READ, entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { EventRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
 
@@ -73,15 +73,21 @@ export function resetTypeIdCache(): void {
  * call contract (not merely renamed/shadowed): `listSeasons(cfg, fetchImpl?)`,
  * `.length === 1`, pinned in entuSeasons.database.spec.ts.
  *
- * #434 slice 2/6 — CACHED_READ: the agenda's own season read. Offline, the
- * last-seen seasons are what let the page render its rows at all.
+ * #434 slice 2/6 — `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF
+ * (review round finding 2: this reader also serves /library, slice 3's screen,
+ * which has no "as of" line yet — a flag hard-wired here would paint a stored
+ * copy as live there). The agenda's own path passes `CACHED_READ` down from
+ * `loadFullAgenda`; the same `opts` rides on to the `resolveDatabaseEntityId`
+ * underneath, because the season read is useless offline without the parent id
+ * it filters on.
  */
 export async function listSeasons(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<Season[]> {
 	const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
-	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
+	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl, opts);
 	if (!dbEntityId) return [];
 
 	// #321 class (1) — one collective's seasons, `_parent`-scoped to the single
@@ -99,7 +105,7 @@ export async function listSeasons(
 		cfg.token,
 		{},
 		fetchImpl,
-		CACHED_READ
+		opts
 	);
 	if (!res.ok) throw new Error(`listSeasons failed: ${res.status}`);
 
@@ -138,13 +144,16 @@ export async function listSeasons(
  * inherited from the series, unlike duration/location/name: the agenda labels
  * what the event itself claims to be.
  *
- * #434 slice 2/6 — CACHED_READ on both this query and the per-series lookup
- * below: the agenda's own event read.
+ * #434 slice 2/6 — `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF,
+ * threaded onto BOTH this query and the per-series lookup below (a merged row
+ * offline needs its series too). The agenda's own path passes `CACHED_READ`
+ * down from `loadFullAgenda`.
  */
 export async function listEvents(
 	cfg: EntuCfg,
 	seasonId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<AgendaItem[]> {
 	// #321 class (1) — ONE season's events, `_parent`-scoped to that season. A
 	// season spans a calendar year (`listSeasons` above), so limit=500 is about 1.4
@@ -164,7 +173,7 @@ export async function listEvents(
 		cfg.token,
 		{},
 		fetchImpl,
-		CACHED_READ
+		opts
 	);
 	if (!res.ok) throw new Error(`listEvents failed: ${res.status}`);
 
@@ -186,7 +195,7 @@ export async function listEvents(
 				cfg.token,
 				{},
 				fetchImpl,
-				CACHED_READ
+				opts
 			);
 			if (!sRes.ok) return;
 			const sBody = (await sRes.json()) as { entity?: SeriesRaw };

@@ -42,8 +42,23 @@
 //     reads only, never a write" is about the whole choreography, not just
 //     which HTTP verb carries the body.
 // So the three read SCREENS of #434 (agenda, event page, library — slices
-// 2-4) turn the flag on in their own readers, and nothing else is ever
-// silently offline-backed. Slice 1 turns it on NOWHERE (#434 review round 2,
+// 2-4) turn the flag on for their own load, and nothing else is ever silently
+// offline-backed.
+//   AND THE FLAG IS AN ARGUMENT, NEVER A LINE INSIDE A SHARED READER (#434
+// slice 2 review round, finding 2). Slice 2's first cut wrote `CACHED_READ`
+// into `checkCollectiveMarker`, `resolveDatabaseEntityId` and
+// `listSeasons`/`listEvents` — which is a blanket by another route, because a
+// reader has callers the screen knows nothing about:
+// `resolveDatabaseEntityId` alone has FIFTEEN, eight of them a GET that is a step
+// inside a write (season/event/series create, sectionActions, linkActions,
+// inviteData each resolve the id and then POST it as `_parent`), and
+// `listSeasons` also serves /library, whose own age line is slice 3's. So a
+// shared reader takes `opts: EntuFetchOptions = {}` and threads it down; the
+// screen's own entry point (`agendaData.loadFullAgenda`) and the app's one
+// identity read (`collectives/discover.ts`) are what pass `CACHED_READ`. The
+// allowlist of files that may name it at all is pinned in
+// readCache.optin-fence.spec.ts.
+// Slice 1 turns it on NOWHERE (#434 review round 2,
 // finding 2): a reader gets the flag in the same slice that ships its screen's
 // "as of <time>" line, because the issue's Done-when pairs the two ("readable
 // offline ... with 'as of <time>' on every such screen"). A flag on a reader

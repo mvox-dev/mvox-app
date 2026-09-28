@@ -134,7 +134,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		const result = await listFullAgenda(cfg, NOW);
 
 		expect(listEventsMock).toHaveBeenCalledTimes(2);
-		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'old', expect.anything(), {});
 		expect(result.upcoming.map((i) => i.id)).toEqual(['cur-next']);
 	});
 
@@ -146,7 +146,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'fila', expect.anything(), {});
 		expect(result.upcoming.map((i) => i.id)).toEqual(['sept']);
 	});
 
@@ -158,7 +158,7 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything());
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'open', expect.anything(), {});
 		expect(result.upcoming.map((i) => i.id)).toEqual(['future']);
 	});
 
@@ -415,10 +415,43 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 
 		// #161 review fix round 2 — `listSeasons` is db-scoped, not person-scoped:
 		// `listFullAgenda` no longer threads personId into the call.
+		//
+		// #434 slice 2 review round, finding 2 — the FOURTH argument is the whole
+		// point of that round: the read-cache opt-in is an argument threaded from
+		// HERE (the agenda page's own entry point), not a flag hard-wired inside
+		// `listSeasons`, which also serves /library. Asserted as the exact value,
+		// not `expect.anything()`: `{}` here would be the bug.
 		expect(listSeasonsMock).toHaveBeenCalledWith(
 			{ db: 'sampledb', token: 'jwt-live' },
-			expect.anything()
+			expect.anything(),
+			{ cache: true }
 		);
+	});
+
+	it('threads the read-cache opt-in onto the EVENT read as well (#434 slice 2)', async () => {
+		collectiveHolder.store.set({ db: 'sampledb', personId: 'person-123' });
+		setToken('jwt-live');
+		listSeasonsMock.mockResolvedValue([season('cur', '2026-09-01', '2027-06-30')]);
+		listEventsMock.mockResolvedValue([]);
+
+		await loadFullAgenda(NOW);
+
+		expect(listEventsMock).toHaveBeenCalledWith(
+			{ db: 'sampledb', token: 'jwt-live' },
+			'cur',
+			expect.anything(),
+			{ cache: true }
+		);
+	});
+
+	it('a DIRECT listFullAgenda call is uncached — retention.ts runs from the root layout on every route', async () => {
+		listSeasonsMock.mockResolvedValue([season('cur', '2026-09-01', '2027-06-30')]);
+		listEventsMock.mockResolvedValue([]);
+
+		await listFullAgenda(cfg, NOW);
+
+		expect(listSeasonsMock).toHaveBeenCalledWith(cfg, expect.anything(), {});
+		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'cur', expect.anything(), {});
 	});
 
 	// #167 — the empty shape carries the manageable* fields too (full-shape

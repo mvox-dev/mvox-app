@@ -1883,7 +1883,9 @@
 	/**
 	 * The in-flight/settled database-entity rights answers, keyed by db + person
 	 * (#167 review F3). The probe is a GET PAIR — `resolveDatabaseEntityId`
-	 * (uncached by design) then one `entity/{id}?props=_owner,_editor` — and its
+	 * (uncached by design, and #434 slice 2 keeps it that way: the read-cache
+	 * flag is threaded as an argument, and this call passes none) then one
+	 * `entity/{id}?props=_owner,_editor` — and its
 	 * trigger, "the season read shows no visible rights", is the NORMAL read for
 	 * every non-granted member (#91's rights buckets). Without this memo every
 	 * plain singer paid that pair on every agenda load and every collective
@@ -6714,6 +6716,27 @@
 										: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
 								})}
 							</p>
+							<!-- #434 slice 2/6 review round, finding 1 — the SECOND door to
+							     /downloads, and the one a warm-cache device actually reaches. #353
+							     put the only in-app link to the downloaded parts in the
+							     `collectives.status === 'error'` branch below, because that branch was
+							     what a cold offline start rendered. This slice's cache means a device
+							     that has seen the agenda renders THIS branch offline instead, and the
+							     parts are not reachable from the rows either (workRows.ts is not opted
+							     in, so the works/part rows fail with no network). Without this anchor
+							     the singer who downloaded her parts and went offline sees her agenda
+							     and can no longer open the music — the exact asset #343/#353 exist to
+							     protect. Gated on the same $servedFromCache as the as-of line above
+							     it: online, the rows' own part links are live and a second door to a
+							     subset of them would only be noise. Both doors are pinned together in
+							     page.downloads-offline.spec.ts. -->
+							<a
+								href="/downloads"
+								class="mb-3 block text-sm text-ink underline"
+								data-testid="agenda-downloads-link-cached"
+							>
+								{m.agenda_downloads_link()}
+							</a>
 						{/if}
 						<!-- #321 — the singer's own answer/attendance set may be PARTIAL (the
 						     person-lifetime rsvp/attendance reads are reachable bounds, per
@@ -8964,10 +8987,15 @@
 				>
 					{m.agenda_collectives_error_retry()}
 				</button>
-				<!-- #353 — this branch is what a cold, offline start actually
-				     renders (collective discovery is a network call; with none,
-				     `collectiveState` settles here, never 'ready') — so it is the
-				     one surface with a door to the parts already on this device. -->
+				<!-- #353 — this branch is what a COLD offline start renders: with
+				     nothing in the read cache, collective discovery still fails and
+				     `collectiveState` settles here, never 'ready'. #434 slice 2
+				     narrowed it to exactly that case — a device that HAS seen the
+				     agenda online now reaches 'ready' offline and renders the agenda
+				     branch, which carries its own /downloads door
+				     (agenda-downloads-link-cached, beside the "as of" line). Two
+				     doors, one per offline start; neither may be dropped without the
+				     other (page.downloads-offline.spec.ts pins both). -->
 				<a href="/downloads" class="text-sm text-ink underline" data-testid="agenda-downloads-link">
 					{m.agenda_downloads_link()}
 				</a>

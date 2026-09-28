@@ -4,11 +4,17 @@
 //
 // CONTRACT (team-lead shared design, fixed for all six slices):
 //   - The copy lives in the app ($lib/entu/readCache, IndexedDB
-//     'mvox-read-cache'), never the service worker. A reader opts in with
-//     CACHED_READ; slice 2 opts in the AGENDA's readers — collective discovery
-//     (marker.ts), the database-entity lookup, listSeasons, listEvents — so a
-//     cold start with no network renders the agenda it last saw instead of
-//     the `collectives.status === 'error'` branch.
+//     'mvox-read-cache'), never the service worker. A CALL SITE opts in with
+//     CACHED_READ (review round finding 2: the flag is an argument, never
+//     hard-wired inside a shared reader); slice 2 opts in the AGENDA's own path
+//     — collective discovery (discover.ts) and `loadFullAgenda` -> listSeasons /
+//     resolveDatabaseEntityId / listEvents — so a start with no network renders
+//     the agenda it last saw instead of the `collectives.status === 'error'`
+//     branch.
+//   - The agenda branch carries its OWN /downloads door
+//     (agenda-downloads-link-cached), because reaching 'ready' offline is
+//     exactly what takes the singer off the error branch that used to hold the
+//     only link to her downloaded parts (review round finding 1).
 //   - Offline = every fetch REJECTS. The page then shows the same rows it
 //     showed online, plus a visible line `data-testid="agenda-as-of"` whose
 //     text is m.agenda_as_of({ time }) — time via tallinnHHMM (the one shared
@@ -164,6 +170,11 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		const { container } = await coldStart();
 		await expectAgendaRows(container);
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
+		// The cached-branch /downloads door rides the same gate: online, the rows'
+		// own part links are live and this second door is not rendered.
+		expect(
+			container.querySelector('[data-testid="agenda-downloads-link-cached"]')
+		).toBeNull();
 	});
 
 	it('online, then every fetch rejecting: the same rows, plus "as of" the stored read time', async () => {
@@ -194,6 +205,16 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		expect(asOf.textContent).not.toContain(tallinnHHMM(LATER_SAME_DAY));
 		// Same day: the time alone, no date.
 		expect(asOf.textContent).toContain(`"time":"${tallinnHHMM(READ_AT)}"`);
+
+		// Review round finding 1 — the door to the parts already on this device,
+		// IN THE RENDERED CONTAINER (not merely present in the page source): this
+		// branch is what a warm offline start shows, and the event rows' own part
+		// links need reads that are not cached, so /downloads is the only way in.
+		const door = container.querySelector('[data-testid="agenda-downloads-link-cached"]');
+		expect(door, 'agenda-downloads-link-cached').not.toBeNull();
+		expect(door!.getAttribute('href')).toBe('/downloads');
+		// The cold-start branch is NOT what rendered — this is the other door.
+		expect(container.querySelector('[data-testid="agenda-downloads-link"]')).toBeNull();
 	});
 
 	it('a stored read from an EARLIER day carries its date as well as its time', async () => {
@@ -243,7 +264,8 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 			'resetServedFromCache()',
 			'$servedFromCache',
 			'tallinnHHMM',
-			'data-testid="agenda-as-of"'
+			'data-testid="agenda-as-of"',
+			'data-testid="agenda-downloads-link-cached"'
 		]) {
 			expect(source.includes(needle), needle).toBe(true);
 		}

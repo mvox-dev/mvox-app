@@ -1,4 +1,4 @@
-import { CACHED_READ, entuFetch, isAuthExpiredError } from '$lib/entu/request';
+import { entuFetch, isAuthExpiredError, type EntuFetchOptions } from '$lib/entu/request';
 import type { MarkerResult } from './types';
 
 // ─── The mvox-collective MARKER ──────────────────────────────────────────────
@@ -39,16 +39,21 @@ type EntuSearchResponse = {
  *
  * ONE cheap query per db: `_type.string=<marker>&limit=1`.
  *
- * #434 slice 2/6 — CACHED_READ: this is the FIRST authenticated read of a
- * cold, offline app load. Without a last-seen answer here, every db reads as
- * unreachable and `collectiveState` never leaves 'error', so the agenda never
- * gets a chance to render its own cached seasons/events underneath.
+ * #434 slice 2/6 — `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF.
+ * The marker read IS what a cold offline start needs served from the cache
+ * (without a last-seen answer every db reads as unreachable, `collectiveState`
+ * never leaves 'error', and the agenda never gets to render its own cached
+ * seasons/events underneath) — but the flag is the CALLER's, set on the app's
+ * one discovery call (discover.ts), not hard-wired in this reader. Review round
+ * finding 2: a flag inside the reader is a blanket, and readCache.ts's header
+ * ("OPT IN, NEVER BLANKET") forbids exactly that.
  */
 export async function checkCollectiveMarker(
 	db: string,
 	personId: string,
 	token: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<MarkerResult> {
 	try {
 		const res = await entuFetch(
@@ -57,7 +62,7 @@ export async function checkCollectiveMarker(
 			token,
 			{},
 			fetchImpl,
-			CACHED_READ
+			opts
 		);
 
 		if (!res.ok) {
