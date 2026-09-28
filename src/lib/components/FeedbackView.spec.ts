@@ -70,6 +70,22 @@ describe('#395 FeedbackView renders one feedback', () => {
 		expect(img?.closest(`[${REDACT_ATTR}]`)).not.toBeNull();
 	});
 
+	// REVIEW ROUND (#395, F3): StrokeSurface's box is sized only by
+	// `aspect-ratio` and its ink SVG spans all of it (`inset: 0; width: 100%;
+	// height: 100%`). A bare inline <img> takes Tailwind preflight's `max-width:
+	// 100%; height: auto` and so stops at its intrinsic width whenever that is
+	// narrower than the container — the strokes then sit offset from the pixels
+	// they annotate. The two layers must be the same rectangle.
+	it('the screenshot FILLS the stroke surface — img and its marker span both block-level, img full width', () => {
+		const { container } = mount();
+		const img = container.querySelector(`img[src="${URL_}"]`) as HTMLImageElement;
+		const classes = img.getAttribute('class')?.split(/\s+/) ?? [];
+		expect(classes).toContain('block');
+		expect(classes).toContain('w-full');
+		const marker = img.closest(`[${REDACT_ATTR}]`) as HTMLElement;
+		expect(marker.getAttribute('class')?.split(/\s+/) ?? []).toContain('block');
+	});
+
 	it('the StrokeSurface over it is readonly — no pen/erase/undo controls', () => {
 		const { container } = mount();
 		expect(container.querySelector('svg[data-testid="stroke-surface"]')).not.toBeNull();

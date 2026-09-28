@@ -24,7 +24,8 @@
 //                     — NAME RULING (#395 body, Gama 2026-09-29): page path +
 //                     submission date, never a member name or description text.
 //                     No prop-def; the type stays at three fields.
-//        description  string = the description
+//        description  string = the description — OPTIONAL on the type, so an
+//                     EMPTY one is omitted entirely (review round F3)
 //        doodle_layer string = serialize(strokes) (#394 format, strokes.ts)
 //      No `_inheritrights` (inheritance left natural, Mihkel #390).
 //   3. POST entity/{newId} — the screenshot's file metadata, the two-step
@@ -40,6 +41,9 @@
 //   FAIL LOUDLY: any failed step rejects — no partial success reported as
 //   success. A failed PUT also DELETEs the phantom screenshot property
 //   (files/index.md recovery, as editionFiles.ts does) and still rejects.
+//   Review round F2: that holds for the DATABASE as well as the promise —
+//   every failure after the entity POST landed also DELETEs the new feedback
+//   entity, so no screenshot-less (hence unviewable) record survives.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
@@ -257,6 +261,70 @@ describe('#395 createFeedback — any failed step rejects (fail loudly, no parti
 	it('a network error on the PUT rejects', async () => {
 		const fetchImpl = makeFetch({ put: new TypeError('network down') });
 		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+	});
+});
+
+// REVIEW ROUND (#395, F2): fail-loudly covers the DATABASE too. Once the entity
+// POST has landed, every later failure rolls the create back — a feedback with
+// no screenshot is exactly what loadFeedback rejects, so leaving one behind is
+// a permanently unviewable record nothing cleans up, and the member's retry
+// adds a second one under the same member.
+describe('#395 createFeedback — a failure after the create DELETEs the half-built entity', () => {
+	function entityDeletes(fetchImpl: ReturnType<typeof makeFetch>): string[] {
+		return fetchImpl.mock.calls
+			.filter(([, i]) => i?.method === 'DELETE')
+			.map(([u]) => String(u))
+			.filter((u) => u === `${API}sampledb/entity/${NEW_ID}`);
+	}
+
+	it('a non-2xx metadata POST deletes the new feedback entity', async () => {
+		const fetchImpl = makeFetch({ meta: json({ error: 'nope' }, 500) });
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		expect(entityDeletes(fetchImpl)).toEqual([`${API}sampledb/entity/${NEW_ID}`]);
+	});
+
+	it('a metadata envelope with no usable upload object deletes the new feedback entity', async () => {
+		const fetchImpl = makeFetch({ meta: json({ _id: NEW_ID, properties: { screenshot: [] } }) });
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		expect(entityDeletes(fetchImpl)).toEqual([`${API}sampledb/entity/${NEW_ID}`]);
+	});
+
+	it('a non-2xx PUT deletes the phantom property AND the new feedback entity, in that order', async () => {
+		const fetchImpl = makeFetch({ put: new Response('denied', { status: 403 }) });
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		const deletes = fetchImpl.mock.calls.filter(([, i]) => i?.method === 'DELETE').map(([u]) => String(u));
+		expect(deletes).toEqual([`${API}sampledb/property/${PROP_ID}`, `${API}sampledb/entity/${NEW_ID}`]);
+	});
+
+	it('a network error on the PUT deletes the new feedback entity too', async () => {
+		const fetchImpl = makeFetch({ put: new TypeError('network down') });
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		expect(entityDeletes(fetchImpl)).toEqual([`${API}sampledb/entity/${NEW_ID}`]);
+	});
+
+	it('a failing cleanup never masks the real error', async () => {
+		const fetchImpl = makeFetch({
+			put: new Response('denied', { status: 403 }),
+			delete: new TypeError('cleanup connection lost')
+		});
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow(/screenshot upload failed/);
+	});
+});
+
+// REVIEW ROUND (#395, F3): `description` is OPTIONAL on the type, so no words
+// means NO property — never an empty value. That absent-property shape is what
+// loadFeedback reads as ''.
+describe('#395 createFeedback — an empty description is OMITTED, not posted empty', () => {
+	it('the create body carries no `description` entry at all', async () => {
+		const fetchImpl = makeFetch();
+		await createFeedback(cfg, MEMBER_ID, { ...input(), description: '' }, fetchImpl);
+		expect(JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))).toEqual([
+			{ type: '_type', reference: TYPE_ID },
+			{ type: '_parent', reference: MEMBER_ID },
+			{ type: '_sharing', string: 'domain' },
+			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
+			{ type: 'doodle_layer', string: serialize(STROKES) }
+		]);
 	});
 });
 

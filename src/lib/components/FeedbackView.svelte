@@ -9,6 +9,15 @@
 	// replaced element a pseudo-element overlay cannot render on, redact.ts —
 	// sits inside its OWN wrapping marked span.
 	//
+	// REVIEW ROUND (#395, F3): the base must FILL StrokeSurface's box. That box
+	// is sized only by `aspect-ratio: naturalWidth / naturalHeight` and the ink
+	// SVG spans all of it (`inset: 0; width: 100%; height: 100%`), so a bare
+	// inline <img> — Tailwind preflight gives it `max-width: 100%; height:
+	// auto` — stops at its intrinsic width whenever that is narrower than the
+	// container, and every stroke lands offset from the pixels it annotates.
+	// `block w-full` on the <img> and `block` on its marker span make the two
+	// layers the same rectangle. Do not drop these classes.
+	//
 	// No route yet (#395 slice 2: no route or compose UI — screenshot capture
 	// is a later issue).
 	import type { StrokeData } from '$lib/strokes/strokes';
@@ -31,8 +40,8 @@
 </script>
 
 {#snippet base()}
-	<RedactedText>
-		<img src={screenshotUrl} alt="" />
+	<RedactedText class="block">
+		<img src={screenshotUrl} alt="" class="block w-full" />
 	</RedactedText>
 {/snippet}
 

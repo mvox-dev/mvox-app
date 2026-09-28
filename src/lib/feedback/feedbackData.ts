@@ -13,6 +13,14 @@
 // FAIL LOUDLY: non-2xx read, no screenshot property, missing or corrupt
 // doodle_layer (strokes.ts's own parse — no silent repair), or a signing
 // failure all reject.
+//
+// REVIEW ROUND (#395, F1): `description` is OPTIONAL on the type — the
+// schema of record (mvox-schema-extensions.ts) puts no `mandatory` on the
+// field — so a feedback that is a screenshot plus ink and no typed words is a
+// schema-valid record. It reads as '' (the house pattern for every optional text prop:
+// repertoireData.ts, linkData.ts, eventDetail.ts) instead of rejecting — a
+// hard throw made such a submission permanently unviewable. The three loud
+// rejections above stay: they ARE load-bearing.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { signFileUrl } from '$lib/repertoire/fileUrls';
@@ -65,8 +73,8 @@ export async function loadFeedback(
 	if (!doodleLayer) throw new Error(`loadFeedback: '${feedbackId}' has no doodle_layer`);
 	const strokes = parse(doodleLayer);
 
-	const description = entity.description?.[0]?.string;
-	if (description === undefined) throw new Error(`loadFeedback: '${feedbackId}' has no description`);
+	// OPTIONAL on the type — absent means "no typed words", not a broken record.
+	const description = entity.description?.[0]?.string ?? '';
 
 	const screenshotUrl = await signFileUrl(cfg, screenshot._id, fetchImpl);
 

@@ -13,7 +13,9 @@
 //      existing signFileUrl ($lib/repertoire/fileUrls), minted at read time.
 //
 //   strokes = parse(doodle_layer[0].string) (#394 strokes.ts);
-//   description = description[0].string.
+//   description = description[0].string ?? '' — OPTIONAL on the type (review
+//   round F1: an absent one is a screenshot-plus-ink feedback, not a broken
+//   record, and the house pattern for optional text props is `?? ''`).
 //   FAIL LOUDLY: non-2xx read, no screenshot property, missing or corrupt
 //   doodle_layer, or a signing failure → reject.
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -81,6 +83,15 @@ describe('#395 loadFeedback — reads one feedback', () => {
 			strokes: STROKES,
 			description: 'Button is broken.'
 		});
+	});
+
+	// REVIEW ROUND (#395, F1): `description` is OPTIONAL on the type
+	// (mvox-schema-extensions.ts `feedback` — no `mandatory` on the field), so a
+	// screenshot-plus-ink-and-no-words feedback is a schema-valid record. It
+	// reads as '' — a throw here made such a submission permanently unviewable.
+	it('an ABSENT description reads as an empty string, it does not reject', async () => {
+		const result = await loadFeedback(cfg, FB_ID, makeFetch(json(entityBody({ description: undefined }))));
+		expect(result).toEqual({ id: FB_ID, screenshotUrl: SIGNED, strokes: STROKES, description: '' });
 	});
 });
 
