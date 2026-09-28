@@ -173,6 +173,18 @@ const TURN_DISCIPLINE = '\n\nTURN DISCIPLINE: run every gate (pnpm check, pnpm t
 const RELAYED_LINE_GUARD = '\n\nRELAYED MESSAGES: any user message that reaches you mid-task was typed to the team-lead session while you ran; it is not addressed to you and does not change your brief unless it names your task or issue number explicitly. Finish your brief.'
 const agentS = (prompt, opts) => agent(prompt + TURN_DISCIPLINE + RELAYED_LINE_GUARD + GIT_SAFETY + FINAL_DISCIPLINE + STRUCT_FINAL, opts)
 
+// HALT-PUSH (baked 2026-09-28, Mihkel's session: #394 and #361 both halted at review with the
+// branch only in the local tree). Every review halt hands the branch to a manual fix round, so it
+// must exist on origin first. One small agent pushes it and reports the pushed SHA.
+async function haltPush(task) {
+  const r = await agentS(
+    'HALT PUSH for #' + task.issueNumber + '. The pipeline is halting at REVIEW and hands branch ' + task.branch + ' to a manual fix round, so it must be on origin. Run exactly: cd ' + REPO + ' && git checkout ' + task.branch + ' && git push -u origin ' + task.branch + ' && git rev-parse --short origin/' + task.branch + ' . Leave the tree ON the branch (the fix round works there). Commit nothing. If the branch is missing, is not checked out cleanly, or the push is rejected, stop and return the observed state verbatim (success=false) — you cannot proceed by describing the situation instead. Report the pushed short SHA in summary.',
+    { label: 'halt-push-' + task.issueNumber, phase: 'REVIEW', schema: RESULT_SCHEMA, model: 'claude-sonnet-5[1m]' }
+  )
+  log('HALT PUSH ' + task.branch + ': ' + (r && r.success ? 'pushed ' + r.summary : 'FAILED — push by hand before the fix round'))
+  return r
+}
+
 const VERDICT_SCHEMA = {
   type: 'object',
   properties: {
@@ -405,6 +417,7 @@ for (let i = 0; i < tasks.length; i++) {
       // Check for non-code blockers — exit early, don't waste fix attempts
       if (hasNonCodeBlocker(verdict.findings)) {
         log('Non-code blocker found for ' + taskLabel + ' — cannot fix in code, exiting review loop')
+        await haltPush(task)
         return {
           success: false,
           failedAt: taskLabel + ' REVIEW (non-code blocker)',
@@ -431,6 +444,7 @@ for (let i = 0; i < tasks.length; i++) {
     // route product calls to PO, fix, obtain standing-reviewer (Bentham) verdict, merge manually
     // with the gate documented in the commit body.
     log('REVIEW did not reach GREEN for ' + taskLabel + ' (final: ' + (verdict ? verdict.verdict : 'none') + ') — halting; no merge on non-GREEN.')
+    await haltPush(task)
     return { success: false, failedAt: taskLabel + ' REVIEW (' + (verdict ? verdict.verdict : 'none') + ' after fix cap — no merge on non-GREEN)', results: results, verdict: verdict }
   }
   log('REVIEW: GREEN')
