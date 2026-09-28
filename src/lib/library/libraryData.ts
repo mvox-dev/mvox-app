@@ -27,6 +27,18 @@ export interface Work {
  * contract and the two probe ledgers it rests on.
  */
 export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Work>> {
+	// #434 — NO CACHED_READ here yet, on purpose (review round 2, finding 2).
+	// The works list is one of the three screens the issue names as readable
+	// offline, but the issue's Done-when is "with 'as of <time>' on every such
+	// screen" — so the flag lands in slice 4, in the same change as the
+	// library's own "as of" line. Slice 1 is the cache core and no UI.
+	// Constraint for slice 4 (and for slices 2-3, which touch readers this page
+	// awaits alongside this one): no reader in a `listWorks` Promise.all gets
+	// the flag until the screen renders the "as of" text. Today every caller
+	// co-awaits an uncached read (listLendings, listAllEditions, listAllCopies,
+	// listRepertoireItems, resolveEventWorksBatch), so offline the whole settle
+	// rejects and nothing stale is ever painted; flipping one of those flags
+	// first is what would paint a stored copy with no age on it.
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=work&props=name,composer&limit=500',

@@ -4,6 +4,7 @@
 // and carry the localStorage Entu JWT (aud=IP-bound — see entu-config.ts).
 import { ENTU_API_BASE } from '$lib/entu-config';
 import { AuthExpiredError } from './auth-expired';
+import { readThroughGet } from './readCache';
 
 // #107 — Entu 401 (expired/revoked/IP-mismatched JWT; the local `exp` check in
 // guard.ts cannot catch those) recovery. This app is a pure client-side SPA
@@ -116,6 +117,31 @@ export function entuUrl(db: string, pathAndQuery: string): string {
 	return `${ENTU_API_BASE}${db}/${path}`;
 }
 
+export interface EntuFetchOptions {
+	/**
+	 * #434 — opt IN to the read-through cache ($lib/entu/readCache): an online
+	 * GET stores its body, and a network rejection serves the last-seen copy
+	 * instead of failing. Default OFF, and the default is load-bearing (#434
+	 * review round 1): a cache-backed read is a decision taken per reader, for a
+	 * reader a member is meant to still see offline. Off, this call keeps exactly
+	 * the promise chain it had before #434 and touches no cache at all.
+	 *
+	 * Do NOT turn it on for a GET whose body is short-lived (`property/{id}`
+	 * answers a signed file url valid for 60 seconds) or for a GET that is a STEP
+	 * inside a write (the lookup of the property `_id`s a following POST or
+	 * DELETE targets): a stale answer there is an expired url handed to the
+	 * browser or a wrong write, not a last-seen screen. readCache.ts's header
+	 * spells both out.
+	 */
+	cache?: boolean;
+}
+
+/**
+ * #434 — the opt-in read-cache flag, named so a reader's call site reads as the
+ * decision it is: `entuFetch(db, path, token, {}, fetchImpl, CACHED_READ)`.
+ */
+export const CACHED_READ: EntuFetchOptions = { cache: true };
+
 /**
  * Browser-direct authenticated fetch against a specific db. Merges the Bearer
  * token into headers; callers supply the token (from `$lib/auth/storage.getToken`)
@@ -126,22 +152,35 @@ export function entuFetch(
 	pathAndQuery: string,
 	token: string,
 	init: RequestInit = {},
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<Response> {
-	return fetchImpl(entuUrl(db, pathAndQuery), {
-		...init,
-		headers: {
-			Authorization: `Bearer ${token}`,
-			Accept: 'application/json',
-			...init.headers
-		}
-	}).then((res) => {
-		// Only a 401 is auth-expiry; every other status (incl. 5xx) and any
-		// network rejection stay exactly as they were — plain data-loading
-		// failures for callers to handle as before (regression guard).
+	const attemptFetch = () =>
+		fetchImpl(entuUrl(db, pathAndQuery), {
+			...init,
+			headers: {
+				Authorization: `Bearer ${token}`,
+				Accept: 'application/json',
+				...init.headers
+			}
+		});
+	// Only a 401 is auth-expiry; every other status (incl. 5xx) and any
+	// network rejection stay exactly as they were — plain data-loading
+	// failures for callers to handle as before (regression guard).
+	const checkAuthExpired = (res: Response): Response => {
 		if (res.status === 401) return handleAuthExpired401();
 		return res;
-	});
+	};
+	// #434 slice 1/6 — with no `cache` opt-in this is the whole function, byte
+	// for byte what it was before the slice: no cache module on the path, no
+	// stored body, and a network rejection stays a rejection.
+	if (!opts.cache) return attemptFetch().then(checkAuthExpired);
+	// Opted in: the GET routes through the read-cache (readCache.ts) — online
+	// success stores a copy, a network rejection serves the last-seen copy when
+	// there is one. `checkAuthExpired` is folded in as `onResolved` rather than
+	// chained as a SEPARATE `.then()` afterwards — see readThroughGet's header
+	// on why the promise-chain SHAPE (one stage, not two) matters here.
+	return readThroughGet(db, pathAndQuery, init, attemptFetch, checkAuthExpired);
 }
 
 // (*MVOX:Josquin*)
