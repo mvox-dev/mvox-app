@@ -12,7 +12,7 @@
 // queued; there is no retry, no backlog — a write attempted while offline
 // simply never happens, full stop (see the write-control specs across the app).
 import { derived, readable, type Readable } from 'svelte/store';
-import { readFellBackToCache } from './cacheFallback';
+import { clearReadFellBackToCache, readFellBackToCache } from './cacheFallback';
 
 /** `navigator.onLine`, read fresh — never cached across calls. `navigator` is
  *  undefined during SSR/prerender (adapter-static build), so this degrades to
@@ -31,7 +31,14 @@ function currentOnLine(): boolean {
 export const online: Readable<boolean> = readable(currentOnLine(), (set) => {
 	set(currentOnLine());
 	if (typeof window === 'undefined') return () => {};
-	const handleOnline = () => set(true);
+	// Review round 3, F1 — a reconnect is new evidence about the network, so it
+	// also clears the cache-fallback half of the write gate. Without this a
+	// mounted screen that had fallen back stayed "No signal" after the network
+	// returned, because nothing on it re-reads.
+	const handleOnline = () => {
+		set(true);
+		clearReadFellBackToCache();
+	};
 	const handleOffline = () => set(false);
 	window.addEventListener('online', handleOnline);
 	window.addEventListener('offline', handleOffline);
@@ -54,9 +61,11 @@ export const online: Readable<boolean> = readable(currentOnLine(), (set) => {
  * So the gate is the OR of both things the app knows: the browser says it is
  * offline, OR a read on this screen had to be answered out of the cache because
  * the live call could not be made ($lib/net/cacheFallback, written by
- * readCache). The second half is not a latch — a live read that gets through
- * clears it, as does the start of the next load — so a single transient
- * fallback cannot wedge writes off.
+ * readCache). The second half is not a latch. It clears when a live read gets
+ * through, when a page starts its next load (resetServedFromCache), when the
+ * browser reports it is back online, and on every navigation (the root
+ * layout's afterNavigate, review round 3) — so no route inherits another
+ * route's closed gate, and a single transient fallback cannot wedge writes off.
  */
 export const writesAvailable: Readable<boolean> = derived(
 	[online, readFellBackToCache],

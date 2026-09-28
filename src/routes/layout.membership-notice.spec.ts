@@ -27,7 +27,7 @@ const { discoverMock, gotoMock, resolveGateMock, resolveMembershipMock } = vi.ho
 	resolveMembershipMock: vi.fn()
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));

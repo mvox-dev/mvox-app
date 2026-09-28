@@ -24,6 +24,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Severs the $env/dynamic/public chain, same as readCache.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
+// Review round 3 — the root layout owns the load-boundary clear. Its
+// `afterNavigate` callbacks are captured here so a navigation can be driven.
+const { afterNavigateCallbacks, discoverMock } = vi.hoisted(() => ({
+	afterNavigateCallbacks: [] as Array<(nav: unknown) => void>,
+	discoverMock: vi.fn()
+}));
+vi.mock('$app/navigation', () => ({
+	goto: vi.fn(),
+	afterNavigate: (cb: (nav: unknown) => void) => {
+		afterNavigateCallbacks.push(cb);
+	}
+}));
+vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+
 import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from '$lib/entu/request';
 import {
 	flushReadCache,
@@ -39,6 +53,8 @@ import {
 	readFellBackToCache
 } from './cacheFallback';
 import { online, writesAvailable } from './online';
+import { cleanup, render } from '@testing-library/svelte';
+import Layout from '../../routes/+layout.svelte';
 
 const DB = 'sampledb';
 const PERSON = 'person-a';
@@ -223,6 +239,51 @@ describe('readFellBackToCache — written by the read path, not by the browser f
 		await flushReadCache();
 
 		expect(get(writesAvailable)).toBe(false);
+	});
+});
+
+// #434 slice 6 review round 3, F1 — the fallback flag is global, but its two
+// original clears (a live opted-in read, a page's resetServedFromCache) belong
+// to the three cache-opted pages. Without these, one cache-served read wedged
+// writes off under "No signal" on /roster, /links, /profile and /admin while
+// fully online, and a reconnect on a mounted page never reopened the gate.
+describe('the write gate recovers without a cache-opted page', () => {
+	it('after a fallback, the browser online event reopens writesAvailable', async () => {
+		const unsubscribe = writesAvailable.subscribe(() => undefined);
+		await storeLive(PATH);
+		await entuFetch(DB, PATH, TOKEN, {}, rejects(), CACHED_READ);
+		expect(get(writesAvailable)).toBe(false);
+
+		await goOnline();
+
+		expect(get(writesAvailable)).toBe(true);
+		unsubscribe();
+	});
+
+	it('navigating to a route with no cache opt-in starts with the gate open', async () => {
+		afterNavigateCallbacks.length = 0;
+		discoverMock.mockResolvedValue({ collectives: [], erroredDbs: [] });
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify({ entities: [] }), { status: 200 }))
+		);
+
+		// The agenda's read fell back to the cache; then she navigates to /roster,
+		// which issues no cache-opted read and never calls resetServedFromCache.
+		await storeLive(PATH);
+		await entuFetch(DB, PATH, TOKEN, {}, rejects(), CACHED_READ);
+		expect(get(writesAvailable)).toBe(false);
+
+		// The root layout is mounted across every route; mounting it is not itself
+		// the clear.
+		render(Layout);
+		expect(get(writesAvailable)).toBe(false);
+
+		expect(afterNavigateCallbacks.length, 'the root layout registers afterNavigate').toBeGreaterThan(0);
+		for (const cb of afterNavigateCallbacks) cb({ to: { url: new URL('https://app.test/roster') } });
+
+		expect(get(writesAvailable)).toBe(true);
+		cleanup();
 	});
 });
 

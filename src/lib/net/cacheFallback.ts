@@ -14,9 +14,11 @@
 // without a cycle: `readCache` (which observes) imports it, and
 // `$lib/net/online` (which gates) imports it.
 //
-// Not a latch: it is cleared the moment a live read succeeds, and again at every
-// load boundary (`resetServedFromCache`), so one transient fallback cannot wedge
-// the write gate closed for the rest of the session.
+// Not a latch: it is cleared the moment a live read succeeds, at every page load
+// boundary (`resetServedFromCache`), on the browser's `online` event
+// ($lib/net/online), and on every navigation (the root layout's afterNavigate —
+// review round 3), so one transient fallback cannot wedge the write gate closed
+// for the rest of the session, or carry into a route that never reads the cache.
 import { writable, type Readable } from 'svelte/store';
 
 const store = writable(false);

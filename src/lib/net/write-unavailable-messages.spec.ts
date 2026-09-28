@@ -10,7 +10,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-const KEY = 'write_unavailable_no_signal';
+// Review round 3 (minor): the HELD reason — shown where a draft stays on screen
+// unsaved (review F2) — is a second user-facing key and gets the same fence.
+const KEYS = ['write_unavailable_no_signal', 'write_held_no_signal'] as const;
 
 function messages(locale: string): Record<string, unknown> {
 	return JSON.parse(readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')) as Record<
@@ -19,7 +21,7 @@ function messages(locale: string): Record<string, unknown> {
 	>;
 }
 
-describe('write_unavailable_no_signal — the offline write reason (#434 slice 6)', () => {
+describe.each(KEYS)('%s — an offline write reason (#434 slice 6)', (KEY) => {
 	it.each(LOCALES)('%s carries the key as a non-empty plain sentence (no params)', (locale) => {
 		const value = messages(locale)[KEY];
 		expect(typeof value, `${locale}.${KEY}`).toBe('string');
@@ -39,4 +41,4 @@ describe('write_unavailable_no_signal — the offline write reason (#434 slice 6
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis* — #434 slice 6 RED; held key added, review round 3 *MVOX:Josquin*)

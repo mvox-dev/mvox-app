@@ -44,7 +44,7 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));

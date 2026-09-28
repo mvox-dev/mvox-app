@@ -18,7 +18,7 @@ const { discoverMock, gotoMock } = vi.hoisted(() => ({
 // Same boundary as store.spec.ts / page.agenda-error.spec.ts: severs
 // discover.ts's $env import under happy-dom, and goto can't run outside an app.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
 // #107 review F1 — entuFetch (imported below to fire a REAL 401) reaches
 // $lib/entu-config, which reads $env/dynamic/public: unavailable under
 // happy-dom outside a SvelteKit request context.

@@ -33,7 +33,7 @@ const { discoverMock, gotoMock, listFullAgendaMock, loadWorksByEventIdMock } = v
 // The same boundary the sibling layout specs use: discover.ts and goto can't
 // run under happy-dom outside an app, and entu-config reads $env/dynamic/public.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: vi.fn(),
