@@ -1,3 +1,4 @@
+import { CACHED_READ } from '$lib/entu/fetchOptions';
 import { checkCollectiveMarker } from './marker';
 import type { Collective } from './types';
 
@@ -14,6 +15,17 @@ export type DiscoverResult = {
  * dbs (the user's other Entu apps) fall out as `not-collective`.
  *
  * `personIdByDb` comes straight from `session.hydrateAuth` (the JWT accounts claim).
+ *
+ * #434 slice 2/6 — THIS is where the marker read opts in to the read cache, and
+ * it is the only place it does: `checkCollectiveMarker` itself hard-wires
+ * nothing (review round finding 2 — a flag inside a shared reader is the
+ * blanket readCache.ts's header forbids). Collective discovery is the app's ONE
+ * identity read, the first authenticated read of any load; without a last-seen
+ * answer here every db reads as unreachable offline, `collectiveState` settles
+ * on 'error', and no screen — the agenda included — ever gets to render the
+ * copies it does hold. What the cache can make stale here is a collective's
+ * display NAME and its marked-ness; the (db, personId) pairing underneath is
+ * derived locally from the JWT either way (offlineIdentity.ts).
  */
 export async function discoverCollectives(
 	personIdByDb: Record<string, string>,
@@ -22,7 +34,7 @@ export async function discoverCollectives(
 ): Promise<DiscoverResult> {
 	const dbs = Object.keys(personIdByDb);
 	const results = await Promise.all(
-		dbs.map((db) => checkCollectiveMarker(db, personIdByDb[db], token, fetchImpl))
+		dbs.map((db) => checkCollectiveMarker(db, personIdByDb[db], token, fetchImpl, CACHED_READ))
 	);
 
 	const collectives: Collective[] = [];

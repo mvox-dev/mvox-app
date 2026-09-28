@@ -1,6 +1,10 @@
 import { get } from 'svelte/store';
 import { getToken } from '$lib/auth/storage';
 import { selectedCollectiveStore } from '$lib/collectives/store';
+// From the dependency-free sibling, not `$lib/entu/request`: this module is
+// pure orchestration and must not inherit request.ts's `$env` chain
+// (fetchOptions.ts's header, and agendaData.spec.ts's own mocking note).
+import { CACHED_READ, type EntuFetchOptions } from '$lib/entu/fetchOptions';
 import { listSeasons, listEvents, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { currentSeason, manageableSeason, recentEvents } from '$lib/attendance/conductorLogic';
 import type { AgendaItem } from './types';
@@ -65,14 +69,22 @@ const NO_MANAGEABLE_SEASON = {
  *   - the duplicate listSeasons + listEvents calls that loadRecentEvents made
  *   - the N+1 entity/{id}?props=conductor requests that resolveConductorEventIds
  *     fired (conductor refs are now on the already-fetched AgendaItem/Season)
+ *
+ * #434 slice 2/6 — `opts` (`entuFetch`'s own `EntuFetchOptions`) rides down onto
+ * both reads, DEFAULT OFF. `loadFullAgenda` below — the agenda page's own entry
+ * point, and its only caller besides retention.ts — passes `CACHED_READ`.
+ * retention.ts deliberately does NOT (review round finding 2): its fan-out runs
+ * from the ROOT LAYOUT on every route, so a cache-served retention read would
+ * set `servedFromCache` and put an "as of" line over fully live agenda rows.
  */
 export async function listFullAgenda(
 	cfg: EntuCfg,
 	now: Date,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<FullAgendaResult> {
 	const nowIso = now.toISOString();
-	const seasons = await listSeasons(cfg, fetchImpl);
+	const seasons = await listSeasons(cfg, fetchImpl, opts);
 
 	// Fetch events (ALL types, #194/#202) for ALL seasons, paired with season id
 	// so we can isolate the current season's events for the Recent section
@@ -80,7 +92,7 @@ export async function listFullAgenda(
 	const paired = await Promise.all(
 		seasons.map(async (s) => ({
 			seasonId: s.id,
-			items: await listEvents(cfg, s.id, fetchImpl)
+			items: await listEvents(cfg, s.id, fetchImpl, opts)
 		}))
 	);
 
@@ -122,6 +134,11 @@ export async function listFullAgenda(
  *
  * #161 review fix round 2 — the whole resolve is db-scoped, so `personId` is NOT
  * threaded anywhere: `listSeasons` dropped it and `listFullAgenda` never read it.
+ *
+ * #434 slice 2/6 — THIS is the agenda's read-cache opt-in, and the only one for
+ * the season/event readers: the agenda page (`src/routes/+page.svelte`) is this
+ * function's sole caller, and it is the screen that renders the "as of <time>"
+ * line the flag owes its reader. Pinned in readCache.optin-fence.spec.ts.
  */
 export async function loadFullAgenda(
 	now: Date = new Date(),
@@ -131,7 +148,7 @@ export async function loadFullAgenda(
 	const token = getToken();
 	if (!collective || !token)
 		return { upcoming: [], recent: [], seasons: [], ...NO_SEASON, ...NO_MANAGEABLE_SEASON };
-	return listFullAgenda({ db: collective.db, token }, now, fetchImpl);
+	return listFullAgenda({ db: collective.db, token }, now, fetchImpl, CACHED_READ);
 }
 
 // (*MVOX:Josquin*)

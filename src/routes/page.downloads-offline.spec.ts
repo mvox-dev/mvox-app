@@ -5,15 +5,20 @@
 //
 // CONTRACT (spike-353, settled):
 //   - Route: src/routes/downloads/+page.svelte. NO nav entry (NAV_ENTRIES
-//     pinned 6); the door is the agenda's offline branch (the one branch that
-//     RENDERS offline — see the structural pin below). Carries HOUSE_SHELL,
+//     pinned 6); the door is the agenda's offline branch (#434 slice 2: now
+//     the COLD-offline branch, nothing cached — a device that has seen the
+//     agenda renders it from the read cache instead; see the pins below). Carries HOUSE_SHELL,
 //     no #341 allowlist line: an ordinary top-flowed list.
 //   - IDENTITY OFFLINE (spike 3, the blocker): selectedCollectiveIdentityStore
-//     is NULL on every page with no network (collective discovery is a
-//     network call). This page must NOT read it — it derives its identities
-//     from authStore's personIdByDb (decoded locally from the JWT by the root
-//     layout's hydrateAuth) via deriveOfflineIdentities + the persisted
-//     'mvox.selected_collective' key. Structural pins below.
+//     is null on a page with no network and NOTHING CACHED — collective
+//     discovery is a network call. (#434 slice 2 narrowed "every page" to
+//     that: discovery now opts in to the read cache, so a device that has
+//     signed in online once does get an identity offline. The rule for THIS
+//     page is unchanged and not conditional on a cache: it must NOT read that
+//     store.) It derives its identities from authStore's personIdByDb (decoded
+//     locally from the JWT by the root layout's hydrateAuth) via
+//     deriveOfflineIdentities + the persisted 'mvox.selected_collective' key.
+//     Structural pins below.
 //   - DATA: per identity, byteStore.heldFileIds(db, personId) is the source
 //     of truth for WHAT IS HELD; labelsFor(db, personId) only NAMES held ids.
 //     A held id with NO label renders an honest unnamed row (a file the view
@@ -370,10 +375,46 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		expect(NAV_ENTRIES.find((e) => e.route === '/downloads')).toBeUndefined();
 	});
 
-	it('the agenda\'s offline branch links here — the one surface that renders with no network (spike 3c)', () => {
+	// #434 slice 2 review round, finding 1 — BOTH doors, asserted together.
+	// Offline has two starts now and each renders a different branch of the
+	// agenda: a COLD device (nothing cached) falls to `collectives.status ===
+	// 'error'`, a WARM one (the read cache has the agenda) reaches 'ready' and
+	// renders the rows. Slice 2's first cut moved the singer to the second
+	// branch and left the only /downloads link behind in the first, so a device
+	// with downloaded parts could no longer open them. Pinning one door alone is
+	// what let that happen: the test passed on the branch that had become
+	// unreachable. Both, or neither is safe from the next slice.
+	it('the agenda links here from BOTH offline branches — cold (error) and warm (cached rows)', () => {
 		const agenda = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
-		expect(agenda).toContain('href="/downloads"');
 		expect(agenda).toContain('agenda_downloads_link');
+		// Cold start: the collectives-error branch's door (#353).
+		expect(agenda).toContain('data-testid="agenda-downloads-link"');
+		// Warm start: the agenda branch's own door, beside the "as of" line.
+		expect(agenda).toContain('data-testid="agenda-downloads-link-cached"');
+		// Two anchors, both to /downloads — not one testid renamed.
+		expect(agenda.match(/href="\/downloads"/g)).toHaveLength(2);
+	});
+
+	// #434 slice 2 — the agenda is no longer "the one surface that renders with
+	// no network" by falling to its error branch: collective discovery and the
+	// agenda's own season/event path opt in to the read cache, so a device that
+	// has seen the agenda online renders it again offline, with an "as of" line.
+	// The error branch (and its own /downloads door) remains what a device with
+	// NOTHING cached renders.
+	//
+	// Review round finding 2 — the opt-in lives at the two CALL SITES, not
+	// inside the shared readers (marker.ts / databaseEntity.ts / entuSeasons.ts
+	// each take it as an argument, defaulting off, because their other callers
+	// are write paths and screens with no age line). The allowlist fence over
+	// every CACHED_READ in src/ is $lib/entu/readCache.optin-fence.spec.ts.
+	it('#434 — the agenda\'s own path opts in to the read cache, so the agenda itself renders offline', () => {
+		const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
+		// Collective discovery: the app's one identity read.
+		expect(src('src/lib/collectives/discover.ts')).toContain('CACHED_READ');
+		// The agenda's own entry point, the screen that renders the age line.
+		expect(src('src/lib/agenda/agendaData.ts')).toContain('CACHED_READ');
+		const agenda = src('src/routes/+page.svelte');
+		expect(agenda.includes('data-testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
 	});
 });
 
@@ -415,6 +456,10 @@ describe('#353 — wording honesty (byteStore.ts:8), the #351 instrument applied
 		'downloads_loading',
 		'downloads_load_error',
 		'agenda_downloads_link',
+		// #434 slice 2 — the warm-offline branch shows the same copy under a
+		// second testid; the honesty fence covers the string, so it is already
+		// covered, but the as-of line it sits beside is new here.
+		'agenda_as_of',
 		// Bentham review round, finding 2 — this surface now renders
 		// repertoire_pdf_error too (the open-failure alert); the honesty fence
 		// should cover every string this route can show, not just the ones it

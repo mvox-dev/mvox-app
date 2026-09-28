@@ -12,11 +12,18 @@
 // already trusts for the person parent).
 //
 // CONTRACT (databaseEntity.spec.ts):
-//   - `resolveDatabaseEntityId(cfg, fetchImpl?)` — NO personId parameter: the
-//     resolution is db-scoped, not person-scoped. ONE GET per call
+//   - `resolveDatabaseEntityId(cfg, fetchImpl?, opts?)` — NO personId parameter:
+//     the resolution is db-scoped, not person-scoped. ONE GET per call
 //     (`_type.string=database&props=_id&limit=1` — the resolve only ever reads
 //     `_id`, never the full entity body), no module-level cache (cfg.db and the
 //     auth token both vary between calls; staleness is worse than a round-trip).
+//   - `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF, and the
+//     default is the load-bearing half (#434 slice 2 review, finding 2): EIGHT
+//     of this function's fifteen call sites resolve the id and then POST it as
+//     `_parent` — the exact "a GET that is a STEP INSIDE a write" pattern
+//     readCache.ts's header forbids the cache flag on. A caller that genuinely
+//     wants the last-seen id offline (the agenda, via `listSeasons`) passes
+//     `CACHED_READ` itself; this module hard-wires nothing.
 //   - Resolves to the database entity's own `_id`.
 //   - NEVER queries `_type.string=member` and NEVER searches for an
 //     "organization"-typed entity.
@@ -26,7 +33,7 @@
 //   - 2xx whose first entity has no `_id` → DatabaseEntityLookupError
 //     (apparent-success trap — same guard as inviteData.resolvePersonParentId).
 
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 export class DatabaseEntityLookupError extends Error {
@@ -43,17 +50,25 @@ export class DatabaseEntityLookupError extends Error {
 /**
  * Resolve the database entity id — the collective identity of `cfg.db`.
  * See module header for the pinned contract.
+ *
+ * #434 slice 2/6 — the read cache is NOT turned on here. `opts` defaults to
+ * `{}` (no cache, exactly the pre-#434 promise chain); the agenda's own path
+ * threads `CACHED_READ` down from `listFullAgenda` -> `listSeasons`, and every
+ * write path that resolves the id before POSTing it as `_parent` keeps passing
+ * nothing. Pinned in $lib/entu/readCache.optin-fence.spec.ts.
  */
 export async function resolveDatabaseEntityId(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<string | null> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=database&props=_id&limit=1',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) {
 		throw new DatabaseEntityLookupError(

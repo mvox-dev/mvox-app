@@ -110,6 +110,10 @@
 		ADD_WORK_KEY
 	} from '$lib/components/agenda/RepertoireElement.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
+	// #434 slice 2/6 — `servedFromCache` is the OLDEST readAt among entries
+	// served since `resetServedFromCache()`, reset at the top of every load
+	// (`loadForSelected`, below) so an online load never shows a stale line.
+	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -1091,6 +1095,10 @@
 		agendaLoading = true;
 		agendaError = false;
 		sessionExpired = false;
+		// #434 slice 2/6 — every load starts with NO claim of staleness; a read
+		// this load makes that has to fall back to the cache notes its own
+		// readAt (readCache.ts), and the "as of" line below reads it back.
+		resetServedFromCache();
 		// Fresh selection -> membership is unresolved again (not carried over as a
 		// stale member/non-member), and no event has a failed write yet.
 		memberId = null;
@@ -1875,7 +1883,9 @@
 	/**
 	 * The in-flight/settled database-entity rights answers, keyed by db + person
 	 * (#167 review F3). The probe is a GET PAIR — `resolveDatabaseEntityId`
-	 * (uncached by design) then one `entity/{id}?props=_owner,_editor` — and its
+	 * (uncached by design, and #434 slice 2 keeps it that way: the read-cache
+	 * flag is threaded as an argument, and this call passes none) then one
+	 * `entity/{id}?props=_owner,_editor` — and its
 	 * trigger, "the season read shows no visible rights", is the NORMAL read for
 	 * every non-granted member (#91's rights buckets). Without this memo every
 	 * plain singer paid that pair on every agenda load and every collective
@@ -6682,6 +6692,52 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #434 slice 2/6 — "as of <time>": null once this load's own reads
+						     all came from the network (reset in loadForSelected, above); set
+						     to the OLDEST readAt among any that fell back to the read cache.
+						     Same Tallinn calendar day as now → the bare time; any earlier day
+						     carries its date alongside it, so a days-old copy never reads as
+						     "this morning". Rendered above everything else in this branch, same
+						     placement rule as the partial-answer notices below. -->
+						{#if $servedFromCache}
+							{@const asOfDate = new Date($servedFromCache)}
+							{@const isToday =
+								isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
+								isoDateFormatter('Europe/Tallinn').format(new Date())}
+							{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
+							<p
+								data-testid="agenda-as-of"
+								role="status"
+								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+							>
+								{m.agenda_as_of({
+									time: isToday
+										? asOfTime
+										: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
+								})}
+							</p>
+							<!-- #434 slice 2/6 review round, finding 1 — the SECOND door to
+							     /downloads, and the one a warm-cache device actually reaches. #353
+							     put the only in-app link to the downloaded parts in the
+							     `collectives.status === 'error'` branch below, because that branch was
+							     what a cold offline start rendered. This slice's cache means a device
+							     that has seen the agenda renders THIS branch offline instead, and the
+							     parts are not reachable from the rows either (workRows.ts is not opted
+							     in, so the works/part rows fail with no network). Without this anchor
+							     the singer who downloaded her parts and went offline sees her agenda
+							     and can no longer open the music — the exact asset #343/#353 exist to
+							     protect. Gated on the same $servedFromCache as the as-of line above
+							     it: online, the rows' own part links are live and a second door to a
+							     subset of them would only be noise. Both doors are pinned together in
+							     page.downloads-offline.spec.ts. -->
+							<a
+								href="/downloads"
+								class="mb-3 block text-sm text-ink underline"
+								data-testid="agenda-downloads-link-cached"
+							>
+								{m.agenda_downloads_link()}
+							</a>
+						{/if}
 						<!-- #321 — the singer's own answer/attendance set may be PARTIAL (the
 						     person-lifetime rsvp/attendance reads are reachable bounds, per
 						     research-321 inv). Rendered here, above everything else in this
@@ -8931,10 +8987,15 @@
 				>
 					{m.agenda_collectives_error_retry()}
 				</button>
-				<!-- #353 — this branch is what a cold, offline start actually
-				     renders (collective discovery is a network call; with none,
-				     `collectiveState` settles here, never 'ready') — so it is the
-				     one surface with a door to the parts already on this device. -->
+				<!-- #353 — this branch is what a COLD offline start renders: with
+				     nothing in the read cache, collective discovery still fails and
+				     `collectiveState` settles here, never 'ready'. #434 slice 2
+				     narrowed it to exactly that case — a device that HAS seen the
+				     agenda online now reaches 'ready' offline and renders the agenda
+				     branch, which carries its own /downloads door
+				     (agenda-downloads-link-cached, beside the "as of" line). Two
+				     doors, one per offline start; neither may be dropped without the
+				     other (page.downloads-offline.spec.ts pins both). -->
 				<a href="/downloads" class="text-sm text-ink underline" data-testid="agenda-downloads-link">
 					{m.agenda_downloads_link()}
 				</a>

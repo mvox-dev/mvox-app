@@ -5,6 +5,7 @@
 import { ENTU_API_BASE } from '$lib/entu-config';
 import { AuthExpiredError } from './auth-expired';
 import { readThroughGet } from './readCache';
+import type { EntuFetchOptions } from './fetchOptions';
 
 // #107 — Entu 401 (expired/revoked/IP-mismatched JWT; the local `exp` check in
 // guard.ts cannot catch those) recovery. This app is a pure client-side SPA
@@ -117,30 +118,13 @@ export function entuUrl(db: string, pathAndQuery: string): string {
 	return `${ENTU_API_BASE}${db}/${path}`;
 }
 
-export interface EntuFetchOptions {
-	/**
-	 * #434 — opt IN to the read-through cache ($lib/entu/readCache): an online
-	 * GET stores its body, and a network rejection serves the last-seen copy
-	 * instead of failing. Default OFF, and the default is load-bearing (#434
-	 * review round 1): a cache-backed read is a decision taken per reader, for a
-	 * reader a member is meant to still see offline. Off, this call keeps exactly
-	 * the promise chain it had before #434 and touches no cache at all.
-	 *
-	 * Do NOT turn it on for a GET whose body is short-lived (`property/{id}`
-	 * answers a signed file url valid for 60 seconds) or for a GET that is a STEP
-	 * inside a write (the lookup of the property `_id`s a following POST or
-	 * DELETE targets): a stale answer there is an expired url handed to the
-	 * browser or a wrong write, not a last-seen screen. readCache.ts's header
-	 * spells both out.
-	 */
-	cache?: boolean;
-}
-
-/**
- * #434 — the opt-in read-cache flag, named so a reader's call site reads as the
- * decision it is: `entuFetch(db, path, token, {}, fetchImpl, CACHED_READ)`.
- */
-export const CACHED_READ: EntuFetchOptions = { cache: true };
+// #434 — the per-call options and the named opt-in flag live in a
+// dependency-free sibling (fetchOptions.ts), for the same reason the
+// AuthExpiredError tag does: a consumer that only needs to NAME the read-cache
+// opt-in must not inherit this module's `$lib/entu-config` ->
+// `$env/dynamic/public` chain. Re-exported so every existing
+// `from '$lib/entu/request'` call site is unaffected.
+export { CACHED_READ, type EntuFetchOptions } from './fetchOptions';
 
 /**
  * Browser-direct authenticated fetch against a specific db. Merges the Bearer
