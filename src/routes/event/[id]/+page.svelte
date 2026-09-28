@@ -16,6 +16,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
+	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	// #251 — the narrative date line's locale source is the APP language, not
 	// the device's. Same specifier LanguageSelector.svelte / routes/+page.svelte
 	// already import from.
@@ -59,8 +60,7 @@
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
-		tallinnLocalToUtcIso,
-		isoDateFormatter
+		tallinnLocalToUtcIso
 	} from '$lib/preferences/timeFormat';
 	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
 	// (was inline here only, #101 review F3; a second inline copy is exactly
@@ -3679,25 +3679,9 @@
 				<!-- #434 slice 3/6 — "as of <time>": null once this load's own reads
 				     all came from the network (reset in loadForSelected, above); set
 				     to the OLDEST readAt among any that fell back to the read cache.
-				     Same Tallinn calendar day as now → the bare time; any earlier day
-				     carries its date alongside it — the agenda's exact rule (slice 2). -->
+				     The line itself is AsOfLine, shared with the agenda (slice 2). -->
 				{#if $servedFromCache}
-					{@const asOfDate = new Date($servedFromCache)}
-					{@const isToday =
-						isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
-						isoDateFormatter('Europe/Tallinn').format(new Date())}
-					{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
-					<p
-						data-testid="event-detail-as-of"
-						role="status"
-						class="mb-1 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-					>
-						{m.agenda_as_of({
-							time: isToday
-								? asOfTime
-								: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
-						})}
-					</p>
+					<AsOfLine readAt={$servedFromCache} testid="event-detail-as-of" class="mb-1" />
 				{/if}
 				<!-- #304 — the series picker. Rights-holders only (`isEditor`, the SAME
 				     one predicate the pencils/delete all run — a plain member

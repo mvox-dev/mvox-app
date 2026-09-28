@@ -494,7 +494,18 @@ export async function flushReadCache(): Promise<void> {
 const servedFromCacheStore = writable<string | null>(null);
 export const servedFromCache: Readable<string | null> = servedFromCacheStore;
 
+// The LOAD epoch (#434 slice 3 review round 3, F1). Neither page cancels an
+// in-flight read, so a cache-served read belonging to a superseded or unmounted
+// load would otherwise stamp `servedFromCache` for the NEXT screen — "as of" over
+// rows that all came back live. Every screen calls `resetServedFromCache()`
+// before its own reads start, so the reset is the load boundary: a read captures
+// the epoch at entry, and one that finishes after a later reset still returns its
+// body (harmless to a dead caller) but stamps nothing. Mirrors
+// `factoryGeneration`, which guards the test-seam swap the same way.
+let loadEpoch = 0;
+
 export function resetServedFromCache(): void {
+	loadEpoch += 1;
 	servedFromCacheStore.set(null);
 }
 
@@ -546,8 +557,10 @@ function isGetMethod(init: RequestInit): boolean {
  *   `onResolved` as-is and never stored.
  * - GET, live call REJECTS (offline): the cached entry for this exact key is
  *   served (via `onResolved`, as a synthesized 200 JSON response) and
- *   `servedFromCache` notes its readAt. With no cached entry, the ORIGINAL
- *   rejection propagates — `onResolved` never sees it.
+ *   `servedFromCache` notes its readAt — unless `resetServedFromCache()` ran
+ *   since this read started (a newer load owns the screen: body served, no
+ *   stamp; see `loadEpoch`). With no cached entry, the ORIGINAL rejection
+ *   propagates — `onResolved` never sees it.
  *
  * STORE-ONLY (`storeOnly`, from `{ cache: 'store' }` / CACHED_READ_STORE_ONLY —
  * #434 slice 3 review round, findings 1 and 2). The store half above is
@@ -581,6 +594,8 @@ export function readThroughGet(
 	// factory it started against can neither serve a body from the dropped
 	// database nor age-stamp `servedFromCache` for whatever is on screen by then.
 	const generation = factoryGeneration;
+	// F1 (round 3) — the load this read belongs to; see `loadEpoch`.
+	const epoch = loadEpoch;
 
 	return attemptFetch().then(
 		(res) => {
@@ -619,7 +634,7 @@ export function readThroughGet(
 			if (generation !== factoryGeneration) throw err;
 			return readCacheGet(db, personId, pathAndQuery).then((cached) => {
 				if (!cached) throw err;
-				noteServedFromCache(cached.readAt);
+				if (epoch === loadEpoch) noteServedFromCache(cached.readAt);
 				return onResolved(
 					new Response(JSON.stringify(cached.body), {
 						status: 200,

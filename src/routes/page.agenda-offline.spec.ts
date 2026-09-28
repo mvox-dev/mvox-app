@@ -17,7 +17,7 @@
 //     only link to her downloaded parts (review round finding 1).
 //   - Offline = every fetch REJECTS. The page then shows the same rows it
 //     showed online, plus a visible line `data-testid="agenda-as-of"` whose
-//     text is m.agenda_as_of({ time }) — time via tallinnHHMM (the one shared
+//     text is m.last_read_as_of({ time }) — time via tallinnHHMM (the one shared
 //     instant->'HH:MM' formatter), date added only when the stored read is
 //     not from today.
 //   - `servedFromCache` is a monotone minimum: the page calls
@@ -264,7 +264,7 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		expect(asOf.textContent).toContain('agenda_as_of');
+		expect(asOf.textContent).toContain('last_read_as_of');
 		// The STORED read's time (10:05 Tallinn), not the offline load's (12:40).
 		expect(asOf.textContent).toContain(tallinnHHMM(READ_AT));
 		expect(asOf.textContent).not.toContain(tallinnHHMM(LATER_SAME_DAY));
@@ -328,8 +328,10 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		for (const needle of [
 			'resetServedFromCache()',
 			'$servedFromCache',
-			'tallinnHHMM',
-			'data-testid="agenda-as-of"',
+			// The line itself is the shared AsOfLine (slice 3 review round 3, F2),
+			// which owns tallinnHHMM and the today-vs-date rule.
+			'<AsOfLine',
+			'testid="agenda-as-of"',
 			'data-testid="agenda-downloads-link-cached"'
 		]) {
 			expect(source.includes(needle), needle).toBe(true);
@@ -338,13 +340,13 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 });
 
 describe('#434 slice 2 — the as-of copy exists in all four locales', () => {
-	it('agenda_as_of is a {time} message in en/et/lv/uk', () => {
+	it('last_read_as_of is a {time} message in en/et/lv/uk', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 			) as Record<string, string>;
-			expect(messages.agenda_as_of, locale).toBeTypeOf('string');
-			expect(messages.agenda_as_of, locale).toContain('{time}');
+			expect(messages.last_read_as_of, locale).toBeTypeOf('string');
+			expect(messages.last_read_as_of, locale).toContain('{time}');
 		}
 	});
 });

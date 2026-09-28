@@ -706,7 +706,7 @@
 	"downloads_unnamed_part": "Nimetu partii",
 	"downloads_open": "Ava",
 	"agenda_downloads_link": "Ava allalaaditud partiid",
-	"agenda_as_of": "Seisuga {time}",
+	"last_read_as_of": "Seisuga {time}",
 	"part_viewer_close": "Sulge",
 	"part_viewer_not_on_device": "See partii pole selles seadmes salvestatud.",
 	"part_viewer_page_of": "{current} / {total}",

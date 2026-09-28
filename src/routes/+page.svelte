@@ -4,6 +4,7 @@
 	import { authStore } from '$lib/auth/session';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
+	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -6726,27 +6727,11 @@
 						<!-- #434 slice 2/6 — "as of <time>": null once this load's own reads
 						     all came from the network (reset in loadForSelected, above); set
 						     to the OLDEST readAt among any that fell back to the read cache.
-						     Same Tallinn calendar day as now → the bare time; any earlier day
-						     carries its date alongside it, so a days-old copy never reads as
-						     "this morning". Rendered above everything else in this branch, same
-						     placement rule as the partial-answer notices below. -->
+						     What it says (and the today-vs-date rule) is AsOfLine's. Rendered
+						     above everything else in this branch, same placement rule as the
+						     partial-answer notices below. -->
 						{#if $servedFromCache}
-							{@const asOfDate = new Date($servedFromCache)}
-							{@const isToday =
-								isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
-								isoDateFormatter('Europe/Tallinn').format(new Date())}
-							{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
-							<p
-								data-testid="agenda-as-of"
-								role="status"
-								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-							>
-								{m.agenda_as_of({
-									time: isToday
-										? asOfTime
-										: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
-								})}
-							</p>
+							<AsOfLine readAt={$servedFromCache} testid="agenda-as-of" class="mb-3" />
 							<!-- #434 slice 2/6 review round, finding 1 — the SECOND door to
 							     /downloads, and the one a warm-cache device actually reaches. #353
 							     put the only in-app link to the downloaded parts in the
