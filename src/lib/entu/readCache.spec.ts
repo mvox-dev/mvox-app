@@ -10,7 +10,7 @@
 //     IndexedDB database 'mvox-read-cache' — NOT #343's 'mvox-byte-store'
 //     (bumping or sharing that one is a cache flush of every downloaded part).
 //   - Key [db, personId, pathAndQuery]; value { body: <parsed JSON>, readAt:
-//     ISO string }.
+//     ISO string, bytes: UTF-8 size of the JSON text } (bytes: review round 3).
 //   - personId = the session's `personIdByDb[db]` (authStore, $lib/auth/session).
 //     No personId → nothing is cached and nothing is served.
 //   - Nothing is ever cleared on logout or token expiry (#343's law).
@@ -27,8 +27,10 @@
 //     Slice 1 turns the flag on for NO reader at all (#434 review round 2,
 //     finding 2): a reader opts in in the same slice that ships its screen's
 //     "as of <time>" line, which the issue's Done-when pairs it with.
-//   - BOUNDED (#434 review round 1, finding 3): at most READ_CACHE_MAX_ENTRIES
-//     entries, oldest-`readAt` evicted first on a put over the cap, and a body
+//   - BOUNDED (#434 review round 1, finding 3; review round 3, F1): the stored
+//     bodies total at most READ_CACHE_MAX_BYTES, oldest-`readAt` evicted first
+//     on a put that takes the total over — no entry-count cap, because the
+//     offline screens fan out per entity — and a body
 //     over READ_CACHE_MAX_ENTRY_BYTES — measured in UTF-8 BYTES, not UTF-16
 //     code units (#434 review round 2, finding 3) — is not stored at all. This
 //     database shares the origin's quota with #343's self-capping (200MB) part
@@ -47,7 +49,7 @@
 //       restores the default (globalThis.indexedDB, resolved LAZILY at first
 //       use — absent under node migration scripts → caching is off, silently).
 //       `null` disables. Every call drops any memoised open connection.
-//   readCacheGet(db, personId, pathAndQuery): Promise<{ body, readAt } | undefined>
+//   readCacheGet(db, personId, pathAndQuery): Promise<{ body, readAt, bytes } | undefined>
 //   flushReadCache(): Promise<void>  — settles once every pending cache write
 //       started by entuFetch has settled (so specs can assert deterministically
 //       without entuFetch having to await the write on the hot path).
@@ -73,7 +75,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 import { CACHED_READ, entuFetch } from './request';
 import {
 	READ_CACHE_DB_NAME,
-	READ_CACHE_MAX_ENTRIES,
+	READ_CACHE_MAX_BYTES,
 	READ_CACHE_MAX_ENTRY_BYTES,
 	flushReadCache,
 	pendingCacheWriteCount,
@@ -96,6 +98,9 @@ const PATH = 'entity?_type.string=work&props=name,composer&limit=500';
 const TOKEN = 'jwt-abc';
 
 const BODY = { count: 1, entities: [{ _id: 'w1', name: [{ string: 'Bogoróditse Djévo' }] }] };
+// What the entry spends of the byte budget: its JSON text in UTF-8 bytes
+// (the 'ó'/'é' are two bytes each, so this is not `.length`).
+const BODY_BYTES = new TextEncoder().encode(JSON.stringify(BODY)).length;
 
 function signIn(personIdByDb: Record<string, string>): void {
 	authStore.set({ status: 'authenticated', personIdByDb, expMs: Date.now() + 3_600_000 });
@@ -157,7 +162,8 @@ describe('readCache — the database', () => {
 
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 		const names = (await browserIdb.databases()).map((d) => d.name);
 		expect(names).toContain('mvox-read-cache');
@@ -165,7 +171,7 @@ describe('readCache — the database', () => {
 });
 
 describe('entuFetch GET — online stores the read', () => {
-	it('an online GET stores exactly { body: <parsed JSON>, readAt: ISO now }', async () => {
+	it('an online GET stores exactly { body: <parsed JSON>, readAt: ISO now, bytes: UTF-8 size }', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date('2026-09-28T10:15:00.000Z'));
 
@@ -173,7 +179,8 @@ describe('entuFetch GET — online stores the read', () => {
 
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: '2026-09-28T10:15:00.000Z'
+			readAt: '2026-09-28T10:15:00.000Z',
+			bytes: BODY_BYTES
 		});
 	});
 
@@ -197,7 +204,8 @@ describe('entuFetch GET — online stores the read', () => {
 
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: '2026-09-28T11:00:00.000Z'
+			readAt: '2026-09-28T11:00:00.000Z',
+			bytes: BODY_BYTES
 		});
 	});
 
@@ -283,7 +291,8 @@ describe('reads only — a write never touches the cache', () => {
 			await flushReadCache();
 			expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 				body: BODY,
-				readAt: '2026-09-28T10:15:00.000Z'
+				readAt: '2026-09-28T10:15:00.000Z',
+				bytes: BODY_BYTES
 			});
 		});
 
@@ -308,7 +317,8 @@ describe('reads only — a write never touches the cache', () => {
 		await flushReadCache();
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 	});
 });
@@ -339,7 +349,8 @@ describe('partition — person and db', () => {
 		await storeOnline(OTHER_DB, PATH);
 		expect(await readCacheGet(OTHER_DB, PERSON_B, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 		expect(await readCacheGet(OTHER_DB, PERSON_A, PATH)).toBeUndefined();
 	});
@@ -385,7 +396,8 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 		endSession({ preserveProvider: false });
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 
 		signIn({ [DB]: PERSON_A });
@@ -398,7 +410,8 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 		endSession({ preserveProvider: true });
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 	});
 
@@ -407,7 +420,8 @@ describe("nothing is cleared on logout or token expiry (#343's law)", () => {
 		setReadCacheFactory(factory); // drops the memoised connection
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
 			body: BODY,
-			readAt: expect.any(String)
+			readAt: expect.any(String),
+			bytes: BODY_BYTES
 		});
 	});
 });
@@ -570,27 +584,33 @@ describe('a GET that is a STEP inside a write is never cache-served (finding 2)'
 	});
 });
 
-describe('bounded: a cap, and oldest-readAt eviction on put (finding 3)', () => {
-	/** Fills the cache to exactly the cap, one entry per minute, oldest first. */
-	async function fillToCap(baseMs: number): Promise<void> {
-		for (let i = 0; i < READ_CACHE_MAX_ENTRIES; i += 1) {
+describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; round 3)', () => {
+	// Bodies just under the per-entry ceiling, all the same encoded size (the
+	// id is fixed-width), so the budget holds exactly FITS of them.
+	const big = (i: number) => ({ _id: `e${String(i).padStart(3, '0')}`, pad: 'x'.repeat(900_000) });
+	const BIG_BYTES = new TextEncoder().encode(JSON.stringify(big(0))).length;
+	const FITS = Math.floor(READ_CACHE_MAX_BYTES / BIG_BYTES);
+
+	/** Fills the budget with exactly FITS entries, one per minute, oldest first. */
+	async function fillToBudget(baseMs: number): Promise<void> {
+		for (let i = 0; i < FITS; i += 1) {
 			vi.setSystemTime(new Date(baseMs + i * 60_000));
-			await storeOnline(DB, `entity/e${i}`);
+			await storeOnline(DB, `entity/e${i}`, big(i));
 		}
 	}
 
-	it('a put over the cap evicts the oldest-readAt entry, and only that many', async () => {
+	it('a put over the budget evicts the oldest-readAt entry, and only that many', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		const base = Date.parse('2026-09-28T00:00:00.000Z');
-		await fillToCap(base);
+		await fillToBudget(base);
 
-		expect(await readCacheEntryCount()).toBe(READ_CACHE_MAX_ENTRIES);
+		expect(await readCacheEntryCount()).toBe(FITS);
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeDefined();
 
-		vi.setSystemTime(new Date(base + READ_CACHE_MAX_ENTRIES * 60_000));
-		await storeOnline(DB, 'entity/overflow');
+		vi.setSystemTime(new Date(base + FITS * 60_000));
+		await storeOnline(DB, 'entity/overflow', big(999));
 
-		expect(await readCacheEntryCount()).toBe(READ_CACHE_MAX_ENTRIES);
+		expect(await readCacheEntryCount()).toBe(FITS);
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeUndefined();
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e1')).toBeDefined();
 		expect(await readCacheGet(DB, PERSON_A, 'entity/overflow')).toBeDefined();
@@ -599,30 +619,30 @@ describe('bounded: a cap, and oldest-readAt eviction on put (finding 3)', () => 
 	it('eviction follows readAt, not insertion order: a re-read is no longer the candidate', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		const base = Date.parse('2026-09-28T00:00:00.000Z');
-		await fillToCap(base);
+		await fillToBudget(base);
 
 		// e0, the oldest, is read online again — now the freshest entry there is.
 		vi.setSystemTime(new Date(base + 10 * 60 * 60_000));
-		await storeOnline(DB, 'entity/e0');
+		await storeOnline(DB, 'entity/e0', big(0));
 
 		vi.setSystemTime(new Date(base + 11 * 60 * 60_000));
-		await storeOnline(DB, 'entity/overflow');
+		await storeOnline(DB, 'entity/overflow', big(999));
 
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeDefined();
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e1')).toBeUndefined();
-		expect(await readCacheEntryCount()).toBe(READ_CACHE_MAX_ENTRIES);
+		expect(await readCacheEntryCount()).toBe(FITS);
 	});
 
-	it('the cap counts entries across persons and dbs — it is the origin quota it protects', async () => {
+	it('the budget counts bytes across persons and dbs — it is the origin quota it protects', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		const base = Date.parse('2026-09-28T00:00:00.000Z');
-		await fillToCap(base);
+		await fillToBudget(base);
 
 		signIn({ [OTHER_DB]: PERSON_B });
 		vi.setSystemTime(new Date(base + 10 * 60 * 60_000));
-		await storeOnline(OTHER_DB, 'entity/other-person');
+		await storeOnline(OTHER_DB, 'entity/other-person', big(999));
 
-		expect(await readCacheEntryCount()).toBe(READ_CACHE_MAX_ENTRIES);
+		expect(await readCacheEntryCount()).toBe(FITS);
 		expect(await readCacheGet(OTHER_DB, PERSON_B, 'entity/other-person')).toBeDefined();
 		expect(await readCacheGet(DB, PERSON_A, 'entity/e0')).toBeUndefined();
 	});
@@ -652,6 +672,82 @@ describe('bounded: a cap, and oldest-readAt eviction on put (finding 3)', () => 
 		await flushReadCache();
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
 		expect(await readCacheEntryCount()).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// #434 review round 3 (Bentham, F1) — the budget is BYTES, not entries. The
+// three offline screens fan out per ENTITY (resolveCopyChains: one GET per copy
+// and per edition; resolveBorrowerName: one per member plus a profiles read;
+// loadWorksByEventId: ~N+4 for N events; listFullAgenda: one listEvents per
+// season), so a real library + agenda load is well past 64 paths. A 64-entry
+// cap evicted a screen's own earliest reads mid-load, and offline its
+// Promise.all then rejected instead of showing last-seen data.
+// ---------------------------------------------------------------------------
+
+describe('bounded by bytes: a real screen fan-out survives, the budget evicts oldest-first (round 3)', () => {
+	/** A kilobyte-class entity body, the size real Entu reads come back at. */
+	function entityBody(id: string, extra: string): unknown {
+		return {
+			_id: id,
+			name: [{ string: `${extra} ${id}` }],
+			_parent: [{ reference: `parent-${id}`, string: 'Kammerkoor' }],
+			notes: [{ string: 'Märkus: '.repeat(40) }]
+		};
+	}
+
+	/** The library + agenda fan-out: lists, then one read per copy, edition,
+	 *  member and profile, then one listEvents per season and per-event works. */
+	function libraryShapedPaths(): string[] {
+		const paths = [
+			'entity?_type.string=work&props=name,composer&limit=500',
+			'entity?_type.string=edition&props=name,_parent,publisher&limit=500',
+			'entity?_type.string=copy&props=_parent,label&limit=500',
+			'entity?_type.string=lending&props=copy,member,renewed_at&limit=500'
+		];
+		for (let i = 0; i < 25; i += 1) paths.push(`entity/copy-${i}?props=_parent,label`);
+		for (let i = 0; i < 20; i += 1) paths.push(`entity/edition-${i}?props=name,_parent`);
+		for (let i = 0; i < 20; i += 1) paths.push(`entity/member-${i}?props=person,name`);
+		for (let i = 0; i < 20; i += 1) paths.push(`entity?_type.string=profile&_parent.reference=person-${i}`);
+		for (let i = 0; i < 8; i += 1) paths.push(`entity?_type.string=event&_parent.reference=season-${i}&limit=500`);
+		for (let i = 0; i < 30; i += 1) paths.push(`entity?_type.string=program_item&_parent.reference=event-${i}`);
+		return paths;
+	}
+
+	it('a library + agenda load well past 64 paths keeps every read — nothing is evicted under the budget', async () => {
+		const paths = libraryShapedPaths();
+		expect(paths.length).toBeGreaterThan(64);
+
+		for (const [i, path] of paths.entries()) await storeOnline(DB, path, entityBody(`e${i}`, 'Bogoróditse'));
+
+		expect(await readCacheEntryCount()).toBe(paths.length);
+		for (const path of paths) {
+			expect(await readCacheGet(DB, PERSON_A, path), `evicted: ${path}`).toBeDefined();
+		}
+	});
+
+	it('over READ_CACHE_MAX_BYTES, the oldest-readAt entries go first until the total fits', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		const base = Date.parse('2026-09-28T00:00:00.000Z');
+		// Bodies just under the per-entry ceiling, so the budget is crossed in a
+		// few dozen puts.
+		const big = (i: number) => ({ _id: `e${String(i).padStart(3, '0')}`, pad: 'x'.repeat(900_000) });
+		const bytesEach = new TextEncoder().encode(JSON.stringify(big(0))).length;
+		const fits = Math.floor(READ_CACHE_MAX_BYTES / bytesEach);
+		const total = fits + 3;
+
+		for (let i = 0; i < total; i += 1) {
+			vi.setSystemTime(new Date(base + i * 60_000));
+			await storeOnline(DB, `entity/e${i}`, big(i));
+		}
+
+		expect(await readCacheEntryCount()).toBe(fits);
+		for (let i = 0; i < 3; i += 1) {
+			expect(await readCacheGet(DB, PERSON_A, `entity/e${i}`), `e${i} should be evicted`).toBeUndefined();
+		}
+		for (let i = 3; i < total; i += 1) {
+			expect(await readCacheGet(DB, PERSON_A, `entity/e${i}`), `e${i} should be kept`).toBeDefined();
+		}
 	});
 });
 

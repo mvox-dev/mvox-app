@@ -8,7 +8,7 @@
 // for a change that has nothing to do with parts).
 //
 // Key: [db, personId, pathAndQuery]. Value: { body: <parsed JSON>, readAt: ISO
-// string }. `personId` is the session's `personIdByDb[db]` (`$lib/auth/session`
+// string, bytes: UTF-8 size of the body's JSON text }. `personId` is the session's `personIdByDb[db]` (`$lib/auth/session`
 // `authStore`) — with no personId, nothing is cached and nothing is served
 // (mirrors #343's null-identity rule for the byte store).
 //
@@ -51,14 +51,23 @@
 // live — so when a screen loads several readers in one Promise.all, they all
 // stay uncached until that screen renders the age.
 //
-// BOUNDED (#434 review round 1, finding 3). This database shares the origin's
-// storage quota with #343's part byte store, which caps itself at 200MB — an
-// unbounded read cache could push the origin to quota and cost the downloaded
-// parts this epic exists to protect. Two limits, both here and nowhere else:
-// at most READ_CACHE_MAX_ENTRIES entries (a put over the cap evicts
-// oldest-readAt first, i.e. least-recently-read-online), and a single body
-// over READ_CACHE_MAX_ENTRY_BYTES is not stored at all. Worst case is the
-// product of the two, and that number is the point — see the constants.
+// BOUNDED (#434 review round 1, finding 3; review round 3, F1). This database
+// shares the origin's storage quota with #343's part byte store, which caps
+// itself at 200MB — an unbounded read cache could push the origin to quota and
+// cost the downloaded parts this epic exists to protect. The quota is spent in
+// BYTES, so the budget is bytes too, and it is the only global limit: the
+// stored bodies total at most READ_CACHE_MAX_BYTES (a put that takes the total
+// over evicts oldest-readAt first, i.e. least-recently-read-online), and a
+// single body over READ_CACHE_MAX_ENTRY_BYTES is not stored at all.
+// There is deliberately NO entry-count cap. The three offline screens fan out
+// per ENTITY, not per screen — libraryData.ts's resolveCopyChains reads one
+// GET per copy and one per edition, resolveBorrowerName one per member plus a
+// profiles read, workRows.ts's loadWorksByEventId ~N+4 for N events, and
+// agendaData.ts's listFullAgenda one listEvents per season. A library with 25
+// lendings is ~90 paths before the agenda adds its own. Each screen awaits its
+// reads in one Promise.all, so an evicted key fails the whole screen offline;
+// a count cap sized for "a few dozen paths" (the first cut's 64) evicted a
+// screen's own earliest reads while it was still loading.
 // Age is NOT a limit: the issue's own answer to a stale copy is "as of
 // <time>" on the screen, so an old entry is shown with its age, not dropped.
 //
@@ -78,40 +87,46 @@ import { get, writable, type Readable } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
 
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
-const DB_VERSION = 1;
+// Version 2 (#434 review round 3): entries carry `bytes`, indexed with
+// `readAt`. A version-1 store (never shipped: slice 1 turns the cache on for no
+// reader) is dropped and recreated rather than migrated.
+const DB_VERSION = 2;
 const STORE_NAME = 'reads';
-// Ordered index over `readAt` — how the cap pass finds the oldest entries
-// without reading a single body (`openKeyCursor` yields keys only).
-const READ_AT_INDEX = 'readAt';
+// Ordered index over [readAt, bytes] — how the budget pass finds the oldest
+// entries AND their sizes without reading a single body (`openKeyCursor`
+// yields index keys only).
+const READ_AT_BYTES_INDEX = 'readAtBytes';
 
 /**
- * #434 review round 1, finding 3 — the entry cap. Generous against what the
- * three offline screens read (an agenda load, an event page and the library
- * list are a few dozen distinct paths per person, per db), tight enough that
- * the worst case stays a fraction of the byte store's own 200MB: 64 entries x
- * 1MB = 64MB, and real bodies are kilobytes. A put that takes the store over
- * the cap evicts oldest-`readAt` first.
+ * #434 review round 3, F1 — the total budget, in UTF-8 BYTES of the stored
+ * bodies' JSON text, across every person and db (it protects the origin quota,
+ * which they all share). 32MB is a sixth of #343's 200MB byte store. Real
+ * bodies are kilobytes, so the per-entity fan-out of the three offline screens
+ * (resolveCopyChains, resolveBorrowerName, loadWorksByEventId, listEvents per
+ * season — see BOUNDED above) is thousands of entries under it. A put that
+ * takes the total over evicts oldest-`readAt` first until it fits.
  */
-export const READ_CACHE_MAX_ENTRIES = 64;
+export const READ_CACHE_MAX_BYTES = 32 * 1024 * 1024;
 
 /**
  * #434 review round 1, finding 3 — the per-entry ceiling, in BYTES of the
- * UTF-8 encoded JSON text (#434 review round 2, finding 3: the name says bytes
- * and the worst case above is arithmetic in bytes, so the measurement is bytes
- * too — `text.length` counts UTF-16 code units, which for non-ASCII names
- * undercounts what the entry actually costs the origin quota).
- * A body this large is not one of the three read screens
+ * UTF-8 encoded JSON text (#434 review round 2, finding 3: `text.length`
+ * counts UTF-16 code units, which for non-ASCII names undercounts what the
+ * entry actually costs the origin quota). Kept beside READ_CACHE_MAX_BYTES
+ * (review round 3): a body this large is not one of the three read screens
  * (the library's 500-work list is ~100KB), and one of them must not be able to
- * spend the whole cache budget by itself. Over the ceiling the read is simply
+ * evict a whole screen's worth of small reads by itself. Over the ceiling the read is simply
  * not cached — the live response is returned untouched, and that path is then
  * not available offline.
  */
 export const READ_CACHE_MAX_ENTRY_BYTES = 1024 * 1024;
 
-/** What one cache entry holds — nothing more. */
+/** What one cache entry holds — nothing more. `bytes` is the UTF-8 size of
+ * the body's JSON text, what the entry spends of READ_CACHE_MAX_BYTES. */
 export interface ReadCacheEntry {
 	body: unknown;
 	readAt: string;
+	bytes: number;
 }
 
 // JSON-encoded triple, not a delimited string — same reasoning as
@@ -142,12 +157,9 @@ function openDb(factory: IDBFactory): Promise<IDBDatabase> {
 		const req = factory.open(READ_CACHE_DB_NAME, DB_VERSION);
 		req.onupgradeneeded = () => {
 			const database = req.result;
-			const store = database.objectStoreNames.contains(STORE_NAME)
-				? req.transaction?.objectStore(STORE_NAME)
-				: database.createObjectStore(STORE_NAME);
-			if (store && !store.indexNames.contains(READ_AT_INDEX)) {
-				store.createIndex(READ_AT_INDEX, 'readAt');
-			}
+			if (database.objectStoreNames.contains(STORE_NAME)) database.deleteObjectStore(STORE_NAME);
+			const store = database.createObjectStore(STORE_NAME);
+			store.createIndex(READ_AT_BYTES_INDEX, ['readAt', 'bytes']);
 		};
 		req.onsuccess = () => resolve(req.result);
 		req.onerror = () => reject(req.error);
@@ -215,8 +227,7 @@ export async function readCacheGet(
 
 /**
  * How many entries the cache currently holds (0 when there is no database, or
- * on any failure). The cap's own observable — `READ_CACHE_MAX_ENTRIES` is a
- * promise about this number.
+ * on any failure).
  */
 export async function readCacheEntryCount(): Promise<number> {
 	const openPromise = getDb();
@@ -230,33 +241,41 @@ export async function readCacheEntryCount(): Promise<number> {
 	}
 }
 
-/**
- * The cap pass (#434 review round 1, finding 3), running in the SAME
- * transaction as the put that triggered it: count what the store now holds and,
- * while that is over `READ_CACHE_MAX_ENTRIES`, delete the oldest-`readAt`
- * entries. Keys only — an eviction never reads a body, and never touches a
- * `readAt` either (a cap pass that restamped what it walked past would invent
- * recency it did not observe).
- */
-function evictOverflow(store: IDBObjectStore): Promise<void> {
-	return reqToPromise(store.count()).then((count) => {
-		let over = count - READ_CACHE_MAX_ENTRIES;
-		if (over <= 0) return undefined;
-		return new Promise<void>((resolve, reject) => {
-			const cursorReq = store.index(READ_AT_INDEX).openKeyCursor();
-			cursorReq.onsuccess = () => {
-				const cursor = cursorReq.result;
-				if (!cursor || over <= 0) {
-					resolve();
-					return;
-				}
-				store.delete(cursor.primaryKey);
-				over -= 1;
-				cursor.continue();
-			};
-			cursorReq.onerror = () => reject(cursorReq.error);
-		});
+/** Every [readAt, bytes] index key, oldest first — keys only, no body read. */
+function sizesOldestFirst(store: IDBObjectStore): Promise<{ key: IDBValidKey; bytes: number }[]> {
+	return new Promise((resolve, reject) => {
+		const out: { key: IDBValidKey; bytes: number }[] = [];
+		const cursorReq = store.index(READ_AT_BYTES_INDEX).openKeyCursor();
+		cursorReq.onsuccess = () => {
+			const cursor = cursorReq.result;
+			if (!cursor) {
+				resolve(out);
+				return;
+			}
+			const [, bytes] = cursor.key as [string, number];
+			out.push({ key: cursor.primaryKey, bytes });
+			cursor.continue();
+		};
+		cursorReq.onerror = () => reject(cursorReq.error);
 	});
+}
+
+/**
+ * The budget pass (#434 review round 3, F1), running in the SAME transaction
+ * as the put that triggered it: sum the stored bytes and, while the total is
+ * over `READ_CACHE_MAX_BYTES`, delete the oldest-`readAt` entries. Index keys
+ * only — an eviction never reads a body, and never touches a `readAt` either
+ * (a pass that restamped what it walked past would invent recency it did not
+ * observe).
+ */
+async function evictOverBudget(store: IDBObjectStore): Promise<void> {
+	const sizes = await sizesOldestFirst(store);
+	let total = sizes.reduce((sum, s) => sum + s.bytes, 0);
+	for (const { key, bytes } of sizes) {
+		if (total <= READ_CACHE_MAX_BYTES) break;
+		store.delete(key);
+		total -= bytes;
+	}
 }
 
 async function readCachePut(
@@ -272,7 +291,7 @@ async function readCachePut(
 	const store = tx.objectStore(STORE_NAME);
 	const req = store.put(entry, compositeKey(db, personId, pathAndQuery));
 	await reqToPromise(req);
-	await evictOverflow(store);
+	await evictOverBudget(store);
 }
 
 // Every write `entuFetch` starts is fire-and-forget on its hot path (the live
@@ -402,15 +421,16 @@ export function readThroughGet(
 						.text()
 						.then((text) => {
 							// The size check reads the TEXT, not the parsed body: the
-							// number the cap is spent in is the response's own size, and
+							// number the ceiling is spent in is the response's own size, and
 							// an over-ceiling body is then never even parsed. Encoded
 							// BYTES, not `text.length`'s UTF-16 code units — the ceiling
 							// is a promise about the origin's storage quota, and a
 							// Cyrillic or Estonian body costs more bytes than it has
 							// characters.
-							if (encodedByteLength(text) > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
+							const bytes = encodedByteLength(text);
+							if (bytes > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
 							const body = JSON.parse(text) as unknown;
-							return readCachePut(db, personId, pathAndQuery, { body, readAt });
+							return readCachePut(db, personId, pathAndQuery, { body, readAt, bytes });
 						})
 						.catch(() => undefined)
 				);
