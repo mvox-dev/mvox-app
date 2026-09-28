@@ -24,10 +24,15 @@
 //     file url (`property/{id}`, entu-www `src/api/files/index.md`) and the
 //     lookup step INSIDE a write choreography (replaceProperty, linkActions,
 //     eventSeriesActions read the property `_id`s their POST/DELETE targets).
+//     Slice 1 turns the flag on for NO reader at all (#434 review round 2,
+//     finding 2): a reader opts in in the same slice that ships its screen's
+//     "as of <time>" line, which the issue's Done-when pairs it with.
 //   - BOUNDED (#434 review round 1, finding 3): at most READ_CACHE_MAX_ENTRIES
 //     entries, oldest-`readAt` evicted first on a put over the cap, and a body
-//     over READ_CACHE_MAX_ENTRY_BYTES is not stored at all. This database shares
-//     the origin's quota with #343's self-capping (200MB) part byte store.
+//     over READ_CACHE_MAX_ENTRY_BYTES — measured in UTF-8 BYTES, not UTF-16
+//     code units (#434 review round 2, finding 3) — is not stored at all. This
+//     database shares the origin's quota with #343's self-capping (200MB) part
+//     byte store.
 //   - Offline = the network call THROWS (fetch rejects). Then the cached entry
 //     for the same key is served; with none, the ORIGINAL error is rethrown.
 //     A resolved response of any status (401, 500) is not "offline".
@@ -46,6 +51,9 @@
 //   flushReadCache(): Promise<void>  — settles once every pending cache write
 //       started by entuFetch has settled (so specs can assert deterministically
 //       without entuFetch having to await the write on the hot path).
+//   pendingCacheWriteCount(): number — writes still in flight; returns to 0 on
+//       its own, with no flush (#434 review round 2, finding 1: the app never
+//       calls flushReadCache, so the list must not be append-only).
 //   servedFromCache: Readable<string | null>
 //   resetServedFromCache(): void
 // and `entuFetch` ($lib/entu/request) routes its GET path through it.
@@ -68,6 +76,7 @@ import {
 	READ_CACHE_MAX_ENTRIES,
 	READ_CACHE_MAX_ENTRY_BYTES,
 	flushReadCache,
+	pendingCacheWriteCount,
 	readCacheEntryCount,
 	readCacheGet,
 	resetServedFromCache,
@@ -424,8 +433,13 @@ describe('a cache failure never breaks an online read', () => {
 	});
 });
 
-describe('integration — a real reader through entuFetch (library works list)', () => {
-	it('listWorks, online then offline, returns the same works from the cache', async () => {
+// An opted-in read of a REAL screen's path and wire body, end to end through
+// `entuFetch`. Deliberately not through `listWorks` (#434 review round 2,
+// finding 2): no reader carries CACHED_READ in slice 1 — a reader gets the flag
+// in the slice that also ships its screen's "as of <time>" line, so this pins
+// the mechanism the library's own reader will opt into in slice 4.
+describe('integration — an opted-in read of a real screen path (library works list)', () => {
+	it('online then offline returns byte-identical body from the cache', async () => {
 		const wire = {
 			count: 1,
 			entities: [
@@ -434,15 +448,24 @@ describe('integration — a real reader through entuFetch (library works list)',
 		};
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date('2026-09-28T08:30:00.000Z'));
-		const live = await listWorks({ db: DB, token: TOKEN } as never, online(wire));
+		const liveRes = await entuFetch(DB, PATH, TOKEN, {}, online(wire), CACHED_READ);
+		expect(await liveRes.json()).toEqual(wire);
 		await flushReadCache();
 
 		vi.setSystemTime(new Date('2026-09-28T13:00:00.000Z'));
-		const cached = await listWorks({ db: DB, token: TOKEN } as never, offline());
+		const cachedRes = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
 
-		expect(cached).toEqual(live);
-		expect(cached.items).toEqual([{ id: 'w1', name: 'Bogoróditse Djévo', composer: 'Pärt' }]);
+		expect(cachedRes.status).toBe(200);
+		expect(await cachedRes.json()).toEqual(wire);
 		expect(get(servedFromCache)).toBe('2026-09-28T08:30:00.000Z');
+	});
+
+	it('the library reader itself is NOT cached yet — offline it still fails (slice 4 flips it)', async () => {
+		const err = new TypeError('Failed to fetch');
+		await listWorks({ db: DB, token: TOKEN } as never, online());
+		await flushReadCache();
+
+		await expect(listWorks({ db: DB, token: TOKEN } as never, offline(err))).rejects.toBe(err);
 	});
 });
 
@@ -614,6 +637,83 @@ describe('bounded: a cap, and oldest-readAt eviction on put (finding 3)', () => 
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
 		expect(await readCacheEntryCount()).toBe(0);
 	});
+
+	it('the ceiling is BYTES: a body under it in characters but over it in UTF-8 is not stored (round 2, finding 3)', async () => {
+		// 'ы' is two UTF-8 bytes and one UTF-16 code unit: 0.6M of them is ~600k
+		// characters (under the ceiling) and ~1.2MB encoded (over it).
+		const body = { entities: [{ _id: 'w1', name: 'ы'.repeat(600_000) }] };
+		const text = JSON.stringify(body);
+		expect(text.length).toBeLessThan(READ_CACHE_MAX_ENTRY_BYTES);
+		expect(new TextEncoder().encode(text).length).toBeGreaterThan(READ_CACHE_MAX_ENTRY_BYTES);
+
+		const res = await entuFetch(DB, PATH, TOKEN, {}, online(body), CACHED_READ);
+
+		expect(await res.json()).toEqual(body);
+		await flushReadCache();
+		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+		expect(await readCacheEntryCount()).toBe(0);
+	});
 });
 
-// (*MVOX:Tallis*) — review-round-1 additions (*MVOX:Josquin*)
+// ---------------------------------------------------------------------------
+// #434 review round 2 (Bentham) — finding 1: the pending-write list must not
+// grow for the life of the tab. `flushReadCache` is a spec affordance; the app
+// never calls it, so a settled write has to drop itself.
+// ---------------------------------------------------------------------------
+
+describe('pending cache writes drain themselves, with no flush (review round 2, finding 1)', () => {
+	// No `flushReadCache()` anywhere in here — that is the whole point.
+	async function settle(): Promise<void> {
+		for (let i = 0; i < 200 && pendingCacheWriteCount() > 0; i += 1) {
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+	}
+
+	it('the list returns to empty on its own once the writes land', async () => {
+		for (let i = 0; i < 5; i += 1) {
+			const res = await entuFetch(DB, `entity/e${i}`, TOKEN, {}, online(), CACHED_READ);
+			expect(res.ok).toBe(true);
+		}
+
+		await settle();
+
+		expect(pendingCacheWriteCount()).toBe(0);
+		// The writes really did land — draining is not "the writes were dropped".
+		expect(await readCacheEntryCount()).toBe(5);
+	});
+
+	it('an over-ceiling body (never stored) still drops its tracking entry', async () => {
+		const big = { entities: [{ _id: 'w1', name: 'x'.repeat(READ_CACHE_MAX_ENTRY_BYTES) }] };
+
+		await entuFetch(DB, PATH, TOKEN, {}, online(big), CACHED_READ);
+		await settle();
+
+		expect(pendingCacheWriteCount()).toBe(0);
+		expect(await readCacheEntryCount()).toBe(0);
+	});
+
+	it('a write that FAILS drops its tracking entry too', async () => {
+		setReadCacheFactory({
+			open: () => {
+				throw new Error('IndexedDB unavailable');
+			}
+		} as unknown as IDBFactory);
+
+		const res = await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ);
+
+		expect(res.ok).toBe(true);
+		await settle();
+		expect(pendingCacheWriteCount()).toBe(0);
+	});
+
+	it('flushReadCache still awaits everything started before it', async () => {
+		await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ);
+
+		await flushReadCache();
+
+		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeDefined();
+		expect(pendingCacheWriteCount()).toBe(0);
+	});
+});
+
+// (*MVOX:Tallis*) — review-round-1 and review-round-2 additions (*MVOX:Josquin*)

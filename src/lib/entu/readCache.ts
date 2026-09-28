@@ -43,7 +43,13 @@
 //     which HTTP verb carries the body.
 // So the three read SCREENS of #434 (agenda, event page, library — slices
 // 2-4) turn the flag on in their own readers, and nothing else is ever
-// silently offline-backed.
+// silently offline-backed. Slice 1 turns it on NOWHERE (#434 review round 2,
+// finding 2): a reader gets the flag in the same slice that ships its screen's
+// "as of <time>" line, because the issue's Done-when pairs the two ("readable
+// offline ... with 'as of <time>' on every such screen"). A flag on a reader
+// whose screen has no age line yet is a stored copy painted as if it were
+// live — so when a screen loads several readers in one Promise.all, they all
+// stay uncached until that screen renders the age.
 //
 // BOUNDED (#434 review round 1, finding 3). This database shares the origin's
 // storage quota with #343's part byte store, which caps itself at 200MB — an
@@ -89,8 +95,12 @@ const READ_AT_INDEX = 'readAt';
 export const READ_CACHE_MAX_ENTRIES = 64;
 
 /**
- * #434 review round 1, finding 3 — the per-entry ceiling, in characters of the
- * response's JSON text. A body this large is not one of the three read screens
+ * #434 review round 1, finding 3 — the per-entry ceiling, in BYTES of the
+ * UTF-8 encoded JSON text (#434 review round 2, finding 3: the name says bytes
+ * and the worst case above is arithmetic in bytes, so the measurement is bytes
+ * too — `text.length` counts UTF-16 code units, which for non-ASCII names
+ * undercounts what the entry actually costs the origin quota).
+ * A body this large is not one of the three read screens
  * (the library's 500-work list is ~100KB), and one of them must not be able to
  * spend the whole cache budget by itself. Over the ceiling the read is simply
  * not cached — the live response is returned untouched, and that path is then
@@ -109,6 +119,15 @@ export interface ReadCacheEntry {
 // own shape enough to rule out colliding with a chosen separator.
 function compositeKey(db: string, personId: string, pathAndQuery: string): string {
 	return JSON.stringify([db, personId, pathAndQuery]);
+}
+
+// One encoder for the module — `encode` allocates, `new TextEncoder()` per read
+// need not.
+const textEncoder = new TextEncoder();
+
+/** UTF-8 byte length of a string — what `READ_CACHE_MAX_ENTRY_BYTES` is spent in. */
+function encodedByteLength(text: string): number {
+	return textEncoder.encode(text).length;
 }
 
 function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
@@ -261,10 +280,36 @@ async function readCachePut(
 // deterministic way to know a write has landed — `flushReadCache` awaits every
 // write started so far, `pendingWrites` is drained (not just read) so a write
 // this flush doesn't know about later still gets its own settle.
+//
+// SELF-DRAINING (#434 review round 2, finding 1). `flushReadCache` is a spec
+// affordance — nothing in `src/` outside the specs calls it — so in production
+// this list is never drained from the outside. Append-only it would grow by one
+// settled promise per cached read for the whole life of a tab, and slices 2-4
+// multiply the call sites. So a tracked write removes ITSELF once it settles:
+// the list only ever holds writes still in flight, and a flush still awaits
+// everything started before it.
 let pendingWrites: Promise<void>[] = [];
 
 function trackWrite(p: Promise<void>): void {
-	pendingWrites.push(p.catch(() => undefined));
+	const tracked: Promise<void> = p
+		.catch(() => undefined)
+		.finally(() => {
+			// Runs a microtask after the `push` below, so `tracked` is already in
+			// whichever array it was pushed to. After a `flushReadCache` swap that
+			// array is no longer `pendingWrites`, and this filter simply finds
+			// nothing to drop — the swapped-out copy is the flush's own to await.
+			pendingWrites = pendingWrites.filter((q) => q !== tracked);
+		});
+	pendingWrites.push(tracked);
+}
+
+/**
+ * How many cache writes are still in flight — the self-draining rule's own
+ * observable (#434 review round 2, finding 1): with no flush at all this
+ * returns to 0 on its own once the writes settle.
+ */
+export function pendingCacheWriteCount(): number {
+	return pendingWrites.length;
 }
 
 /** Resolves once every cache write started up to this call has settled. */
@@ -357,9 +402,13 @@ export function readThroughGet(
 						.text()
 						.then((text) => {
 							// The size check reads the TEXT, not the parsed body: the
-							// number the cap is spent in is the response's own length,
-							// and an over-ceiling body is then never even parsed.
-							if (text.length > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
+							// number the cap is spent in is the response's own size, and
+							// an over-ceiling body is then never even parsed. Encoded
+							// BYTES, not `text.length`'s UTF-16 code units — the ceiling
+							// is a promise about the origin's storage quota, and a
+							// Cyrillic or Estonian body costs more bytes than it has
+							// characters.
+							if (encodedByteLength(text) > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
 							const body = JSON.parse(text) as unknown;
 							return readCachePut(db, personId, pathAndQuery, { body, readAt });
 						})
