@@ -100,7 +100,11 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	it.each([
 		'src/lib/collectives/marker.ts',
 		'src/lib/collective/databaseEntity.ts',
-		'src/lib/seasons/entuSeasons.ts'
+		'src/lib/seasons/entuSeasons.ts',
+		// Slice 3: the event page's reader and the profile read under its
+		// conductor line — both shared (post-write refresh, profile page).
+		'src/lib/events/eventDetail.ts',
+		'src/lib/profile/profileData.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
@@ -130,7 +134,10 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		// Slice 2: collective discovery — the app's ONE identity read.
 		'src/lib/collectives/discover.ts',
 		// Slice 2: the agenda's own entry point, the screen with the age line.
-		'src/lib/agenda/agendaData.ts'
+		'src/lib/agenda/agendaData.ts',
+		// Slice 3: the event page's own entry point (also the agenda's
+		// next-event prefetch of that page's reads).
+		'src/lib/events/eventPageData.ts'
 	].sort();
 
 	const SRC = resolve(process.cwd(), 'src');
@@ -174,3 +181,4 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 });
 
 // (*MVOX:Josquin* — #434 slice 2 review round, finding 2)
+// (*MVOX:Tallis* — #434 slice 3 RED: event page entries)
