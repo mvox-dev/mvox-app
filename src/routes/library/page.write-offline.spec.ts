@@ -90,6 +90,20 @@ vi.mock('$lib/library/librarianStore', async () => {
 const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
+// #434 slice 6 review F1 — the tree's OWN write seams get named handles too, so
+// the offline fence can assert on the call, not just on a POST reaching the wire:
+// `createEdition` resolves its type id with a GET FIRST, so under this file's
+// empty-answer read stub an ungated create dies on that GET and never issues a
+// non-GET at all — invisible to `nonGetCalls` alone.
+const { createWorkMock, createEditionMock } = vi.hoisted(() => ({
+	createWorkMock: vi.fn(),
+	createEditionMock: vi.fn()
+}));
+vi.mock('$lib/entity/entityCreate', () => ({
+	createWork: createWorkMock,
+	createEdition: createEditionMock
+}));
+
 // #74 — mock lendingActions to verify submit triggers the action layer
 const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
 	createLendingMock: vi.fn(),
@@ -114,7 +128,8 @@ import {
 	settle,
 	expectVisibleReason,
 	isWriteDisabled,
-	nonGetCalls
+	nonGetCalls,
+	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
 
 function setAuthedWithOneCollective() {
@@ -162,6 +177,8 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
+	createWorkMock.mockReset();
+	createEditionMock.mockReset();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
@@ -306,4 +323,61 @@ describe('/library — lending writes while offline (#434 slice 6)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// ── #434 slice 6 review F1 — the STRUCTURAL fence ────────────────────────────
+// The block above pins the three LENDING controls by name. That naming is how
+// the slice shipped five controls on other routes still live offline, and on
+// this one it left create-work, create-edition and attach-files ungated too.
+// This sweep operates EVERY enabled control on the rendered page and asserts no
+// non-GET reached the wire — so a control nobody listed fails here.
+describe('/library — no write control reaches the wire offline (#434 slice 6 fence)', () => {
+	it('offline: operating every enabled control issues no non-GET', async () => {
+		const { container, fetchStub } = await renderExpandedOnline();
+		await goOffline();
+		await settle();
+		fetchStub.mockClear();
+		createLendingMock.mockClear();
+		returnLendingMock.mockClear();
+		bulkCheckoutMock.mockClear();
+		createWorkMock.mockClear();
+		createEditionMock.mockClear();
+		resolveMyLibraryIdMock.mockClear();
+
+		// The two tree DISCLOSURE toggles are skipped: they write nothing, and
+		// collapsing the subtree mid-sweep would hide the very copy/edition
+		// controls this fence exists to reach.
+		const touched = await exerciseEveryEnabledControl(container, {
+			skip: ['library-work-toggle-work-1', 'library-edition-toggle-edition-1']
+		});
+
+		// Not a vacuous pass: the sweep really did reach live controls.
+		expect(touched.length).toBeGreaterThan(5);
+		expect(createLendingMock).not.toHaveBeenCalled();
+		expect(returnLendingMock).not.toHaveBeenCalled();
+		expect(bulkCheckoutMock).not.toHaveBeenCalled();
+		expect(createWorkMock).not.toHaveBeenCalled();
+		expect(createEditionMock).not.toHaveBeenCalled();
+		expect(resolveMyLibraryIdMock).not.toHaveBeenCalled();
+		// …and nothing outside those seams reached the wire either (the file
+		// upload leg has no seam of its own — it IS raw entuFetch).
+		expect(nonGetCalls(fetchStub)).toEqual([]);
+	});
+
+	it('offline: the tree\'s own create/attach controls are disabled too', async () => {
+		const { container } = await renderExpandedOnline();
+		// The edition-create form is opened by its own button (which writes
+		// nothing), exactly as the agenda's create forms are.
+		await fireEvent.click(q(container, 'create-edition-button-work-1') as HTMLElement);
+		await waitFor(() => expect(q(container, 'create-edition-submit-work-1')).not.toBeNull());
+		await goOffline();
+
+		await waitFor(() => {
+			for (const testid of ['create-edition-submit-work-1', 'library-attach-file-edition-1']) {
+				const el = q(container, testid);
+				expect(el, testid).not.toBeNull();
+				expect(isWriteDisabled(el!), testid).toBe(true);
+			}
+		});
+	});
+});
+
+// (*MVOX:Tallis* — #434 slice 6 RED; fence added by *MVOX:Josquin* for review F1)

@@ -373,6 +373,9 @@
 
 	async function submitCreateWork(): Promise<void> {
 		if (createWorkPending) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		createWorkError = null;
 		createWorkStatus = '';
 		const current = selected;
@@ -677,6 +680,9 @@
 
 	async function submitCreateEdition(workId: string): Promise<void> {
 		if (createEditionPending.has(workId)) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const errs0 = new Map(createEditionErrors);
 		errs0.delete(workId);
 		createEditionErrors = errs0;
@@ -841,6 +847,9 @@
 
 	async function handleAttachFiles(editionId: string, fileList: FileList | null): Promise<void> {
 		if (!fileList || fileList.length === 0) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const files = Array.from(fileList);
 		const current = selected;
 		const token = getToken();
@@ -1327,9 +1336,12 @@
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 				{m.library_librarian_tools()}
 
-				<!-- #434 slice 6 — ONE visible reason for every lending write control
-				     on the page (bulk checkout, inline checkout, return): each is
-				     disabled while offline; this says why once. -->
+				<!-- #434 slice 6 — ONE visible reason for every write control on this
+				     page (bulk checkout, inline checkout, return, and the tree's own
+				     create-work / create-edition / attach-files further down): each is
+				     disabled while offline; this says why once, in the librarian tools
+				     block that only ever renders for the viewer who has those controls
+				     at all. -->
 				{#if isOffline}
 					<p data-testid="library-write-unavailable" class="mt-2 text-xs text-ink-2">
 						{m.write_unavailable_no_signal()}
@@ -1490,7 +1502,7 @@
 									type="button"
 									data-testid="create-work-submit"
 									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-									disabled={createWorkPending}
+									disabled={createWorkPending || isOffline}
 									onclick={() => void submitCreateWork()}
 									onkeydown={onCreateWorkEscapeKeydown}
 								>
@@ -1968,7 +1980,7 @@
 																multiple
 																data-testid="library-attach-file-{edition.id}"
 																aria-label={m.library_edition_file_attach()}
-																disabled={editionFilesPending.has(edition.id)}
+																disabled={editionFilesPending.has(edition.id) || isOffline}
 																onchange={(e) => {
 																	const input = e.currentTarget as HTMLInputElement;
 																	void handleAttachFiles(edition.id, input.files);
@@ -2093,7 +2105,7 @@
 														type="button"
 														data-testid="create-edition-submit-{work.id}"
 														class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-														disabled={createEditionPending.has(work.id)}
+														disabled={createEditionPending.has(work.id) || isOffline}
 														onclick={() => void submitCreateEdition(work.id)}
 														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
 													>
