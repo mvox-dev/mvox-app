@@ -558,6 +558,32 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		}
 		expect(markers.length).toBeLessThanOrEqual(1);
 	});
+
+	// Review round 3: the EDIT state renders the name into a bare <input>. The
+	// marker cannot sit on a replaced element, so it wraps the input the way
+	// RedactedField does. The email editor stays unmarked (#361 is names only;
+	// recorded as uncovered in redact.ts).
+	const markerAncestors = (el: Element): number => {
+		let n = 0;
+		for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+			if (cur.hasAttribute(REDACT_ATTR)) n += 1;
+		}
+		return n;
+	};
+
+	it('name: the edit-state input sits inside exactly one marker', async () => {
+		const container = await renderSeeded();
+		await fireEvent.click(valueEl(container, 'name') as HTMLElement);
+		await waitFor(() => expect(input(container, 'name')).not.toBeNull());
+		expect(markerAncestors(input(container, 'name') as HTMLInputElement)).toBe(1);
+	});
+
+	it('email: the edit-state input carries no marker', async () => {
+		const container = await renderSeeded();
+		await fireEvent.click(valueEl(container, 'email') as HTMLElement);
+		await waitFor(() => expect(input(container, 'email')).not.toBeNull());
+		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(0);
+	});
 });
 
 // (*MVOX:Tallis* — #361 RED: profile name display value marked)

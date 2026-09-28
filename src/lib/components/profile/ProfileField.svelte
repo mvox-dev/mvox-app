@@ -6,6 +6,7 @@
 	import type { FieldKey } from '$lib/profile/fieldMove';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
+	import { REDACT_ATTR } from '$lib/redact/redact';
 
 	interface Props {
 		field: FieldKey;
@@ -247,8 +248,7 @@
 	     visibility tier toolbar below is a SEPARATE concept and stays mounted
 	     across both states (untouched by this retrofit). -->
 	{#if editing}
-		<label class="flex flex-col gap-1 text-sm">
-			{FIELD_LABEL[field]()}
+		{#snippet fieldInput()}
 			<input
 				type={field === 'email' ? 'email' : 'text'}
 				data-testid="profile-{field}"
@@ -260,6 +260,21 @@
 				disabled={saving && disabled}
 				class="rounded-md border border-ink px-3 py-2 disabled:opacity-50"
 			/>
+		{/snippet}
+		<label class="flex flex-col gap-1 text-sm">
+			{FIELD_LABEL[field]()}
+			<!-- #361 review round 3 — the name editor is a name render site too. The
+			     marker wraps the <input> in a span (RedactedField's idiom: the ::after
+			     overlay cannot render on a replaced element); RedactedField itself has
+			     no room for this input's focus/input/key/blur handlers. The email
+			     editor stays unmarked — #361 is names only (see redact.ts). -->
+			{#if field === 'name'}
+				<span {...{ [REDACT_ATTR]: '' }} class="relative flex flex-col">
+					{@render fieldInput()}
+				</span>
+			{:else}
+				{@render fieldInput()}
+			{/if}
 		</label>
 	{:else}
 		<div class="flex flex-col gap-1 text-sm">

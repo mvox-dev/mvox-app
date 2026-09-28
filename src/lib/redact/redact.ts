@@ -96,3 +96,10 @@ export const REDACT_TOGGLE_ATTR = 'data-redacting';
 // account carrying no email it prints a real person's name. It is a sentence
 // with the account baked in, so the whole paragraph is wrapped in
 // RedactedText rather than routed through PersonName.
+//
+// /profile's ProfileField (src/lib/components/profile/ProfileField.svelte):
+// the NAME field is marked in both states — the display value through
+// PersonName, the edit-state <input> inside a wrapping marker span. The EMAIL
+// field is UNCOVERED on /profile, display and edit state alike: #361 marks
+// names only, and no other slice marks it — #392's RedactedField covers the
+// /roster record editor, not /profile.
