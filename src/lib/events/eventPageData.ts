@@ -16,6 +16,9 @@
 //     NOT what the screen is currently rendering.
 import { CACHED_READ, CACHED_READ_STORE_ONLY } from '$lib/entu/fetchOptions';
 import { loadEventDetail, type EventDetail } from './eventDetail';
+import { loadWorksByEventId } from '$lib/repertoire/workRows';
+import type { RepertoireReadOptions } from '$lib/repertoire/repertoireData';
+import type { WorkRow } from '$lib/repertoire/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 /**
@@ -64,5 +67,31 @@ export async function refreshEventPageDetail(
 	return loadEventDetail(cfg, eventId, fetchImpl, CACHED_READ_STORE_ONLY);
 }
 
+/**
+ * #434 slice 5 — the event page's OTHER cache-backed load: the works section
+ * (`loadWorksByEventId`: works, editions, copies, program items — a join over
+ * FOUR collections, workRows.ts). `loadComposeSurfaces`
+ * (`src/routes/event/[id]/+page.svelte`) is its only caller, alongside
+ * `loadEventPageDetail` above — both feed the SAME mounted screen, so both
+ * store AND serve: offline, the works list (and therefore the part link a
+ * held file's row carries) survives exactly like the header does.
+ *
+ * `loadWorksByEventId`/`resolveEventWorksBatch`/`listWorks`/`listAllEditions`/
+ * `listAllCopies` are SHARED readers (the agenda's own works read, and this
+ * page's post-write `refreshWorks`, call them too) — they thread `options`
+ * down and hard-wire nothing themselves; this is the one call site, on the
+ * allowlist (readCache.optin-fence.spec.ts), that actually names CACHED_READ.
+ */
+export async function loadEventPageWorkRows(
+	cfg: EntuCfg,
+	eventIds: string[],
+	seasonId: string | null,
+	fetchImpl: typeof fetch = fetch,
+	options: Omit<RepertoireReadOptions, 'cache'> = {}
+): Promise<Record<string, WorkRow[]>> {
+	return loadWorksByEventId(cfg, eventIds, seasonId, fetchImpl, { ...options, ...CACHED_READ });
+}
+
 // (*MVOX:Josquin* — #434 slice 3/6 GREEN)
 // (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
+// (*MVOX:Josquin* — #434 slice 5/6 GREEN: the works read + the part link)

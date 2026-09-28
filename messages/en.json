@@ -370,6 +370,8 @@
 	"repertoire_manage_saved": "Change saved.",
 	"repertoire_pdf_link_aria_label": "Open the PDF for {work}",
 	"repertoire_borrow_link_aria_label": "Borrow {work}",
+	"event_part_link": "Open part",
+	"event_part_link_aria_label": "Open the part for {work}",
 	"repertoire_external_link_aria_label": "Open {domain} for {work} (opens in a new window)",
 	"repertoire_status_button_aria_label": "Set {work} to {status}",
 	"repertoire_status_group_label": "Status for {work}",

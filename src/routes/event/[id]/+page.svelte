@@ -38,7 +38,11 @@
 	//   - `refreshEventPageDetail` — store only, for the post-write re-read
 	//     (slice 3 review round, finding 2): the live answer or nothing, and the
 	//     stored copy kept level with the write that just landed.
-	import { loadEventPageDetail, refreshEventPageDetail } from '$lib/events/eventPageData';
+	import {
+		loadEventPageDetail,
+		refreshEventPageDetail,
+		loadEventPageWorkRows
+	} from '$lib/events/eventPageData';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
 	// unassign = DELETE of the series `_parent` value id — see that module's
@@ -1535,7 +1539,13 @@
 		// offer is not worth a read.
 		if (eventEditor && sid !== null) loadSeriesOptions(cfg, sid, g);
 
-		loadWorksByEventId(cfg, [loaded.id], sid, fetch, {
+		// #434 slice 5 — the mounted screen's OWN load, cache-backed like the
+		// header (loadEventPageDetail above): offline, the works list — and
+		// therefore the part link a held file's row carries — survives exactly
+		// like the header does. `refreshWorks` (this page's post-write re-read,
+		// below) stays on the plain `loadWorksByEventId` — a write only ever
+		// happens online, and its answer must be the live one, not a stored copy.
+		loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {
 			includeInactive: seasonRights === 'editor'
 		})
 			.then((byEvent) => {
@@ -5022,6 +5032,7 @@
 							expanded={true}
 							onpdfclick={handlePdfClick}
 							{heldFileIds}
+							partLinkDb={selected?.db}
 							manageRights={seasonManageRights}
 							seasonRights={seasonManageRights}
 							eventRights={eventManageRights}

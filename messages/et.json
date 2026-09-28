@@ -370,6 +370,8 @@
 	"repertoire_manage_saved": "Muudatus salvestatud.",
 	"repertoire_pdf_link_aria_label": "Ava PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Laenuta: {work}",
+	"event_part_link": "Ava partii",
+	"event_part_link_aria_label": "Ava partii: {work}",
 	"repertoire_external_link_aria_label": "Ava {domain}: {work} (avaneb uues aknas)",
 	"repertoire_status_button_aria_label": "Määra {work} staatuseks {status}",
 	"repertoire_status_group_label": "{work} staatus",

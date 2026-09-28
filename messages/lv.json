@@ -371,6 +371,8 @@
 	"repertoire_manage_saved": "Izmaiņas saglabātas.",
 	"repertoire_pdf_link_aria_label": "Atvērt PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Aizņemties: {work}",
+	"event_part_link": "Atvērt partiju",
+	"event_part_link_aria_label": "Atvērt partiju: {work}",
 	"repertoire_external_link_aria_label": "Atvērt {domain}: {work} (atveras jaunā logā)",
 	"repertoire_status_button_aria_label": "Iestatīt {work} statusu: {status}",
 	"repertoire_status_group_label": "{work} statuss",

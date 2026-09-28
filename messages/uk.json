@@ -372,6 +372,8 @@
 	"repertoire_manage_saved": "Зміну збережено.",
 	"repertoire_pdf_link_aria_label": "Відкрити PDF: {work}",
 	"repertoire_borrow_link_aria_label": "Позичити: {work}",
+	"event_part_link": "Відкрити партію",
+	"event_part_link_aria_label": "Відкрити партію: {work}",
 	"repertoire_external_link_aria_label": "Відкрити {domain}: {work} (відкриється в новому вікні)",
 	"repertoire_status_button_aria_label": "Встановити статус {status} для {work}",
 	"repertoire_status_group_label": "Статус {work}",

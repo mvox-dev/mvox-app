@@ -191,10 +191,17 @@ export async function loadWorksByEventId(
 ): Promise<Record<string, WorkRow[]>> {
 	if (eventIds.length === 0) return {};
 
+	// #434 slice 5 — `options` (extends EntuFetchOptions) threads into EVERY
+	// read this function makes, not just the program/repertoire-item join: a
+	// caller opting into the read cache must get the WHOLE joined row set
+	// offline, never one with a blank name/composer/edition because only the
+	// join itself was cache-backed. Still opt-in, never hard-wired here — the
+	// event page's own entry point (eventPageData.ts) is what actually passes
+	// CACHED_READ.
 	const [worksRead, editionsRead, copiesRead, worksByEvent] = await Promise.all([
-		listWorks(cfg, fetchImpl),
-		listAllEditions(cfg, fetchImpl),
-		listAllCopies(cfg, fetchImpl),
+		listWorks(cfg, fetchImpl, options),
+		listAllEditions(cfg, fetchImpl, options),
+		listAllCopies(cfg, fetchImpl, options),
 		resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)
 	]);
 	// #321 — no partial-list notice here, and the reason is NOT the pinned-scope
