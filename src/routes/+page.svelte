@@ -110,6 +110,10 @@
 		ADD_WORK_KEY
 	} from '$lib/components/agenda/RepertoireElement.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
+	// #434 slice 2/6 — `servedFromCache` is the OLDEST readAt among entries
+	// served since `resetServedFromCache()`, reset at the top of every load
+	// (`loadForSelected`, below) so an online load never shows a stale line.
+	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -1091,6 +1095,10 @@
 		agendaLoading = true;
 		agendaError = false;
 		sessionExpired = false;
+		// #434 slice 2/6 — every load starts with NO claim of staleness; a read
+		// this load makes that has to fall back to the cache notes its own
+		// readAt (readCache.ts), and the "as of" line below reads it back.
+		resetServedFromCache();
 		// Fresh selection -> membership is unresolved again (not carried over as a
 		// stale member/non-member), and no event has a failed write yet.
 		memberId = null;
@@ -6682,6 +6690,31 @@
 							</button>
 						</div>
 					{:else}
+						<!-- #434 slice 2/6 — "as of <time>": null once this load's own reads
+						     all came from the network (reset in loadForSelected, above); set
+						     to the OLDEST readAt among any that fell back to the read cache.
+						     Same Tallinn calendar day as now → the bare time; any earlier day
+						     carries its date alongside it, so a days-old copy never reads as
+						     "this morning". Rendered above everything else in this branch, same
+						     placement rule as the partial-answer notices below. -->
+						{#if $servedFromCache}
+							{@const asOfDate = new Date($servedFromCache)}
+							{@const isToday =
+								isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
+								isoDateFormatter('Europe/Tallinn').format(new Date())}
+							{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
+							<p
+								data-testid="agenda-as-of"
+								role="status"
+								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+							>
+								{m.agenda_as_of({
+									time: isToday
+										? asOfTime
+										: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
+								})}
+							</p>
+						{/if}
 						<!-- #321 — the singer's own answer/attendance set may be PARTIAL (the
 						     person-lifetime rsvp/attendance reads are reachable bounds, per
 						     research-321 inv). Rendered here, above everything else in this

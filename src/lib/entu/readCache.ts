@@ -87,15 +87,31 @@ import { get, writable, type Readable } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
 
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
-// Version 2 (#434 review round 3): entries carry `bytes`, indexed with
-// `readAt`. A version-1 store (never shipped: slice 1 turns the cache on for no
-// reader) is dropped and recreated rather than migrated.
-const DB_VERSION = 2;
+// Version 3 (#434 slice 2/6, carried review): version 2 added `bytes`/`readAt`
+// (slice 1); version 3 adds the META_STORE_NAME running-total record. Neither
+// store is ever migrated forward — a version bump drops and recreates BOTH
+// (see openDb's onupgradeneeded) — no version has shipped with real user data
+// yet, so there is nothing to preserve.
+const DB_VERSION = 3;
 const STORE_NAME = 'reads';
 // Ordered index over [readAt, bytes] — how the budget pass finds the oldest
 // entries AND their sizes without reading a single body (`openKeyCursor`
 // yields index keys only).
 const READ_AT_BYTES_INDEX = 'readAtBytes';
+// #434 slice 2/6 (Bentham, slice-1 review, carry i) — the running byte total,
+// one record, updated in the SAME transaction as every put/evict so it can
+// never drift from the entries it describes. A meta record is not a read
+// entry: `readCacheEntryCount()` still means "how many READ entries" and never
+// counts this store at all.
+const META_STORE_NAME = 'meta';
+const META_TOTAL_KEY = 'totalBytes';
+// #434 slice 2/6 (Bentham, slice-1 review, carry ii) — another tab holding an
+// OLDER version can leave our own `open()` permanently `blocked` (it never
+// rejects on its own); a screen waiting on that would show nothing forever.
+// At most 2000ms: a blocked open times out and falls through to "caching is
+// unavailable for this read" (online: the live body still comes back; offline:
+// the original network error is rethrown, exactly as with nothing cached).
+export const READ_CACHE_OPEN_TIMEOUT_MS = 1500;
 
 /**
  * #434 review round 3, F1 — the total budget, in UTF-8 BYTES of the stored
@@ -154,15 +170,55 @@ function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
 
 function openDb(factory: IDBFactory): Promise<IDBDatabase> {
 	return new Promise((resolve, reject) => {
+		let settled = false;
 		const req = factory.open(READ_CACHE_DB_NAME, DB_VERSION);
+		// carry ii — the timer is the ONLY thing standing between a `blocked`
+		// open and hanging forever: `blocked` alone never fires `onsuccess` or
+		// `onerror`, so with no timer an older tab that never closes on
+		// `versionchange` would keep this promise pending for the life of the tab.
+		const timer = setTimeout(() => {
+			if (settled) return;
+			settled = true;
+			reject(new Error('readCache: open() blocked by another connection (timed out)'));
+		}, READ_CACHE_OPEN_TIMEOUT_MS);
 		req.onupgradeneeded = () => {
 			const database = req.result;
 			if (database.objectStoreNames.contains(STORE_NAME)) database.deleteObjectStore(STORE_NAME);
 			const store = database.createObjectStore(STORE_NAME);
 			store.createIndex(READ_AT_BYTES_INDEX, ['readAt', 'bytes']);
+			if (database.objectStoreNames.contains(META_STORE_NAME)) {
+				database.deleteObjectStore(META_STORE_NAME);
+			}
+			database.createObjectStore(META_STORE_NAME);
 		};
-		req.onsuccess = () => resolve(req.result);
-		req.onerror = () => reject(req.error);
+		req.onsuccess = () => {
+			const database = req.result;
+			if (settled) {
+				// The timeout already rejected this open — a later success (the
+				// other tab finally let go) belongs to nobody now; close it rather
+				// than leak a connection nothing will ever read from.
+				database.close();
+				return;
+			}
+			settled = true;
+			clearTimeout(timer);
+			// carry ii — a NEWER version opened elsewhere (another tab on a newer
+			// deploy) fires `versionchange` on every OTHER open connection; an
+			// IndexedDB upgrade cannot start while any connection stays open, so
+			// closing ours here is what lets their upgrade proceed at all. Also
+			// drops the memoised connection so the NEXT read opens fresh.
+			database.onversionchange = () => {
+				database.close();
+				dbPromise = null;
+			};
+			resolve(database);
+		};
+		req.onerror = () => {
+			if (settled) return;
+			settled = true;
+			clearTimeout(timer);
+			reject(req.error);
+		};
 	});
 }
 
@@ -261,23 +317,55 @@ function sizesOldestFirst(store: IDBObjectStore): Promise<{ key: IDBValidKey; by
 }
 
 /**
- * The budget pass (#434 review round 3, F1), running in the SAME transaction
- * as the put that triggered it: sum the stored bytes and, while the total is
- * over `READ_CACHE_MAX_BYTES`, delete the oldest-`readAt` entries. Index keys
- * only — an eviction never reads a body, and never touches a `readAt` either
- * (a pass that restamped what it walked past would invent recency it did not
- * observe).
+ * The budget pass (#434 review round 3, F1; slice 2 carry i — now given the
+ * total rather than re-summing it), running in the SAME transaction as the put
+ * that triggered it: while the total is over `READ_CACHE_MAX_BYTES`, delete the
+ * oldest-`readAt` entries. A put that stays under the budget returns
+ * immediately — NO cursor is opened at all; the oldest-first walk (index keys
+ * only, no body ever read) runs solely to find eviction victims once a put
+ * actually crosses the line.
  */
-async function evictOverBudget(store: IDBObjectStore): Promise<void> {
+async function evictOverBudget(store: IDBObjectStore, total: number): Promise<number> {
+	if (total <= READ_CACHE_MAX_BYTES) return total;
 	const sizes = await sizesOldestFirst(store);
-	let total = sizes.reduce((sum, s) => sum + s.bytes, 0);
+	let remaining = total;
 	for (const { key, bytes } of sizes) {
-		if (total <= READ_CACHE_MAX_BYTES) break;
+		if (remaining <= READ_CACHE_MAX_BYTES) break;
 		store.delete(key);
-		total -= bytes;
+		remaining -= bytes;
+	}
+	return remaining;
+}
+
+/**
+ * How many bytes the cache currently holds — the running total (#434 slice
+ * 2/6, carry i), read straight off its own meta record rather than re-summed.
+ * 0 with no database, or on any failure.
+ */
+export async function readCacheTotalBytes(): Promise<number> {
+	const openPromise = getDb();
+	if (!openPromise) return 0;
+	try {
+		const database = await openPromise;
+		const tx = database.transaction(META_STORE_NAME, 'readonly');
+		const total = (await reqToPromise(tx.objectStore(META_STORE_NAME).get(META_TOTAL_KEY))) as
+			| number
+			| undefined;
+		return total ?? 0;
+	} catch {
+		return 0;
 	}
 }
 
+/**
+ * Store one entry and keep the running byte total exact — carry i. Both
+ * stores are touched in ONE transaction: the old entry's bytes (if this key
+ * already held one) are subtracted before the new bytes are added, so an
+ * OVERWRITE never double-counts, and the eviction pass (when the put crosses
+ * the budget) subtracts exactly what it deletes. A put that stays under the
+ * budget never opens a cursor — the plain `get` calls here are direct key
+ * lookups, not a walk over the store.
+ */
 async function readCachePut(
 	db: string,
 	personId: string,
@@ -287,11 +375,20 @@ async function readCachePut(
 	const openPromise = getDb();
 	if (!openPromise) return;
 	const database = await openPromise;
-	const tx = database.transaction(STORE_NAME, 'readwrite');
+	const tx = database.transaction([STORE_NAME, META_STORE_NAME], 'readwrite');
 	const store = tx.objectStore(STORE_NAME);
-	const req = store.put(entry, compositeKey(db, personId, pathAndQuery));
-	await reqToPromise(req);
-	await evictOverBudget(store);
+	const meta = tx.objectStore(META_STORE_NAME);
+	const key = compositeKey(db, personId, pathAndQuery);
+
+	const existing = (await reqToPromise(store.get(key))) as ReadCacheEntry | undefined;
+	const storedTotal = (await reqToPromise(meta.get(META_TOTAL_KEY))) as number | undefined;
+
+	await reqToPromise(store.put(entry, key));
+
+	const total = (storedTotal ?? 0) - (existing?.bytes ?? 0) + entry.bytes;
+	const finalTotal = await evictOverBudget(store, total);
+
+	await reqToPromise(meta.put(finalTotal, META_TOTAL_KEY));
 }
 
 // Every write `entuFetch` starts is fire-and-forget on its hot path (the live

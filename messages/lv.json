@@ -707,6 +707,7 @@
 	"downloads_unnamed_part": "Nenosaukta partija",
 	"downloads_open": "Atvērt",
 	"agenda_downloads_link": "Atvērt lejupielādētās partijas",
+	"agenda_as_of": "Stāvoklis uz {time}",
 	"part_viewer_close": "Aizvērt",
 	"part_viewer_not_on_device": "Šī partija nav saglabāta šajā ierīcē.",
 	"part_viewer_page_of": "{current} / {total}",

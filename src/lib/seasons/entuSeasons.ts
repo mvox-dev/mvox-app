@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { CACHED_READ, entuFetch } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { EventRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
 
@@ -72,6 +72,9 @@ export function resetTypeIdCache(): void {
  * #161 review fix round 2 — the dead `personId` parameter is DELETED from the
  * call contract (not merely renamed/shadowed): `listSeasons(cfg, fetchImpl?)`,
  * `.length === 1`, pinned in entuSeasons.database.spec.ts.
+ *
+ * #434 slice 2/6 — CACHED_READ: the agenda's own season read. Offline, the
+ * last-seen seasons are what let the page render its rows at all.
  */
 export async function listSeasons(
 	cfg: EntuCfg,
@@ -95,7 +98,8 @@ export async function listSeasons(
 		`entity?_type.string=season&_parent.reference=${encodeURIComponent(dbEntityId)}&props=name,start_date,end_date,conductor,_owner,_editor&limit=200`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		CACHED_READ
 	);
 	if (!res.ok) throw new Error(`listSeasons failed: ${res.status}`);
 
@@ -133,6 +137,9 @@ export async function listSeasons(
  * each carrying its OWN `eventType` verbatim ('' when absent) — never
  * inherited from the series, unlike duration/location/name: the agenda labels
  * what the event itself claims to be.
+ *
+ * #434 slice 2/6 — CACHED_READ on both this query and the per-series lookup
+ * below: the agenda's own event read.
  */
 export async function listEvents(
 	cfg: EntuCfg,
@@ -156,7 +163,8 @@ export async function listEvents(
 		`entity?_type.string=event&_parent.reference=${seasonId}&props=event_name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		CACHED_READ
 	);
 	if (!res.ok) throw new Error(`listEvents failed: ${res.status}`);
 
@@ -177,7 +185,8 @@ export async function listEvents(
 				`entity/${sid}?props=name,default_location,duration_minutes`,
 				cfg.token,
 				{},
-				fetchImpl
+				fetchImpl,
+				CACHED_READ
 			);
 			if (!sRes.ok) return;
 			const sBody = (await sRes.json()) as { entity?: SeriesRaw };

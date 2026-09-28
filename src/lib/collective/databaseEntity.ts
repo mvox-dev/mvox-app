@@ -26,7 +26,7 @@
 //   - 2xx whose first entity has no `_id` → DatabaseEntityLookupError
 //     (apparent-success trap — same guard as inviteData.resolvePersonParentId).
 
-import { entuFetch } from '$lib/entu/request';
+import { CACHED_READ, entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 export class DatabaseEntityLookupError extends Error {
@@ -43,6 +43,10 @@ export class DatabaseEntityLookupError extends Error {
 /**
  * Resolve the database entity id — the collective identity of `cfg.db`.
  * See module header for the pinned contract.
+ *
+ * #434 slice 2/6 — CACHED_READ: `listSeasons` calls this on every agenda load;
+ * offline, the last-seen id lets the season/event reads underneath it still
+ * resolve their own cached copies.
  */
 export async function resolveDatabaseEntityId(
 	cfg: EntuCfg,
@@ -53,7 +57,8 @@ export async function resolveDatabaseEntityId(
 		'entity?_type.string=database&props=_id&limit=1',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		CACHED_READ
 	);
 	if (!res.ok) {
 		throw new DatabaseEntityLookupError(

@@ -1,4 +1,4 @@
-import { entuFetch, isAuthExpiredError } from '$lib/entu/request';
+import { CACHED_READ, entuFetch, isAuthExpiredError } from '$lib/entu/request';
 import type { MarkerResult } from './types';
 
 // ─── The mvox-collective MARKER ──────────────────────────────────────────────
@@ -38,6 +38,11 @@ type EntuSearchResponse = {
  *                        collective on a transient blip).
  *
  * ONE cheap query per db: `_type.string=<marker>&limit=1`.
+ *
+ * #434 slice 2/6 — CACHED_READ: this is the FIRST authenticated read of a
+ * cold, offline app load. Without a last-seen answer here, every db reads as
+ * unreachable and `collectiveState` never leaves 'error', so the agenda never
+ * gets a chance to render its own cached seasons/events underneath.
  */
 export async function checkCollectiveMarker(
 	db: string,
@@ -51,7 +56,8 @@ export async function checkCollectiveMarker(
 			`entity?_type.string=${encodeURIComponent(MVOX_COLLECTIVE_MARKER_TYPE)}&props=name&limit=1`,
 			token,
 			{},
-			fetchImpl
+			fetchImpl,
+			CACHED_READ
 		);
 
 		if (!res.ok) {
