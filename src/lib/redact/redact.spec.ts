@@ -211,6 +211,33 @@ describe('#361 — redact.ts records the member-name channels no marker can cove
 			expect(src, `redact.ts must record ${ref}`).toContain(ref);
 		}
 	});
+
+	// #361 review F2 — the message id alone was pinned, so redact.ts could name
+	// TWO of the three chips that render it and the suite stayed green. A reader
+	// auditing the season-manage panel found no entry for its ×. Each site is
+	// named now, the way the <option> paragraph names each picker.
+	it('names all THREE conductor-chip remove buttons, not just the two create panels', () => {
+		const src = redactSource();
+		for (const ref of [
+			'season-manage-conductor-remove',
+			'season-create-conductor-remove',
+			'event-create-conductor-remove'
+		]) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
+
+	// #361 review F3 — /profile's signed-in-as line renders `email || name`, so
+	// it can print a real name. The decision (marked, whole-paragraph) belongs
+	// beside the marker, not implied by the absence of an entry.
+	it("records /profile's signed-in-as line and how it is covered", () => {
+		const src = redactSource();
+		for (const ref of ['src/routes/profile/+page.svelte', 'profile-identity']) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
 });
 
 // (*MVOX:Tallis* — #361 RED: uncovered member-name channels recorded in redact.ts)
+
+// (*MVOX:Josquin* — #361 review F2/F3: all three conductor chips, /profile identity)

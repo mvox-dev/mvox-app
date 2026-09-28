@@ -323,6 +323,35 @@ describe('/profile v2 — render + seed', () => {
 		const identity = q(container, '[data-testid="profile-identity"]');
 		expect(identity?.textContent).toBe('Signed in as Mihkel via Smart-ID');
 	});
+
+	// #361 review F3 — with no email on the account the line above prints a real
+	// NAME in element content. Both spellings of the line carry the marker, so a
+	// screenshot blanks it; without this the wrap can be dropped silently.
+	it.each([
+		[
+			'with an email',
+			{ _id: 'u1', email: 'mihkel@example.com', name: 'Mihkel' },
+			'google',
+			'mihkel@example.com'
+		],
+		['name only', { _id: 'u1', name: 'Mihkel' }, 'smart-id', 'Mihkel'],
+		['name only, no provider', { _id: 'u1', name: 'Mihkel' }, null, 'Mihkel']
+	] as const)(
+		'the signed-in-as line is inside a capture-redaction marker (%s)',
+		async (_label, user, provider, value) => {
+			selectSampledb();
+			setUser({ ...user });
+			if (provider) setLastProvider(provider);
+			h.listMyProfilesMock.mockResolvedValue([]);
+			const { container } = render(Page);
+			await waitReady(container);
+			const identity = q(container, '[data-testid="profile-identity"]');
+			expect(identity).not.toBeNull();
+			const marked = identity?.querySelector('[data-redact]');
+			expect(marked, 'profile-identity must wrap its account value in RedactedText').not.toBeNull();
+			expect(marked?.textContent).toContain(value);
+		}
+	);
 });
 
 describe('/profile v2 — autosave on blur', () => {

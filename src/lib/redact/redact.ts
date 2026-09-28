@@ -84,6 +84,15 @@ export const REDACT_TOGGLE_ATTR = 'data-redacting';
 // aria-label — an attribute, never element content. Sites: AttendanceSurface
 // (src/lib/components/attendance/AttendanceSurface.svelte) —
 // attendance_rsvp_aria_label, attendance_group_label,
-// attendance_toggle_aria_label — the season-create/event-create conductor
-// chips' remove buttons (season_conductor_remove), and SectionPicker's
-// memberName label (src/lib/sections/SectionPicker.svelte).
+// attendance_toggle_aria_label — the THREE conductor chips' remove buttons
+// (src/routes/+page.svelte — season-manage-conductor-remove,
+// season-create-conductor-remove, event-create-conductor-remove; all three
+// render season_conductor_remove with the member's name baked in), and
+// SectionPicker's memberName label (src/lib/sections/SectionPicker.svelte).
+//
+// /profile's signed-in-as line (src/routes/profile/+page.svelte —
+// profile-identity) is MARKED, not uncovered: it renders the viewer's OWN
+// account value (`identityUser?.email || identityUser?.name`), so on an Entu
+// account carrying no email it prints a real person's name. It is a sentence
+// with the account baked in, so the whole paragraph is wrapped in
+// RedactedText rather than routed through PersonName.
