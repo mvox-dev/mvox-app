@@ -3,6 +3,7 @@
 	import { get } from 'svelte/store';
 	import { authStore } from '$lib/auth/session';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import PersonName from '$lib/components/PersonName.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -7304,7 +7305,7 @@
 													data-conductor-key={key}
 													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
-													{seasonConductorLabel(personId)}
+													<PersonName name={seasonConductorLabel(personId)} />
 													<!-- #237 SWEEP FENCE — DO NOT convert this to the shared
 													     DeleteTrigger. The red-trashcan sweep covered Table A
 													     (destroy) only; this chip is Table B (unlink), and the PO
@@ -8254,7 +8255,7 @@
 													data-testid="season-create-conductor-{conductor.id}"
 													class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 												>
-													{conductor.name}
+													<PersonName name={conductor.name} />
 													<button
 														type="button"
 														data-testid="season-create-conductor-remove-{conductor.id}"
@@ -8660,7 +8661,7 @@
 												data-testid="event-create-conductor-{conductor.id}"
 												class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
 											>
-												{conductor.name}
+												<PersonName name={conductor.name} />
 												<button
 													type="button"
 													data-testid="event-create-conductor-remove-{conductor.id}"

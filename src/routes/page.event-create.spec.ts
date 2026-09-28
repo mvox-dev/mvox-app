@@ -290,6 +290,7 @@ import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { HOURS_24, MINUTES_5, fillDateTime, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
@@ -2527,3 +2528,25 @@ describe('the event-create conductor picker (#321 review F2)', () => {
 		expect(container.querySelector(NOTICE)).toBeNull();
 	});
 });
+
+// ── #361 — the event-create conductor chip's name carries the marker ───────
+describe('#361 — event-create conductor chip: the member name is marked', () => {
+	it('a picked conductor chip renders the name through PersonName — marked, and marked once', async () => {
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await waitFor(() => {
+			expect(optionValues(conductorSelect(container))).toContain('p-ada');
+		});
+		await pickConductor(container, 'p-ada');
+		await waitFor(() => {
+			expect(q(container, 'event-create-conductor-p-ada')).not.toBeNull();
+		});
+		expectNameMarkedOnce(
+			q(container, 'event-create-conductor-p-ada') as HTMLElement,
+			'Ada Lovelace',
+			'in the event-create conductor chip'
+		);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: event-create conductor chip marked)

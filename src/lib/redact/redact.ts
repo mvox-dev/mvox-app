@@ -64,3 +64,42 @@ export const REDACT_TOGGLE_ATTR = 'data-redacting';
 // reaches the DOM only as an `aria-label`/`title` attribute, never as element
 // content — it belongs with the UNCOVERED CHANNELS above, not with the marked
 // fields, and no marked wrapper can cover it.
+//
+// #361 — PersonName.svelte is the ONE way a bare member name renders (built
+// on RedactedText). Every surface that CAN hold a marker now routes its name
+// through it or, for a sentence with the name baked in, wraps the whole
+// element in RedactedText. Two channels a member name reaches that NO marker
+// can cover, recorded here rather than left as a silent gap:
+//
+// <option> content — a native <option> holds no child element, so it cannot
+// host the marker's wrapping span at all (the native-control rule, #209
+// standing rule 1). Sites: the season-manage, season-create and event-create
+// conductor pickers (src/routes/+page.svelte —
+// season-manage-conductor-select, season-create-conductor-select,
+// event-create-conductor-select), the invite person select
+// (src/lib/components/admin/InviteSurface.svelte — invite-person-select),
+// and the library's per-copy inline-checkout picker
+// (src/routes/library/+page.svelte — inline-checkout).
+//
+// aria-label — an attribute, never element content. Sites: AttendanceSurface
+// (src/lib/components/attendance/AttendanceSurface.svelte) —
+// attendance_rsvp_aria_label, attendance_group_label,
+// attendance_toggle_aria_label — the THREE conductor chips' remove buttons
+// (src/routes/+page.svelte — season-manage-conductor-remove,
+// season-create-conductor-remove, event-create-conductor-remove; all three
+// render season_conductor_remove with the member's name baked in), and
+// SectionPicker's memberName label (src/lib/sections/SectionPicker.svelte).
+//
+// /profile's signed-in-as line (src/routes/profile/+page.svelte —
+// profile-identity) is MARKED, not uncovered: it renders the viewer's OWN
+// account value (`identityUser?.email || identityUser?.name`), so on an Entu
+// account carrying no email it prints a real person's name. It is a sentence
+// with the account baked in, so the whole paragraph is wrapped in
+// RedactedText rather than routed through PersonName.
+//
+// /profile's ProfileField (src/lib/components/profile/ProfileField.svelte):
+// the NAME field is marked in both states — the display value through
+// PersonName, the edit-state <input> inside a wrapping marker span. The EMAIL
+// field is UNCOVERED on /profile, display and edit state alike: #361 marks
+// names only, and no other slice marks it — #392's RedactedField covers the
+// /roster record editor, not /profile.

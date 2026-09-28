@@ -50,6 +50,8 @@ import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
+import { REDACT_ATTR } from '$lib/redact/redact';
 
 // Full-fallback paraglide mock — every key renders `[key {params}]`, so the
 // sr-only assertions below can pin WHICH key the label rides on.
@@ -532,3 +534,56 @@ describe('#205 — new Paraglide keys land in ALL FOUR locales', () => {
 });
 
 // (*MVOX:Tallis* — #205 RED; review round-3 flush-on-cancel case *MVOX:Josquin*)
+
+// ── #361 — ProfileField marks the displayed NAME via PersonName ────────────
+//
+// Only the name field's displayed value routes through PersonName. The email
+// field is not a name and is not this slice's to mark — and must never carry
+// a second, nested marker (one marker per rendered value).
+describe('#361 — /profile: the displayed name value is marked', () => {
+	it('name: the display-state value sits inside exactly one marker', async () => {
+		const container = await renderSeeded();
+		const value = valueEl(container, 'name');
+		expect(value, 'profile-name-value must render').not.toBeNull();
+		expectNameMarkedOnce(value!, 'Ada', 'in the profile name display value');
+	});
+
+	it('email: the display-state value never carries nested markers', async () => {
+		const container = await renderSeeded();
+		const value = valueEl(container, 'email');
+		expect(value, 'profile-email-value must render').not.toBeNull();
+		const markers = value!.querySelectorAll(`[${REDACT_ATTR}]`);
+		for (const mk of markers) {
+			expect(mk.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
+		}
+		expect(markers.length).toBeLessThanOrEqual(1);
+	});
+
+	// Review round 3: the EDIT state renders the name into a bare <input>. The
+	// marker cannot sit on a replaced element, so it wraps the input the way
+	// RedactedField does. The email editor stays unmarked (#361 is names only;
+	// recorded as uncovered in redact.ts).
+	const markerAncestors = (el: Element): number => {
+		let n = 0;
+		for (let cur: Element | null = el; cur; cur = cur.parentElement) {
+			if (cur.hasAttribute(REDACT_ATTR)) n += 1;
+		}
+		return n;
+	};
+
+	it('name: the edit-state input sits inside exactly one marker', async () => {
+		const container = await renderSeeded();
+		await fireEvent.click(valueEl(container, 'name') as HTMLElement);
+		await waitFor(() => expect(input(container, 'name')).not.toBeNull());
+		expect(markerAncestors(input(container, 'name') as HTMLInputElement)).toBe(1);
+	});
+
+	it('email: the edit-state input carries no marker', async () => {
+		const container = await renderSeeded();
+		await fireEvent.click(valueEl(container, 'email') as HTMLElement);
+		await waitFor(() => expect(input(container, 'email')).not.toBeNull());
+		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(0);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: profile name display value marked)

@@ -186,6 +186,7 @@ import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
@@ -1144,3 +1145,22 @@ describe('the season-create conductor picker (#321 review F2)', () => {
 });
 
 // (*MVOX:Palestrina* — #132/T2 review fixes F1–F7)
+
+// ── #361 — the season-create conductor chip's name carries the marker ──────
+describe('#361 — season-create conductor chip: the member name is marked', () => {
+	it('a picked conductor chip renders the name through PersonName — marked, and marked once', async () => {
+		const container = await renderReady();
+		await openForm(container);
+		await pickConductor(container, 'p-ada');
+		await waitFor(() => {
+			expect(q(container, 'season-create-conductor-p-ada')).not.toBeNull();
+		});
+		expectNameMarkedOnce(
+			q(container, 'season-create-conductor-p-ada') as HTMLElement,
+			'Ada Lovelace',
+			'in the season-create conductor chip'
+		);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: season-create conductor chip marked)

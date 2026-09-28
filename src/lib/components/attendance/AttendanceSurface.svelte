@@ -18,6 +18,7 @@
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+	import PersonName from '$lib/components/PersonName.svelte';
 
 	interface AttendanceEntryLite {
 		attendanceId: string;
@@ -280,7 +281,7 @@
 					class="flex flex-col gap-1 border-b border-dashed border-ink-5 pb-2 last:border-b-0"
 				>
 					<div class="flex items-center justify-between gap-2">
-						<span class="min-w-0 flex-1 truncate text-sm text-ink">{member.name}</span>
+						<span class="min-w-0 flex-1 truncate text-sm text-ink"><PersonName name={member.name} /></span>
 						<span data-testid="attendance-rsvp-{member.memberId}" class="text-[10px] text-ink-2"
 							role="img"
 							aria-label={m.attendance_rsvp_aria_label({ name: member.name, rsvp: rsvpLabel(member.memberId) })}

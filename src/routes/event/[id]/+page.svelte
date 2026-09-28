@@ -161,6 +161,7 @@
 		type ScheduleItem
 	} from '$lib/schedule/scheduleData';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import PersonName from '$lib/components/PersonName.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -4343,7 +4344,10 @@
 					     the four fields that are, so it holds the same 16px body tier — a lone
 					     14px line among them would just be the old inconsistency relocated. -->
 					<p data-testid="event-detail-conductors" class="text-base text-ink-2">
-						{m.event_detail_conductor_label()}: {detail.conductorNames.join(', ')}
+						{m.event_detail_conductor_label()}:
+						{#each detail.conductorNames as conductorName, conductorIndex (conductorName + conductorIndex)}{#if conductorIndex > 0}{', '}{/if}<PersonName
+								name={conductorName}
+							/>{/each}
 					</p>
 				{/if}
 
@@ -4902,9 +4906,19 @@
 														     carries no domain/public name, so the #28 completeness
 														     gate dropped her row — renders a translated placeholder
 														     instead. -->
+														<!-- #361 review F1 — `tallyCardNames` holds `row.name`, the
+														     SAME overlaid displayed name every other surface marks, so
+														     with the real-names toggle on this open card is a list of
+														     real member names a screenshot would keep. It is plain
+														     element content, so it CAN host the marker: it goes through
+														     PersonName like the rest. The placeholder branch rides the
+														     same wrapper — one code path, and nothing personal to blank
+														     when it is what renders. -->
 														<li>
-															{tallyCardNames[memberId] ??
-																m.event_detail_tally_name_unavailable()}
+															<PersonName
+																name={tallyCardNames[memberId] ??
+																	m.event_detail_tally_name_unavailable()}
+															/>
 														</li>
 													{/each}
 												</ul>

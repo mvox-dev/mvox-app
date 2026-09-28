@@ -228,6 +228,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/+page.svelte';
+import { expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 import { setToken, clearAll } from '$lib/auth/storage';
 import {
 	collectiveState,
@@ -861,3 +862,48 @@ describe('/admin invite — the person select states a truncated roster (#321 re
 
 // (*MVOX:Palestrina* — #301 review F1/F2: cross-path error clearing + the
 //  owner-gated uninvited-list read)
+
+// ── #361 — invite sentences that bake the member's name in are marked whole ─
+//
+// admin_invite_submit_person ("Invite {name}") is the submit button's visible
+// text, and admin_invite_mint_error names the person too. A marker cannot
+// blank part of a sentence, so each element's WHOLE text sits in one
+// RedactedText (the sentence blanks in a capture; the control still works).
+// The person <select>'s options cannot hold a marker — recorded in redact.ts.
+describe('#361 — /admin invite: name-bearing sentences are marked whole', () => {
+	it('the submit button reading "Invite {name}" holds its whole text in exactly one marker', async () => {
+		selectSampledb();
+		loadOk();
+		const { section } = await renderInviteReady();
+		const select = await waitFor(() => personSelect(section));
+		await pick(select, 'p-cilla');
+		await waitFor(() => {
+			expect(submitButton(section).textContent).toContain('Invite Cilla Cane');
+		});
+		expectWholeTextMarkedOnce(submitButton(section), 'invite submit button');
+	});
+
+	it('the mint-error message naming the person holds its whole text in exactly one marker', async () => {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		selectSampledb();
+		loadOk();
+		h.mintSelfLinkInviteMock.mockRejectedValue(
+			new h.SelfLinkMintError('self-link mint failed: HTTP 500', {
+				phase: 'mint',
+				reason: 'http'
+			})
+		);
+		const { container, section } = await renderInviteReady();
+		const select = await waitFor(() => personSelect(section));
+		await pick(select, 'p-cilla');
+		await fireEvent.click(submitButton(section));
+		await waitFor(() => {
+			expect(q(container, 'invite-mint-error')?.textContent).toContain('Could not invite Cilla Cane.');
+		});
+		const message = q<HTMLElement>(container, 'invite-mint-error')!.querySelector('p') as HTMLElement;
+		expectWholeTextMarkedOnce(message, 'invite mint-error message');
+		consoleSpy.mockRestore();
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: invite name-bearing sentences marked)

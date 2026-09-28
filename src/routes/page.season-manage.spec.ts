@@ -248,6 +248,7 @@ import {
 } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
@@ -2741,3 +2742,23 @@ describe('#321 review F2 — the panel\u2019s conductor picker states a truncate
 // (*MVOX:Josquin* — #321 review F1: the panel's own partial notice — raised from
 // the truncated series read, absent on a complete one, torn down by both switches)
 // (*MVOX:Tallis* — #483 RED: a doubled season conductor opens the panel and each copy is removable on its own)
+
+// ── #361 — the season-manage conductor panel chip's name carries the marker ─
+describe('#361 — season-manage conductor chip: the member name is marked', () => {
+	it('the current conductor chip renders the name (seasonConductorLabel) through PersonName — marked, and marked once', async () => {
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, 'season-manage-conductor-p-grace')?.textContent).toContain(
+				'Grace Hopper'
+			);
+		});
+		expectNameMarkedOnce(
+			q(container, 'season-manage-conductor-p-grace') as HTMLElement,
+			'Grace Hopper',
+			'in the season-manage conductor chip'
+		);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: season-manage conductor chip marked)

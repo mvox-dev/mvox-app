@@ -54,6 +54,8 @@
 	// route still renders (backward compat) — see
 	// src/lib/components/admin/InviteSurface.svelte.
 	import InviteSurface from '$lib/components/admin/InviteSurface.svelte';
+	import PersonName from '$lib/components/PersonName.svelte';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 
 	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
 	type Cfg = { db: string; token: string };
@@ -690,7 +692,7 @@
 							class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
 						>
 							<span
-								>{person.name}
+								><PersonName name={person.name} />
 								<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 							>
 							<!-- #164 — the viewer's OWN row renders NO Remove button at all
@@ -709,7 +711,7 @@
 									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 									onclick={() => onRemoveAdmin(person.id)}
 								>
-									{m.admin_roles_remove({ name: person.name })}
+									<RedactedText>{m.admin_roles_remove({ name: person.name })}</RedactedText>
 								</button>
 							{:else}
 								<span data-testid="admin-roles-admins-self-hint" class="text-xs text-ink-2">
@@ -789,7 +791,7 @@
 								class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
 							>
 								<span
-									>{person.name}
+									><PersonName name={person.name} />
 									<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 								>
 								<!-- #148 — a library OWNER's grant is not this surface's to
@@ -807,7 +809,7 @@
 										class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 										onclick={() => onRemoveLibrarian(person.id)}
 									>
-										{m.admin_roles_remove({ name: person.name })}
+										<RedactedText>{m.admin_roles_remove({ name: person.name })}</RedactedText>
 									</button>
 								{/if}
 							</li>

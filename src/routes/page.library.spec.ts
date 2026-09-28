@@ -141,6 +141,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -940,6 +941,58 @@ describe('#76 — inline checkout on browse tree', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-copy-copy-1"]')?.textContent).toContain('Out — Ben Jonson');
 		});
+	});
+
+	// ── #361 — member names on the library surfaces carry the marker ────────
+	//
+	// library_copy_lent_to bakes the borrower's name INTO a sentence ("Out —
+	// {name}"); a marker cannot blank part of a sentence, so the WHOLE badge
+	// content sits in one RedactedText. The bulk-checkout member list renders
+	// memberNames.get(...) in two branches (already-lent row, checkbox label),
+	// both through PersonName. The inline-checkout <option>s cannot hold a
+	// marker and are recorded in redact.ts's uncovered channels.
+	it('#361 — the lent-to badge: the whole "Out — {name}" text sits in exactly one marker', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+		await expandToCopies(container);
+		const row = await waitFor(() => {
+			const el = container.querySelector('[data-testid="library-copy-copy-2"]') as HTMLElement;
+			expect(el?.textContent).toContain('Out — Ada Lovelace');
+			return el;
+		});
+		const [node] = textNodesContaining(row, 'Ada Lovelace');
+		const marker = markerOf(node);
+		expect(marker, 'the lent-to badge text must sit inside a marker').not.toBeNull();
+		expectWholeTextMarkedOnce(marker!.parentElement as HTMLElement, 'library_copy_lent_to badge');
+		expect(marker!.textContent).toContain('Out — Ada Lovelace');
+	});
+
+	it('#361 — bulk checkout: both member-list branches (already-lent row, checkbox label) mark the name once', async () => {
+		mockTreeWithOneLending();
+		setAuthedWithOneCollective();
+		mockLibrarianCheckoutData();
+
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="bulk-checkout-edition-select"]')).not.toBeNull();
+		});
+		const select = container.querySelector('[data-testid="bulk-checkout-edition-select"]') as HTMLSelectElement;
+		await fireEvent.change(select, { target: { value: 'edition-1' } });
+		const list = await waitFor(() => {
+			const el = container.querySelector('[data-testid="bulk-checkout-member-list"]') as HTMLElement;
+			expect(el).not.toBeNull();
+			expect(el.querySelector('[data-testid="bulk-checkout-already-lent-member-a"]')).not.toBeNull();
+			expect(el.textContent).toContain('Ada Lovelace');
+			expect(el.textContent).toContain('Ben Jonson');
+			return el;
+		});
+		// member-a holds copy-2 of edition-1 → the already-lent branch.
+		expectNameMarkedOnce(list, 'Ada Lovelace', 'in the bulk-checkout already-lent row');
+		// member-b is free → the checkbox-label branch.
+		expectNameMarkedOnce(list, 'Ben Jonson', 'in the bulk-checkout checkbox label');
 	});
 });
 

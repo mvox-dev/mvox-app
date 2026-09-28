@@ -163,3 +163,81 @@ describe('#388 — redact.ts header cites the owning issue and lists SectionPick
 });
 
 // (*MVOX:Tallis* — #388 RED: redact.ts header issue cites + SectionPicker channel)
+
+// #361 RED — the channels a member name reaches that NO marker can cover are
+// RECORDED where you meet the marker, with file refs, so a reader looking for
+// "why is this name not blanked" finds the reason instead of a gap:
+//   <option> content — a replaced-ish form control's option text cannot host
+//   the ::after overlay: the season-manage, season-create and event-create
+//   conductor pickers (src/routes/+page.svelte), the invite person select
+//   (InviteSurface.svelte), and the library's per-copy inline-checkout picker
+//   (src/routes/library/+page.svelte — found re-deriving the sites).
+//   aria-label names — attributes, never element content: AttendanceSurface's
+//   three (rsvp, group, toggle), season_conductor_remove on the conductor
+//   chips' × buttons, and SectionPicker's memberName labels.
+describe('#361 — redact.ts records the member-name channels no marker can cover, with file refs', () => {
+	it('cites #361 and PersonName', () => {
+		const src = redactSource();
+		expect(src).toContain('#361');
+		expect(src).toContain('PersonName');
+	});
+
+	it('lists the <option> sites: three conductor pickers, the invite person select, the library inline-checkout picker', () => {
+		const src = redactSource();
+		for (const ref of [
+			'src/routes/+page.svelte',
+			'season-manage-conductor-select',
+			'season-create-conductor-select',
+			'event-create-conductor-select',
+			'src/lib/components/admin/InviteSurface.svelte',
+			'invite-person-select',
+			'src/routes/library/+page.svelte',
+			'inline-checkout'
+		]) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
+
+	it('lists the aria-label names: AttendanceSurface ×3, season_conductor_remove, SectionPicker', () => {
+		const src = redactSource();
+		for (const ref of [
+			'src/lib/components/attendance/AttendanceSurface.svelte',
+			'attendance_rsvp_aria_label',
+			'attendance_group_label',
+			'attendance_toggle_aria_label',
+			'season_conductor_remove',
+			'src/lib/sections/SectionPicker.svelte'
+		]) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
+
+	// #361 review F2 — the message id alone was pinned, so redact.ts could name
+	// TWO of the three chips that render it and the suite stayed green. A reader
+	// auditing the season-manage panel found no entry for its ×. Each site is
+	// named now, the way the <option> paragraph names each picker.
+	it('names all THREE conductor-chip remove buttons, not just the two create panels', () => {
+		const src = redactSource();
+		for (const ref of [
+			'season-manage-conductor-remove',
+			'season-create-conductor-remove',
+			'event-create-conductor-remove'
+		]) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
+
+	// #361 review F3 — /profile's signed-in-as line renders `email || name`, so
+	// it can print a real name. The decision (marked, whole-paragraph) belongs
+	// beside the marker, not implied by the absence of an entry.
+	it("records /profile's signed-in-as line and how it is covered", () => {
+		const src = redactSource();
+		for (const ref of ['src/routes/profile/+page.svelte', 'profile-identity']) {
+			expect(src, `redact.ts must record ${ref}`).toContain(ref);
+		}
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: uncovered member-name channels recorded in redact.ts)
+
+// (*MVOX:Josquin* — #361 review F2/F3: all three conductor chips, /profile identity)

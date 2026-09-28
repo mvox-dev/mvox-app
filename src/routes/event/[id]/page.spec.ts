@@ -116,6 +116,8 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
+import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
+import { REDACT_ATTR } from '$lib/redact/redact';
 import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
 import { authStore } from '$lib/auth/session';
 import {
@@ -2690,6 +2692,31 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(card.textContent).not.toContain('Viewer Vera');
 	});
 
+	// #361 review F1 — the same card, now for the MARKER. The names above are
+	// real member names, so the open card is a screenshot leak unless each one
+	// renders through PersonName. The structural guard cannot see a shape it was
+	// not taught; this pins the rendered DOM.
+	it('the RSVP tally card renders each respondent name through the capture marker, exactly once (#361)', async () => {
+		const { container } = renderComposePage({
+			event: pastEventEntity(),
+			realNames: true
+		});
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-tally-toggle"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="event-detail-tally-toggle"]')!);
+		const group = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-tally-card-group-going"]');
+			expect(el).not.toBeNull();
+			// Settle on the RESOLVED name: before the roster read lands the card
+			// renders the placeholder, and a marker assertion against that would
+			// pass while saying nothing about a real name.
+			expect(el!.textContent).toContain(RN_RECORD_NAMES['p-viewer']);
+			return el!;
+		});
+		expectNameMarkedOnce(group, RN_RECORD_NAMES['p-viewer'], 'in the RSVP tally card');
+	});
+
 	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {
 		// Default season: conductors are p-mihkel + p-alice — the viewer holds no seat.
 		const { container } = renderComposePage({ event: pastEventEntity() });
@@ -3240,3 +3267,26 @@ describe('#483 /event/[id] header — a doubled season conductor is named ONCE, 
 });
 
 // (*MVOX:Tallis* — #483 RED: a doubled season conductor is named once on the event page)
+
+// ── #361 — the event header's conductor names carry the marker ─────────────
+//
+// Each conductor name renders through PersonName; the ', ' separators sit
+// OUTSIDE the markers, so a capture blanks each name and keeps the list
+// shape. ONE marker per name.
+describe('#361 — /event/[id] header: each conductor name is marked', () => {
+	it('each name sits in its own marker (exactly the name), the separator is outside every marker', async () => {
+		const { container } = renderEventPage();
+		const line = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-detail-conductors"]');
+			expect(el).not.toBeNull();
+			expect(el!.textContent).toContain('Mihkel Putrinš, Alice Smith');
+			return el as HTMLElement;
+		});
+		expectNameMarkedOnce(line, 'Mihkel Putrinš', 'in the event header conductor line');
+		expectNameMarkedOnce(line, 'Alice Smith', 'in the event header conductor line');
+		const markers = [...line.querySelectorAll(`[${REDACT_ATTR}]`)].map((e) => e.textContent);
+		expect(markers).toEqual(['Mihkel Putrinš', 'Alice Smith']);
+	});
+});
+
+// (*MVOX:Tallis* — #361 RED: event header conductor names marked)

@@ -22,6 +22,7 @@
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 	import { createAutosave } from '$lib/profile/autosave';
 	import ProfileField from '$lib/components/profile/ProfileField.svelte';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import { timeFormatStore, setTimeFormat, type TimeFormat } from '$lib/preferences/timeFormat';
@@ -1192,12 +1193,20 @@
 
 		<div class="flex flex-col items-start gap-1">
 			{#if identityAccount}
+				<!-- #361 review F3 — `identityAccount` is `email || name` (see the script
+				     above), so on an Entu account with no email this line prints a real
+				     person's NAME. It is the viewer's own account rather than a
+				     roster-resolved member, but it is still a real name in element
+				     content, so it carries the marker. A sentence with the account
+				     baked in cannot be split, so the whole paragraph is wrapped (the
+				     admin_roles_remove form) — recorded in $lib/redact/redact.ts. -->
 				<p data-testid="profile-identity" class="text-sm text-ink-2">
-					{#if identityProvider}
-						{m.profile_signed_in_as({ account: identityAccount, provider: identityProvider })}
-					{:else}
-						{identityAccount}
-					{/if}
+					<RedactedText
+						>{#if identityProvider}{m.profile_signed_in_as({
+								account: identityAccount,
+								provider: identityProvider
+							})}{:else}{identityAccount}{/if}</RedactedText
+					>
 				</p>
 			{/if}
 			<a class="text-sm text-ink-2 underline" href="/auth/logout">{m.profile_sign_out()}</a>
