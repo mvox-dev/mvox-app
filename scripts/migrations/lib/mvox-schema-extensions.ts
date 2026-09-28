@@ -499,4 +499,82 @@ export const event_name: PropertyAdditionDef = {
 	]
 };
 
+/**
+ * `feedback` — a member's feedback on the app itself: a screenshot, ink
+ * drawn over it, and a description. Commissioned
+ * [mvox-app#395](https://github.com/mvox-dev/mvox-app/issues/395), child of
+ * [mvox-app#390](https://github.com/mvox-dev/mvox-app/issues/390).
+ *
+ * **Parent**: `member` (single, required) — the first `MvoxEntityDef` in
+ * this file parented to `member` rather than `database`. **Creator**: the
+ * member themself, `{ kind: 'self' }` — the first use of that `CreatorRule`
+ * kind here (`admin_member_record`'s only precedent is `parent_right
+ * _editor`, admin-created, not self).
+ *
+ * **Sharing — set explicitly, never left to inherit** (Gama, #395 body,
+ * 2026-09-28): the type and all three fields carry `_sharing: domain`. A
+ * type's `_sharing` is a ceiling, not a default (ER-1); a child copies its
+ * parent's `_sharing` only when the parent is non-private (ER-13) — a
+ * `member` still sitting at its own default `private` tier (not yet
+ * flipped to `domain`, per `t3-1-singer-provision.ts`) would otherwise
+ * silently leave a feedback under it `private` too. The create path (a
+ * later slice) sets `_sharing: domain` on the instance explicitly at
+ * create time, as `admin_member_record` does on #265 — never omitted.
+ *
+ * `_inheritrights: true` — inheritance left natural (Mihkel, #390 ruling,
+ * quoted in the #395 body): rights on the member cascade to their
+ * feedback, the `sectionActions.ts` precedent, not `profileData.ts`'s
+ * isolate-and-assert-explicit `_inheritrights: false` pattern.
+ */
+export const feedback: MvoxEntityDef = {
+	name: 'feedback',
+	blurb: "A member's feedback on the app: a screenshot, ink drawn over it, and a description.",
+	sharing: 'domain',
+	inheritsRights: true,
+	parents: [
+		{
+			entity: 'member',
+			required: true,
+			parentCard: '1',
+			childCard: '0..N',
+			verb: 'gives'
+		}
+	],
+	properties: [
+		{
+			name: 'screenshot',
+			type: 'file',
+			sharing: 'domain',
+			descriptionEn: 'Screenshot of the page the member is giving feedback on.',
+			descriptionEt: 'Kuvatõmmis lehest, mille kohta liige tagasisidet annab.',
+			ordinal: 1
+		},
+		{
+			name: 'doodle_layer',
+			type: 'text',
+			sharing: 'domain',
+			note: "#394's StrokeData JSON (src/lib/strokes/strokes.ts serialize/parse) — ink drawn over the screenshot",
+			descriptionEn: 'Ink drawn over the screenshot — stroke data as JSON (the #394 StrokeData format).',
+			descriptionEt: 'Kuvatõmmisele joonistatud märkused — joonte andmed JSON-vormingus (#394 StrokeData).',
+			ordinal: 2
+		},
+		{
+			name: 'description',
+			type: 'text',
+			sharing: 'domain',
+			descriptionEn: "The member's feedback in their own words.",
+			descriptionEt: 'Liikme tagasiside tema enda sõnadega.',
+			ordinal: 3
+		}
+	],
+	creators: [{ kind: 'self' }],
+	notes: [
+		'mvox app extension — not part of the canonical v4E schema (upstream flow retired 2026-09-06; entu/research is historical reference only).',
+		'Created by the member with their own key (`creators: self`) — Entu auto-grants the creator `_owner` on create; no extra grant.',
+		"Instance `_sharing` is set EXPLICITLY to `domain` at create time, as #265 does: a type's `_sharing` is a ceiling, not a default (ER-1), and a child copies its parent's `_sharing` only when the parent is non-private (ER-13) — a feedback under a still-private member would otherwise stay private (PO ruling, Gama, 2026-09-28).",
+		'`_inheritrights: true` — inheritance left natural (Mihkel, #390): rights on the member cascade to its feedback.'
+	],
+	commissionedBy: 'mvox-app#395'
+};
+
 // (*MVOX:Perotin*)

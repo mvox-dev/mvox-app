@@ -73,6 +73,7 @@ const CREDE_MUTATING_SCRIPTS = [
 	'seed-265-admin-member-record-type-crede-2026-09-06.ts',
 	'seed-282-id-code-propdef-crede-2026-09-07.ts',
 	'seed-293-crede-season-repertoire-2026-09-08.ts',
+	'seed-395-feedback-type-crede-2026-09-28.ts',
 	'seed-445-person-rsvp-domain-inherit-crede.ts'
 ] as const;
 
