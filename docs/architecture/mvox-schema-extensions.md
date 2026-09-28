@@ -218,11 +218,55 @@ rules.
 **mvox app extension** — not part of the canonical v4E schema. No
 `entu/research` PR; the remote team seeds the type directly.
 
+### `feedback`
+
+A member's feedback on the app itself: a screenshot, ink drawn over it, and
+a description. Commissioned
+[mvox-app#395](https://github.com/mvox-dev/mvox-app/issues/395), child of
+[mvox-app#390](https://github.com/mvox-dev/mvox-app/issues/390).
+
+**Parent**: `member` (single, required) — the first type in this catalog
+parented to `member` rather than `database`.
+
+**Created with the member's own key** — `creators: self`, the first use of
+that `CreatorRule` kind here (`admin_member_record`'s only precedent is
+`parent_right _editor`, admin-created, not self-created).
+
+**`_sharing`**: `domain` on the type and on every one of the three fields,
+each set EXPLICITLY (the #265 inherit-from-parent trap: a type's `_sharing`
+is a ceiling, not a default — ER-1 — and a child copies its parent's
+`_sharing` only when the parent is non-private — ER-13). The create path (a
+later slice) also sets `_sharing: domain` explicitly on each feedback
+instance at create time, as `admin_member_record` does on #265 — otherwise a
+feedback under a member still sitting at its own default `private` tier
+would silently stay private too (PO ruling, Gama, #395 body, 2026-09-28).
+
+**`_inheritrights: true`** — inheritance left natural (Mihkel, #390 ruling,
+quoted in the #395 body): rights on the member cascade to their feedback,
+the `sectionActions.ts` precedent rather than `profileData.ts`'s
+isolate-and-assert-explicit `_inheritrights: false` pattern.
+
+| Property       | Type | Required | Notes                                                                                             |
+| -------------- | ---- | -------- | --------------------------------------------------------------------------------------------------- |
+| `screenshot`   | file | no       | screenshot of the page the member is giving feedback on                                               |
+| `doodle_layer` | text | no       | ink drawn over the screenshot — [mvox-app#394](https://github.com/mvox-dev/mvox-app/issues/394)'s StrokeData JSON (`src/lib/strokes/strokes.ts` serialize/parse) |
+| `description`  | text | no       | the member's feedback in their own words                                                             |
+
+**Rights posture**: the member who created a feedback owns it (`_owner`,
+Entu's create-time auto-grant); every domain-tier reader in the same
+collective can read `description` and see the screenshot with the ink
+rendered. No editor tier is designed for in this slice — feedback is
+create-and-read, not edited after the fact.
+
+**mvox app extension** — not part of the canonical v4E schema. No
+`entu/research` PR.
+
 ### Org tree (excerpt)
 
 ```
 collective database root (post-#161: organization retired)
         ├── member
+        │     └── feedback          ← mvox extension, self-created, one per submission
         ├── admin_member_record    ← mvox extension, one per person
         ├── link                   ← mvox extension, one collection per collective
         ├── roster_show_real_names  (property on the database entity itself, not a child type)
@@ -242,6 +286,7 @@ collective database root (post-#161: organization retired)
 | `schedule_item`         | read      | read                           | read                                       | full (if conductor of parent event scope)    | full                     |
 | `admin_member_record`   | none      | none                           | read `name`/`person` only, rest invisible  | none (not an org-editor role by default)     | full                     |
 | `link`                  | none      | read                           | read                                       | read (unless also holding admin rights)      | full                     |
+| `feedback`              | none      | read                           | read; create own (`creators: self`)        | read                                          | full                     |
 
 ### Bucket exposure (excerpt)
 
@@ -253,6 +298,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
+| `feedback`              | domain                            | domain (asserted, explicit) | screenshot, doodle_layer, description — nothing private on this type |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only
@@ -406,5 +452,17 @@ copied from the issue thread's prose.
 It is the first `PropertyAdditionDef` provisioned by a single script rather
 than a `-crede-`/`-polyphony-` pair, per the 2026-09-18 ruling that ends that
 pattern going forward.
+
+`feedback` was commissioned on
+[mvox-app#395](https://github.com/mvox-dev/mvox-app/issues/395), child of
+[mvox-app#390](https://github.com/mvox-dev/mvox-app/issues/390) — Gama's
+ruling in the #395 body settles both the shape (member's child, three
+fields, all domain, explicit `_sharing` at every level per the #265
+inherit-from-parent trap) and the sharing correction (Mihkel's #390 "left as
+natural" reading would otherwise leave a feedback under a still-private
+member silently private too). First type in this catalog parented to
+`member`, and the first to use `creators: self`. Landed crede only, per the
+#233 estate ruling that ends the per-collective twin-script pattern for
+every schema change since.
 
 (*MVOX:Perotin*)
