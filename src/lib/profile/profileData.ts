@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 // T4.4/#25 — the SOLE code path allowed to create a `profile` entity (epic #21;
@@ -158,11 +158,16 @@ function isLevel(value: string): value is Level {
  * returns empty, `entu-api utils/entity.js:198`). An explicit `limit` is mandatory
  * (every codebase query sets one). Fails loud on non-2xx; an unknown `_sharing`
  * value throws rather than being silently dropped.
+ *
+ * #434 slice 3/6 — SHARED reader (the event page's conductor line is one
+ * caller among others), so it hard-wires no cache flag: `opts` threads
+ * straight into the one `entuFetch` call, default off (readCache.optin-fence.spec.ts).
  */
 export async function listMyProfiles(
 	cfg: EntuCfg,
 	personId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<MyProfile[]> {
 	// Profiles are children of the member's person (`_parent` = personId), mirroring
 	// listMyRsvps' native own-person scoping. Project `_sharing` (underscore) — a bare
@@ -173,7 +178,8 @@ export async function listMyProfiles(
 		`entity?_type.string=profile&_parent.reference=${encodeURIComponent(personId)}&props=name,email,_sharing&limit=10`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listMyProfiles failed: ${res.status}`);
 	const body = (await res.json()) as {

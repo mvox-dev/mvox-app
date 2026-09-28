@@ -27,6 +27,9 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
+	// #434 slice 3/6 — the next event's Entu metadata, prefetched alongside its
+	// part bytes (below): the event page's own cache-backed entry point.
+	import { loadEventPageDetail } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
 	// waits for the sweep before #409's prefetch). See $lib/files/retention.
@@ -2090,6 +2093,20 @@
 	 * re-queries presence so #367's badges flip without a reload or a click.
 	 */
 	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
+		// #434 slice 3/6 — the next event's Entu METADATA (event/season/series/
+		// conductor-profile reads, via the event page's own cache-backed entry
+		// point), fired UNCONDITIONALLY and ahead of the no-parts early return
+		// below: an event with no music attached yet is still an event she needs
+		// to find offline (time, place). This is a fire-and-forget prefetch, not
+		// a page load — no `status`/`detail` write, nothing for a stale
+		// `thisRequest` to guard; only the console line on failure.
+		const nextEventId = agendaItems[0]?.id;
+		if (nextEventId) {
+			loadEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
+				console.error('agenda: next-event detail prefetch failed', e);
+			});
+		}
+
 		const fileIds = nextEventFileIds(agendaItems, worksByEventId);
 		if (fileIds.length === 0) return;
 		const identity = get(selectedCollectiveIdentityStore);

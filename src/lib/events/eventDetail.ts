@@ -22,7 +22,7 @@
 // conductor with neither a record name nor a profile name is DROPPED from
 // `conductorNames` (never a raw entity id — "Entity IDs need names" cuts both
 // ways), while `conductorIds` keeps every resolved id regardless.
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
@@ -207,18 +207,35 @@ function domainOrPublicName(profiles: MyProfile[]): string {
  * season/series reads are best-effort (a missing/unreadable parent degrades to
  * "nothing to inherit/no conductors from it", never a thrown error, matching
  * `listEvents`'s own series-cache posture).
+ *
+ * #434 slice 3/6 — SHARED reader (also the page's post-write refresh), so it
+ * hard-wires no cache flag (slice 2 review round, finding 2). `opts` threads
+ * into every read this function makes — the event entity, the parent season
+ * (`fetchSeason`), the parent series (`fetchSeries`) and each conductor's
+ * profile read (`listMyProfiles`) — so a caller that opts in gets the WHOLE
+ * header served offline, never a header with its conductor or its
+ * series-inherited fields missing. The real-names overlay
+ * (`resolveRealNameByPerson`, below) stays OUT of this: it already degrades to
+ * the profile name on any failure (rosterData.ts), so it needs no cache of its
+ * own — see `eventPageData.spec.ts`'s header for why that overlay is not part
+ * of this slice. `loadEventPageDetail` (eventPageData.ts) is the one caller
+ * that passes `CACHED_READ`; the page's own post-write refresh calls this
+ * function directly, with nothing — a cache-served header there would paint a
+ * stored copy as the result of a write that just happened.
  */
 export async function loadEventDetail(
 	cfg: EntuCfg,
 	eventId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<EventDetail> {
 	const eventRes = await entuFetch(
 		cfg.db,
 		`entity/${eventId}?props=event_name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!eventRes.ok)
 		throw new EventDetailLoadError(`loadEventDetail failed: ${eventRes.status}`, eventRes.status);
@@ -239,8 +256,8 @@ export async function loadEventDetail(
 	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? null;
 
 	const [season, series] = await Promise.all([
-		seasonId ? fetchSeason(cfg, seasonId, fetchImpl) : Promise.resolve(undefined),
-		seriesId ? fetchSeries(cfg, seriesId, fetchImpl) : Promise.resolve(undefined)
+		seasonId ? fetchSeason(cfg, seasonId, fetchImpl, opts) : Promise.resolve(undefined),
+		seriesId ? fetchSeries(cfg, seriesId, fetchImpl, opts) : Promise.resolve(undefined)
 	]);
 
 	const name = event.event_name?.[0]?.string ?? series?.name?.[0]?.string ?? '';
@@ -296,7 +313,7 @@ export async function loadEventDetail(
 	const profilesById = new Map<string, MyProfile[]>();
 	await Promise.all(
 		conductorIds.map(async (id) => {
-			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl));
+			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl, opts));
 		})
 	);
 	// #469 review F3 — the header's conductor line obeys `roster_show_real_names`
@@ -381,14 +398,16 @@ export async function loadEventDetail(
 async function fetchSeason(
 	cfg: EntuCfg,
 	seasonId: string,
-	fetchImpl: typeof fetch
+	fetchImpl: typeof fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<SeasonRaw | undefined> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity/${seasonId}?props=conductor,_owner,_editor`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) return undefined;
 	const body = (await res.json()) as { entity?: SeasonRaw };
@@ -465,14 +484,16 @@ export async function listEventLocations(
 async function fetchSeries(
 	cfg: EntuCfg,
 	seriesId: string,
-	fetchImpl: typeof fetch
+	fetchImpl: typeof fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<SeriesRaw | undefined> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity/${seriesId}?props=name,duration_minutes,default_location,default_description`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) return undefined;
 	const body = (await res.json()) as { entity?: SeriesRaw };

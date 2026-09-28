@@ -30,6 +30,12 @@
 		type EventDetail,
 		type EventInheritedField
 	} from '$lib/events/eventDetail';
+	// #434 slice 3/6 — the page's own entry point (the cache-backed twin of
+	// `loadEventDetail`, agendaData.loadFullAgenda's role for this screen);
+	// `resetServedFromCache`/`servedFromCache` drive the "as of <time>" line,
+	// same contract as the agenda's (slice 2).
+	import { loadEventPageDetail } from '$lib/events/eventPageData';
+	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
 	// unassign = DELETE of the series `_parent` value id — see that module's
 	// header for the SPIKE-verified rights shape).
@@ -50,7 +56,8 @@
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
-		tallinnLocalToUtcIso
+		tallinnLocalToUtcIso,
+		isoDateFormatter
 	} from '$lib/preferences/timeFormat';
 	// #194/#202 — the type-label map is SHARED with the agenda's per-row badge
 	// (was inline here only, #101 review F3; a second inline copy is exactly
@@ -723,9 +730,14 @@
 		resetComposeState();
 		resetDeleteState();
 		resetConvertState();
+		// #434 slice 3/6 — every load starts with no claim of staleness; a read
+		// this load falls back to the cache for notes its own readAt
+		// (readCache.ts), and the "as of" line below reads it back. Same
+		// placement rule as the agenda's `loadForSelected` (slice 2).
+		resetServedFromCache();
 		try {
 			const cfg = { db: current.db, token: getToken() ?? '' };
-			const loaded = await loadEventDetail(cfg, id);
+			const loaded = await loadEventPageDetail(cfg, id);
 			if (g !== generation) return; // superseded by a newer selection/param
 			detail = loaded;
 			status = 'ready';
@@ -3651,6 +3663,29 @@
 			</p>
 		{:else if detail}
 			<div class="flex flex-col gap-1.5">
+				<!-- #434 slice 3/6 — "as of <time>": null once this load's own reads
+				     all came from the network (reset in loadForSelected, above); set
+				     to the OLDEST readAt among any that fell back to the read cache.
+				     Same Tallinn calendar day as now → the bare time; any earlier day
+				     carries its date alongside it — the agenda's exact rule (slice 2). -->
+				{#if $servedFromCache}
+					{@const asOfDate = new Date($servedFromCache)}
+					{@const isToday =
+						isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
+						isoDateFormatter('Europe/Tallinn').format(new Date())}
+					{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
+					<p
+						data-testid="event-detail-as-of"
+						role="status"
+						class="mb-1 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
+					>
+						{m.agenda_as_of({
+							time: isToday
+								? asOfTime
+								: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
+						})}
+					</p>
+				{/if}
 				<!-- #304 — the series picker. Rights-holders only (`isEditor`, the SAME
 				     one predicate the pencils/delete all run — a plain member
 				     gets no picker and no note); scoped to events that HAVE a season
