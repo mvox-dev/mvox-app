@@ -136,17 +136,25 @@ export interface ActiveMember {
  * for the contract and the two probe ledgers it rests on. `/roster` raises
  * `roster-partial-notice` off it; `loadRoster` (the shared profile-names producer
  * below) deliberately discards the flag and warns instead — see its doc.
+ *
+ * #434 slice 4 review round 2, finding 1 — SHARED reader (/roster's rows, the
+ * event page's attendance panel, the home page, the library's librarian
+ * pickers), so it hard-wires no cache flag; `opts` threads into the one
+ * `entuFetch` call, default off. `libraryPageData.ts`'s `loadLibrarianPickers`
+ * is the one caller that switches it on.
  */
 export async function listActiveMembers(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<ListRead<ActiveMember>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=member&status.string=active&props=person,_parent,_created,_owner&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listActiveMembers failed: ${res.status}`);
 	const body = (await res.json()) as {

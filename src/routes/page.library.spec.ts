@@ -109,12 +109,19 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
+// #434 slice 4 review round 2, finding 2 — the write paths no longer read the
+// library id off a store the (cache-backed) librarian resolution filled: they
+// resolve it LIVE through `resolveMyLibraryId`, so it is mocked here too.
+const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
+	resolveLibrarianMock: vi.fn(),
+	resolveMyLibraryIdMock: vi.fn()
+}));
 vi.mock('$lib/library/librarianStore', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
 	return {
 		...actual, // keep the real writable store + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock
+		resolveLibrarian: resolveLibrarianMock,
+		resolveMyLibraryId: resolveMyLibraryIdMock
 	};
 });
 
@@ -155,6 +162,9 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	// #434 slice 4 review round 2, finding 2 — the LIVE write-path resolution
+	// every checkout/create now makes for its own `_parent`.
+	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
 	findMyMemberIdMock.mockResolvedValue(null);
 	// Default: empty copy names, unless a test overrides.
@@ -185,6 +195,7 @@ afterEach(() => {
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
 	resolveLibrarianMock.mockReset();
+	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -354,14 +365,32 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		expect(listEditionsMock).not.toHaveBeenCalled();
 
 		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
-		await waitFor(() => expect(listEditionsMock).toHaveBeenCalledWith(expect.anything(), 'work-1'));
+		// #434 slice 4/6 — the page now calls listEditions/listCopies through
+		// libraryPageData's loadLibraryEditions/loadLibraryCopies, which thread
+		// a fetchImpl and CACHED_READ opts alongside the (cfg, id) pair this
+		// test already asserted.
+		await waitFor(() =>
+			expect(listEditionsMock).toHaveBeenCalledWith(
+				expect.anything(),
+				'work-1',
+				expect.anything(),
+				expect.anything()
+			)
+		);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull();
 		});
 		expect(listCopiesMock).not.toHaveBeenCalled();
 
 		await fireEvent.click(container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element);
-		await waitFor(() => expect(listCopiesMock).toHaveBeenCalledWith(expect.anything(), 'edition-1'));
+		await waitFor(() =>
+			expect(listCopiesMock).toHaveBeenCalledWith(
+				expect.anything(),
+				'edition-1',
+				expect.anything(),
+				expect.anything()
+			)
+		);
 
 		// #128 — member view collapses the available copy (copy-1) into a
 		// summary line instead of an individual row; the lent copy (copy-2)

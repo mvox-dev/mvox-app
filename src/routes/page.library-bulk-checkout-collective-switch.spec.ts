@@ -117,12 +117,18 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
+// #434 slice 4 review round 2, finding 2 — the bulk checkout's `_parent` is
+// resolved LIVE per cfg, which is what keeps A's library out of B's write.
+const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
+	resolveLibrarianMock: vi.fn(),
+	resolveMyLibraryIdMock: vi.fn()
+}));
 vi.mock('$lib/library/librarianStore', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
 	return {
 		...actual, // keep the real writable store + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock
+		resolveLibrarian: resolveLibrarianMock,
+		resolveMyLibraryId: resolveMyLibraryIdMock
 	};
 });
 
@@ -230,6 +236,9 @@ beforeEach(() => {
 	);
 	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve({ state: 'librarian', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
+	);
+	resolveMyLibraryIdMock.mockImplementation((cfg: { db: string }) =>
+		Promise.resolve(cfg.db === DB_A ? 'lib-a' : 'lib-b')
 	);
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
