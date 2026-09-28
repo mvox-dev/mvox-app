@@ -15,8 +15,6 @@
 		listAllEditions,
 		listAllCopies,
 		resolveBorrowerNames,
-		resolveCopyNames,
-		resolveCopyChains,
 		formatLoanChainLabel,
 		deriveCopyAvailability,
 		deriveEditionAvailability,
@@ -34,18 +32,26 @@
 	// store-only post-write lending re-read. `listWorks`/`listEditions`/
 	// `listCopies`/`listLendings` stay SHARED readers, never called directly
 	// from this page (readCache.optin-fence.spec.ts pins the allowlist).
+	// #434 slice 4 review round, findings 1 and 2 — the librarian state and the
+	// my-loans chain load through the same entry points: offline they restore
+	// the last-seen answer instead of (1) painting a red librarian-load-error
+	// beside a perfectly restored listing and (2) silently dropping the
+	// my-loans section altogether.
 	import {
 		loadLibraryListing,
 		loadLibraryEditions,
 		loadLibraryCopies,
-		refreshLibraryLendings
+		refreshLibraryLendings,
+		loadLibrarianState,
+		loadMyMemberId,
+		loadMyLoanCopyNames,
+		loadMyLoanCopyChains
 	} from '$lib/library/libraryPageData';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import { workLabel } from '$lib/repertoire/workLabel';
-	import { librarianStore, libraryEntityIdStore, resetLibrarian, resolveLibrarian } from '$lib/library/librarianStore';
+	import { librarianStore, libraryEntityIdStore, resetLibrarian } from '$lib/library/librarianStore';
 	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
-	import { findMyMemberId } from '$lib/rsvp/rsvpData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
 	// #275 — the app's first upload path: attach files to an edition.
@@ -480,11 +486,14 @@
 			borrowerNames = listing.borrowerNames;
 			status = 'ready';
 
-			// #73 — resolve current member for my-loans. #434 slice 4/6 — offline
-			// with nothing further to serve this rejects; caught here so it never
-			// escapes as an unhandled rejection or takes the (already-rendered)
-			// listing down.
-			findMyMemberId(cfg, current.personId)
+			// #73 — resolve current member for my-loans. #434 slice 4 review
+			// round, finding 2 — cache-backed (loadMyMemberId): uncached this
+			// rejected offline, myMemberId stayed null and the whole my-loans
+			// section vanished from a screen that says it is showing last-seen
+			// data. Still caught: with nothing stored either, it rejects, and the
+			// rejection may neither escape unhandled nor take the (already
+			// rendered) listing down.
+			loadMyMemberId(cfg, current.personId)
 				.then((id) => {
 					if (isCurrent()) myMemberId = id;
 				})
@@ -1010,7 +1019,7 @@
 			return;
 		}
 		const cfg = { db: current.db, token };
-		resolveCopyNames(cfg, unresolved).then(names => {
+		loadMyLoanCopyNames(cfg, unresolved).then(names => {
 			if (g !== copyNameGen) return;
 			// Merge locally-resolved names with network-fetched ones
 			for (const [id, name] of localNames) names.set(id, name);
@@ -1057,7 +1066,7 @@
 			return;
 		}
 		const cfg = { db: current.db, token };
-		resolveCopyChains(cfg, unresolved, works).then(chains => {
+		loadMyLoanCopyChains(cfg, unresolved, works).then(chains => {
 			if (g !== chainGen) return;
 			for (const [id, chain] of localChains) chains.set(id, chain);
 			myCopyChains = chains;
@@ -1096,7 +1105,7 @@
 		resetLibrarianPickerPartial();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
-		resolveLibrarian(cfg, current.personId).then(async (result) => {
+		loadLibrarianState(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
 			libraryEntityIdStore.set(result.libraryId);
 			// Load checkout form data BEFORE revealing librarian tools so the
@@ -1474,7 +1483,7 @@
 						// #321 — same as the effect above: the claims come down while the
 						// feeds behind them are being re-read.
 						resetLibrarianPickerPartial();
-						resolveLibrarian(cfg, selected.personId).then(async (result) => {
+						loadLibrarianState(cfg, selected.personId).then(async (result) => {
 							libraryEntityIdStore.set(result.libraryId);
 							if (result.state === 'librarian') {
 								try {

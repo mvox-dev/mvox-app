@@ -114,7 +114,16 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		'src/lib/collective/rosterNames.ts',
 		// Slice 4: the library's readers — shared with the librarian's pickers,
 		// the post-write lending re-reads and the my-loans chain.
-		'src/lib/library/libraryData.ts'
+		'src/lib/library/libraryData.ts',
+		// Slice 4 review round, finding 1: the librarian resolution. Shared with
+		// /admin's librarian panel and /roster's lending-eligibility chain, and
+		// (via resolveMyLibraryId) the parent id a lending WRITE is created
+		// under — so the flag can only ever be an argument here.
+		'src/lib/library/librarianStore.ts',
+		// Slice 4 review round, finding 2: the viewer's own member id. Shared
+		// with the RSVP WRITE path (agenda + event page resolve it and then POST
+		// it as `member` on an rsvp) — the exact step-inside-a-write shape.
+		'src/lib/rsvp/rsvpData.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
@@ -160,6 +169,26 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		expect(library).toContain('listMyProfiles(cfg, personId, fetchImpl, opts)');
 		expect(library).toContain('resolveRealNameByPerson(cfg, fetchImpl, opts)');
 	});
+
+	it('the librarian resolution threads its own opts all the way down', () => {
+		// Slice 4 review round, finding 1 — resolveLibrarian maps ANY throw to
+		// `{ state: 'error' }`, so one un-threaded link out of its three reads
+		// (database entity -> library list -> the library's _owner/_editor) is a
+		// red `librarian-load-error` alert offline, beside a listing that
+		// restored perfectly.
+		const store = src('src/lib/library/librarianStore.ts');
+		expect(store).toContain('resolveDatabaseEntityId(cfg, fetchImpl, opts)');
+		expect(store).toContain('resolveMyLibraryId(cfg, fetchImpl, dbEntityId, opts)');
+	});
+
+	it('the my-loans copy labels thread their own opts all the way down', () => {
+		// Slice 4 review round, finding 2 — a my-loans row's label is the copy
+		// read AND (for the work/edition context) the edition read; an
+		// un-threaded link leaves a restored row half-labelled or
+		// `library_copy_name_unknown`.
+		const library = src('src/lib/library/libraryData.ts');
+		expect(library).toContain('resolveCopyName(cfg, id, fetchImpl, opts)');
+	});
 });
 
 describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', () => {
@@ -179,7 +208,9 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		// findings 1 and 2).
 		'src/lib/events/eventPageData.ts',
 		// Slice 4: the library's own entry points — the listing, the node
-		// expansions, and the store-only post-write lending re-read.
+		// expansions, the store-only post-write lending re-read, and (slice 4
+		// review round, findings 1 and 2) the librarian state and the my-loans
+		// member id + copy labels.
 		'src/lib/library/libraryPageData.ts'
 	].sort();
 

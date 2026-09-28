@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 
@@ -36,11 +36,19 @@ export type RsvpByEventId = Record<string, { rsvpId: string; status: RsvpStatus 
  * Resolve the singer's own active `member` id in the current collective. Returns
  * null when no active membership exists (e.g. a signed-in person with no roster
  * row yet) — callers use this to gate the RSVP control (#12).
+ *
+ * #434 slice 4 review round, finding 2 — `opts` (trailing, DEFAULT OFF) is the
+ * read-cache flag. SHARED with the RSVP WRITE path (the agenda and the event
+ * page both resolve this id and then POST it as `member` on an rsvp), which is
+ * exactly the "a GET that is a step inside a write" shape readCache.ts forbids
+ * the flag on — so nothing is hard-wired here. The library page's my-loans
+ * section, which is a READ, switches it on from `libraryPageData.ts`.
  */
 export async function findMyMemberId(
 	cfg: EntuCfg,
 	personId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<string | null> {
 	// #321 class-1 — scoped by person.reference + status.string=active: the
 	// single-collective-per-db invariant (this module header) means a signed-in
@@ -52,7 +60,8 @@ export async function findMyMemberId(
 		`entity?_type.string=member&person.reference=${encodeURIComponent(personId)}&status.string=active&props=_id&limit=1`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`findMyMemberId failed: ${res.status}`);
 	const body = (await res.json()) as { entities?: Array<{ _id: string }> };

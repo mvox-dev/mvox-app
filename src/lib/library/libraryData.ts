@@ -351,9 +351,10 @@ export function deriveCopyAvailability(copyId: string, lendings: Lending[]): Cop
 async function resolveCopyName(
 	cfg: EntuCfg,
 	copyId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<string> {
-	const res = await entuFetch(cfg.db, `entity/${copyId}?props=name,copy_number`, cfg.token, {}, fetchImpl);
+	const res = await entuFetch(cfg.db, `entity/${copyId}?props=name,copy_number`, cfg.token, {}, fetchImpl, opts);
 	if (!res.ok) throw new Error(`resolveCopyName: copy ${copyId} lookup failed: ${res.status}`);
 	const body = (await res.json()) as {
 		entity?: { name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> };
@@ -368,15 +369,22 @@ async function resolveCopyName(
 /**
  * Batched + deduped copy-name resolution. Same fail-loud-as-a-whole pattern
  * as resolveBorrowerNames.
+ *
+ * #434 slice 4 review round, finding 2 — `opts` (trailing, DEFAULT OFF)
+ * threaded into every per-copy read. This labels the my-loans rows, so offline
+ * an un-threaded link means the rows render `library_copy_name_unknown` over
+ * data that was on screen minutes earlier. Shared reader; the flag is switched
+ * on in `libraryPageData.ts`.
  */
 export async function resolveCopyNames(
 	cfg: EntuCfg,
 	copyIds: string[],
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<Map<string, string>> {
 	const unique = [...new Set(copyIds)];
 	const pairs = await Promise.all(
-		unique.map(async (id) => [id, await resolveCopyName(cfg, id, fetchImpl)] as const)
+		unique.map(async (id) => [id, await resolveCopyName(cfg, id, fetchImpl, opts)] as const)
 	);
 	return new Map(pairs);
 }
@@ -533,18 +541,26 @@ export function formatLoanChainLabel(chain: LoanChain): string {
 	return `Copy #${chain.copyNumber} — ${context}`;
 }
 
+/**
+ * #434 slice 4 review round, finding 2 — `opts` (trailing, DEFAULT OFF) reaches
+ * BOTH reads per chain (the copy and its edition): the my-loans row's
+ * work/edition label is the copy read AND the edition read, so one un-threaded
+ * link is a half-labelled row offline. Shared reader; the flag is switched on
+ * in `libraryPageData.ts`.
+ */
 export async function resolveCopyChains(
 	cfg: EntuCfg,
 	copyIds: string[],
 	works: Work[],
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<Map<string, LoanChain>> {
 	const unique = [...new Set(copyIds)];
 	const editionCache = new Map<string, { name: string; workId: string }>();
 
 	const pairs = await Promise.all(
 		unique.map(async (copyId) => {
-			const copyRes = await entuFetch(cfg.db, `entity/${copyId}?props=copy_number,_parent`, cfg.token, {}, fetchImpl);
+			const copyRes = await entuFetch(cfg.db, `entity/${copyId}?props=copy_number,_parent`, cfg.token, {}, fetchImpl, opts);
 			if (!copyRes.ok) throw new Error(`resolveCopyChains: copy ${copyId} lookup failed: ${copyRes.status}`);
 			const copyBody = (await copyRes.json()) as {
 				entity?: {
@@ -560,7 +576,7 @@ export async function resolveCopyChains(
 
 			const editionId = editionParent.reference;
 			if (!editionCache.has(editionId)) {
-				const edRes = await entuFetch(cfg.db, `entity/${editionId}?props=name,_parent`, cfg.token, {}, fetchImpl);
+				const edRes = await entuFetch(cfg.db, `entity/${editionId}?props=name,_parent`, cfg.token, {}, fetchImpl, opts);
 				if (!edRes.ok) throw new Error(`resolveCopyChains: edition ${editionId} lookup failed: ${edRes.status}`);
 				const edBody = (await edRes.json()) as {
 					entity?: {

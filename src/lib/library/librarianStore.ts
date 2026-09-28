@@ -1,6 +1,11 @@
 // src/lib/library/librarianStore.ts
 import { writable, type Writable } from 'svelte/store';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+// TYPE-ONLY (module-graph note below): `$lib/entu/fetchOptions` is the
+// dependency-free sibling of `$lib/entu/request`, and this import is erased at
+// build time regardless — naming the options type here costs the root layout
+// nothing.
+import type { EntuFetchOptions } from '$lib/entu/fetchOptions';
 
 export type LibrarianState = 'loading' | 'librarian' | 'not-librarian' | 'error';
 
@@ -66,17 +71,24 @@ export class LibraryLookupError extends Error {
 // resolved the database entity thread it straight in, skipping the internal
 // `resolveDatabaseEntityId` round-trip. Omitted, behavior is identical to
 // before — this function resolves it itself.
+// #434 slice 4 review round, finding 1 — `opts` (trailing, DEFAULT OFF) is the
+// read-cache flag, threaded into BOTH reads under here (the database entity and
+// the library list). This is a SHARED reader — /roster's lending-eligibility
+// chain and /admin's librarian panel call it too — so it hard-wires nothing;
+// the library page switches the flag on from `libraryPageData.ts`
+// (readCache.optin-fence.spec.ts).
 export async function resolveMyLibraryId(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch,
-	dbEntityId?: string
+	dbEntityId?: string,
+	opts: EntuFetchOptions = {}
 ): Promise<string | null> {
 	const { entuFetch } = await import('$lib/entu/request');
 
 	let resolvedDbEntityId = dbEntityId;
 	if (!resolvedDbEntityId) {
 		const { resolveDatabaseEntityId } = await import('$lib/collective/databaseEntity');
-		const resolved = await resolveDatabaseEntityId(cfg, fetchImpl);
+		const resolved = await resolveDatabaseEntityId(cfg, fetchImpl, opts);
 		// No visible database entity: there is no collective to scope the
 		// library lookup to, so no library can be resolved.
 		if (!resolved) return null;
@@ -100,7 +112,8 @@ export async function resolveMyLibraryId(
 		`entity?_type.string=library&_parent.reference=${encodeURIComponent(resolvedDbEntityId)}&props=_id&limit=1`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) {
 		throw new LibraryLookupError(
@@ -115,14 +128,21 @@ export async function resolveMyLibraryId(
 
 // #173 — `dbEntityId` (4th param, OPTIONAL) forwards straight to
 // `resolveMyLibraryId`; see its header for the round-trip-skipping contract.
+// #434 slice 4 review round, finding 1 — `opts` (trailing, DEFAULT OFF) reaches
+// all THREE reads this resolution makes (database entity, library list, the
+// library's `_owner`/`_editor`). It has to reach all three: this function maps
+// ANY throw to `{ state: 'error' }`, so one un-threaded link offline is the
+// library page showing a red "librarian state could not be loaded" alert beside
+// a listing that restored perfectly. Shared reader — no flag is named here.
 export async function resolveLibrarian(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch,
-	dbEntityId?: string
+	dbEntityId?: string,
+	opts: EntuFetchOptions = {}
 ): Promise<LibrarianResult> {
 	try {
-		const libraryId = await resolveMyLibraryId(cfg, fetchImpl, dbEntityId);
+		const libraryId = await resolveMyLibraryId(cfg, fetchImpl, dbEntityId, opts);
 		// #143 review F4 — `null` here is now ONLY the factual "no library entity
 		// is visible under the collective's database entity" (no database entity,
 		// or an empty library list). Every failure kind (database-entity lookup,
@@ -135,7 +155,8 @@ export async function resolveLibrarian(
 			`entity/${libraryId}?props=_owner,_editor`,
 			cfg.token,
 			{},
-			fetchImpl
+			fetchImpl,
+			opts
 		);
 		if (!res.ok) return { state: 'error', libraryId: null };
 
