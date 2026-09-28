@@ -95,7 +95,18 @@ below is only how *I* work: method, self-corrections, and findings I have alread
   it five days without re-deriving it. That is the "shipped as #N" failure from the other end — **a negative
   existence claim rots exactly like a positive one.** Re-check existence at the point of use, every time.
 
-- **[LIVE 2026-09-23] The schema gate in `prompts/bentham.md` still demands the RETIRED upstream trailer.**
+- **[CLOSED 2026-09-26] All THREE prompt-file contradictions below are folded in — verified at
+  `prompts/bentham.md` on `main` @ `45b1a0c` this turn, not from a relay.** (a) `:103` now reads
+  "`Schema-Change: entu/research@<sha>` trailer is RETIRED … never require it", so the false-RED risk is
+  gone and `PO-Approved:` alone is the gate; (b) `:139` is a **YOU MUST** — run `pnpm check` + `pnpm test`
+  on the branch's own bytes before any merge verdict, with running the gates named as verification rather
+  than implementation, so a fresh me has no ground to decline; (c) `:72` states the no-server SPA fence
+  (any `src/lib/server/`, `+page.server.ts`, `+server.ts`, `$env/static/private` import is the break;
+  browser-direct through `src/lib/entu/` is the norm), and `:72` widens the security-critical glob to
+  `src/lib/*/*Data.ts` / `src/lib/*/*Actions.ts` — one level down, which is where the 16 real files live.
+  **The two entries below are kept for their lessons only, not as open flags. Do not re-raise them.**
+
+- **[was LIVE 2026-09-23, now CLOSED — see above] The schema gate in `prompts/bentham.md` demanded the RETIRED upstream trailer.**
   Its "v4E Schema Mutations" section requires **both** `Schema-Change: entu/research@<sha>` and `PO-Approved:`,
   with "Missing either → RED". Rulebook section C is explicit that `Schema-Change:` is **dead — never require it,
   and never read one as pointing anywhere meaningful.** Still unfixed on `chore/mvox-27-seam` (checked this turn).
@@ -728,3 +739,32 @@ plausible, matching 6196, which is exactly what makes it dangerous: **a mid-run 
 itself in the result.** Capturing HEAD before and after IN THE SAME COMMAND is what surfaced it; had I read
 HEAD in a separate call I would have quoted a number I could not stand behind. Re-ran on a stable tree for
 the real figure. Under the single-tree protocol, say out loud that review holds the tree.
+
+## [STAND-DOWN, premise named] 2026-09-28, #394 r3 — eraser reach ignores a loaded stroke's own `w`
+`ERASE_THRESHOLD` (StrokeSurface.svelte:67) is DEFAULT_STROKE_WIDTH/2 + 0.004, but `parse` accepts any
+positive `w`, so a thicker loaded stroke's visible edge sits outside the reach. Not pressed: the component is
+the only producer and always emits DEFAULT_STROKE_WIDTH. **Re-open when any producer emits `w` other than the
+default** (per-pen widths, #333 import); fix shape then = `stroke.w/2 + 0.004` per stroke inside pathHits.
+
+## [CALIBRATION-NO-REPLAY-DURING-A-SUITE] 2026-09-28, #361 r3
+File-granularity RED replay swaps a real source file in the shared tree. Never run it while a background
+`pnpm test` is live: the suite may import the swapped bytes and its count stops being the branch's own.
+Order: gates first (or replay first), never overlapping. I overlapped once; killed and re-ran the suite clean.
+
+## [STAND-DOWN, premise named] 2026-09-28, #434 s1 r3 — read-cache budget pass is a full scan per put
+`evictOverBudget` (src/lib/entu/readCache.ts) walks EVERY [readAt,bytes] index key on every put to sum the
+total — O(n) per put, n up to ~10k entries at 32MB of kilobyte bodies, one scan per GET a fan-out screen makes.
+Not pressed at s1: no reader carries CACHED_READ, so no put ever runs. **Re-open at the slice that first opts a
+reader in (slice 2).** Fix shape: a running total in a meta record, updated in the same readwrite transaction
+as the put/delete; scan only past the budget. Same slice: the open path has no `onversionchange`/`onblocked`
+handling — harmless while v2 is the first shipped version, a hang risk (offline serve awaits getDb) at any future bump.
+**[CLOSED 2026-09-28, verified at feat/434-s3-offline f856d98]** Slice 2 landed both: a META store running total
+(`totalBytes`, read/updated in the put's own readwrite tx; scan only past budget) and `onversionchange` on the db.
+
+## [STAND-DOWN, premise named] 2026-09-28, #434 s6 r3 — afterNavigate clear vs a page's own cache fallback
+Root +layout afterNavigate clears the cache-fallback flag. SvelteKit (client.js navigate) fires afterNavigate after
+commit + two `tick()`s — microtasks after mount — while a fallback needs a network-error task plus an IDB get, so a
+page's own fallback lands AFTER the clear. Premise: `src/routes/+layout.ts` load is synchronous (no fetch) and no
+cached route navigates itself via goto (verified: agenda none; event/library goto only to /part, /). **Re-open if a
+universal load gains an await/fetch, or a cached page starts a goto on its own route (e.g. a ?work= scroll-spy via
+goto, not replaceState)** — then a fallback can land before the clear and reopen writes over cached data.
