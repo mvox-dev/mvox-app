@@ -15,11 +15,21 @@ export interface LibrarianResult {
 }
 
 export const librarianStore: Writable<LibrarianState> = writable('loading');
-export const libraryEntityIdStore: Writable<string | null> = writable(null);
 
+// #434 slice 4 review round 2, finding 2 — `libraryEntityIdStore` is GONE. It
+// held the library id `resolveLibrarian` answered, and its only readers were
+// /library's three write paths, which passed it as the `_parent` of a lending
+// or work CREATE. Once review round 1 made that resolution cache-backed
+// (`libraryPageData.loadLibrarianState`), the store could hand a stored id to a
+// live POST — the "GET that is a STEP INSIDE a write" readCache.ts forbids the
+// flag on. The write paths now resolve their parent live
+// (`libraryPageData.resolveWriteLibraryId`), which left nothing reading the
+// store: `state: 'librarian'` already implies a library was found (a null id is
+// `not-librarian`), and /admin keeps its own local `libraryId` off
+// `LibrarianResult`. A store only ever written to is state that cannot be
+// wrong and cannot be right.
 export function resetLibrarian(): void {
 	librarianStore.set('loading');
-	libraryEntityIdStore.set(null);
 }
 
 // NOTE (module-graph): `$lib/entu/request` pulls in `$lib/entu-config`, which

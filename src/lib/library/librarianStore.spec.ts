@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import {
 	librarianStore,
-	libraryEntityIdStore,
 	resetLibrarian,
 	resolveLibrarian,
 	resolveMyLibraryId
@@ -192,11 +191,11 @@ describe('librarianStore', () => {
 		expect(get(librarianStore)).toBe('loading');
 	});
 
-	it('resetLibrarian sets to loading and clears libraryEntityIdStore', () => {
+	// #434 slice 4 review round 2, finding 2 — `libraryEntityIdStore` is gone;
+	// see the store module's note. `resetLibrarian` is now only the state.
+	it('resetLibrarian sets to loading', () => {
 		librarianStore.set('librarian');
-		libraryEntityIdStore.set('lib-1');
 		resetLibrarian();
 		expect(get(librarianStore)).toBe('loading');
-		expect(get(libraryEntityIdStore)).toBeNull();
 	});
 });

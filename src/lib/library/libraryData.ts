@@ -135,15 +135,29 @@ export async function listEditions(
  * Flat list of ALL editions in the collective (no parent-work filter). Used by
  * the librarian bulk checkout/return UI where the edition picker must show every
  * edition regardless of which work tree node the user has expanded.
+ *
+ * #434 slice 4 review round 2, finding 1 — SHARED reader (the /library
+ * librarian panel, /repertoire's work rows, the home page, /profile's file
+ * metadata read), so it hard-wires no flag; `opts` threads into the one
+ * `entuFetch` call, default off. `libraryPageData.ts`'s `loadLibrarianPickers`
+ * is what switches it on: this read also feeds the librarian's RENDERED browse
+ * tree (`deriveWorkAvailability`) and the my-loans local chain, so leaving it
+ * uncached only moved the offline failure one step behind `resolveLibrarian` —
+ * the restored listing still carried a red `librarian-load-error` beside it.
  */
 /** #321 — collective-wide flat read, no natural ceiling. */
-export async function listAllEditions(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Edition>> {
+export async function listAllEditions(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
+): Promise<ListRead<Edition>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=edition&props=name,publisher,_parent,external_link,file&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
 	const body = (await res.json()) as {
@@ -204,15 +218,24 @@ export async function listCopies(
  * the librarian checkout form where the copy picker must show every available
  * copy regardless of which edition tree node the user has expanded. Includes
  * `_parent` so each copy carries its edition ID for bulk-return grouping.
+ *
+ * #434 slice 4 review round 2, finding 1 — SHARED reader, same reasoning as
+ * `listAllEditions` above: `opts` threads into the one `entuFetch` call,
+ * default off, and `libraryPageData.ts`'s `loadLibrarianPickers` switches it on.
  */
 /** #321 — collective-wide flat read, no natural ceiling. */
-export async function listAllCopies(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Copy>> {
+export async function listAllCopies(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
+): Promise<ListRead<Copy>> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=copy&props=name,copy_number,_parent&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
 	const body = (await res.json()) as {

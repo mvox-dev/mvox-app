@@ -28,12 +28,20 @@
 //     stores, so a later offline listing shows the copy correctly returned/
 //     checked out, and never touches `servedFromCache` (a background re-read
 //     is not what the mounted screen is rendering).
+//   - `loadLibrarianPickers` / `loadLibrarianMemberNames` (review round 2,
+//     finding 1) — the librarian panel's own three collective-wide feeds, same
+//     store-and-serve decision as the listing they sit beside.
+//   - `resolveWriteLibraryId` (review round 2, finding 2) — the ONE read here
+//     deliberately left UNCACHED: the `_parent` a lending or work CREATE lands
+//     under, resolved live at write time.
 import { CACHED_READ, CACHED_READ_STORE_ONLY } from '$lib/entu/fetchOptions';
 import {
 	listWorks,
 	listLendings,
 	listEditions,
 	listCopies,
+	listAllEditions,
+	listAllCopies,
 	resolveBorrowerNames,
 	resolveCopyNames,
 	resolveCopyChains,
@@ -43,8 +51,9 @@ import {
 	type Lending,
 	type LoanChain
 } from './libraryData';
-import { resolveLibrarian, type LibrarianResult } from './librarianStore';
+import { resolveLibrarian, resolveMyLibraryId, type LibrarianResult } from './librarianStore';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
+import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { ListRead } from '$lib/entu/listRead';
 
@@ -207,5 +216,91 @@ export async function loadMyLoanCopyChains(
 	return resolveCopyChains(cfg, copyIds, works, fetchImpl, CACHED_READ);
 }
 
+/** The three collective-wide feeds behind the librarian panel. */
+export interface LibrarianPickers {
+	editions: ListRead<Edition>;
+	copies: ListRead<Copy>;
+	members: ListRead<ActiveMember>;
+}
+
+/**
+ * The librarian panel's own three feeds — every edition, every copy, every
+ * active member (#434 slice 4 review round 2, finding 1).
+ *
+ * WHY this entry point exists. Review round 1 made `loadLibrarianState`
+ * cache-backed so the offline screen would show the LAST-SEEN librarian state
+ * instead of a red `librarian-load-error`. It did not close the finding: the
+ * page loads these three feeds BEHIND that answer, and only reveals the panel
+ * once they resolve. They were uncached, so a librarian offline got
+ * `state: 'librarian'` from the cache, then three rejections, then
+ * `librarianStore.set('error')` — the same alert beside the same restored
+ * listing, one step later. The shipped offline fixture answered the library
+ * list with `{ count: 0 }`, so the viewer was always `not-librarian` and the
+ * whole branch went unexercised.
+ *
+ * `CACHED_READ` (serve, not store-only): these feeds are RENDERED, not just
+ * picker fuel — `deriveWorkAvailability` draws the browse tree's
+ * available/total counter from `allEditions` + `allCopies`, and the my-loans
+ * rows resolve their copy -> edition -> work labels locally out of them. Their
+ * age belongs on the same "as of <time>" line as the listing's. The write
+ * controls they also feed are slice 6's gate, not this read's.
+ */
+export async function loadLibrarianPickers(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<LibrarianPickers> {
+	const [editions, copies, members] = await Promise.all([
+		listAllEditions(cfg, fetchImpl, CACHED_READ),
+		listAllCopies(cfg, fetchImpl, CACHED_READ),
+		listActiveMembers(cfg, fetchImpl, CACHED_READ)
+	]);
+	return { editions, copies, members };
+}
+
+/**
+ * The librarian pickers' member names (#434 slice 4 review round 2, finding 1).
+ * Same real-names-overlaid map as the listing's borrower names, over the
+ * ACTIVE-member set instead of the borrowing one — uncached it left every
+ * offline picker row reading `library_borrower_unknown` over people who were
+ * named minutes earlier.
+ */
+export async function loadLibrarianMemberNames(
+	cfg: EntuCfg,
+	memberIds: string[],
+	fetchImpl: typeof fetch = fetch
+): Promise<Map<string, string>> {
+	return resolveBorrowerNames(cfg, memberIds, fetchImpl, CACHED_READ);
+}
+
+/**
+ * The library entity id a lending / work CREATE is parented under, resolved
+ * LIVE — the one library read in this file that is deliberately NOT
+ * cache-backed (#434 slice 4 review round 2, finding 2).
+ *
+ * `loadLibrarianState` above passes `CACHED_READ` all the way down into
+ * `resolveMyLibraryId`, which is right for the answer the PANEL renders and
+ * wrong for the `_parent` of a write: readCache.ts forbids the flag on "a GET
+ * that is a STEP INSIDE a write", and readCache.optin-fence.spec.ts names this
+ * exact chain ("via resolveMyLibraryId the parent id a lending WRITE is created
+ * under"). Review round 1 turned the flag on for it anyway, and /library's three
+ * write paths read the resulting id back off `librarianStore`'s
+ * `libraryEntityIdStore` — so a flapping connection could serve a stored id, the
+ * connection return, and the POST land under a parent nobody re-verified.
+ *
+ * So the two are SPLIT: the panel's answer stays cache-backed and is only ever
+ * RENDERED, and every write path calls this — the default, flag-free
+ * `resolveMyLibraryId`, exactly the call the eight `resolveDatabaseEntityId`
+ * write paths make. Offline it rejects, which is what a write should do
+ * offline; the POST needed the network regardless. (`libraryEntityIdStore` is
+ * gone with the last reader: see librarianStore.ts's note.)
+ */
+export async function resolveWriteLibraryId(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<string | null> {
+	return resolveMyLibraryId(cfg, fetchImpl);
+}
+
 // (*MVOX:Josquin* — #434 slice 4/6 GREEN)
 // (*MVOX:Josquin* — #434 slice 4 review round, findings 1 and 2)
+// (*MVOX:Josquin* — #434 slice 4 review round 2, findings 1 and 2)

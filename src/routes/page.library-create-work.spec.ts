@@ -125,14 +125,21 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
+// #434 slice 4 review round 2, finding 2 — the new work's `_parent` is resolved
+// LIVE at submit time (`resolveMyLibraryId`), not read off a store the
+// cache-backed librarian resolution filled.
+const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
+	resolveLibrarianMock: vi.fn(),
+	resolveMyLibraryIdMock: vi.fn()
+}));
 vi.mock('$lib/library/librarianStore', async () => {
 	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>(
 		'$lib/library/librarianStore'
 	);
 	return {
 		...actual, // keep the real writable stores + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock
+		resolveLibrarian: resolveLibrarianMock,
+		resolveMyLibraryId: resolveMyLibraryIdMock
 	};
 });
 
@@ -203,6 +210,8 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 	// Defaults; tests override resolveLibrarianMock per case.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	// #434 slice 4 review round 2, finding 2 — the LIVE write-path resolution.
+	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
@@ -236,6 +245,7 @@ afterEach(() => {
 	resolveCopyNamesMock.mockReset();
 	resolveCopyChainsMock.mockReset();
 	resolveLibrarianMock.mockReset();
+	resolveMyLibraryIdMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
@@ -343,7 +353,7 @@ describe('#198 — inline create-work form', () => {
 		expect(container.querySelector('[data-testid="create-work-submit"]')).not.toBeNull();
 	});
 
-	it('submitting calls createWork with the LIBRARY entity id (from resolveLibrarian, via libraryEntityIdStore) + name + composer, and appends the created work to the LOCAL list — no listWorks refetch', async () => {
+	it('submitting calls createWork with the LIBRARY entity id (resolved LIVE at submit time, #434 slice 4 review round 2 finding 2) + name + composer, and appends the created work to the LOCAL list — no listWorks refetch', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		mockLibrarian();

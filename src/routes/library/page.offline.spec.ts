@@ -98,6 +98,7 @@ import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
 const DB = 'sampledb';
 const PERSON = 'person-1';
 const DB_ENTITY = 'db-entity-1';
+const LIBRARY = 'lib-1';
 
 // The borrower: member m-2 -> person p-2. Her PROFILE name and her RECORD name
 // differ, and roster_show_real_names is ON — so the lent-copy row names her by
@@ -132,10 +133,61 @@ function urlOf(input: RequestInfo | URL): string {
 }
 
 /** The online Entu: discovery (slice 2's fixture) plus the library's reads.
- *  Everything else answers empty. */
-function onlineEntu() {
+ *  Everything else answers empty.
+ *
+ *  #434 slice 4 review round 2, finding 1 — `librarianPerson` is the person the
+ *  collective's library names as `_owner`. WITHOUT it the library list answers
+ *  `{ count: 0 }`, which is what the fixture did for the whole of round 1: every
+ *  viewer resolved to `not-librarian`, so the `state === 'librarian'` branch —
+ *  and the three collective-wide feeds behind it — was never exercised offline,
+ *  and the red `librarian-load-error` that branch raised went unseen. */
+function onlineEntu(opts: { librarianPerson?: string } = {}) {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = urlOf(input);
+		if (url.includes('_type.string=library&')) {
+			return json(
+				opts.librarianPerson ? { count: 1, entities: [{ _id: LIBRARY }] } : { count: 0, entities: [] }
+			);
+		}
+		if (url.includes(`entity/${LIBRARY}?props=_owner,_editor`)) {
+			return json({
+				entity: { _id: LIBRARY, _owner: [{ reference: opts.librarianPerson ?? '' }] }
+			});
+		}
+		// The librarian panel's three feeds: every edition, every copy, every
+		// active member (flat, collective-wide — distinct from the per-node
+		// expansion reads matched further down by their `_parent.reference`).
+		if (url.includes('_type.string=edition&props=')) {
+			return json({
+				count: 1,
+				entities: [
+					{
+						_id: EDITION.id,
+						name: [{ string: EDITION.name }],
+						publisher: [{ string: EDITION.publisher }],
+						_parent: [{ reference: WORKS[0].id, entity_type: 'work' }]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=copy&props=')) {
+			return json({
+				count: 1,
+				entities: [
+					{
+						_id: COPY.id,
+						copy_number: [{ number: COPY.copyNumber }],
+						_parent: [{ reference: EDITION.id, entity_type: 'edition' }]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=member&status.string=active')) {
+			return json({
+				count: 1,
+				entities: [{ _id: BORROWER_MEMBER, person: [{ reference: BORROWER_PERSON }] }]
+			});
+		}
 		if (url.includes('_type.string=mvox_collective')) {
 			return json({ count: 1, entities: [{ _id: 'marker-1', name: [{ string: 'Sample Choir' }] }] });
 		}
@@ -518,6 +570,123 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 	});
 });
 
+describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel offline, not an alert', () => {
+	// The signed-in person OWNS the collective's library here. Round 1's fixture
+	// answered the library list with `{ count: 0 }`, so every viewer was
+	// `not-librarian` and this whole branch went unexercised: `loadLibrarianState`
+	// was cache-backed, resolved 'librarian' offline, and the three feeds gated
+	// BEHIND that answer (every edition, every copy, every active member) were
+	// not — so the page's catch set `librarianStore` to 'error' and painted the
+	// red `librarian-load-error` beside the restored listing. `expectListing`'s
+	// no-alert assertion is what catches it.
+	function librarianEntu() {
+		return onlineEntu({ librarianPerson: PERSON });
+	}
+
+	/** Wait for the librarian panel itself, and for the browse tree's
+	 *  availability counter — which is DERIVED from the picker feeds
+	 *  (deriveWorkAvailability over allEditions + allCopies), so it is on screen
+	 *  only if those feeds landed. */
+	async function expectLibrarianPanel(container: HTMLElement) {
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]'), 'librarian-tools').not.toBeNull();
+			expect(
+				container.querySelector('[data-testid="bulk-checkout-work-select"]'),
+				'bulk-checkout-work-select'
+			).not.toBeNull();
+		});
+		// FULL shape: `total: 1` is edition e-1's one copy, seen only through the
+		// picker feeds; `available: 0` is that copy lent out to m-2.
+		const row = container.querySelector(`[data-testid="library-work-${WORKS[0].id}"]`);
+		expect(row!.textContent, 'availability counter off the picker feeds').toContain(
+			'library_work_availability {"available":0,"total":1}'
+		);
+		expect(container.querySelector('[data-testid="librarian-load-error"]')).toBeNull();
+	}
+
+	/** One full online visit as the librarian, with every read the panel makes
+	 *  drained into the cache. */
+	async function librarianOnlineVisit() {
+		const stub = librarianEntu();
+		vi.stubGlobal('fetch', stub);
+		const first = await openLibrary();
+		await expectListing(first.container);
+		await expectLibrarianPanel(first.container);
+		await awaitRead(stub, '_type.string=member&status.string=active');
+		await flushReadCache();
+		cleanup();
+	}
+
+	it('online the librarian panel is on screen, with no alert and no as-of line', async () => {
+		vi.stubGlobal('fetch', librarianEntu());
+		const { container } = await openLibrary();
+		await expectListing(container);
+		await expectLibrarianPanel(container);
+		expect(container.querySelector('[data-testid="library-as-of"]')).toBeNull();
+	});
+
+	it('offline the panel is restored from the last-seen feeds — no librarian-load-error, and an as-of line', async () => {
+		await librarianOnlineVisit();
+
+		vi.setSystemTime(LATER_SAME_DAY);
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openLibrary();
+		await expectListing(container);
+		await expectLibrarianPanel(container);
+		const asOf = await asOfLine(container);
+		expect(asOf.textContent).toContain(tallinnHHMM(READ_AT));
+	});
+
+	it('offline the bulk-checkout member picker still names its members', async () => {
+		await librarianOnlineVisit();
+
+		vi.setSystemTime(LATER_SAME_DAY);
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openLibrary();
+		await expectListing(container);
+		await expectLibrarianPanel(container);
+		await fireEvent.change(container.querySelector('[data-testid="bulk-checkout-work-select"]')!, {
+			target: { value: WORKS[0].id }
+		});
+		await fireEvent.change(
+			await waitFor(() => {
+				const el = container.querySelector('[data-testid="bulk-checkout-edition-select"]');
+				expect(el, 'bulk-checkout-edition-select').not.toBeNull();
+				return el!;
+			}),
+			{ target: { value: EDITION.id } }
+		);
+		const list = await waitFor(() => {
+			const el = container.querySelector('[data-testid="bulk-checkout-member-list"]');
+			expect(el, 'bulk-checkout-member-list').not.toBeNull();
+			return el!;
+		});
+		// The real-names overlay's answer, not `library_borrower_unknown`. The name
+		// map is resolved fire-and-forget behind the picker feeds, so it is waited
+		// for rather than read on the same tick the list appears.
+		await waitFor(() => {
+			expect(list.textContent, 'bulk-checkout member name').toContain(RECORD_NAME);
+		});
+		expect(list.textContent).not.toContain('library_borrower_unknown');
+	});
+
+	it('with NOTHING cached, offline the librarian panel still fails legibly rather than claiming a state', async () => {
+		// Discovery alone warmed: the page reaches its own load, the listing
+		// fails, and there is no last-seen librarian answer to restore either.
+		vi.stubGlobal('fetch', librarianEntu());
+		collectiveState.set({ status: 'loading' });
+		await hydrateCollectives();
+		await flushReadCache();
+
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openLibrary();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="library-load-error"]'), 'library-load-error').not.toBeNull();
+		});
+		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
+	});
+});
+
 describe('#434 slice 4 — the page is wired through its own entry points', () => {
 	const page = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
 
@@ -552,6 +721,31 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 		expect(page).not.toMatch(/\bresolveCopyChains\(/);
 	});
 
+	it('the librarian panel feeds load through libraryPageData too (review round 2, finding 1)', () => {
+		// A cache-backed `loadLibrarianState` whose three gated feeds are still
+		// the bare shared readers is the same red alert one step later.
+		expect(page).toContain('loadLibrarianPickers(');
+		expect(page).toContain('loadLibrarianMemberNames(');
+		expect(page).not.toMatch(/\blistAllEditions\(/);
+		expect(page).not.toMatch(/\blistAllCopies\(/);
+		expect(page).not.toMatch(/\blistActiveMembers\(/);
+		expect(page).not.toMatch(/\bresolveBorrowerNames\(/);
+		// BOTH paths — the mount effect and the retry button, which duplicates it.
+		expect(page.match(/loadLibrarianPickers\(/g)?.length ?? 0).toBe(2);
+	});
+
+	it('every write resolves its own `_parent` LIVE (review round 2, finding 2)', () => {
+		// `loadLibrarianState` is cache-backed, so the library id it answers can
+		// come from a stored copy. readCache.ts forbids the flag on "a GET that is
+		// a STEP INSIDE a write", so the three write paths (inline checkout, bulk
+		// checkout, create work) resolve the parent themselves through the
+		// flag-free `resolveWriteLibraryId` — and `libraryEntityIdStore`, whose
+		// only readers those three were, is gone.
+		expect(page).toContain("resolveWriteLibraryId");
+		expect(page.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(3);
+		expect(page).not.toMatch(/\$libraryEntityIdStore/);
+	});
+
 	it('the three post-write lending re-reads store without serving (refreshLibraryLendings)', () => {
 		// Inline checkout, return and bulk checkout each re-read the lendings
 		// after the write lands. A cache-SERVED re-read could show the
@@ -564,3 +758,4 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 
 // (*MVOX:Tallis* — #434 slice 4/6 RED)
 // (*MVOX:Josquin* — #434 slice 4 review round, findings 1 and 2)
+// (*MVOX:Josquin* — #434 slice 4 review round 2, findings 1 and 2)

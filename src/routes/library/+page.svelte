@@ -12,9 +12,6 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import {
-		listAllEditions,
-		listAllCopies,
-		resolveBorrowerNames,
 		formatLoanChainLabel,
 		deriveCopyAvailability,
 		deriveEditionAvailability,
@@ -37,12 +34,21 @@
 	// the last-seen answer instead of (1) painting a red librarian-load-error
 	// beside a perfectly restored listing and (2) silently dropping the
 	// my-loans section altogether.
+	// #434 slice 4 review round 2 — and so do the librarian panel's own three
+	// feeds (finding 1: uncached, they rejected offline BEHIND a cache-served
+	// `state: 'librarian'` and the catch painted the very alert round 1 set out
+	// to remove). `resolveWriteLibraryId` is the other half (finding 2): the
+	// `_parent` of a lending/work CREATE is resolved LIVE, never read back off
+	// the cache-served panel state.
 	import {
 		loadLibraryListing,
 		loadLibraryEditions,
 		loadLibraryCopies,
 		refreshLibraryLendings,
 		loadLibrarianState,
+		loadLibrarianPickers,
+		loadLibrarianMemberNames,
+		resolveWriteLibraryId,
 		loadMyMemberId,
 		loadMyLoanCopyNames,
 		loadMyLoanCopyChains
@@ -50,8 +56,8 @@
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import { workLabel } from '$lib/repertoire/workLabel';
-	import { librarianStore, libraryEntityIdStore, resetLibrarian } from '$lib/library/librarianStore';
-	import { listActiveMembers, type ActiveMember } from '$lib/roster/rosterData';
+	import { librarianStore, resetLibrarian } from '$lib/library/librarianStore';
+	import type { ActiveMember } from '$lib/roster/rosterData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
 	// #275 — the app's first upload path: attach files to an edition.
@@ -309,8 +315,10 @@
 	// open/close/local-insert shape as roster's page-level section create
 	// (pageCreateOpen/submitPageCreate): closed by default, no form in the DOM
 	// until opened, and a successful create is inserted LOCALLY into `works`
-	// (no listWorks refetch) — the parent is the LIBRARY entity id from
-	// `libraryEntityIdStore` (resolveLibrarian), never the database entity.
+	// (no listWorks refetch) — the parent is the LIBRARY entity id, never the
+	// database entity. #434 slice 4 review round 2, finding 2: that id is
+	// resolved LIVE inside `submitCreateWork` (`resolveWriteLibraryId`), not
+	// carried over from the panel's own cache-backed librarian resolution.
 	let createWorkOpen = $state(false);
 	let createWorkName = $state('');
 	let createWorkComposer = $state('');
@@ -365,15 +373,13 @@
 		createWorkStatus = '';
 		const current = selected;
 		const token = getToken();
-		const libraryId = $libraryEntityIdStore;
 		// Fail LOUDLY (house rule) — a librarian whose JWT expired while the
 		// librarian tools are still on screen must see why the write did not
 		// happen, not get a silent no-op. Same shape as roster's submitPageCreate.
-		if (!current || !token || !libraryId) {
-			console.error('library: create work with no cfg/library', {
+		if (!current || !token) {
+			console.error('library: create work with no cfg', {
 				hasCollective: !!current,
-				hasToken: !!token,
-				libraryId
+				hasToken: !!token
 			});
 			createWorkError = m.library_create_work_error;
 			return;
@@ -393,6 +399,15 @@
 		let newId: string;
 		createWorkPending = true;
 		try {
+			// #434 slice 4 review round 2, finding 2 — the new work's `_parent` is
+			// resolved LIVE here, not carried over from the panel's librarian
+			// resolution (which is cache-backed, so it can answer from a stored
+			// copy): a GET that is a step inside a write is the one shape
+			// readCache.ts forbids the flag on. Offline this rejects — which is what
+			// a write does offline — and the loud `library_create_work_error` below
+			// says so.
+			const libraryId = await resolveWriteLibraryId(cfg);
+			if (!libraryId) throw new Error('submitCreateWork: no library entity under this collective');
 			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
 		} catch (e) {
 			console.error('library: create work failed', name, e);
@@ -1107,16 +1122,21 @@
 		const cfg = { db: current.db, token: token ?? '' };
 		loadLibrarianState(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
-			libraryEntityIdStore.set(result.libraryId);
 			// Load checkout form data BEFORE revealing librarian tools so the
 			// bulk-checkout/return edition pickers are populated on first render.
 			if (result.state === 'librarian') {
 				try {
-					const [editionsRead, copiesRead, membersRead] = await Promise.all([
-						listAllEditions(cfg),
-						listAllCopies(cfg),
-						listActiveMembers(cfg)
-					]);
+					// #434 slice 4 review round 2, finding 1 — through the page's own
+					// entry point, so these three are cache-backed exactly like the
+					// listing they sit beside. Uncached they rejected offline BEHIND a
+					// cache-served `state: 'librarian'`, and the catch below set
+					// 'error' — the red `librarian-load-error` review round 1 set out
+					// to remove, one step later.
+					const {
+						editions: editionsRead,
+						copies: copiesRead,
+						members: membersRead
+					} = await loadLibrarianPickers(cfg);
 					if (g !== librarianGen) return;
 					// #321 — the librarian-only bulk-checkout PICKER data: a distinct
 					// surface from the browsing tree `library-partial-notice` covers, and
@@ -1130,7 +1150,7 @@
 					librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
 					librarianMembersPartial = membersRead.truncated;
 					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-					resolveBorrowerNames(cfg, memberIdList).then((names) => {
+					loadLibrarianMemberNames(cfg, memberIdList).then((names) => {
 						if (g === librarianGen) memberNames = names;
 					}).catch((e) => console.error('library: member name resolution failed', e));
 				} catch (e) {
@@ -1157,10 +1177,16 @@
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		const libraryId = $libraryEntityIdStore;
-		if (!libraryId) return;
 		const cfg = { db: current.db, token };
 		try {
+			// #434 slice 4 review round 2, finding 2 — the lending's `_parent` is
+			// resolved LIVE at write time, not carried over from the panel's
+			// librarian resolution: that one is cache-backed, and a GET that is a
+			// step inside a write is the one shape readCache.ts forbids the flag on.
+			// Offline this rejects into the catch below, which is where an offline
+			// write belongs.
+			const libraryId = await resolveWriteLibraryId(cfg);
+			if (!libraryId) throw new Error('handleInlineCheckout: no library entity under this collective');
 			await createLending(cfg, libraryId, {
 				copyId,
 				memberId,
@@ -1234,12 +1260,15 @@
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		const libraryId = $libraryEntityIdStore;
-		if (!libraryId) return;
 		if (!bulkCheckoutEditionId || bulkCheckoutCheckedMembers.size === 0) return;
 		const cfg = { db: current.db, token };
 		const activeLendings = lendings.filter((l) => l.returnedAt === '');
 		try {
+			// #434 slice 4 review round 2, finding 2 — same as handleInlineCheckout:
+			// the lendings' `_parent` is resolved LIVE, not carried over from the
+			// panel's cache-backed librarian resolution.
+			const libraryId = await resolveWriteLibraryId(cfg);
+			if (!libraryId) throw new Error('handleBulkCheckout: no library entity under this collective');
 			const result = await bulkCheckout(cfg, libraryId, {
 				editionId: bulkCheckoutEditionId,
 				memberIds: [...bulkCheckoutCheckedMembers],
@@ -1484,14 +1513,16 @@
 						// feeds behind them are being re-read.
 						resetLibrarianPickerPartial();
 						loadLibrarianState(cfg, selected.personId).then(async (result) => {
-							libraryEntityIdStore.set(result.libraryId);
 							if (result.state === 'librarian') {
 								try {
-									const [editionsRead, copiesRead, membersRead] = await Promise.all([
-										listAllEditions(cfg),
-										listAllCopies(cfg),
-										listActiveMembers(cfg)
-									]);
+									// #434 slice 4 review round 2, finding 1 — the same entry point the
+									// effect above uses; the retry must not be the one path that still
+									// reaches the shared readers directly.
+									const {
+										editions: editionsRead,
+										copies: copiesRead,
+										members: membersRead
+									} = await loadLibrarianPickers(cfg);
 									allEditions = editionsRead.items;
 									allCopies = copiesRead.items;
 									allMembers = membersRead.items;
@@ -1501,7 +1532,7 @@
 									librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
 									librarianMembersPartial = membersRead.truncated;
 									const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-									resolveBorrowerNames(cfg, memberIdList).then((names) => {
+									loadLibrarianMemberNames(cfg, memberIdList).then((names) => {
 										memberNames = names;
 									}).catch((e) => console.error('library: member name resolution failed', e));
 								} catch (e) {

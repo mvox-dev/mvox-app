@@ -524,8 +524,9 @@ interface CreateWorkInput {
 	/**
 	 * The v4E parent — the collective's LIBRARY entity (librarian-rights scope,
 	 * `_editor` on library IS the librarian role), NOT the database entity. The
-	 * caller (the /library page) already holds this id via `libraryEntityIdStore`
-	 * (resolveLibrarian) — this module never looks it up or guesses it.
+	 * caller (the /library page) resolves this id live at write time
+	 * (`libraryPageData.resolveWriteLibraryId`, #434 slice 4 review round 2,
+	 * finding 2) — this module never looks it up or guesses it.
 	 */
 	libraryEntityId: string;
 	/** Composer name — `composer` `{ string }`; blank/omit → not sent (v4E optional). */

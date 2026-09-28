@@ -29,17 +29,23 @@ import {
 	servedFromCache,
 	setReadCacheFactory
 } from '$lib/entu/readCache';
-import { listWorks, listLendings } from './libraryData';
+import { listWorks, listLendings, listAllEditions, listAllCopies } from './libraryData';
+import { listActiveMembers } from '$lib/roster/rosterData';
 import {
 	loadLibraryListing,
 	loadLibraryEditions,
 	loadLibraryCopies,
-	refreshLibraryLendings
+	refreshLibraryLendings,
+	loadLibrarianState,
+	loadLibrarianPickers,
+	resolveWriteLibraryId
 } from './libraryPageData';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
 const CFG = { db: DB, token: 'tok-1' };
+const DB_ENTITY = 'db-entity-1';
+const LIBRARY = 'lib-1';
 
 function json(body: unknown): Response {
 	return new Response(JSON.stringify(body), {
@@ -96,6 +102,45 @@ function online(lendings: LendingRow[]) {
 		}
 		if (url.includes('_type.string=copy&') && url.includes('_parent.reference=e-1')) {
 			return json({ count: 1, entities: [{ _id: 'c-1', copy_number: [{ number: 3 }] }] });
+		}
+		// #434 slice 4 review round 2 — the librarian resolution (database entity
+		// -> library list -> the library's rights) and the panel's own three
+		// collective-wide feeds behind it.
+		if (url.includes('_type.string=database')) {
+			return json({ count: 1, entities: [{ _id: DB_ENTITY }] });
+		}
+		if (url.includes('_type.string=library&')) {
+			return json({ count: 1, entities: [{ _id: LIBRARY }] });
+		}
+		if (url.includes(`entity/${LIBRARY}?props=_owner,_editor`)) {
+			return json({ entity: { _id: LIBRARY, _owner: [{ reference: PERSON }] } });
+		}
+		if (url.includes('_type.string=edition&props=')) {
+			return json({
+				count: 1,
+				entities: [
+					{
+						_id: 'e-1',
+						name: [{ string: 'Carus 2019' }],
+						_parent: [{ reference: 'w-1', entity_type: 'work' }]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=copy&props=')) {
+			return json({
+				count: 1,
+				entities: [
+					{
+						_id: 'c-1',
+						copy_number: [{ number: 3 }],
+						_parent: [{ reference: 'e-1', entity_type: 'edition' }]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=member&status.string=active')) {
+			return json({ count: 1, entities: [{ _id: 'm-2', person: [{ reference: 'p-2' }] }] });
 		}
 		return json({ count: 0, entities: [] });
 	});
@@ -200,4 +245,81 @@ describe('#434 slice 4 — refreshLibraryLendings stores without serving', () =>
 	});
 });
 
+describe('#434 slice 4 review round 2, finding 1 — the librarian panel feeds are cache-backed', () => {
+	it('the three pickers called the SHARED way store nothing', async () => {
+		await listAllEditions(CFG, online(LENT));
+		await listAllCopies(CFG, online(LENT));
+		await listActiveMembers(CFG, online(LENT));
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(0);
+	});
+
+	it('loadLibrarianPickers comes back offline identical to the online answer, stamped', async () => {
+		const live = await loadLibrarianPickers(CFG, online(LENT));
+		expect(live.editions.items.map((e) => e.id)).toEqual(['e-1']);
+		expect(live.copies.items.map((c) => c.id)).toEqual(['c-1']);
+		expect(live.members.items.map((mbr) => mbr.memberId)).toEqual(['m-2']);
+		await flushReadCache();
+		expect(get(servedFromCache)).toBeNull();
+
+		resetServedFromCache();
+		const stored = await loadLibrarianPickers(CFG, offline());
+		expect(stored).toEqual(live);
+		expect(get(servedFromCache)).not.toBeNull();
+	});
+
+	it('the librarian STATE and its pickers restore together — the panel never resolves to a half-load', async () => {
+		// The shape the page depends on: `loadLibrarianState` answering
+		// 'librarian' offline is only useful if the three feeds gated behind that
+		// answer resolve too. Round 1 cached the state and left the feeds
+		// uncached, so the page's catch set `librarianStore` to 'error' — the red
+		// alert the round set out to remove, one step later.
+		expect(await loadLibrarianState(CFG, PERSON, online(LENT))).toEqual({
+			state: 'librarian',
+			libraryId: LIBRARY
+		});
+		await loadLibrarianPickers(CFG, online(LENT));
+		await flushReadCache();
+
+		resetServedFromCache();
+		const stub = offline();
+		expect(await loadLibrarianState(CFG, PERSON, stub)).toEqual({
+			state: 'librarian',
+			libraryId: LIBRARY
+		});
+		await expect(loadLibrarianPickers(CFG, stub)).resolves.toBeDefined();
+	});
+});
+
+describe('#434 slice 4 review round 2, finding 2 — the WRITE parent is never cache-served', () => {
+	it('resolveWriteLibraryId stores nothing — the default, flag-free resolution', async () => {
+		expect(await resolveWriteLibraryId(CFG, online(LENT))).toBe(LIBRARY);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(0);
+	});
+
+	it('resolveWriteLibraryId REJECTS offline even though the panel restores the same id', async () => {
+		expect(await loadLibrarianState(CFG, PERSON, online(LENT))).toEqual({
+			state: 'librarian',
+			libraryId: LIBRARY
+		});
+		await flushReadCache();
+
+		// The panel still restores (finding 1) ...
+		expect((await loadLibrarianState(CFG, PERSON, offline())).libraryId).toBe(LIBRARY);
+		// ... and the id a lending POST would be parented under does NOT.
+		await expect(resolveWriteLibraryId(CFG, offline())).rejects.toThrow('Failed to fetch');
+	});
+
+	it('it leaves servedFromCache alone — a write-path read never age-stamps the screen', async () => {
+		await loadLibrarianState(CFG, PERSON, online(LENT));
+		await flushReadCache();
+
+		resetServedFromCache();
+		await resolveWriteLibraryId(CFG, online(LENT));
+		expect(get(servedFromCache)).toBeNull();
+	});
+});
+
 // (*MVOX:Tallis* — #434 slice 4/6 RED)
+// (*MVOX:Josquin* — #434 slice 4 review round 2, findings 1 and 2)
