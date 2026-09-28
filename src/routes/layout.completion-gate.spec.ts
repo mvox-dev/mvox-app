@@ -20,7 +20,7 @@ const { discoverMock, gotoMock, resolveGateMock } = vi.hoisted(() => ({
 	resolveGateMock: vi.fn()
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
 // The layout now installs the #107 401 recovery at module scope, which pulls in
 // $lib/entu/request -> $lib/entu-config. Severs the $env/dynamic/public chain
 // (unavailable outside a SvelteKit request context) — the same one-liner

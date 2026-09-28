@@ -182,9 +182,14 @@
 	} from '$lib/schedule/scheduleData';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
+	// #434 slice 6/6 — the ONE online/offline signal; inline event editing
+	// (the six header pencils) reads it directly here, RsvpControl/
+	// AttendanceSurface read it themselves.
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
+	const isOffline = $derived(!$writesAvailable);
 
 	// 'not-available' is a genuine 5th state, NOT a flavour of 'load-error':
 	// switching collectives with a detail page open refetches the SAME id against
@@ -1205,6 +1210,10 @@
 	 *  confirm that replaced it. Writes nothing. A fresh attempt owns the error
 	 *  slot, same rule armSeasonManageDelete follows. */
 	async function armDelete(): Promise<void> {
+		// #434 slice 6 — offline: nothing arms (the same shape the agenda's
+		// arm* helpers carry). The header's `event-edit-write-unavailable`
+		// sentence says why; the trigger is disabled too.
+		if (isOffline) return;
 		deleteError = null;
 		deleteArmed = true;
 		await tick();
@@ -1231,6 +1240,9 @@
 	 *  `_owner` the DELETE endpoint demands (deleteErrors.ts). */
 	async function confirmDelete(): Promise<void> {
 		if (!selected || !detail || deletePending) return;
+		// #434 slice 6 — the signal may have dropped while this confirm sat
+		// armed; refuse the cascade rather than run it blind.
+		if (isOffline) return;
 		deletePending = true;
 		deleteError = null;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
@@ -1347,6 +1359,10 @@
 
 	function handleRsvpChange(newStatus: RsvpStatus | null): void {
 		if (!selected || !detail) return;
+		// #434 slice 6 — second layer: the control itself is disabled while the
+		// signal is down (RsvpControl/AttendanceSurface read the store), this is the
+		// page-side guard so no write can reach the wire either way.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const personId = selected.personId;
 		const g = generation;
@@ -1669,6 +1685,9 @@
 		const selectEl = e.currentTarget as HTMLSelectElement;
 		const newId = selectEl.value;
 		if (!detail || !selected) return;
+		// #434 slice 6 — offline: nothing is armed, nothing is written. The
+		// select is disabled too, so this is the second layer only.
+		if (isOffline) return;
 		const previousId = detail.seriesId ?? '';
 		seriesError = null;
 		seriesStatus = '';
@@ -1737,6 +1756,9 @@
 	 */
 	async function commitSeriesChange(newId: string, selectEl: HTMLSelectElement | null): Promise<void> {
 		if (!detail || !selected) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// picker's own `event-series-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const g = generation;
 		const evId = detail.id;
 		const previousId = detail.seriesId ?? '';
@@ -1969,6 +1991,10 @@
 	 */
 	async function submitEventConvert(): Promise<void> {
 		if (eventConvertSubmitting) return; // no duplicate runs on the wire
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// form's own `event-convert-write-unavailable` sentence says why. This
+		// layer also covers Enter-on-an-input, which the disabled button does not.
+		if (isOffline) return;
 		if (!selected || !detail || detail.seasonId === null) return;
 		clearEventConvertError();
 
@@ -2316,6 +2342,8 @@
 	}
 
 	function handleAddWork(workId: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg || seasonId === null) return;
 		const sid = seasonId;
@@ -2325,6 +2353,8 @@
 	}
 
 	function handleStatusChange(itemId: string, status: RepertoireStatus): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = findWorkRow(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
@@ -2336,6 +2366,8 @@
 	}
 
 	function handlePinEdition(itemId: string, editionId: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = findWorkRow(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
@@ -2352,6 +2384,8 @@
 	 *  program-item-free event, but the row itself always states its own
 	 *  provenance (same rule the agenda's handleRemoveItem follows). */
 	function handleRemoveItem(itemId: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = findWorkRow(itemId);
 		if (!cfg || !row) return;
@@ -2377,6 +2411,8 @@
 	}
 
 	function handleMoveItem(itemId: string, direction: 'up' | 'down'): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg || !detail) return;
 		const items = workRows
@@ -2396,6 +2432,8 @@
 	}
 
 	function handleAddProgramItem(editionId: string, ordinal: number): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg || !detail) return;
 		const eventIdForProgram = detail.id;
@@ -2558,6 +2596,9 @@
 	}
 
 	function submitScheduleAdd(): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// schedule section's own `event-schedule-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg || !detail) return;
 		// ── validation BEFORE any fetch (#262 review F4, the #132/T4 F1 rule) ──
@@ -2588,6 +2629,10 @@
 	}
 
 	function beginScheduleEdit(row: ScheduleItem): void {
+		// #434 slice 6 — offline: no editor opens (the same rule
+		// `beginFieldEdit`/`beginSeasonFieldEdit` follow), so there is no half-open
+		// editor whose blur could try to commit.
+		if (isOffline) return;
 		scheduleRemoveArmedId = null;
 		// #262 review F1 — a stale row error must not outlive the retry it
 		// provoked (`beginScheduleAdd`'s rule, applied to the row keys).
@@ -2624,6 +2669,9 @@
 	 *  Commit ONLY: closing the editor is the blur handler's call, not this
 	 *  one's, so a name commit cannot tear down the datetime half. */
 	function commitScheduleName(id: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// schedule section's own `event-schedule-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = scheduleRows.find((r) => r.id === id);
 		if (!cfg || !row || scheduleEditingId !== id) return;
@@ -2649,6 +2697,9 @@
 	/** Commit the DATETIME half — focus leaving the WHOLE composite wrapper
 	 *  (the #207 rule-5 commit rule), never a bare blur on one of its parts. */
 	function commitScheduleDatetime(id: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// schedule section's own `event-schedule-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = scheduleRows.find((r) => r.id === id);
 		if (!cfg || !row || scheduleEditingId !== id) return;
@@ -2702,6 +2753,8 @@
 	}
 
 	function armScheduleRemove(id: string): void {
+		// #434 slice 6 — offline: nothing arms, so no confirm can ever be reached.
+		if (isOffline) return;
 		scheduleEditingId = null;
 		// #262 review F1 — same rule as `beginScheduleEdit`: the previous failure
 		// must not still be on screen while the retry is being armed.
@@ -2712,6 +2765,9 @@
 		scheduleRemoveArmedId = null;
 	}
 	function confirmScheduleRemove(id: string): void {
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// schedule section's own `event-schedule-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = scheduleRows.find((r) => r.id === id);
 		if (!cfg || !row) return;
@@ -3099,6 +3155,10 @@
 
 	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
 		if (!selected || !detail) return;
+		// #434 slice 6 — second layer: the control itself is disabled while the
+		// signal is down (RsvpControl/AttendanceSurface read the store), this is the
+		// page-side guard so no write can reach the wire either way.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const current = attendanceMap[targetMemberId];
 		const existing: EventAttendance | null = current
@@ -3188,6 +3248,18 @@
 	// SAME `event-edit-error-duration_minutes` slot (one testid, two possible
 	// messages). Cleared alongside `editErrors` whenever the pencil reopens.
 	let editRangeErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
+	// #434 slice 6 review F2 — a confirm that the signal refused. The editor and
+	// its draft STAY (the typed text is the viewer's work, not ours to discard),
+	// and this flag is what says so out loud; without it the only feedback would
+	// be the generic offline sentence that was already on screen before she
+	// typed. Cleared on the next open, on cancel, and by the signal returning.
+	let editHeldOffline = $state(false);
+	// The signal came back — the notice has said its piece. The draft stays; only
+	// the "nothing saved" line goes, because now a confirm would save. Reads
+	// `isOffline` only, so this cannot re-trigger itself.
+	$effect(() => {
+		if (!isOffline) editHeldOffline = false;
+	});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
 	// #328 — ONE region shared by all six inline fields (Gama's one-node-PER-
 	// SURFACE ruling: the inline-field surface is one queue, `editWriteQueue`,
@@ -3378,10 +3450,13 @@
 	function beginFieldEdit(field: EditableEventField): void {
 		// A field whose previous write is still in flight cannot be re-opened —
 		// the pencil is disabled for exactly this window, this is the backstop for
-		// a tap that beat the re-render (#104 review F1).
-		if (!detail || editWritePending[field]) return;
+		// a tap that beat the re-render (#104 review F1). #434 slice 6 — offline
+		// is the same backstop: the pencil is disabled, this is the guard for a
+		// tap that beat that re-render.
+		if (!detail || editWritePending[field] || isOffline) return;
 		editErrors = { ...editErrors, [field]: false };
 		editRangeErrors = { ...editRangeErrors, [field]: false };
+		editHeldOffline = false;
 		if (field === 'start_datetime') {
 			const seeded = toTallinnLocalInputValue(detail.startDatetime);
 			const [datePart, timePart] = seeded.split('T');
@@ -3471,6 +3546,10 @@
 		editDraft = '';
 		editDraftDate = '';
 		editDraftTime = '';
+		// #434 slice 6 review F2 — an explicit abandon (Escape, or a confirm with
+		// nothing to write) settles the held-draft notice: there is no draft left
+		// for it to be about.
+		editHeldOffline = false;
 		if (restoreFocus) restorePencilFocus(field);
 	}
 
@@ -3573,6 +3652,21 @@
 	 *  mid-interaction. */
 	function confirmFieldEdit(field: EditableEventField, restoreFocus: boolean): void {
 		if (!selected || !detail || editingField !== field) return;
+		// #434 slice 6 — the signal dropped while this editor was open (mid-edit,
+		// not just at open time — `beginFieldEdit`'s guard only covers the tap
+		// that opens it). No write reaches the wire and nothing is queued.
+		//
+		// Review F2: it does NOT degrade to a cancel. An unchanged draft loses
+		// nothing when it closes; a CHANGED one loses the viewer's typing, and the
+		// first cut threw it away on a blur she never meant as "discard". So the
+		// editor and the draft stay exactly as they are, the refusal is said out
+		// loud (`editHeldOffline`), and one more Enter once the signal is back
+		// commits the same text. Still no queue: nothing saves by itself.
+		if (isOffline) {
+			editErrors = { ...editErrors, [field]: false };
+			editHeldOffline = true;
+			return;
+		}
 		const before = fieldValue(detail, field);
 		// #243 — duration_minutes takes its own path: the derived RAW minutes
 		// (which may be zero or negative) decide between "no change" (cancel,
@@ -3726,6 +3820,18 @@
 						<label for="event-series-select" class="text-xs text-ink-2">
 							{m.event_detail_series_label()}
 						</label>
+						<!-- #434 slice 6 — ONE visible reason for this surface (the picker,
+						     its armed confirm, and the convert form below): each control is
+						     disabled while offline, this says why once. -->
+						{#if isOffline}
+							<p
+								data-testid="event-series-write-unavailable"
+								role="status"
+								class="text-xs text-ink-2"
+							>
+								{m.write_unavailable_no_signal()}
+							</p>
+						{/if}
 						<!-- Standing rule 1 — native <select>. Value is bound to the
 						     SERVER-CONFIRMED `detail.seriesId` alone (never the armed pick),
 						     so nothing here forces the DOM back until a write actually
@@ -3739,7 +3845,7 @@
 							id="event-series-select"
 							data-testid="event-series-select"
 							value={detail.seriesId ?? ''}
-							disabled={seriesPending}
+							disabled={seriesPending || isOffline}
 							onchange={(e) => void onSeriesSelectChange(e)}
 							class="w-fit border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
 						>
@@ -3813,7 +3919,7 @@
 									<button
 										type="button"
 										data-testid="event-series-confirm-apply"
-										disabled={seriesPending}
+										disabled={seriesPending || isOffline}
 										aria-busy={seriesPending}
 										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
 										onclick={() => void confirmSeriesChange()}
@@ -3888,6 +3994,13 @@
 							class="flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
 							onkeydown={onEventConvertFormKeydown}
 						>
+							<!-- #434 slice 6 — the offline reason, VISIBLE, inside the form:
+							     submit is disabled while offline; this says why. -->
+							{#if isOffline}
+								<p data-testid="event-convert-write-unavailable" class="text-xs text-ink-2">
+									{m.write_unavailable_no_signal()}
+								</p>
+							{/if}
 							<label class="flex w-full flex-col gap-0.5">
 								<span class="text-xs text-ink-2">
 									{m.event_convert_interval_label()}
@@ -4003,7 +4116,7 @@
 								<button
 									type="button"
 									data-testid="event-convert-submit"
-									disabled={eventConvertSubmitting}
+									disabled={eventConvertSubmitting || isOffline}
 									aria-busy={eventConvertSubmitting}
 									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 									onclick={() => void submitEventConvert()}
@@ -4060,7 +4173,7 @@
 							type="button"
 							data-testid="event-edit-btn-event_type"
 							class="group flex min-h-11 w-fit appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left disabled:opacity-40"
-							disabled={editWritePending.event_type === true}
+							disabled={editWritePending.event_type === true || isOffline}
 							bind:this={pencilRefs.event_type}
 							onclick={() => beginFieldEdit('event_type')}
 						>
@@ -4141,7 +4254,7 @@
 							type="button"
 							data-testid="event-edit-btn-name"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
-							disabled={editWritePending.event_name === true}
+							disabled={editWritePending.event_name === true || isOffline}
 							bind:this={pencilRefs.event_name}
 							onclick={() => beginFieldEdit('event_name')}
 						>
@@ -4218,7 +4331,7 @@
 							type="button"
 							data-testid="event-edit-btn-start_datetime"
 							class="group flex min-h-11 w-full appearance-none flex-wrap items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.start_datetime === true}
+							disabled={editWritePending.start_datetime === true || isOffline}
 							bind:this={pencilRefs.start_datetime}
 							onclick={() => beginFieldEdit('start_datetime')}
 						>
@@ -4253,7 +4366,7 @@
 						type="button"
 						data-testid="event-edit-btn-start_datetime"
 						class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-xs text-ink-3 disabled:opacity-40"
-						disabled={editWritePending.start_datetime === true}
+						disabled={editWritePending.start_datetime === true || isOffline}
 						bind:this={pencilRefs.start_datetime}
 						onclick={() => beginFieldEdit('start_datetime')}
 					>
@@ -4320,7 +4433,7 @@
 							type="button"
 							data-testid="event-edit-btn-duration_minutes"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.duration_minutes === true}
+							disabled={editWritePending.duration_minutes === true || isOffline}
 							bind:this={pencilRefs.duration_minutes}
 							onclick={() => beginFieldEdit('duration_minutes')}
 						>
@@ -4380,7 +4493,7 @@
 							type="button"
 							data-testid="event-edit-btn-location"
 							class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
-							disabled={editWritePending.location === true}
+							disabled={editWritePending.location === true || isOffline}
 							bind:this={pencilRefs.location}
 							onclick={() => beginFieldEdit('location')}
 						>
@@ -4435,7 +4548,7 @@
 							type="button"
 							data-testid="event-edit-btn-description"
 							class="group mt-2 flex min-h-11 w-full appearance-none items-start gap-2 border-0 bg-transparent p-0 text-left text-base text-ink disabled:opacity-40"
-							disabled={editWritePending.description === true}
+							disabled={editWritePending.description === true || isOffline}
 							bind:this={pencilRefs.description}
 							onclick={() => beginFieldEdit('description')}
 						>
@@ -4454,6 +4567,24 @@
 				{#if editErrors.description}
 					<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
 						{m.event_edit_save_error()}
+					</p>
+				{/if}
+
+				<!-- #434 slice 6 — ONE visible reason for the whole header edit area,
+				     not one per pencil: an editor with the signal down already sees
+				     every pencil disabled, so this says why once. -->
+				{#if isEditor && isOffline}
+					<p data-testid="event-edit-write-unavailable" role="status" class="text-xs text-ink-2">
+						{m.write_unavailable_no_signal()}
+					</p>
+				{/if}
+				<!-- #434 slice 6 review F2 — she pressed Enter (or blurred) with the
+				     signal down and a changed draft. The editor above is still open on
+				     her text; this says why nothing saved, so the refusal is not
+				     invisible behind the sentence that was already there. -->
+				{#if editHeldOffline}
+					<p data-testid="event-edit-held-offline" role="alert" class="text-xs text-ink-2">
+						{m.write_held_no_signal()}
 					</p>
 				{/if}
 
@@ -4490,6 +4621,19 @@
 						<h2 id="event-detail-schedule-heading" class="font-display text-lg text-ink-2">
 							{m.event_schedule_heading()}
 						</h2>
+						<!-- #434 slice 6 — ONE visible reason for this whole section (add,
+						     per-row edit, remove), not one per control: every one of them is
+						     disabled while offline, this says why once. Editors only — a
+						     member sees no write affordance to explain. -->
+						{#if isEditor && isOffline}
+							<p
+								data-testid="event-schedule-write-unavailable"
+								role="status"
+								class="text-xs text-ink-2"
+							>
+								{m.write_unavailable_no_signal()}
+							</p>
+						{/if}
 						{#if scheduleRows.length > 0}
 							<ul class="flex flex-col gap-1">
 								{#each scheduleRows as row (row.id)}
@@ -4595,7 +4739,8 @@
 													disabled={scheduleWritePending[`schedule-edit-name-${row.id}`] ===
 														true ||
 														scheduleWritePending[`schedule-edit-datetime-${row.id}`] ===
-															true}
+															true ||
+														isOffline}
 													class="group flex min-h-11 flex-1 appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-sm text-ink disabled:opacity-40"
 													onclick={() => beginScheduleEdit(row)}
 												>
@@ -4629,7 +4774,7 @@
 															})}
 															disabled={scheduleWritePending[
 																`schedule-remove-${row.id}`
-															] === true}
+															] === true || isOffline}
 															aria-busy={scheduleWritePending[`schedule-remove-${row.id}`] ===
 																true}
 															class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
@@ -4663,6 +4808,7 @@
 														data-testid={`event-schedule-remove-${row.id}`}
 														aria-label={m.event_schedule_remove_aria_label({ name: row.name })}
 														iconClass="h-4 w-4"
+														disabled={isOffline}
 														onclick={() => armScheduleRemove(row.id)}
 													/>
 												{/if}
@@ -4769,7 +4915,7 @@
 									<button
 										type="button"
 										data-testid="event-schedule-add-submit"
-										disabled={scheduleWritePending[SCHEDULE_ADD_KEY] === true}
+										disabled={scheduleWritePending[SCHEDULE_ADD_KEY] === true || isOffline}
 										class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50"
 										onclick={submitScheduleAdd}
 									>
@@ -5183,7 +5329,7 @@
 									type="button"
 									data-testid="event-detail-delete-confirm"
 									aria-label={m.event_detail_delete_confirm_aria_label()}
-									disabled={deletePending}
+									disabled={deletePending || isOffline}
 									aria-busy={deletePending}
 									class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
 									onclick={() => void confirmDelete()}
@@ -5212,6 +5358,7 @@
 							<DeleteTrigger
 								data-testid="event-detail-delete"
 								class="gap-1 px-1 text-xs underline"
+								disabled={isOffline}
 								onclick={() => void armDelete()}
 							>
 								{#snippet children()}

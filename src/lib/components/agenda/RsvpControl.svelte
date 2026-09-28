@@ -40,11 +40,20 @@
 	reconciled answer can always be changed again).
 
 	No RsvpTallyBadge — tally is out of scope for slice-2 (epic #8).
+
+	#434 slice 6 — offline joins `pending` as a second disable reason, but
+	unlike `pending` it SAYS why: a visible sentence
+	(`rsvp-write-unavailable`) inside this control. `pending` stays exactly
+	as silent as the block comment above describes — the sentence only ever
+	names the offline case. Read from the ONE signal store ($lib/net/online)
+	here, inside the component, so every host (agenda row, event page) gets
+	the gate with no wiring of its own.
 -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { writesAvailable } from '$lib/net/online';
 
 	interface Props {
 		status?: RsvpStatus | null;
@@ -68,8 +77,9 @@
 		onchange
 	}: Props = $props();
 
-	// The sole disable reason (see block comment) — a write in flight.
-	const isDisabled = $derived(pending);
+	// #434 slice 6 — the signal down is the second disable reason.
+	const isOffline = $derived(!$writesAvailable);
+	const isDisabled = $derived(pending || isOffline);
 
 	const BUTTONS: { value: RsvpStatus; label: () => string }[] = [
 		{ value: 'going', label: m.rsvp_status_going },
@@ -143,6 +153,16 @@
 			</button>
 		{/each}
 	</div>
+	<!--
+		#434 slice 6 — the offline reason, VISIBLE (not a tooltip, not sr-only),
+		unlike `pending`'s silent disable. Only rendered while offline, so its
+		absence is itself the "back online" signal the specs pin.
+	-->
+	{#if isOffline}
+		<p data-testid="rsvp-write-unavailable" class="text-xs text-ink-2">
+			{m.write_unavailable_no_signal()}
+		</p>
+	{/if}
 	<!--
 		Message line — ALWAYS rendered (min-height reserves the vertical space) so an
 		error appearing or disappearing on a tap never shifts the layout. Holds the

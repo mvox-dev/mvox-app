@@ -187,6 +187,10 @@
 	// #214 — the SAME #211 color scheme the row badges use, reused verbatim on
 	// the active filter chip (never a second hand-typed copy).
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
+	// #434 slice 6 — the ONE online/offline signal; season management and
+	// event creation are gated on it directly (RsvpControl/AttendanceSurface
+	// read it themselves, so the agenda row's RSVP needs no wiring here).
+	import { writesAvailable } from '$lib/net/online';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -195,6 +199,7 @@
 	const collectives = $derived($collectiveState);
 	const selected = $derived($selectedCollectiveStore);
 	const pickerMode = $derived($pickerModeStore);
+	const isOffline = $derived(!$writesAvailable);
 
 	// #338 — discovery is in flight from the error panel's retry. `hydrateCollectives`
 	// publishes no 'loading' state of its own on a retry (it only ever sets the
@@ -1645,6 +1650,10 @@
 	// is just the adapter from AgendaList's callback shape to the queue's.
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
+		// #434 slice 6 — second layer: the control itself is disabled while the
+		// signal is down (RsvpControl/AttendanceSurface read the store), this is the
+		// page-side guard so no write can reach the wire either way.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const personId = selected.personId;
 		const identity = { db: selected.db, personId };
@@ -2451,6 +2460,8 @@
 	 *  control disables while the create is in flight and the refetch brings the
 	 *  real row. */
 	function handleAddWork(workId: string) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const seasonId = currentSeasonId;
 		if (!cfg || seasonId === null) return;
@@ -2460,6 +2471,8 @@
 	}
 
 	function handleStatusChange(itemId: string, status: RepertoireStatus) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = findRow(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
@@ -2475,6 +2488,8 @@
 	}
 
 	function handlePinEdition(itemId: string, editionId: string) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = findRow(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
@@ -2501,6 +2516,8 @@
 	 * deleted at all.
 	 */
 	function handleRemoveItem(eventId: string, itemId: string) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const row = worksByEventId[eventId]?.find((r) => r.id === itemId);
 		if (!cfg || !row) return;
@@ -2637,6 +2654,8 @@
 	/** Add a work to the PANEL's season. No optimistic row (create's id is
 	 *  server-assigned) — mirrors `handleAddWork`'s reasoning exactly. */
 	function handlePanelAddWork(workId: string) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		const seasonId = manageableSeasonId;
 		if (!cfg || seasonId === null) return;
@@ -2660,6 +2679,8 @@
 	 * re-read whatever season `panelRepertoireSeasonId` names.
 	 */
 	function handlePanelStatusChange(itemId: string, status: RepertoireStatus) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const before = panelRepertoire.find((item) => item.id === itemId)?.status;
@@ -2681,6 +2702,8 @@
 	}
 
 	function handlePanelRemoveItem(itemId: string) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const before = panelRepertoire;
@@ -2715,6 +2738,8 @@
 	 * UI anyway.
 	 */
 	function handleMoveItem(eventId: string, itemId: string, direction: 'up' | 'down') {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const rows = worksByEventId[eventId] ?? [];
@@ -2743,6 +2768,8 @@
 	 *  program_item id comes from the server. One programme add at a time across
 	 *  the agenda (ADD_PROGRAMME_KEY is what the controls disable on). */
 	function handleAddProgramItem(eventId: string, editionId: string, ordinal: number) {
+		// #434 slice 6 — no write reaches the wire while the signal is down.
+		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
 		repertoireQueue.request(ADD_PROGRAMME_KEY, async () => {
@@ -3240,6 +3267,10 @@
 
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
 		if (!selected || !attendanceItem) return;
+		// #434 slice 6 — second layer: the control itself is disabled while the
+		// signal is down (RsvpControl/AttendanceSurface read the store), this is the
+		// page-side guard so no write can reach the wire either way.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const current = attendanceMap[memberId];
 		const existing: EventAttendance | null = current
@@ -3537,6 +3568,10 @@
 		// in flight is a duplicate season, not a retry. The button is disabled too;
 		// this is the layer that also covers Enter-on-the-name-input.
 		if (seasonCreateSubmitting) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// form's own `season-create-write-unavailable` sentence says why. This layer
+		// also covers Enter-on-an-input, which the disabled button does not.
+		if (isOffline) return;
 
 		// A fresh attempt owns both the error slot and the status slot.
 		clearSeasonCreateError();
@@ -3865,6 +3900,15 @@
 	 *  edit was refused before any write, #132/T3 review F3). The kind picks the
 	 *  message: a rejected date range must name the actual mistake. */
 	let seasonEditErrors = $state<Partial<Record<SeasonEditableField, 'save' | 'range'>>>({});
+	// #434 slice 6 review F2 — a confirm the signal refused. The editor and its
+	// draft STAY (the admin's typing is not ours to discard) and this says so;
+	// otherwise the only feedback is the panel sentence that was already there.
+	let seasonEditHeldOffline = $state(false);
+	// The signal returned: the notice is spent, the draft is not. Reads
+	// `isOffline` only, so it cannot re-trigger itself.
+	$effect(() => {
+		if (!isOffline) seasonEditHeldOffline = false;
+	});
 	let seasonEditPending = $state<Partial<Record<SeasonEditableField, boolean>>>({});
 	/** #328 — ONE region shared by all three fields (Gama's one-node-PER-SURFACE
 	 *  ruling: the three fields are one surface, not three), matching the
@@ -4389,8 +4433,9 @@
 	}
 
 	function beginSeasonFieldEdit(field: SeasonEditableField): void {
-		if (seasonEditPending[field]) return; // a write for this field is already in flight
+		if (seasonEditPending[field] || isOffline) return; // a write for this field is already in flight
 		clearSeasonFieldError(field);
+		seasonEditHeldOffline = false;
 		seasonEditDraft = seasonFieldValue(field);
 		seasonEditingField = field;
 	}
@@ -4398,6 +4443,8 @@
 	function cancelSeasonFieldEdit(): void {
 		seasonEditingField = null;
 		seasonEditDraft = '';
+		// Review F2 — an explicit abandon leaves no draft for the notice to be about.
+		seasonEditHeldOffline = false;
 	}
 
 	/** Enter/blur confirm: optimistic apply + immediate write, eventFieldEdit's
@@ -4407,6 +4454,19 @@
 	 *  UNCHANGED draft degrades to a plain cancel: no wire call at all. */
 	function confirmSeasonFieldEdit(field: SeasonEditableField): void {
 		if (!selected || manageableSeasonId === null || seasonEditingField !== field) return;
+		// #434 slice 6 — the signal dropped while this editor was open. No write
+		// reaches the wire and nothing is queued.
+		//
+		// Review F2: NOT a cancel. Delegating here threw away whatever the admin
+		// had retyped on a blur she never meant as "discard" — an unchanged draft
+		// loses nothing when it closes, a changed one loses her work. So the editor
+		// and the draft stay, the refusal is said out loud, and one more Enter once
+		// the signal is back writes the same text.
+		if (isOffline) {
+			clearSeasonFieldError(field);
+			seasonEditHeldOffline = true;
+			return;
+		}
 		const before = seasonFieldValue(field);
 		const value = seasonEditDraft.trim();
 		seasonEditingField = null;
@@ -4509,7 +4569,7 @@
 		// state signal, so a racing pick must be refused by the handler itself,
 		// not merely by the attribute. See seasonManageConductorPending's doc
 		// for the duplicate/lost-remove race this closes.
-		if (seasonManageConductorPending) return;
+		if (seasonManageConductorPending || isOffline) return;
 		if (!selection.id || !selected || manageableSeasonId === null) return;
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return; // no duplicate chips
@@ -4548,8 +4608,9 @@
 	// position was clicked (`entry` below carries it) — and revert restores
 	// that exact position on failure, never just appends the id back at the end.
 	function onSeasonManageConductorRemove(personId: string, index: number): void {
-		// #325 — same wire-level refusal as the select above.
-		if (seasonManageConductorPending) return;
+		// #325 — same wire-level refusal as the select above. #434 slice 6 — the
+		// signal down is the same kind of refusal.
+		if (seasonManageConductorPending || isOffline) return;
 		if (!selected || manageableSeasonId === null) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
@@ -5141,6 +5202,9 @@
 	 * than promising a stale figure; the delete itself still counts for real.
 	 */
 	async function armSeasonManageSeriesDelete(series: SeriesListItem): Promise<void> {
+		// #434 slice 6 — offline: nothing arms, nothing reads the live count
+		// (same shape as `armSeasonManageSeasonDelete`).
+		if (isOffline) return;
 		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
 		await armSeasonManageDelete(series.id, `season-manage-series-delete-confirm-${series.id}`);
 		if (!cfg) return;
@@ -5181,6 +5245,8 @@
 	 * every switch, exactly as it does for the cascade's own progress ticks.
 	 */
 	async function armSeasonManageSeasonDelete(): Promise<void> {
+		// #434 slice 6 — offline: nothing arms, nothing reads the live scope.
+		if (isOffline) return;
 		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
 		const seasonId = manageableSeasonId;
 		const generation = seasonManageDeleteGeneration;
@@ -5285,6 +5351,12 @@
 	function onSeasonManageSeriesDelete(series: SeriesListItem): void {
 		if (!selected) return;
 		if (seasonManageDeletePendingId !== null) return; // one delete on the wire at a time
+		// #434 slice 6 — the same guard its season-delete twin
+		// (`onSeasonManageSeasonDelete`) carries: the signal may have dropped
+		// while this confirm sat armed; refuse the cascade rather than run it
+		// blind. The panel's own `season-manage-write-unavailable` sentence says
+		// why, and the trigger/confirm below are disabled too.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		seasonManageDeleteError = null;
 		seasonManageDeleteProgress = null;
@@ -5343,6 +5415,9 @@
 	function onSeasonManageSeasonDelete(): void {
 		if (!selected || manageableSeasonId === null) return;
 		if (seasonManageDeletePendingId !== null) return;
+		// #434 slice 6 — the signal may have dropped while this confirm sat
+		// armed; refuse the cascade rather than run it blind.
+		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const seasonId = manageableSeasonId;
 		// #236 — captured from `seasonManageDeleteName`, not the raw
@@ -5407,6 +5482,9 @@
 	 */
 	async function submitEventCreate(): Promise<void> {
 		if (eventCreateSubmitting) return; // #132/T2 review F1 shape — no duplicate creates in flight
+		// #434 slice 6 — offline: no write, nothing queued, nothing in the form
+		// is touched — the typed draft stays exactly as it was.
+		if (isOffline) return;
 
 		// A fresh attempt owns both the error slot and the status slot.
 		clearEventCreateError();
@@ -6287,6 +6365,10 @@
 	 */
 	async function submitSeriesCreate(): Promise<void> {
 		if (seriesCreateSubmitting) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// form's own `series-create-write-unavailable` sentence says why. This layer
+		// also covers Enter-on-an-input, which the disabled button does not.
+		if (isOffline) return;
 		clearSeriesCreateError();
 
 		const resume = seriesCreateResume;
@@ -7063,7 +7145,7 @@
 																repertoire: seasonManageDeleteScope.repertoireItems
 															})
 														: m.season_manage_delete_confirm({ name: seasonManageDeleteName })}
-													disabled={seasonManageDeletePendingId !== null}
+													disabled={seasonManageDeletePendingId !== null || isOffline}
 													aria-busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
 													class="ml-auto flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
 													onclick={onSeasonManageSeasonDelete}
@@ -7116,6 +7198,7 @@
 													data-testid="season-manage-delete-season"
 													aria-label={m.season_manage_season_delete({ name: seasonManageDeleteName })}
 													class="ml-auto"
+													disabled={isOffline}
 													onclick={() => void armSeasonManageSeasonDelete()}
 													onkeydown={onSeasonManagePanelKeydown}
 												/>
@@ -7180,6 +7263,27 @@
 									     pattern), so the phrase renders exactly once whether the
 									     panel is open or not. -->
 
+									<!-- #434 slice 6 — ONE visible reason for every write control in
+									     this panel (edit pencils, conductor select/remove, delete):
+									     each is disabled while offline; this says why once. -->
+									{#if isOffline}
+										<p data-testid="season-manage-write-unavailable" class="text-xs text-ink-2">
+											{m.write_unavailable_no_signal()}
+										</p>
+									{/if}
+									<!-- #434 slice 6 review F2 — a confirm the signal refused, with the
+									     editor still open on the admin's typing. Says why nothing saved;
+									     the draft above is untouched. -->
+									{#if seasonEditHeldOffline}
+										<p
+											data-testid="season-edit-held-offline"
+											role="alert"
+											class="text-xs text-ink-2"
+										>
+											{m.write_held_no_signal()}
+										</p>
+									{/if}
+
 									<!-- name -->
 									<div>
 									{#if seasonEditingField === 'name'}
@@ -7215,7 +7319,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-name"
-												disabled={seasonEditPending.name === true}
+												disabled={seasonEditPending.name === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-lg text-ink disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('name')}
 											>
@@ -7280,7 +7384,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-start_date"
-												disabled={seasonEditPending.start_date === true}
+												disabled={seasonEditPending.start_date === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('start_date')}
 											>
@@ -7329,7 +7433,7 @@
 											<button
 												type="button"
 												data-testid="season-edit-btn-end_date"
-												disabled={seasonEditPending.end_date === true}
+												disabled={seasonEditPending.end_date === true || isOffline}
 												class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
 												onclick={() => beginSeasonFieldEdit('end_date')}
 											>
@@ -7411,7 +7515,7 @@
 														aria-label={m.season_conductor_remove({
 															name: seasonConductorLabel(personId)
 														})}
-														disabled={seasonManageConductorPending}
+														disabled={seasonManageConductorPending || isOffline}
 														class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
 														onclick={() => onSeasonManageConductorRemove(personId, entryIndex)}
 													>
@@ -7430,7 +7534,8 @@
 											data-testid="season-manage-conductor-select"
 											aria-label={m.season_conductor_label()}
 											disabled={seasonManageConductorOptions.length === 0 ||
-												seasonManageConductorPending}
+												seasonManageConductorPending ||
+												isOffline}
 											value=""
 											onchange={(e) => {
 												const target = e.currentTarget as HTMLSelectElement;
@@ -7545,6 +7650,16 @@
 											class="mt-1 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
 											onkeydown={onSeriesCreateFormKeydown}
 										>
+											<!-- #434 slice 6 — the offline reason, VISIBLE, inside the form:
+											     submit is disabled while offline; this says why. -->
+											{#if isOffline}
+												<p
+													data-testid="series-create-write-unavailable"
+													class="text-xs text-ink-2"
+												>
+													{m.write_unavailable_no_signal()}
+												</p>
+											{/if}
 											<!-- Every box below carries `disabled={seriesCreateLocked}`: once a
 											     run has stopped partway, submit finishes THAT run and edits here
 											     would be silently discarded (review F5).
@@ -7915,7 +8030,9 @@
 												<button
 													type="button"
 													data-testid="series-create-submit"
-													disabled={seriesCreateSubmitting || seriesCreateNothingToSubmit}
+													disabled={seriesCreateSubmitting ||
+														seriesCreateNothingToSubmit ||
+														isOffline}
 													aria-busy={seriesCreateSubmitting}
 													class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 													onclick={() => void submitSeriesCreate()}
@@ -8026,7 +8143,7 @@
 																	count: seasonManageArmedSeriesCount
 																})
 															: m.season_manage_delete_confirm({ name: series.name })}
-														disabled={seasonManageDeletePendingId !== null}
+														disabled={seasonManageDeletePendingId !== null || isOffline}
 														aria-busy={seasonManageDeletePendingId === series.id}
 														class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
 														onclick={() => onSeasonManageSeriesDelete(series)}
@@ -8057,6 +8174,7 @@
 													<DeleteTrigger
 														data-testid="season-manage-series-delete-{series.id}"
 														aria-label={m.season_manage_series_delete({ name: series.name })}
+														disabled={isOffline}
 														onclick={() => void armSeasonManageSeriesDelete(series)}
 													/>
 												{/if}
@@ -8227,6 +8345,13 @@
 									class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
 									onkeydown={onSeasonFormKeydown}
 								>
+									<!-- #434 slice 6 — the offline reason, VISIBLE, inside the form:
+									     submit is disabled while offline; this says why. -->
+									{#if isOffline}
+										<p data-testid="season-create-write-unavailable" class="text-xs text-ink-2">
+											{m.write_unavailable_no_signal()}
+										</p>
+									{/if}
 									<input
 										type="text"
 										data-testid="season-create-name"
@@ -8370,7 +8495,7 @@
 										<button
 											type="button"
 											data-testid="season-create-submit"
-											disabled={seasonCreateSubmitting}
+											disabled={seasonCreateSubmitting || isOffline}
 											aria-busy={seasonCreateSubmitting}
 											class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 											onclick={() => void submitSeasonCreate()}
@@ -8418,6 +8543,13 @@
 								class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
 								onkeydown={onEventCreateFormKeydown}
 							>
+								<!-- #434 slice 6 — the offline reason, VISIBLE, inside the form:
+								     submit is disabled while offline; this says why. -->
+								{#if isOffline}
+									<p data-testid="event-create-write-unavailable" class="text-xs text-ink-2">
+										{m.write_unavailable_no_signal()}
+									</p>
+								{/if}
 								<!-- #199 — the canonical, localized picker: same shape as
 								     series-create-type.
 								     #242 ruling — empty start, one explicit choice: a leading ''
@@ -8778,7 +8910,7 @@
 									<button
 										type="button"
 										data-testid="event-create-submit"
-										disabled={eventCreateSubmitting}
+										disabled={eventCreateSubmitting || isOffline}
 										aria-busy={eventCreateSubmitting}
 										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
 										onclick={() => void submitEventCreate()}

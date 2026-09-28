@@ -21,7 +21,8 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/state';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
+	import { clearReadFellBackToCache } from '$lib/net/cacheFallback';
 	import { getToken } from '$lib/auth/storage';
 	import { isProtectedPath } from '$lib/auth/guard';
 	import { hydrateAuth, authStore } from '$lib/auth/session';
@@ -70,6 +71,16 @@
 	// per load, after the strategy chain has resolved, and always matches.
 	$effect(() => {
 		document.documentElement.lang = getLocale();
+	});
+
+	// #434 slice 6 review round 3, F1 — every navigation is a load boundary for
+	// the write gate's cache-fallback half. The flag is global, but only the three
+	// cache-opted pages clear it themselves (resetServedFromCache); without this
+	// one cache-served read on the agenda left /roster, /links, /profile and
+	// /admin under "No signal" while fully online. The pages keep their own
+	// resetServedFromCache — it owns the as-of stamp.
+	afterNavigate(() => {
+		clearReadFellBackToCache();
 	});
 
 	// Keep the URL-derived collective selection in sync with the address bar so a

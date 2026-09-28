@@ -54,6 +54,11 @@
 	// route still renders (backward compat) — see
 	// src/lib/components/admin/InviteSurface.svelte.
 	import InviteSurface from '$lib/components/admin/InviteSurface.svelte';
+	// #434 slice 6 review F1 — the write gate. Role grants/revokes and the
+	// collective rename are writes: disabled and refused while there is no usable
+	// signal, with one sentence saying why. Nothing is queued. (The invite section
+	// reads the same gate inside InviteSurface itself.)
+	import { writesAvailable } from '$lib/net/online';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 
@@ -66,6 +71,7 @@
 	// that decides "which collective is this page acting on" keys off
 	// `selectedCollectiveIdentityStore` instead (see the load effect below).
 	const selected = $derived($selectedCollectiveStore);
+	const isOffline = $derived(!$writesAvailable);
 	let cfg = $state<Cfg | null>(null);
 	let dbEntityId = $state<string | null>(null);
 	let libraryId = $state<string | null>(null);
@@ -113,6 +119,13 @@
 	// unlikely — the handlers below check it themselves, since `disabled` is
 	// a double-tap guard, not a state signal.
 	let rolesPending = $state(false);
+	// #434 slice 6 review F1/F2 — a name confirm the signal refused, with the
+	// editor still open on the typed draft. Cleared on the next open, on an
+	// explicit cancel, and by the signal returning.
+	let nameHeldOffline = $state(false);
+	$effect(() => {
+		if (!isOffline) nameHeldOffline = false;
+	});
 	// #325/#267 shape — persistent role="status" region, mounted blank, text
 	// set imperatively on a successful settle, cleared at the START of the
 	// next attempt (never on a timer).
@@ -347,6 +360,9 @@
 	// cancelFieldEdit/confirmFieldEdit shape, collapsed to the ONE field this
 	// surface owns (no per-field key needed).
 	function beginNameEdit(): void {
+		// Offline the whole-field button is disabled; this is the backstop for a tap
+		// that beat the re-render (the event page's beginFieldEdit shape).
+		if (isOffline) return;
 		if (!nameMarker || nameWritePending) return;
 		nameError = false;
 		nameDraft = nameMarker.name;
@@ -361,6 +377,8 @@
 	function cancelNameEdit(restoreFocus: boolean): void {
 		editingName = false;
 		nameDraft = '';
+		// An explicit abandon leaves no draft for the held-draft notice to be about.
+		nameHeldOffline = false;
 		if (restoreFocus) tick().then(() => namePencilRef?.focus());
 	}
 
@@ -390,6 +408,15 @@
 	 *  already moved focus somewhere deliberate. */
 	async function confirmNameEdit(restoreFocus: boolean): Promise<void> {
 		if (!editingName || !cfg || !nameMarker) return;
+		// #434 slice 6 review F1/F2 — the signal dropped with the editor open. No
+		// write, nothing queued, and the editor STAYS on the typed draft: a blur is
+		// not a discard gesture, and closing here would eat the admin's retyping.
+		// `nameHeldOffline` says why nothing saved.
+		if (isOffline) {
+			nameError = false;
+			nameHeldOffline = true;
+			return;
+		}
 		const draft = nameDraft.trim();
 		const before = nameMarker;
 		if (draft === '' || draft === before.name) {
@@ -475,6 +502,10 @@
 	// lands mid-write invalidates the snapshot, so neither the refetched rows nor
 	// the error banner can leak into the collective the viewer moved to.
 	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
+		// #434 slice 6 review F1 — no signal, no rights write. FIRST, before the
+		// attempt-start clears below, so a refused pick cannot wipe the error from
+		// the grant that really did fail. Nothing is queued.
+		if (isOffline) return;
 		// #325 — wire-level refusal: checked before anything else, since
 		// `disabled` on the select is a double-tap guard, not a state signal.
 		if (rolesPending) return;
@@ -498,6 +529,7 @@
 	}
 
 	async function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
+		if (isOffline) return;
 		if (rolesPending) return;
 		if (!selection.id || !cfg || !libraryId) return;
 		const thisLoad = loadSeq;
@@ -519,6 +551,7 @@
 	}
 
 	async function onRemoveAdmin(personId: string): Promise<void> {
+		if (isOffline) return;
 		if (rolesPending) return;
 		if (!cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
@@ -540,6 +573,7 @@
 	}
 
 	async function onRemoveLibrarian(personId: string): Promise<void> {
+		if (isOffline) return;
 		if (rolesPending) return;
 		if (!cfg || !libraryId) return;
 		const thisLoad = loadSeq;
@@ -631,7 +665,7 @@
 							<button
 								type="button"
 								data-testid="admin-collective-name-edit"
-								disabled={nameWritePending}
+								disabled={nameWritePending || isOffline}
 								bind:this={namePencilRef}
 								class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
 								onclick={beginNameEdit}
@@ -658,6 +692,23 @@
 						</p>
 					{/if}
 				</div>
+			{/if}
+
+			<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
+			     this surface (the name field, both role selects, every remove): each
+			     is disabled while there is no signal; this says why once. The invite
+			     section below carries its own, inside InviteSurface. -->
+			{#if isOffline}
+				<p data-testid="admin-write-unavailable" class="text-sm text-ink-2">
+					{m.write_unavailable_no_signal()}
+				</p>
+			{/if}
+			<!-- Review F2's rule on this page's one inline editor: a confirm the
+			     signal refused keeps the draft, and says so. -->
+			{#if nameHeldOffline}
+				<p data-testid="admin-name-held-offline" role="alert" class="text-sm text-ink-2">
+					{m.write_held_no_signal()}
+				</p>
 			{/if}
 
 			{#if actionError}
@@ -707,7 +758,7 @@
 								<button
 									type="button"
 									data-testid="admin-remove-{person.id}"
-									disabled={!canManageAdmins || isLastOwner(person) || rolesPending}
+									disabled={!canManageAdmins || isLastOwner(person) || rolesPending || isOffline}
 									class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 									onclick={() => onRemoveAdmin(person.id)}
 								>
@@ -733,7 +784,7 @@
 					<select
 						data-testid="admin-add-admin-select"
 						aria-label={m.admin_roles_add_admin_label()}
-						disabled={adminOptions.length === 0 || rolesPending}
+						disabled={adminOptions.length === 0 || rolesPending || isOffline}
 						value=""
 						onchange={(e) => {
 							const target = e.currentTarget as HTMLSelectElement;
@@ -804,7 +855,7 @@
 									<button
 										type="button"
 										data-testid="librarian-remove-{person.id}"
-										disabled={!canManageLibrarians || isSelf(person) || rolesPending}
+										disabled={!canManageLibrarians || isSelf(person) || rolesPending || isOffline}
 										title={isSelf(person) ? m.admin_roles_remove_self_hint() : undefined}
 										class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 										onclick={() => onRemoveLibrarian(person.id)}
@@ -828,7 +879,7 @@
 						<select
 							data-testid="admin-add-librarian-select"
 							aria-label={m.admin_roles_add_librarian_label()}
-							disabled={librarianOptions.length === 0 || rolesPending}
+							disabled={librarianOptions.length === 0 || rolesPending || isOffline}
 							value=""
 							onchange={(e) => {
 								const target = e.currentTarget as HTMLSelectElement;

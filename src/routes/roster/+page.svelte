@@ -100,9 +100,16 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import EntuRef from '$lib/components/EntuRef.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
+	// #434 slice 6 review F1 — the write gate. Every write on this page (member
+	// lifecycle, the member record, invite mint/withdraw, and the whole section
+	// tree: assign/unassign/move, create, rename, reorder, reparent, delete) is
+	// disabled and refused while there is no usable signal, with one sentence
+	// saying why. Nothing is queued.
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
 	const admin = $derived($adminStore);
+	const isOffline = $derived(!$writesAvailable);
 
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<RosterRow[]>([]);
@@ -980,6 +987,11 @@
 
 	/** Blank picker → a section: optimistic add, frozen until the POST lands. */
 	async function handleAssign(memberId: string, sectionId: string): Promise<void> {
+		// #434 slice 6 review F1 — offline: nothing written, nothing queued. BEFORE
+		// the `sectionWriteError` clear, so a refused pick cannot wipe the banner
+		// from the write that really did fail. (The picker renders `busy` offline,
+		// so this is the backstop for a change that beat the re-render.)
+		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
@@ -1028,6 +1040,7 @@
 	 *  reconcile-forward rule the old `handlePick` pinned) — the removal goes
 	 *  through, no banner. */
 	async function handleUnassign(memberId: string, sectionId: string): Promise<void> {
+		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
@@ -1060,6 +1073,7 @@
 	 *  danger of losing her only section. A failed delete leaves her visibly
 	 *  in BOTH (never in neither) — fixable, never silently lost. */
 	async function handleMove(memberId: string, fromId: string, toId: string): Promise<void> {
+		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
@@ -1400,6 +1414,7 @@
 	 *  re-enabled, next to whichever alert fired, for direct retry through the
 	 *  SAME confirm — no re-arming dance. */
 	async function handleDeactivateConfirm(row: RosterRow): Promise<void> {
+		if (isOffline) return;
 		if (deactivatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -1645,6 +1660,7 @@
 	let reinstatePending = $state<string | null>(null);
 
 	async function handleReinstate(memberId: string): Promise<void> {
+		if (isOffline) return;
 		if (reinstatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -1720,6 +1736,7 @@
 	 *  admin here. NEVER `createInvite` — every row already has a person; that
 	 *  function mints a SECOND one. */
 	async function handleMintInvite(row: RosterRow): Promise<void> {
+		if (isOffline) return;
 		if (inviteActionPending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -1766,6 +1783,7 @@
 	 *  — withdrawn and never-invited are the SAME state (Mihkel ruling); no
 	 *  local "withdrawn" flag is set, because there is no state left to flag. */
 	async function handleWithdrawInvite(row: RosterRow): Promise<void> {
+		if (isOffline) return;
 		if (inviteActionPending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -2096,6 +2114,10 @@
 		// to. The controls render disabled to match, so this is never a silent
 		// no-op.
 		if (recordSavingMemberId !== null) return;
+		// #434 slice 6 review F1/F2 — offline: nothing written, and the editor stays
+		// open on the typed record. BEFORE the `recordSaveError` clear below, so a
+		// refused save cannot wipe the message from the one that really failed.
+		if (isOffline) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
 		const lookup = recordEditorLookup;
@@ -2430,6 +2452,7 @@
 		// site, #273); this is the defensive backstop for the moment BEFORE that
 		// render lands and for any path the UI can't disable.
 		if (structuralWritePending) return;
+		if (isOffline) return; // #434 slice 6 review F1 — no signal, no structural write
 		// Both resolved BEFORE the tree is mutated below — that mutation destroys
 		// the evidence this needs (the pre-removal sibling list, the pre-removal
 		// activeElement comparison).
@@ -2640,6 +2663,10 @@
 	}
 
 	async function submitPageCreate(): Promise<void> {
+		// #434 slice 6 review F1 — offline: nothing written, and the typed name is
+		// left in the form. BEFORE the attempt-start clears, so a refused submit
+		// cannot wipe the error from the create that really did fail.
+		if (isOffline) return;
 		// A fresh attempt owns both the error slot and the status slot — a
 		// previous failure/success must not sit alongside a new attempt in flight.
 		pageCreateError = null;
@@ -2879,6 +2906,11 @@
 		// a rename or a delete started on a neighbouring arrange row is just as
 		// much an outstanding write on this tree.
 		if (structuralWritePending) return false;
+		// #434 slice 6 review F1 — offline: no reorder. Before `reorderError`/
+		// `reparentPartial` are touched, so a refused drag reports nothing at all.
+		// (Reorder is reachable by drag, which has no `disabled` to set — this IS
+		// the gate for that path.)
+		if (isOffline) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reorder with no cfg', afterIds);
@@ -3015,6 +3047,8 @@
 		// #155/S4 review F1 — see `performReorder`: one structural write at a time,
 		// counting rename and delete.
 		if (structuralWritePending) return false;
+		// Offline: no reparent — the drag path's gate, same as `performReorder`.
+		if (isOffline) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section reparent with no cfg', node.id);
@@ -3202,6 +3236,10 @@
 	const structuralWritePending = $derived(reorderPending || renamePending || removePending);
 
 	function startRename(node: SectionNode): void {
+		// The trigger is disabled offline; this is the backstop for a tap that beat
+		// the re-render. Arming an editor whose every commit would be refused is
+		// just a trap.
+		if (isOffline) return;
 		// #303 review F1 — `reorderPending || removePending`, NOT the page-wide
 		// `structuralWritePending`. ARMING an editor writes nothing: it sets
 		// `renamingSectionId`/`renameValue` and mounts an input. The single-flight
@@ -3318,7 +3356,12 @@
 		// only ever blocks for as long as the pair is genuinely on screen.
 		// Pinned by "AN ARMED-BUT-UNCONFIRMED DELETE HOLDS THE FLOOR" in
 		// page.roster-rename-abandon-commits.spec.ts.
-		if (structuralWritePending || pendingRemoveId !== null) return;
+		// #434 slice 6 review F1/F2 — offline joins the two refusals above, and
+		// inherits their exact shape: nothing written, nothing discarded, the input
+		// stays open with its text for a retry once the signal is back. It is
+		// checked BEFORE blur's own reconciliation for the same reason
+		// `structuralWritePending` is — a refusal is not a commit decision.
+		if (structuralWritePending || pendingRemoveId !== null || isOffline) return;
 		if (blurTrigger) {
 			const original = findSectionNode(sections, id)?.name ?? '';
 			if (name === '' || name === original) {
@@ -4358,7 +4401,7 @@
 							<button
 								type="button"
 								data-testid="roster-record-save"
-								disabled={recordSavingMemberId !== null}
+								disabled={recordSavingMemberId !== null || isOffline}
 								class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
 								onclick={() => saveRecordEditor(row)}
 							>
@@ -4431,7 +4474,7 @@
 								<button
 									type="button"
 									data-testid="roster-member-invite-{row.memberId}"
-									disabled={inviteActionPending}
+									disabled={inviteActionPending || isOffline}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 									onclick={() => handleMintInvite(row)}
 								>
@@ -4441,7 +4484,7 @@
 								<button
 									type="button"
 									data-testid="roster-member-reinvite-{row.memberId}"
-									disabled={inviteActionPending}
+									disabled={inviteActionPending || isOffline}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 									onclick={() => handleMintInvite(row)}
 								>
@@ -4450,7 +4493,7 @@
 								<button
 									type="button"
 									data-testid="roster-member-withdraw-{row.memberId}"
-									disabled={inviteActionPending}
+									disabled={inviteActionPending || isOffline}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 									onclick={() => handleWithdrawInvite(row)}
 								>
@@ -4562,7 +4605,7 @@
 					<button
 						type="button"
 						data-testid="member-deactivate-confirm-{row.memberId}"
-						disabled={deactivatePending}
+						disabled={deactivatePending || isOffline}
 						aria-busy={deactivatePending}
 						class="rounded-md border border-red-700 px-2 py-1 text-xs text-red-700 hover:bg-red-700 hover:text-paper disabled:opacity-50"
 						onclick={() => handleDeactivateConfirm(row)}
@@ -4582,7 +4625,7 @@
 					<button
 						type="button"
 						data-testid="member-deactivate-{row.memberId}"
-						disabled={deactivatePending}
+						disabled={deactivatePending || isOffline}
 						class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 						onclick={() => armDeactivate(row.memberId)}
 					>
@@ -4685,7 +4728,7 @@
 					{sections}
 					selectedIds={memberSectionIds}
 					renderIds={pickerRenderIds}
-					busy={sectionBusyIds.has(row.memberId)}
+					busy={sectionBusyIds.has(row.memberId) || isOffline}
 					onassign={(sectionId) => handleAssign(row.memberId, sectionId)}
 					onunassign={(sectionId) => handleUnassign(row.memberId, sectionId)}
 					onmove={(fromId, toId) => handleMove(row.memberId, fromId, toId)}
@@ -4814,6 +4857,19 @@
 		     second visual language. `rosterPartial` and the two flags behind it are
 		     declared at the top of the script; `reset` is what keeps this from
 		     surviving a collective switch. -->
+		<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
+		     this page: member deactivate/reinstate, the member-record editor, the
+		     invite mint/withdraw trio, the section pickers, and the whole arrange
+		     surface (create, rename, indent/unindent, drag-reorder, delete). Each is
+		     disabled (or, for drag, refused in the handler) while there is no signal;
+		     this says why once. Admin-gated — a plain member sees no write control
+		     here to explain. -->
+		{#if admin === 'admin' && isOffline}
+			<p data-testid="roster-write-unavailable" class="text-sm text-ink-2">
+				{m.write_unavailable_no_signal()}
+			</p>
+		{/if}
+
 		{#if rosterPartial}
 			<p
 				data-testid="roster-partial-notice"
@@ -5448,7 +5504,7 @@
 										type="button"
 										data-testid="arrange-rename-{row.id}"
 										title={m.roster_section_rename({ name: row.name })}
-										disabled={reorderPending || removePending || renamingSectionId === row.id}
+										disabled={reorderPending || removePending || renamingSectionId === row.id || isOffline}
 										class="group flex min-h-11 min-w-0 flex-1 appearance-none items-center gap-1.5 border-0 bg-transparent p-0 text-left text-ink-2 hover:text-ink disabled:cursor-default"
 										onclick={() => startRename(node)}
 									>
@@ -5571,7 +5627,7 @@
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
 											damaged ||
-											!indentApplicable}
+											!indentApplicable || isOffline}
 										tabindex="-1"
 										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {indentApplicable
 											? ''
@@ -5590,7 +5646,7 @@
 										disabled={structuralWritePending ||
 											renamingSectionId === row.id ||
 											damaged ||
-											!unindentApplicable}
+											!unindentApplicable || isOffline}
 										tabindex="-1"
 										class="flex min-h-11 min-w-11 items-center justify-center rounded text-ink disabled:cursor-default disabled:opacity-60 {unindentApplicable
 											? ''
@@ -5641,7 +5697,7 @@
 											type="button"
 											data-testid="section-remove-confirm-{row.id}"
 											aria-label={m.roster_section_remove_confirm({ name: row.name })}
-											disabled={structuralWritePending}
+											disabled={structuralWritePending || isOffline}
 											aria-busy={removePending}
 											class="rounded px-1 text-xs text-red-700 underline disabled:opacity-50"
 											onclick={() => void handleRemoveSection(row.id)}
@@ -5673,7 +5729,7 @@
 											title={m.roster_section_remove({ name: row.name })}
 											disabled={structuralWritePending ||
 												renamingSectionId === row.id ||
-												!canDelete}
+												!canDelete || isOffline}
 											onclick={() => void armRemove(row.id)}
 										/>
 									{/if}
@@ -5706,7 +5762,8 @@
 								<button
 									type="button"
 									data-testid="roster-new-section"
-									class="self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
+									class="self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50"
+									disabled={isOffline}
 									onclick={openPageCreateForm}
 								>
 									{m.roster_new_section()}
@@ -5760,7 +5817,8 @@
 										<button
 											type="button"
 											data-testid="roster-new-section-submit"
-											class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
+											class="border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
+											disabled={isOffline}
 											onclick={() => void submitPageCreate()}
 										>
 											{m.roster_create_assign()}
@@ -5864,7 +5922,7 @@
 										type="button"
 										data-testid="member-reinstate-{row.memberId}"
 										class="self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-										disabled={reinstatePending !== null}
+										disabled={reinstatePending !== null || isOffline}
 										onclick={() => handleReinstate(row.memberId)}
 									>
 										{m.roster_member_reinstate()}

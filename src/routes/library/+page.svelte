@@ -73,8 +73,12 @@
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
+	// #434 slice 6 — the ONE online/offline signal; lending writes (checkout,
+	// return, bulk checkout) are gated on it directly.
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
+	const isOffline = $derived(!$writesAvailable);
 
 	// #76 correction 9, superseded by #207 rule 7 (PO standing rule, Gama's
 	// 2026-09-02 rulings) — lending dates are NUMERIC/TABULAR text, so they
@@ -369,6 +373,9 @@
 
 	async function submitCreateWork(): Promise<void> {
 		if (createWorkPending) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		createWorkError = null;
 		createWorkStatus = '';
 		const current = selected;
@@ -673,6 +680,9 @@
 
 	async function submitCreateEdition(workId: string): Promise<void> {
 		if (createEditionPending.has(workId)) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const errs0 = new Map(createEditionErrors);
 		errs0.delete(workId);
 		createEditionErrors = errs0;
@@ -837,6 +847,9 @@
 
 	async function handleAttachFiles(editionId: string, fileList: FileList | null): Promise<void> {
 		if (!fileList || fileList.length === 0) return;
+		// #434 slice 6 — no write reaches the wire while the signal is down; the
+		// page's own `library-write-unavailable` sentence says why.
+		if (isOffline) return;
 		const files = Array.from(fileList);
 		const current = selected;
 		const token = getToken();
@@ -1170,6 +1183,9 @@
 	// are re-fetched after createLending resolves, so the row's availability
 	// reflects the refreshed list, not an optimistic local flip.
 	async function handleInlineCheckout(copyId: string, memberId: string): Promise<void> {
+		// #434 slice 6 — offline: no write, nothing queued. Checked before any
+		// state clear or `resolveWriteLibraryId` call, so this is a true no-op.
+		if (isOffline) return;
 		const nextErrors = new Map(inlineCheckoutErrors);
 		nextErrors.delete(copyId);
 		inlineCheckoutErrors = nextErrors;
@@ -1216,6 +1232,8 @@
 
 	// #73 — return a lending
 	async function handleReturn(lendingId: string): Promise<void> {
+		// #434 slice 6 — offline: no write, nothing queued.
+		if (isOffline) return;
 		returnError = '';
 		const current = selected;
 		if (!current) return;
@@ -1255,6 +1273,8 @@
 
 	// #74 — bulk checkout handler
 	async function handleBulkCheckout(): Promise<void> {
+		// #434 slice 6 — offline: no write, nothing queued.
+		if (isOffline) return;
 		bulkCheckoutError = '';
 		const current = selected;
 		if (!current) return;
@@ -1315,6 +1335,18 @@
 		{#if $librarianStore === 'librarian'}
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 				{m.library_librarian_tools()}
+
+				<!-- #434 slice 6 — ONE visible reason for every write control on this
+				     page (bulk checkout, inline checkout, return, and the tree's own
+				     create-work / create-edition / attach-files further down): each is
+				     disabled while offline; this says why once, in the librarian tools
+				     block that only ever renders for the viewer who has those controls
+				     at all. -->
+				{#if isOffline}
+					<p data-testid="library-write-unavailable" class="mt-2 text-xs text-ink-2">
+						{m.write_unavailable_no_signal()}
+					</p>
+				{/if}
 
 				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
 				<div data-testid="bulk-checkout" class="mt-3">
@@ -1397,7 +1429,7 @@
 						{#if bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available}
 							<p data-testid="bulk-checkout-too-many" class="mt-1 text-xs text-red-700" role="alert">{m.library_bulk_checkout_too_many()}</p>
 						{/if}
-						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" disabled={bulkCheckoutCheckedMembers.size === 0 || bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available} onclick={handleBulkCheckout}>
+						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" disabled={bulkCheckoutCheckedMembers.size === 0 || bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available || isOffline} onclick={handleBulkCheckout}>
 							{m.library_checkout_submit()}
 						</button>
 						{#if bulkCheckoutError}
@@ -1470,7 +1502,7 @@
 									type="button"
 									data-testid="create-work-submit"
 									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-									disabled={createWorkPending}
+									disabled={createWorkPending || isOffline}
 									onclick={() => void submitCreateWork()}
 									onkeydown={onCreateWorkEscapeKeydown}
 								>
@@ -1794,6 +1826,7 @@
 																				data-testid="inline-checkout-{copy.id}"
 																				aria-label={m.library_inline_checkout_placeholder()}
 																				value=""
+																				disabled={isOffline}
 																				onchange={(e) => {
 																					const memberId = e.currentTarget.value;
 																					if (memberId) void handleInlineCheckout(copy.id, memberId);
@@ -1845,6 +1878,7 @@
 																				type="button"
 																				data-testid="library-return-{copy.id}"
 																				class="rounded-md border border-ink px-2 py-0.5 text-xs hover:bg-ink hover:text-paper"
+																				disabled={isOffline}
 																				onclick={() => handleReturn(activeLending.id)}
 																			>
 																				{m.library_return()}
@@ -1946,7 +1980,7 @@
 																multiple
 																data-testid="library-attach-file-{edition.id}"
 																aria-label={m.library_edition_file_attach()}
-																disabled={editionFilesPending.has(edition.id)}
+																disabled={editionFilesPending.has(edition.id) || isOffline}
 																onchange={(e) => {
 																	const input = e.currentTarget as HTMLInputElement;
 																	void handleAttachFiles(edition.id, input.files);
@@ -2071,7 +2105,7 @@
 														type="button"
 														data-testid="create-edition-submit-{work.id}"
 														class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-														disabled={createEditionPending.has(work.id)}
+														disabled={createEditionPending.has(work.id) || isOffline}
 														onclick={() => void submitCreateEdition(work.id)}
 														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
 													>

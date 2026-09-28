@@ -19,6 +19,10 @@
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
+	// #434 slice 6 — the ONE online/offline signal, read directly here (same
+	// shape as RsvpControl) so both host pages (agenda, event page) get the
+	// gate with no wiring of their own.
+	import { writesAvailable } from '$lib/net/online';
 
 	interface AttendanceEntryLite {
 		attendanceId: string;
@@ -129,8 +133,11 @@
 		return RSVP_LABELS[entry.status]?.() ?? entry.status;
 	}
 
+	// #434 slice 6 — the signal down is a second reason no toggle may write.
+	const isOffline = $derived(!$writesAvailable);
+
 	function handleToggle(memberId: string, status: AttendanceStatus) {
-		if (pendingMemberIds.has(memberId) || !ontoggle) return;
+		if (pendingMemberIds.has(memberId) || isOffline || !ontoggle) return;
 		// Tap the ACTIVE status -> clear the record (null); tap any other -> set it.
 		const current = attendanceByMemberId[memberId]?.status;
 		ontoggle(memberId, current === status ? null : status);
@@ -245,6 +252,14 @@
 		>{statusText}</span
 	>
 
+	<!-- #434 slice 6 — ONE visible reason for the whole panel, not per toggle:
+	     every toggle below is disabled while offline; this says why once. -->
+	{#if isOffline}
+		<p data-testid="attendance-write-unavailable" class="text-xs text-ink-2">
+			{m.write_unavailable_no_signal()}
+		</p>
+	{/if}
+
 	{#if loading}
 		<div data-testid="attendance-panel-loading" class="flex flex-col gap-2" aria-hidden="true">
 			{#each [0, 1, 2] as skeletonRow (skeletonRow)}
@@ -309,7 +324,9 @@
 								<button
 									data-testid="attendance-toggle-{member.memberId}-{status.value}"
 									type="button"
-									aria-disabled={pendingMemberIds.has(member.memberId) ? 'true' : undefined}
+									aria-disabled={pendingMemberIds.has(member.memberId) || isOffline
+										? 'true'
+										: undefined}
 									aria-pressed={attendanceByMemberId[member.memberId]?.status === status.value
 										? 'true'
 										: 'false'}

@@ -116,6 +116,11 @@
 		readerEditionUnknownReason as getReaderEditionUnknownReason
 	} from '$lib/repertoire/editionUnknown';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+	// #434 slice 6 — the ONE online/offline signal, read directly here (same
+	// shape as RsvpControl/AttendanceSurface) so every host surface (agenda
+	// event row, agenda season-manage panel, event page) gets the write gate
+	// with no wiring of its own.
+	import { writesAvailable } from '$lib/net/online';
 
 	/** Stable identity for the `editionsResolvedWorkIds` default — a fresh
 	 *  `new Set()` per render would be a new prop value every time. */
@@ -343,6 +348,12 @@
 	);
 	const canManage = $derived(canManageRepertoire || canManageProgramme);
 
+	// #434 slice 6 — the signal down is a second disable reason for EVERY
+	// management control this element renders (status, pin edition, remove,
+	// move, add work, add to programme). Unlike `pendingKeys` it SAYS why:
+	// one visible sentence per manage surface, rendered below.
+	const isOffline = $derived(!$writesAvailable);
+
 	/** #288 — see the `pickableEditionsVisible` prop doc: fall back to the
 	 *  original rule when no caller override is given. */
 	const pickableEditionsVisible = $derived(
@@ -437,13 +448,13 @@
 	let selectedEditionForAdd = $state('');
 
 	function handleAddWork() {
-		if (!selectedWorkId || pendingKeys.has(addWorkKey)) return;
+		if (!selectedWorkId || pendingKeys.has(addWorkKey) || isOffline) return;
 		onaddwork?.(selectedWorkId);
 		selectedWorkId = '';
 	}
 
 	function handleAddProgramItem() {
-		if (!selectedEditionForAdd || pendingKeys.has(ADD_PROGRAMME_KEY)) return;
+		if (!selectedEditionForAdd || pendingKeys.has(ADD_PROGRAMME_KEY) || isOffline) return;
 		const knownOrdinals = rows.flatMap((r) => (r.ordinal !== null ? [r.ordinal] : []));
 		const nextOrdinal = knownOrdinals.length === 0 ? 0 : Math.max(...knownOrdinals) + 1;
 		onaddprogramitem?.(selectedEditionForAdd, nextOrdinal);
@@ -451,22 +462,22 @@
 	}
 
 	function handleStatusChange(rowId: string, status: RepertoireStatus) {
-		if (pendingKeys.has(rowId)) return;
+		if (pendingKeys.has(rowId) || isOffline) return;
 		onstatuschange?.(rowId, status);
 	}
 
 	function handlePinEdition(rowId: string, editionId: string) {
-		if (pendingKeys.has(rowId)) return;
+		if (pendingKeys.has(rowId) || isOffline) return;
 		onpinedition?.(rowId, editionId);
 	}
 
 	function handleRemove(rowId: string) {
-		if (pendingKeys.has(rowId)) return;
+		if (pendingKeys.has(rowId) || isOffline) return;
 		onremoveitem?.(rowId);
 	}
 
 	function handleMove(rowId: string, direction: 'up' | 'down') {
-		if (pendingKeys.has(rowId)) return;
+		if (pendingKeys.has(rowId) || isOffline) return;
 		onmoveitem?.(rowId, direction);
 	}
 
@@ -518,7 +529,7 @@
 		data-testid="work-edition-picker"
 		class="w-full sm:w-auto"
 		value={pickerValue(row)}
-		disabled={pendingKeys.has(row.id)}
+		disabled={pendingKeys.has(row.id) || isOffline}
 		aria-label={m.repertoire_pin_edition_select_aria_label({ work: row.workName })}
 		onchange={(e) => handlePinEdition(row.id, (e.currentTarget as HTMLSelectElement).value)}
 	>
@@ -695,7 +706,7 @@
 		type="button"
 		data-testid="work-manage-remove"
 		class="text-xs text-red underline disabled:cursor-default disabled:opacity-[0.45]"
-		disabled={pendingKeys.has(row.id)}
+		disabled={pendingKeys.has(row.id) || isOffline}
 		aria-label={m.repertoire_remove_aria_label({ work: row.workName })}
 		onclick={() => handleRemove(row.id)}
 	>
@@ -737,7 +748,7 @@
 							data-testid={`work-status-${opt.value}`}
 							class="rounded-full border border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase disabled:cursor-default disabled:opacity-[0.45] aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
 							aria-pressed={(row.status ?? 'active') === opt.value}
-							disabled={pendingKeys.has(row.id)}
+							disabled={pendingKeys.has(row.id) || isOffline}
 							tabindex={activeStatusFor(row) === opt.value ? 0 : -1}
 							onfocus={() =>
 								(rovingStatusByRow = { ...rovingStatusByRow, [row.id]: opt.value })}
@@ -762,7 +773,7 @@
 					type="button"
 					data-testid="work-manage-move-up"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-					disabled={pendingKeys.has(row.id) || index === 0}
+					disabled={pendingKeys.has(row.id) || index === 0 || isOffline}
 					aria-label={m.repertoire_move_up_aria_label({ work: row.workName })}
 					onclick={() => handleMove(row.id, 'up')}
 				>
@@ -772,7 +783,7 @@
 					type="button"
 					data-testid="work-manage-move-down"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-					disabled={pendingKeys.has(row.id) || index === orderedRows.length - 1}
+					disabled={pendingKeys.has(row.id) || index === orderedRows.length - 1 || isOffline}
 					aria-label={m.repertoire_move_down_aria_label({ work: row.workName })}
 					onclick={() => handleMove(row.id, 'down')}
 				>
@@ -785,6 +796,16 @@
 {/snippet}
 
 {#snippet manageAddControls()}
+	<!-- #434 slice 6 — ONE visible reason for this whole management surface (not
+	     one per control, matching AttendanceSurface): every row control and add
+	     control above/below is disabled while offline; this says why once. Only
+	     for a caller that actually renders management controls — a read-only
+	     element has nothing to explain. -->
+	{#if canManage && isOffline}
+		<p data-testid="repertoire-write-unavailable" class="text-xs text-ink-2">
+			{m.write_unavailable_no_signal()}
+		</p>
+	{/if}
 	{#if canManageRepertoire && context === 'repertoire'}
 		<!-- #311 — the gate is on the inner select+button, not this wrapper
 		     (mirrors #272 part 4's rule for the programme control below): the
@@ -800,7 +821,7 @@
 					data-testid="work-manage-add-work-select"
 					class="w-full sm:w-auto"
 					value={selectedWorkId}
-					disabled={pendingKeys.has(addWorkKey)}
+					disabled={pendingKeys.has(addWorkKey) || isOffline}
 					aria-label={m.repertoire_add_work_label()}
 					onchange={(e) => (selectedWorkId = (e.currentTarget as HTMLSelectElement).value)}
 				>
@@ -826,7 +847,7 @@
 					type="button"
 					data-testid="work-manage-add-work-button"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-					disabled={pendingKeys.has(addWorkKey) || !selectedWorkId}
+					disabled={pendingKeys.has(addWorkKey) || !selectedWorkId || isOffline}
 					aria-label={m.repertoire_add_work_aria_label()}
 					onclick={handleAddWork}
 				>
@@ -848,7 +869,7 @@
 					data-testid="work-manage-add-programme-select"
 					class="w-full sm:w-auto"
 					value={selectedEditionForAdd}
-					disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+					disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || isOffline}
 					aria-label={m.repertoire_add_programme_label()}
 					onchange={(e) => (selectedEditionForAdd = (e.currentTarget as HTMLSelectElement).value)}
 				>
@@ -871,7 +892,7 @@
 					type="button"
 					data-testid="work-manage-add-programme-button"
 					class="text-xs text-ink underline disabled:cursor-default disabled:opacity-[0.45]"
-					disabled={pendingKeys.has(ADD_PROGRAMME_KEY)}
+					disabled={pendingKeys.has(ADD_PROGRAMME_KEY) || isOffline}
 					aria-label={m.repertoire_add_programme_aria_label()}
 					onclick={handleAddProgramItem}
 				>

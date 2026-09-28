@@ -112,6 +112,10 @@
 
 import { get, writable, type Readable } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
+// #434 slice 6 review F3 — this module OBSERVES whether reads are reaching the
+// network at all; `$lib/net/online` turns that observation into the write gate.
+// The signal lives in its own tiny module so neither side imports the other.
+import { clearReadFellBackToCache, noteReadFellBackToCache } from '$lib/net/cacheFallback';
 
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
 // Version 3 (#434 slice 2/6, carried review): version 2 added `bytes`/`readAt`
@@ -507,6 +511,9 @@ let loadEpoch = 0;
 export function resetServedFromCache(): void {
 	loadEpoch += 1;
 	servedFromCacheStore.set(null);
+	// F3 — a new load is a fresh question about the network; whatever the last
+	// one observed says nothing about this one.
+	clearReadFellBackToCache();
 }
 
 function noteServedFromCache(readAt: string): void {
@@ -599,6 +606,11 @@ export function readThroughGet(
 
 	return attemptFetch().then(
 		(res) => {
+			// F3 — the live call got through, so whatever earlier fallback closed the
+			// write gate is stale news: reopen it. Epoch-guarded like the age stamp,
+			// so a read belonging to a superseded load speaks for nobody. Independent
+			// of `personId`: reaching the origin is the claim here, not caching.
+			if (res.ok && epoch === loadEpoch) clearReadFellBackToCache();
 			if (res.ok && personId) {
 				const readAt = new Date().toISOString();
 				const clone = res.clone();
@@ -634,7 +646,13 @@ export function readThroughGet(
 			if (generation !== factoryGeneration) throw err;
 			return readCacheGet(db, personId, pathAndQuery).then((cached) => {
 				if (!cached) throw err;
-				if (epoch === loadEpoch) noteServedFromCache(cached.readAt);
+				if (epoch === loadEpoch) {
+					noteServedFromCache(cached.readAt);
+					// F3 — the live call could not be made and stored data answered in
+					// its place. That is the write gate's real question, and it is true
+					// here whatever the browser's own network flag says.
+					noteReadFellBackToCache();
+				}
 				return onResolved(
 					new Response(JSON.stringify(cached.body), {
 						status: 200,
