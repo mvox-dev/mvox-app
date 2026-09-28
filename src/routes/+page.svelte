@@ -4,6 +4,7 @@
 	import { authStore } from '$lib/auth/session';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
+	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
@@ -27,6 +28,12 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
+	// #434 slice 3/6 — the next event's Entu metadata, prefetched alongside its
+	// part bytes (below): the event page's own STORE-ONLY entry point. Never
+	// `loadEventPageDetail` here (slice 3 review round, finding 1) — a
+	// cache-SERVING background read writes `servedFromCache`, which is this
+	// page's own staleness claim.
+	import { refreshEventPageDetail } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
 	// waits for the sweep before #409's prefetch). See $lib/files/retention.
@@ -2090,6 +2097,31 @@
 	 * re-queries presence so #367's badges flip without a reload or a click.
 	 */
 	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
+		// #434 slice 3/6 — the next event's Entu METADATA (event/season/series/
+		// conductor-profile reads, via the event page's own STORE-ONLY entry
+		// point), fired UNCONDITIONALLY and ahead of the no-parts early return
+		// below: an event with no music attached yet is still an event she needs
+		// to find offline (time, place). This is a fire-and-forget prefetch, not
+		// a page load — no `status`/`detail` write, nothing for a stale
+		// `thisRequest` to guard; only the console line on failure.
+		//
+		// STORE-ONLY, never `loadEventPageDetail` (slice 3 review round, finding
+		// 1). `servedFromCache` is ONE store, and on THIS page it is the AGENDA's
+		// own staleness claim — the `agenda-as-of` line and the offline
+		// /downloads door below both read it, after `loadForSelected` has reset
+		// it. A cache-SERVING prefetch can only add to it, so on a flapping
+		// connection (the whole reason this epic exists) the agenda's own reads
+		// could all come back live while the prefetch's reject and serve stored
+		// copies — painting "As of <an older time>" over rows that are entirely
+		// fresh, for data this page never renders. Offline the prefetch has
+		// nothing to do anyway: it would only re-read what is already stored.
+		const nextEventId = agendaItems[0]?.id;
+		if (nextEventId) {
+			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
+				console.error('agenda: next-event detail prefetch failed', e);
+			});
+		}
+
 		const fileIds = nextEventFileIds(agendaItems, worksByEventId);
 		if (fileIds.length === 0) return;
 		const identity = get(selectedCollectiveIdentityStore);
@@ -6695,27 +6727,11 @@
 						<!-- #434 slice 2/6 — "as of <time>": null once this load's own reads
 						     all came from the network (reset in loadForSelected, above); set
 						     to the OLDEST readAt among any that fell back to the read cache.
-						     Same Tallinn calendar day as now → the bare time; any earlier day
-						     carries its date alongside it, so a days-old copy never reads as
-						     "this morning". Rendered above everything else in this branch, same
-						     placement rule as the partial-answer notices below. -->
+						     What it says (and the today-vs-date rule) is AsOfLine's. Rendered
+						     above everything else in this branch, same placement rule as the
+						     partial-answer notices below. -->
 						{#if $servedFromCache}
-							{@const asOfDate = new Date($servedFromCache)}
-							{@const isToday =
-								isoDateFormatter('Europe/Tallinn').format(asOfDate) ===
-								isoDateFormatter('Europe/Tallinn').format(new Date())}
-							{@const asOfTime = formatTime(tallinnHHMM(asOfDate), $timeFormatStore)}
-							<p
-								data-testid="agenda-as-of"
-								role="status"
-								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-							>
-								{m.agenda_as_of({
-									time: isToday
-										? asOfTime
-										: `${isoDateFormatter('Europe/Tallinn').format(asOfDate)} ${asOfTime}`
-								})}
-							</p>
+							<AsOfLine readAt={$servedFromCache} testid="agenda-as-of" class="mb-3" />
 							<!-- #434 slice 2/6 review round, finding 1 — the SECOND door to
 							     /downloads, and the one a warm-cache device actually reaches. #353
 							     put the only in-app link to the downloaded parts in the

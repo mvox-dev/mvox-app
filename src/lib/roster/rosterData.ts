@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles, resolveField, type MyProfile } from '$lib/profile/profileData';
 import { hasVisibleName } from '$lib/profile/completionGate';
@@ -392,14 +392,16 @@ export function toRosterRow(member: ActiveMember, profiles: MyProfile[]): Roster
  */
 async function listRecordNamesByPerson(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch
+	fetchImpl: typeof fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<{ byPerson: Map<string, string>; truncated: boolean }> {
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=admin_member_record&props=person,name&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listRecordNamesByPerson failed: ${res.status}`);
 	const body = (await res.json()) as {
@@ -557,15 +559,28 @@ export async function loadRosterRead(
  * while the toggle is off. `truncated` is the records read's own flag (false
  * whenever the map is empty — a read that threw, or never ran, says nothing
  * about its own completeness).
+ *
+ * #434 slice 3 review round, finding 1 — SHARED reader (the /roster overlay, the
+ * library's borrower names, the event header's conductor line), so it hard-wires
+ * no cache flag: `opts` defaults to `{}` and threads into BOTH reads behind the
+ * overlay, the toggle read (`readRosterNamesSetting`, and the
+ * `resolveDatabaseEntityId` underneath it) and the records read. The default is
+ * the load-bearing half; a caller opts in only for a screen that carries its own
+ * "as of <time>" line. That opt-in is what keeps the overlay's degrade from
+ * becoming a WRONG name offline: with the toggle on, a conductor named only by
+ * her `admin_member_record` has no profile name to fall back to, so an
+ * unthreaded overlay would drop her from a header the online load named.
+ * Pinned in $lib/entu/readCache.optin-fence.spec.ts.
  */
 export async function resolveRealNameByPerson(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<{ byPerson: Map<string, string>; truncated: boolean }> {
 	try {
-		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl);
+		const { showRealNames } = await readRosterNamesSetting(cfg, fetchImpl, opts);
 		if (!showRealNames) return { byPerson: new Map(), truncated: false };
-		const records = await listRecordNamesByPerson(cfg, fetchImpl);
+		const records = await listRecordNamesByPerson(cfg, fetchImpl, opts);
 		return { byPerson: records.byPerson, truncated: records.truncated };
 	} catch (e) {
 		// See doc above — an unresolvable overlay degrades to "toggle off", never
@@ -674,3 +689,4 @@ export async function applyRealNames(
 // (*MVOX:Josquin* — #321 review F2: the member + record reads report truncation)
 // (*MVOX:Josquin* — #467 review F1: _created[0].datetime validated as a string)
 // (*MVOX:Palestrina* — #469 GREEN: the overlay moves into loadRoster as applyRealNames, one producer)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

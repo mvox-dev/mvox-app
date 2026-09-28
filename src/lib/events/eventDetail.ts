@@ -22,7 +22,7 @@
 // conductor with neither a record name nor a profile name is DROPPED from
 // `conductorNames` (never a raw entity id — "Entity IDs need names" cuts both
 // ways), while `conductorIds` keeps every resolved id regardless.
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
@@ -207,18 +207,46 @@ function domainOrPublicName(profiles: MyProfile[]): string {
  * season/series reads are best-effort (a missing/unreadable parent degrades to
  * "nothing to inherit/no conductors from it", never a thrown error, matching
  * `listEvents`'s own series-cache posture).
+ *
+ * #434 slice 3/6 — SHARED reader (also the page's post-write refresh), so it
+ * hard-wires no cache flag (slice 2 review round, finding 2). `opts` threads
+ * into EVERY read this function makes — the event entity, the parent season
+ * (`fetchSeason`), the parent series (`fetchSeries`), each conductor's profile
+ * read (`listMyProfiles`) AND the real-names overlay
+ * (`resolveRealNameByPerson`, rosterData.ts: its toggle read, the
+ * `resolveDatabaseEntityId` underneath it and its records read) — so a caller
+ * that opts in gets the WHOLE header served offline, never a header with its
+ * conductor or its series-inherited fields missing.
+ *
+ * The overlay is threaded, not excluded (slice 3 review round, finding 1),
+ * BECAUSE it degrades. Its degrade is to the profile name, and with
+ * `roster_show_real_names` ON that is a DIFFERENT name from the one the online
+ * header showed — and for a conductor named only by her `admin_member_record`
+ * (private profile, or none at all) it is the empty string, which the
+ * `conductorNames` filter drops: an offline header with no conductor where the
+ * online one named her. Exactly what the paragraph above promises not to happen.
+ *
+ * Two entry points pass a flag, both in eventPageData.ts: `loadEventPageDetail`
+ * (the mounted screen's load) passes `CACHED_READ` — store and serve, age noted
+ * on `servedFromCache` for the page's "as of <time>" line — and
+ * `refreshEventPageDetail` passes `CACHED_READ_STORE_ONLY`, used by the page's
+ * own post-write refresh and by the agenda's next-event prefetch: it stores, so
+ * the stored header stays level with the write that just landed, and never
+ * serves, so a read the screen is not rendering can never age-stamp it.
  */
 export async function loadEventDetail(
 	cfg: EntuCfg,
 	eventId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<EventDetail> {
 	const eventRes = await entuFetch(
 		cfg.db,
 		`entity/${eventId}?props=event_name,event_type,start_datetime,duration_minutes,location,description,conductor,_parent,capacity,_owner,_editor`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!eventRes.ok)
 		throw new EventDetailLoadError(`loadEventDetail failed: ${eventRes.status}`, eventRes.status);
@@ -239,8 +267,8 @@ export async function loadEventDetail(
 	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? null;
 
 	const [season, series] = await Promise.all([
-		seasonId ? fetchSeason(cfg, seasonId, fetchImpl) : Promise.resolve(undefined),
-		seriesId ? fetchSeries(cfg, seriesId, fetchImpl) : Promise.resolve(undefined)
+		seasonId ? fetchSeason(cfg, seasonId, fetchImpl, opts) : Promise.resolve(undefined),
+		seriesId ? fetchSeries(cfg, seriesId, fetchImpl, opts) : Promise.resolve(undefined)
 	]);
 
 	const name = event.event_name?.[0]?.string ?? series?.name?.[0]?.string ?? '';
@@ -296,7 +324,7 @@ export async function loadEventDetail(
 	const profilesById = new Map<string, MyProfile[]>();
 	await Promise.all(
 		conductorIds.map(async (id) => {
-			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl));
+			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl, opts));
 		})
 	);
 	// #469 review F3 — the header's conductor line obeys `roster_show_real_names`
@@ -331,10 +359,16 @@ export async function loadEventDetail(
 	// on its own (never to a hole or a raw id), and a shared read would couple
 	// three independently-mounted regions to one failure. Revisit only with a
 	// case where the split is visible to a user in practice.
+	//
+	// #434 slice 3 review round, finding 1 — `opts` reaches the overlay too. The
+	// degrade above ("the profile name is the fallback, never a hole") is a
+	// statement about an ONLINE failure; offline, with the toggle on, it would
+	// rename every conductor the header had just been showing by her record name,
+	// and DROP any conductor who has no domain/public profile name at all.
 	const recordNameByPerson =
 		conductorIds.length === 0
 			? new Map<string, string>()
-			: (await resolveRealNameByPerson(cfg, fetchImpl)).byPerson;
+			: (await resolveRealNameByPerson(cfg, fetchImpl, opts)).byPerson;
 	const conductorNames = conductorIds
 		.map((id) => {
 			const recordName = recordNameByPerson.get(id)?.trim();
@@ -381,14 +415,16 @@ export async function loadEventDetail(
 async function fetchSeason(
 	cfg: EntuCfg,
 	seasonId: string,
-	fetchImpl: typeof fetch
+	fetchImpl: typeof fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<SeasonRaw | undefined> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity/${seasonId}?props=conductor,_owner,_editor`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) return undefined;
 	const body = (await res.json()) as { entity?: SeasonRaw };
@@ -465,14 +501,16 @@ export async function listEventLocations(
 async function fetchSeries(
 	cfg: EntuCfg,
 	seriesId: string,
-	fetchImpl: typeof fetch
+	fetchImpl: typeof fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<SeriesRaw | undefined> {
 	const res = await entuFetch(
 		cfg.db,
 		`entity/${seriesId}?props=name,duration_minutes,default_location,default_description`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) return undefined;
 	const body = (await res.json()) as { entity?: SeriesRaw };
@@ -485,3 +523,4 @@ async function fetchSeries(
 // (*MVOX:Byrd* — #102 TE.2 review F1: ownerIds alongside editorIds — owner-or-editor)
 // (*MVOX:Palestrina* — #103 TE.3 review round 2, F1/F2: seasonId + season rights
 //  on the one read that already happened; loadEventSeasonId deleted)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

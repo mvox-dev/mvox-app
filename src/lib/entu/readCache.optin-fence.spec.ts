@@ -100,7 +100,18 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	it.each([
 		'src/lib/collectives/marker.ts',
 		'src/lib/collective/databaseEntity.ts',
-		'src/lib/seasons/entuSeasons.ts'
+		'src/lib/seasons/entuSeasons.ts',
+		// Slice 3: the event page's reader and the profile read under its
+		// conductor line — both shared (post-write refresh, profile page).
+		'src/lib/events/eventDetail.ts',
+		'src/lib/profile/profileData.ts',
+		// Slice 3 review round, finding 1: the real-names overlay under the same
+		// conductor line. Shared three ways over (the /roster rows, the library's
+		// borrower names, this header) and — with `roster_show_real_names` ON —
+		// the one read whose absence offline changes a conductor's NAME rather
+		// than merely dropping a decoration.
+		'src/lib/roster/rosterData.ts',
+		'src/lib/collective/rosterNames.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
@@ -118,6 +129,25 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
 		);
 	});
+
+	it('the real-names overlay threads its own opts all the way down', () => {
+		// Slice 3 review round, finding 1 — same reasoning as listSeasons above:
+		// the toggle's value read is addressed BY the database entity id, and the
+		// records read is what carries the names, so one un-threaded link in the
+		// chain is the whole overlay lost offline.
+		expect(src('src/lib/collective/rosterNames.ts')).toContain(
+			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/roster/rosterData.ts')).toContain(
+			'readRosterNamesSetting(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/roster/rosterData.ts')).toContain(
+			'listRecordNamesByPerson(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/events/eventDetail.ts')).toContain(
+			'resolveRealNameByPerson(cfg, fetchImpl, opts)'
+		);
+	});
 });
 
 describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', () => {
@@ -130,7 +160,12 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		// Slice 2: collective discovery — the app's ONE identity read.
 		'src/lib/collectives/discover.ts',
 		// Slice 2: the agenda's own entry point, the screen with the age line.
-		'src/lib/agenda/agendaData.ts'
+		'src/lib/agenda/agendaData.ts',
+		// Slice 3: the event page's own entry points — the mounted screen's
+		// cache-backed load AND the store-only twin the agenda's next-event
+		// prefetch and the page's post-write refresh use (slice 3 review round,
+		// findings 1 and 2).
+		'src/lib/events/eventPageData.ts'
 	].sort();
 
 	const SRC = resolve(process.cwd(), 'src');
@@ -151,14 +186,32 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		return out;
 	}
 
-	/** Names the flag in an `import`/`export` statement — the only way a file can
-	 *  hold the binding and pass it to `entuFetch`. */
+	/** Names ANY of the flags in an `import`/`export` statement — the only way a
+	 *  file can hold the binding and pass it to `entuFetch`. */
 	function switchesTheCacheOn(source: string): boolean {
 		// ONE line: `[^;\n]*` must not run past the end of the statement, or an
 		// `export function ...` header would reach a CACHED_READ mentioned in a
 		// comment inside its body (libraryData.ts's "NO CACHED_READ here yet").
-		return /^[ \t]*(?:import|export)\b[^;\n]*\bCACHED_READ\b/m.test(source);
+		//
+		// No trailing `\b` (slice 3 review round): `_` is a word character, so
+		// `\bCACHED_READ\b` does NOT match `CACHED_READ_STORE_ONLY` — the fence
+		// would have let the store-only flag, and any later variant, spread
+		// unwatched. Storing without serving is a lesser claim than serving, but
+		// not a free one: a stored body is still a body a SERVING reader of the
+		// same key can hand back later (a signed `property/{id}` url, a stale
+		// `_id` a write is about to target), and it still spends the shared byte
+		// budget. Same fence, both flags.
+		return /^[ \t]*(?:import|export)\b[^;\n]*\bCACHED_READ/m.test(source);
 	}
+
+	it('the fence catches the store-only flag too, not just CACHED_READ', () => {
+		expect(switchesTheCacheOn("import { CACHED_READ_STORE_ONLY } from './fetchOptions';")).toBe(
+			true
+		);
+		expect(switchesTheCacheOn("import { CACHED_READ } from './fetchOptions';")).toBe(true);
+		// Prose is still not an opt-in.
+		expect(switchesTheCacheOn('// NO CACHED_READ_STORE_ONLY here yet, on purpose.')).toBe(false);
+	});
 
 	it('only the allowlisted files switch the read cache on', () => {
 		// Prose-only mentions (libraryData.ts saying why it stays OFF, and the
@@ -174,3 +227,5 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 });
 
 // (*MVOX:Josquin* — #434 slice 2 review round, finding 2)
+// (*MVOX:Tallis* — #434 slice 3 RED: event page entries)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

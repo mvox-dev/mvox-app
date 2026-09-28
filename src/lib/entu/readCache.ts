@@ -86,6 +86,18 @@
 // Age is NOT a limit: the issue's own answer to a stale copy is "as of
 // <time>" on the screen, so an old entry is shown with its age, not dropped.
 //
+// STORING IS NOT SERVING (#434 slice 3 review round, findings 1 and 2). The
+// opt-in has THREE modes, not two: `{ cache: 'store' }`
+// (CACHED_READ_STORE_ONLY) stores exactly like `{ cache: true }` and skips the
+// serve half — offline it rethrows, and it never touches `servedFromCache`.
+// `servedFromCache` is ONE store, read by whichever screen is mounted, so any
+// read that is NOT what that screen is rendering must use this mode: a
+// background warm-up (the agenda's next-event detail prefetch) whose reads
+// reject on a flapping connection would otherwise paint an older "as of" over
+// agenda rows that all came back live, and a post-write re-read
+// (`refreshEventDetail`) that opts out of the cache entirely leaves the stored
+// copy behind the write that just landed.
+//
 // Offline = the underlying fetch call THROWS (a network rejection). A cached
 // entry for the same key is then served, with the ORIGINAL error rethrown when
 // there is none. A resolved response of any status (401, 500, ...) is not
@@ -246,9 +258,28 @@ function openDb(factory: IDBFactory): Promise<IDBDatabase> {
 let explicitFactory: IDBFactory | null | undefined;
 let dbPromise: Promise<IDBDatabase> | null = null;
 
+// #434 slice 3 review round, finding 2 — the factory GENERATION. Dropping
+// `dbPromise` above is not enough to isolate one caller from the next: an
+// already-RESOLVED `IDBDatabase` is still held by every read currently awaiting
+// a transaction on it, so a read that started before the swap can finish
+// against the OLD database afterwards and serve its body — and, worse, call
+// `noteServedFromCache`, which writes to the ONE module-global
+// `servedFromCache` store whatever screen (or whatever test) is live by then.
+// That is a real, observed cross-test leak: an unmounted page's in-flight
+// reads outlive it, and the agenda's "as of" assertions are exactly what a
+// foreign `readAt` breaks.
+//
+// So every swap bumps this counter, each read captures it at entry, and a read
+// whose generation has moved serves NOTHING and stamps NOTHING — it answers
+// like a miss, and `readThroughGet` rethrows the caller's own network error.
+// Nothing in `src/` outside the specs calls `setReadCacheFactory`, so in
+// production this counter never changes and no read is ever discarded by it.
+let factoryGeneration = 0;
+
 export function setReadCacheFactory(factory?: IDBFactory | null): void {
 	explicitFactory = factory;
 	dbPromise = null;
+	factoryGeneration += 1;
 }
 
 function resolveFactory(): IDBFactory | null {
@@ -277,20 +308,26 @@ function getDb(): Promise<IDBDatabase> | null {
 	return dbPromise;
 }
 
-/** Read one entry. `undefined` on a miss, an absent personId, or any failure. */
+/**
+ * Read one entry. `undefined` on a miss, an absent personId, any failure, or a
+ * factory swapped out while this read was in flight (see `factoryGeneration`) —
+ * a body from a dropped database is not an answer about the current one.
+ */
 export async function readCacheGet(
 	db: string,
 	personId: string,
 	pathAndQuery: string
 ): Promise<ReadCacheEntry | undefined> {
 	if (!personId) return undefined;
+	const generation = factoryGeneration;
 	const openPromise = getDb();
 	if (!openPromise) return undefined;
 	try {
 		const database = await openPromise;
 		const tx = database.transaction(STORE_NAME, 'readonly');
 		const req = tx.objectStore(STORE_NAME).get(compositeKey(db, personId, pathAndQuery));
-		return (await reqToPromise(req)) as ReadCacheEntry | undefined;
+		const entry = (await reqToPromise(req)) as ReadCacheEntry | undefined;
+		return generation === factoryGeneration ? entry : undefined;
 	} catch {
 		return undefined;
 	}
@@ -457,7 +494,18 @@ export async function flushReadCache(): Promise<void> {
 const servedFromCacheStore = writable<string | null>(null);
 export const servedFromCache: Readable<string | null> = servedFromCacheStore;
 
+// The LOAD epoch (#434 slice 3 review round 3, F1). Neither page cancels an
+// in-flight read, so a cache-served read belonging to a superseded or unmounted
+// load would otherwise stamp `servedFromCache` for the NEXT screen — "as of" over
+// rows that all came back live. Every screen calls `resetServedFromCache()`
+// before its own reads start, so the reset is the load boundary: a read captures
+// the epoch at entry, and one that finishes after a later reset still returns its
+// body (harmless to a dead caller) but stamps nothing. Mirrors
+// `factoryGeneration`, which guards the test-seam swap the same way.
+let loadEpoch = 0;
+
 export function resetServedFromCache(): void {
+	loadEpoch += 1;
 	servedFromCacheStore.set(null);
 }
 
@@ -509,19 +557,45 @@ function isGetMethod(init: RequestInit): boolean {
  *   `onResolved` as-is and never stored.
  * - GET, live call REJECTS (offline): the cached entry for this exact key is
  *   served (via `onResolved`, as a synthesized 200 JSON response) and
- *   `servedFromCache` notes its readAt. With no cached entry, the ORIGINAL
- *   rejection propagates — `onResolved` never sees it.
+ *   `servedFromCache` notes its readAt — unless `resetServedFromCache()` ran
+ *   since this read started (a newer load owns the screen: body served, no
+ *   stamp; see `loadEpoch`). With no cached entry, the ORIGINAL rejection
+ *   propagates — `onResolved` never sees it.
+ *
+ * STORE-ONLY (`storeOnly`, from `{ cache: 'store' }` / CACHED_READ_STORE_ONLY —
+ * #434 slice 3 review round, findings 1 and 2). The store half above is
+ * unchanged; the SERVE half is skipped entirely — offline the original
+ * rejection propagates and `noteServedFromCache` is not called. Two reads need
+ * exactly that, and neither can use `{ cache: true }` without misinforming the
+ * viewer, because `servedFromCache` is ONE store shared by whatever screen is
+ * mounted:
+ *   - a background warm-up of a page she has not opened (the agenda's
+ *     next-event detail prefetch). Cache-backed, its reads rejecting on a
+ *     flapping connection would serve stored copies and stamp their age onto
+ *     the AGENDA's own "as of" line — over rows that came back live.
+ *   - a post-write re-read (the event page's `refreshEventDetail`). It must
+ *     show the live answer, never a stored copy of the pre-write header; but
+ *     declining the cache altogether leaves the stored copy behind the write
+ *     that just landed, so the member who edits and then goes offline is shown
+ *     her own superseded data.
  */
 export function readThroughGet(
 	db: string,
 	pathAndQuery: string,
 	init: RequestInit,
 	attemptFetch: () => Promise<Response>,
-	onResolved: (res: Response) => Response
+	onResolved: (res: Response) => Response,
+	storeOnly = false
 ): Promise<Response> {
 	if (!isGetMethod(init)) return attemptFetch().then(onResolved);
 
 	const personId = currentPersonId(db);
+	// Finding 2 — captured BEFORE the live call, so a read that outlives the
+	// factory it started against can neither serve a body from the dropped
+	// database nor age-stamp `servedFromCache` for whatever is on screen by then.
+	const generation = factoryGeneration;
+	// F1 (round 3) — the load this read belongs to; see `loadEpoch`.
+	const epoch = loadEpoch;
 
 	return attemptFetch().then(
 		(res) => {
@@ -550,10 +624,17 @@ export function readThroughGet(
 			return onResolved(res);
 		},
 		(err) => {
-			if (!personId) throw err;
+			// store-only: there is nothing to do offline. The rejection is the
+			// answer, and `servedFromCache` stays exactly as the mounted screen's
+			// own reads left it.
+			if (storeOnly || !personId) throw err;
+			// The factory was swapped while the live call was in flight — this read
+			// belongs to a torn-down caller now. `readCacheGet` guards the other
+			// half of the window (a swap between here and its own resolution).
+			if (generation !== factoryGeneration) throw err;
 			return readCacheGet(db, personId, pathAndQuery).then((cached) => {
 				if (!cached) throw err;
-				noteServedFromCache(cached.readAt);
+				if (epoch === loadEpoch) noteServedFromCache(cached.readAt);
 				return onResolved(
 					new Response(JSON.stringify(cached.body), {
 						status: 200,
@@ -566,3 +647,4 @@ export function readThroughGet(
 }
 
 // (*MVOX:Josquin*)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

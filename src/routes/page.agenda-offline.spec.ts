@@ -17,7 +17,7 @@
 //     only link to her downloaded parts (review round finding 1).
 //   - Offline = every fetch REJECTS. The page then shows the same rows it
 //     showed online, plus a visible line `data-testid="agenda-as-of"` whose
-//     text is m.agenda_as_of({ time }) — time via tallinnHHMM (the one shared
+//     text is m.last_read_as_of({ time }) — time via tallinnHHMM (the one shared
 //     instant->'HH:MM' formatter), date added only when the stored read is
 //     not from today.
 //   - `servedFromCache` is a monotone minimum: the page calls
@@ -77,6 +77,10 @@ function json(body: unknown): Response {
 		status: 200,
 		headers: { 'Content-Type': 'application/json' }
 	});
+}
+
+function urlOf(input: RequestInfo | URL): string {
+	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 }
 
 /** The online Entu, answering the agenda's reads by path; everything else empty. */
@@ -165,6 +169,67 @@ afterEach(() => {
 });
 
 describe('#434 slice 2 — the agenda renders offline from the read cache', () => {
+	// #434 slice 3 review round, finding 1 — the agenda's "as of" line is its own
+	// claim about its own rows, and `servedFromCache` is ONE store. Slice 3 added
+	// a fire-and-forget prefetch of the NEXT EVENT's detail reads to this page;
+	// cache-backed, on a flapping connection those reads reject, serve stored
+	// copies and stamp their age onto the agenda — over rows that all came back
+	// live, for data this page never renders.
+	//
+	// Position-independent (slice 3 review round, finding 2). This test used to
+	// carry a "KEEP THIS FIRST" note: the offline loads below leave read chains in
+	// flight that outlive their own test (an unmounted page's retention sweep and
+	// prefetch keep resolving), and a `readCacheGet` already awaiting the previous
+	// test's IDBFactory when `beforeEach` swaps in a fresh one still served from
+	// the OLD database — landing a foreign as-of on whatever test was running by
+	// then. That leak is now closed at the seam instead: `setReadCacheFactory`
+	// bumps a generation counter, and a read whose generation has moved serves
+	// nothing and stamps nothing (readCache.ts's `factoryGeneration`).
+	it('the next-event detail prefetch rejecting does NOT age-stamp a fully live agenda', async () => {
+		// Warm the store online, so the prefetch's own reads have a stored copy
+		// to be tempted by.
+		const firstOnline = onlineEntu();
+		vi.stubGlobal('fetch', firstOnline);
+		const first = await coldStart();
+		await expectAgendaRows(first.container);
+		await waitFor(() => {
+			const urls = firstOnline.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL));
+			expect(urls.some((u) => u.includes(`entity/${EVENTS[0].id}?`)), 'prefetch ran').toBe(true);
+		});
+		await flushReadCache();
+		cleanup();
+
+		// A flapping connection: the AGENDA's own reads all succeed; only the
+		// next event's detail read rejects.
+		vi.setSystemTime(LATER_SAME_DAY);
+		const live = onlineEntu();
+		let detailRejections = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((input: RequestInfo | URL) => {
+				if (urlOf(input).includes(`entity/${EVENTS[0].id}?`)) {
+					detailRejections += 1;
+					return Promise.reject(new TypeError('Failed to fetch'));
+				}
+				// `init` is deliberately dropped: `onlineEntu` routes on the URL
+				// alone, exactly as the other tests here use it.
+				return live(input);
+			})
+		);
+
+		const { container } = await coldStart();
+		await expectAgendaRows(container);
+		await waitFor(() => {
+			expect(detailRejections, 'the prefetch read rejected').toBeGreaterThan(0);
+		});
+		await flushReadCache();
+
+		// Every row on screen is live, so there is nothing to be "as of".
+		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
+		// And the offline door gated on the same store stays shut.
+		expect(container.querySelector('[data-testid="agenda-downloads-link-cached"]')).toBeNull();
+	});
+
 	it('an online load shows the agenda rows and NO as-of line', async () => {
 		vi.stubGlobal('fetch', onlineEntu());
 		const { container } = await coldStart();
@@ -199,7 +264,7 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		expect(asOf.textContent).toContain('agenda_as_of');
+		expect(asOf.textContent).toContain('last_read_as_of');
 		// The STORED read's time (10:05 Tallinn), not the offline load's (12:40).
 		expect(asOf.textContent).toContain(tallinnHHMM(READ_AT));
 		expect(asOf.textContent).not.toContain(tallinnHHMM(LATER_SAME_DAY));
@@ -263,8 +328,10 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		for (const needle of [
 			'resetServedFromCache()',
 			'$servedFromCache',
-			'tallinnHHMM',
-			'data-testid="agenda-as-of"',
+			// The line itself is the shared AsOfLine (slice 3 review round 3, F2),
+			// which owns tallinnHHMM and the today-vs-date rule.
+			'<AsOfLine',
+			'testid="agenda-as-of"',
 			'data-testid="agenda-downloads-link-cached"'
 		]) {
 			expect(source.includes(needle), needle).toBe(true);
@@ -273,15 +340,16 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 });
 
 describe('#434 slice 2 — the as-of copy exists in all four locales', () => {
-	it('agenda_as_of is a {time} message in en/et/lv/uk', () => {
+	it('last_read_as_of is a {time} message in en/et/lv/uk', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 			) as Record<string, string>;
-			expect(messages.agenda_as_of, locale).toBeTypeOf('string');
-			expect(messages.agenda_as_of, locale).toContain('{time}');
+			expect(messages.last_read_as_of, locale).toBeTypeOf('string');
+			expect(messages.last_read_as_of, locale).toContain('{time}');
 		}
 	});
 });
 
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

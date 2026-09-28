@@ -414,7 +414,7 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		// The agenda's own entry point, the screen that renders the age line.
 		expect(src('src/lib/agenda/agendaData.ts')).toContain('CACHED_READ');
 		const agenda = src('src/routes/+page.svelte');
-		expect(agenda.includes('data-testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
+		expect(agenda.includes('<AsOfLine readAt={$servedFromCache} testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
 	});
 });
 
@@ -459,7 +459,7 @@ describe('#353 — wording honesty (byteStore.ts:8), the #351 instrument applied
 		// #434 slice 2 — the warm-offline branch shows the same copy under a
 		// second testid; the honesty fence covers the string, so it is already
 		// covered, but the as-of line it sits beside is new here.
-		'agenda_as_of',
+		'last_read_as_of',
 		// Bentham review round, finding 2 — this surface now renders
 		// repertoire_pdf_error too (the open-failure alert); the honesty fence
 		// should cover every string this route can show, not just the ones it

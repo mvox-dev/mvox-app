@@ -20,7 +20,7 @@
 //     choreography ($lib/entu/replaceProperty, atomic since #264). Non-2xx
 //     anywhere → throw (fail loud, no silent success); turning that into the
 //     truthful inline error is the profile page's job.
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveDatabaseEntityId } from './databaseEntity';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -35,12 +35,22 @@ type EntuEntityResponse = {
 /**
  * Resolve the collective-wide `roster_show_real_names` setting for `cfg.db`.
  * See module header for the pinned contract.
+ *
+ * #434 slice 3 review round, finding 1 — SHARED reader, so it hard-wires no
+ * cache flag: `opts` defaults to `{}` (the profile page's own toggle read and
+ * every roster surface keep the exact pre-#434 promise chain) and threads into
+ * BOTH reads this function makes — its `resolveDatabaseEntityId` and the value
+ * read, because the value read is useless offline without the db entity id it
+ * addresses. A screen that must answer "which name did I last see for her"
+ * offline — the event page's conductor line, via `resolveRealNameByPerson` —
+ * passes its own flag down. Pinned in $lib/entu/readCache.optin-fence.spec.ts.
  */
 export async function readRosterNamesSetting(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<RosterNamesSetting> {
-	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
+	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl, opts);
 	if (!dbEntityId) {
 		throw new Error(`readRosterNamesSetting: no visible database entity in db '${cfg.db}'`);
 	}
@@ -50,7 +60,8 @@ export async function readRosterNamesSetting(
 		`entity/${dbEntityId}?props=roster_show_real_names`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) {
 		throw new Error(`readRosterNamesSetting: value read failed: HTTP ${res.status}`);
@@ -83,3 +94,4 @@ export async function updateRosterShowRealNames(
 }
 
 // (*MVOX:Palestrina* — #267 GREEN)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

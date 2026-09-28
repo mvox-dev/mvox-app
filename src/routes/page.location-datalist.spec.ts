@@ -422,9 +422,19 @@ function locationInput(container: HTMLElement, testid: string): HTMLInputElement
 }
 
 /** Any fetch that reached the network layer — the agenda-page derivation must
- *  need NONE (every data seam is a module mock; the corpus is in memory). */
+ *  need NONE (every data seam is a module mock; the corpus is in memory).
+ *
+ *  #434 slice 3/6 — `runPressureSweepThenPrefetch` -> `prefetchNextEventPartsAfterSettle`
+ *  fires the next event's (agendaItems[0], here 'up-1') own metadata prefetch
+ *  UNCONDITIONALLY once works settle, entirely independent of this route's
+ *  location derivation. It is a real, deliberate background fetch this pin
+ *  never claimed to forbid (the pin is about the SUGGESTION DERIVATION, not
+ *  every fetch this page ever makes) — excluded by name rather than widening
+ *  the contract to cover a feature this spec predates. */
 function entityFetchCalls(): unknown[][] {
-	return fetchSpy.mock.calls.filter((c) => String(c[0]).includes('entity'));
+	return fetchSpy.mock.calls.filter(
+		(c) => String(c[0]).includes('entity') && !String(c[0]).includes('entity/up-1?props=event_name')
+	);
 }
 
 // ═════════════════════════════════════════════════════════════════════════════

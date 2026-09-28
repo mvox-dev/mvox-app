@@ -124,7 +124,7 @@ export function entuUrl(db: string, pathAndQuery: string): string {
 // opt-in must not inherit this module's `$lib/entu-config` ->
 // `$env/dynamic/public` chain. Re-exported so every existing
 // `from '$lib/entu/request'` call site is unaffected.
-export { CACHED_READ, type EntuFetchOptions } from './fetchOptions';
+export { CACHED_READ, CACHED_READ_STORE_ONLY, type EntuFetchOptions } from './fetchOptions';
 
 /**
  * Browser-direct authenticated fetch against a specific db. Merges the Bearer
@@ -164,7 +164,18 @@ export function entuFetch(
 	// there is one. `checkAuthExpired` is folded in as `onResolved` rather than
 	// chained as a SEPARATE `.then()` afterwards — see readThroughGet's header
 	// on why the promise-chain SHAPE (one stage, not two) matters here.
-	return readThroughGet(db, pathAndQuery, init, attemptFetch, checkAuthExpired);
+	//
+	// #434 slice 3 review round — `{ cache: 'store' }` (CACHED_READ_STORE_ONLY)
+	// takes the same path for the STORE half and skips the serve half: offline
+	// the original rejection propagates and `servedFromCache` is never touched.
+	return readThroughGet(
+		db,
+		pathAndQuery,
+		init,
+		attemptFetch,
+		checkAuthExpired,
+		opts.cache === 'store'
+	);
 }
 
 // (*MVOX:Josquin*)

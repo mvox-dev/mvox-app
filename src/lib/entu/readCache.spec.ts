@@ -72,7 +72,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Severs the $env/dynamic/public chain, same as request.auth-expired.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-import { CACHED_READ, entuFetch } from './request';
+import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from './request';
 import {
 	READ_CACHE_DB_NAME,
 	READ_CACHE_MAX_BYTES,
@@ -214,6 +214,195 @@ describe('entuFetch GET — online stores the read', () => {
 		expect(res.status).toBe(500);
 		await flushReadCache();
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+	});
+});
+
+// #434 slice 3 review round, findings 1 and 2 — the THIRD mode: store, never
+// serve, never touch `servedFromCache`. What a read that is not what the
+// mounted screen renders gets: a background warm-up, or a post-write re-read.
+describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () => {
+	it('stores the body online, exactly as CACHED_READ does', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-09-28T10:15:00.000Z'));
+
+		const res = await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ_STORE_ONLY);
+		expect(await res.json()).toEqual(BODY);
+		await flushReadCache();
+
+		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+			body: BODY,
+			readAt: '2026-09-28T10:15:00.000Z',
+			bytes: BODY_BYTES
+		});
+	});
+
+	it('offline it REJECTS with the original error even though a stored copy exists', async () => {
+		await storeOnline(DB, PATH);
+		const err = new TypeError('Failed to fetch');
+		await expect(
+			entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ_STORE_ONLY)
+		).rejects.toBe(err);
+	});
+
+	it('offline it leaves servedFromCache alone — a background read cannot age-stamp a live screen', async () => {
+		// The mounted screen's own read came back live, so the age line is absent.
+		await storeOnline(DB, 'entity/screens-own-read');
+		await storeOnline(DB, PATH);
+		resetServedFromCache();
+		expect(get(servedFromCache)).toBeNull();
+
+		await expect(
+			entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ_STORE_ONLY)
+		).rejects.toThrow('Failed to fetch');
+
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('the same key stays SERVABLE to a CACHED_READ reader — only this call declines the copy', async () => {
+		await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ_STORE_ONLY);
+		await flushReadCache();
+		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(await served.json()).toEqual(BODY);
+		expect(get(servedFromCache)).not.toBeNull();
+	});
+
+	it('a store-only re-read moves the stored copy forward (a landed write stops drifting out of the cache)', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
+		await storeOnline(DB, PATH, { entities: [{ _id: 'ev-1', name: 'before the write' }] });
+
+		vi.setSystemTime(new Date('2026-09-28T10:05:00.000Z'));
+		const after = { entities: [{ _id: 'ev-1', name: 'after the write' }] };
+		await entuFetch(DB, PATH, TOKEN, {}, online(after), CACHED_READ_STORE_ONLY);
+		await flushReadCache();
+
+		// Offline, a SERVING reader of the same key now sees the post-write body.
+		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(await served.json()).toEqual(after);
+	});
+});
+
+// #434 slice 3 review round, finding 2 — the factory GENERATION. Dropping
+// `dbPromise` does not reach a read that already holds a resolved
+// `IDBDatabase`, so before this guard a read started against one factory could
+// finish against it after a swap: serve a foreign body, and age-stamp the ONE
+// global `servedFromCache` for whatever screen (or test) was live by then. That
+// is what made `page.agenda-offline.spec.ts` order-dependent.
+//
+// BOTH tests below RE-REGISTER THE SAME FACTORY, on purpose. Swapping in a fresh
+// `IDBFactory` proves nothing: the lookup would then open an EMPTY database and
+// miss anyway, so such a test passes with the guard removed. Handing back the
+// same factory keeps the stored entry findable, so the only thing that can stop
+// the serve is the generation check itself.
+describe('readCache — a read that outlives its factory serves nothing', () => {
+	/** A fetch that stays pending until the test rejects it by hand. */
+	function heldOffline(): { impl: typeof fetch; reject: (reason: unknown) => void } {
+		let reject: (reason: unknown) => void = () => undefined;
+		const impl = vi.fn(
+			() =>
+				new Promise<Response>((_resolve, rejectLive) => {
+					reject = rejectLive;
+				})
+		);
+		return { impl: impl as unknown as typeof fetch, reject: (r) => reject(r) };
+	}
+
+	it('a swap while the live call is in flight rethrows, and stamps no age', async () => {
+		await storeOnline(DB, PATH);
+		const held = heldOffline();
+		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
+
+		// What a spec's `beforeEach` does between tests, while this read is still
+		// in flight — the caller it belonged to is gone.
+		setReadCacheFactory(factory);
+		resetServedFromCache();
+
+		held.reject(new TypeError('Failed to fetch'));
+		await expect(pending).rejects.toThrow('Failed to fetch');
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('a swap DURING the cache lookup cannot serve from the dropped database either', async () => {
+		await storeOnline(DB, PATH);
+		const held = heldOffline();
+		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
+
+		held.reject(new TypeError('Failed to fetch'));
+		// Two microtask turns: the rejection handler has run (so `readThroughGet`'s
+		// own check already passed) and its lookup is awaiting the ALREADY-OPEN
+		// database. The IDB request completes on a later task, so the swap lands
+		// inside exactly the window `dbPromise = null` does not reach — the one the
+		// agenda spec's leak came through.
+		await Promise.resolve();
+		await Promise.resolve();
+		setReadCacheFactory(factory);
+		resetServedFromCache();
+
+		await expect(pending).rejects.toThrow('Failed to fetch');
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('the identical read with NO swap is still served — the guard is not a blanket', async () => {
+		await storeOnline(DB, PATH);
+		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(await served.json()).toEqual(BODY);
+		expect(get(servedFromCache)).not.toBeNull();
+	});
+});
+
+// #434 slice 3 review round 3, F1 — the LOAD epoch. Neither page cancels an
+// in-flight read: a superseded or unmounted load's cache-served read used to
+// stamp `servedFromCache` for the NEXT screen, painting "as of" over live rows.
+// Every screen calls `resetServedFromCache()` before its own reads start, so a
+// read begun before the latest reset belongs to a load that is no longer on
+// screen: it still gets its body (harmless to a dead caller) but stamps nothing.
+// Same factory throughout — only the reset moves.
+describe('readCache — a read from a superseded load serves its body but stamps no age', () => {
+	function heldOffline(): { impl: typeof fetch; reject: (reason: unknown) => void } {
+		let reject: (reason: unknown) => void = () => undefined;
+		const impl = vi.fn(
+			() =>
+				new Promise<Response>((_resolve, rejectLive) => {
+					reject = rejectLive;
+				})
+		);
+		return { impl: impl as unknown as typeof fetch, reject: (r) => reject(r) };
+	}
+
+	it('a reset while the live call is in flight: the body is served, servedFromCache stays null', async () => {
+		await storeOnline(DB, PATH);
+		const held = heldOffline();
+		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
+
+		// The next screen's load starts while this read is still in flight.
+		resetServedFromCache();
+
+		held.reject(new TypeError('Failed to fetch'));
+		const served = await pending;
+		expect(await served.json()).toEqual(BODY);
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('a reset DURING the cache lookup: still no stamp', async () => {
+		await storeOnline(DB, PATH);
+		const held = heldOffline();
+		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
+
+		held.reject(new TypeError('Failed to fetch'));
+		await Promise.resolve();
+		await Promise.resolve();
+		resetServedFromCache();
+
+		const served = await pending;
+		expect(await served.json()).toEqual(BODY);
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('a read started AFTER the reset still stamps — the guard drops only the superseded load', async () => {
+		await storeOnline(DB, PATH);
+		resetServedFromCache();
+		await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(get(servedFromCache)).not.toBeNull();
 	});
 });
 
@@ -813,3 +1002,4 @@ describe('pending cache writes drain themselves, with no flush (review round 2, 
 });
 
 // (*MVOX:Tallis*) — review-round-1 and review-round-2 additions (*MVOX:Josquin*)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

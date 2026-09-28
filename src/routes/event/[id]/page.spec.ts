@@ -120,6 +120,8 @@ import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { REDACT_ATTR } from '$lib/redact/redact';
 import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
 import { authStore } from '$lib/auth/session';
+import { IDBFactory } from 'fake-indexeddb';
+import { setReadCacheFactory } from '$lib/entu/readCache';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -866,22 +868,34 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 	});
 
 	it('still offers Retry for a genuinely transient failure (network throw)', async () => {
-		vi.stubGlobal(
-			'fetch',
-			vi.fn(async () => {
-				throw new TypeError('network down');
-			})
-		);
-		pageStub.params = { id: 'ev1' };
-		pageStub.url = new URL('http://localhost/event/ev1');
-		setAuthedWithSampledb();
-		const { container } = render(Page);
+		// #434 slice 3 — the page's own load is cache-backed, so a network throw
+		// is served from the read cache when a stored copy exists
+		// (page.offline.spec.ts). This pins the case where there is NONE: an
+		// explicit, EMPTY read cache under an identity that could have stored one
+		// — not "no IndexedDB at all", which never reaches the cache path.
+		setReadCacheFactory(new IDBFactory());
+		try {
+			vi.stubGlobal(
+				'fetch',
+				vi.fn(async () => {
+					throw new TypeError('network down');
+				})
+			);
+			pageStub.params = { id: 'ev1' };
+			pageStub.url = new URL('http://localhost/event/ev1');
+			setAuthedWithSampledb();
+			const { container } = render(Page);
 
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-load-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="event-detail-retry"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-not-available"]')).toBeNull();
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="event-detail-load-error"]')).not.toBeNull();
+			});
+			expect(container.querySelector('[data-testid="event-detail-retry"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="event-detail-not-available"]')).toBeNull();
+			// Nothing was served from a stored copy, so no age line either.
+			expect(container.querySelector('[data-testid="event-detail-as-of"]')).toBeNull();
+		} finally {
+			setReadCacheFactory(undefined);
+		}
 	});
 });
 

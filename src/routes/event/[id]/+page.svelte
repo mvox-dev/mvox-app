@@ -16,6 +16,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
+	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	// #251 — the narrative date line's locale source is the APP language, not
 	// the device's. Same specifier LanguageSelector.svelte / routes/+page.svelte
 	// already import from.
@@ -24,12 +25,21 @@
 	import { get } from 'svelte/store';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
-		loadEventDetail,
 		listEventLocations,
 		EventDetailLoadError,
 		type EventDetail,
 		type EventInheritedField
 	} from '$lib/events/eventDetail';
+	// #434 slice 3/6 — the page's own entry points over the shared
+	// `loadEventDetail` (agendaData.loadFullAgenda's role for this screen);
+	// `resetServedFromCache`/`servedFromCache` drive the "as of <time>" line,
+	// same contract as the agenda's (slice 2).
+	//   - `loadEventPageDetail` — the mounted screen's load: store AND serve.
+	//   - `refreshEventPageDetail` — store only, for the post-write re-read
+	//     (slice 3 review round, finding 2): the live answer or nothing, and the
+	//     stored copy kept level with the write that just landed.
+	import { loadEventPageDetail, refreshEventPageDetail } from '$lib/events/eventPageData';
+	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
 	// unassign = DELETE of the series `_parent` value id — see that module's
 	// header for the SPIKE-verified rights shape).
@@ -723,9 +733,14 @@
 		resetComposeState();
 		resetDeleteState();
 		resetConvertState();
+		// #434 slice 3/6 — every load starts with no claim of staleness; a read
+		// this load falls back to the cache for notes its own readAt
+		// (readCache.ts), and the "as of" line below reads it back. Same
+		// placement rule as the agenda's `loadForSelected` (slice 2).
+		resetServedFromCache();
 		try {
 			const cfg = { db: current.db, token: getToken() ?? '' };
-			const loaded = await loadEventDetail(cfg, id);
+			const loaded = await loadEventPageDetail(cfg, id);
 			if (g !== generation) return; // superseded by a newer selection/param
 			detail = loaded;
 			status = 'ready';
@@ -1747,12 +1762,22 @@
 	 *  callback on this page: a refresh that resolves after a collective
 	 *  switch must not repaint the view the viewer has since moved to. A
 	 *  FAILED refresh is a lesser problem than losing the confirmed write —
-	 *  `detail` is simply left as it was; the viewer can reload. */
+	 *  `detail` is simply left as it was; the viewer can reload.
+	 *
+	 *  #434 slice 3 review round, finding 2 — STORE-ONLY, not uncached. This
+	 *  read must never be SERVED from the cache (a stored pre-write header
+	 *  painted as the result of the write that just landed), but it must still
+	 *  STORE what it read: an uncached refresh leaves the read cache holding the
+	 *  pre-write header until the next full load of this event, so a member who
+	 *  reassigns a series and then goes offline is shown her own superseded
+	 *  merged name/duration/location/description. `refreshEventPageDetail` is
+	 *  exactly that pair — live answer or a rejection, and the stored copy moved
+	 *  forward on success. */
 	async function refreshEventDetail(evId: string, g: number): Promise<void> {
 		if (!selected) return;
 		try {
 			const cfg = { db: selected.db, token: getToken() ?? '' };
-			const refreshed = await loadEventDetail(cfg, evId);
+			const refreshed = await refreshEventPageDetail(cfg, evId);
 			if (g !== generation) return;
 			detail = refreshed;
 		} catch (err) {
@@ -3651,6 +3676,13 @@
 			</p>
 		{:else if detail}
 			<div class="flex flex-col gap-1.5">
+				<!-- #434 slice 3/6 — "as of <time>": null once this load's own reads
+				     all came from the network (reset in loadForSelected, above); set
+				     to the OLDEST readAt among any that fell back to the read cache.
+				     The line itself is AsOfLine, shared with the agenda (slice 2). -->
+				{#if $servedFromCache}
+					<AsOfLine readAt={$servedFromCache} testid="event-detail-as-of" class="mb-1" />
+				{/if}
 				<!-- #304 — the series picker. Rights-holders only (`isEditor`, the SAME
 				     one predicate the pencils/delete all run — a plain member
 				     gets no picker and no note); scoped to events that HAVE a season
