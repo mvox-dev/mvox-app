@@ -32,8 +32,10 @@
 	// part bytes (below): the event page's own STORE-ONLY entry point. Never
 	// `loadEventPageDetail` here (slice 3 review round, finding 1) — a
 	// cache-SERVING background read writes `servedFromCache`, which is this
-	// page's own staleness claim.
-	import { refreshEventPageDetail } from '$lib/events/eventPageData';
+	// page's own staleness claim. `refreshEventPageWorkRows` is the same
+	// store-only mode for this page's OWN works reads (#434 slice 5 review
+	// round 3): they store the works fan-out the event page restores offline.
+	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
 	// waits for the sweep before #409's prefetch). See $lib/files/retention.
@@ -67,7 +69,7 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
-	import { loadWorksByEventId, collectSources, buildWorkRows } from '$lib/repertoire/workRows';
+	import { collectSources, buildWorkRows } from '$lib/repertoire/workRows';
 	// #262 — the agenda's compact schedule-times line: the SAME bulk-read
 	// producer the event-detail page uses, mirroring `loadWorksByEventId`'s own
 	// seam (one GET per visible event id, upcoming AND recent — no per-row
@@ -1957,7 +1959,8 @@
 		// owns the flag from here on, and must both raise it (the rows are being
 		// replaced under the upgraded rights) and clear it on either outcome.
 		worksRowsLoading = true;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, { includeInactive: true })
+		// #434 slice 5 review round 3, F1 — store-only: see loadWorksAndManagement.
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, { includeInactive: true })
 			.then((byEvent) => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = mergePendingRows(byEvent);
@@ -2012,7 +2015,17 @@
 		// the raise sits next to the read that owns it and survives any future
 		// caller that reaches this function without the reset.
 		worksRowsLoading = true;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+		// #434 slice 5 review round 3, F1 — the agenda's OWN works read is the one
+		// that STORES the works fan-out, so the event page's works section (and the
+		// part link a held file's row carries) restores offline for every event on
+		// this agenda — tonight's included, the one #409 downloads parts for. The
+		// work/edition/copy lists carry no per-event params and `program_item` is
+		// per event, so the keys are the event page's own. STORE-ONLY, never
+		// serving: `servedFromCache` is this page's own as-of claim, and offline
+		// this read rejects into the `.catch` below exactly as before. No second
+		// warm-up read beside it (the review round's re-fetched the same four
+		// collections seconds later, on every agenda load).
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
@@ -2270,7 +2283,9 @@
 		const seasonId = currentSeasonId;
 		const thisRequest = requestId;
 		const thisWorksLoad = ++worksLoadId;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+		// #434 slice 5 review round 3 — store-only, like the load it re-reads: the
+		// live answer, and the stored copy kept level with the write that landed.
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {

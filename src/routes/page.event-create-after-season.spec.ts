@@ -576,7 +576,8 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 				['ev-1'],
 				CURRENT_SEASON_ID,
 				expect.anything(),
-				{ includeInactive: true }
+				// #434 slice 5 review round 3 — the agenda's own works reads store.
+				{ includeInactive: true, cache: 'store' }
 			);
 		});
 	});
@@ -596,7 +597,7 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 			expect.anything(),
 			expect.anything(),
 			expect.anything(),
-			{ includeInactive: true }
+			expect.objectContaining({ includeInactive: true })
 		);
 	});
 });
@@ -782,7 +783,8 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 				['ev-1'],
 				lapsed.id,
 				expect.anything(),
-				{ includeInactive: true }
+				// #434 slice 5 review round 3 — the agenda's own works reads store.
+				{ includeInactive: true, cache: 'store' }
 			);
 		});
 	});
@@ -830,7 +832,7 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 			expect.anything(),
 			expect.anything(),
 			expect.anything(),
-			{ includeInactive: true }
+			expect.objectContaining({ includeInactive: true })
 		);
 	});
 });

@@ -123,7 +123,14 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		// Slice 4 review round, finding 2: the viewer's own member id. Shared
 		// with the RSVP WRITE path (agenda + event page resolve it and then POST
 		// it as `member` on an rsvp) — the exact step-inside-a-write shape.
-		'src/lib/rsvp/rsvpData.ts'
+		'src/lib/rsvp/rsvpData.ts',
+		// Slice 5 review round, finding 3: the repertoire resolver under the event
+		// page's works section. Shared with the AGENDA's own works read (every
+		// visible row's Works element, a screen whose age line is its own) and with
+		// both pages' post-write re-reads — and `RepertoireReadOptions` now extends
+		// EntuFetchOptions, so a `cache: true` written inside this file would switch
+		// the agenda's works read on with no visible diff line anywhere.
+		'src/lib/repertoire/repertoireData.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
@@ -189,6 +196,38 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		const library = src('src/lib/library/libraryData.ts');
 		expect(library).toContain('resolveCopyName(cfg, id, fetchImpl, opts)');
 	});
+
+	it('the repertoire resolver threads its own options into both of its reads', () => {
+		// Slice 5 review round, finding 3 — `resolveEventWorksBatch` is the shared
+		// reader UNDER the event page's works section AND the agenda's own works
+		// read. Its bag is `RepertoireReadOptions`, which only widens
+		// EntuFetchOptions with `includeInactive`, so the flag still only ever
+		// arrives as an argument — pinned here so a later `cache: true` inside this
+		// file cannot switch the agenda's read on silently.
+		const rep = src('src/lib/repertoire/repertoireData.ts');
+		expect(rep).toMatch(/interface RepertoireReadOptions extends EntuFetchOptions/);
+		expect(rep).toContain('listProgramItems(cfg, id, fetchImpl, options)');
+		expect(rep).toContain('listRepertoireItems(cfg, seasonId, fetchImpl, options)');
+	});
+
+	it('the works join threads its own options into all four of its reads', () => {
+		// Slice 5 review round, finding 3 — `loadWorksByEventId` is the OTHER shared
+		// reader slice 5 threaded, and it is a join over four collections: the three
+		// collective-wide label lookups plus the per-event item resolve. One
+		// un-threaded link and the restored row set is short a name/composer/edition
+		// — or, for the item resolve, empty. It takes `options:
+		// RepertoireReadOptions = {}` rather than `opts: EntuFetchOptions = {}`, so
+		// it is guarded here by threading rather than in the bag-shape list above.
+		const rows = src('src/lib/repertoire/workRows.ts');
+		expect(rows).toContain('options: RepertoireReadOptions = {}');
+		expect(rows).toContain('listWorks(cfg, fetchImpl, options)');
+		expect(rows).toContain('listAllEditions(cfg, fetchImpl, options)');
+		expect(rows).toContain('listAllCopies(cfg, fetchImpl, options)');
+		expect(rows).toContain('resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)');
+		// Same never-as-an-argument rule as the bag-shape list above.
+		expect(rows).not.toMatch(/^\s*CACHED_READ\s*$/m);
+		expect(rows).not.toMatch(/,\s*CACHED_READ\s*\)/);
+	});
 });
 
 describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', () => {
@@ -205,7 +244,8 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		// Slice 3: the event page's own entry points — the mounted screen's
 		// cache-backed load AND the store-only twin the agenda's next-event
 		// prefetch and the page's post-write refresh use (slice 3 review round,
-		// findings 1 and 2).
+		// findings 1 and 2). Slice 5 (and its review round findings 1 and 2) adds
+		// the same pair over this screen's works read, in the same file.
 		'src/lib/events/eventPageData.ts',
 		// Slice 4: the library's own entry points — the listing, the node
 		// expansions, the store-only post-write lending re-read, and (slice 4
@@ -276,3 +316,4 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 // (*MVOX:Tallis* — #434 slice 3 RED: event page entries)
 // (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
 // (*MVOX:Tallis* — #434 slice 4 RED: library entries)
+// (*MVOX:Josquin* — #434 slice 5 review round, finding 3: repertoire entries)

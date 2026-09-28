@@ -311,10 +311,15 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(gotoMock.mock.calls.length).toBe(before);
 
-		// Tapping the row's PDF link navigates to the viewer (#427) — it no
-		// longer opens a tab or touches a byte on this page at all.
-		const links = container.querySelectorAll('[data-testid="work-link-pdf"]');
-		await fireEvent.click(links[0]);
+		// Tapping the held row's part affordance navigates to the viewer (#427)
+		// — it no longer opens a tab or touches a byte on this page at all.
+		// #434 slice 5: on a HELD row that affordance is the part LINK, and it
+		// is the only one on the row (the `work-link-pdf` button renders on the
+		// other rows, whose parts are not on the device). The label handoff
+		// below is exactly what pins that the link did not lose it.
+		expect(container.querySelector('[data-testid="part-link-file-held"]')).not.toBeNull();
+		expect(container.querySelectorAll('[data-testid="work-link-pdf"]').length).toBe(1);
+		await fireEvent.click(container.querySelector('[data-testid="part-link-file-held"]')!);
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
 		// #427 review finding 3 — the part's NAME rides the navigation: this
 		// page is the only place that has it, the viewer is where the bytes

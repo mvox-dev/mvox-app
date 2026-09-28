@@ -17,6 +17,11 @@
 //     touches `servedFromCache`. Used by the two reads that are not what a
 //     mounted screen is rendering — the agenda's next-event prefetch and this
 //     page's own post-write refresh.
+//   - the SAME pair over the WORKS read (slice 5, and its review round findings
+//     1 and 2): loadEventPageWorkRows(cfg, eventIds, seasonId, fetchImpl, opts)
+//     for the mounted screen, refreshEventPageWorkRows(...) store-only for the
+//     agenda's next-event warm-up and this page's post-write re-read. The shared
+//     loadWorksByEventId underneath them stays uncached by default.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -32,7 +37,13 @@ import {
 } from '$lib/entu/readCache';
 import { get } from 'svelte/store';
 import { loadEventDetail } from './eventDetail';
-import { loadEventPageDetail, refreshEventPageDetail } from './eventPageData';
+import {
+	loadEventPageDetail,
+	loadEventPageWorkRows,
+	refreshEventPageDetail,
+	refreshEventPageWorkRows
+} from './eventPageData';
+import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -136,6 +147,70 @@ function onlineRealNames() {
  * overlay to degrade before it reaches its toggle or records read).
  */
 const CACHED_READS_PER_LOAD = 5;
+
+/**
+ * Slice 5 review round, findings 1 and 2 — the WORKS read's own fixture: the
+ * three collective-wide label lookups `loadWorksByEventId` makes (work, edition,
+ * copy) plus this event's `program_item` list. The event IS programmed, so the
+ * season-repertoire fallback is never read — which is why the count below holds
+ * whatever `seasonId` a caller passes.
+ *
+ * `programme` is the wire shape of the event's program_items, so a test can hand
+ * the "after the write" list to a second call.
+ */
+function onlineWorks(
+	programme: Array<Record<string, unknown>> = [
+		{
+			_id: 'pi-1',
+			name: [{ string: 'Ave Maria' }],
+			edition: [{ reference: 'ed-1' }],
+			ordinal: [{ number: 1 }]
+		}
+	]
+) {
+	return vi.fn(async (input: RequestInfo | URL) => {
+		const url = urlOf(input);
+		if (url.includes('_type.string=work&')) {
+			return json({
+				count: 1,
+				entities: [
+					{ _id: 'work-1', name: [{ string: 'Ave Maria' }], composer: [{ string: 'Arvo Pärt' }] }
+				]
+			});
+		}
+		if (url.includes('_type.string=edition&')) {
+			return json({
+				count: 1,
+				entities: [
+					{
+						_id: 'ed-1',
+						name: [{ string: 'Urtext' }],
+						_parent: [{ reference: 'work-1', entity_type: 'work' }],
+						file: [
+							{
+								_id: 'file-1',
+								filename: 'ave-maria.pdf',
+								filesize: 1234,
+								filetype: 'application/pdf'
+							}
+						]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=copy&')) {
+			return json({ count: 0, entities: [] });
+		}
+		if (url.includes('_type.string=program_item') && url.includes('_parent.reference=ev-1')) {
+			return json({ count: programme.length, entities: programme });
+		}
+		return json({ count: 0, entities: [] });
+	});
+}
+
+/** Exact, for the same reason CACHED_READS_PER_LOAD is: work + edition + copy +
+ *  this event's program_item list, and nothing else. */
+const CACHED_WORKS_READS_PER_LOAD = 4;
 
 function offline() {
 	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
@@ -302,6 +377,151 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 	});
 });
 
+// #434 slice 5 review round, findings 1 and 2 — the works read's store-only twin.
+describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving', () => {
+	it('the shared loadWorksByEventId still stores nothing by default', async () => {
+		const rows = await loadWorksByEventId(
+			CFG,
+			['ev-1'],
+			'season-1',
+			onlineWorks() as unknown as typeof fetch
+		);
+		expect(rows['ev-1']?.map((r) => r.workName)).toEqual(['Ave Maria']);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(0);
+	});
+
+	it('stores every read online, exactly as loadEventPageWorkRows does', async () => {
+		const rows = await refreshEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			onlineWorks() as unknown as typeof fetch
+		);
+		expect(rows['ev-1']?.map((r) => r.workName)).toEqual(['Ave Maria']);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(CACHED_WORKS_READS_PER_LOAD);
+	});
+
+	it('REJECTS offline even with a stored copy, and leaves servedFromCache null', async () => {
+		await loadEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			onlineWorks() as unknown as typeof fetch
+		);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(CACHED_WORKS_READS_PER_LOAD);
+		resetServedFromCache();
+
+		await expect(
+			refreshEventPageWorkRows(CFG, ['ev-1'], 'season-1', offline() as unknown as typeof fetch)
+		).rejects.toThrow('Failed to fetch');
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	// Finding 1 — the whole slice's Done-when, in the case #409 creates: the part
+	// bytes are prefetched while she is on the AGENDA, and until this warm-up
+	// existed the event page's works read had nothing stored to restore from, so
+	// offline it fell into its own `.catch` and rendered an EMPTY repertoire
+	// section — the part on the device, and /downloads the only door to it.
+	it('the agenda-side warm-up is what lets the event page restore its works list offline', async () => {
+		const live = await refreshEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			onlineWorks() as unknown as typeof fetch
+		);
+		await flushReadCache();
+		resetServedFromCache();
+
+		const stored = await loadEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			offline() as unknown as typeof fetch
+		);
+		// The SAME rows, not merely non-empty: the part link the row carries is
+		// `fileId`, so a row restored without it is a row with no door to the file.
+		expect(stored).toEqual(live);
+		expect(stored['ev-1']?.map((r) => r.fileId)).toEqual(['file-1']);
+		// The store-only warm-up itself never claimed an age; the SCREEN's own
+		// serving read is what sets it.
+		expect(get(servedFromCache)).not.toBeNull();
+	});
+
+	// Finding 2 — the post-write re-read.
+	it('a post-write refresh moves the STORED rows forward, so a later offline visit shows the write', async () => {
+		await loadEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			onlineWorks() as unknown as typeof fetch
+		);
+		await flushReadCache();
+
+		// She adds a second piece to tonight's programme; the post-write re-read
+		// sees both.
+		const afterWrite = onlineWorks([
+			{
+				_id: 'pi-1',
+				name: [{ string: 'Ave Maria' }],
+				edition: [{ reference: 'ed-1' }],
+				ordinal: [{ number: 1 }]
+			},
+			{
+				_id: 'pi-2',
+				name: [{ string: 'Ave Maria' }],
+				edition: [{ reference: 'ed-1' }],
+				ordinal: [{ number: 2 }]
+			}
+		]);
+		const refreshed = await refreshEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			afterWrite as unknown as typeof fetch
+		);
+		expect(refreshed['ev-1']).toHaveLength(2);
+		await flushReadCache();
+
+		// Offline, the SCREEN's own reader serves the POST-write programme — not
+		// the pre-write one the uncached re-read used to leave behind.
+		const stored = await loadEventPageWorkRows(
+			CFG,
+			['ev-1'],
+			'season-1',
+			offline() as unknown as typeof fetch
+		);
+		expect(stored['ev-1']?.map((r) => r.id)).toEqual(['pi-1', 'pi-2']);
+	});
+
+	// Slice 5 review round 3, F1 — the agenda's OWN works reads store; there is
+	// no separate next-event warm-up beside them.
+	it("the agenda's own works reads go through the store-only entry point, with no separate warm-up", () => {
+		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
+		expect(source).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
+		expect(source).not.toContain('refreshEventPageWorkRows(cfg, [nextEventId]');
+		// Store-only, never the serving entry point: `servedFromCache` on this page
+		// is the AGENDA's own as-of claim. And not the plain shared reader either.
+		expect(source).not.toContain('loadEventPageWorkRows(');
+		expect(source).not.toMatch(/loadWorksByEventId\(/);
+	});
+
+	it('the event page wires BOTH its works reads through eventPageData, not the shared reader', () => {
+		const source = readFileSync(
+			resolve(process.cwd(), 'src/routes/event/[id]/+page.svelte'),
+			'utf-8'
+		);
+		expect(source).toContain('loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {');
+		expect(source).toContain('refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {');
+		// Not imported at all any more, so neither read can drift off the store.
+		expect(source).not.toMatch(/loadWorksByEventId\s*\}/);
+		expect(source).not.toMatch(/loadWorksByEventId\(/);
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
 // (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
+// (*MVOX:Josquin* — #434 slice 5 review round, findings 1-3)

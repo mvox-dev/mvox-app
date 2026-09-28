@@ -38,7 +38,15 @@
 	//   - `refreshEventPageDetail` — store only, for the post-write re-read
 	//     (slice 3 review round, finding 2): the live answer or nothing, and the
 	//     stored copy kept level with the write that just landed.
-	import { loadEventPageDetail, refreshEventPageDetail } from '$lib/events/eventPageData';
+	//   - the same pair over the WORKS read (slice 5, and its review round finding
+	//     2): `loadEventPageWorkRows` for the mounted screen,
+	//     `refreshEventPageWorkRows` for the post-write re-read.
+	import {
+		loadEventPageDetail,
+		refreshEventPageDetail,
+		loadEventPageWorkRows,
+		refreshEventPageWorkRows
+	} from '$lib/events/eventPageData';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
 	// unassign = DELETE of the series `_parent` value id — see that module's
@@ -107,7 +115,9 @@
 	// (workRows.ts joins repertoireData's resolved items against the library
 	// lookups), plus the write layer (repertoireActions) and its picker source
 	// (repertoireData.listRepertoireItems, library.listWorks/-Editions).
-	import { loadWorksByEventId } from '$lib/repertoire/workRows';
+	// #434 slice 5 review round, finding 2 — `loadWorksByEventId` is no longer
+	// imported here at all: BOTH of this page's works reads go through
+	// eventPageData.ts's entry points above, so neither can miss the store.
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import {
 		canMarkAttendance,
@@ -1535,7 +1545,15 @@
 		// offer is not worth a read.
 		if (eventEditor && sid !== null) loadSeriesOptions(cfg, sid, g);
 
-		loadWorksByEventId(cfg, [loaded.id], sid, fetch, {
+		// #434 slice 5 — the mounted screen's OWN load, cache-backed like the
+		// header (loadEventPageDetail above): offline, the works list — and
+		// therefore the part link a held file's row carries — survives exactly
+		// like the header does. `refreshWorks` (this page's post-write re-read,
+		// below) goes through `refreshEventPageWorkRows` instead — STORE-ONLY, the
+		// same choice `refreshEventDetail` makes (#434 slice 5 review round,
+		// finding 2): store-only IS the live answer, and only adds the store, so the
+		// stored copy stays level with the write that just landed.
+		loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {
 			includeInactive: seasonRights === 'editor'
 		})
 			.then((byEvent) => {
@@ -2205,13 +2223,26 @@
 	 *  collections (workRows.ts), so only worth paying after a CREATE (whose
 	 *  server-assigned id exists nowhere else) or a FAILED write (the screen
 	 *  must show the truth, not a stale local fiction). Mirrors the agenda's
-	 *  own `refreshWorksAfterWrite`. */
+	 *  own `refreshWorksAfterWrite`.
+	 *
+	 *  #434 slice 5 review round, finding 2 — STORE-ONLY
+	 *  (`refreshEventPageWorkRows`), the same shape `refreshEventDetail` uses for
+	 *  the header and slice 4 uses for the lending re-read. The plain, uncached
+	 *  reader it used before neither served NOR stored, so every programme write
+	 *  on this page (add work, add programme item, remove, reorder, status,
+	 *  pin edition) left the STORED rows behind the write that had just landed:
+	 *  offline she was then shown the pre-write repertoire under an "as of" from
+	 *  before it, and a piece added tonight carried no part link. Store-only keeps
+	 *  the live answer this function needs — the serve half is the part a
+	 *  post-write read must not have — and moves the stored copy forward with it. */
 	function refreshWorks(): void {
 		const cfg = manageCfg();
 		if (!cfg || !detail) return;
 		const evId = detail.id;
 		const g = generation;
-		loadWorksByEventId(cfg, [evId], seasonId, fetch, { includeInactive: seasonManageRights === 'editor' })
+		refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {
+			includeInactive: seasonManageRights === 'editor'
+		})
 			.then((byEvent) => {
 				if (g !== generation) return;
 				workRows = byEvent[evId] ?? [];
@@ -5022,6 +5053,7 @@
 							expanded={true}
 							onpdfclick={handlePdfClick}
 							{heldFileIds}
+							partLinkDb={selected?.db}
 							manageRights={seasonManageRights}
 							seasonRights={seasonManageRights}
 							eventRights={eventManageRights}

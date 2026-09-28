@@ -14,8 +14,17 @@
 //     page's "as of <time>" line.
 //   - `refreshEventPageDetail` — store only, never serve: for a read that is
 //     NOT what the screen is currently rendering.
+//
+// #434 slice 5 puts the SAME pair over this screen's other read, the works
+// section (`loadWorksByEventId`, shared with the agenda and this page's own
+// post-write refresh): `loadEventPageWorkRows` (store and serve, the mounted
+// screen) and `refreshEventPageWorkRows` (store only — the agenda's own works
+// reads, and the post-write re-reads on both pages).
 import { CACHED_READ, CACHED_READ_STORE_ONLY } from '$lib/entu/fetchOptions';
 import { loadEventDetail, type EventDetail } from './eventDetail';
+import { loadWorksByEventId } from '$lib/repertoire/workRows';
+import type { RepertoireReadOptions } from '$lib/repertoire/repertoireData';
+import type { WorkRow } from '$lib/repertoire/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 /**
@@ -64,5 +73,71 @@ export async function refreshEventPageDetail(
 	return loadEventDetail(cfg, eventId, fetchImpl, CACHED_READ_STORE_ONLY);
 }
 
+/**
+ * #434 slice 5 — the event page's OTHER cache-backed load: the works section
+ * (`loadWorksByEventId`: works, editions, copies, program items — a join over
+ * FOUR collections, workRows.ts). `loadComposeSurfaces`
+ * (`src/routes/event/[id]/+page.svelte`) is its only caller, alongside
+ * `loadEventPageDetail` above — both feed the SAME mounted screen, so both
+ * store AND serve: offline, the works list (and therefore the part link a
+ * held file's row carries) survives exactly like the header does.
+ *
+ * `loadWorksByEventId`/`resolveEventWorksBatch`/`listWorks`/`listAllEditions`/
+ * `listAllCopies` are SHARED readers (the agenda's own works read, and this
+ * page's post-write `refreshWorks`, call them too) — they thread `options`
+ * down and hard-wire nothing themselves; this is the one call site, on the
+ * allowlist (readCache.optin-fence.spec.ts), that actually names CACHED_READ.
+ */
+export async function loadEventPageWorkRows(
+	cfg: EntuCfg,
+	eventIds: string[],
+	seasonId: string | null,
+	fetchImpl: typeof fetch = fetch,
+	options: Omit<RepertoireReadOptions, 'cache'> = {}
+): Promise<Record<string, WorkRow[]>> {
+	return loadWorksByEventId(cfg, eventIds, seasonId, fetchImpl, { ...options, ...CACHED_READ });
+}
+
+/**
+ * The works read STORED but never SERVED — `refreshEventPageDetail`'s twin, one
+ * layer down. Callers:
+ *   - the agenda's OWN works reads (`loadWorksAndManagement`,
+ *     `upgradeRepertoireManagement`, `src/routes/+page.svelte` — #434 slice 5
+ *     review round 3, F1). The agenda already reads the works fan-out for every
+ *     event on it, tonight's included; storing THAT read is what lets the event
+ *     page's works section, and the part link a held file's row carries, restore
+ *     offline — without a second warm-up read of the same URLs beside it. The
+ *     work/edition/copy lists carry no per-event params and `program_item` is
+ *     `_parent.reference=<eventId>`, so the keys are the event page's own;
+ *     `includeInactive` filters client-side and changes no URL. The one key that
+ *     can differ is the season-repertoire fallback, read under the agenda's
+ *     CURRENT season.
+ *   - the post-write re-reads on both pages (the agenda's
+ *     `refreshWorksAfterWrite`, the event page's `refreshWorks`). Plain
+ *     `loadWorksByEventId` neither serves NOR stores, so every programme write
+ *     would leave the stored copy behind the write that just landed. Store-only
+ *     IS the live answer, plus the stored copy kept level with the write.
+ *
+ * Store-only, never `loadEventPageWorkRows`, for all of them: `servedFromCache`
+ * is ONE store, read by whichever screen is mounted. On the agenda it is the
+ * AGENDA's own as-of claim, and offline these reads reject exactly as the
+ * uncached ones did; on the event page a serving post-write read could hand back
+ * a stored pre-write row set as if it were the write's result.
+ */
+export async function refreshEventPageWorkRows(
+	cfg: EntuCfg,
+	eventIds: string[],
+	seasonId: string | null,
+	fetchImpl: typeof fetch = fetch,
+	options: Omit<RepertoireReadOptions, 'cache'> = {}
+): Promise<Record<string, WorkRow[]>> {
+	return loadWorksByEventId(cfg, eventIds, seasonId, fetchImpl, {
+		...options,
+		...CACHED_READ_STORE_ONLY
+	});
+}
+
 // (*MVOX:Josquin* — #434 slice 3/6 GREEN)
 // (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
+// (*MVOX:Josquin* — #434 slice 5/6 GREEN: the works read + the part link)
+// (*MVOX:Josquin* — #434 slice 5 review round, findings 1-3)

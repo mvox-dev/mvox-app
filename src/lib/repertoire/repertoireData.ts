@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 // #90 TR.2 GREEN — the repertoire READ data layer. Read-only throughout: no
@@ -48,7 +48,8 @@ type RepertoireItemRaw = {
 export async function listRepertoireItems(
 	cfg: EntuCfg,
 	seasonId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<RepertoireItem[]> {
 	// #321 class (1) — ONE season's repertoire, `_parent`-scoped to that season:
 	// the works the collective is rehearsing this year, a programme a conductor
@@ -56,12 +57,17 @@ export async function listRepertoireItems(
 	// library — the collective-lifetime catalogue is `listWorks` (libraryData.ts),
 	// which is class (2) and reports `truncated`. limit=500 is an explicit, ample
 	// bound.
+	//
+	// #434 slice 5 — `opts` threads straight into the one `entuFetch` call,
+	// default off (SHARED reader — resolveEventWorksBatch's own callers decide,
+	// never hard-wired here).
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=repertoire_item&_parent.reference=${encodeURIComponent(seasonId)}&props=name,work,edition,status&limit=500`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listRepertoireItems failed: ${res.status}`);
 	const body = (await res.json()) as { entities?: RepertoireItemRaw[] };
@@ -94,17 +100,22 @@ type ProgramItemRaw = {
 export async function listProgramItems(
 	cfg: EntuCfg,
 	eventId: string,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	opts: EntuFetchOptions = {}
 ): Promise<ProgramItem[]> {
 	// #321 class (1) — ONE event's programme, `_parent`-scoped to that event: the
 	// pieces sung at a single concert, in `ordinal` order. A concert programme runs
 	// to tens of items; limit=500 is an explicit, ample bound.
+	//
+	// #434 slice 5 — `opts` threads straight into the one `entuFetch` call, same
+	// reasoning as `listRepertoireItems` above.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=program_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,edition,ordinal,notes&limit=500`,
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		opts
 	);
 	if (!res.ok) throw new Error(`listProgramItems failed: ${res.status}`);
 	const body = (await res.json()) as { entities?: ProgramItemRaw[] };
@@ -131,7 +142,12 @@ const ACTIVE_STATUSES = new Set(['active', 'learning']);
  * became permanently unmanageable. A rights-holder therefore reads the
  * UNFILTERED repertoire; every other reader keeps the AC-8 filter.
  */
-export interface RepertoireReadOptions {
+// #434 slice 5 — extends `EntuFetchOptions` so the read-cache opt-in threads
+// down alongside `includeInactive`, all the way to `listProgramItems`'s /
+// `listRepertoireItems`'s own `entuFetch` calls above. Still a SHARED reader's
+// options bag: nothing in this file names `CACHED_READ` itself — the
+// allowlisted screen entry points do (readCache.optin-fence.spec.ts).
+export interface RepertoireReadOptions extends EntuFetchOptions {
 	/** Keep retired/dropped repertoire_items in the fallback (management read). */
 	includeInactive?: boolean;
 }
@@ -180,13 +196,17 @@ export async function resolveEventWorksBatch(
 	options: RepertoireReadOptions = {}
 ): Promise<Record<string, EventWorks>> {
 	const uniqueIds = [...new Set(eventIds)];
+	// #434 slice 5 — `options` (RepertoireReadOptions extends EntuFetchOptions)
+	// threads to both reads, same as every other shared reader in this slice.
 	const programsPerEvent = await Promise.all(
-		uniqueIds.map(async (id) => [id, await listProgramItems(cfg, id, fetchImpl)] as const)
+		uniqueIds.map(async (id) => [id, await listProgramItems(cfg, id, fetchImpl, options)] as const)
 	);
 
 	const needsFallback = programsPerEvent.some(([, items]) => items.length === 0);
 	const all: RepertoireItem[] =
-		needsFallback && seasonId !== null ? await listRepertoireItems(cfg, seasonId, fetchImpl) : [];
+		needsFallback && seasonId !== null
+			? await listRepertoireItems(cfg, seasonId, fetchImpl, options)
+			: [];
 	const fallback: RepertoireItem[] = options.includeInactive
 		? all
 		: all.filter((item) => ACTIVE_STATUSES.has(item.status));
