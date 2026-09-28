@@ -28,9 +28,14 @@
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
+	// #434 slice 6 review F1 — the write gate. Every write on this page (create,
+	// update, delete, reorder) is disabled and refused while there is no usable
+	// signal, with one sentence saying why; nothing is queued.
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveIdentityStore);
 	const admin = $derived($adminStore);
+	const isOffline = $derived(!$writesAvailable);
 
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<LinkRow[]>([]);
@@ -175,6 +180,10 @@
 	// arrows. Reference: #267, src/routes/profile/+page.svelte (rosterStatus).
 
 	async function submitAdd(): Promise<void> {
+		// #434 slice 6 review F1 — offline: nothing is written and nothing is
+		// queued. BEFORE the attempt-start `writeError` clear below, so a refused
+		// submit cannot wipe the alert from the attempt that really did fail.
+		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
 		const name = addName.trim();
@@ -209,6 +218,9 @@
 	}
 
 	function startEdit(row: LinkRow): void {
+		// The Edit button is disabled offline; this is the backstop for a tap that
+		// beat the re-render (same shape as the event page's pencils).
+		if (isOffline) return;
 		editingId = row.id;
 		editName = row.name;
 		editUrl = row.url;
@@ -223,6 +235,10 @@
 	}
 
 	async function saveEdit(id: string): Promise<void> {
+		// Offline: refuse before the `writeError` clear, and WITHOUT closing the
+		// form — the typed draft is the admin's work (review F2's rule, same
+		// reasoning).
+		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
 		const name = editName.trim();
@@ -245,6 +261,7 @@
 	}
 
 	async function handleRemove(id: string): Promise<void> {
+		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
 		const g = routeLoad.generation;
@@ -267,6 +284,9 @@
 		// because `fireEvent`/a stray dispatched click bypasses `disabled`; the
 		// handler itself has to refuse the second tap.
 		if (reorderPending) return;
+		// Offline: before the attempt-start clears AND before `reorderPending`
+		// flips, so a refused move leaves the arrows exactly as they were.
+		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
 		const g = routeLoad.generation;
@@ -381,6 +401,16 @@
 		</p>
 	{/if}
 
+	<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
+	     this page (add, per-row edit/remove, the reorder arrows): each is
+	     disabled while there is no signal; this says why once. Admin-gated,
+	     because a member sees no write control to explain. -->
+	{#if admin === 'admin' && isOffline}
+		<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
+			{m.write_unavailable_no_signal()}
+		</p>
+	{/if}
+
 	{#if admin === 'admin'}
 		<form
 			data-testid="links-add-form"
@@ -420,6 +450,7 @@
 			<button
 				type="submit"
 				data-testid="links-add-submit"
+				disabled={isOffline}
 				class="self-start rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
 			>
 				{m.links_add_submit()}
@@ -483,6 +514,7 @@
 							<button
 								type="button"
 								data-testid="links-edit-save"
+								disabled={isOffline}
 								onclick={() => saveEdit(row.id)}
 								class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
 							>
@@ -516,7 +548,7 @@
 								<button
 									type="button"
 									data-testid="links-move-up"
-									disabled={i === 0 || reorderPending}
+									disabled={i === 0 || reorderPending || isOffline}
 									aria-label={m.links_move_up()}
 									onclick={() => moveUp(i)}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
@@ -526,7 +558,7 @@
 								<button
 									type="button"
 									data-testid="links-move-down"
-									disabled={i === rows.length - 1 || reorderPending}
+									disabled={i === rows.length - 1 || reorderPending || isOffline}
 									aria-label={m.links_move_down()}
 									onclick={() => moveDown(i)}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
@@ -536,6 +568,7 @@
 								<button
 									type="button"
 									data-testid="links-edit"
+									disabled={isOffline}
 									onclick={() => startEdit(row)}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 								>
@@ -544,6 +577,7 @@
 								<button
 									type="button"
 									data-testid="links-remove"
+									disabled={isOffline}
 									onclick={() => handleRemove(row.id)}
 									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
 								>

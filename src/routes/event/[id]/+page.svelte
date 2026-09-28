@@ -185,11 +185,11 @@
 	// #434 slice 6/6 — the ONE online/offline signal; inline event editing
 	// (the six header pencils) reads it directly here, RsvpControl/
 	// AttendanceSurface read it themselves.
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 
 	// 'not-available' is a genuine 5th state, NOT a flavour of 'load-error':
 	// switching collectives with a detail page open refetches the SAME id against
@@ -3248,6 +3248,18 @@
 	// SAME `event-edit-error-duration_minutes` slot (one testid, two possible
 	// messages). Cleared alongside `editErrors` whenever the pencil reopens.
 	let editRangeErrors = $state<Partial<Record<EditableEventField, boolean>>>({});
+	// #434 slice 6 review F2 — a confirm that the signal refused. The editor and
+	// its draft STAY (the typed text is the viewer's work, not ours to discard),
+	// and this flag is what says so out loud; without it the only feedback would
+	// be the generic offline sentence that was already on screen before she
+	// typed. Cleared on the next open, on cancel, and by the signal returning.
+	let editHeldOffline = $state(false);
+	// The signal came back — the notice has said its piece. The draft stays; only
+	// the "nothing saved" line goes, because now a confirm would save. Reads
+	// `isOffline` only, so this cannot re-trigger itself.
+	$effect(() => {
+		if (!isOffline) editHeldOffline = false;
+	});
 	let editWritePending = $state<Partial<Record<EditableEventField, boolean>>>({});
 	// #328 — ONE region shared by all six inline fields (Gama's one-node-PER-
 	// SURFACE ruling: the inline-field surface is one queue, `editWriteQueue`,
@@ -3444,6 +3456,7 @@
 		if (!detail || editWritePending[field] || isOffline) return;
 		editErrors = { ...editErrors, [field]: false };
 		editRangeErrors = { ...editRangeErrors, [field]: false };
+		editHeldOffline = false;
 		if (field === 'start_datetime') {
 			const seeded = toTallinnLocalInputValue(detail.startDatetime);
 			const [datePart, timePart] = seeded.split('T');
@@ -3533,6 +3546,10 @@
 		editDraft = '';
 		editDraftDate = '';
 		editDraftTime = '';
+		// #434 slice 6 review F2 — an explicit abandon (Escape, or a confirm with
+		// nothing to write) settles the held-draft notice: there is no draft left
+		// for it to be about.
+		editHeldOffline = false;
 		if (restoreFocus) restorePencilFocus(field);
 	}
 
@@ -3637,10 +3654,17 @@
 		if (!selected || !detail || editingField !== field) return;
 		// #434 slice 6 — the signal dropped while this editor was open (mid-edit,
 		// not just at open time — `beginFieldEdit`'s guard only covers the tap
-		// that opens it). No write reaches the wire; this degrades exactly like
-		// an unchanged draft: close without committing.
+		// that opens it). No write reaches the wire and nothing is queued.
+		//
+		// Review F2: it does NOT degrade to a cancel. An unchanged draft loses
+		// nothing when it closes; a CHANGED one loses the viewer's typing, and the
+		// first cut threw it away on a blur she never meant as "discard". So the
+		// editor and the draft stay exactly as they are, the refusal is said out
+		// loud (`editHeldOffline`), and one more Enter once the signal is back
+		// commits the same text. Still no queue: nothing saves by itself.
 		if (isOffline) {
-			cancelFieldEdit(field, restoreFocus);
+			editErrors = { ...editErrors, [field]: false };
+			editHeldOffline = true;
 			return;
 		}
 		const before = fieldValue(detail, field);
@@ -4552,6 +4576,15 @@
 				{#if isEditor && isOffline}
 					<p data-testid="event-edit-write-unavailable" role="status" class="text-xs text-ink-2">
 						{m.write_unavailable_no_signal()}
+					</p>
+				{/if}
+				<!-- #434 slice 6 review F2 — she pressed Enter (or blurred) with the
+				     signal down and a changed draft. The editor above is still open on
+				     her text; this says why nothing saved, so the refusal is not
+				     invisible behind the sentence that was already there. -->
+				{#if editHeldOffline}
+					<p data-testid="event-edit-held-offline" role="alert" class="text-xs text-ink-2">
+						{m.write_held_no_signal()}
 					</p>
 				{/if}
 

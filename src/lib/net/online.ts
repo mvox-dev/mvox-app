@@ -6,12 +6,13 @@
 // events — a repo-wide sweep pins that.
 //
 // A signal only: it gates WRITES (every write control across the app reads
-// `online` and disables itself while it is false), it never gates reads —
-// $lib/entu/readCache.ts serves a cached read on a rejected fetch, which is a
-// completely independent mechanism from this store. Nothing here is queued;
-// there is no retry, no backlog — a write attempted while offline simply
-// never happens, full stop (see the write-control specs across the app).
-import { readable, type Readable } from 'svelte/store';
+// `writesAvailable` and disables itself while it is false), it never gates
+// reads — $lib/entu/readCache.ts serves a cached read on a rejected fetch,
+// which is a completely independent mechanism from this store. Nothing here is
+// queued; there is no retry, no backlog — a write attempted while offline
+// simply never happens, full stop (see the write-control specs across the app).
+import { derived, readable, type Readable } from 'svelte/store';
+import { readFellBackToCache } from './cacheFallback';
 
 /** `navigator.onLine`, read fresh — never cached across calls. `navigator` is
  *  undefined during SSR/prerender (adapter-static build), so this degrades to
@@ -40,4 +41,26 @@ export const online: Readable<boolean> = readable(currentOnLine(), (set) => {
 	};
 });
 
-// (*MVOX:Josquin* — #434 slice 6 GREEN)
+/**
+ * THE WRITE GATE — what every write control reads (`online` alone is not it).
+ *
+ * #434 slice 6 review F3: `navigator.onLine` is true as soon as the device is
+ * associated to a network, uplink or no uplink. On rehearsal-hall wifi that
+ * cannot reach the internet — the shape #434's user story names — it stays true
+ * while every fetch rejects, so gating on it alone leaves every control live on
+ * a screen that is already showing stored rows under an "as of" line, and a tap
+ * gets a generic write error instead of "No signal".
+ *
+ * So the gate is the OR of both things the app knows: the browser says it is
+ * offline, OR a read on this screen had to be answered out of the cache because
+ * the live call could not be made ($lib/net/cacheFallback, written by
+ * readCache). The second half is not a latch — a live read that gets through
+ * clears it, as does the start of the next load — so a single transient
+ * fallback cannot wedge writes off.
+ */
+export const writesAvailable: Readable<boolean> = derived(
+	[online, readFellBackToCache],
+	([isOnline, fellBack]) => isOnline && !fellBack
+);
+
+// (*MVOX:Josquin* — #434 slice 6 GREEN; F3 write gate added in review)

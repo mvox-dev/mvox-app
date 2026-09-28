@@ -290,6 +290,62 @@ describe('/event/[id] — inline editing while offline (#434 slice 6)', () => {
 		expect(editPosts(fetchStub)).toEqual([]);
 	});
 
+	// ── review F2 ──────────────────────────────────────────────────────────────
+	// The first cut delegated the offline confirm to `cancelFieldEdit`, so a
+	// signal drop mid-edit closed the editor and silently discarded the typed
+	// text. An unchanged draft loses nothing when it closes; a changed one loses
+	// the editor's work, and a blur is not a "discard" gesture.
+	it('a signal drop mid-edit KEEPS the typed text — the draft is not discarded', async () => {
+		const { container, fetchStub } = await renderEditable();
+		await fireEvent.click(container.querySelector('[data-testid="event-edit-btn-name"]')!);
+		const input = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-edit-input-name"]');
+			expect(el).not.toBeNull();
+			return el as HTMLInputElement;
+		});
+		await fireEvent.input(input, { target: { value: 'Autumn Sing' } });
+		await goOffline();
+
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await settle();
+
+		const still = container.querySelector<HTMLInputElement>('[data-testid="event-edit-input-name"]');
+		expect(still, 'the editor stays open on her text').not.toBeNull();
+		expect(still!.value).toBe('Autumn Sing');
+		expect(editPosts(fetchStub)).toEqual([]);
+		// ...and the refusal is SAID, not left to the sentence that was already
+		// on screen before she typed.
+		expectVisibleReason(container, 'event-edit-held-offline', '[write_held_no_signal]');
+	});
+
+	it('the held draft commits on one more Enter once the signal is back (still nothing queued)', async () => {
+		const { container, fetchStub } = await renderEditable();
+		await fireEvent.click(container.querySelector('[data-testid="event-edit-btn-name"]')!);
+		const input = await waitFor(() => {
+			const el = container.querySelector('[data-testid="event-edit-input-name"]');
+			expect(el).not.toBeNull();
+			return el as HTMLInputElement;
+		});
+		await fireEvent.input(input, { target: { value: 'Autumn Sing' } });
+		await goOffline();
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await settle();
+		expect(editPosts(fetchStub)).toEqual([]);
+
+		// The signal returns. NOTHING saves by itself — no queue, no retry.
+		await goOnline();
+		await settle();
+		expect(editPosts(fetchStub)).toEqual([]);
+		expect(container.querySelector('[data-testid="event-edit-held-offline"]')).toBeNull();
+
+		const held = container.querySelector<HTMLInputElement>('[data-testid="event-edit-input-name"]')!;
+		expect(held.value).toBe('Autumn Sing');
+		await fireEvent.keyDown(held, { key: 'Enter' });
+
+		await waitFor(() => expect(editPosts(fetchStub).length).toBe(1));
+		expect(JSON.stringify(editPosts(fetchStub))).toContain('Autumn Sing');
+	});
+
 	it('back online: pencils enabled, reason gone, and an edit commits', async () => {
 		const { container, fetchStub } = await renderEditable();
 		await goOffline();

@@ -75,10 +75,10 @@
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	// #434 slice 6 — the ONE online/offline signal; lending writes (checkout,
 	// return, bulk checkout) are gated on it directly.
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 
 	// #76 correction 9, superseded by #207 rule 7 (PO standing rule, Gama's
 	// 2026-09-02 rulings) — lending dates are NUMERIC/TABULAR text, so they

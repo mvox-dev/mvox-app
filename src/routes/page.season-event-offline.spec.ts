@@ -482,6 +482,58 @@ describe('agenda — season management while offline (#434 slice 6)', () => {
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
 	});
 
+	// ── review F2 ──────────────────────────────────────────────────────────────
+	// The first cut delegated the offline confirm to `cancelSeasonFieldEdit`, so
+	// a signal drop mid-edit closed the editor and threw the retyped name away.
+	it('a signal drop mid-edit KEEPS the typed season name — the draft is not discarded', async () => {
+		const { container, panel } = await renderPanelOnline();
+		await fireEvent.click(q(container, 'season-edit-btn-name') as HTMLElement);
+		const input = await waitFor(() => {
+			const el = q(container, 'season-edit-input-name') as HTMLInputElement | null;
+			expect(el).not.toBeNull();
+			return el as HTMLInputElement;
+		});
+		await fireEvent.input(input, { target: { value: 'Season of Rain' } });
+		await goOffline();
+
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await settle();
+
+		const still = q(container, 'season-edit-input-name') as HTMLInputElement | null;
+		expect(still, 'the editor stays open on her text').not.toBeNull();
+		expect(still!.value).toBe('Season of Rain');
+		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
+		expectVisibleReason(panel, 'season-edit-held-offline', '[write_held_no_signal]');
+	});
+
+	it('the held season draft commits on one more Enter once the signal is back', async () => {
+		const { container } = await renderPanelOnline();
+		await fireEvent.click(q(container, 'season-edit-btn-name') as HTMLElement);
+		const input = await waitFor(() => {
+			const el = q(container, 'season-edit-input-name') as HTMLInputElement | null;
+			expect(el).not.toBeNull();
+			return el as HTMLInputElement;
+		});
+		await fireEvent.input(input, { target: { value: 'Season of Rain' } });
+		await goOffline();
+		await fireEvent.keyDown(input, { key: 'Enter' });
+		await settle();
+		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
+
+		// Nothing saves by itself when the signal returns — no queue, no retry.
+		await goOnline();
+		await settle();
+		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
+		expect(q(container, 'season-edit-held-offline')).toBeNull();
+
+		const held = q(container, 'season-edit-input-name') as HTMLInputElement;
+		expect(held.value).toBe('Season of Rain');
+		await fireEvent.keyDown(held, { key: 'Enter' });
+
+		await waitFor(() => expect(updateSeasonFieldMock).toHaveBeenCalledTimes(1));
+		expect(JSON.stringify(updateSeasonFieldMock.mock.calls[0])).toContain('Season of Rain');
+	});
+
 	it('back online: the controls enable again and the reason is gone', async () => {
 		const { container } = await renderPanelOnline();
 		await goOffline();

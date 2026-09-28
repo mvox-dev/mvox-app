@@ -120,7 +120,7 @@
 	// shape as RsvpControl/AttendanceSurface) so every host surface (agenda
 	// event row, agenda season-manage panel, event page) gets the write gate
 	// with no wiring of its own.
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	/** Stable identity for the `editionsResolvedWorkIds` default — a fresh
 	 *  `new Set()` per render would be a new prop value every time. */
@@ -352,7 +352,7 @@
 	// management control this element renders (status, pin edition, remove,
 	// move, add work, add to programme). Unlike `pendingKeys` it SAYS why:
 	// one visible sentence per manage surface, rendered below.
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 
 	/** #288 — see the `pickableEditionsVisible` prop doc: fall back to the
 	 *  original rule when no caller override is given. */

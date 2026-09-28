@@ -53,7 +53,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
 	import { rovingNextIndex } from '$lib/a11y/roving';
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	interface Props {
 		status?: RsvpStatus | null;
@@ -78,7 +78,7 @@
 	}: Props = $props();
 
 	// #434 slice 6 — the signal down is the second disable reason.
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 	const isDisabled = $derived(pending || isOffline);
 
 	const BUTTONS: { value: RsvpStatus; label: () => string }[] = [

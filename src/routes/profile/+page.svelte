@@ -29,6 +29,12 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
+	// #434 slice 6 review F1 — the write gate. This page's writes are unusual in
+	// that the main one has NO button: a 2-second idle autosave fires on its own,
+	// with no user click to disable. So the gate lands in `onAutosave` itself
+	// (nothing writes) AND in `handleValueChange` (nothing is even scheduled),
+	// on top of the controls that do exist.
+	import { writesAvailable } from '$lib/net/online';
 	// #267 — admin-only roster-names toggle: adminStore is the roster
 	// precedent, resolved app-wide by +layout, keyed to the selected
 	// collective — zero new resolution wiring on this page.
@@ -323,6 +329,7 @@
 		resFor(f).holders[0]?.level ?? 'domain';
 
 	const writesInFlight = $derived(busy || pendingLevels.size > 0);
+	const isOffline = $derived(!$writesAvailable);
 
 	function isDirty(field: FieldKey): boolean {
 		const level = activeLevelFor(field);
@@ -923,6 +930,9 @@
 	// failure (e.g. the missing-self-_editor rights gap) surfaces loudly here and
 	// launches nothing.
 	async function handleLinkProvider(providerId: string): Promise<void> {
+		// #434 slice 6 review F1 — minting a self-invite is a write, and it ends in a
+		// full-page OAuth redirect; offline it must not even start.
+		if (isOffline) return;
 		// #219 — an already-linked provider is a legitimate pick now (the pre-mint
 		// refusal is gone): entu-api's same-person branch still reports a clean
 		// `redeemed`, so the guard moved to the callback (run-link-callback.ts),
@@ -968,6 +978,13 @@
 
 	// The autosave onSave callback — dispatches through the existing queue.
 	function onAutosave(field: FieldKey): void {
+		// #434 slice 6 review F1 — no usable signal: nothing is written and nothing
+		// is queued. FIRST, before the name-private throw and before the
+		// savingFields/failedFields flips, so a refused autosave neither raises nor
+		// paints a saving state for a write that never happens. The typed draft is
+		// left exactly as it is (review F2's rule) — it is the viewer's work, and
+		// `profile-write-unavailable` says why it is not saved.
+		if (isOffline) return;
 		if (!isDirty(field)) return;
 		const activeLevel = activeLevelFor(field);
 
@@ -998,6 +1015,8 @@
 	const autosaveCtrl = createAutosave({ idleMs: 2_000, onSave: onAutosave });
 
 	function onmove(field: FieldKey, toLevel: Level) {
+		// Offline: before the name-private throw and before any pending/failed flip.
+		if (isOffline) return;
 		if (writesInFlight) return;
 
 		// Name-private guard (loud failure on the move path).
@@ -1033,6 +1052,7 @@
 	}
 
 	function onrepair(field: FieldKey) {
+		if (isOffline) return;
 		if (writesInFlight) return;
 		const plan = planFor(field);
 		if (!plan) return;
@@ -1054,6 +1074,7 @@
 	// pre-existing repair-detection machinery picks up the now-same-value
 	// duplicate on the next load).
 	function handleResolve(field: FieldKey, level: Level) {
+		if (isOffline) return;
 		if (writesInFlight) return;
 		const res = resFor(field);
 		const other = otherField(field);
@@ -1081,6 +1102,14 @@
 
 	function handleValueChange(field: FieldKey, value: string) {
 		draft = { ...draft, [field]: value };
+		// Offline the keystroke is KEPT (the draft above) but no idle timer is armed:
+		// a timer that fires into a refusing `onAutosave` is just a dead callback,
+		// and any timer left over from before the drop is cancelled here so it
+		// cannot fire either.
+		if (isOffline) {
+			autosaveCtrl.cancel(field);
+			return;
+		}
 		autosaveCtrl.keystroke(field);
 	}
 
@@ -1139,6 +1168,15 @@
 		// the browser's already-mutated DOM value stuck on the user's pick.
 		const selectEl = e.currentTarget as HTMLSelectElement;
 		const value = selectEl.value === 'real';
+		// #434 slice 6 review F1 — offline: nothing is written. The select is
+		// disabled, so this is the backstop for a change that beat the re-render;
+		// like the precondition branch below it puts the DOM back to the last
+		// server-confirmed value rather than leaving a pick the server never took.
+		// The page-level `profile-write-unavailable` sentence says why.
+		if (isOffline) {
+			selectEl.value = rosterShowRealNames ? 'real' : 'profile';
+			return;
+		}
 		const ctx = activeContext();
 		const dbEntityId = rosterDbEntityId;
 		// #267 (review F1) — a failing write PRECONDITION is NOT "nothing
@@ -1303,7 +1341,7 @@
 					data-testid="profile-roster-names"
 					bind:this={rosterSelectEl}
 					value={rosterShowRealNames ? 'real' : 'profile'}
-					disabled={rosterBusy || rosterDbEntityId === null}
+					disabled={rosterBusy || rosterDbEntityId === null || isOffline}
 					onchange={onRosterNamesChange}
 					class="border border-ink-5 bg-paper px-2 py-1 text-ink"
 				>
@@ -1399,6 +1437,16 @@
 				page's own introduction; this is the control's own explanation. -->
 			<h2 class="text-sm font-semibold">{m.profile_visibility_title()}</h2>
 			<p class="text-sm text-ink-2">{m.profile_visibility_intro()}</p>
+			<!-- #434 slice 6 review F1 — ONE visible reason for every write on this
+			     page: the fields' idle AUTOSAVE (which has no button of its own to
+			     disable — hence a sentence, not just a `disabled`), the visibility
+			     move/repair/resolve controls, the roster-names toggle and the
+			     account-link buttons. A draft already typed is kept, not saved. -->
+			{#if isOffline}
+				<p data-testid="profile-write-unavailable" class="text-sm text-ink-2">
+					{m.write_unavailable_no_signal()}
+				</p>
+			{/if}
 
 			<div class="flex flex-col gap-6">
 				{#each FIELDS as field (field)}
@@ -1413,7 +1461,8 @@
 						conflict={isConflict(field)}
 						conflictLevels={conflictLevelsFor(field)}
 						conflictValues={conflictValuesFor(field)}
-						disabled={writesInFlight}
+						disabled={writesInFlight || isOffline}
+						offline={isOffline}
 						moveFailed={moveFailed.has(field)}
 						saveFailed={failedFields.has(field)}
 						onvisibilitychange={handleVisibilityChange}
@@ -1478,7 +1527,7 @@
 						data-testid="profile-link-another"
 						bind:this={linkAnotherEl}
 						class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-						disabled={linkedLoadFailed}
+						disabled={linkedLoadFailed || isOffline}
 						onclick={openLinkPicker}
 					>
 						{m.profile_link_another()}
@@ -1491,7 +1540,7 @@
 								type="button"
 								data-testid={`profile-link-provider-${provider.id}`}
 								class="rounded-md border border-ink px-4 py-2 text-left text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-								disabled={linkBusy || linkedLoadFailed}
+								disabled={linkBusy || linkedLoadFailed || isOffline}
 								aria-busy={linkBusy}
 								onclick={() => handleLinkProvider(provider.id)}
 							>

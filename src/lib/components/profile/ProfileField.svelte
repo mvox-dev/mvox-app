@@ -21,6 +21,11 @@
 		/** #131 — each level's OWN value for this field, so a conflict-tier tap can preview it. */
 		conflictValues: Record<Level, string>;
 		disabled: boolean;
+		/** #434 slice 6 review F1 — no usable signal: the field's editor cannot be
+		 *  OPENED (the whole-field activator is disabled, exactly like the event
+		 *  page's pencils). An editor already open keeps its text — the draft is the
+		 *  viewer's work — and the parent refuses the autosave instead. */
+		offline?: boolean;
 		moveFailed: boolean;
 		saveFailed: boolean;
 		onvisibilitychange: (field: FieldKey, toLevel: Level) => void;
@@ -44,6 +49,7 @@
 		conflictLevels = [],
 		conflictValues = { public: '', domain: '', private: '' },
 		disabled = false,
+		offline = false,
 		moveFailed = false,
 		saveFailed = false,
 		onvisibilitychange,
@@ -293,7 +299,7 @@
 				type="button"
 				data-testid="profile-{field}-edit"
 				bind:this={activatorRef}
-				disabled={saving && disabled}
+				disabled={(saving && disabled) || offline}
 				class="group flex min-h-11 w-full appearance-none items-center gap-2 rounded-md border border-ink px-3 py-2 text-left disabled:opacity-50"
 				onclick={openEditor}
 			>

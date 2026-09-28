@@ -22,7 +22,7 @@
 	// #434 slice 6 — the ONE online/offline signal, read directly here (same
 	// shape as RsvpControl) so both host pages (agenda, event page) get the
 	// gate with no wiring of their own.
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	interface AttendanceEntryLite {
 		attendanceId: string;
@@ -134,7 +134,7 @@
 	}
 
 	// #434 slice 6 — the signal down is a second reason no toggle may write.
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 
 	function handleToggle(memberId: string, status: AttendanceStatus) {
 		if (pendingMemberIds.has(memberId) || isOffline || !ontoggle) return;

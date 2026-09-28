@@ -190,7 +190,7 @@
 	// #434 slice 6 — the ONE online/offline signal; season management and
 	// event creation are gated on it directly (RsvpControl/AttendanceSurface
 	// read it themselves, so the agenda row's RSVP needs no wiring here).
-	import { online } from '$lib/net/online';
+	import { writesAvailable } from '$lib/net/online';
 
 	// Auth + collective reflection, same as the walking skeleton. T5: once a
 	// collective is resolved, this IS the post-login home — the agenda renders
@@ -199,7 +199,7 @@
 	const collectives = $derived($collectiveState);
 	const selected = $derived($selectedCollectiveStore);
 	const pickerMode = $derived($pickerModeStore);
-	const isOffline = $derived(!$online);
+	const isOffline = $derived(!$writesAvailable);
 
 	// #338 — discovery is in flight from the error panel's retry. `hydrateCollectives`
 	// publishes no 'loading' state of its own on a retry (it only ever sets the
@@ -3900,6 +3900,15 @@
 	 *  edit was refused before any write, #132/T3 review F3). The kind picks the
 	 *  message: a rejected date range must name the actual mistake. */
 	let seasonEditErrors = $state<Partial<Record<SeasonEditableField, 'save' | 'range'>>>({});
+	// #434 slice 6 review F2 — a confirm the signal refused. The editor and its
+	// draft STAY (the admin's typing is not ours to discard) and this says so;
+	// otherwise the only feedback is the panel sentence that was already there.
+	let seasonEditHeldOffline = $state(false);
+	// The signal returned: the notice is spent, the draft is not. Reads
+	// `isOffline` only, so it cannot re-trigger itself.
+	$effect(() => {
+		if (!isOffline) seasonEditHeldOffline = false;
+	});
 	let seasonEditPending = $state<Partial<Record<SeasonEditableField, boolean>>>({});
 	/** #328 — ONE region shared by all three fields (Gama's one-node-PER-SURFACE
 	 *  ruling: the three fields are one surface, not three), matching the
@@ -4426,6 +4435,7 @@
 	function beginSeasonFieldEdit(field: SeasonEditableField): void {
 		if (seasonEditPending[field] || isOffline) return; // a write for this field is already in flight
 		clearSeasonFieldError(field);
+		seasonEditHeldOffline = false;
 		seasonEditDraft = seasonFieldValue(field);
 		seasonEditingField = field;
 	}
@@ -4433,6 +4443,8 @@
 	function cancelSeasonFieldEdit(): void {
 		seasonEditingField = null;
 		seasonEditDraft = '';
+		// Review F2 — an explicit abandon leaves no draft for the notice to be about.
+		seasonEditHeldOffline = false;
 	}
 
 	/** Enter/blur confirm: optimistic apply + immediate write, eventFieldEdit's
@@ -4443,10 +4455,16 @@
 	function confirmSeasonFieldEdit(field: SeasonEditableField): void {
 		if (!selected || manageableSeasonId === null || seasonEditingField !== field) return;
 		// #434 slice 6 — the signal dropped while this editor was open. No write
-		// reaches the wire; degrades exactly like a cancel, delegated to
-		// `cancelSeasonFieldEdit` so the two paths cannot drift (review F2).
+		// reaches the wire and nothing is queued.
+		//
+		// Review F2: NOT a cancel. Delegating here threw away whatever the admin
+		// had retyped on a blur she never meant as "discard" — an unchanged draft
+		// loses nothing when it closes, a changed one loses her work. So the editor
+		// and the draft stay, the refusal is said out loud, and one more Enter once
+		// the signal is back writes the same text.
 		if (isOffline) {
-			cancelSeasonFieldEdit();
+			clearSeasonFieldError(field);
+			seasonEditHeldOffline = true;
 			return;
 		}
 		const before = seasonFieldValue(field);
@@ -7251,6 +7269,18 @@
 									{#if isOffline}
 										<p data-testid="season-manage-write-unavailable" class="text-xs text-ink-2">
 											{m.write_unavailable_no_signal()}
+										</p>
+									{/if}
+									<!-- #434 slice 6 review F2 — a confirm the signal refused, with the
+									     editor still open on the admin's typing. Says why nothing saved;
+									     the draft above is untouched. -->
+									{#if seasonEditHeldOffline}
+										<p
+											data-testid="season-edit-held-offline"
+											role="alert"
+											class="text-xs text-ink-2"
+										>
+											{m.write_held_no_signal()}
 										</p>
 									{/if}
 

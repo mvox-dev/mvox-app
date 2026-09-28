@@ -35,6 +35,11 @@
 	// the linked-identity property, never presence — same #294 discipline the
 	// roster's badges use). Both REUSED verbatim, never reimplemented here.
 	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
+	// #434 slice 6 review F1 — minting an invite is a WRITE, and this component is
+	// rendered on two pages (/admin and /admin/invite). Reading the gate HERE,
+	// inside the component, gives every host the same refusal with no wiring of
+	// its own (the RsvpControl pattern).
+	import { writesAvailable } from '$lib/net/online';
 	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
 	// #107 review F2 — a 401 here used to land in the generic 'load-error'
 	// (Retry against a token already deleted from localStorage) or, on the write
@@ -174,6 +179,7 @@
 	let createError = $state<{ personId?: string } | null>(null);
 
 	const canSubmit = $derived(dbId !== '' && dbEntityId !== '');
+	const isOffline = $derived(!$writesAvailable);
 
 	// #301 — the person-select's own prerequisite state. `ownerTier` starts
 	// 'loading' and — per the issue's explicit instruction — 'loading' AND
@@ -392,6 +398,10 @@
 	});
 
 	async function submit(): Promise<void> {
+		// #434 slice 6 review F1 — no signal, no mint. Before the error-surface
+		// clears below: a refused tap must not wipe the message from the attempt
+		// that really did fail. Nothing is queued.
+		if (isOffline) return;
 		if (!dbId || !canSubmit || status === 'creating') return;
 		const token = getToken();
 		if (!token) {
@@ -719,10 +729,16 @@
 					{m.picker_partial_members_notice()}
 				</p>
 			{/if}
+			<!-- #434 slice 6 review F1 — ONE visible reason for the mint button. -->
+			{#if isOffline}
+				<p data-testid="invite-write-unavailable" class="text-xs text-ink-2">
+					{m.write_unavailable_no_signal()}
+				</p>
+			{/if}
 			<button
 				type="button"
 				data-testid="invite-admin-submit"
-				disabled={!canSubmit || status === 'creating'}
+				disabled={!canSubmit || status === 'creating' || isOffline}
 				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:opacity-50"
 				onclick={submit}
 			>
