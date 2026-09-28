@@ -33,7 +33,7 @@
 	// `loadEventPageDetail` here (slice 3 review round, finding 1) — a
 	// cache-SERVING background read writes `servedFromCache`, which is this
 	// page's own staleness claim.
-	import { refreshEventPageDetail } from '$lib/events/eventPageData';
+	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
 	// waits for the sweep before #409's prefetch). See $lib/files/retention.
@@ -2119,6 +2119,28 @@
 		if (nextEventId) {
 			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
 				console.error('agenda: next-event detail prefetch failed', e);
+			});
+			// #434 slice 5 review round, finding 1 — the same warm-up for that
+			// event's WORKS read, and it is what makes the part bytes below
+			// reachable. #409 downloads the next event's part while she is on this
+			// page; the event page's repertoire section is the only screen that
+			// links to it from an event. Without this the works read had no
+			// warm-up at all: offline the event page restored its header, its works
+			// read rejected, and its `.catch` showed an EMPTY repertoire section —
+			// the part on the device, and /downloads the only door left to it.
+			//
+			// STORE-ONLY, for the same reason as the detail prefetch above, and the
+			// same cache keys as the event page's own `loadEventPageWorkRows`
+			// (eventPageData.ts documents the one that can differ, the season
+			// fallback). `currentSeasonId` is the season the agenda's OWN works
+			// read used for this row, so warming under it keeps the two level.
+			// Fire-and-forget: nothing on this page renders it, so no `thisRequest`
+			// guard and no state write — only the console line on failure. No
+			// `includeInactive` either: it filters the resolved rows client-side and
+			// changes no URL, so it cannot change what this warm-up STORES, and the
+			// rows themselves are discarded.
+			refreshEventPageWorkRows(cfg, [nextEventId], currentSeasonId, fetch).catch((e) => {
+				console.error('agenda: next-event works prefetch failed', e);
 			});
 		}
 
