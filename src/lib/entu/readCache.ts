@@ -20,6 +20,42 @@
 // 'GET') is cached or served from cache. Any other method passes straight
 // through to the live call, touching this module not at all.
 //
+// OPT IN, NEVER BLANKET (#434 review round 1, findings 1 and 2). A caller
+// reaches this module only by asking for it: `entuFetch(db, path, token, init,
+// fetchImpl, { cache: true })`. Every one of the ~290 other call sites keeps
+// the exact pre-slice promise chain and no cache at all. The first cut wrapped
+// EVERY GET, which is wrong in two ways — and an exclusion list of the paths
+// that must not be cached is not the fix: swPolicy.ts's own fence is
+// deliberately structural, "not as a per-endpoint blacklist, so it cannot erode
+// one route at a time later", and the same reasoning holds here:
+//   - Some GET bodies must never be reused. `GET property/{id}` answers a
+//     signed S3 url that entu-www `src/api/files/index.md` calls "valid for 60
+//     seconds. Do not cache or share it; generate a fresh one each time."
+//     Served from cache, `signFileUrl` stops failing offline and
+//     `openFileBytes` hands the tab a long-expired url — an open that RESOLVES
+//     onto S3's AccessDenied XML instead of failing where the caller can say
+//     so (#343 review round 3, finding 2).
+//   - Some GETs are a STEP INSIDE a write. replaceProperty.ts,
+//     linkActions.ts and eventSeriesActions.ts read a property's current
+//     `_id`s and then POST/DELETE against them; a cache-served lookup on a
+//     flapping connection feeds stale `_id`s into a live mutation. "Caches
+//     reads only, never a write" is about the whole choreography, not just
+//     which HTTP verb carries the body.
+// So the three read SCREENS of #434 (agenda, event page, library — slices
+// 2-4) turn the flag on in their own readers, and nothing else is ever
+// silently offline-backed.
+//
+// BOUNDED (#434 review round 1, finding 3). This database shares the origin's
+// storage quota with #343's part byte store, which caps itself at 200MB — an
+// unbounded read cache could push the origin to quota and cost the downloaded
+// parts this epic exists to protect. Two limits, both here and nowhere else:
+// at most READ_CACHE_MAX_ENTRIES entries (a put over the cap evicts
+// oldest-readAt first, i.e. least-recently-read-online), and a single body
+// over READ_CACHE_MAX_ENTRY_BYTES is not stored at all. Worst case is the
+// product of the two, and that number is the point — see the constants.
+// Age is NOT a limit: the issue's own answer to a stale copy is "as of
+// <time>" on the screen, so an old entry is shown with its age, not dropped.
+//
 // Offline = the underlying fetch call THROWS (a network rejection). A cached
 // entry for the same key is then served, with the ORIGINAL error rethrown when
 // there is none. A resolved response of any status (401, 500, ...) is not
@@ -38,6 +74,29 @@ import { authStore } from '$lib/auth/session';
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'reads';
+// Ordered index over `readAt` — how the cap pass finds the oldest entries
+// without reading a single body (`openKeyCursor` yields keys only).
+const READ_AT_INDEX = 'readAt';
+
+/**
+ * #434 review round 1, finding 3 — the entry cap. Generous against what the
+ * three offline screens read (an agenda load, an event page and the library
+ * list are a few dozen distinct paths per person, per db), tight enough that
+ * the worst case stays a fraction of the byte store's own 200MB: 64 entries x
+ * 1MB = 64MB, and real bodies are kilobytes. A put that takes the store over
+ * the cap evicts oldest-`readAt` first.
+ */
+export const READ_CACHE_MAX_ENTRIES = 64;
+
+/**
+ * #434 review round 1, finding 3 — the per-entry ceiling, in characters of the
+ * response's JSON text. A body this large is not one of the three read screens
+ * (the library's 500-work list is ~100KB), and one of them must not be able to
+ * spend the whole cache budget by itself. Over the ceiling the read is simply
+ * not cached — the live response is returned untouched, and that path is then
+ * not available offline.
+ */
+export const READ_CACHE_MAX_ENTRY_BYTES = 1024 * 1024;
 
 /** What one cache entry holds — nothing more. */
 export interface ReadCacheEntry {
@@ -64,8 +123,11 @@ function openDb(factory: IDBFactory): Promise<IDBDatabase> {
 		const req = factory.open(READ_CACHE_DB_NAME, DB_VERSION);
 		req.onupgradeneeded = () => {
 			const database = req.result;
-			if (!database.objectStoreNames.contains(STORE_NAME)) {
-				database.createObjectStore(STORE_NAME);
+			const store = database.objectStoreNames.contains(STORE_NAME)
+				? req.transaction?.objectStore(STORE_NAME)
+				: database.createObjectStore(STORE_NAME);
+			if (store && !store.indexNames.contains(READ_AT_INDEX)) {
+				store.createIndex(READ_AT_INDEX, 'readAt');
 			}
 		};
 		req.onsuccess = () => resolve(req.result);
@@ -132,6 +194,52 @@ export async function readCacheGet(
 	}
 }
 
+/**
+ * How many entries the cache currently holds (0 when there is no database, or
+ * on any failure). The cap's own observable — `READ_CACHE_MAX_ENTRIES` is a
+ * promise about this number.
+ */
+export async function readCacheEntryCount(): Promise<number> {
+	const openPromise = getDb();
+	if (!openPromise) return 0;
+	try {
+		const database = await openPromise;
+		const tx = database.transaction(STORE_NAME, 'readonly');
+		return await reqToPromise(tx.objectStore(STORE_NAME).count());
+	} catch {
+		return 0;
+	}
+}
+
+/**
+ * The cap pass (#434 review round 1, finding 3), running in the SAME
+ * transaction as the put that triggered it: count what the store now holds and,
+ * while that is over `READ_CACHE_MAX_ENTRIES`, delete the oldest-`readAt`
+ * entries. Keys only — an eviction never reads a body, and never touches a
+ * `readAt` either (a cap pass that restamped what it walked past would invent
+ * recency it did not observe).
+ */
+function evictOverflow(store: IDBObjectStore): Promise<void> {
+	return reqToPromise(store.count()).then((count) => {
+		let over = count - READ_CACHE_MAX_ENTRIES;
+		if (over <= 0) return undefined;
+		return new Promise<void>((resolve, reject) => {
+			const cursorReq = store.index(READ_AT_INDEX).openKeyCursor();
+			cursorReq.onsuccess = () => {
+				const cursor = cursorReq.result;
+				if (!cursor || over <= 0) {
+					resolve();
+					return;
+				}
+				store.delete(cursor.primaryKey);
+				over -= 1;
+				cursor.continue();
+			};
+			cursorReq.onerror = () => reject(cursorReq.error);
+		});
+	});
+}
+
 async function readCachePut(
 	db: string,
 	personId: string,
@@ -142,8 +250,10 @@ async function readCachePut(
 	if (!openPromise) return;
 	const database = await openPromise;
 	const tx = database.transaction(STORE_NAME, 'readwrite');
-	const req = tx.objectStore(STORE_NAME).put(entry, compositeKey(db, personId, pathAndQuery));
+	const store = tx.objectStore(STORE_NAME);
+	const req = store.put(entry, compositeKey(db, personId, pathAndQuery));
 	await reqToPromise(req);
+	await evictOverflow(store);
 }
 
 // Every write `entuFetch` starts is fire-and-forget on its hot path (the live
@@ -200,7 +310,9 @@ function isGetMethod(init: RequestInit): boolean {
 }
 
 /**
- * The read-through wrapper `entuFetch` calls for every request. `attemptFetch`
+ * The read-through wrapper `entuFetch` calls ONLY for a request whose caller
+ * opted in (`{ cache: true }` — see OPT IN, NEVER BLANKET above; an uncached
+ * call never reaches this module at all). `attemptFetch`
  * is the live network call (already carrying auth headers); this function
  * decides nothing about the RESPONSE beyond store-or-not — 401 handling is
  * request.ts's own concern, folded in here as `onResolved` so the whole thing
@@ -215,7 +327,8 @@ function isGetMethod(init: RequestInit): boolean {
  *   (rejections are NOT this function's to interpret for a write) — no read,
  *   no write.
  * - GET, live call resolves: an `ok` body is cloned and stored (fire-and-
- *   forget) keyed to the CURRENT personId for `db`; `onResolved` still runs on
+ *   forget) keyed to the CURRENT personId for `db`, unless its JSON text is
+ *   over `READ_CACHE_MAX_ENTRY_BYTES`; `onResolved` still runs on
  *   the ORIGINAL response. A non-`ok` response (401, 500, ...) is passed to
  *   `onResolved` as-is and never stored.
  * - GET, live call REJECTS (offline): the cached entry for this exact key is
@@ -241,8 +354,15 @@ export function readThroughGet(
 				const clone = res.clone();
 				trackWrite(
 					clone
-						.json()
-						.then((body) => readCachePut(db, personId, pathAndQuery, { body, readAt }))
+						.text()
+						.then((text) => {
+							// The size check reads the TEXT, not the parsed body: the
+							// number the cap is spent in is the response's own length,
+							// and an over-ceiling body is then never even parsed.
+							if (text.length > READ_CACHE_MAX_ENTRY_BYTES) return undefined;
+							const body = JSON.parse(text) as unknown;
+							return readCachePut(db, personId, pathAndQuery, { body, readAt });
+						})
 						.catch(() => undefined)
 				);
 			}

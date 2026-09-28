@@ -1,4 +1,4 @@
-import { entuFetch } from '$lib/entu/request';
+import { CACHED_READ, entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyProfiles } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
@@ -27,12 +27,18 @@ export interface Work {
  * contract and the two probe ledgers it rests on.
  */
 export async function listWorks(cfg: EntuCfg, fetchImpl: typeof fetch = fetch): Promise<ListRead<Work>> {
+	// #434 — CACHED_READ: the works list is one of the three screens the issue
+	// names as readable offline (the library), and this is the reader behind it.
+	// The read cache is opt-in per reader (see request.ts's `EntuFetchOptions`);
+	// the rest of the library's reads get the flag in slice 4, with the "as of
+	// <time>" line that must appear on any screen showing a stored copy.
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=work&props=name,composer&limit=500',
 		cfg.token,
 		{},
-		fetchImpl
+		fetchImpl,
+		CACHED_READ
 	);
 	if (!res.ok) throw new Error(`listWorks failed: ${res.status}`);
 	const body = (await res.json()) as {
