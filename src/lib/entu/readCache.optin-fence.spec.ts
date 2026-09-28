@@ -104,7 +104,14 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		// Slice 3: the event page's reader and the profile read under its
 		// conductor line — both shared (post-write refresh, profile page).
 		'src/lib/events/eventDetail.ts',
-		'src/lib/profile/profileData.ts'
+		'src/lib/profile/profileData.ts',
+		// Slice 3 review round, finding 1: the real-names overlay under the same
+		// conductor line. Shared three ways over (the /roster rows, the library's
+		// borrower names, this header) and — with `roster_show_real_names` ON —
+		// the one read whose absence offline changes a conductor's NAME rather
+		// than merely dropping a decoration.
+		'src/lib/roster/rosterData.ts',
+		'src/lib/collective/rosterNames.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
@@ -120,6 +127,25 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 		// argument, which is what makes the write paths' default hold.
 		expect(src('src/lib/seasons/entuSeasons.ts')).toContain(
 			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
+		);
+	});
+
+	it('the real-names overlay threads its own opts all the way down', () => {
+		// Slice 3 review round, finding 1 — same reasoning as listSeasons above:
+		// the toggle's value read is addressed BY the database entity id, and the
+		// records read is what carries the names, so one un-threaded link in the
+		// chain is the whole overlay lost offline.
+		expect(src('src/lib/collective/rosterNames.ts')).toContain(
+			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/roster/rosterData.ts')).toContain(
+			'readRosterNamesSetting(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/roster/rosterData.ts')).toContain(
+			'listRecordNamesByPerson(cfg, fetchImpl, opts)'
+		);
+		expect(src('src/lib/events/eventDetail.ts')).toContain(
+			'resolveRealNameByPerson(cfg, fetchImpl, opts)'
 		);
 	});
 });
@@ -202,3 +228,4 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 
 // (*MVOX:Josquin* — #434 slice 2 review round, finding 2)
 // (*MVOX:Tallis* — #434 slice 3 RED: event page entries)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

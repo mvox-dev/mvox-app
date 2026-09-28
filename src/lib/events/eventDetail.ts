@@ -210,18 +210,29 @@ function domainOrPublicName(profiles: MyProfile[]): string {
  *
  * #434 slice 3/6 — SHARED reader (also the page's post-write refresh), so it
  * hard-wires no cache flag (slice 2 review round, finding 2). `opts` threads
- * into every read this function makes — the event entity, the parent season
- * (`fetchSeason`), the parent series (`fetchSeries`) and each conductor's
- * profile read (`listMyProfiles`) — so a caller that opts in gets the WHOLE
- * header served offline, never a header with its conductor or its
- * series-inherited fields missing. The real-names overlay
- * (`resolveRealNameByPerson`, below) stays OUT of this: it already degrades to
- * the profile name on any failure (rosterData.ts), so it needs no cache of its
- * own — see `eventPageData.spec.ts`'s header for why that overlay is not part
- * of this slice. `loadEventPageDetail` (eventPageData.ts) is the one caller
- * that passes `CACHED_READ`; the page's own post-write refresh calls this
- * function directly, with nothing — a cache-served header there would paint a
- * stored copy as the result of a write that just happened.
+ * into EVERY read this function makes — the event entity, the parent season
+ * (`fetchSeason`), the parent series (`fetchSeries`), each conductor's profile
+ * read (`listMyProfiles`) AND the real-names overlay
+ * (`resolveRealNameByPerson`, rosterData.ts: its toggle read, the
+ * `resolveDatabaseEntityId` underneath it and its records read) — so a caller
+ * that opts in gets the WHOLE header served offline, never a header with its
+ * conductor or its series-inherited fields missing.
+ *
+ * The overlay is threaded, not excluded (slice 3 review round, finding 1),
+ * BECAUSE it degrades. Its degrade is to the profile name, and with
+ * `roster_show_real_names` ON that is a DIFFERENT name from the one the online
+ * header showed — and for a conductor named only by her `admin_member_record`
+ * (private profile, or none at all) it is the empty string, which the
+ * `conductorNames` filter drops: an offline header with no conductor where the
+ * online one named her. Exactly what the paragraph above promises not to happen.
+ *
+ * Two entry points pass a flag, both in eventPageData.ts: `loadEventPageDetail`
+ * (the mounted screen's load) passes `CACHED_READ` — store and serve, age noted
+ * on `servedFromCache` for the page's "as of <time>" line — and
+ * `refreshEventPageDetail` passes `CACHED_READ_STORE_ONLY`, used by the page's
+ * own post-write refresh and by the agenda's next-event prefetch: it stores, so
+ * the stored header stays level with the write that just landed, and never
+ * serves, so a read the screen is not rendering can never age-stamp it.
  */
 export async function loadEventDetail(
 	cfg: EntuCfg,
@@ -348,10 +359,16 @@ export async function loadEventDetail(
 	// on its own (never to a hole or a raw id), and a shared read would couple
 	// three independently-mounted regions to one failure. Revisit only with a
 	// case where the split is visible to a user in practice.
+	//
+	// #434 slice 3 review round, finding 1 — `opts` reaches the overlay too. The
+	// degrade above ("the profile name is the fallback, never a hole") is a
+	// statement about an ONLINE failure; offline, with the toggle on, it would
+	// rename every conductor the header had just been showing by her record name,
+	// and DROP any conductor who has no domain/public profile name at all.
 	const recordNameByPerson =
 		conductorIds.length === 0
 			? new Map<string, string>()
-			: (await resolveRealNameByPerson(cfg, fetchImpl)).byPerson;
+			: (await resolveRealNameByPerson(cfg, fetchImpl, opts)).byPerson;
 	const conductorNames = conductorIds
 		.map((id) => {
 			const recordName = recordNameByPerson.get(id)?.trim();
@@ -506,3 +523,4 @@ async function fetchSeries(
 // (*MVOX:Byrd* — #102 TE.2 review F1: ownerIds alongside editorIds — owner-or-editor)
 // (*MVOX:Palestrina* — #103 TE.3 review round 2, F1/F2: seasonId + season rights
 //  on the one read that already happened; loadEventSeasonId deleted)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

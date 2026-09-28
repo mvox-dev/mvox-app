@@ -176,15 +176,15 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 	// copies and stamp their age onto the agenda — over rows that all came back
 	// live, for data this page never renders.
 	//
-	// KEEP THIS FIRST in the file. It is the only test here that asserts the
-	// as-of line is ABSENT after a load in which SOMETHING rejected, and
-	// `servedFromCache` is module-global: the offline loads below leave read
-	// chains in flight that outlive their own test (an unmounted page's
-	// retention sweep and prefetch keep resolving), and a `readCacheGet` already
-	// awaiting the previous test's IDBFactory when `beforeEach` swaps in a fresh
-	// one still serves from the OLD database — landing a foreign as-of on
-	// whatever test is running by then. Observed, not theorised: with this test
-	// placed last it failed on a `listSeasons`/`listEvents` serve it never made.
+	// Position-independent (slice 3 review round, finding 2). This test used to
+	// carry a "KEEP THIS FIRST" note: the offline loads below leave read chains in
+	// flight that outlive their own test (an unmounted page's retention sweep and
+	// prefetch keep resolving), and a `readCacheGet` already awaiting the previous
+	// test's IDBFactory when `beforeEach` swaps in a fresh one still served from
+	// the OLD database — landing a foreign as-of on whatever test was running by
+	// then. That leak is now closed at the seam instead: `setReadCacheFactory`
+	// bumps a generation counter, and a read whose generation has moved serves
+	// nothing and stamps nothing (readCache.ts's `factoryGeneration`).
 	it('the next-event detail prefetch rejecting does NOT age-stamp a fully live agenda', async () => {
 		// Warm the store online, so the prefetch's own reads have a stored copy
 		// to be tempted by.
@@ -350,3 +350,4 @@ describe('#434 slice 2 — the as-of copy exists in all four locales', () => {
 });
 
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)

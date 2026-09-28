@@ -92,6 +92,51 @@ function online() {
 	});
 }
 
+/**
+ * Slice 3 review round, finding 1 — the same event, but the collective has
+ * `roster_show_real_names` ON and its conductor is named ONLY by her
+ * `admin_member_record`: no profile entity at all, so there is no
+ * domain-or-public profile name to degrade to. Online the header names her; the
+ * overlay losing its reads offline would not rename her, it would DROP her (the
+ * `conductorNames` filter removes the empty string).
+ */
+function onlineRealNames() {
+	return vi.fn(async (input: RequestInfo | URL) => {
+		const url = urlOf(input);
+		if (url.includes('_type.string=database')) {
+			return json({ count: 1, entities: [{ _id: 'db-1' }] });
+		}
+		if (url.includes('entity/db-1?')) {
+			return json({
+				entity: { _id: 'db-1', roster_show_real_names: [{ _id: 'v-1', boolean: true }] }
+			});
+		}
+		if (url.includes('_type.string=admin_member_record')) {
+			return json({
+				count: 1,
+				entities: [
+					{ _id: 'rec-1', person: [{ reference: 'p-cond' }], name: [{ string: 'Anna Päts' }] }
+				]
+			});
+		}
+		// Her profile read answers "no profile", so `domainOrPublicName` is ''.
+		if (url.includes('_type.string=profile') && url.includes('_parent.reference=p-cond')) {
+			return json({ count: 0, entities: [] });
+		}
+		return online()(input);
+	});
+}
+
+/**
+ * Every read ONE `loadEventPageDetail` stores against the `online()` fixture —
+ * exact, because the number is knowable and it is the interesting one (finding
+ * 4): the event entity, its parent season, its parent series, the conductor's
+ * profile read, and the real-names overlay's `resolveDatabaseEntityId` (which
+ * this fixture answers with an empty list — a 200, so it is stored — leaving the
+ * overlay to degrade before it reaches its toggle or records read).
+ */
+const CACHED_READS_PER_LOAD = 5;
+
 function offline() {
 	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
 }
@@ -133,9 +178,11 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 	it('stores the event, season, series and conductor-profile reads online', async () => {
 		await loadEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
 		await flushReadCache();
-		// event + season + series + one conductor profile read. (The real-names
-		// overlay reads are not part of this slice; they degrade to profile names.)
-		expect(await readCacheEntryCount()).toBeGreaterThanOrEqual(4);
+		// EXACT, not a lower bound (slice 3 review round, finding 4): a lenient
+		// `>= 4` passes just as happily when a read that must NOT be cached starts
+		// being one, which is the single thing this assertion is here to catch.
+		// Any new cached read has to be accounted for here on purpose.
+		expect(await readCacheEntryCount()).toBe(CACHED_READS_PER_LOAD);
 	});
 
 	it('offline, returns the SAME detail it returned online, and marks it served from cache', async () => {
@@ -150,6 +197,29 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 		expect(stored).toEqual(live);
 		expect(get(servedFromCache)).not.toBeNull();
 	});
+
+	// Slice 3 review round, finding 1 — the real-names overlay is threaded, not
+	// excluded. With the toggle ON its degrade is not "lose a decoration", it is
+	// "show a different name", and for a conductor with no domain/public profile
+	// name it is "show no conductor at all".
+	it('offline, a conductor named only by her admin_member_record keeps that name', async () => {
+		const live = await loadEventPageDetail(
+			CFG,
+			'ev-1',
+			onlineRealNames() as unknown as typeof fetch
+		);
+		expect(live.conductorNames).toEqual(['Anna Päts']);
+		await flushReadCache();
+		resetServedFromCache();
+
+		const stored = await loadEventPageDetail(CFG, 'ev-1', offline() as unknown as typeof fetch);
+		// Not merely non-empty: the SAME name. An un-threaded overlay gives [] here
+		// (she has no profile name to fall back to) — an offline header with no
+		// conductor where the online one named her.
+		expect(stored.conductorNames).toEqual(live.conductorNames);
+		expect(stored).toEqual(live);
+		expect(get(servedFromCache)).not.toBeNull();
+	});
 });
 
 // #434 slice 3 review round, findings 1 and 2.
@@ -158,7 +228,10 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 		const detail = await refreshEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
 		expect(detail.name).toBe('Tuesday rehearsal');
 		await flushReadCache();
-		expect(await readCacheEntryCount()).toBeGreaterThanOrEqual(4);
+		// Exactly what `loadEventPageDetail` stores — same reads, same count
+		// (finding 4): "exactly as loadEventPageDetail does" is the claim, and a
+		// lower bound cannot make it.
+		expect(await readCacheEntryCount()).toBe(CACHED_READS_PER_LOAD);
 	});
 
 	it('REJECTS offline even with a stored copy, and leaves servedFromCache null', async () => {
@@ -231,3 +304,4 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 
 // (*MVOX:Tallis*)
 // (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
+// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
