@@ -53,7 +53,7 @@ import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
-import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
+import { flushReadCache, readCacheGet, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { tallinnHHMM } from '$lib/preferences/timeFormat';
 
 const DB = 'sampledb';
@@ -336,6 +336,51 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		]) {
 			expect(source.includes(needle), needle).toBe(true);
 		}
+	});
+});
+
+// #434 slice 5 review round 3, F1 — the agenda's OWN works read is the one that
+// stores the works fan-out (store-only, so this page's as-of claim is untouched).
+// The review round's separate next-event warm-up re-fetched the same four
+// collections seconds later — three of them collective-wide limit=500 lists —
+// on every agenda load.
+describe('#434 slice 5 — one works read per agenda load, and it stores', () => {
+	const WORKS_READ = /_type\.string=(work|edition|copy|program_item|repertoire_item)(&|$)/;
+
+	it('each works URL is fetched exactly once, the reads are stored, and nothing is "as of"', async () => {
+		const live = onlineEntu();
+		vi.stubGlobal('fetch', live);
+		const { container } = await coldStart();
+		await expectAgendaRows(container);
+		// The next-event detail prefetch fires after the works read settles —
+		// once it has run, any warm-up beside it has run too.
+		await waitFor(() => {
+			const urls = live.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL));
+			expect(urls.some((u) => u.includes(`entity/${EVENTS[0].id}?`)), 'prefetch ran').toBe(true);
+		});
+		await flushReadCache();
+
+		const counts = new Map<string, number>();
+		for (const c of live.mock.calls) {
+			const url = urlOf(c[0] as RequestInfo | URL);
+			if (WORKS_READ.test(url)) counts.set(url, (counts.get(url) ?? 0) + 1);
+		}
+		const kinds = [...counts.keys()].map((u) => u.match(WORKS_READ)![1]);
+		for (const kind of ['work', 'edition', 'copy', 'program_item']) {
+			expect(kinds, `the ${kind} read ran`).toContain(kind);
+		}
+		expect(
+			[...counts.entries()].filter(([, n]) => n !== 1),
+			'a works URL fetched more than once'
+		).toEqual([]);
+
+		// Stored: the agenda's own read keeps the event page's works section
+		// restorable offline.
+		const base = `https://api.entu-test.invalid/${DB}/`;
+		for (const url of counts.keys()) {
+			expect(await readCacheGet(DB, PERSON, url.slice(base.length)), `stored: ${url}`).toBeDefined();
+		}
+		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
 	});
 });
 

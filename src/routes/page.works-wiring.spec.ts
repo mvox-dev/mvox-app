@@ -323,7 +323,8 @@ describe('+page — Works element wiring (#90 TR.2)', () => {
 			['ev-1', 'ev-0'],
 			'season-1',
 			expect.anything(),
-			{ includeInactive: false }
+			// #434 slice 5 review round 3 — the agenda's own works read stores.
+			{ includeInactive: false, cache: 'store' }
 		);
 	});
 
@@ -1074,20 +1075,16 @@ describe('#410 — the pressure sweep runs at app open, before the prefetch, sco
 			expect((call[0] as { token: string }).token).toBe('jwt-abc');
 		}
 		// ...and the selected db's works fan-out (listWorks + listAllEditions +
-		// listAllCopies + resolveEventWorksBatch) is the PAGE's own, twice over and
-		// never the retention build's — it reused those rows rather than paying for
-		// them again. The two are told apart by their options bag, not their ids
-		// (both cover ev-1 here): the page's own load is UNCACHED, and #434 slice 5
-		// review round finding 1's next-event warm-up is STORE-ONLY — the works half
-		// of the prefetch that makes tonight's part reachable from the event page
-		// offline, beside the detail prefetch slice 3 added.
+		// listAllCopies + resolveEventWorksBatch) is the PAGE's own, ONCE — never
+		// the retention build's (it reused those rows rather than paying for them
+		// again), and never a second warm-up read beside it (#434 slice 5 review
+		// round 3, F1). That one read is STORE-ONLY: it stores the fan-out the
+		// event page's works section restores offline, and never serves, so the
+		// agenda's own as-of claim is untouched.
 		const sampleWorkCalls = loadWorksByEventIdMock.mock.calls.filter(
 			(c) => (c[0] as { db: string }).db === 'sampledb'
 		);
-		expect(sampleWorkCalls.map((c) => c[4])).toEqual([
-			{ includeInactive: false },
-			{ cache: 'store' }
-		]);
+		expect(sampleWorkCalls.map((c) => c[4])).toEqual([{ includeInactive: false, cache: 'store' }]);
 		// The OTHER collective's works read is agendaItems[0] ONLY: ev-c1,
 		// never ev-c2, under crede's own season id.
 		const credeWorkCalls = loadWorksByEventIdMock.mock.calls.filter(

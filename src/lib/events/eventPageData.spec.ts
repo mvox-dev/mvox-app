@@ -496,12 +496,16 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		expect(stored['ev-1']?.map((r) => r.id)).toEqual(['pi-1', 'pi-2']);
 	});
 
-	it('the agenda wires a works warm-up beside its next-event detail prefetch', () => {
+	// Slice 5 review round 3, F1 — the agenda's OWN works reads store; there is
+	// no separate next-event warm-up beside them.
+	it("the agenda's own works reads go through the store-only entry point, with no separate warm-up", () => {
 		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
-		expect(source).toContain('refreshEventPageWorkRows(cfg, [nextEventId], currentSeasonId, fetch)');
+		expect(source).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
+		expect(source).not.toContain('refreshEventPageWorkRows(cfg, [nextEventId]');
 		// Store-only, never the serving entry point: `servedFromCache` on this page
-		// is the AGENDA's own as-of claim.
+		// is the AGENDA's own as-of claim. And not the plain shared reader either.
 		expect(source).not.toContain('loadEventPageWorkRows(');
+		expect(source).not.toMatch(/loadWorksByEventId\(/);
 	});
 
 	it('the event page wires BOTH its works reads through eventPageData, not the shared reader', () => {

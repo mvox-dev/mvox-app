@@ -18,8 +18,8 @@
 // #434 slice 5 puts the SAME pair over this screen's other read, the works
 // section (`loadWorksByEventId`, shared with the agenda and this page's own
 // post-write refresh): `loadEventPageWorkRows` (store and serve, the mounted
-// screen) and `refreshEventPageWorkRows` (store only — the agenda's next-event
-// warm-up and the post-write re-read).
+// screen) and `refreshEventPageWorkRows` (store only — the agenda's own works
+// reads, and the post-write re-reads on both pages).
 import { CACHED_READ, CACHED_READ_STORE_ONLY } from '$lib/entu/fetchOptions';
 import { loadEventDetail, type EventDetail } from './eventDetail';
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
@@ -100,39 +100,29 @@ export async function loadEventPageWorkRows(
 
 /**
  * The works read STORED but never SERVED — `refreshEventPageDetail`'s twin, one
- * layer down, and for the same two callers (#434 slice 5 review round, findings
- * 1 and 2):
- *   - the agenda's next-event WARM-UP (`prefetchNextEventPartsAfterSettle`,
- *     `src/routes/+page.svelte`). Slice 3 warmed only that event's HEADER;
- *     #409 downloads that event's part BYTES. Without this the works read had
- *     no warm-up at all, so offline the event page restored its header, its
- *     works read rejected, and `loadEventPageWorkRows`'s `.catch` left an
- *     EMPTY repertoire section — no part row, no part link, and the file on the
- *     device reachable only from /downloads. That is the slice's own Done-when
- *     failing in exactly the case #409 creates.
- *   - the event page's post-write re-read (`refreshWorks`). Plain
+ * layer down. Callers:
+ *   - the agenda's OWN works reads (`loadWorksAndManagement`,
+ *     `upgradeRepertoireManagement`, `src/routes/+page.svelte` — #434 slice 5
+ *     review round 3, F1). The agenda already reads the works fan-out for every
+ *     event on it, tonight's included; storing THAT read is what lets the event
+ *     page's works section, and the part link a held file's row carries, restore
+ *     offline — without a second warm-up read of the same URLs beside it. The
+ *     work/edition/copy lists carry no per-event params and `program_item` is
+ *     `_parent.reference=<eventId>`, so the keys are the event page's own;
+ *     `includeInactive` filters client-side and changes no URL. The one key that
+ *     can differ is the season-repertoire fallback, read under the agenda's
+ *     CURRENT season.
+ *   - the post-write re-reads on both pages (the agenda's
+ *     `refreshWorksAfterWrite`, the event page's `refreshWorks`). Plain
  *     `loadWorksByEventId` neither serves NOR stores, so every programme write
- *     left the stored copy behind the write that just landed: offline she then
- *     saw the pre-write repertoire under an "as of" from before it, and a piece
- *     added tonight carried no part link. Store-only IS the live answer — the
- *     serve half is what a post-write read must not have — plus the stored copy
- *     kept level with the write.
+ *     would leave the stored copy behind the write that just landed. Store-only
+ *     IS the live answer, plus the stored copy kept level with the write.
  *
- * Store-only, never `loadEventPageWorkRows`, for both: `servedFromCache` is ONE
- * store, read by whichever screen is mounted. On the agenda it is the AGENDA's
- * own as-of claim, so a serving warm-up would paint an older time over rows that
- * came back live; on the event page a serving post-write read could hand back a
- * stored pre-write row set as if it were the write's result.
- *
- * The keys line up with `loadEventPageWorkRows`'s exactly, which is what makes
- * the warm-up useful: the work/edition/copy reads carry no per-event params, and
- * `program_item` is `_parent.reference=<eventId>` — the same URL the event page
- * requests. `includeInactive` filters client-side (repertoireData.ts) and
- * changes no URL, so an editor's and a member's reads share keys. The ONE key
- * that can differ is the season-repertoire fallback: the agenda knows only its
- * CURRENT season id, and `agendaItems[0]` may belong to a later one — then the
- * fallback read is warmed under the agenda's own season, the same one the
- * agenda row itself was built from.
+ * Store-only, never `loadEventPageWorkRows`, for all of them: `servedFromCache`
+ * is ONE store, read by whichever screen is mounted. On the agenda it is the
+ * AGENDA's own as-of claim, and offline these reads reject exactly as the
+ * uncached ones did; on the event page a serving post-write read could hand back
+ * a stored pre-write row set as if it were the write's result.
  */
 export async function refreshEventPageWorkRows(
 	cfg: EntuCfg,

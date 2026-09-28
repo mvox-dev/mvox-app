@@ -383,6 +383,17 @@ describe('#434 slice 5 — the part link message keys', () => {
 		}
 	});
 
+	// Slice 5 review round 3, F2 — WCAG 2.5.3 Label in Name: the visible text
+	// must sit inside the accessible name, or a voice-control user saying
+	// "click Open part" matches nothing.
+	it('label in name: the visible text is inside the aria label, in every locale', () => {
+		for (const locale of locales) {
+			const visible = (messages(locale)['event_part_link'] as string).toLowerCase();
+			const name = (messages(locale)['event_part_link_aria_label'] as string).toLowerCase();
+			expect(name, locale).toContain(visible);
+		}
+	});
+
 	it('et/lv/uk are translated, not copies of the English aria label', () => {
 		const en = messages('en')['event_part_link_aria_label'];
 		for (const locale of ['et', 'lv', 'uk'] as const) {

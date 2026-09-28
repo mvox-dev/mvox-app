@@ -32,7 +32,9 @@
 	// part bytes (below): the event page's own STORE-ONLY entry point. Never
 	// `loadEventPageDetail` here (slice 3 review round, finding 1) — a
 	// cache-SERVING background read writes `servedFromCache`, which is this
-	// page's own staleness claim.
+	// page's own staleness claim. `refreshEventPageWorkRows` is the same
+	// store-only mode for this page's OWN works reads (#434 slice 5 review
+	// round 3): they store the works fan-out the event page restores offline.
 	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
@@ -67,7 +69,7 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
-	import { loadWorksByEventId, collectSources, buildWorkRows } from '$lib/repertoire/workRows';
+	import { collectSources, buildWorkRows } from '$lib/repertoire/workRows';
 	// #262 — the agenda's compact schedule-times line: the SAME bulk-read
 	// producer the event-detail page uses, mirroring `loadWorksByEventId`'s own
 	// seam (one GET per visible event id, upcoming AND recent — no per-row
@@ -1957,7 +1959,8 @@
 		// owns the flag from here on, and must both raise it (the rows are being
 		// replaced under the upgraded rights) and clear it on either outcome.
 		worksRowsLoading = true;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, { includeInactive: true })
+		// #434 slice 5 review round 3, F1 — store-only: see loadWorksAndManagement.
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, { includeInactive: true })
 			.then((byEvent) => {
 				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
 				worksByEventId = mergePendingRows(byEvent);
@@ -2012,7 +2015,17 @@
 		// the raise sits next to the read that owns it and survives any future
 		// caller that reaches this function without the reset.
 		worksRowsLoading = true;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+		// #434 slice 5 review round 3, F1 — the agenda's OWN works read is the one
+		// that STORES the works fan-out, so the event page's works section (and the
+		// part link a held file's row carries) restores offline for every event on
+		// this agenda — tonight's included, the one #409 downloads parts for. The
+		// work/edition/copy lists carry no per-event params and `program_item` is
+		// per event, so the keys are the event page's own. STORE-ONLY, never
+		// serving: `servedFromCache` is this page's own as-of claim, and offline
+		// this read rejects into the `.catch` below exactly as before. No second
+		// warm-up read beside it (the review round's re-fetched the same four
+		// collections seconds later, on every agenda load).
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
@@ -2119,28 +2132,6 @@
 		if (nextEventId) {
 			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
 				console.error('agenda: next-event detail prefetch failed', e);
-			});
-			// #434 slice 5 review round, finding 1 — the same warm-up for that
-			// event's WORKS read, and it is what makes the part bytes below
-			// reachable. #409 downloads the next event's part while she is on this
-			// page; the event page's repertoire section is the only screen that
-			// links to it from an event. Without this the works read had no
-			// warm-up at all: offline the event page restored its header, its works
-			// read rejected, and its `.catch` showed an EMPTY repertoire section —
-			// the part on the device, and /downloads the only door left to it.
-			//
-			// STORE-ONLY, for the same reason as the detail prefetch above, and the
-			// same cache keys as the event page's own `loadEventPageWorkRows`
-			// (eventPageData.ts documents the one that can differ, the season
-			// fallback). `currentSeasonId` is the season the agenda's OWN works
-			// read used for this row, so warming under it keeps the two level.
-			// Fire-and-forget: nothing on this page renders it, so no `thisRequest`
-			// guard and no state write — only the console line on failure. No
-			// `includeInactive` either: it filters the resolved rows client-side and
-			// changes no URL, so it cannot change what this warm-up STORES, and the
-			// rows themselves are discarded.
-			refreshEventPageWorkRows(cfg, [nextEventId], currentSeasonId, fetch).catch((e) => {
-				console.error('agenda: next-event works prefetch failed', e);
 			});
 		}
 
@@ -2292,7 +2283,9 @@
 		const seasonId = currentSeasonId;
 		const thisRequest = requestId;
 		const thisWorksLoad = ++worksLoadId;
-		loadWorksByEventId(cfg, eventIds, seasonId, fetch, {
+		// #434 slice 5 review round 3 — store-only, like the load it re-reads: the
+		// live answer, and the stored copy kept level with the write that landed.
+		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
 			includeInactive: seasonManageRights === 'editor'
 		})
 			.then((byEvent) => {
