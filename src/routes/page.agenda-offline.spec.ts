@@ -79,6 +79,10 @@ function json(body: unknown): Response {
 	});
 }
 
+function urlOf(input: RequestInfo | URL): string {
+	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
 /** The online Entu, answering the agenda's reads by path; everything else empty. */
 function onlineEntu() {
 	return vi.fn(async (input: RequestInfo | URL) => {
@@ -165,6 +169,67 @@ afterEach(() => {
 });
 
 describe('#434 slice 2 — the agenda renders offline from the read cache', () => {
+	// #434 slice 3 review round, finding 1 — the agenda's "as of" line is its own
+	// claim about its own rows, and `servedFromCache` is ONE store. Slice 3 added
+	// a fire-and-forget prefetch of the NEXT EVENT's detail reads to this page;
+	// cache-backed, on a flapping connection those reads reject, serve stored
+	// copies and stamp their age onto the agenda — over rows that all came back
+	// live, for data this page never renders.
+	//
+	// KEEP THIS FIRST in the file. It is the only test here that asserts the
+	// as-of line is ABSENT after a load in which SOMETHING rejected, and
+	// `servedFromCache` is module-global: the offline loads below leave read
+	// chains in flight that outlive their own test (an unmounted page's
+	// retention sweep and prefetch keep resolving), and a `readCacheGet` already
+	// awaiting the previous test's IDBFactory when `beforeEach` swaps in a fresh
+	// one still serves from the OLD database — landing a foreign as-of on
+	// whatever test is running by then. Observed, not theorised: with this test
+	// placed last it failed on a `listSeasons`/`listEvents` serve it never made.
+	it('the next-event detail prefetch rejecting does NOT age-stamp a fully live agenda', async () => {
+		// Warm the store online, so the prefetch's own reads have a stored copy
+		// to be tempted by.
+		const firstOnline = onlineEntu();
+		vi.stubGlobal('fetch', firstOnline);
+		const first = await coldStart();
+		await expectAgendaRows(first.container);
+		await waitFor(() => {
+			const urls = firstOnline.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL));
+			expect(urls.some((u) => u.includes(`entity/${EVENTS[0].id}?`)), 'prefetch ran').toBe(true);
+		});
+		await flushReadCache();
+		cleanup();
+
+		// A flapping connection: the AGENDA's own reads all succeed; only the
+		// next event's detail read rejects.
+		vi.setSystemTime(LATER_SAME_DAY);
+		const live = onlineEntu();
+		let detailRejections = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((input: RequestInfo | URL) => {
+				if (urlOf(input).includes(`entity/${EVENTS[0].id}?`)) {
+					detailRejections += 1;
+					return Promise.reject(new TypeError('Failed to fetch'));
+				}
+				// `init` is deliberately dropped: `onlineEntu` routes on the URL
+				// alone, exactly as the other tests here use it.
+				return live(input);
+			})
+		);
+
+		const { container } = await coldStart();
+		await expectAgendaRows(container);
+		await waitFor(() => {
+			expect(detailRejections, 'the prefetch read rejected').toBeGreaterThan(0);
+		});
+		await flushReadCache();
+
+		// Every row on screen is live, so there is nothing to be "as of".
+		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
+		// And the offline door gated on the same store stays shut.
+		expect(container.querySelector('[data-testid="agenda-downloads-link-cached"]')).toBeNull();
+	});
+
 	it('an online load shows the agenda rows and NO as-of line', async () => {
 		vi.stubGlobal('fetch', onlineEntu());
 		const { container } = await coldStart();

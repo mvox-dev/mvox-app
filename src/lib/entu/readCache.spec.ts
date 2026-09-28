@@ -72,7 +72,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // Severs the $env/dynamic/public chain, same as request.auth-expired.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-import { CACHED_READ, entuFetch } from './request';
+import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from './request';
 import {
 	READ_CACHE_DB_NAME,
 	READ_CACHE_MAX_BYTES,
@@ -214,6 +214,71 @@ describe('entuFetch GET — online stores the read', () => {
 		expect(res.status).toBe(500);
 		await flushReadCache();
 		expect(await readCacheGet(DB, PERSON_A, PATH)).toBeUndefined();
+	});
+});
+
+// #434 slice 3 review round, findings 1 and 2 — the THIRD mode: store, never
+// serve, never touch `servedFromCache`. What a read that is not what the
+// mounted screen renders gets: a background warm-up, or a post-write re-read.
+describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () => {
+	it('stores the body online, exactly as CACHED_READ does', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-09-28T10:15:00.000Z'));
+
+		const res = await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ_STORE_ONLY);
+		expect(await res.json()).toEqual(BODY);
+		await flushReadCache();
+
+		expect(await readCacheGet(DB, PERSON_A, PATH)).toEqual({
+			body: BODY,
+			readAt: '2026-09-28T10:15:00.000Z',
+			bytes: BODY_BYTES
+		});
+	});
+
+	it('offline it REJECTS with the original error even though a stored copy exists', async () => {
+		await storeOnline(DB, PATH);
+		const err = new TypeError('Failed to fetch');
+		await expect(
+			entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ_STORE_ONLY)
+		).rejects.toBe(err);
+	});
+
+	it('offline it leaves servedFromCache alone — a background read cannot age-stamp a live screen', async () => {
+		// The mounted screen's own read came back live, so the age line is absent.
+		await storeOnline(DB, 'entity/screens-own-read');
+		await storeOnline(DB, PATH);
+		resetServedFromCache();
+		expect(get(servedFromCache)).toBeNull();
+
+		await expect(
+			entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ_STORE_ONLY)
+		).rejects.toThrow('Failed to fetch');
+
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('the same key stays SERVABLE to a CACHED_READ reader — only this call declines the copy', async () => {
+		await entuFetch(DB, PATH, TOKEN, {}, online(), CACHED_READ_STORE_ONLY);
+		await flushReadCache();
+		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(await served.json()).toEqual(BODY);
+		expect(get(servedFromCache)).not.toBeNull();
+	});
+
+	it('a store-only re-read moves the stored copy forward (a landed write stops drifting out of the cache)', async () => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
+		await storeOnline(DB, PATH, { entities: [{ _id: 'ev-1', name: 'before the write' }] });
+
+		vi.setSystemTime(new Date('2026-09-28T10:05:00.000Z'));
+		const after = { entities: [{ _id: 'ev-1', name: 'after the write' }] };
+		await entuFetch(DB, PATH, TOKEN, {}, online(after), CACHED_READ_STORE_ONLY);
+		await flushReadCache();
+
+		// Offline, a SERVING reader of the same key now sees the post-write body.
+		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
+		expect(await served.json()).toEqual(after);
 	});
 });
 

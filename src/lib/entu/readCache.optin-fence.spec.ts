@@ -135,8 +135,10 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		'src/lib/collectives/discover.ts',
 		// Slice 2: the agenda's own entry point, the screen with the age line.
 		'src/lib/agenda/agendaData.ts',
-		// Slice 3: the event page's own entry point (also the agenda's
-		// next-event prefetch of that page's reads).
+		// Slice 3: the event page's own entry points — the mounted screen's
+		// cache-backed load AND the store-only twin the agenda's next-event
+		// prefetch and the page's post-write refresh use (slice 3 review round,
+		// findings 1 and 2).
 		'src/lib/events/eventPageData.ts'
 	].sort();
 
@@ -158,14 +160,32 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		return out;
 	}
 
-	/** Names the flag in an `import`/`export` statement — the only way a file can
-	 *  hold the binding and pass it to `entuFetch`. */
+	/** Names ANY of the flags in an `import`/`export` statement — the only way a
+	 *  file can hold the binding and pass it to `entuFetch`. */
 	function switchesTheCacheOn(source: string): boolean {
 		// ONE line: `[^;\n]*` must not run past the end of the statement, or an
 		// `export function ...` header would reach a CACHED_READ mentioned in a
 		// comment inside its body (libraryData.ts's "NO CACHED_READ here yet").
-		return /^[ \t]*(?:import|export)\b[^;\n]*\bCACHED_READ\b/m.test(source);
+		//
+		// No trailing `\b` (slice 3 review round): `_` is a word character, so
+		// `\bCACHED_READ\b` does NOT match `CACHED_READ_STORE_ONLY` — the fence
+		// would have let the store-only flag, and any later variant, spread
+		// unwatched. Storing without serving is a lesser claim than serving, but
+		// not a free one: a stored body is still a body a SERVING reader of the
+		// same key can hand back later (a signed `property/{id}` url, a stale
+		// `_id` a write is about to target), and it still spends the shared byte
+		// budget. Same fence, both flags.
+		return /^[ \t]*(?:import|export)\b[^;\n]*\bCACHED_READ/m.test(source);
 	}
+
+	it('the fence catches the store-only flag too, not just CACHED_READ', () => {
+		expect(switchesTheCacheOn("import { CACHED_READ_STORE_ONLY } from './fetchOptions';")).toBe(
+			true
+		);
+		expect(switchesTheCacheOn("import { CACHED_READ } from './fetchOptions';")).toBe(true);
+		// Prose is still not an opt-in.
+		expect(switchesTheCacheOn('// NO CACHED_READ_STORE_ONLY here yet, on purpose.')).toBe(false);
+	});
 
 	it('only the allowlisted files switch the read cache on', () => {
 		// Prose-only mentions (libraryData.ts saying why it stays OFF, and the

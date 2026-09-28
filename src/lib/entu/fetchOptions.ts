@@ -29,8 +29,20 @@ export interface EntuFetchOptions {
 	 * down; the flag is switched on at the call site that owns the screen with
 	 * the "as of <time>" line. The allowlist of files that may name
 	 * `CACHED_READ` at all is pinned in readCache.optin-fence.spec.ts.
+	 *
+	 * THREE modes, not two (#434 slice 3 review round, findings 1 and 2):
+	 *   - absent/`false` — no cache on the path at all.
+	 *   - `true` (`CACHED_READ`) — store online, SERVE the stored copy offline,
+	 *     and note its age on `servedFromCache` so the screen can say "as of".
+	 *     Only a read whose own screen carries that age line may ask for this.
+	 *   - `'store'` (`CACHED_READ_STORE_ONLY`) — store online, and offline
+	 *     simply REJECT: no serve, and nothing written to `servedFromCache`.
+	 *     For a read that is not what a screen is currently rendering: a
+	 *     background warm-up for a page the member has not opened yet, or a
+	 *     re-read that must show the live answer (a post-write refresh) while
+	 *     still keeping the stored copy level with the write that landed.
 	 */
-	cache?: boolean;
+	cache?: boolean | 'store';
 }
 
 /**
@@ -39,4 +51,25 @@ export interface EntuFetchOptions {
  */
 export const CACHED_READ: EntuFetchOptions = { cache: true };
 
+/**
+ * #434 slice 3 review round, findings 1 and 2 — store WITHOUT serving, and
+ * without ever touching `servedFromCache`.
+ *
+ * `CACHED_READ` conflates three things a background read must not have
+ * together: it stores, it serves a stored copy when the network rejects, AND it
+ * paints that copy's age onto the one global `servedFromCache` store the
+ * on-screen "as of <time>" line reads. A read that is NOT what the current
+ * screen renders — the agenda's next-event prefetch, a post-write re-read whose
+ * whole point is the live answer — therefore cannot be cache-backed at all
+ * without lying about the screen: on a flapping connection its own reads reject,
+ * serve stored copies, and stamp an older "as of" over rows that came back live.
+ *
+ * This flag is the other half: the online `put` happens exactly as with
+ * `CACHED_READ`, so the stored copy stays level with what was last read live;
+ * offline the original network rejection propagates untouched, and no
+ * background task can age-stamp a screen it is not rendering.
+ */
+export const CACHED_READ_STORE_ONLY: EntuFetchOptions = { cache: 'store' };
+
 // (*MVOX:Josquin* — #434 slice 2 review round, finding 2)
+// (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)

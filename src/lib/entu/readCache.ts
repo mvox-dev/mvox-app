@@ -86,6 +86,18 @@
 // Age is NOT a limit: the issue's own answer to a stale copy is "as of
 // <time>" on the screen, so an old entry is shown with its age, not dropped.
 //
+// STORING IS NOT SERVING (#434 slice 3 review round, findings 1 and 2). The
+// opt-in has THREE modes, not two: `{ cache: 'store' }`
+// (CACHED_READ_STORE_ONLY) stores exactly like `{ cache: true }` and skips the
+// serve half — offline it rethrows, and it never touches `servedFromCache`.
+// `servedFromCache` is ONE store, read by whichever screen is mounted, so any
+// read that is NOT what that screen is rendering must use this mode: a
+// background warm-up (the agenda's next-event detail prefetch) whose reads
+// reject on a flapping connection would otherwise paint an older "as of" over
+// agenda rows that all came back live, and a post-write re-read
+// (`refreshEventDetail`) that opts out of the cache entirely leaves the stored
+// copy behind the write that just landed.
+//
 // Offline = the underlying fetch call THROWS (a network rejection). A cached
 // entry for the same key is then served, with the ORIGINAL error rethrown when
 // there is none. A resolved response of any status (401, 500, ...) is not
@@ -511,13 +523,31 @@ function isGetMethod(init: RequestInit): boolean {
  *   served (via `onResolved`, as a synthesized 200 JSON response) and
  *   `servedFromCache` notes its readAt. With no cached entry, the ORIGINAL
  *   rejection propagates — `onResolved` never sees it.
+ *
+ * STORE-ONLY (`storeOnly`, from `{ cache: 'store' }` / CACHED_READ_STORE_ONLY —
+ * #434 slice 3 review round, findings 1 and 2). The store half above is
+ * unchanged; the SERVE half is skipped entirely — offline the original
+ * rejection propagates and `noteServedFromCache` is not called. Two reads need
+ * exactly that, and neither can use `{ cache: true }` without misinforming the
+ * viewer, because `servedFromCache` is ONE store shared by whatever screen is
+ * mounted:
+ *   - a background warm-up of a page she has not opened (the agenda's
+ *     next-event detail prefetch). Cache-backed, its reads rejecting on a
+ *     flapping connection would serve stored copies and stamp their age onto
+ *     the AGENDA's own "as of" line — over rows that came back live.
+ *   - a post-write re-read (the event page's `refreshEventDetail`). It must
+ *     show the live answer, never a stored copy of the pre-write header; but
+ *     declining the cache altogether leaves the stored copy behind the write
+ *     that just landed, so the member who edits and then goes offline is shown
+ *     her own superseded data.
  */
 export function readThroughGet(
 	db: string,
 	pathAndQuery: string,
 	init: RequestInit,
 	attemptFetch: () => Promise<Response>,
-	onResolved: (res: Response) => Response
+	onResolved: (res: Response) => Response,
+	storeOnly = false
 ): Promise<Response> {
 	if (!isGetMethod(init)) return attemptFetch().then(onResolved);
 
@@ -550,7 +580,10 @@ export function readThroughGet(
 			return onResolved(res);
 		},
 		(err) => {
-			if (!personId) throw err;
+			// store-only: there is nothing to do offline. The rejection is the
+			// answer, and `servedFromCache` stays exactly as the mounted screen's
+			// own reads left it.
+			if (storeOnly || !personId) throw err;
 			return readCacheGet(db, personId, pathAndQuery).then((cached) => {
 				if (!cached) throw err;
 				noteServedFromCache(cached.readAt);

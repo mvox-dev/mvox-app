@@ -28,8 +28,11 @@
 	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
 	// #434 slice 3/6 — the next event's Entu metadata, prefetched alongside its
-	// part bytes (below): the event page's own cache-backed entry point.
-	import { loadEventPageDetail } from '$lib/events/eventPageData';
+	// part bytes (below): the event page's own STORE-ONLY entry point. Never
+	// `loadEventPageDetail` here (slice 3 review round, finding 1) — a
+	// cache-SERVING background read writes `servedFromCache`, which is this
+	// page's own staleness claim.
+	import { refreshEventPageDetail } from '$lib/events/eventPageData';
 	// #410 — the SESSION-scoped retention set (root layout drives the build;
 	// this page only seeds the selected collective's already-loaded half and
 	// waits for the sweep before #409's prefetch). See $lib/files/retention.
@@ -2094,15 +2097,26 @@
 	 */
 	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
 		// #434 slice 3/6 — the next event's Entu METADATA (event/season/series/
-		// conductor-profile reads, via the event page's own cache-backed entry
+		// conductor-profile reads, via the event page's own STORE-ONLY entry
 		// point), fired UNCONDITIONALLY and ahead of the no-parts early return
 		// below: an event with no music attached yet is still an event she needs
 		// to find offline (time, place). This is a fire-and-forget prefetch, not
 		// a page load — no `status`/`detail` write, nothing for a stale
 		// `thisRequest` to guard; only the console line on failure.
+		//
+		// STORE-ONLY, never `loadEventPageDetail` (slice 3 review round, finding
+		// 1). `servedFromCache` is ONE store, and on THIS page it is the AGENDA's
+		// own staleness claim — the `agenda-as-of` line and the offline
+		// /downloads door below both read it, after `loadForSelected` has reset
+		// it. A cache-SERVING prefetch can only add to it, so on a flapping
+		// connection (the whole reason this epic exists) the agenda's own reads
+		// could all come back live while the prefetch's reject and serve stored
+		// copies — painting "As of <an older time>" over rows that are entirely
+		// fresh, for data this page never renders. Offline the prefetch has
+		// nothing to do anyway: it would only re-read what is already stored.
 		const nextEventId = agendaItems[0]?.id;
 		if (nextEventId) {
-			loadEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
+			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
 				console.error('agenda: next-event detail prefetch failed', e);
 			});
 		}

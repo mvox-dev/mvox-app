@@ -24,17 +24,20 @@
 	import { get } from 'svelte/store';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
-		loadEventDetail,
 		listEventLocations,
 		EventDetailLoadError,
 		type EventDetail,
 		type EventInheritedField
 	} from '$lib/events/eventDetail';
-	// #434 slice 3/6 — the page's own entry point (the cache-backed twin of
-	// `loadEventDetail`, agendaData.loadFullAgenda's role for this screen);
+	// #434 slice 3/6 — the page's own entry points over the shared
+	// `loadEventDetail` (agendaData.loadFullAgenda's role for this screen);
 	// `resetServedFromCache`/`servedFromCache` drive the "as of <time>" line,
 	// same contract as the agenda's (slice 2).
-	import { loadEventPageDetail } from '$lib/events/eventPageData';
+	//   - `loadEventPageDetail` — the mounted screen's load: store AND serve.
+	//   - `refreshEventPageDetail` — store only, for the post-write re-read
+	//     (slice 3 review round, finding 2): the live answer or nothing, and the
+	//     stored copy kept level with the write that just landed.
+	import { loadEventPageDetail, refreshEventPageDetail } from '$lib/events/eventPageData';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	// #304 — the series picker's write layer (reassign = atomic-overwrite POST,
 	// unassign = DELETE of the series `_parent` value id — see that module's
@@ -1759,12 +1762,22 @@
 	 *  callback on this page: a refresh that resolves after a collective
 	 *  switch must not repaint the view the viewer has since moved to. A
 	 *  FAILED refresh is a lesser problem than losing the confirmed write —
-	 *  `detail` is simply left as it was; the viewer can reload. */
+	 *  `detail` is simply left as it was; the viewer can reload.
+	 *
+	 *  #434 slice 3 review round, finding 2 — STORE-ONLY, not uncached. This
+	 *  read must never be SERVED from the cache (a stored pre-write header
+	 *  painted as the result of the write that just landed), but it must still
+	 *  STORE what it read: an uncached refresh leaves the read cache holding the
+	 *  pre-write header until the next full load of this event, so a member who
+	 *  reassigns a series and then goes offline is shown her own superseded
+	 *  merged name/duration/location/description. `refreshEventPageDetail` is
+	 *  exactly that pair — live answer or a rejection, and the stored copy moved
+	 *  forward on success. */
 	async function refreshEventDetail(evId: string, g: number): Promise<void> {
 		if (!selected) return;
 		try {
 			const cfg = { db: selected.db, token: getToken() ?? '' };
-			const refreshed = await loadEventDetail(cfg, evId);
+			const refreshed = await refreshEventPageDetail(cfg, evId);
 			if (g !== generation) return;
 			detail = refreshed;
 		} catch (err) {

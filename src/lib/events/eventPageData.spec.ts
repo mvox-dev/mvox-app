@@ -11,6 +11,12 @@
 //     entry point, = loadEventDetail(..., CACHED_READ): every read it makes
 //     (event, season, series, conductor profiles) is stored online and served
 //     offline, giving the SAME EventDetail back.
+//   - refreshEventPageDetail(cfg, eventId, fetchImpl = fetch) — slice 3 review
+//     round, findings 1 and 2: the same reads STORE-ONLY. Online it stores
+//     exactly what loadEventPageDetail would; offline it REJECTS and never
+//     touches `servedFromCache`. Used by the two reads that are not what a
+//     mounted screen is rendering — the agenda's next-event prefetch and this
+//     page's own post-write refresh.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +32,9 @@ import {
 } from '$lib/entu/readCache';
 import { get } from 'svelte/store';
 import { loadEventDetail } from './eventDetail';
-import { loadEventPageDetail } from './eventPageData';
+import { loadEventPageDetail, refreshEventPageDetail } from './eventPageData';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -144,4 +152,82 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 	});
 });
 
+// #434 slice 3 review round, findings 1 and 2.
+describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', () => {
+	it('stores every read online, exactly as loadEventPageDetail does', async () => {
+		const detail = await refreshEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
+		expect(detail.name).toBe('Tuesday rehearsal');
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBeGreaterThanOrEqual(4);
+	});
+
+	it('REJECTS offline even with a stored copy, and leaves servedFromCache null', async () => {
+		await loadEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBeGreaterThan(0);
+		resetServedFromCache();
+
+		await expect(
+			refreshEventPageDetail(CFG, 'ev-1', offline() as unknown as typeof fetch)
+		).rejects.toThrow('Failed to fetch');
+		// The whole point: a read that is not what the screen renders cannot put
+		// an "as of <time>" line on it.
+		expect(get(servedFromCache)).toBeNull();
+	});
+
+	it('a post-write refresh moves the STORED header forward, so a later offline visit shows the write', async () => {
+		// Before the write: no name of its own, so the header inherits nothing
+		// but the series duration/location.
+		const preWrite = online();
+		await loadEventPageDetail(CFG, 'ev-1', preWrite as unknown as typeof fetch);
+		await flushReadCache();
+
+		// The write landed; the post-write re-read sees the new name.
+		// `online()` routes on the URL alone, so no `init` is threaded here.
+		const postWrite = vi.fn(async (input: RequestInfo | URL) => {
+			const url = urlOf(input);
+			if (url.includes('entity/ev-1?')) {
+				const res = await online()(input);
+				const body = (await res.json()) as { entity: { event_name: { string: string }[] } };
+				body.entity.event_name = [{ string: 'Thursday rehearsal' }];
+				return json(body);
+			}
+			return online()(input);
+		});
+		const refreshed = await refreshEventPageDetail(
+			CFG,
+			'ev-1',
+			postWrite as unknown as typeof fetch
+		);
+		expect(refreshed.name).toBe('Thursday rehearsal');
+		await flushReadCache();
+
+		// Offline, the SCREEN's own reader now serves the post-write header — not
+		// the pre-write one the refresh used to leave behind.
+		const offlineDetail = await loadEventPageDetail(
+			CFG,
+			'ev-1',
+			offline() as unknown as typeof fetch
+		);
+		expect(offlineDetail.name).toBe('Thursday rehearsal');
+	});
+
+	it('the event page wires its post-write refresh through this function, not the serving one', () => {
+		const source = readFileSync(
+			resolve(process.cwd(), 'src/routes/event/[id]/+page.svelte'),
+			'utf-8'
+		);
+		expect(source).toContain('refreshEventPageDetail');
+		// The shared uncached reader is no longer called from the page at all.
+		expect(source).not.toMatch(/await loadEventDetail\(/);
+	});
+
+	it('the agenda wires its next-event prefetch through this function, not the serving one', () => {
+		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
+		expect(source).toContain('refreshEventPageDetail(cfg, nextEventId, fetch)');
+		expect(source).not.toContain('loadEventPageDetail(');
+	});
+});
+
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
