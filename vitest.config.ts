@@ -27,6 +27,10 @@ export default mergeConfig(
 			// specs spawn directly (e.g. node-import-guard.spec.ts's execFileSync),
 			// which sit outside the in-process fetch monkeypatch.
 			setupFiles: ['./src/lib/testing/networkGuard.setup.ts'],
+			// #504 — the default triggers include **/package.json/**, so any diff
+			// touching package.json turned `pnpm test:changed` into the full suite.
+			// setupFiles stay triggers regardless (vitest appends them).
+			forceRerunTriggers: [],
 			env: {
 				MVOX_TEST_NO_NETWORK: '1'
 			}

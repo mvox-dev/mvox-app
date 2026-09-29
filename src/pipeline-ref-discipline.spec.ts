@@ -47,6 +47,7 @@ import {
 	HALT_REASON_TIP,
 	HALT_REASON_WRONG_BRANCH
 } from './pipeline-ref-discipline-fence';
+import vitestConfig from '../vitest.config';
 
 const TEMPLATE_PATH = resolve(__dirname, '../.claude/workflows/tdd-slice-pipeline.js');
 
@@ -445,6 +446,14 @@ describe('#504: the iterating phases run a real related-spec selection, not a sw
 			fullSuiteLabels.sort(),
 			`expected the full suite ('${FULL_SUITE_CMD}') in exactly the INTEGRATION and REVIEW prompts — #504 done-when 2 caps a no-fix-round slice at two full runs, and done-when 3 needs those two to keep catching an unrelated break before merge; found: ${JSON.stringify(fullSuiteLabels)}`
 		).toEqual(["integration-", "review-"]);
+	});
+
+	// Checks the loaded config, not its text: a comment or a spread can fake the literal.
+	it('vitest.config sets forceRerunTriggers to [] — a package.json diff must not force the full suite', () => {
+		expect(
+			vitestConfig.test?.forceRerunTriggers,
+			"vitest's default forceRerunTriggers include **/package.json/**, so `pnpm test:changed` on any diff touching package.json reruns all 467 spec files and exits 0 as if it had selected"
+		).toEqual([]);
 	});
 });
 
