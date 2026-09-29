@@ -10,10 +10,11 @@ import { resolve } from 'node:path';
 
 const FILES = [
 	'src/routes/admin/+page.svelte',
-	'src/routes/+page.svelte',
 	'src/routes/event/[id]/+page.svelte',
 	'src/routes/library/+page.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
+	'src/lib/components/agenda/SeasonCreateForm.svelte',
+	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
 	'src/lib/components/profile/ProfileField.svelte'
@@ -173,9 +174,10 @@ describe('#361 — name-bearing sentences sit whole inside a RedactedText', () =
 // not-a-person token, per file (`row.name` is a schedule row here, a person elsewhere).
 const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
 	'src/routes/admin/+page.svelte': ['nameMarker.name'],
-	// a season (selected / manageable / delete confirm / edit field) or event series
-	'src/routes/+page.svelte': [
-		'selected.name',
+	// the selected collective
+	'src/routes/+page.svelte': ['selected.name'],
+	// a season (manageable / delete confirm / edit field) or event series
+	'src/lib/components/agenda/SeasonManagePanel.svelte': [
 		'ms.name',
 		'seasonManageDeleteName',
 		'seasonManageName',
