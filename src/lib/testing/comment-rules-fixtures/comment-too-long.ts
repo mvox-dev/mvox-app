@@ -1,0 +1,50 @@
+export const a0 = 0;
+export const a1 = 1;
+// one
+// two
+// three
+// four
+export const b0 = 0;
+export const b1 = 1;
+export const b2 = 2;
+export const b3 = 3;
+export const b4 = 4;
+export const b5 = 5;
+export const b6 = 6;
+export const b7 = 7;
+export const b8 = 8;
+export const b9 = 9;
+export const b10 = 10;
+export const b11 = 11;
+export const b12 = 12;
+export const b13 = 13;
+export const b14 = 14;
+export const b15 = 15;
+export const b16 = 16;
+export const b17 = 17;
+export const b18 = 18;
+export const b19 = 19;
+export const b20 = 20;
+export const b21 = 21;
+export const b22 = 22;
+export const b23 = 23;
+export const b24 = 24;
+export const b25 = 25;
+export const b26 = 26;
+export const b27 = 27;
+export const b28 = 28;
+export const b29 = 29;
+export const b30 = 30;
+export const b31 = 31;
+export const b32 = 32;
+export const b33 = 33;
+export const b34 = 34;
+export const b35 = 35;
+export const b36 = 36;
+export const b37 = 37;
+export const b38 = 38;
+export const b39 = 39;
+export const b40 = 40;
+export const b41 = 41;
+export const b42 = 42;
+export const b43 = 43;
