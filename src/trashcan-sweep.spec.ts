@@ -1,42 +1,6 @@
-// #237 — the red-trashcan sweep, made enforceable at the source level.
-//
-// Scanning real sources (rather than rendering) follows the
-// typography-scale.spec / ios-form-zoom.spec precedent: a call site nothing
-// mounts cannot hide a violation, and the check costs nothing at runtime.
-//
-// What lives here (the halves of #237 that are repo-wide invariants, not
-// per-route behavior — those are pinned in the route suites):
-//
-//   1. ONE DEFINITION (the issue's load-bearing half): the idle destructive
-//      treatment `hover:text-red-800` lives in EXACTLY one .svelte file —
-//      src/lib/components/DeleteTrigger.svelte. One colour change = one edit.
-//      This is also what FORCES the two pre-#237 TrashIcon sites
-//      (season-manage-delete-season from #236/#261, event-schedule-remove
-//      from #262) onto the shared unit: stated choice = MIGRATE, because
-//      leaving them would leave three definitions and the issue's "defined
-//      once" would be a fiction. Their rendered surfaces are pinned unchanged
-//      by their own suites (page.season-card.spec.ts, page.schedule.spec.ts),
-//      which must stay green through the migration.
-//   2. Every Table-A route file actually IMPORTS the shared unit (integration
-//      floor: the component cannot be "done" in isolation).
-//   3. Table B NEGATIVE fences (PO ruling in the #237 body, reaffirmed in the
-//      release comment): the three conductor-remove chips KEEP their × and
-//      their muted tone. They use the same × glyph as the old Table-A sites,
-//      so any sweep-by-glyph over-matches — these fences catch it. The WHY
-//      is also required to be stated IN THE MARKUP at one of the three (the
-//      season-manage chip) — a future sweeper reads the .svelte first and
-//      this spec file last, so a rationale that lives only here is a
-//      rationale they never see (#237 review F1).
-//   4. The #238 lesson as a fence: no colour-emoji glyph (🗑 ⚙) in any
-//      .svelte markup — emoji ignore CSS `color`.
-//   5. Locale fence: the sweep is purely visual — the four Table-A accessible
-//      names and the Table-B name are EXISTING glyph-independent keys,
-//      present in all four locales; no key edits ride along.
-//   6. Stale-pointer fence: pre-#261 a comment said the gear was "left for
-//      #237 to pick up"; #261 removed the gear and the pointer. Nothing may
-//      reintroduce a #237-waits-for-the-gear breadcrumb.
-//
-// (*MVOX:Palestrina* — #237 RED)
+// #237 — the red-trashcan sweep, source-scanned: hover:text-red-800 lives in
+// ONE file, every Table-A route imports it, Table-B chips keep their × and
+// muted tone (WHY stated in markup too). (*MVOX:Palestrina*)
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -49,9 +13,8 @@ function svelteFiles(): string[] {
 		.map((d) => join(d.parentPath, d.name));
 }
 
-/** Source with HTML comments and //-style script comment lines removed, so a
- *  needle in a WHY-comment (TrashIcon.svelte narrates the red pair) cannot
- *  count as a definition. */
+/** Source with comments stripped, so a WHY-comment mentioning the red pair
+ *  cannot count as a definition. */
 function markupOf(path: string): string {
 	return readFileSync(path, 'utf-8')
 		.replace(/<!--[\s\S]*?-->/g, '')
@@ -87,11 +50,7 @@ describe('#237 — the destructive trigger treatment is defined ONCE', () => {
 // ── 2. the shared unit is WIRED into every Table-A route ───────────────────────
 
 describe('#237 — every Table-A route imports the shared unit (integration floor)', () => {
-	const routes = [
-		'routes/+page.svelte', // season-manage series + event rows (+ the migrated season delete)
-		'routes/event/[id]/+page.svelte', // event-detail delete (+ the migrated #262 schedule remove)
-		'routes/roster/+page.svelte' // section remove
-	];
+	const routes = ['routes/+page.svelte', 'routes/event/[id]/+page.svelte', 'routes/roster/+page.svelte'];
 	for (const route of routes) {
 		it(`${route} imports $lib/components/DeleteTrigger.svelte`, () => {
 			const source = readFileSync(join(SRC_ROOT, route), 'utf-8');
@@ -104,9 +63,8 @@ describe('#237 — every Table-A route imports the shared unit (integration floo
 
 // ── 3. Table B fences — unlink is NOT destroy ──────────────────────────────────
 
-/** The chip button's source block: from its testid literal to its closing tag.
- *  If a sweep converts the chip to DeleteTrigger the </button> disappears and
- *  the slice runs long — every fence below then fails, which is the point. */
+/** The chip button's source, testid literal to closing tag — a sweep that
+ *  converts it drops the `</button>` and every fence below fails. */
 function buttonBlock(path: string, testidLiteral: string): string {
 	const source = readFileSync(join(SRC_ROOT, path), 'utf-8');
 	const at = source.indexOf(testidLiteral);
@@ -120,7 +78,10 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 	const chips: Array<[string, string]> = [
 		['routes/+page.svelte', 'data-testid="season-manage-conductor-remove-{personId}"'],
 		['routes/+page.svelte', 'data-testid="season-create-conductor-remove-{conductor.id}"'],
-		['routes/+page.svelte', 'data-testid="event-create-conductor-remove-{conductor.id}"']
+		[
+			'lib/components/agenda/EventCreateForm.svelte',
+			'data-testid="event-create-conductor-remove-{conductor.id}"'
+		]
 	];
 	for (const [path, testid] of chips) {
 		it(`${testid} keeps × and the muted tone — no trashcan, no red`, () => {
@@ -134,11 +95,8 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 		});
 	}
 
-	// #237 review F1 — the issue's "Done when" asks for the RATIONALE at a
-	// Table-B site, in the markup a future sweeper edits FIRST. Recording it
-	// only in this spec file puts it where that sweeper looks LAST, which is
-	// the failure mode the bullet exists to prevent. Read raw (not markupOf):
-	// the whole point is that the HTML comment survives in the source.
+	// The rationale must live in the markup, not only here (read raw, since the
+	// point is that the HTML comment survives in the source).
 	it('the season-manage chip carries the WHY in markup, above the button a future sweeper would convert', () => {
 		const source = readFileSync(join(SRC_ROOT, 'routes/+page.svelte'), 'utf-8');
 		const at = source.indexOf('data-testid="season-manage-conductor-remove-{personId}"');
@@ -167,11 +125,11 @@ describe('#237 — no colour-emoji glyph anywhere in markup', () => {
 
 describe('#237 — zero message-key changes ride along', () => {
 	const keys = [
-		'season_manage_series_delete', // Table A: series row
-		'season_manage_event_delete', // Table A: event row
-		'event_detail_delete_label', // Table A: detail page visible label
-		'roster_section_remove', // Table A: roster section
-		'season_conductor_remove' // Table B: stays as-is
+		'season_manage_series_delete',
+		'season_manage_event_delete',
+		'event_detail_delete_label',
+		'roster_section_remove',
+		'season_conductor_remove'
 	];
 	for (const locale of ['en', 'et', 'lv', 'uk']) {
 		it(`messages/${locale}.json still carries every glyph-independent name key`, () => {

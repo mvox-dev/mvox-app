@@ -1,41 +1,20 @@
-// #230 RED — the shared Tallinn DST-aware conversion helpers (R1 review item
-// 32, epic #223). The two-pass wall-clock ↔ UTC conversion is duplicated
-// near-verbatim between src/routes/+page.svelte (eventCreateTallinnOffsetMinutes
-// + tallinnLocalToUtcIso) and src/routes/event/[id]/+page.svelte
-// (tallinnOffsetMinutes + tallinnLocalToUtcIso) — byte-identical bodies modulo
-// names (re-verified by diff in research-224-232.json). Both files ALREADY
-// import $lib/preferences/timeFormat, so the shared home exists.
-//
-// CONTRACT (GREEN must implement — src/lib/preferences/timeFormat.ts):
-//
-//   export function tallinnOffsetMinutes(date: Date): number;
-//     // Tallinn wall-clock offset (minutes) in effect AT `date`:
-//     // 120 in EET (winter), 180 in EEST (summer), DST-aware.
-//   export function tallinnLocalToUtcIso(local: string): string;
-//     // 'YYYY-MM-DDTHH:MM' typed AS Tallinn wall clock → UTC ISO instant,
-//     // TWO passes (the offset depends on the instant being converted).
-//     // TOTAL: '' on an empty or unparseable draft — never throws.
-//
-// SCOPE (stated per the slice brief): AgendaList.svelte is deliberately OUT.
-// Its TZ usage is structurally different — calendar-day GROUPING formatters
-// guarded by a PRESERVED-VERBATIM comment citing the T5 DST edge cases — not
-// the two-pass offset/local→UTC-ISO conversion this slice extracts. Only the
-// two event surfaces above move onto the shared helpers.
-//
-// timeFormat.no-hardcoded-render.spec.ts coherence: that lint spec's
-// `isConverter` fingerprint (options carrying `second: '2-digit'` OR an
-// immediate `.formatToParts(` call) already excludes these offset converters
-// wherever they live, and timeFormat.ts is on its ALLOWLIST anyway — the
-// wiring block below pins that the moved converter keeps the fingerprint, so
-// the exclusion stays coherent instead of silently widening.
+// #230 RED — the shared Tallinn DST-aware conversion helpers (epic #223): the
+// two-pass wall-clock <-> UTC conversion was duplicated near-verbatim between
+// the two event-create surfaces; this module is their shared home.
+
+// CONTRACT (src/lib/preferences/timeFormat.ts): tallinnOffsetMinutes(date) —
+// the DST-aware Tallinn offset in minutes at that instant; tallinnLocalToUtcIso
+// (local) — 'YYYY-MM-DDTHH:MM' Tallinn wall clock -> UTC ISO, '' if unparseable.
+
+// SCOPE: AgendaList.svelte is deliberately OUT (its calendar-day GROUPING
+// formatters are a different, PRESERVED-VERBATIM shape). timeFormat.ts stays
+// on the no-hardcoded-render allowlist and keeps the isConverter fingerprint.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// The module exists but does not export these yet — a static named import
-// would fail at LINK time (and pnpm check with it) with an opaque error, so
-// the tests reach for the exports dynamically and fail with a legible
-// "not a function" instead. GREEN makes this cast a truthful no-op.
+// A static named import of not-yet-exported members would fail at LINK time
+// with an opaque error, so the tests reach for the exports dynamically.
 type TallinnConversionExports = {
 	tallinnOffsetMinutes: (date: Date) => number;
 	tallinnLocalToUtcIso: (local: string) => string;
@@ -74,8 +53,7 @@ describe('#230 — tallinnLocalToUtcIso (shared two-pass wall-clock → UTC inst
 
 	it('spring-forward day, EET side (01:30 on 29 Mar): the SECOND pass is what lands 23:30Z — one pass would write 22:30Z, an hour off', async () => {
 		const { tallinnLocalToUtcIso } = await conversionExports();
-		// This is the exact scenario the in-code doc-comment documents, and the
-		// instant event/[id] page.event-editing.spec.ts pins end-to-end.
+		// The exact instant page.event-editing.spec.ts pins end-to-end.
 		expect(tallinnLocalToUtcIso('2026-03-29T01:30')).toEqual('2026-03-28T23:30:00.000Z');
 	});
 
@@ -118,8 +96,7 @@ describe('#230 — tallinnLocalToUtcIso (shared two-pass wall-clock → UTC inst
 
 	it('round-trips every valid Tallinn wall clock — full-shape, DST edges included', async () => {
 		const { tallinnLocalToUtcIso } = await conversionExports();
-		// Independent reference: render the produced instant BACK to a Tallinn
-		// 'YYYY-MM-DDTHH:MM' wall clock and require the original input.
+		// Independent reference: render the instant back to a wall clock, require the original.
 		const backFmt = new Intl.DateTimeFormat('en-CA', {
 			timeZone: 'Europe/Tallinn',
 			hourCycle: 'h23',
@@ -161,8 +138,13 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 		expect(/function\s+tallinnLocalToUtcIso\s*\(/.test(content)).toBe(false);
 	});
 
-	it('src/routes/+page.svelte imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', () => {
-		const content = rootPage();
+	// #508 moved the event-create form (and its tallinnLocalToUtcIso call) out
+	// of +page.svelte into EventCreateForm.svelte — the wiring pin followed it.
+	it('EventCreateForm.svelte imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', () => {
+		const content = readFileSync(
+			resolve(SRC_ROOT, 'lib/components/agenda/EventCreateForm.svelte'),
+			'utf8'
+		);
 		expect(
 			/import\s*\{[^}]*\btallinnLocalToUtcIso\b[^}]*\}\s*from\s*'\$lib\/preferences\/timeFormat'/.test(
 				content
@@ -200,10 +182,7 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	});
 
 	it("no-hardcoded-render coherence: the shared module's moved offset converter keeps the isConverter fingerprint (second: '2-digit' + immediate .formatToParts)", () => {
-		// timeFormat.no-hardcoded-render.spec.ts excludes data-layer converters by
-		// fingerprint; the moved helper must keep matching it so the lint spec's
-		// exclusion stays the SAME shape after the move (allowlist membership of
-		// timeFormat.ts is belt, this is braces).
+		// The lint spec excludes data-layer converters by fingerprint — belt and braces.
 		const content = readFileSync(resolve(SRC_ROOT, 'lib/preferences/timeFormat.ts'), 'utf8');
 		const converterFingerprint =
 			/Intl\.DateTimeFormat\([^)]*,\s*\{[^}]*second:\s*'2-digit'[^}]*\}\s*\)\.formatToParts\(/s;
@@ -211,4 +190,4 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	});
 });
 
-// (*MVOX:Tallis* — #230 RED: shared Tallinn DST-aware conversion helpers — offset + two-pass local→UTC-ISO, extraction wiring pinned)
+// (*MVOX:Tallis* — #230 RED: shared Tallinn conversion helpers, wiring pinned)
