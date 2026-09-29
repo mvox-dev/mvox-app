@@ -7,6 +7,7 @@ import {
 	checkChangedFiles,
 	checkCommentRules,
 	selectCheckedFiles,
+	type CommentRule,
 	type CommentViolation
 } from './commentRules';
 
@@ -136,6 +137,43 @@ describe('checkCommentRules — what is not a violation', () => {
 	});
 });
 
+describe('checkCommentRules — a trailing comment escapes the counting rules, not the content rules', () => {
+	function rules(source: string): CommentRule[] {
+		return checkCommentRules('src/x.ts', source + '\n').map((v) => v.rule);
+	}
+
+	it('narration trailing a code line is reported, // and /* */ alike', () => {
+		expect(rules('export const x = 1; // review round 3 asked for this')).toEqual([
+			'review-history'
+		]);
+		expect(rules('export const x = 1; /* slice 4 added this */')).toEqual(['review-history']);
+	});
+
+	it('narration in a trailing comment inside svelte markup is reported', () => {
+		const markup = '<p>x</p> <!-- findings 2 moved this -->';
+		expect(checkCommentRules('src/X.svelte', markup + '\n').map((v) => v.rule)).toEqual([
+			'review-history'
+		]);
+	});
+
+	it('a trailing comment over 100 characters is reported, the code it trails uncounted', () => {
+		expect(rules(`export const x = 1; // ${'q'.repeat(140)}`)).toEqual(['line-too-long']);
+		expect(rules(`export const someVeryLongName = ${'1'.repeat(140)};`)).toEqual([]);
+	});
+
+	it('a // inside a string opens no comment, so a url is not narration', () => {
+		expect(rules("const u = 'https://x'; // ok")).toEqual([]);
+		expect(rules("const u = 'https://x'; // finding 3")).toEqual(['review-history']);
+		expect(rules(`const u = "https://${'x'.repeat(140)}";`)).toEqual([]);
+		expect(rules('const u = `https://x/findings 3`;')).toEqual([]);
+	});
+
+	it('the counting rules still ignore trailing comments', () => {
+		const fourInARow = Array.from({ length: 4 }, (_, i) => `const v${i} = ${i}; // note ${i}`);
+		expect(rules(fourInARow.join('\n'))).toEqual([]);
+	});
+});
+
 describe('selectCheckedFiles — which changed paths are checked', () => {
 	it('keeps code files anywhere in the repo', () => {
 		const code = [
@@ -143,7 +181,12 @@ describe('selectCheckedFiles — which changed paths are checked', () => {
 			'src/routes/x/+page.svelte',
 			'src/lib/a.spec.ts',
 			'scripts/migrations/run.ts',
-			'.claude/workflows/tdd-slice-pipeline.js'
+			'.claude/workflows/tdd-slice-pipeline.js',
+			'scripts/migrations/lib/loader.mjs',
+			'scripts/migrations/lib/register-loader.mjs',
+			'tools/legacy.cjs',
+			'tools/mod.mts',
+			'tools/mod.cts'
 		];
 		expect(selectCheckedFiles(code)).toEqual(code);
 	});

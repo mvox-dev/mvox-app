@@ -24,7 +24,14 @@ const MAX_COMMENT_SHARE = 0.1;
 // is as often pluralised, hyphenated, or numbered with a suffix or range, all of
 // which a closing \b lets pass. The shapes are pinned in commentRules.spec.ts.
 const REVIEW_HISTORY = /\b(review[ -]rounds?|findings? \d+|slices? \d+)\w*/i;
-const CODE_FILE = /\.(ts|js|svelte)$/;
+const CODE_FILE = /\.(ts|mts|cts|js|mjs|cjs|svelte)$/;
+
+interface LineKind {
+	// Whole-line comment: what the run-length and share rules count.
+	isComment: boolean;
+	// The comment on the line, whole-line or trailing, '' when there is none.
+	commentText: string;
+}
 
 // A trailing newline splits into a phantom empty final element; drop it here
 // so callers count real lines only, once.
@@ -34,16 +41,40 @@ function splitLines(source: string): string[] {
 	return lines;
 }
 
-// A whole-comment line: `// x`, or a line inside a `/* */` / `<!-- -->` span,
-// in whichever syntax its .svelte region (script/style/markup) uses. Code
-// with a trailing `// note` is not a comment line — the code is what counts.
-function classifyCommentLines(lines: string[], isSvelte: boolean): boolean[] {
-	const isComment: boolean[] = new Array(lines.length).fill(false);
+// Quoted spans hide comment openers — `'https://x'` opens nothing — so walk the
+// line and step over ' " ` spans before looking. An unterminated quote consumes
+// the rest of the line, which reports no comment rather than a phantom one.
+function trailingComment(line: string, markup: boolean): string {
+	if (markup) {
+		const opener = line.indexOf('<!--');
+		return opener === -1 ? '' : line.slice(opener);
+	}
+
+	let i = 0;
+	while (i < line.length) {
+		const ch = line[i];
+		if (ch === "'" || ch === '"' || ch === '`') {
+			i++;
+			while (i < line.length && line[i] !== ch) i += line[i] === '\\' ? 2 : 1;
+			i++;
+			continue;
+		}
+		if (ch === '/' && (line[i + 1] === '/' || line[i + 1] === '*')) return line.slice(i);
+		i++;
+	}
+	return '';
+}
+
+// A whole-comment line: `// x`, or a line inside a `/* */` / `<!-- -->` span, in
+// whichever syntax its .svelte region (script/style/markup) uses. Code with a
+// trailing `// note` is not one, but that note is still comment text.
+function classifyLines(lines: string[], isSvelte: boolean): LineKind[] {
+	const kinds: LineKind[] = [];
 	let region: 'script' | 'style' | 'markup' = isSvelte ? 'markup' : 'script';
 	let blockOpen = false;
 
-	for (let i = 0; i < lines.length; i++) {
-		const trimmed = lines[i].trim();
+	for (const line of lines) {
+		const trimmed = line.trim();
 
 		if (isSvelte) {
 			if (trimmed.startsWith('<script')) region = 'script';
@@ -57,26 +88,30 @@ function classifyCommentLines(lines: string[], isSvelte: boolean): boolean[] {
 			}
 		}
 
+		const markup = region === 'markup';
+
 		if (blockOpen) {
-			isComment[i] = true;
-			if (trimmed.includes(region === 'markup' ? '-->' : '*/')) blockOpen = false;
+			kinds.push({ isComment: true, commentText: line });
+			if (trimmed.includes(markup ? '-->' : '*/')) blockOpen = false;
 			continue;
 		}
 
-		if (region === 'markup') {
-			if (trimmed.startsWith('<!--')) {
-				isComment[i] = true;
-				if (!trimmed.slice(4).includes('-->')) blockOpen = true;
-			}
-		} else if (trimmed.startsWith('//')) {
-			isComment[i] = true;
-		} else if (trimmed.startsWith('/*')) {
-			isComment[i] = true;
-			if (!trimmed.slice(2).includes('*/')) blockOpen = true;
+		const opensLine = markup
+			? trimmed.startsWith('<!--')
+			: trimmed.startsWith('//') || trimmed.startsWith('/*');
+
+		if (opensLine) {
+			kinds.push({ isComment: true, commentText: line });
+			if (markup && !trimmed.slice(4).includes('-->')) blockOpen = true;
+			if (!markup && trimmed.startsWith('/*') && !trimmed.slice(2).includes('*/'))
+				blockOpen = true;
+			continue;
 		}
+
+		kinds.push({ isComment: false, commentText: trailingComment(line, markup) });
 	}
 
-	return isComment;
+	return kinds;
 }
 
 // Two counting rules an author needs: CONSECUTIVE comment lines are one comment,
@@ -84,12 +119,12 @@ function classifyCommentLines(lines: string[], isSvelte: boolean): boolean[] {
 // and a blank line between them is the fix; a block counts every line it spans.
 export function checkCommentRules(file: string, source: string): CommentViolation[] {
 	const lines = splitLines(source);
-	const isComment = classifyCommentLines(lines, file.endsWith('.svelte'));
+	const kinds = classifyLines(lines, file.endsWith('.svelte'));
 	const violations: CommentViolation[] = [];
 
 	let runStart = -1;
 	for (let i = 0; i <= lines.length; i++) {
-		const inRun = i < lines.length && isComment[i];
+		const inRun = i < lines.length && kinds[i].isComment;
 		if (inRun) {
 			if (runStart === -1) runStart = i;
 			continue;
@@ -108,17 +143,21 @@ export function checkCommentRules(file: string, source: string): CommentViolatio
 		}
 	}
 
+	// The content rules read comment TEXT, so a comment trailing code is caught
+	// too: #506 bans narration from the source outright. The code it trails is
+	// not part of the comment, hence not part of its length.
 	for (let i = 0; i < lines.length; i++) {
-		if (!isComment[i]) continue;
-		if (lines[i].length > MAX_LINE_LENGTH) {
+		const text = kinds[i].commentText;
+		if (text === '') continue;
+		if (text.length > MAX_LINE_LENGTH) {
 			violations.push({
 				file,
 				rule: 'line-too-long',
 				line: i + 1,
-				detail: `comment line is ${lines[i].length} characters, over the ${MAX_LINE_LENGTH}-character limit`
+				detail: `comment is ${text.length} characters, over the ${MAX_LINE_LENGTH}-character limit`
 			});
 		}
-		if (REVIEW_HISTORY.test(lines[i])) {
+		if (REVIEW_HISTORY.test(text)) {
 			violations.push({
 				file,
 				rule: 'review-history',
@@ -128,9 +167,9 @@ export function checkCommentRules(file: string, source: string): CommentViolatio
 		}
 	}
 
-	const commentCount = isComment.filter(Boolean).length;
+	const commentCount = kinds.filter((k) => k.isComment).length;
 	if (lines.length > 0 && commentCount / lines.length >= MAX_COMMENT_SHARE) {
-		const firstCommentLine = isComment.indexOf(true);
+		const firstCommentLine = kinds.findIndex((k) => k.isComment);
 		const share = Math.round((commentCount / lines.length) * 100);
 		violations.push({
 			file,

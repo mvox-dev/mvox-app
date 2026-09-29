@@ -51,6 +51,7 @@ How `src/comment-rules.spec.ts` counts these, on every code file a change touche
 - Consecutive comment lines are ONE comment, whatever their syntax — a 3-line block touching a `//` line is a 4-line comment, and a blank line between them is the fix.
 - A block comment costs every line it spans, toward both the 3-line limit and the 10% share.
 - The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
+- A comment TRAILING code (`const x = 1; // why`) is exempt from the 3-line and 10% counts — that line is code — but NOT from the narration and 100-character rules, which read the comment text alone. A `//` inside a string opens no comment, so URLs are safe.
 
 ## Stack
 
