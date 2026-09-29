@@ -8,13 +8,7 @@
 	// #220 — the AM/PM preference reaches every displayed clock time through
 	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
 	// that no other file may keep its own 24h-rendering Intl formatter).
-	import {
-		tallinnHHMM,
-		formatTime,
-		timeFormatStore,
-		tallinnLocalToUtcIso,
-		isoDateFormatter
-	} from '$lib/preferences/timeFormat';
+	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import {
 		collectiveState,
 		selectedCollectiveStore,
@@ -101,6 +95,7 @@
 		ADD_WORK_KEY
 	} from '$lib/components/agenda/RepertoireElement.svelte';
 	import SeriesCreateForm from '$lib/components/agenda/SeriesCreateForm.svelte';
+	import EventCreateForm from '$lib/components/agenda/EventCreateForm.svelte';
 	import { clearSeriesCreateResume, type SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	// `servedFromCache` is the OLDEST readAt among entries served since
@@ -108,7 +103,6 @@
 	// load never shows a stale line.
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
-	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
@@ -118,15 +112,13 @@
 	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
-	import { createEvent, createSeason } from '$lib/entity/entityCreate';
-	import type { CreateEventInput } from '$lib/entity/entityCreate';
+	import { createSeason } from '$lib/entity/entityCreate';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import {
 		listEventSeriesForSeason,
 		updateSeasonField,
 		addSeasonConductor,
 		removeSeasonConductor as apiRemoveSeasonConductor,
-		getSeriesDefaults,
 		deleteEventSeries as apiDeleteEventSeries,
 		countSeriesOccurrences as apiCountSeriesOccurrences,
 		countSeasonScope as apiCountSeasonScope,
@@ -493,7 +485,7 @@
 			seasonRatesPartial = false;
 			seasons = [];
 			closeSeasonCreateForm();
-			closeEventCreateForm();
+			eventCreateOpen = false;
 			seriesCreateOpen = false;
 			return;
 		}
@@ -537,7 +529,7 @@
 		seasonRatesPartial = false;
 		seasons = [];
 		closeSeasonCreateForm();
-		closeEventCreateForm();
+		eventCreateOpen = false;
 
 		const personId = current.personId;
 
@@ -1813,7 +1805,7 @@
 
 	function openSeasonCreateForm(): void {
 		if (createEntryPointsBlocked) return;
-		closeEventCreateForm();
+		eventCreateOpen = false;
 		seriesCreateOpen = false;
 		seasonCreateName = '';
 		seasonCreateStartDate = '';
@@ -2408,157 +2400,21 @@
 	}
 
 
-	const EVENT_CREATE_TZ = 'Europe/Tallinn';
-
-	function eventCreateDerivedDuration(
-		startIso: string,
-		endLocal: string
-	): number | 'range' | undefined {
-		if (!endLocal) return undefined;
-		const endIso = tallinnLocalToUtcIso(endLocal);
-		if (!endIso) return 'range';
-		const startMs = new Date(startIso).getTime();
-		const endMs = new Date(endIso).getTime();
-		const minutes = Math.round((endMs - startMs) / 60_000);
-		if (!Number.isFinite(minutes)) return 'range';
-		return minutes <= 0 ? 'range' : minutes;
-	}
-
-
-	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | 'end' | null;
-
-	const eventCreateStatusDateFmt = isoDateFormatter(EVENT_CREATE_TZ);
-	function eventCreateStatusFmt(at: Date): string {
-		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
-	}
-
 	let eventCreateOpen = $state(false);
-	let eventCreateOrigin = $state<'panel' | null>(null);
-	let eventCreateSeasonId = $state('');
-	let eventCreateSeriesId = $state('');
-	let eventCreateSeriesOptions = $state<SeriesListItem[]>([]);
-	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
-	let eventCreateType = $state('');
-	let eventCreateName = $state('');
-	let eventCreateDate = $state('');
-	let eventCreateTime = $state('');
-	const eventCreateDatetime = $derived(
-		eventCreateDate && eventCreateTime ? `${eventCreateDate}T${eventCreateTime}` : ''
-	);
-	let eventCreateEndDate = $state('');
-	let eventCreateEndTime = $state('');
-	let eventCreateEndTouched = $state(false);
-	const eventCreateEndDatetime = $derived(
-		eventCreateEndDate && eventCreateEndTime ? `${eventCreateEndDate}T${eventCreateEndTime}` : ''
-	);
-	let eventCreateLocation = $state('');
-	let eventCreateDescription = $state('');
-	let eventCreateCapacity = $state('');
-	let eventCreateConductors = $state<Array<{ id: string; name: string }>>([]);
-	let eventCreateError = $state<(() => string) | null>(null);
-	let eventCreateErrorField = $state<EventCreateErrorField>(null);
-	let eventCreateLoadId = 0;
 	let eventCreateSubmitting = $state(false);
 	let eventCreateStatus = $state('');
-	let eventCreateNameInput = $state<HTMLInputElement | null>(null);
 
-	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
-		eventCreateError = msg;
-		eventCreateErrorField = field;
-	}
-
-	function clearEventCreateError(): void {
-		eventCreateError = null;
-		eventCreateErrorField = null;
-	}
-
-	function eventCreateDescribedBy(field: EventCreateErrorField): string | undefined {
-		return eventCreateErrorField === field ? 'event-create-error' : undefined;
-	}
-
-	function eventCreateInvalid(field: EventCreateErrorField): true | undefined {
-		return eventCreateErrorField === field ? true : undefined;
-	}
-
-	function loadEventCreateSeriesOptions(cfg: ManageCfg, seasonId: string): void {
-		const thisLoad = eventCreateLoadId;
-		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeasonId !== seasonId;
-		listEventSeriesForSeason(cfg, seasonId)
-			.then((result) => {
-				if (stale()) return;
-				eventCreateSeriesOptions = result.items;
-			})
-			.catch((e) => {
-				if (stale()) return;
-				console.error('agenda: loading series options for event create failed', e);
-				eventCreateSeriesOptions = [];
-			});
-	}
-
-	function openEventCreateForm(origin: 'panel'): void {
+	function openEventCreateForm(): void {
 		if (createEntryPointsBlocked) return;
 		closeSeasonCreateForm();
 		seriesCreateOpen = false;
-		eventCreateLoadId += 1;
-		eventCreateOrigin = origin;
 		eventCreateStatus = '';
-		const prefillSeasonId = manageableSeasonId ?? '';
-		eventCreateSeasonId = prefillSeasonId;
-		eventCreateSeriesId = '';
-		eventCreateSeriesOptions = [];
-		eventCreateSeriesDefaults = null;
-		eventCreateType = '';
-		eventCreateName = '';
-		eventCreateDate = '';
-		eventCreateTime = '';
-		eventCreateEndDate = '';
-		eventCreateEndTime = '';
-		eventCreateEndTouched = false;
-		eventCreateLocation = '';
-		eventCreateDescription = '';
-		eventCreateCapacity = '';
-		eventCreateConductors = [];
-		clearEventCreateError();
-		eventCreateSubmitting = false;
 		eventCreateOpen = true;
-
-		const current = selected;
-		if (!current) return;
-		const cfg = { db: current.db, token: getToken() ?? '' };
-		getRoster(cfg).catch((e) => {
-			console.error('agenda: loading the roster for the event conductor picker failed', e);
-		});
-		getSections(cfg).catch((e) => {
-			console.error('agenda: loading the section tree for the event conductor picker failed', e);
-		});
-		if (prefillSeasonId) loadEventCreateSeriesOptions(cfg, prefillSeasonId);
 	}
 
-	function closeEventCreateForm(): void {
-		eventCreateLoadId += 1;
-		eventCreateOpen = false;
-		eventCreateOrigin = null;
-		eventCreateSeasonId = '';
-		eventCreateSeriesId = '';
-		eventCreateSeriesOptions = [];
-		eventCreateSeriesDefaults = null;
-		eventCreateType = '';
-		eventCreateName = '';
-		eventCreateDate = '';
-		eventCreateTime = '';
-		eventCreateEndDate = '';
-		eventCreateEndTime = '';
-		eventCreateEndTouched = false;
-		eventCreateLocation = '';
-		eventCreateDescription = '';
-		eventCreateCapacity = '';
-		eventCreateConductors = [];
-		clearEventCreateError();
-	}
-
-	function restoreEventCreateFocus(origin: 'panel' | null): void {
+	function restoreEventCreateFocus(): void {
 		tick().then(() => {
-			if (origin === 'panel') seasonManagePanelEl?.focus();
+			seasonManagePanelEl?.focus();
 		});
 	}
 
@@ -2612,70 +2468,8 @@
 
 	function dismissEventCreateForm(): void {
 		if (eventCreateSubmitting) return;
-		const origin = eventCreateOrigin;
-		closeEventCreateForm();
-		restoreEventCreateFocus(origin);
-	}
-
-	function onEventCreateFormKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') dismissEventCreateForm();
-	}
-
-	function handleEventCreateSeasonChange(newSeasonId: string): void {
-		clearEventCreateError();
-		eventCreateSeasonId = newSeasonId;
-		eventCreateSeriesId = '';
-		eventCreateSeriesDefaults = null;
-		eventCreateSeriesOptions = [];
-		if (!newSeasonId) return;
-		const current = selected;
-		if (!current) return;
-		loadEventCreateSeriesOptions({ db: current.db, token: getToken() ?? '' }, newSeasonId);
-	}
-
-	function handleEventCreateSeriesChange(newSeriesId: string): void {
-		clearEventCreateError();
-		eventCreateSeriesId = newSeriesId;
-		if (!newSeriesId) {
-			eventCreateSeriesDefaults = null;
-			return;
-		}
-		const current = selected;
-		if (!current) return;
-		const cfg = { db: current.db, token: getToken() ?? '' };
-		const thisLoad = eventCreateLoadId;
-		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeriesId !== newSeriesId;
-		getSeriesDefaults(cfg, newSeriesId)
-			.then((defaults) => {
-				if (stale()) return;
-				eventCreateSeriesDefaults = defaults;
-			})
-			.catch((e) => {
-				if (stale()) return;
-				console.error('agenda: loading series defaults for event create failed', e);
-				eventCreateSeriesDefaults = null;
-			});
-	}
-
-	function handleEventCreateConductorSelect(selection: { id: string | null; label: string }): void {
-		if (!selection.id) return;
-		if (eventCreateConductors.some((c) => c.id === selection.id)) return;
-		eventCreateConductors = [...eventCreateConductors, { id: selection.id, name: selection.label }];
-	}
-
-	function removeEventCreateConductor(id: string): void {
-		eventCreateConductors = eventCreateConductors.filter((c) => c.id !== id);
-	}
-
-	const eventCreateConductorOptions = $derived(
-		rosterPickerOptions(eventCreateConductors.map((c) => c.id))
-	);
-
-	function eventCreateNumberOrUndefined(raw: string): number | undefined {
-		const trimmed = raw.trim();
-		if (!trimmed) return undefined;
-		const n = Number(trimmed);
-		return Number.isFinite(n) ? n : undefined;
+		eventCreateOpen = false;
+		restoreEventCreateFocus();
 	}
 
 	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
@@ -2868,127 +2662,6 @@
 	}
 
 
-	async function submitEventCreate(): Promise<void> {
-		if (eventCreateSubmitting) return;
-		if (isOffline) return;
-
-		clearEventCreateError();
-		eventCreateStatus = '';
-
-		const panelSeasonId = manageableSeasonId;
-
-		const seasonId = eventCreateSeasonId;
-		if (!seasonId) {
-			setEventCreateError(m.event_create_season_required, 'season');
-			return;
-		}
-		const typeValue = eventCreateType;
-		if (!typeValue) {
-			setEventCreateError(m.event_create_type_required, 'type');
-			return;
-		}
-		if (!eventCreateDatetime) {
-			setEventCreateError(m.event_create_datetime_required, 'datetime');
-			return;
-		}
-		const startDatetime = tallinnLocalToUtcIso(eventCreateDatetime);
-		if (!startDatetime) {
-			setEventCreateError(m.event_create_datetime_required, 'datetime');
-			return;
-		}
-		const derivedDuration = eventCreateDerivedDuration(startDatetime, eventCreateEndDatetime);
-		if (derivedDuration === 'range') {
-			setEventCreateError(m.event_end_before_start, 'end');
-			return;
-		}
-		const durationValue = derivedDuration;
-		const trimmedName = eventCreateName.trim();
-		if (!eventCreateSeriesId && !trimmedName) {
-			setEventCreateError(m.event_create_name_required, 'name');
-			return;
-		}
-
-		const current = selected;
-		if (!current) {
-			console.error('agenda: event create submitted with no selected collective');
-			setEventCreateError(m.event_create_failed, null);
-			return;
-		}
-		const cfg = { db: current.db, token: getToken() ?? '' };
-
-		eventCreateSubmitting = true;
-		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for event create failed', e);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
-			if (!dbEntityId) {
-				console.error('agenda: event create with no resolvable database entity', current.personId);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
-
-			const capacityValue = eventCreateNumberOrUndefined(eventCreateCapacity);
-			const trimmedLocation = eventCreateLocation.trim();
-			const trimmedDescription = eventCreateDescription.trim();
-
-			const input: CreateEventInput = {
-				dbEntityId,
-				extraParentIds: [seasonId],
-				eventType: typeValue,
-				startDatetime,
-				...(trimmedName ? { name: trimmedName } : {}),
-				...(eventCreateSeriesId ? { seriesId: eventCreateSeriesId } : {}),
-				...(durationValue !== undefined ? { durationMinutes: durationValue } : {}),
-				...(trimmedLocation ? { location: trimmedLocation } : {}),
-				...(trimmedDescription ? { description: trimmedDescription } : {}),
-				...(eventCreateConductors.length > 0
-					? { conductorRefs: eventCreateConductors.map((c) => c.id) }
-					: {}),
-				...(capacityValue !== undefined ? { capacity: capacityValue } : {})
-			};
-
-			let newEventId: string;
-			try {
-				newEventId = await createEvent(cfg, input);
-			} catch (e) {
-				console.error('agenda: event create failed', e);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
-
-			const origin = eventCreateOrigin;
-			const showableUnderFilter =
-				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
-			const createdName = trimmedName || eventCreateSeriesDefaults?.name || typeValue;
-			const createdWhen = eventCreateStatusFmt(new Date(startDatetime));
-			eventCreateStatus = showableUnderFilter
-				? m.event_created({ name: createdName, when: createdWhen })
-				: m.event_created_hidden_by_filter({ name: createdName, when: createdWhen });
-			closeEventCreateForm();
-			loadForSelected({ keepSeasonManage: origin === 'panel' });
-			if (origin === 'panel' && panelSeasonId === seasonId) {
-				refreshSeasonManageLists(cfg, panelSeasonId);
-			}
-
-			if (origin === 'panel' && showableUnderFilter) {
-				surfaceCreatedEvent(newEventId);
-			}
-			restoreEventCreateFocus(origin);
-		} finally {
-			eventCreateSubmitting = false;
-		}
-	}
-
-	$effect(() => {
-		if (eventCreateOpen && eventCreateNameInput) eventCreateNameInput.focus();
-	});
-
-
 	let seriesCreateOpen = $state(false);
 	let seriesCreateSubmitting = $state(false);
 	let seriesRunDb = $state<string | null>(null);
@@ -3009,7 +2682,7 @@
 		if (manageableSeasonId === null) return;
 		if (createEntryPointsBlocked) return;
 		closeSeasonCreateForm();
-		closeEventCreateForm();
+		eventCreateOpen = false;
 		seriesCreateOpen = true;
 	}
 
@@ -3673,7 +3346,7 @@
 										data-testid="season-manage-add-event"
 										disabled={createEntryPointsBlocked}
 										class="flex min-h-11 items-center text-xs text-ink underline disabled:opacity-50"
-										onclick={() => openEventCreateForm('panel')}
+										onclick={openEventCreateForm}
 									>
 										{m.season_manage_add_event()}
 									</button>
@@ -3913,337 +3586,28 @@
 							{eventCreateStatus}
 						</div>
 						{#if eventCreateOpen}
-							<div
-								data-testid="event-create-form"
-								role="dialog"
-								aria-label={m.event_create_form_label()}
-								tabindex="-1"
-								class="mb-3 flex flex-col gap-1.5 border-b border-dashed border-ink-5 pb-3"
-								onkeydown={onEventCreateFormKeydown}
-							>
-								{#if isOffline}
-									<p data-testid="event-create-write-unavailable" class="text-xs text-ink-2">
-										{m.write_unavailable_no_signal()}
-									</p>
-								{/if}
-								<label class="flex w-full flex-col gap-0.5">
-									<span data-testid="event-create-type-label" class="text-xs text-ink-2">
-										{m.event_create_type_label()}
-									</span>
-									<select
-										data-testid="event-create-type"
-										aria-invalid={eventCreateInvalid('type')}
-										aria-describedby={eventCreateDescribedBy('type')}
-										value={eventCreateType}
-										onchange={(e) => {
-											eventCreateType = (e.currentTarget as HTMLSelectElement).value;
-											clearEventCreateError();
-										}}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									>
-										<option value="">{m.event_create_type_placeholder()}</option>
-										{#each CANONICAL_EVENT_TYPES as type (type)}
-											<option value={type}>{eventTypeLabel(type)}</option>
-										{/each}
-									</select>
-								</label>
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_season_label()}</span>
-									<select
-										data-testid="event-create-season"
-										aria-invalid={eventCreateInvalid('season')}
-										aria-describedby={eventCreateDescribedBy('season')}
-										value={eventCreateSeasonId}
-										onchange={(e) =>
-											handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									>
-										<option value="">{m.event_create_season_placeholder()}</option>
-										{#each seasons as season (season.id)}
-											<option value={season.id}>{season.name}</option>
-										{/each}
-									</select>
-								</label>
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_series_label()}</span>
-									<select
-										data-testid="event-create-series"
-										value={eventCreateSeriesId}
-										disabled={eventCreateSeasonId === ''}
-										onchange={(e) =>
-											handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-									>
-										<option value="">{m.event_create_series_none()}</option>
-										{#each eventCreateSeriesOptions as series (series.id)}
-											<option value={series.id}>{series.name}</option>
-										{/each}
-									</select>
-								</label>
-
-								{#if eventCreateSeriesId === ''}
-									<p data-testid="event-create-series-hint" class="text-xs text-ink-2">
-										{m.event_create_series_hint()}
-									</p>
-								{/if}
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_name_label()}</span>
-									<input
-										type="text"
-										data-testid="event-create-name"
-										bind:this={eventCreateNameInput}
-										aria-invalid={eventCreateInvalid('name')}
-										aria-describedby={eventCreateDescribedBy('name')}
-										placeholder={m.event_create_name_placeholder()}
-										value={eventCreateName}
-										oninput={(e) => {
-											eventCreateName = (e.currentTarget as HTMLInputElement).value;
-											clearEventCreateError();
-										}}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
-								</label>
-								{#if eventCreateSeriesDefaults?.name}
-									<p data-testid="event-create-name-inherited" class="text-xs text-ink-2">
-										{m.event_create_inherited_from_series({ value: eventCreateSeriesDefaults.name })}
-									</p>
-								{/if}
-
-								<div class="flex flex-col gap-0.5">
-									<span id="event-create-start-label" class="text-xs text-ink-2">
-										{m.event_create_start_label()}
-									</span>
-									<div
-										data-testid="event-create-datetime"
-										role="group"
-										aria-labelledby="event-create-start-label"
-										class="flex flex-wrap gap-2"
-									>
-										<input
-											type="date"
-											data-testid="event-create-datetime-date"
-											aria-label={m.time_select_date_label()}
-											aria-invalid={eventCreateInvalid('datetime')}
-											aria-describedby={eventCreateDescribedBy('datetime')}
-											value={eventCreateDate}
-											oninput={(e) => {
-												eventCreateDate = (e.currentTarget as HTMLInputElement).value;
-												if (!eventCreateEndTouched) eventCreateEndDate = eventCreateDate;
-												clearEventCreateError();
-											}}
-											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-										/>
-										<TimeSelect
-											prefix="event-create-datetime"
-											value={eventCreateTime}
-											invalid={eventCreateInvalid('datetime')}
-											describedBy={eventCreateDescribedBy('datetime')}
-											onchange={(v) => {
-												eventCreateTime = v;
-												clearEventCreateError();
-											}}
-										/>
-									</div>
-								</div>
-
-								<div class="flex flex-col gap-0.5">
-									<span id="event-create-end-label" class="text-xs text-ink-2">
-										{m.event_create_end_label()}
-									</span>
-									<div
-										data-testid="event-create-end"
-										role="group"
-										aria-labelledby="event-create-end-label"
-										class="flex flex-wrap gap-2"
-									>
-										<input
-											type="date"
-											data-testid="event-create-end-date"
-											aria-label={m.time_select_date_label()}
-											aria-invalid={eventCreateInvalid('end')}
-											aria-describedby={eventCreateDescribedBy('end')}
-											value={eventCreateEndDate}
-											oninput={(e) => {
-												eventCreateEndDate = (e.currentTarget as HTMLInputElement).value;
-												eventCreateEndTouched = true;
-												clearEventCreateError();
-											}}
-											class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-										/>
-										<TimeSelect
-											prefix="event-create-end"
-											value={eventCreateEndTime}
-											invalid={eventCreateInvalid('end')}
-											describedBy={eventCreateDescribedBy('end')}
-											onchange={(v) => {
-												eventCreateEndTime = v;
-												clearEventCreateError();
-											}}
-										/>
-									</div>
-								</div>
-								{#if eventCreateSeriesDefaults && eventCreateSeriesDefaults.durationMinutes !== null}
-									<p data-testid="event-create-duration-inherited" class="text-xs text-ink-2">
-										{m.event_create_inherited_from_series({
-											value: m.agenda_duration_min({
-												minutes: eventCreateSeriesDefaults.durationMinutes
-											})
-										})}
-									</p>
-								{/if}
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_capacity_label()}</span>
-									<input
-										type="number"
-										data-testid="event-create-capacity"
-										placeholder={m.event_create_capacity_placeholder()}
-										value={eventCreateCapacity}
-										oninput={(e) =>
-											(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
-								</label>
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_location_label()}</span>
-									<input
-										type="text"
-										data-testid="event-create-location"
-										list={LOCATION_SUGGESTIONS_ID}
-										placeholder={m.event_create_location_placeholder()}
-										value={eventCreateLocation}
-										oninput={(e) =>
-											(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									/>
-								</label>
-								{#if eventCreateSeriesDefaults?.defaultLocation}
-									<p data-testid="event-create-location-inherited" class="text-xs text-ink-2">
-										{m.event_create_inherited_from_series({
-											value: eventCreateSeriesDefaults.defaultLocation
-										})}
-									</p>
-								{/if}
-
-								<label class="flex w-full flex-col gap-0.5">
-									<span class="text-xs text-ink-2">{m.event_create_description_label()}</span>
-									<textarea
-										data-testid="event-create-description"
-										placeholder={m.event_create_description_placeholder()}
-										value={eventCreateDescription}
-										oninput={(e) =>
-											(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-										class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-									></textarea>
-								</label>
-								{#if eventCreateSeriesDefaults?.defaultDescription}
-									<p data-testid="event-create-description-inherited" class="text-xs text-ink-2">
-										{m.event_create_inherited_from_series({
-											value: eventCreateSeriesDefaults.defaultDescription
-										})}
-									</p>
-								{/if}
-								
-								<div data-testid="event-create-conductors-field">
-									<label class="flex w-full flex-col gap-0.5">
-										<span class="text-xs text-ink-2">{m.event_create_conductor_label()}</span>
-										<select
-											data-testid="event-create-conductor-select"
-											disabled={eventCreateConductorOptions.length === 0}
-											value=""
-											onchange={(e) => {
-												const target = e.currentTarget as HTMLSelectElement;
-												const personId = target.value;
-												target.value = '';
-												if (!personId) return;
-												const label =
-													eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
-													'';
-												handleEventCreateConductorSelect({ id: personId, label });
-											}}
-											class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-										>
-											<option value="" disabled selected hidden>
-												{pickerPromptText(
-													eventCreateConductorOptions.length,
-													m.event_create_conductor_placeholder()
-												)}
-											</option>
-											{#each eventCreateConductorOptions as option (option.id)}
-												<option value={option.id}>{option.label}</option>
-											{/each}
-									</select>
-									</label>
-									{#if rosterPartial}
-										<p data-testid="event-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
-											{m.picker_partial_members_notice()}
-										</p>
-									{/if}
-									{#if sectionsReadFailed}
-										<p data-testid="event-create-conductor-order-note" class="text-xs text-ink-2">
-											{m.picker_order_fallback()}
-										</p>
-									{/if}
-								</div>
-								{#if eventCreateConductors.length > 0}
-									<ul class="flex flex-wrap gap-1.5">
-										{#each eventCreateConductors as conductor (conductor.id)}
-											<li
-												data-testid="event-create-conductor-{conductor.id}"
-												class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-											>
-												<PersonName name={conductor.name} />
-												<button
-													type="button"
-													data-testid="event-create-conductor-remove-{conductor.id}"
-													aria-label={m.season_conductor_remove({ name: conductor.name })}
-													class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-													onclick={() => removeEventCreateConductor(conductor.id)}
-												>
-													&times;
-												</button>
-											</li>
-										{/each}
-									</ul>
-								{/if}
-								
-								{#if eventCreateError}
-									<p
-										id="event-create-error"
-										data-testid="event-create-error"
-										role="alert"
-										class="text-xs text-red-700"
-									>
-										{eventCreateError()}
-									</p>
-								{/if}
-								
-								<div class="flex gap-2">
-									<button
-										type="button"
-										data-testid="event-create-submit"
-										disabled={eventCreateSubmitting || isOffline}
-										aria-busy={eventCreateSubmitting}
-										class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-										onclick={() => void submitEventCreate()}
-									>
-										{m.event_create_submit()}
-									</button>
-									<button
-										type="button"
-										data-testid="event-create-cancel"
-										disabled={eventCreateSubmitting}
-										class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-										onclick={dismissEventCreateForm}
-									>
-										{m.roster_cancel()}
-									</button>
-								</div>
-							</div>
+							<EventCreateForm
+								{selected}
+								{manageableSeasonId}
+								{seasons}
+								{agendaTypeFilter}
+								{agendaFilterBucketOf}
+								{rosterPartial}
+								{sectionsReadFailed}
+								locationSuggestionsId={LOCATION_SUGGESTIONS_ID}
+								bind:submitting={eventCreateSubmitting}
+								bind:status={eventCreateStatus}
+								{getRoster}
+								{getSections}
+								{rosterPickerOptions}
+								{pickerPromptText}
+								{loadForSelected}
+								{refreshSeasonManageLists}
+								dismiss={dismissEventCreateForm}
+								onclose={() => (eventCreateOpen = false)}
+								{restoreEventCreateFocus}
+								{surfaceCreatedEvent}
+							/>
 						{/if}
 						{#if agendaFilterChips.length > 0}
 							<div class="flex flex-wrap items-center justify-between gap-2 pb-3">

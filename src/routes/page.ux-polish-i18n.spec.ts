@@ -18,11 +18,12 @@ const CHANGED_SURFACES = [
 	'src/lib/components/attendance/TakeAttendanceButton.svelte',
 	// The landing surface and the components its own i18n pass edited — the scan
 	// is only as wide as this list.
-	// #508 adds SeriesCreateForm.svelte, split out of +page.svelte.
+	// #508 splits +page.svelte: SeriesCreateForm.svelte, EventCreateForm.svelte.
 	'src/routes/+page.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/routes/event/[id]/+page.svelte',
-	'src/lib/components/agenda/SeriesCreateForm.svelte'
+	'src/lib/components/agenda/SeriesCreateForm.svelte',
+	'src/lib/components/agenda/EventCreateForm.svelte'
 ] as const;
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
