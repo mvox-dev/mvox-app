@@ -1,8 +1,6 @@
-<!-- #508 — [+ Event] dialog, moved out of +page.svelte's season-manage markup.
-	Mounted only while open (the page renders it inside `{#if eventCreateOpen}`):
-	the roster/section/series-option prefetch that `openEventCreateForm` used to
-	kick off now runs once at construction instead. `surfaceCreatedEvent` and
-	the row-watcher stay in the page — they must outlive this form's own close. -->
+<!-- #508 — [+ Event] dialog, mounted only while open, so its roster/section/series
+	prefetch runs once at construction. `surfaceCreatedEvent` and the row-watcher
+	stay in the page — they must outlive this form's own close. -->
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
