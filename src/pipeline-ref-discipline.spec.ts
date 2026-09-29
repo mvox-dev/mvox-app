@@ -47,6 +47,7 @@ import {
 	HALT_REASON_TIP,
 	HALT_REASON_WRONG_BRANCH
 } from './pipeline-ref-discipline-fence';
+import vitestConfig from '../vitest.config';
 
 const TEMPLATE_PATH = resolve(__dirname, '../.claude/workflows/tdd-slice-pipeline.js');
 
@@ -327,4 +328,134 @@ describe('#381 acceptance: PRIMARY (pre-commit branch) check precedes the SECOND
 	});
 });
 
-// (*MVOX:Tallis* — #381 RED; review-fix + acceptance additions *MVOX:Byrd*)
+// ── 5. #504 — the related-spec iteration policy must be a REAL selection ────
+// #504 asks GREEN/GREEN-FIX/FIX to run only the specs related to the change so
+// that a no-fix-round slice runs the full suite at most twice (INTEGRATION +
+// REVIEW). The first attempt wrote `pnpm test -- --changed origin/main` into
+// all three prompts. Measured (Bentham review round, 2026-09-29): because the
+// `test` script is `vitest run`, pnpm expands that to
+// `vitest run -- --changed origin/main`, vitest DISCARDS the options after the
+// `--` separator, and the run selects all 467 spec files — byte-identical to
+// the no-flag baseline — while exiting 0. The prompt claimed a selective run
+// and delivered the full ~494s suite, so the budget was still 3 full runs and
+// the agent's report was wrong about what it had executed.
+//
+// Two things are pinned here, both of them failure modes that exit 0:
+//   (a) the swallowed form — the flag must not be routed through the `test`
+//       script behind a `--`. The prompts call `pnpm test:changed`, whose
+//       package.json definition invokes vitest directly (verified to parse:
+//       `--changed origin/main~3` selects 31 of 467).
+//   (b) the empty selection — `--changed <ref>` resolves affected specs
+//       through vitest's STATIC IMPORT GRAPH, so a spec that reads its subject
+//       with readFileSync rather than importing it is never selected. THIS
+//       spec file is exactly that shape (TEMPLATE_PATH + readFileSync, no
+//       import edge to the template), and ~40 more fence/drift-pin specs in
+//       src are too. On the #504 branch itself `vitest --changed origin/main`
+//       returned ZERO test files and exit 0 — a GREEN agent would read that
+//       clean exit as "related specs pass" having run nothing. Merge stays
+//       protected (INTEGRATION, REVIEW and CI all run the full suite), but the
+//       GREEN gate silently becomes a no-op for template/doc/config work, so
+//       the prompts must say an empty selection is not a pass and name the
+//       fallback.
+const PACKAGE_JSON_PATH = resolve(__dirname, '../package.json');
+
+/** The real package.json scripts block; {} when absent so each assertion fails with its own message. */
+function packageScripts(): Record<string, string> {
+	if (!existsSync(PACKAGE_JSON_PATH)) return {};
+	const parsed = JSON.parse(readFileSync(PACKAGE_JSON_PATH, 'utf-8')) as { scripts?: Record<string, string> };
+	return parsed.scripts ?? {};
+}
+
+// The form that exits 0 while running everything — pnpm forwards it as trailing
+// args and vitest drops them. Must appear NOWHERE in the template.
+const SWALLOWED_CHANGED_FORM = 'pnpm test -- --changed';
+// The related-spec command the three iterating prompts must call instead.
+const RELATED_SPEC_CMD = 'pnpm test:changed';
+// The full-suite command — belongs to INTEGRATION and REVIEW only (the issue's
+// "once before review and once by the reviewer").
+const FULL_SUITE_CMD = 'pnpm test -- --run';
+// The empty-selection rule and its fallback, as literals the prompts carry.
+const EMPTY_SELECTION_PINS = [
+	'ZERO TEST FILES IS NOT A PASS', //  the rule, uppercase — a clean exit on 0 files is not green
+	'readFileSync', //                   names WHY specs go missing (no import edge to their subject)
+	'pnpm exec vitest run' //            the fallback: name the covering specs and run them by path
+] as const;
+
+const ITERATING_PHASES = [
+	['GREEN', LABELS.green],
+	['GREEN-FIX', LABELS.greenFix],
+	['FIX', LABELS.fix]
+] as const;
+
+describe('#504: the iterating phases run a real related-spec selection, not a swallowed flag', () => {
+	it('package.json defines test:changed, invoking vitest --changed directly (no `--` separator to swallow it)', () => {
+		const script = packageScripts()['test:changed'];
+		expect(
+			script,
+			'package.json has no "test:changed" script — the GREEN/GREEN-FIX/FIX prompts call `pnpm test:changed`, so without it every iterating phase fails with ERR_PNPM_NO_SCRIPT'
+		).toBeDefined();
+		expect(script, `"test:changed" must pass --changed to vitest; got: ${script}`).toContain('--changed');
+		expect(
+			script?.includes(' -- '),
+			`"test:changed" routes its flags behind a \`--\` separator (${script}) — vitest discards options after \`--\`, which is the exact bug this pin exists to prevent`
+		).toBe(false);
+	});
+
+	it.each(ITERATING_PHASES)(
+		'%s calls pnpm test:changed and never the swallowed `pnpm test -- --changed` form',
+		(name, labelKey) => {
+			const region = regionFor(labelKey);
+			expect(
+				region.includes(SWALLOWED_CHANGED_FORM),
+				`the ${name} prompt contains '${SWALLOWED_CHANGED_FORM}' — pnpm forwards everything after \`--\` to vitest as trailing args and vitest discards them, so this form silently runs all 467 specs while reporting a selective run`
+			).toBe(false);
+			expect(
+				region.includes(RELATED_SPEC_CMD),
+				`the ${name} prompt does not call '${RELATED_SPEC_CMD}' — #504 asks this phase to run only the specs related to the change while iterating`
+			).toBe(true);
+		}
+	);
+
+	it('the swallowed form appears nowhere in the template — not in any phase, present or future', () => {
+		expect(
+			template().includes(SWALLOWED_CHANGED_FORM),
+			`'${SWALLOWED_CHANGED_FORM}' is back in the template — measured to select all 467 spec files and exit 0, indistinguishable from a real related-spec run in the agent's report`
+		).toBe(false);
+	});
+
+	it.each(ITERATING_PHASES)(
+		'%s states that an empty selection is NOT a pass, and names the run-by-path fallback',
+		(name, labelKey) => {
+			const region = regionFor(labelKey);
+			const missing = missingPins(region, EMPTY_SELECTION_PINS);
+			expect(
+				missing,
+				`the ${name} prompt lacks empty-selection string(s): ${JSON.stringify(missing)} — \`--changed\` selects through vitest's static import graph, so a doc/template/config change can select zero specs and exit 0; without this rule the agent reports "related specs pass" having executed nothing`
+			).toEqual([]);
+		}
+	);
+
+	it('the full suite still runs exactly twice — INTEGRATION and REVIEW, and no iterating phase', () => {
+		const fullSuiteLabels = callRegions(template())
+			.filter((r) => r.includes(FULL_SUITE_CMD))
+			.map((r) => {
+				const label = r.match(/label:\s*'([^']*)/);
+				return label ? label[1] : r.slice(0, 80).replace(/\s+/g, ' ');
+			});
+		expect(
+			fullSuiteLabels.sort(),
+			`expected the full suite ('${FULL_SUITE_CMD}') in exactly the INTEGRATION and REVIEW prompts — #504 done-when 2 caps a no-fix-round slice at two full runs, and done-when 3 needs those two to keep catching an unrelated break before merge; found: ${JSON.stringify(fullSuiteLabels)}`
+		).toEqual(["integration-", "review-"]);
+	});
+
+	// Checks the loaded config, not its text: a comment or a spread can fake the literal.
+	it('vitest.config sets forceRerunTriggers to [] — a package.json diff must not force the full suite', () => {
+		expect(
+			vitestConfig.test?.forceRerunTriggers,
+			"vitest's default forceRerunTriggers include **/package.json/**, so `pnpm test:changed` on any diff touching package.json reruns all 467 spec files and exits 0 as if it had selected"
+		).toEqual([]);
+	});
+});
+
+// (*MVOX:Tallis* — #381 RED; review-fix + acceptance additions *MVOX:Byrd*;
+//  #504 related-spec pins *MVOX:Josquin*)

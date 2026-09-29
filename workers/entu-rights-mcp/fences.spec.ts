@@ -194,7 +194,15 @@ describe('package.json: at most a generator scripts entry', () => {
 	// now — it ran the whole suite before, so a prompt-template fence held the
 	// public page stale for ten hours (2026-09-19). Commissioned by Mihkel;
 	// still zero runtime/dev dependencies, still nothing from this slice.
-	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate', () => {
+	// #504 widens it once more: `test:changed` is `vitest run --changed origin/main`,
+	// the related-spec run the slice pipeline's GREEN/GREEN-FIX/FIX prompts call
+	// while iterating. It exists as a SCRIPT rather than as a flag on `test`
+	// because `pnpm test -- --changed origin/main` expands to
+	// `vitest run -- --changed origin/main` and vitest discards the options after
+	// `--`, which silently ran all 467 specs while reporting a selective run
+	// (measured 2026-09-29). Commissioned by #504; still zero runtime/dev
+	// dependencies, still nothing from this slice.
+	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate + the related-spec iteration run', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {
 			expect(keys, `baseline script "${k}" was removed or renamed`).toContain(k);
@@ -204,6 +212,7 @@ describe('package.json: at most a generator scripts entry', () => {
 			'check:sw',
 			'check:workers',
 			'mcp:bundle',
+			'test:changed',
 			'test:roadmap'
 		]);
 	});
