@@ -50,7 +50,11 @@ describe('#237 — the destructive trigger treatment is defined ONCE', () => {
 // ── 2. the shared unit is WIRED into every Table-A route ───────────────────────
 
 describe('#237 — every Table-A route imports the shared unit (integration floor)', () => {
-	const routes = ['routes/+page.svelte', 'routes/event/[id]/+page.svelte', 'routes/roster/+page.svelte'];
+	const routes = [
+		'lib/components/agenda/SeasonManagePanel.svelte',
+		'routes/event/[id]/+page.svelte',
+		'routes/roster/+page.svelte'
+	];
 	for (const route of routes) {
 		it(`${route} imports $lib/components/DeleteTrigger.svelte`, () => {
 			const source = readFileSync(join(SRC_ROOT, route), 'utf-8');
@@ -76,7 +80,10 @@ function buttonBlock(path: string, testidLiteral: string): string {
 
 describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink empties the idiom)', () => {
 	const chips: Array<[string, string]> = [
-		['routes/+page.svelte', 'data-testid="season-manage-conductor-remove-{personId}"'],
+		[
+			'lib/components/agenda/SeasonManagePanel.svelte',
+			'data-testid="season-manage-conductor-remove-{personId}"'
+		],
 		[
 			'lib/components/agenda/SeasonCreateForm.svelte',
 			'data-testid="season-create-conductor-remove-{conductor.id}"'
@@ -101,7 +108,10 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 	// The rationale must live in the markup, not only here (read raw, since the
 	// point is that the HTML comment survives in the source).
 	it('the season-manage chip carries the WHY in markup, above the button a future sweeper would convert', () => {
-		const source = readFileSync(join(SRC_ROOT, 'routes/+page.svelte'), 'utf-8');
+		const source = readFileSync(
+			join(SRC_ROOT, 'lib/components/agenda/SeasonManagePanel.svelte'),
+			'utf-8'
+		);
 		const at = source.indexOf('data-testid="season-manage-conductor-remove-{personId}"');
 		expect(at, 'the season-manage chip must exist').toBeGreaterThan(-1);
 		const preamble = source.slice(Math.max(0, at - 1400), at);

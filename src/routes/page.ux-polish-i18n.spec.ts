@@ -24,7 +24,8 @@ const CHANGED_SURFACES = [
 	'src/routes/event/[id]/+page.svelte',
 	'src/lib/components/agenda/SeriesCreateForm.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
-	'src/lib/components/agenda/SeasonCreateForm.svelte'
+	'src/lib/components/agenda/SeasonCreateForm.svelte',
+	'src/lib/components/agenda/SeasonManagePanel.svelte'
 ] as const;
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
