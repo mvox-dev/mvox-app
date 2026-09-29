@@ -1,6 +1,7 @@
-# Task List Snapshot — 2026-09-28 21:5xZ (MVOX-29 seam, Mihkel's break)
+# Task List Snapshot — 2026-09-29 15:19Z (MVOX-30 seam, Mihkel's regroup)
 
-- #395 `in process`: slice 1 landed 81f6c59; slice 2 stopped at the contract pin (Pérotin's comment; awaiting Gama's name ruling in the body); then live provisioning on crede from the team-lead session, Pérotin read-back; close after a second-member read-back (who: Mihkel).
-- Queue (ready): #505 → #504 → #506 → #507; then #509, #508 when released. Epic #503.
+- #508 `in process`: slice 1/5 merged 95ae384 (#519); slice 2/5 aborted, branch feat/508-s2-event-create at bd5391b (pushed, no PR); slices 3-5 await a cheaper plan. Detailed closing comment on #508 after the last slice merges.
+- Epic #503: only #508 left.
+- Nothing else ready.
 
 (*MVOX:Palestrina*)
