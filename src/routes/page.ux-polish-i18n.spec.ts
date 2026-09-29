@@ -1,30 +1,5 @@
-// #113 TU.5 RED — i18n pass over every surface TU.1–TU.4 (#109–#112) touched:
-//
-//   - src/routes/roster/+page.svelte           (TU.1/TU.2 — section creation
-//     threading, reorder spinner, empty-section remove + two-step confirm,
-//     collapse-all/expand-all, dashed drop-target hint)
-//   - src/lib/sections/SectionPicker.svelte    (TU.1 — org-scoped duplicate
-//     check; the create form's labels)
-//   - src/lib/components/agenda/RepertoireElement.svelte (TU.3 — separators,
-//     unified status/actions row, native selects)
-//   - src/routes/library/+page.svelte          (TU.4 — copy-list sort controls)
-//   - src/lib/components/agenda/AgendaList.svelte + TakeAttendanceButton.svelte
-//     (TU.4 — hide-while-open wiring around the attendance entry point)
-//
-// Pure source scans — no rendering. Three families:
-//   1. no hardcoded user-visible text: every bare text node and every
-//      aria-label/title/placeholder must come from a Paraglide m.* call;
-//   2. locale parity: every m.* key a scanned file actually uses exists,
-//      non-empty, in ALL FOUR locale files (en, et, lv, uk) — and the
-//      parameterised remove-confirmation labels carry {name} everywhere;
-//   3. focus-indicator hygiene: no changed surface may strip the browser's
-//      default focus ring (`outline-none`) unless it supplies a replacement —
-//      stripping it bare leaves keyboard users with NO visible focus indicator
-//      at all (WCAG 2.4.7). Originally a blanket ban, which was exact while no
-//      file here had a replacement to offer; #205 gave the roster arrange row
-//      one (see FOCUS_STRIP_EXCEPTIONS below).
-//
-// Follows the #86/#93/#99 source-scan precedent (page.sections-a11y.spec.ts).
+// #113 TU.5 RED — i18n pass over the CHANGED_SURFACES list below: hardcoded
+// strings, locale parity, and focus-indicator hygiene (source scans only).
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -41,22 +16,13 @@ const CHANGED_SURFACES = [
 	'src/routes/library/+page.svelte',
 	'src/lib/components/agenda/AgendaList.svelte',
 	'src/lib/components/attendance/TakeAttendanceButton.svelte',
-	// #113 review F3 — the files THIS pass itself edits. They were missing from
-	// the list, so the scan below never ran against them and a hardcoded English
-	// "Switch collective" (plus the whole signed-in/signed-out fallback block)
-	// sat untranslated on the app's landing surface. The scan is the right tool;
-	// it was pointed at the wrong set.
-	//
-	// #113 review F2 — the third edited file, event/[id]/+page.svelte (the
-	// closeAttendancePanel focus-return), was still missing after that fix, so
-	// the focus-indicator family never ran against the surface that owns the
-	// pass's own focus-management story. It carried five `focus:outline-none`
-	// edit-in-place inputs (#105 debt) with no replacement focus style — all
-	// programmatically focused via use:focusOnMount, i.e. invisible keyboard
-	// focus exactly where focus is placed for you. Stripped; the UA ring stands.
+	// The landing surface and the components its own i18n pass edited — the scan
+	// is only as wide as this list.
+	// #508 adds SeriesCreateForm.svelte, split out of +page.svelte.
 	'src/routes/+page.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
-	'src/routes/event/[id]/+page.svelte'
+	'src/routes/event/[id]/+page.svelte',
+	'src/lib/components/agenda/SeriesCreateForm.svelte'
 ] as const;
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
@@ -65,12 +31,8 @@ function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
-/** Bare (non-expression) text nodes in a Svelte template — the established
- *  #86/#93/#99 helper: strip script blocks, HTML comments and Svelte
- *  expressions; anything left with letters in it is a hardcoded user-facing
- *  string. Glyph-only nodes (carets, drag handle, arrows, separators, ✕) are
- *  allowed — they must be aria-hidden or labelled, which the DOM specs check;
- *  they are not TRANSLATABLE strings. */
+/** Bare template text nodes outside m.* calls — glyph-only nodes (✕, arrows,
+ *  …) pass if aria-hidden or labelled; they aren't translatable text. */
 function bareTextNodes(source: string): string[] {
 	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
 	template = template.replace(/<!--[\s\S]*?-->/g, '');
@@ -93,9 +55,7 @@ function bareTextNodes(source: string): string[] {
 	return nodes;
 }
 
-/** Every Paraglide message key the file's CODE references (comments stripped —
- *  a prose mention of a key is not a usage). Catches both call (`m.key(...)`)
- *  and function-reference (`label: m.key`) forms. */
+/** Every m.* key the file's CODE references (comments stripped first). */
 function usedMessageKeys(source: string): string[] {
 	let code = source.replace(/<!--[\s\S]*?-->/g, '');
 	code = code.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -107,16 +67,12 @@ function usedMessageKeys(source: string): string[] {
 	return [...keys].sort();
 }
 
-// Values are `string | MessageVariant[]` — plural messages are variant arrays,
-// so every assertion below goes through the messageFile helpers rather than
-// calling string methods on the raw value.
+// Messages are `string | MessageVariant[]`, so assertions use messageFile helpers.
 function localeMessages(locale: string): MessageFile {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 }
 
-// ---------------------------------------------------------------------------
 // 1 — no hardcoded user-visible strings on any changed surface
-// ---------------------------------------------------------------------------
 describe('#113 — i18n: no hardcoded user-facing strings on TU.1–TU.4 surfaces', () => {
 	for (const file of CHANGED_SURFACES) {
 		it(`${file} renders no bare text nodes outside m.* calls`, () => {
@@ -124,8 +80,7 @@ describe('#113 — i18n: no hardcoded user-facing strings on TU.1–TU.4 surface
 		});
 
 		it(`${file} has no hardcoded aria-label/title/placeholder string literals`, () => {
-			// A literal `aria-label="Remove section"` bypasses Paraglide entirely —
-			// labels must be bound expressions ({m.*(...)}), never quoted strings.
+			// A literal aria-label/title/placeholder bypasses Paraglide — must be m.*.
 			const hardcoded =
 				readSource(file).match(/(?:aria-label|title|placeholder)="[^"]*[a-zA-Z][^"]*"/g) ?? [];
 			expect(hardcoded).toEqual([]);
@@ -133,9 +88,7 @@ describe('#113 — i18n: no hardcoded user-facing strings on TU.1–TU.4 surface
 	}
 });
 
-// ---------------------------------------------------------------------------
 // 2 — locale parity: every used key exists in ALL FOUR locale files
-// ---------------------------------------------------------------------------
 describe('#113 — i18n: every message key used by a changed surface exists in all four locales', () => {
 	for (const file of CHANGED_SURFACES) {
 		it(`every m.* key in ${file} is present and non-empty in en, et, lv and uk`, () => {
@@ -184,23 +137,10 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 3 — focus-indicator hygiene on the changed surfaces
-// ---------------------------------------------------------------------------
-// The invariant is "no focusable surface here is left with NO visible focus
-// state" — the blanket `outline-none` ban was the cheap proxy for it, exact
-// while no surface on this list had a replacement to offer. #205 review F2
-// (round 3) gave one surface a real replacement: the arrange row's own outline
-// spans the ~16px grip since the section name moved into the sibling rename
-// activator, so the row suppresses it and the wrapper that already owns the
-// hold and drop affordances paints a row-sized `focus-within:ring-2` instead —
-// focus, hold and drop finally enclosing the same rectangle (the ring itself is
-// pinned in page.roster-arrange-whole-field.spec.ts).
-//
-// So the guard now states the invariant directly: a strip is allowed only where
-// it is listed AND the replacement is actually present in the file. The allowed
-// list is exact, so a second, undocumented `outline-none` in the same file
-// still fails — this is an itemised exception, not an exemption.
+
+// No surface may strip the UA focus ring (WCAG 2.4.7) without a listed
+// FOCUS_STRIP_EXCEPTIONS replacement (#205 gave the arrange row one).
 const FOCUS_STRIP_EXCEPTIONS: Record<string, { allowed: string[]; replacement: RegExp }> = {
 	'src/routes/roster/+page.svelte': {
 		allowed: ['focus:outline-none'],
@@ -230,4 +170,4 @@ describe('#113 — a11y: changed surfaces never strip the default focus indicato
 	}
 });
 
-// (*MVOX:Tallis*; #205 review round-3 focus-strip exception *MVOX:Josquin*)
+// (*MVOX:Tallis*; #205's focus-strip exception *MVOX:Josquin*)
