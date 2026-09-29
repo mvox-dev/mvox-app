@@ -1,0 +1,255 @@
+{
+  "dryRun": false,
+  "db": "mvox_crede",
+  "sensitive": false,
+  "memberTypeId": "6a92a327ca67df980f414ef4",
+  "typeId": "6abb6b9256069f238dec7ce2",
+  "propDefIds": {
+    "screenshot": "6abb6b9256069f238dec7ced",
+    "doodle_layer": "6abb6b9356069f238dec7cf9",
+    "description": "6abb6b9356069f238dec7d05"
+  },
+  "plannedWrites": [
+    {
+      "target": "feedback",
+      "body": [
+        {
+          "type": "_type",
+          "reference": "6a8f471a5eb2498f434e50cc"
+        },
+        {
+          "type": "name",
+          "string": "feedback"
+        },
+        {
+          "type": "label",
+          "language": "en",
+          "string": "Feedback"
+        },
+        {
+          "type": "label",
+          "language": "et",
+          "string": "Tagasiside"
+        },
+        {
+          "type": "description",
+          "language": "en",
+          "string": "A member's feedback on the app: a screenshot, ink drawn over it, and a description. Created by the member with their own key. mvox app extension — not part of the canonical v4E schema."
+        },
+        {
+          "type": "description",
+          "language": "et",
+          "string": "Liikme tagasiside rakenduse kohta: kuvatõmmis, sellele joonistatud märkused ja kirjeldus. Liige loob selle oma võtmega. Mvoxi rakenduse laiendus — ei kuulu v4E baasstruktuuri hulka."
+        },
+        {
+          "type": "_inheritrights",
+          "boolean": true
+        },
+        {
+          "type": "_sharing",
+          "string": "domain"
+        }
+      ]
+    },
+    {
+      "target": "feedback.screenshot",
+      "body": [
+        {
+          "type": "_type",
+          "reference": "6a8f471a5eb2498f434e50e0"
+        },
+        {
+          "type": "_parent",
+          "reference": "6abb6b9256069f238dec7ce2"
+        },
+        {
+          "type": "name",
+          "string": "screenshot"
+        },
+        {
+          "type": "type",
+          "string": "file"
+        },
+        {
+          "type": "_sharing",
+          "string": "domain"
+        },
+        {
+          "type": "description",
+          "language": "en",
+          "string": "Screenshot of the page the member is giving feedback on."
+        },
+        {
+          "type": "description",
+          "language": "et",
+          "string": "Kuvatõmmis lehest, mille kohta liige tagasisidet annab."
+        },
+        {
+          "type": "ordinal",
+          "number": 1
+        }
+      ]
+    },
+    {
+      "target": "feedback.doodle_layer",
+      "body": [
+        {
+          "type": "_type",
+          "reference": "6a8f471a5eb2498f434e50e0"
+        },
+        {
+          "type": "_parent",
+          "reference": "6abb6b9256069f238dec7ce2"
+        },
+        {
+          "type": "name",
+          "string": "doodle_layer"
+        },
+        {
+          "type": "type",
+          "string": "text"
+        },
+        {
+          "type": "_sharing",
+          "string": "domain"
+        },
+        {
+          "type": "description",
+          "language": "en",
+          "string": "Ink drawn over the screenshot — stroke data as JSON (the #394 StrokeData format)."
+        },
+        {
+          "type": "description",
+          "language": "et",
+          "string": "Kuvatõmmisele joonistatud märkused — joonte andmed JSON-vormingus (#394 StrokeData)."
+        },
+        {
+          "type": "ordinal",
+          "number": 2
+        }
+      ]
+    },
+    {
+      "target": "feedback.description",
+      "body": [
+        {
+          "type": "_type",
+          "reference": "6a8f471a5eb2498f434e50e0"
+        },
+        {
+          "type": "_parent",
+          "reference": "6abb6b9256069f238dec7ce2"
+        },
+        {
+          "type": "name",
+          "string": "description"
+        },
+        {
+          "type": "type",
+          "string": "text"
+        },
+        {
+          "type": "_sharing",
+          "string": "domain"
+        },
+        {
+          "type": "description",
+          "language": "en",
+          "string": "The member's feedback in their own words."
+        },
+        {
+          "type": "description",
+          "language": "et",
+          "string": "Liikme tagasiside tema enda sõnadega."
+        },
+        {
+          "type": "ordinal",
+          "number": 3
+        }
+      ]
+    }
+  ],
+  "instancesCreated": 0,
+  "ledger": [
+    {
+      "action": "ensure-type",
+      "target": "feedback",
+      "id": "6abb6b9256069f238dec7ce2",
+      "outcome": "created",
+      "after": {
+        "sharing": "domain",
+        "inheritsRights": true
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.sharing-readback",
+      "id": "6abb6b9256069f238dec7ce2",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.screenshot",
+      "id": "6abb6b9256069f238dec7ced",
+      "outcome": "created",
+      "after": {
+        "type": "file",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.screenshot.sharing-readback",
+      "id": "6abb6b9256069f238dec7ced",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.doodle_layer",
+      "id": "6abb6b9356069f238dec7cf9",
+      "outcome": "created",
+      "after": {
+        "type": "text",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.doodle_layer.sharing-readback",
+      "id": "6abb6b9356069f238dec7cf9",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.description",
+      "id": "6abb6b9356069f238dec7d05",
+      "outcome": "created",
+      "after": {
+        "type": "text",
+        "sharing": "domain",
+        "mandatory": false
+      }
+    },
+    {
+      "action": "ensure-propdef",
+      "target": "feedback.description.sharing-readback",
+      "id": "6abb6b9356069f238dec7d05",
+      "outcome": "found",
+      "after": {
+        "sharing": "domain"
+      }
+    }
+  ],
+  "authorizedBy": "Mihkel, #395 issue body 2026-09-28: \"#395 go-ahead!\" — https://github.com/mvox-dev/mvox-app/issues/395"
+}

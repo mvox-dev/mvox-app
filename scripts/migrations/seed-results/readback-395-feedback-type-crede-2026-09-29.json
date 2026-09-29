@@ -1,0 +1,30 @@
+{
+  "db": "mvox_crede",
+  "kind": "read-only read-back of the #395 feedback type provisioning (Perotin, 2026-09-29)",
+  "sensitive": false,
+  "ledgers": [
+    "seed-395-feedback-type-crede-dry-2026-09-29T07-40-58-383Z.json",
+    "seed-395-feedback-type-crede-live-2026-09-29T07-41-08-041Z.json"
+  ],
+  "checks": {
+    "type_sharing_domain": true,
+    "type_inheritrights_true": true,
+    "type_meta_type": "entity (6a8f471a5eb2498f434e50cc)",
+    "propdefs": {
+      "screenshot": { "id": "6abb6b9256069f238dec7ced", "type": "file", "sharing": "domain", "ordinal": 1, "parent": "feedback" },
+      "doodle_layer": { "id": "6abb6b9356069f238dec7cf9", "type": "text", "sharing": "domain", "ordinal": 2, "parent": "feedback" },
+      "description": { "id": "6abb6b9356069f238dec7d05", "type": "text", "sharing": "domain", "ordinal": 3, "parent": "feedback" }
+    },
+    "propdef_meta_type": "property (6a8f471a5eb2498f434e50e0)",
+    "feedback_named_entities": 1,
+    "children_of_type_def": 3,
+    "feedback_instances": 0,
+    "entities_total": 690,
+    "entities_with_id_at_or_after_6abb": ["6abb6b9256069f238dec7ce2", "6abb6b9256069f238dec7ced", "6abb6b9356069f238dec7cf9", "6abb6b9356069f238dec7d05"]
+  },
+  "deviation": {
+    "type_def_parent": "ABSENT. The feedback type-def carries no _parent property. Team-lead expected the member type-def 6a92a327ca67df980f414ef4; existing peer type-defs (admin_member_record, rsvp) are parented to the database entity 6a8f471a5eb2498f434e5112 (mvox_crede). The seed body writes no _parent on the type-def (ensureEntityType); MvoxEntityDef.parents is not written to Entu for the type-def, so this is the script's behaviour, not a stray write.",
+    "status": "surfaced, not fixed"
+  },
+  "method": "GET /auth + GET entity reads only; no writes. 'Nothing else written' = no new entity ids beyond the four; edits to pre-existing entities are not detectable this way."
+}
