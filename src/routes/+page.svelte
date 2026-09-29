@@ -110,7 +110,6 @@
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getLocale } from '$lib/paraglide/runtime.js';
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
 	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
@@ -119,13 +118,8 @@
 	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
-	import { createEvent, createEventSeries, createSeason } from '$lib/entity/entityCreate';
-	import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
-	import {
-		generateEventDates,
-		generateIntervalDates,
-		type RepeatPattern
-	} from '$lib/events/recurrence';
+	import { createEvent, createSeason } from '$lib/entity/entityCreate';
+	import type { CreateEventInput } from '$lib/entity/entityCreate';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import {
 		listEventSeriesForSeason,

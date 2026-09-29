@@ -16,7 +16,8 @@ const CHANGED_SURFACES = [
 	'src/routes/library/+page.svelte',
 	'src/lib/components/agenda/AgendaList.svelte',
 	'src/lib/components/attendance/TakeAttendanceButton.svelte',
-	// #113 F2/F3 added +page.svelte, AttendanceSurface.svelte and event/[id];
+	// The landing surface and the components its own i18n pass edited — the scan
+	// is only as wide as this list.
 	// #508 adds SeriesCreateForm.svelte, split out of +page.svelte.
 	'src/routes/+page.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
