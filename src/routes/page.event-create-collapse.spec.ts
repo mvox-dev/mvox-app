@@ -623,6 +623,64 @@ describe('#244 — a failed create leaves the panel open, the form intact and th
 	});
 });
 
+describe('#508 — a create that lands after its form closed runs no success tail', () => {
+	it('switching collective mid-create: no season-list refresh for the old collective, no scroll, no mark', async () => {
+		let resolveCreate!: (id: string) => void;
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((r) => {
+					resolveCreate = r;
+				})
+		);
+		setToken('jwt-abc');
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { sampledb: 'person-p', otherdb: 'person-p' },
+			expMs: Date.now() + 100_000
+		});
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
+				{ db: 'otherdb', name: 'Otherdb', personId: 'person-p' }
+			],
+			erroredDbs: []
+		});
+		urlCollectiveDbStore.set(null);
+		selectedCollectiveDbStore.set('sampledb');
+		const { container } = render(Page);
+		await waitFor(() => {
+			expect(q(container as HTMLElement, 'season-card-expand')).not.toBeNull();
+		});
+		await openFormFromPanel(container as HTMLElement);
+		await fillConcert(container as HTMLElement);
+		const calls = spyScroll();
+		await submit(container as HTMLElement);
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+
+		selectedCollectiveDbStore.set('otherdb');
+		await waitFor(() => {
+			expect(q(container as HTMLElement, 'event-create-form')).toBeNull();
+		});
+		await settleMicro();
+		const seriesReadsBefore = listEventSeriesForSeasonMock.mock.calls.length;
+		const eventReadsBefore = listEventsForSeasonMock.mock.calls.length;
+
+		worldHasNewEvent = true;
+		resolveCreate(NEW_EVENT_ID);
+		await new Promise((r) => setTimeout(r, 0));
+		await settleMicro();
+
+		expect(listEventSeriesForSeasonMock.mock.calls.slice(seriesReadsBefore)).toEqual([]);
+		expect(listEventsForSeasonMock.mock.calls.slice(eventReadsBefore)).toEqual([]);
+		expect(q(container as HTMLElement, 'season-manage-panel')).toBeNull();
+		expect(rowScrolls(calls)).toEqual([]);
+		expect(q(container as HTMLElement, CREATED_MARK)).toBeNull();
+	});
+});
+
 // ── 4b. review fixes: the collapse follows the ROW, in every view ──────────────
 
 describe('#244 review F2 — month mode is a persisted view choice, and gets the same surfacing', () => {

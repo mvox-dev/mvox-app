@@ -325,6 +325,7 @@
 				return;
 			}
 
+			const panel = mounted;
 			const showableUnderFilter =
 				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
 			const createdName = trimmedName || eventCreateSeriesDefaults?.name || typeValue;
@@ -333,15 +334,15 @@
 				? m.event_created({ name: createdName, when: createdWhen })
 				: m.event_created_hidden_by_filter({ name: createdName, when: createdWhen });
 			onclose();
-			loadForSelected({ keepSeasonManage: true });
-			if (panelSeasonId === seasonId) {
+			loadForSelected({ keepSeasonManage: panel });
+			if (panel && panelSeasonId === seasonId) {
 				refreshSeasonManageLists(cfg, panelSeasonId);
 			}
 
-			if (showableUnderFilter) {
+			if (panel && showableUnderFilter) {
 				surfaceCreatedEvent(newEventId);
 			}
-			restoreEventCreateFocus();
+			if (panel) restoreEventCreateFocus();
 		} finally {
 			submitting = false;
 		}
@@ -349,6 +350,11 @@
 
 	$effect(() => {
 		eventCreateNameInput?.focus();
+	});
+
+	let mounted = true;
+	$effect(() => () => {
+		mounted = false;
 	});
 </script>
 
