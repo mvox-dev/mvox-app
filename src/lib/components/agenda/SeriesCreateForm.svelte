@@ -1,8 +1,8 @@
 <!-- #508 — [+ Series] dialog, moved out of +page.svelte's season-manage markup.
-	Mounted only while open, so construction seeds a resume snapshot.
+	Mounted only while open: untracked prop reads seed the form once at construction, deliberately.
 	submitting/resumeByDb/seriesRunDb stay bindable: the page reads them across unmounts. -->
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -55,9 +55,11 @@
 
 	const isOffline = $derived(!$writesAvailable);
 
-	const initialResume = selected ? (resumeByDb[selected.db] ?? null) : null;
+	const initialResume = untrack(() => (selected ? (resumeByDb[selected.db] ?? null) : null));
 
-	let seriesCreateSeasonId = $state(initialResume?.form.seasonId ?? manageableSeasonId ?? '');
+	let seriesCreateSeasonId = $state(
+		initialResume?.form.seasonId ?? untrack(() => manageableSeasonId) ?? ''
+	);
 	let seriesCreateName = $state(initialResume?.form.name ?? '');
 	let seriesCreateType = $state(initialResume?.form.type ?? 'rehearsal');
 	let seriesCreateDuration = $state(initialResume?.form.duration ?? '');
@@ -66,8 +68,8 @@
 	let seriesCreateRepeat = $state<RepeatPattern>(initialResume?.form.repeat ?? 'weekly');
 	let seriesCreateDay = $state(initialResume?.form.day ?? '');
 	let seriesCreateTime = $state(initialResume?.form.time ?? '');
-	let seriesCreateFrom = $state(initialResume?.form.from ?? seasonManageStartDate);
-	let seriesCreateUntil = $state(initialResume?.form.until ?? seasonManageEndDate);
+	let seriesCreateFrom = $state(initialResume?.form.from ?? untrack(() => seasonManageStartDate));
+	let seriesCreateUntil = $state(initialResume?.form.until ?? untrack(() => seasonManageEndDate));
 	let seriesCreateSkipDates = $state<string[]>(
 		initialResume ? [...initialResume.form.skipDates] : []
 	);
