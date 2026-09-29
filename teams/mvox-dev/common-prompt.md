@@ -37,6 +37,14 @@ When prompts or memory cite `$REPO/...` or `$ENTU_RESEARCH/...`, resolve relativ
 
 All persistent text output (architecture decisions, PR descriptions, shared knowledge files, scratchpad entries, **issue bodies — at file time, not as a later edit**) must carry the author's name: `(*MVOX:<AgentName>*)`. Place on a new line below the block, or next to the section heading if you wrote the entire section.
 
+## Source Comments
+
+A comment says why the code is as it is (Mihkel, 2026-09-29, #506):
+
+- At most 3 lines, each at most 100 characters.
+- At most one comment per function or component, and only where the why is not obvious.
+- Comments are under 10% of a file's lines.
+- No review rounds, finding numbers, or "slice N" narration — those go in the commit message or PR, never the source.
 
 ## Stack
 
