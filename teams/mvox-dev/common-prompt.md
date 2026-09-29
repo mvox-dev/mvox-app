@@ -45,6 +45,7 @@ A comment says why the code is as it is (Mihkel, 2026-09-29, #506):
 - At most one comment per function or component, and only where the why is not obvious.
 - Comments are under 10% of a file's lines.
 - No review rounds, finding numbers, or "slice N" narration — those go in the commit message or PR, never the source.
+- When in doubt, leave comment out (Mihkel, 2026-09-29).
 
 How `src/comment-rules.spec.ts` counts these, on every code file a change touches (#509):
 
