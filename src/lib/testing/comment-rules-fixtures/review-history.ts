@@ -1,0 +1,40 @@
+export const r0 = 0;
+export const r1 = 1;
+export const r2 = 2;
+export const r3 = 3;
+// Review round 2 settled this
+export const r5 = 5;
+export const r6 = 6;
+export const r7 = 7;
+export const r8 = 8;
+export const r9 = 9;
+export const r10 = 10;
+export const r11 = 11;
+export const r12 = 12;
+export const r13 = 13;
+// see finding 3
+export const r15 = 15;
+export const r16 = 16;
+export const r17 = 17;
+export const r18 = 18;
+export const r19 = 19;
+export const r20 = 20;
+export const r21 = 21;
+export const r22 = 22;
+export const r23 = 23;
+// slice 4 adds the rest
+export const r25 = 25;
+export const r26 = 26;
+export const r27 = 27;
+export const r28 = 28;
+export const r29 = 29;
+export const r30 = 30;
+export const r31 = 31;
+export const r32 = 32;
+export const r33 = 33;
+export const r34 = 34;
+export const r35 = 35;
+export const r36 = 36;
+export const r37 = 37;
+export const r38 = 38;
+export const r39 = 39;

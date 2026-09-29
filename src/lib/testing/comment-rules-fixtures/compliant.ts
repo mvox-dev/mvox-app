@@ -1,0 +1,40 @@
+/**
+ * Kept short on purpose.
+ */
+export const longCode = 'yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy';
+export const phrases = ['review round', 'finding 3', 'slice 4'];
+export const trailing = 1; // a trailing note
+export const v0 = 0;
+export const v1 = 1;
+export const v2 = 2;
+export const v3 = 3;
+export const v4 = 4;
+export const v5 = 5;
+export const v6 = 6;
+export const v7 = 7;
+export const v8 = 8;
+export const v9 = 9;
+export const v10 = 10;
+export const v11 = 11;
+export const v12 = 12;
+export const v13 = 13;
+export const v14 = 14;
+export const v15 = 15;
+export const v16 = 16;
+export const v17 = 17;
+export const v18 = 18;
+export const v19 = 19;
+export const v20 = 20;
+export const v21 = 21;
+export const v22 = 22;
+export const v23 = 23;
+export const v24 = 24;
+export const v25 = 25;
+export const v26 = 26;
+export const v27 = 27;
+export const v28 = 28;
+export const v29 = 29;
+export const v30 = 30;
+export const v31 = 31;
+export const v32 = 32;
+export const v33 = 33;

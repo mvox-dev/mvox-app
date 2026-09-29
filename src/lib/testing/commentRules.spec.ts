@@ -1,0 +1,172 @@
+import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import {
+	COMMENT_FIXTURES_DIR,
+	changedFiles,
+	checkChangedFiles,
+	checkCommentRules,
+	selectCheckedFiles,
+	type CommentViolation
+} from './commentRules';
+
+const FIXTURES = 'src/lib/testing/comment-rules-fixtures/';
+
+function fixture(name: string): string {
+	return readFileSync(resolve(process.cwd(), FIXTURES, name), 'utf8');
+}
+
+function check(name: string): Array<Pick<CommentViolation, 'rule' | 'line'>> {
+	return checkCommentRules(FIXTURES + name, fixture(name)).map(({ rule, line }) => ({
+		rule,
+		line
+	}));
+}
+
+describe('checkCommentRules — the four violations, each from a planted fixture', () => {
+	it('a run of 4 whole-line // comments is one comment over 3 lines', () => {
+		expect(check('comment-too-long.ts')).toEqual([{ rule: 'comment-too-long', line: 3 }]);
+	});
+
+	it('a block comment spanning 5 lines is over 3 lines', () => {
+		expect(check('block-too-long.ts')).toEqual([{ rule: 'comment-too-long', line: 1 }]);
+	});
+
+	it('an html comment spanning 4 lines in svelte markup is over 3 lines', () => {
+		expect(check('comment-too-long.svelte')).toEqual([{ rule: 'comment-too-long', line: 5 }]);
+	});
+
+	it('a comment line over 100 characters is reported', () => {
+		expect(check('line-too-long.ts')).toEqual([{ rule: 'line-too-long', line: 2 }]);
+	});
+
+	it('comments at 15% of a file are too many', () => {
+		expect(check('too-many-comments.ts').map((v) => v.rule)).toEqual(['too-many-comments']);
+	});
+
+	it('exactly 10% is already too many (2 of 20 lines, trailing newline not a line)', () => {
+		expect(check('ten-percent.ts').map((v) => v.rule)).toEqual(['too-many-comments']);
+	});
+
+	it('every line a block comment spans counts toward the share', () => {
+		expect(check('block-span-counts.ts').map((v) => v.rule)).toEqual(['too-many-comments']);
+	});
+
+	it('review-history phrases in comments are reported, case-insensitive', () => {
+		expect(check('review-history.ts')).toEqual([
+			{ rule: 'review-history', line: 5 },
+			{ rule: 'review-history', line: 15 },
+			{ rule: 'review-history', line: 25 }
+		]);
+	});
+
+	it('review-history phrases in a svelte script comment are reported', () => {
+		expect(check('review-history.svelte')).toEqual([{ rule: 'review-history', line: 2 }]);
+	});
+
+	it('every violation names its file', () => {
+		const found = checkCommentRules('src/x.ts', fixture('line-too-long.ts'));
+		expect(found.map((v) => v.file)).toEqual(['src/x.ts']);
+		expect(found[0].detail).toEqual(expect.any(String));
+	});
+});
+
+describe('checkCommentRules — what is not a violation', () => {
+	it('a compliant ts file passes: 3-line JSDoc, long code line, phrases only in strings', () => {
+		expect(check('compliant.ts')).toEqual([]);
+	});
+
+	it('a compliant svelte file passes', () => {
+		expect(check('compliant.svelte')).toEqual([]);
+	});
+
+	it('a code line with a trailing // is not a comment line', () => {
+		expect(check('trailing-comments.ts')).toEqual([]);
+	});
+});
+
+describe('selectCheckedFiles — which changed paths are checked', () => {
+	it('keeps code files anywhere in the repo', () => {
+		const code = [
+			'src/lib/a.ts',
+			'src/routes/x/+page.svelte',
+			'src/lib/a.spec.ts',
+			'scripts/migrations/run.ts',
+			'.claude/workflows/tdd-slice-pipeline.js'
+		];
+		expect(selectCheckedFiles(code)).toEqual(code);
+	});
+
+	it('drops non-code files', () => {
+		expect(
+			selectCheckedFiles([
+				'README.md',
+				'.github/workflows/ci.yml',
+				'package.json',
+				'messages/en.json'
+			])
+		).toEqual([]);
+	});
+
+	it('drops the planted fixtures, so the real check never trips on them', () => {
+		expect(COMMENT_FIXTURES_DIR).toBe(FIXTURES);
+		expect(
+			selectCheckedFiles([FIXTURES + 'comment-too-long.ts', FIXTURES + 'compliant.svelte'])
+		).toEqual([]);
+	});
+});
+
+describe('checkChangedFiles — only the changed set is checked', () => {
+	const contents: Record<string, string> = {
+		'src/touched.ts': fixture('compliant.ts'),
+		'src/untouched.ts': fixture('comment-too-long.ts')
+	};
+
+	it('a violating file outside the changed set is not read or reported', () => {
+		const read: string[] = [];
+		const found = checkChangedFiles(['src/touched.ts', 'README.md'], (p) => {
+			read.push(p);
+			return contents[p];
+		});
+		expect(found).toEqual([]);
+		expect(read).toEqual(['src/touched.ts']);
+	});
+
+	it('a changed file that breaks the rules fails', () => {
+		const found = checkChangedFiles(['src/untouched.ts'], (p) => contents[p]);
+		expect(found.map(({ file, rule, line }) => ({ file, rule, line }))).toEqual([
+			{ file: 'src/untouched.ts', rule: 'comment-too-long', line: 3 }
+		]);
+	});
+});
+
+describe('changedFiles — the changed set against main', () => {
+	it('diffs the working tree against the merge base with origin/main, deletions excluded', () => {
+		const calls: string[][] = [];
+		const git = (args: string[]): string => {
+			calls.push(args);
+			if (args[0] === 'merge-base') return 'abc123\n';
+			return 'src/a.ts\nREADME.md\n\n';
+		};
+		expect(changedFiles({ git })).toEqual(['src/a.ts', 'README.md']);
+		expect(calls).toEqual([
+			['merge-base', 'origin/main', 'HEAD'],
+			['diff', '--name-only', '--diff-filter=d', 'abc123']
+		]);
+	});
+
+	it('runs against the real repository without throwing', () => {
+		const files = changedFiles();
+		expect(Array.isArray(files)).toBe(true);
+		for (const f of files) expect(typeof f).toBe('string');
+	});
+});
+
+describe('CI can compute the changed set', () => {
+	it('the CI checkout fetches full history so origin/main exists', () => {
+		const ci = readFileSync(resolve(process.cwd(), '.github/workflows/ci.yml'), 'utf8');
+		const checkout = ci.slice(ci.indexOf('uses: actions/checkout'));
+		const step = checkout.slice(0, checkout.search(/\n\s*- name:/));
+		expect(step).toMatch(/fetch-depth:\s*0\b/);
+	});
+});
