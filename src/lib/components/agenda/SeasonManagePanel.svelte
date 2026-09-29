@@ -10,25 +10,14 @@
 	import RepertoireElement from '$lib/components/agenda/RepertoireElement.svelte';
 	import SeriesCreateForm from '$lib/components/agenda/SeriesCreateForm.svelte';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
-	import { writesAvailable } from '$lib/net/online';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import type { Season } from '$lib/seasons/types';
 	import type { ManageRightsState } from '$lib/repertoire/types';
-	import { canDeleteSeries } from '$lib/repertoire/repertoireActions';
+	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
-	import {
-		listEventSeriesForSeason,
-		updateSeasonField,
-		addSeasonConductor,
-		removeSeasonConductor as apiRemoveSeasonConductor,
-		deleteEventSeries as apiDeleteEventSeries,
-		countSeriesOccurrences as apiCountSeriesOccurrences,
-		countSeasonScope as apiCountSeasonScope,
-		deleteSeason as apiDeleteSeason,
-		type SeasonEditableField,
-		type SeriesListItem
-	} from '$lib/seasons/seasonManage';
+	import type * as SeasonManage from '$lib/seasons/seasonManage';
+	import type { SeasonEditableField, SeriesListItem } from '$lib/seasons/seasonManage';
 	// deleteErrors.ts's discriminators live in their own module so the page's
 	// specs can `vi.mock` seasonManage wholesale without breaking them; the
 	// 'partial-event' case is dead here since the standalone-event delete left.
@@ -86,6 +75,17 @@
 		handlePanelAddWork: (workId: string) => void;
 		handlePanelStatusChange: NonNullable<RepertoireProps['onstatuschange']>;
 		handlePanelRemoveItem: (itemId: string) => void;
+		isOffline: boolean;
+		writeUnavailableText: string;
+		listEventSeriesForSeason: typeof SeasonManage.listEventSeriesForSeason;
+		updateSeasonField: typeof SeasonManage.updateSeasonField;
+		addSeasonConductor: typeof SeasonManage.addSeasonConductor;
+		apiRemoveSeasonConductor: typeof SeasonManage.removeSeasonConductor;
+		apiDeleteEventSeries: typeof SeasonManage.deleteEventSeries;
+		apiCountSeriesOccurrences: typeof SeasonManage.countSeriesOccurrences;
+		apiCountSeasonScope: typeof SeasonManage.countSeasonScope;
+		apiDeleteSeason: typeof SeasonManage.deleteSeason;
+		canDeleteSeries: typeof RepertoireActions.canDeleteSeries;
 	}
 
 	let {
@@ -132,10 +132,19 @@
 		handlePdfClick,
 		handlePanelAddWork,
 		handlePanelStatusChange,
-		handlePanelRemoveItem
+		handlePanelRemoveItem,
+		isOffline,
+		writeUnavailableText,
+		listEventSeriesForSeason,
+		updateSeasonField,
+		addSeasonConductor,
+		apiRemoveSeasonConductor,
+		apiDeleteEventSeries,
+		apiCountSeriesOccurrences,
+		apiCountSeasonScope,
+		apiDeleteSeason,
+		canDeleteSeries
 	}: Props = $props();
-
-	const isOffline = $derived(!$writesAvailable);
 
 	const manageableSeasonEntries = $derived(
 		seasons.filter((s) => manageableSeasonRightsById[s.id] === 'editor')
@@ -844,7 +853,7 @@
 
 				{#if isOffline}
 					<p data-testid="season-manage-write-unavailable" class="text-xs text-ink-2">
-						{m.write_unavailable_no_signal()}
+						{writeUnavailableText}
 					</p>
 				{/if}
 				{#if seasonEditHeldOffline}

@@ -59,6 +59,7 @@
 	} from '$lib/repertoire/types';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import {
+		canDeleteSeries,
 		canMarkAttendance,
 		createProgramItem,
 		createRepertoireItem,
@@ -104,6 +105,16 @@
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import {
+		listEventSeriesForSeason,
+		updateSeasonField,
+		addSeasonConductor,
+		removeSeasonConductor as apiRemoveSeasonConductor,
+		deleteEventSeries as apiDeleteEventSeries,
+		countSeriesOccurrences as apiCountSeriesOccurrences,
+		countSeasonScope as apiCountSeasonScope,
+		deleteSeason as apiDeleteSeason
+	} from '$lib/seasons/seasonManage';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
@@ -2151,6 +2162,17 @@
 							{handlePanelAddWork}
 							{handlePanelStatusChange}
 							{handlePanelRemoveItem}
+							{isOffline}
+							writeUnavailableText={m.write_unavailable_no_signal()}
+							{listEventSeriesForSeason}
+							{updateSeasonField}
+							{addSeasonConductor}
+							{apiRemoveSeasonConductor}
+							{apiDeleteEventSeries}
+							{apiCountSeriesOccurrences}
+							{apiCountSeasonScope}
+							{apiDeleteSeason}
+							{canDeleteSeries}
 						/>
 						<div
 							data-testid="season-create-status"
