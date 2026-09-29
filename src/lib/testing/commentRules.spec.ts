@@ -38,6 +38,26 @@ describe('checkCommentRules — the four violations, each from a planted fixture
 		expect(check('block-too-long.ts')).toEqual([{ rule: 'comment-too-long', line: 1 }]);
 	});
 
+	it('a block opened after code on the same line still counts every line it spans', () => {
+		expect(check('mid-line-block.ts')).toEqual([
+			{ rule: 'comment-too-long', line: 2 },
+			{ rule: 'review-history', line: 3 }
+		]);
+	});
+
+	it('an html comment opened after markup on the same line still counts every line it spans', () => {
+		expect(check('mid-line-block.svelte')).toEqual([
+			{ rule: 'comment-too-long', line: 6 },
+			{ rule: 'review-history', line: 7 }
+		]);
+	});
+
+	it('a block opened and closed after code on one line leaves the next line as code', () => {
+		const code = Array.from({ length: 19 }, (_, i) => `export const v${i} = ${i};`);
+		const source = ['export const a = 1; /* why */', ...code].join('\n');
+		expect(checkCommentRules('src/x.ts', source)).toEqual([]);
+	});
+
 	it('an html comment spanning 4 lines in svelte markup is over 3 lines', () => {
 		expect(check('comment-too-long.svelte')).toEqual([{ rule: 'comment-too-long', line: 5 }]);
 	});
@@ -262,5 +282,16 @@ describe('CI can compute the changed set', () => {
 		const checkout = ci.slice(ci.indexOf('uses: actions/checkout'));
 		const step = checkout.slice(0, checkout.search(/\n\s*- name:/));
 		expect(step).toMatch(/fetch-depth:\s*0\b/);
+	});
+});
+
+describe('the related-spec run reaches the comment check', () => {
+	it('test:changed runs src/comment-rules.spec.ts by path, which --changed never collects', () => {
+		const pkg = JSON.parse(readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')) as {
+			scripts: Record<string, string>;
+		};
+		expect(pkg.scripts['test:changed']).toBe(
+			'vitest run --changed origin/main && vitest run src/comment-rules.spec.ts'
+		);
 	});
 });

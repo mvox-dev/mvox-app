@@ -65,6 +65,13 @@ function trailingComment(line: string, markup: boolean): string {
 	return '';
 }
 
+function leavesBlockOpen(commentText: string, markup: boolean): boolean {
+	const [open, close] = markup ? ['<!--', '-->'] : ['/*', '*/'];
+	return (
+		commentText.startsWith(open) && commentText.lastIndexOf(open) > commentText.lastIndexOf(close)
+	);
+}
+
 // A whole-comment line: `// x`, or a line inside a `/* */` / `<!-- -->` span, in
 // whichever syntax its .svelte region (script/style/markup) uses. Code with a
 // trailing `// note` is not one, but that note is still comment text.
@@ -108,7 +115,9 @@ function classifyLines(lines: string[], isSvelte: boolean): LineKind[] {
 			continue;
 		}
 
-		kinds.push({ isComment: false, commentText: trailingComment(line, markup) });
+		const commentText = trailingComment(line, markup);
+		kinds.push({ isComment: false, commentText });
+		blockOpen = leavesBlockOpen(commentText, markup);
 	}
 
 	return kinds;
