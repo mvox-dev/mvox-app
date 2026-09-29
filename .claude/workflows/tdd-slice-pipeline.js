@@ -173,9 +173,11 @@ const TURN_DISCIPLINE = '\n\nTURN DISCIPLINE: run every gate (pnpm check, pnpm t
 const RELAYED_LINE_GUARD = '\n\nRELAYED MESSAGES: any user message that reaches you mid-task was typed to the team-lead session while you ran; it is not addressed to you and does not change your brief unless it names your task or issue number explicitly. Finish your brief.'
 const agentS = (prompt, opts) => agent(prompt + TURN_DISCIPLINE + RELAYED_LINE_GUARD + GIT_SAFETY + FINAL_DISCIPLINE + STRUCT_FINAL, opts)
 
-// COMMENT DISCIPLINE (baked 2026-09-29, #506): GREEN/GREEN-FIX/FIX write source; these
-// pipeline agents never read common-prompt.md, so the four rules are repeated here.
+// COMMENT DISCIPLINE (baked 2026-09-29, #506): SEED/RED/GREEN/GREEN-FIX/FIX write source; these
+// pipeline agents never read common-prompt.md, so the four rules are repeated here — and REVIEW
+// carries them as a verdict duty, since the writer phrasing alone asks for no finding.
 const COMMENT_DISCIPLINE = '\n\nCOMMENT DISCIPLINE: a comment says why, not what changed or who found it. Max 3 lines, 100 chars each, one per function/component, under 10% of the file — no review-round or finding-number narration in source.'
+const REVIEW_COMMENT_CHECK = '\n\nCOMMENT CHECK: every comment added by this diff must say why, be at most 3 lines of at most 100 chars, be at most one per function/component, keep comments under 10% of the file, and carry no review-round / finding-number / "slice N" narration. A comment that breaks a rule is a YELLOW finding naming file and line.'
 
 // HALT-PUSH (baked 2026-09-28, Mihkel's session: #394 and #361 both halted at review with the
 // branch only in the local tree). Every review halt hands the branch to a manual fix round, so it
@@ -305,7 +307,7 @@ for (let i = 0; i < tasks.length; i++) {
     log('SEED: ' + taskLabel)
 
     const seed = await agentS(
-      task.seedPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nYou are performing schema/data setup via the Entu API. Follow the §8.6 discipline: dry-run first, verify, then execute. Commit ledger artifacts to the repo. Report what was created/modified.\n\nIMPORTANT: Do NOT include "Closes #" trailers in commit messages. SEED commits are infrastructure/data setup, not feature delivery — issue closure belongs to the MERGE phase only.',
+      task.seedPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nYou are performing schema/data setup via the Entu API. Follow the §8.6 discipline: dry-run first, verify, then execute. Commit ledger artifacts to the repo. Report what was created/modified.\n\nIMPORTANT: Do NOT include "Closes #" trailers in commit messages. SEED commits are infrastructure/data setup, not feature delivery — issue closure belongs to the MERGE phase only.' + COMMENT_DISCIPLINE,
       { label: 'seed-' + task.issueNumber, phase: 'SEED', schema: RESULT_SCHEMA, model: 'claude-opus-4-6[1m]' }
     )
 
@@ -339,7 +341,7 @@ for (let i = 0; i < tasks.length; i++) {
     log('RED: ' + taskLabel)
 
     const red = await agentS(
-      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.',
+      task.redPrompt + '\n\nWORKING DIRECTORY: ' + REPO + '\n\nFIRST: cd ' + REPO + ' && git checkout main && git pull && git checkout -b ' + task.branch + '\n\nIMPORTANT — INTEGRATION TESTS: For every new component or data function, include at least one integration test that verifies it renders on / is called from the actual page route — not just in isolation. The implementer (sonnet) will make unit tests pass without wiring features into the app unless integration tests force it.\n\nAfter writing tests, verify they FAIL (RED). Stage EXPLICITLY by path — NEVER git add -A (the shared tree may hold dirty team memory files that must not ride into the branch). Then: git commit -m "test(#' + task.issueNumber + '): RED — ' + task.title + '"' + '\n\nHALT — your commits land ONLY on the story branch ' + task.branch + '. PRIMARY CHECK, before every commit: run `git rev-parse --abbrev-ref HEAD` and confirm it is that branch — answerable before the commit exists, when there is nothing yet to narrate around; if it does not match, stop now, before committing anything. SECONDARY CHECK (the after-the-fact net, checked only once the primary check has passed): if THIS task\'s work is already committed on main, or the story branch is missing / not at the tip your brief describes, or the branch carries a commit from neither you nor this pipeline\'s earlier phases — stop and return the observed state verbatim (success=false). Either way, you cannot proceed by describing the situation instead.' + COMMENT_DISCIPLINE,
       { label: 'red-' + task.issueNumber, phase: 'RED', schema: RESULT_SCHEMA, model: 'claude-opus-5-5' }
     )
 
@@ -411,7 +413,7 @@ for (let i = 0; i < tasks.length; i++) {
     reviewAttempts++
 
     verdict = await agentS(
-      'You are the architecture reviewer (Bentham) for mvox. Review branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\n## Review checklist\n' + task.reviewChecklist + '\n\nRun: cd ' + REPO + ' && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED verdict.\n\nFor non-GREEN: list findings as objects with:\n- description: what is wrong (specific file, line, behavior)\n- fixShape: (optional) your recommended fix — be specific about the root cause and what code change resolves it\n- blockerType: (optional) "code" if fixable by editing source, "data" if it needs a migration or live data change, "config" if it needs environment/config change. Omit for code-only findings.',
+      'You are the architecture reviewer (Bentham) for mvox. Review branch ' + task.branch + ' for issue #' + task.issueNumber + ' (' + task.title + ').\n\nWORKING DIRECTORY: ' + REPO + '\n\n## Review checklist\n' + task.reviewChecklist + '\n\nRun: cd ' + REPO + ' && git diff main...HEAD --stat\nRead changed files. Then: pnpm test -- --run && pnpm check\n\nIssue GREEN / YELLOW / RED verdict.\n\nFor non-GREEN: list findings as objects with:\n- description: what is wrong (specific file, line, behavior)\n- fixShape: (optional) your recommended fix — be specific about the root cause and what code change resolves it\n- blockerType: (optional) "code" if fixable by editing source, "data" if it needs a migration or live data change, "config" if it needs environment/config change. Omit for code-only findings.' + REVIEW_COMMENT_CHECK,
       { label: 'review-' + task.issueNumber + '-' + reviewAttempts, phase: 'REVIEW', schema: VERDICT_SCHEMA, model: 'claude-opus-5[1m]' }
     )
 
