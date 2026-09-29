@@ -1,9 +1,8 @@
-export const r0 = 0;
 export const r1 = 1;
 export const r2 = 2;
 export const r3 = 3;
+export const r4 = 4;
 // Review round 2 settled this
-export const r5 = 5;
 export const r6 = 6;
 export const r7 = 7;
 export const r8 = 8;
@@ -12,8 +11,8 @@ export const r10 = 10;
 export const r11 = 11;
 export const r12 = 12;
 export const r13 = 13;
+export const r14 = 14;
 // see finding 3
-export const r15 = 15;
 export const r16 = 16;
 export const r17 = 17;
 export const r18 = 18;
@@ -22,8 +21,8 @@ export const r20 = 20;
 export const r21 = 21;
 export const r22 = 22;
 export const r23 = 23;
+export const r24 = 24;
 // slice 4 adds the rest
-export const r25 = 25;
 export const r26 = 26;
 export const r27 = 27;
 export const r28 = 28;
@@ -33,8 +32,59 @@ export const r31 = 31;
 export const r32 = 32;
 export const r33 = 33;
 export const r34 = 34;
-export const r35 = 35;
+// review rounds settled the shape
 export const r36 = 36;
 export const r37 = 37;
 export const r38 = 38;
 export const r39 = 39;
+export const r40 = 40;
+export const r41 = 41;
+export const r42 = 42;
+export const r43 = 43;
+export const r44 = 44;
+// findings 1a-1d moved this
+export const r46 = 46;
+export const r47 = 47;
+export const r48 = 48;
+export const r49 = 49;
+export const r50 = 50;
+export const r51 = 51;
+export const r52 = 52;
+export const r53 = 53;
+export const r54 = 54;
+// review-round 2 kept the name
+export const r56 = 56;
+export const r57 = 57;
+export const r58 = 58;
+export const r59 = 59;
+export const r60 = 60;
+export const r61 = 61;
+export const r62 = 62;
+export const r63 = 63;
+export const r64 = 64;
+// slice 4b adds the rest
+export const r66 = 66;
+export const r67 = 67;
+export const r68 = 68;
+export const r69 = 69;
+export const r70 = 70;
+export const r71 = 71;
+export const r72 = 72;
+export const r73 = 73;
+export const r74 = 74;
+// findings 2–4 reshaped this
+export const r76 = 76;
+export const r77 = 77;
+export const r78 = 78;
+export const r79 = 79;
+export const r80 = 80;
+export const r81 = 81;
+export const r82 = 82;
+export const r83 = 83;
+export const r84 = 84;
+export const r85 = 85;
+export const r86 = 86;
+export const r87 = 87;
+export const r88 = 88;
+export const r89 = 89;
+export const r90 = 90;

@@ -20,7 +20,10 @@ export const COMMENT_FIXTURES_DIR = 'src/lib/testing/comment-rules-fixtures/';
 const MAX_COMMENT_RUN = 3;
 const MAX_LINE_LENGTH = 100;
 const MAX_COMMENT_SHARE = 0.1;
-const REVIEW_HISTORY = /\b(review round|finding \d+|slice \d+)\b/i;
+// Plural stems, an optional hyphen, and a trailing \w* on purpose: the narration
+// is as often pluralised, hyphenated, or numbered with a suffix or range, all of
+// which a closing \b lets pass. The shapes are pinned in commentRules.spec.ts.
+const REVIEW_HISTORY = /\b(review[ -]rounds?|findings? \d+|slices? \d+)\w*/i;
 const CODE_FILE = /\.(ts|js|svelte)$/;
 
 // A trailing newline splits into a phantom empty final element; drop it here
@@ -76,6 +79,9 @@ function classifyCommentLines(lines: string[], isSvelte: boolean): boolean[] {
 	return isComment;
 }
 
+// Two counting rules an author needs: CONSECUTIVE comment lines are one comment,
+// so a compliant JSDoc touching a `//` directive reads as a single over-long run
+// and a blank line between them is the fix; a block counts every line it spans.
 export function checkCommentRules(file: string, source: string): CommentViolation[] {
 	const lines = splitLines(source);
 	const isComment = classifyCommentLines(lines, file.endsWith('.svelte'));
@@ -95,7 +101,7 @@ export function checkCommentRules(file: string, source: string): CommentViolatio
 					file,
 					rule: 'comment-too-long',
 					line: runStart + 1,
-					detail: `comment spans ${runLength} lines, over the ${MAX_COMMENT_RUN}-line limit`
+					detail: `${runLength} consecutive comment lines read as one comment, over the ${MAX_COMMENT_RUN}-line limit (a blank line splits them)`
 				});
 			}
 			runStart = -1;

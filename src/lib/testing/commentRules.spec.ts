@@ -16,6 +16,11 @@ function fixture(name: string): string {
 	return readFileSync(resolve(process.cwd(), FIXTURES, name), 'utf8');
 }
 
+function oneCommentIn20Lines(comment: string): string {
+	const body = Array.from({ length: 19 }, (_, i) => `export const v${i} = ${i};`);
+	return [comment, ...body].join('\n') + '\n';
+}
+
 function check(name: string): Array<Pick<CommentViolation, 'rule' | 'line'>> {
 	return checkCommentRules(FIXTURES + name, fixture(name)).map(({ rule, line }) => ({
 		rule,
@@ -56,12 +61,58 @@ describe('checkCommentRules — the four violations, each from a planted fixture
 		expect(check('review-history.ts')).toEqual([
 			{ rule: 'review-history', line: 5 },
 			{ rule: 'review-history', line: 15 },
-			{ rule: 'review-history', line: 25 }
+			{ rule: 'review-history', line: 25 },
+			{ rule: 'review-history', line: 35 },
+			{ rule: 'review-history', line: 45 },
+			{ rule: 'review-history', line: 55 },
+			{ rule: 'review-history', line: 65 },
+			{ rule: 'review-history', line: 75 }
 		]);
+	});
+
+	it('the plural and suffixed shapes are caught, not just the bare singular', () => {
+		const narration = [
+			'// review rounds settled the shape',
+			'// review-round 2 kept the name',
+			'// findings 1a-1d moved this',
+			'// findings 2–4 reshaped this',
+			'// slice 4b adds the rest',
+			'// slices 1 and 2 landed together'
+		];
+		for (const line of narration) {
+			expect(
+				checkCommentRules('src/x.ts', oneCommentIn20Lines(line)).map((v) => v.rule)
+			).toEqual(['review-history']);
+		}
+	});
+
+	it('words that merely contain the stems are not narration', () => {
+		const innocent = [
+			'// the refinding of the root cause',
+			'// a slice of the array',
+			'// review the rounding here',
+			'// finding the parent by id'
+		];
+		for (const line of innocent) {
+			expect(checkCommentRules('src/x.ts', oneCommentIn20Lines(line)).map((v) => v.rule)).toEqual(
+				[]
+			);
+		}
 	});
 
 	it('review-history phrases in a svelte script comment are reported', () => {
 		expect(check('review-history.svelte')).toEqual([{ rule: 'review-history', line: 2 }]);
+	});
+
+	it('a compliant block touching a directive line merges into one over-long comment', () => {
+		expect(check('adjacent-runs-merge.ts')).toEqual([{ rule: 'comment-too-long', line: 1 }]);
+	});
+
+	it('the comment-too-long detail names the run, so the blank-line fix is evident', () => {
+		const found = checkCommentRules('src/x.ts', fixture('adjacent-runs-merge.ts'));
+		expect(found[0].detail).toBe(
+			'4 consecutive comment lines read as one comment, over the 3-line limit (a blank line splits them)'
+		);
 	});
 
 	it('every violation names its file', () => {

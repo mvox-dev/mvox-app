@@ -46,6 +46,12 @@ A comment says why the code is as it is (Mihkel, 2026-09-29, #506):
 - Comments are under 10% of a file's lines.
 - No review rounds, finding numbers, or "slice N" narration — those go in the commit message or PR, never the source.
 
+How `src/comment-rules.spec.ts` counts these, on every code file a change touches (#509):
+
+- Consecutive comment lines are ONE comment, whatever their syntax — a 3-line block touching a `//` line is a 4-line comment, and a blank line between them is the fix.
+- A block comment costs every line it spans, toward both the 3-line limit and the 10% share.
+- The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
+
 ## Stack
 
 Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rationale behind each row.
