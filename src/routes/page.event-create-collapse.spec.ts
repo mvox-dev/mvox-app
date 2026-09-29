@@ -763,6 +763,8 @@ describe('#244 review F3 — a create whose row is never listed must not collaps
 
 const PAGE_SOURCE = () => readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
 // #508 — submitEventCreate moved out; the row-watcher stays in +page.svelte.
+const AGENDA_LOAD_SOURCE = () =>
+	readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaLoad.ts'), 'utf-8');
 const EVENT_CREATE_FORM_SOURCE = () =>
 	readFileSync(resolve(process.cwd(), 'src/lib/components/agenda/EventCreateForm.svelte'), 'utf-8');
 
@@ -824,7 +826,7 @@ describe('#244 — structural: the collapse routes through closeSeasonManagePane
 	});
 
 	it('the create path never assigns agendaTypeFilter, and the page gains no new write site for it', () => {
-		const source = PAGE_SOURCE();
+		const source = PAGE_SOURCE() + AGENDA_LOAD_SOURCE();
 		expect(
 			/agendaTypeFilter\s*=[^=]/.test(submitEventCreateBody(EVENT_CREATE_FORM_SOURCE())),
 			'the create path must READ the filter to decide showability, never write it'

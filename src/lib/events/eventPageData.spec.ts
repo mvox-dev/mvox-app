@@ -1,27 +1,5 @@
-// #434 slice 3/6 RED — the event page's data entry point, and the opt-in fence
-// around the shared reader it wraps.
-//
-// CONTRACT (see src/routes/event/[id]/page.offline.spec.ts's header for the
-// whole slice):
-//   - loadEventDetail(cfg, eventId, fetchImpl = fetch, opts = {}) — SHARED, so
-//     its DEFAULT is uncached: no stored entry, and a rejection offline even
-//     when a stored copy for the same key exists (the page's post-write refresh
-//     must never paint a stored header as the result of a write).
-//   - loadEventPageDetail(cfg, eventId, fetchImpl = fetch) — the screen's own
-//     entry point, = loadEventDetail(..., CACHED_READ): every read it makes
-//     (event, season, series, conductor profiles) is stored online and served
-//     offline, giving the SAME EventDetail back.
-//   - refreshEventPageDetail(cfg, eventId, fetchImpl = fetch) — slice 3 review
-//     round, findings 1 and 2: the same reads STORE-ONLY. Online it stores
-//     exactly what loadEventPageDetail would; offline it REJECTS and never
-//     touches `servedFromCache`. Used by the two reads that are not what a
-//     mounted screen is rendering — the agenda's next-event prefetch and this
-//     page's own post-write refresh.
-//   - the SAME pair over the WORKS read (slice 5, and its review round findings
-//     1 and 2): loadEventPageWorkRows(cfg, eventIds, seasonId, fetchImpl, opts)
-//     for the mounted screen, refreshEventPageWorkRows(...) store-only for the
-//     agenda's next-event warm-up and this page's post-write re-read. The shared
-//     loadWorksByEventId underneath them stays uncached by default.
+// The event page's data entry points: the shared reader stays uncached by default, the
+// screen's reader stores and serves, and the refresh twins store without serving.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -46,6 +24,11 @@ import {
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+const AGENDA_SOURCE = () =>
+	['src/routes/+page.svelte', 'src/lib/agenda/agendaLoad.ts']
+		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
+		.join('\n');
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -103,14 +86,8 @@ function online() {
 	});
 }
 
-/**
- * Slice 3 review round, finding 1 — the same event, but the collective has
- * `roster_show_real_names` ON and its conductor is named ONLY by her
- * `admin_member_record`: no profile entity at all, so there is no
- * domain-or-public profile name to degrade to. Online the header names her; the
- * overlay losing its reads offline would not rename her, it would DROP her (the
- * `conductorNames` filter removes the empty string).
- */
+/** Real names ON and a conductor named only by her admin_member_record: offline, losing
+ *  the overlay would drop her from the header, not rename her. */
 function onlineRealNames() {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = urlOf(input);
@@ -130,7 +107,6 @@ function onlineRealNames() {
 				]
 			});
 		}
-		// Her profile read answers "no profile", so `domainOrPublicName` is ''.
 		if (url.includes('_type.string=profile') && url.includes('_parent.reference=p-cond')) {
 			return json({ count: 0, entities: [] });
 		}
@@ -138,26 +114,12 @@ function onlineRealNames() {
 	});
 }
 
-/**
- * Every read ONE `loadEventPageDetail` stores against the `online()` fixture —
- * exact, because the number is knowable and it is the interesting one (finding
- * 4): the event entity, its parent season, its parent series, the conductor's
- * profile read, and the real-names overlay's `resolveDatabaseEntityId` (which
- * this fixture answers with an empty list — a 200, so it is stored — leaving the
- * overlay to degrade before it reaches its toggle or records read).
- */
+/** Every read one `loadEventPageDetail` stores against `online()`, exact: event, season,
+ *  series, conductor profile, and the overlay's database-entity probe. */
 const CACHED_READS_PER_LOAD = 5;
 
-/**
- * Slice 5 review round, findings 1 and 2 — the WORKS read's own fixture: the
- * three collective-wide label lookups `loadWorksByEventId` makes (work, edition,
- * copy) plus this event's `program_item` list. The event IS programmed, so the
- * season-repertoire fallback is never read — which is why the count below holds
- * whatever `seasonId` a caller passes.
- *
- * `programme` is the wire shape of the event's program_items, so a test can hand
- * the "after the write" list to a second call.
- */
+/** The works read's fixture: three collective-wide label lookups plus this event's
+ *  program_item list; the event is programmed, so the season fallback is never read. */
 function onlineWorks(
 	programme: Array<Record<string, unknown>> = [
 		{
@@ -208,8 +170,7 @@ function onlineWorks(
 	});
 }
 
-/** Exact, for the same reason CACHED_READS_PER_LOAD is: work + edition + copy +
- *  this event's program_item list, and nothing else. */
+/** Work + edition + copy + this event's program_item list, and nothing else. */
 const CACHED_WORKS_READS_PER_LOAD = 4;
 
 function offline() {
@@ -253,10 +214,7 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 	it('stores the event, season, series and conductor-profile reads online', async () => {
 		await loadEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
 		await flushReadCache();
-		// EXACT, not a lower bound (slice 3 review round, finding 4): a lenient
-		// `>= 4` passes just as happily when a read that must NOT be cached starts
-		// being one, which is the single thing this assertion is here to catch.
-		// Any new cached read has to be accounted for here on purpose.
+		// Exact, not a lower bound: a new cached read has to be accounted for on purpose.
 		expect(await readCacheEntryCount()).toBe(CACHED_READS_PER_LOAD);
 	});
 
@@ -273,10 +231,7 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 		expect(get(servedFromCache)).not.toBeNull();
 	});
 
-	// Slice 3 review round, finding 1 — the real-names overlay is threaded, not
-	// excluded. With the toggle ON its degrade is not "lose a decoration", it is
-	// "show a different name", and for a conductor with no domain/public profile
-	// name it is "show no conductor at all".
+	// The real-names overlay is threaded: offline it must not rename or drop the conductor.
 	it('offline, a conductor named only by her admin_member_record keeps that name', async () => {
 		const live = await loadEventPageDetail(
 			CFG,
@@ -288,24 +243,19 @@ describe('#434 slice 3 — loadEventPageDetail is cache-backed for every read it
 		resetServedFromCache();
 
 		const stored = await loadEventPageDetail(CFG, 'ev-1', offline() as unknown as typeof fetch);
-		// Not merely non-empty: the SAME name. An un-threaded overlay gives [] here
-		// (she has no profile name to fall back to) — an offline header with no
-		// conductor where the online one named her.
+		// The same name: an un-threaded overlay would drop a conductor with no profile name.
 		expect(stored.conductorNames).toEqual(live.conductorNames);
 		expect(stored).toEqual(live);
 		expect(get(servedFromCache)).not.toBeNull();
 	});
 });
 
-// #434 slice 3 review round, findings 1 and 2.
 describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', () => {
 	it('stores every read online, exactly as loadEventPageDetail does', async () => {
 		const detail = await refreshEventPageDetail(CFG, 'ev-1', online() as unknown as typeof fetch);
 		expect(detail.name).toBe('Tuesday rehearsal');
 		await flushReadCache();
-		// Exactly what `loadEventPageDetail` stores — same reads, same count
-		// (finding 4): "exactly as loadEventPageDetail does" is the claim, and a
-		// lower bound cannot make it.
+		// Exactly what `loadEventPageDetail` stores: a lower bound cannot prove "the same".
 		expect(await readCacheEntryCount()).toBe(CACHED_READS_PER_LOAD);
 	});
 
@@ -318,20 +268,16 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 		await expect(
 			refreshEventPageDetail(CFG, 'ev-1', offline() as unknown as typeof fetch)
 		).rejects.toThrow('Failed to fetch');
-		// The whole point: a read that is not what the screen renders cannot put
-		// an "as of <time>" line on it.
+		// A read the screen does not render cannot put an as-of line on it.
 		expect(get(servedFromCache)).toBeNull();
 	});
 
 	it('a post-write refresh moves the STORED header forward, so a later offline visit shows the write', async () => {
-		// Before the write: no name of its own, so the header inherits nothing
-		// but the series duration/location.
 		const preWrite = online();
 		await loadEventPageDetail(CFG, 'ev-1', preWrite as unknown as typeof fetch);
 		await flushReadCache();
 
 		// The write landed; the post-write re-read sees the new name.
-		// `online()` routes on the URL alone, so no `init` is threaded here.
 		const postWrite = vi.fn(async (input: RequestInfo | URL) => {
 			const url = urlOf(input);
 			if (url.includes('entity/ev-1?')) {
@@ -350,8 +296,7 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 		expect(refreshed.name).toBe('Thursday rehearsal');
 		await flushReadCache();
 
-		// Offline, the SCREEN's own reader now serves the post-write header — not
-		// the pre-write one the refresh used to leave behind.
+		// Offline, the screen's own reader serves the post-write header.
 		const offlineDetail = await loadEventPageDetail(
 			CFG,
 			'ev-1',
@@ -366,18 +311,17 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 			'utf-8'
 		);
 		expect(source).toContain('refreshEventPageDetail');
-		// The shared uncached reader is no longer called from the page at all.
 		expect(source).not.toMatch(/await loadEventDetail\(/);
 	});
 
 	it('the agenda wires its next-event prefetch through this function, not the serving one', () => {
-		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
+		const source = AGENDA_SOURCE();
 		expect(source).toContain('refreshEventPageDetail(cfg, nextEventId, fetch)');
 		expect(source).not.toContain('loadEventPageDetail(');
 	});
 });
 
-// #434 slice 5 review round, findings 1 and 2 — the works read's store-only twin.
+// The works read's store-only twin.
 describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving', () => {
 	it('the shared loadWorksByEventId still stores nothing by default', async () => {
 		const rows = await loadWorksByEventId(
@@ -420,11 +364,8 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		expect(get(servedFromCache)).toBeNull();
 	});
 
-	// Finding 1 — the whole slice's Done-when, in the case #409 creates: the part
-	// bytes are prefetched while she is on the AGENDA, and until this warm-up
-	// existed the event page's works read had nothing stored to restore from, so
-	// offline it fell into its own `.catch` and rendered an EMPTY repertoire
-	// section — the part on the device, and /downloads the only door to it.
+	// Parts prefetched from the agenda must find a stored works read offline, or the event
+	// page renders an empty repertoire section.
 	it('the agenda-side warm-up is what lets the event page restore its works list offline', async () => {
 		const live = await refreshEventPageWorkRows(
 			CFG,
@@ -441,16 +382,14 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 			'season-1',
 			offline() as unknown as typeof fetch
 		);
-		// The SAME rows, not merely non-empty: the part link the row carries is
-		// `fileId`, so a row restored without it is a row with no door to the file.
+		// The same rows: a row restored without `fileId` has no door to the file.
 		expect(stored).toEqual(live);
 		expect(stored['ev-1']?.map((r) => r.fileId)).toEqual(['file-1']);
-		// The store-only warm-up itself never claimed an age; the SCREEN's own
-		// serving read is what sets it.
+		// The store-only warm-up never claims an age; the screen's serving read does.
 		expect(get(servedFromCache)).not.toBeNull();
 	});
 
-	// Finding 2 — the post-write re-read.
+	// The post-write re-read.
 	it('a post-write refresh moves the STORED rows forward, so a later offline visit shows the write', async () => {
 		await loadEventPageWorkRows(
 			CFG,
@@ -460,8 +399,6 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		);
 		await flushReadCache();
 
-		// She adds a second piece to tonight's programme; the post-write re-read
-		// sees both.
 		const afterWrite = onlineWorks([
 			{
 				_id: 'pi-1',
@@ -485,8 +422,7 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		expect(refreshed['ev-1']).toHaveLength(2);
 		await flushReadCache();
 
-		// Offline, the SCREEN's own reader serves the POST-write programme — not
-		// the pre-write one the uncached re-read used to leave behind.
+		// Offline, the screen's own reader serves the post-write programme.
 		const stored = await loadEventPageWorkRows(
 			CFG,
 			['ev-1'],
@@ -496,14 +432,11 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		expect(stored['ev-1']?.map((r) => r.id)).toEqual(['pi-1', 'pi-2']);
 	});
 
-	// Slice 5 review round 3, F1 — the agenda's OWN works reads store; there is
-	// no separate next-event warm-up beside them.
 	it("the agenda's own works reads go through the store-only entry point, with no separate warm-up", () => {
-		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
+		const source = AGENDA_SOURCE();
 		expect(source).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
 		expect(source).not.toContain('refreshEventPageWorkRows(cfg, [nextEventId]');
-		// Store-only, never the serving entry point: `servedFromCache` on this page
-		// is the AGENDA's own as-of claim. And not the plain shared reader either.
+		// The as-of line here is the agenda's own claim, so never the serving reader.
 		expect(source).not.toContain('loadEventPageWorkRows(');
 		expect(source).not.toMatch(/loadWorksByEventId\(/);
 	});
@@ -522,6 +455,3 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Josquin* — #434 slice 3 review round, findings 1 and 2)
-// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
-// (*MVOX:Josquin* — #434 slice 5 review round, findings 1-3)

@@ -1,36 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 2/6 RED — the agenda, offline, from the read cache, with "as of".
-//
-// CONTRACT (team-lead shared design, fixed for all six slices):
-//   - The copy lives in the app ($lib/entu/readCache, IndexedDB
-//     'mvox-read-cache'), never the service worker. A CALL SITE opts in with
-//     CACHED_READ (review round finding 2: the flag is an argument, never
-//     hard-wired inside a shared reader); slice 2 opts in the AGENDA's own path
-//     — collective discovery (discover.ts) and `loadFullAgenda` -> listSeasons /
-//     resolveDatabaseEntityId / listEvents — so a start with no network renders
-//     the agenda it last saw instead of the `collectives.status === 'error'`
-//     branch.
-//   - The agenda branch carries its OWN /downloads door
-//     (agenda-downloads-link-cached), because reaching 'ready' offline is
-//     exactly what takes the singer off the error branch that used to hold the
-//     only link to her downloaded parts (review round finding 1).
-//   - Offline = every fetch REJECTS. The page then shows the same rows it
-//     showed online, plus a visible line `data-testid="agenda-as-of"` whose
-//     text is m.last_read_as_of({ time }) — time via tallinnHHMM (the one shared
-//     instant->'HH:MM' formatter), date added only when the stored read is
-//     not from today.
-//   - `servedFromCache` is a monotone minimum: the page calls
-//     resetServedFromCache() when its load starts, so an online load shows NO
-//     as-of line.
-//
-// INTEGRATION, NOT ISOLATION: nothing between the page and `fetch` is mocked —
-// the REAL hydrateCollectives -> discoverCollectives -> checkCollectiveMarker,
-// the REAL loadFullAgenda -> listSeasons/listEvents, the REAL entuFetch and
-// readCache over fake-indexeddb. Only `globalThis.fetch` is stubbed: an online
-// router first, then a stub that rejects every call. Every other agenda-page
-// read (rsvp, attendance, works, rights) runs for real too and simply fails
-// offline — the agenda rows must survive that.
+
+// The agenda offline: rows from the read cache plus an as-of line. Only fetch is stubbed,
+// so every real reader between the page and the wire runs.
 import { IDBFactory } from 'fake-indexeddb';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -126,7 +97,6 @@ function offlineEntu() {
 	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
 }
 
-/** Cold start: discovery via the store's own entry point, then mount. */
 async function coldStart() {
 	collectiveState.set({ status: 'loading' });
 	await hydrateCollectives();
@@ -169,22 +139,8 @@ afterEach(() => {
 });
 
 describe('#434 slice 2 — the agenda renders offline from the read cache', () => {
-	// #434 slice 3 review round, finding 1 — the agenda's "as of" line is its own
-	// claim about its own rows, and `servedFromCache` is ONE store. Slice 3 added
-	// a fire-and-forget prefetch of the NEXT EVENT's detail reads to this page;
-	// cache-backed, on a flapping connection those reads reject, serve stored
-	// copies and stamp their age onto the agenda — over rows that all came back
-	// live, for data this page never renders.
-	//
-	// Position-independent (slice 3 review round, finding 2). This test used to
-	// carry a "KEEP THIS FIRST" note: the offline loads below leave read chains in
-	// flight that outlive their own test (an unmounted page's retention sweep and
-	// prefetch keep resolving), and a `readCacheGet` already awaiting the previous
-	// test's IDBFactory when `beforeEach` swaps in a fresh one still served from
-	// the OLD database — landing a foreign as-of on whatever test was running by
-	// then. That leak is now closed at the seam instead: `setReadCacheFactory`
-	// bumps a generation counter, and a read whose generation has moved serves
-	// nothing and stamps nothing (readCache.ts's `factoryGeneration`).
+	// The as-of line claims the agenda's own rows only: a next-event prefetch that falls back
+	// to the cache must not stamp an age over rows that came back live.
 	it('the next-event detail prefetch rejecting does NOT age-stamp a fully live agenda', async () => {
 		// Warm the store online, so the prefetch's own reads have a stored copy
 		// to be tempted by.
@@ -224,9 +180,7 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		});
 		await flushReadCache();
 
-		// Every row on screen is live, so there is nothing to be "as of".
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
-		// And the offline door gated on the same store stays shut.
 		expect(container.querySelector('[data-testid="agenda-downloads-link-cached"]')).toBeNull();
 	});
 
@@ -249,7 +203,6 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		await flushReadCache();
 		cleanup();
 
-		// Later the same day, no network at all.
 		vi.setSystemTime(LATER_SAME_DAY);
 		vi.stubGlobal('fetch', offlineEntu());
 		const { container } = await coldStart();
@@ -268,17 +221,13 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		// The STORED read's time (10:05 Tallinn), not the offline load's (12:40).
 		expect(asOf.textContent).toContain(tallinnHHMM(READ_AT));
 		expect(asOf.textContent).not.toContain(tallinnHHMM(LATER_SAME_DAY));
-		// Same day: the time alone, no date.
 		expect(asOf.textContent).toContain(`"time":"${tallinnHHMM(READ_AT)}"`);
 
-		// Review round finding 1 — the door to the parts already on this device,
-		// IN THE RENDERED CONTAINER (not merely present in the page source): this
-		// branch is what a warm offline start shows, and the event rows' own part
-		// links need reads that are not cached, so /downloads is the only way in.
+		// The door to parts already on this device: the rows' own part links need uncached reads,
+		// so /downloads is the only way in.
 		const door = container.querySelector('[data-testid="agenda-downloads-link-cached"]');
 		expect(door, 'agenda-downloads-link-cached').not.toBeNull();
 		expect(door!.getAttribute('href')).toBe('/downloads');
-		// The cold-start branch is NOT what rendered — this is the other door.
 		expect(container.querySelector('[data-testid="agenda-downloads-link"]')).toBeNull();
 	});
 
@@ -299,7 +248,6 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 			return el!;
 		});
 		expect(asOf.textContent).toContain(tallinnHHMM(READ_AT));
-		// Not the bare time: a date rides with it.
 		expect(asOf.textContent).not.toContain(`"time":"${tallinnHHMM(READ_AT)}"`);
 	});
 
@@ -324,12 +272,12 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 	});
 
 	it('the page resets servedFromCache when its load starts, and reads it for the as-of line', () => {
+		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaLoad.ts'), 'utf-8');
+		expect(load.includes('resetServedFromCache()'), 'resetServedFromCache()').toBe(true);
 		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
 		for (const needle of [
-			'resetServedFromCache()',
 			'$servedFromCache',
-			// The line itself is the shared AsOfLine (slice 3 review round 3, F2),
-			// which owns tallinnHHMM and the today-vs-date rule.
+			// The line itself is the shared AsOfLine, which owns the today-vs-date rule.
 			'<AsOfLine',
 			'testid="agenda-as-of"',
 			'data-testid="agenda-downloads-link-cached"'
@@ -339,11 +287,8 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 	});
 });
 
-// #434 slice 5 review round 3, F1 — the agenda's OWN works read is the one that
-// stores the works fan-out (store-only, so this page's as-of claim is untouched).
-// The review round's separate next-event warm-up re-fetched the same four
-// collections seconds later — three of them collective-wide limit=500 lists —
-// on every agenda load.
+// The agenda's own works read stores the works fan-out; no separate next-event warm-up
+// re-fetches the same collections on every load.
 describe('#434 slice 5 — one works read per agenda load, and it stores', () => {
 	const WORKS_READ = /_type\.string=(work|edition|copy|program_item|repertoire_item)(&|$)/;
 
@@ -397,4 +342,4 @@ describe('#434 slice 2 — the as-of copy exists in all four locales', () => {
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
+// (*MVOX:Josquin*)

@@ -105,6 +105,8 @@
 	import type { AttendancePanel } from '$lib/attendance/types';
 	import type { Season } from '$lib/seasons/types';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { createAgendaLoadState, createLoadCounters, createAgendaLoader } from '$lib/agenda/agendaLoad';
+	import { attendanceQueueHandlers } from '$lib/agenda/attendancePanel';
 	import {
 		listEventSeriesForSeason,
 		updateSeasonField,
@@ -125,6 +127,59 @@
 	const pickerMode = $derived($pickerModeStore);
 	const isOffline = $derived(!$writesAvailable);
 
+	const ag = $state(createAgendaLoadState());
+	const seq = createLoadCounters();
+	const {
+		getRoster,
+		getSections,
+		loadForSelected,
+		resetManagement,
+		reorderKey,
+		mergePendingRows,
+		refreshWorksAfterWrite,
+		mapRows,
+		patchRow,
+		findRow,
+		snapshotRow,
+		restoreRow,
+		dropRow,
+		setOrdinals,
+		openAttendancePanel,
+		closeAttendancePanel,
+		handleExpandSeasonSummary,
+		loadPanelRepertoire
+	} = createAgendaLoader(ag, seq, {
+		selected: () => selected,
+		seasonManageOpen: () => seasonManageOpen,
+		seasonManageSwitchGeneration: () => seasonManageSwitchGeneration,
+		collectiveIdentity: () => get(selectedCollectiveIdentityStore),
+		collectivesState: () => get(collectiveState),
+		isRepertoirePending: (key) => repertoireQueue.isPending(key),
+		pendingMembersForEvent: (eventId) => attendanceQueue.pendingMembersForEvent(eventId),
+		resetSeasonManage,
+		closeSeasonCreateForm,
+		closeEventCreateForm: () => (eventCreateOpen = false),
+		closeSeriesCreateForm: () => (seriesCreateOpen = false),
+		restoreSeriesCreateRun,
+		refreshPresence,
+		findMyMemberId: (...a) => findMyMemberId(...a),
+		listMyRsvps: (...a) => listMyRsvps(...a),
+		rsvpsByEventId: (...a) => rsvpsByEventId(...a),
+		listMyAttendance: (...a) => listMyAttendance(...a),
+		listAttendance: (...a) => listAttendance(...a),
+		listAllRsvpsForEvent: (...a) => listAllRsvpsForEvent(...a),
+		attendanceByMemberId: (...a) => attendanceByMemberId(...a),
+		listWorks: (...a) => listWorks(...a),
+		listAllEditions: (...a) => listAllEditions(...a),
+		listAllCopies: (...a) => listAllCopies(...a),
+		listRepertoireItems: (...a) => listRepertoireItems(...a),
+		listScheduleItemsByEventId: (...a) => listScheduleItemsByEventId(...a),
+		loadActiveAndArchivedRosters: (...a) => loadActiveAndArchivedRosters(...a),
+		canMarkAttendance: (...a) => canMarkAttendance(...a),
+		manageRightsFrom: (...a) => manageRightsFrom(...a),
+		resolveManageRights: (...a) => resolveManageRights(...a),
+	});
+
 	// hydrateCollectives publishes no loading state of its own on retry (only
 	// the terminal state), so this flag is the only place an in-flight retry
 	// shows — without it a slow retry reads as a dead control.
@@ -144,29 +199,10 @@
 		}
 	}
 
-	let agendaItems = $state<AgendaItem[]>([]);
-	let agendaLoading = $state(true);
-	let agendaError = $state(false);
-	let sessionExpired = $state(false);
-
-	let memberId = $state<string | null>(null);
-	let membership = $state<'loading' | 'member' | 'non-member'>('loading');
-	let rsvpRights = $state<'loading' | 'editor' | 'not-editor'>('loading');
-	let rsvpByEventId = $state<RsvpByEventId>({});
-	let rsvpPartial = $state(false);
-	let failedEventIds = $state<Set<string>>(new Set());
 	let pendingEventIds = $state<Set<string>>(new Set());
-	let savedEventIds = $state<Set<string>>(new Set());
-
-	let myAttendance = $state<MyAttendance[]>([]);
-	let attendancePartial = $state(false);
-
-	let recentItems = $state<AgendaItem[]>([]);
-	let attendanceEventIds = $state<Set<string>>(new Set());
 
 	type AgendaFilterBucket = (typeof CANONICAL_EVENT_TYPES)[number];
 	type AgendaTypeFilter = 'all' | AgendaFilterBucket;
-	let agendaTypeFilter = $state<AgendaTypeFilter>('all');
 	const CANONICAL_EVENT_TYPE_SET = new Set<string>(CANONICAL_EVENT_TYPES);
 	function agendaFilterBucketOf(eventType: string | undefined): AgendaFilterBucket {
 		const type = eventType ?? '';
@@ -175,28 +211,28 @@
 	}
 	const agendaFilterChips = $derived.by(() => {
 		const present = new Set<AgendaFilterBucket>();
-		for (const it of agendaItems) present.add(agendaFilterBucketOf(it.eventType));
-		for (const it of recentItems) present.add(agendaFilterBucketOf(it.eventType));
+		for (const it of ag.agendaItems) present.add(agendaFilterBucketOf(it.eventType));
+		for (const it of ag.recentItems) present.add(agendaFilterBucketOf(it.eventType));
 		return CANONICAL_EVENT_TYPES.filter((type) => present.has(type));
 	});
 	const filteredAgendaItems = $derived(
-		agendaTypeFilter === 'all'
-			? agendaItems
-			: agendaItems.filter((it) => agendaFilterBucketOf(it.eventType) === agendaTypeFilter)
+		ag.agendaTypeFilter === 'all'
+			? ag.agendaItems
+			: ag.agendaItems.filter((it) => agendaFilterBucketOf(it.eventType) === ag.agendaTypeFilter)
 	);
 	const filteredRecentItems = $derived(
-		agendaTypeFilter === 'all'
-			? recentItems
-			: recentItems.filter((it) => agendaFilterBucketOf(it.eventType) === agendaTypeFilter)
+		ag.agendaTypeFilter === 'all'
+			? ag.recentItems
+			: ag.recentItems.filter((it) => agendaFilterBucketOf(it.eventType) === ag.agendaTypeFilter)
 	);
 	const CHIP_PRESSED_CLASS = 'font-semibold ring-1 ring-ink';
 	function agendaTypeChipClass(type: AgendaFilterBucket): string {
-		return agendaTypeFilter === type
+		return ag.agendaTypeFilter === type
 			? `${eventTypeBadgeClass(type)} ${CHIP_PRESSED_CLASS}`
 			: 'border-ink-4 text-ink-2';
 	}
 	function selectAgendaTypeFilter(value: AgendaTypeFilter) {
-		agendaTypeFilter = agendaTypeFilter === value ? 'all' : value;
+		ag.agendaTypeFilter = ag.agendaTypeFilter === value ? 'all' : value;
 	}
 
 	function handleAgendaViewKeydown(e: KeyboardEvent): void {
@@ -214,8 +250,8 @@
 	}
 
 	$effect(() => {
-		if (agendaTypeFilter !== 'all' && !agendaFilterChips.includes(agendaTypeFilter)) {
-			agendaTypeFilter = 'all';
+		if (ag.agendaTypeFilter !== 'all' && !agendaFilterChips.includes(ag.agendaTypeFilter)) {
+			ag.agendaTypeFilter = 'all';
 		}
 	});
 
@@ -223,13 +259,13 @@
 	const locationSuggestions = $derived.by(() => {
 		const seen = new Set<string>();
 		const out: string[] = [];
-		for (const it of recentItems) {
+		for (const it of ag.recentItems) {
 			if (it.location && !seen.has(it.location)) {
 				seen.add(it.location);
 				out.push(it.location);
 			}
 		}
-		for (const it of agendaItems) {
+		for (const it of ag.agendaItems) {
 			if (it.location && !seen.has(it.location)) {
 				seen.add(it.location);
 				out.push(it.location);
@@ -237,11 +273,6 @@
 		}
 		return out;
 	});
-
-	let worksByEventId = $state<Record<string, WorkRow[]>>({});
-	let scheduleByEventId = $state<Record<string, ScheduleItem[]>>({});
-	let pdfError = $state(false);
-	let heldFileIds = $state<Set<string> | null>(null);
 
 	let presenceSeq = 0;
 	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
@@ -251,7 +282,7 @@
 				.heldFileIds(db, personId)
 				.then((ids) => {
 					if (seq !== presenceSeq || !isCurrent()) return;
-					heldFileIds = new Set(ids);
+					ag.heldFileIds = new Set(ids);
 				})
 				.catch((e) => {
 					console.error('agenda: file presence read failed', e);
@@ -261,479 +292,76 @@
 		}
 	}
 
-	let currentSeasonId = $state<string | null>(null);
-	let seasonManageRights = $state<ManageRightsState>('not-editor');
-	let manageableSeasonId = $state<string | null>(null);
-	let manageableSeasonRights = $state<ManageRightsState>('not-editor');
-	let manageableSeasonRightsById = $state<Record<string, ManageRightsState>>({});
-	let seasonCreateRights = $state<ManageRightsState>('not-editor');
-	let eventManageRights = $state<Record<string, ManageRightsState>>({});
-	let seasons = $state<Season[]>([]);
-	let seasonRepertoire = $state<RepertoireItem[]>([]);
-	let libraryWorks = $state<Work[]>([]);
-	let libraryEditions = $state<Edition[]>([]);
-	let libraryWorksPartial = $state(false);
-	let libraryEditionsPartial = $state(false);
-	let scopedEditionsByWorkId = $state<Record<string, PickerOption[]>>({});
-	let scopedEditionWorkIdsRequested = new Set<string>();
-	let libraryPickersLoading = $state(false);
-	let libraryPickersLoadSucceeded = $state(false);
-	let worksRowsLoading = $state(false);
 	let pickableEditionsVisibleByEventId = $state<Record<string, boolean>>({});
 	let pickableWorksVisible = $state<boolean | undefined>(undefined);
-	let managePendingKeys = $state<Set<string>>(new Set());
-	let manageError = $state(false);
 
-	let panelRepertoire = $state<RepertoireItem[]>([]);
-	let panelWorks = $state<Work[]>([]);
-	let panelEditions = $state<Edition[]>([]);
-	let panelWorksPartial = $state(false);
-	let panelCopies = $state<Copy[]>([]);
 	let panelPendingKeys = $state<Set<string>>(new Set());
-	let panelRepertoireError = $state(false);
 	let panelManageError = $state(false);
 	let panelManageStatus = $state('');
-	let panelRepertoireLoading = $state(false);
-	let panelRepertoireItemsOk = $state(false);
-	let panelWorksSourcesOk = $state(false);
 	let panelPickableWorksVisible = $state<boolean | undefined>(undefined);
-	let panelRepertoireSeasonId: string | null = null;
 
-	let seasonSummaryExpanded = $state(false);
-	let seasonMemberRates = $state<MemberAttendanceRate[]>([]);
-	let seasonRatesLoaded = $state(false);
-	let seasonRatesLoading = $state(false);
-	let seasonRatesError = $state(false);
-	let seasonRatesPartial = $state(false);
-
-	let attendanceItem = $state<AgendaItem | null>(null);
-	let attendanceLoading = $state(false);
-	let attendanceError = $state(false);
-	let attendanceRoster = $state<RosterRow[]>([]);
-	let attendanceMap = $state<Record<string, { attendanceId: string; status: AttendanceStatus }>>({});
-	let attendanceRsvpMap = $state<Record<string, { rsvpId: string; status: string }>>({});
-	let attendancePendingMemberIds = $state<Set<string>>(new Set());
-	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
-	let attendanceSavedMemberIds = $state<Set<string>>(new Set());
-	let attendanceFailedByEvent = $state<Map<string, Set<string>>>(new Map());
-	let attendanceRequestId = 0;
-	const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
-	let rosterCache = $state<{
-		db: string;
-		roster: RosterRow[];
-		truncated: boolean;
-		fetchedAt: number;
-	} | null>(null);
-	let rosterRows = $state<RosterRow[]>([]);
-	let rosterReadsInFlight = $state(0);
-	let rosterReadFailed = $state(false);
-	let rosterPartial = $state(false);
-	let sectionsReadFailed = $state(false);
-	const rosterPickerLoading = $derived(rosterReadsInFlight > 0);
-
-	function getRoster(cfg: { db: string; token: string }): Promise<RosterRow[]> {
-		const cacheValid =
-			rosterCache &&
-			rosterCache.db === cfg.db &&
-			Date.now() - rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		if (cacheValid) {
-			rosterRows = rosterCache!.roster;
-			rosterReadFailed = false;
-			rosterPartial = rosterCache!.truncated;
-			return Promise.resolve(rosterCache!.roster);
-		}
-		rosterReadsInFlight += 1;
-		rosterReadFailed = false;
-		return loadRoster(cfg)
-			.then((read) => {
-				rosterCache = {
-					db: cfg.db,
-					roster: read.items,
-					truncated: read.truncated,
-					fetchedAt: Date.now()
-				};
-				rosterRows = read.items;
-				rosterPartial = read.truncated;
-				return read.items;
-			})
-			.catch((e: unknown) => {
-				rosterReadFailed = true;
-				rosterPartial = false;
-				throw e;
-			})
-			.finally(() => {
-				rosterReadsInFlight -= 1;
-			});
-	}
-
-	let sectionsCache = $state<{ db: string; sections: SectionNode[]; fetchedAt: number } | null>(
-		null
-	);
-	let rosterSections = $state<SectionNode[]>([]);
-
-	function getSections(cfg: { db: string; token: string }): Promise<SectionNode[]> {
-		const cacheValid =
-			sectionsCache &&
-			sectionsCache.db === cfg.db &&
-			Date.now() - sectionsCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		if (cacheValid) {
-			rosterSections = sectionsCache!.sections;
-			sectionsReadFailed = false;
-			return Promise.resolve(sectionsCache!.sections);
-		}
-		rosterReadsInFlight += 1;
-		sectionsReadFailed = false;
-		return listSections(cfg)
-			.then((sections) => {
-				sectionsCache = { db: cfg.db, sections, fetchedAt: Date.now() };
-				rosterSections = sections;
-				return sections;
-			})
-			.catch((e: unknown) => {
-				sectionsReadFailed = true;
-				throw e;
-			})
-			.finally(() => {
-				rosterReadsInFlight -= 1;
-			});
-	}
+	const rosterPickerLoading = $derived(ag.rosterReadsInFlight > 0);
 
 	function rosterPickerOptions(
 		excludeIds: readonly string[]
 	): Array<{ id: string; label: string }> {
-		return rosterOrder(rosterRows, rosterSections)
+		return rosterOrder(ag.rosterRows, ag.rosterSections)
 			.filter((row) => !excludeIds.includes(row.personId))
 			.map((row) => ({ id: row.personId, label: row.name }));
 	}
 
 	function pickerPromptText(optionCount: number, addPrompt: string): string {
 		if (optionCount > 0) return addPrompt;
-		if (rosterReadFailed) return m.picker_roster_unavailable();
+		if (ag.rosterReadFailed) return m.picker_roster_unavailable();
 		if (rosterPickerLoading) return m.picker_roster_loading();
-		if (rosterRows.length === 0) return m.picker_no_members();
+		if (ag.rosterRows.length === 0) return m.picker_no_members();
 		return m.picker_everyone_added();
-	}
-
-	let requestId = 0;
-	let pressureSweepRanAtOpen = false;
-	let worksLoadId = 0;
-	let scheduleLoadId = 0;
-	function loadForSelected(opts: { keepSeasonManage?: boolean } = {}) {
-		const keepSeasonManage = opts.keepSeasonManage === true;
-		const heldSeasonId = keepSeasonManage && seasonManageOpen ? manageableSeasonId : null;
-		const current = selected;
-		if (!current) {
-			agendaItems = [];
-			agendaLoading = false;
-			agendaError = false;
-			memberId = null;
-			membership = 'loading';
-			rsvpRights = 'loading';
-			rsvpByEventId = {};
-			rsvpPartial = false;
-			failedEventIds = new Set();
-			savedEventIds = new Set();
-			recentItems = [];
-			attendanceEventIds = new Set();
-			agendaTypeFilter = 'all';
-			worksByEventId = {};
-			scheduleByEventId = {};
-			pdfError = false;
-			heldFileIds = null;
-			resetManagement();
-			libraryPickersLoading = false;
-			worksRowsLoading = false;
-			closeAttendancePanel();
-			rosterCache = null;
-			rosterRows = [];
-			rosterPartial = false;
-			sectionsCache = null;
-			rosterSections = [];
-			rosterReadFailed = false;
-			sectionsReadFailed = false;
-			resetSeasonManage();
-			attendanceFailedByEvent = new Map();
-			myAttendance = [];
-			attendancePartial = false;
-			seasonSummaryExpanded = false;
-			seasonMemberRates = [];
-			seasonRatesLoaded = false;
-			seasonRatesLoading = false;
-			seasonRatesError = false;
-			seasonRatesPartial = false;
-			seasons = [];
-			closeSeasonCreateForm();
-			eventCreateOpen = false;
-			seriesCreateOpen = false;
-			return;
-		}
-		const thisRequest = ++requestId;
-		closeAttendancePanel();
-		agendaLoading = true;
-		agendaError = false;
-		sessionExpired = false;
-		resetServedFromCache();
-		memberId = null;
-		membership = 'loading';
-		rsvpRights = 'loading';
-		failedEventIds = new Set();
-		savedEventIds = new Set();
-		worksByEventId = {};
-		scheduleByEventId = {};
-		pdfError = false;
-		heldFileIds = null;
-		resetManagement();
-		if (!keepSeasonManage) {
-			agendaTypeFilter = 'all';
-			rosterCache = null;
-			rosterRows = [];
-			rosterPartial = false;
-			sectionsCache = null;
-			rosterSections = [];
-			rosterReadFailed = false;
-			sectionsReadFailed = false;
-			resetSeasonManage();
-			seriesCreateOpen = false;
-		}
-		attendanceFailedByEvent = new Map();
-		myAttendance = [];
-		rsvpPartial = false;
-		attendancePartial = false;
-		seasonSummaryExpanded = false;
-		seasonMemberRates = [];
-		seasonRatesLoaded = false;
-		seasonRatesLoading = false;
-		seasonRatesError = false;
-		seasonRatesPartial = false;
-		seasons = [];
-		closeSeasonCreateForm();
-		eventCreateOpen = false;
-
-		const personId = current.personId;
-
-		loadFullAgenda()
-			.then(
-				({
-					upcoming,
-					recent,
-					seasonId,
-					seasonConductors,
-					seasonOwners,
-					seasonEditors,
-					seasons: fullSeasons,
-					manageableSeasonId: mSeasonId,
-					manageableSeasonOwners: mOwners,
-					manageableSeasonEditors: mEditors
-				}) => {
-					if (thisRequest !== requestId) return;
-					agendaItems = upcoming;
-					agendaLoading = false;
-					recentItems = recent;
-					seasons = fullSeasons;
-
-					const worksCfg = { db: current.db, token: getToken() ?? '' };
-					const events = [...upcoming, ...recent];
-					const eventIds = events.map((item) => item.id);
-					currentSeasonId = seasonId;
-					seasonManageRights =
-						seasonId === null
-							? 'not-editor'
-							: manageRightsFrom(seasonOwners, seasonEditors, personId);
-					const nowDateOnly = new Date().toISOString().slice(0, 10);
-					const candidateSeasons = fullSeasons.filter(
-						(s) => s.id === mSeasonId || s.endDate === '' || s.endDate >= nowDateOnly
-					);
-					const nextManageableRightsById: Record<string, ManageRightsState> = {};
-					for (const s of candidateSeasons) {
-						nextManageableRightsById[s.id] = manageRightsFrom(s.owners, s.editors, personId);
-					}
-					manageableSeasonRightsById = nextManageableRightsById;
-					const keptSeasonId =
-						heldSeasonId !== null && candidateSeasons.some((s) => s.id === heldSeasonId)
-							? heldSeasonId
-							: null;
-					if (keptSeasonId !== null) {
-						manageableSeasonId = keptSeasonId;
-						manageableSeasonRights = nextManageableRightsById[keptSeasonId] ?? 'not-editor';
-					} else {
-						if (heldSeasonId !== null) {
-							resetSeasonManage();
-							seriesCreateOpen = false;
-						}
-						manageableSeasonId = mSeasonId;
-						manageableSeasonRights =
-							mSeasonId === null ? 'not-editor' : manageRightsFrom(mOwners, mEditors, personId);
-					}
-					restoreSeriesCreateRun();
-					seasonCreateRights = deriveSeasonCreateRights(
-						seasonId,
-						seasonOwners,
-						seasonEditors,
-						fullSeasons,
-						personId
-					);
-					eventManageRights = Object.fromEntries(
-						events.map((item) => [item.id, manageRightsFrom(item.owners, item.editors, personId)])
-					);
-					loadWorksAndManagement(worksCfg, eventIds, seasonId, thisRequest);
-					refreshPresence(worksCfg.db, personId, () => thisRequest === requestId);
-					loadScheduleItems(worksCfg, eventIds, thisRequest);
-					const currentRightsInvisible =
-						seasonId !== null && seasonOwners.length === 0 && seasonEditors.length === 0;
-					const noSeasonToBorrowFrom = seasonId === null && fullSeasons.length === 0;
-					const invisibleCandidateSeasons = candidateSeasons.filter(
-						(s) => s.owners.length === 0 && s.editors.length === 0
-					);
-					if (
-						invisibleCandidateSeasons.length > 0 ||
-						currentRightsInvisible ||
-						noSeasonToBorrowFrom
-					) {
-						loadDatabaseEntityRights(worksCfg, personId).then((state) => {
-							if (thisRequest !== requestId) return;
-							if (state !== 'editor') return;
-							if (invisibleCandidateSeasons.length > 0) {
-								manageableSeasonRightsById = {
-									...manageableSeasonRightsById,
-									...Object.fromEntries(
-										invisibleCandidateSeasons.map(
-											(s) => [s.id, 'editor'] as [string, ManageRightsState]
-										)
-									)
-								};
-							}
-							if (
-								manageableSeasonId !== null &&
-								manageableSeasonRightsById[manageableSeasonId] === 'editor'
-							) {
-								manageableSeasonRights = 'editor';
-							}
-							seasonCreateRights = 'editor';
-							if (currentRightsInvisible && seasonManageRights !== 'editor') {
-								seasonManageRights = 'editor';
-								upgradeRepertoireManagement(worksCfg, eventIds, seasonId, thisRequest);
-							}
-						});
-					}
-					attendanceEventIds = new Set(
-						recent.filter((item) => canMarkAttendance(item, personId)).map((item) => item.id)
-					);
-				}
-			)
-			.catch((err) => {
-				if (thisRequest !== requestId) return;
-				agendaLoading = false;
-				if (isAuthExpiredError(err)) {
-					sessionExpired = true;
-				} else {
-					agendaError = true;
-				}
-				recentItems = [];
-				attendanceEventIds = new Set();
-				worksByEventId = {};
-				scheduleByEventId = {};
-				heldFileIds = null;
-				resetManagement();
-				libraryPickersLoading = false;
-				worksRowsLoading = false;
-				resetSeasonManage();
-				seasons = [];
-			});
-
-		{
-			const rightsCfg = { db: current.db, token: getToken() ?? '' };
-			const rightsIdentity = { db: current.db, personId };
-			resolveManageRights(rightsCfg, personId, personId).then((state) => {
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), rightsIdentity)) return;
-				rsvpRights = state === 'editor' ? 'editor' : 'not-editor';
-			});
-		}
-
-		findMyMemberId({ db: current.db, token: getToken() ?? '' }, personId)
-			.then((id) => {
-				if (thisRequest !== requestId) return;
-				memberId = id;
-				membership = id ? 'member' : 'non-member';
-				if (id) {
-					listMyAttendance({ db: current.db, token: getToken() ?? '' }, id)
-						.then((result) => {
-							if (thisRequest !== requestId) return;
-							myAttendance = result.items;
-							attendancePartial = result.truncated;
-						})
-						.catch(() => {
-							if (thisRequest !== requestId) return;
-							myAttendance = [];
-							attendancePartial = false;
-						});
-				} else {
-					myAttendance = [];
-					attendancePartial = false;
-				}
-			})
-			.catch(() => {
-				if (thisRequest !== requestId) return;
-				memberId = null;
-				membership = 'loading';
-			});
-
-		listMyRsvps({ db: current.db, token: getToken() ?? '' }, personId)
-			.then((result) => {
-				if (thisRequest !== requestId) return;
-				rsvpByEventId = rsvpsByEventId(result.items);
-				rsvpPartial = result.truncated;
-			})
-			.catch(() => {
-				if (thisRequest !== requestId) return;
-				rsvpByEventId = {};
-				rsvpPartial = false;
-			});
 	}
 
 	const rsvpQueue = createRsvpChangeQueue({
 		setOptimistic(eventId, entry) {
-			const next = { ...rsvpByEventId };
+			const next = { ...ag.rsvpByEventId };
 			if (entry) next[eventId] = entry;
 			else delete next[eventId];
-			rsvpByEventId = next;
+			ag.rsvpByEventId = next;
 		},
 		setPending(eventId, isPending) {
 			const next = new Set(pendingEventIds);
 			if (isPending) next.add(eventId);
 			else next.delete(eventId);
 			pendingEventIds = next;
-			if (isPending && failedEventIds.has(eventId)) {
-				const cleared = new Set(failedEventIds);
+			if (isPending && ag.failedEventIds.has(eventId)) {
+				const cleared = new Set(ag.failedEventIds);
 				cleared.delete(eventId);
-				failedEventIds = cleared;
+				ag.failedEventIds = cleared;
 			}
-			if (isPending && savedEventIds.has(eventId)) {
-				const cleared = new Set(savedEventIds);
+			if (isPending && ag.savedEventIds.has(eventId)) {
+				const cleared = new Set(ag.savedEventIds);
 				cleared.delete(eventId);
-				savedEventIds = cleared;
+				ag.savedEventIds = cleared;
 			}
 		},
 		reconcile(eventId, entry) {
-			const next = { ...rsvpByEventId };
+			const next = { ...ag.rsvpByEventId };
 			if (entry) next[eventId] = entry;
 			else delete next[eventId];
-			rsvpByEventId = next;
-			const saved = new Set(savedEventIds);
+			ag.rsvpByEventId = next;
+			const saved = new Set(ag.savedEventIds);
 			saved.add(eventId);
-			savedEventIds = saved;
+			ag.savedEventIds = saved;
 		},
 		revert(eventId, before) {
-			const next = { ...rsvpByEventId };
+			const next = { ...ag.rsvpByEventId };
 			if (before) next[eventId] = before;
 			else delete next[eventId];
-			rsvpByEventId = next;
-			const failed = new Set(failedEventIds);
+			ag.rsvpByEventId = next;
+			const failed = new Set(ag.failedEventIds);
 			failed.add(eventId);
-			failedEventIds = failed;
-			if (savedEventIds.has(eventId)) {
-				const cleared = new Set(savedEventIds);
+			ag.failedEventIds = failed;
+			if (ag.savedEventIds.has(eventId)) {
+				const cleared = new Set(ag.savedEventIds);
 				cleared.delete(eventId);
-				savedEventIds = cleared;
+				ag.savedEventIds = cleared;
 			}
 		}
 	});
@@ -745,7 +373,7 @@
 		const personId = selected.personId;
 		const identity = { db: selected.db, personId };
 
-		const current: RsvpEntry | undefined = rsvpByEventId[item.id];
+		const current: RsvpEntry | undefined = ag.rsvpByEventId[item.id];
 		const existing: MyRsvp | null = current
 			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
 			: null;
@@ -753,12 +381,12 @@
 		rsvpQueue.request({
 			cfg,
 			personId,
-			memberId,
+			memberId: ag.memberId,
 			resolveMemberId: async () => {
 				const id = await findMyMemberId(cfg, personId);
 				if (sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					memberId = id;
-					if (!id) membership = 'non-member';
+					ag.memberId = id;
+					if (!id) ag.membership = 'non-member';
 				}
 				return id;
 			},
@@ -769,7 +397,7 @@
 	}
 
 	function findWorkRowByFileId(fileId: string): WorkRow | undefined {
-		for (const rows of Object.values(worksByEventId)) {
+		for (const rows of Object.values(ag.worksByEventId)) {
 			const row = rows.find((r) => r.fileId === fileId);
 			if (row) return row;
 		}
@@ -781,7 +409,7 @@
 		const cfg = { db: selected.db, token: getToken() ?? '' };
 		const identity = get(selectedCollectiveIdentityStore);
 		if (!identity) return;
-		pdfError = false;
+		ag.pdfError = false;
 		const row = findWorkRowByFileId(fileId);
 		const tab = window.open('', '_blank');
 		if (tab) tab.opener = null;
@@ -813,283 +441,23 @@
 			.catch(() => {
 				tab?.close();
 				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
-				pdfError = true;
+				ag.pdfError = true;
 			});
-	}
-
-
-
-	function resetManagement() {
-		currentSeasonId = null;
-		seasonManageRights = 'not-editor';
-		manageableSeasonId = null;
-		manageableSeasonRights = 'not-editor';
-		manageableSeasonRightsById = {};
-		seasonCreateRights = 'not-editor';
-		eventManageRights = {};
-		seasonRepertoire = [];
-		libraryWorks = [];
-		libraryEditions = [];
-		libraryWorksPartial = false;
-		libraryEditionsPartial = false;
-		scopedEditionsByWorkId = {};
-		scopedEditionWorkIdsRequested = new Set<string>();
-		libraryPickersLoading = true;
-		libraryPickersLoadSucceeded = false;
-		worksRowsLoading = true;
-		managePendingKeys = new Set();
-		manageError = false;
 	}
 
 	type ManageCfg = { db: string; token: string };
-
-	function deriveSeasonCreateRights(
-		seasonId: string | null,
-		seasonOwners: string[],
-		seasonEditors: string[],
-		allSeasons: Season[],
-		personId: string
-	): ManageRightsState {
-		if (seasonId !== null) return manageRightsFrom(seasonOwners, seasonEditors, personId);
-		const latest = allSeasons.reduce<Season | null>(
-			(best, s) => (best === null || s.startDate > best.startDate ? s : best),
-			null
-		);
-		if (!latest) return 'not-editor';
-		return manageRightsFrom(latest.owners, latest.editors, personId);
-	}
-
-	const databaseEntityRightsByDbPerson = new Map<string, Promise<ManageRightsState>>();
-
-	function loadDatabaseEntityRights(cfg: ManageCfg, personId: string): Promise<ManageRightsState> {
-		const key = `${cfg.db}::${personId}`;
-		const cached = databaseEntityRightsByDbPerson.get(key);
-		if (cached) return cached;
-		const probe = resolveDatabaseEntityId(cfg)
-			.then((dbEntityId) =>
-				dbEntityId === null
-					?
-						Promise.resolve<ManageRightsState>('not-editor')
-					: resolveManageRights(cfg, dbEntityId, personId)
-			)
-			.catch((e): ManageRightsState => {
-				console.error('agenda: resolving database entity rights failed', e);
-				return 'error';
-			})
-			.then((state) => {
-				if (state === 'error') databaseEntityRightsByDbPerson.delete(key);
-				return state;
-			});
-		databaseEntityRightsByDbPerson.set(key, probe);
-		return probe;
-	}
-
-	function upgradeRepertoireManagement(
-		cfg: ManageCfg,
-		eventIds: string[],
-		seasonId: string | null,
-		thisRequest: number
-	) {
-		loadManagePickers(cfg, seasonId, thisRequest);
-		const thisWorksLoad = ++worksLoadId;
-		worksRowsLoading = true;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, { includeInactive: true })
-			.then((byEvent) => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksByEventId = mergePendingRows(byEvent);
-				worksRowsLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksRowsLoading = false;
-			});
-	}
-
-	function loadWorksAndManagement(
-		cfg: ManageCfg,
-		eventIds: string[],
-		seasonId: string | null,
-		thisRequest: number
-	) {
-		const canManage =
-			seasonManageRights === 'editor' ||
-			Object.values(eventManageRights).some((right) => right === 'editor');
-		if (canManage) {
-			loadManagePickers(cfg, seasonId, thisRequest);
-		} else {
-			libraryPickersLoading = false;
-		}
-
-		const thisWorksLoad = ++worksLoadId;
-		worksRowsLoading = true;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
-			includeInactive: seasonManageRights === 'editor'
-		})
-			.then((byEvent) => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksByEventId = byEvent;
-				worksRowsLoading = false;
-				runPressureSweepThenPrefetch(cfg, thisRequest);
-			})
-			.catch(() => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksByEventId = {};
-				worksRowsLoading = false;
-			});
-	}
-
-	function runPressureSweepThenPrefetch(cfg: { db: string; token: string }, thisRequest: number) {
-		if (pressureSweepRanAtOpen) {
-			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
-			return;
-		}
-		pressureSweepRanAtOpen = true;
-		const identity = get(selectedCollectiveIdentityStore);
-		if (identity && identity.db === cfg.db) {
-			seedRetentionKeys(identity.db, identity.personId, nextEventFileIds(agendaItems, worksByEventId));
-		}
-		const state = get(collectiveState);
-		ensureRetentionSweep({
-			token: cfg.token,
-			collectives: state.status === 'ready' ? state.collectives : [],
-			fetchImpl: fetch
-		}).finally(() => {
-			if (thisRequest !== requestId) return;
-			prefetchNextEventPartsAfterSettle(cfg, thisRequest);
-		});
-	}
-
-	function prefetchNextEventPartsAfterSettle(cfg: { db: string; token: string }, thisRequest: number) {
-		const nextEventId = agendaItems[0]?.id;
-		if (nextEventId) {
-			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
-				console.error('agenda: next-event detail prefetch failed', e);
-			});
-		}
-
-		const fileIds = nextEventFileIds(agendaItems, worksByEventId);
-		if (fileIds.length === 0) return;
-		const identity = get(selectedCollectiveIdentityStore);
-		prefetchNextEventParts(cfg, identity, fileIds, getAppByteStore(), fetch, () => thisRequest === requestId)
-			.then((results) => {
-				if (thisRequest !== requestId || !identity) return;
-				if (
-					results.some((r) => r.outcome === 'network-stored' || r.outcome === 'network-uncached')
-				) {
-					refreshPresence(identity.db, identity.personId, () => thisRequest === requestId);
-				}
-			})
-			.catch((e) => {
-				console.error('agenda: next-event prefetch failed', e);
-			});
-	}
-
-	function loadScheduleItems(cfg: ManageCfg, eventIds: string[], thisRequest: number) {
-		const thisScheduleLoad = ++scheduleLoadId;
-		listScheduleItemsByEventId(cfg, eventIds, fetch)
-			.then((byEvent) => {
-				if (thisRequest !== requestId || thisScheduleLoad !== scheduleLoadId) return;
-				scheduleByEventId = byEvent;
-			})
-			.catch(() => {
-				if (thisRequest !== requestId || thisScheduleLoad !== scheduleLoadId) return;
-				scheduleByEventId = {};
-			});
-	}
-
-	function loadManagePickers(cfg: ManageCfg, seasonId: string | null, thisRequest: number) {
-		libraryPickersLoading = true;
-		Promise.all([
-			listWorks(cfg),
-			listAllEditions(cfg),
-			seasonId === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, seasonId)
-		])
-			.then(([worksRead, editionsRead, repertoire]) => {
-				if (thisRequest !== requestId) return;
-				libraryWorks = worksRead.items;
-				libraryEditions = editionsRead.items;
-				libraryWorksPartial = worksRead.truncated;
-				libraryEditionsPartial = editionsRead.truncated;
-				seasonRepertoire = repertoire;
-				libraryPickersLoading = false;
-				libraryPickersLoadSucceeded = true;
-			})
-			.catch(() => {
-				if (thisRequest !== requestId) return;
-				libraryWorks = [];
-				libraryEditions = [];
-				libraryWorksPartial = false;
-				libraryEditionsPartial = false;
-				seasonRepertoire = [];
-				libraryPickersLoading = false;
-				libraryPickersLoadSucceeded = false;
-			});
-	}
-
-	const reorderKey = (eventId: string) => `move:${eventId}`;
-
-	function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {
-		const merged: Record<string, WorkRow[]> = {};
-		for (const [eventId, rows] of Object.entries(byEvent)) {
-			const reorderPending = repertoireQueue.isPending(reorderKey(eventId));
-			const live = worksByEventId[eventId] ?? [];
-			const out: WorkRow[] = [];
-			for (const row of rows) {
-				const pending =
-					repertoireQueue.isPending(row.id) || (reorderPending && row.kind === 'program');
-				if (!pending) {
-					out.push(row);
-					continue;
-				}
-				const liveRow = live.find((r) => r.id === row.id);
-				if (liveRow) out.push(liveRow);
-			}
-			merged[eventId] = out;
-		}
-		return merged;
-	}
-
-	function refreshWorksAfterWrite() {
-		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const eventIds = [...agendaItems, ...recentItems].map((item) => item.id);
-		const seasonId = currentSeasonId;
-		const thisRequest = requestId;
-		const thisWorksLoad = ++worksLoadId;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
-			includeInactive: seasonManageRights === 'editor'
-		})
-			.then((byEvent) => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksByEventId = mergePendingRows(byEvent);
-				worksRowsLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== requestId || thisWorksLoad !== worksLoadId) return;
-				worksRowsLoading = false;
-			});
-		if (seasonId !== null && seasonManageRights === 'editor') {
-			listRepertoireItems(cfg, seasonId)
-				.then((items) => {
-					if (thisRequest !== requestId) return;
-					seasonRepertoire = items;
-				})
-				.catch(() => {
-				});
-		}
-	}
 
 	const managePendingMarks = new Map<string, string[]>();
 
 	const repertoireQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
-			const next = new Set(managePendingKeys);
+			const next = new Set(ag.managePendingKeys);
 			for (const mark of [key, ...(managePendingMarks.get(key) ?? [])]) {
 				if (pending) next.add(mark);
 				else next.delete(mark);
 			}
-			managePendingKeys = next;
-			if (pending) manageError = false;
+			ag.managePendingKeys = next;
+			if (pending) ag.manageError = false;
 		},
 		reconcile(key) {
 			managePendingMarks.delete(key);
@@ -1098,72 +466,11 @@
 		},
 		revert(key) {
 			managePendingMarks.delete(key);
-			manageError = true;
+			ag.manageError = true;
 			syncPanelRepertoireAfterAgendaWrite();
 			refreshWorksAfterWrite();
 		}
 	});
-
-
-	function mapRows(update: (rows: WorkRow[], eventId: string) => WorkRow[]) {
-		const next: Record<string, WorkRow[]> = {};
-		for (const [eventId, rows] of Object.entries(worksByEventId)) {
-			next[eventId] = update(rows, eventId);
-		}
-		worksByEventId = next;
-	}
-
-	function patchRow(itemId: string, patch: Partial<WorkRow>) {
-		mapRows((rows) => rows.map((row) => (row.id === itemId ? { ...row, ...patch } : row)));
-	}
-
-	function findRow(itemId: string): WorkRow | undefined {
-		for (const rows of Object.values(worksByEventId)) {
-			const hit = rows.find((row) => row.id === itemId);
-			if (hit) return hit;
-		}
-		return undefined;
-	}
-
-	function snapshotRow(itemId: string, onlyEventId?: string) {
-		const snapshot: Array<{ eventId: string; index: number; row: WorkRow }> = [];
-		for (const [eventId, rows] of Object.entries(worksByEventId)) {
-			if (onlyEventId !== undefined && eventId !== onlyEventId) continue;
-			const index = rows.findIndex((row) => row.id === itemId);
-			if (index >= 0) snapshot.push({ eventId, index, row: rows[index] });
-		}
-		return snapshot;
-	}
-
-	function restoreRow(snapshot: Array<{ eventId: string; index: number; row: WorkRow }>) {
-		const next = { ...worksByEventId };
-		for (const { eventId, index, row } of snapshot) {
-			const rows = [...(next[eventId] ?? [])];
-			if (rows.some((r) => r.id === row.id)) continue;
-			rows.splice(Math.min(index, rows.length), 0, row);
-			next[eventId] = rows;
-		}
-		worksByEventId = next;
-	}
-
-	function dropRow(itemId: string, onlyEventId?: string) {
-		mapRows((rows, eventId) =>
-			onlyEventId !== undefined && eventId !== onlyEventId
-				? rows
-				: rows.filter((row) => row.id !== itemId)
-		);
-	}
-
-	function setOrdinals(eventId: string, ordinalById: Map<string, number>) {
-		mapRows((rows, id) =>
-			id === eventId
-				? rows.map((row) =>
-						ordinalById.has(row.id) ? { ...row, ordinal: ordinalById.get(row.id)! } : row
-					)
-				: rows
-		);
-	}
-
 
 	function manageCfg(): ManageCfg | null {
 		if (!selected) return null;
@@ -1173,7 +480,7 @@
 	function handleAddWork(workId: string) {
 		if (isOffline) return;
 		const cfg = manageCfg();
-		const seasonId = currentSeasonId;
+		const seasonId = ag.currentSeasonId;
 		if (!cfg || seasonId === null) return;
 		repertoireQueue.request(ADD_WORK_KEY, async () => {
 			await createRepertoireItem(cfg, { seasonId, workId });
@@ -1202,7 +509,7 @@
 		const row = findRow(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
 		const before = { editionId: row.editionId, editionName: row.editionName };
-		const editionName = libraryEditions.find((e) => e.id === editionId)?.name ?? '';
+		const editionName = ag.libraryEditions.find((e) => e.id === editionId)?.name ?? '';
 		repertoireQueue.request(
 			itemId,
 			() => pinEdition(cfg, itemId, editionId),
@@ -1216,7 +523,7 @@
 	function handleRemoveItem(eventId: string, itemId: string) {
 		if (isOffline) return;
 		const cfg = manageCfg();
-		const row = worksByEventId[eventId]?.find((r) => r.id === itemId);
+		const row = ag.worksByEventId[eventId]?.find((r) => r.id === itemId);
 		if (!cfg || !row) return;
 		if (row.kind === 'program') {
 			const snapshot = snapshotRow(itemId, eventId);
@@ -1227,15 +534,15 @@
 			return;
 		}
 		const snapshot = snapshotRow(itemId);
-		const repertoireBefore = seasonRepertoire;
+		const repertoireBefore = ag.seasonRepertoire;
 		repertoireQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
 			apply: () => {
 				dropRow(itemId);
-				seasonRepertoire = seasonRepertoire.filter((item) => item.id !== itemId);
+				ag.seasonRepertoire = ag.seasonRepertoire.filter((item) => item.id !== itemId);
 			},
 			rollback: () => {
 				restoreRow(snapshot);
-				seasonRepertoire = repertoireBefore;
+				ag.seasonRepertoire = repertoireBefore;
 			}
 		});
 	}
@@ -1244,15 +551,15 @@
 
 	function refreshPanelRepertoire(): void {
 		const cfg = manageCfg();
-		const seasonId = panelRepertoireSeasonId;
+		const seasonId = seq.panelRepertoireSeasonId;
 		if (!cfg || seasonId === null) return;
-		const thisRequest = requestId;
+		const thisRequest = seq.requestId;
 		const thisSwitch = seasonManageSwitchGeneration;
 		listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				panelRepertoire = items;
-				panelRepertoireItemsOk = true;
+				if (thisRequest !== seq.requestId || thisSwitch !== seasonManageSwitchGeneration) return;
+				ag.panelRepertoire = items;
+				ag.panelRepertoireItemsOk = true;
 			})
 			.catch(() => {
 			});
@@ -1260,7 +567,7 @@
 
 	function syncPanelRepertoireAfterAgendaWrite(): void {
 		if (!seasonManageOpen) return;
-		if (manageableSeasonId === null || manageableSeasonId !== currentSeasonId) return;
+		if (ag.manageableSeasonId === null || ag.manageableSeasonId !== ag.currentSeasonId) return;
 		refreshPanelRepertoire();
 	}
 
@@ -1290,7 +597,7 @@
 	function handlePanelAddWork(workId: string) {
 		if (isOffline) return;
 		const cfg = manageCfg();
-		const seasonId = manageableSeasonId;
+		const seasonId = ag.manageableSeasonId;
 		if (!cfg || seasonId === null) return;
 		panelQueue.request(PANEL_ADD_WORK_KEY, async () => {
 			await createRepertoireItem(cfg, { seasonId, workId });
@@ -1301,18 +608,18 @@
 		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
-		const before = panelRepertoire.find((item) => item.id === itemId)?.status;
+		const before = ag.panelRepertoire.find((item) => item.id === itemId)?.status;
 		if (before === undefined) return;
 		const thisSwitch = seasonManageSwitchGeneration;
 		panelQueue.request(itemId, () => updateRepertoireStatus(cfg, itemId, status), {
 			apply: () => {
-				panelRepertoire = panelRepertoire.map((item) =>
+				ag.panelRepertoire = ag.panelRepertoire.map((item) =>
 					item.id === itemId ? { ...item, status } : item
 				);
 			},
 			rollback: () => {
 				if (thisSwitch !== seasonManageSwitchGeneration) return;
-				panelRepertoire = panelRepertoire.map((item) =>
+				ag.panelRepertoire = ag.panelRepertoire.map((item) =>
 					item.id === itemId ? { ...item, status: before } : item
 				);
 			}
@@ -1323,15 +630,15 @@
 		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
-		const before = panelRepertoire;
+		const before = ag.panelRepertoire;
 		const thisSwitch = seasonManageSwitchGeneration;
 		panelQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
 			apply: () => {
-				panelRepertoire = panelRepertoire.filter((item) => item.id !== itemId);
+				ag.panelRepertoire = ag.panelRepertoire.filter((item) => item.id !== itemId);
 			},
 			rollback: () => {
 				if (thisSwitch !== seasonManageSwitchGeneration) return;
-				panelRepertoire = before;
+				ag.panelRepertoire = before;
 			}
 		});
 	}
@@ -1340,7 +647,7 @@
 		if (isOffline) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
-		const rows = worksByEventId[eventId] ?? [];
+		const rows = ag.worksByEventId[eventId] ?? [];
 		const items = rows
 			.filter((row) => row.kind === 'program')
 			.map((row) => ({ id: row.id, ordinal: row.ordinal ?? 0 }));
@@ -1371,10 +678,9 @@
 		});
 	}
 
-
 	const editionsByWorkId = $derived.by(() => {
 		const map = new Map<string, Edition[]>();
-		for (const edition of libraryEditions) {
+		for (const edition of ag.libraryEditions) {
 			const workId = edition.workId ?? '';
 			if (workId === '') continue;
 			const list = map.get(workId);
@@ -1390,11 +696,11 @@
 
 	const editionOptionsByRowId = $derived.by(() => {
 		const out: Record<string, PickerOption[]> = {};
-		for (const rows of Object.values(worksByEventId)) {
+		for (const rows of Object.values(ag.worksByEventId)) {
 			for (const row of rows) {
 				if (row.kind !== 'repertoire' || row.workId === '' || out[row.id]) continue;
 				const options =
-					scopedEditionsByWorkId[row.workId] ??
+					ag.scopedEditionsByWorkId[row.workId] ??
 					(editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
 						id: edition.id,
 						label: editionLabel(edition)
@@ -1405,13 +711,13 @@
 		return out;
 	});
 
-	const editionsResolvedWorkIds = $derived(new Set(Object.keys(scopedEditionsByWorkId)));
+	const editionsResolvedWorkIds = $derived(new Set(Object.keys(ag.scopedEditionsByWorkId)));
 
 	const unknownEditionWorkIds = $derived(
 		unresolvedEditionWorkIds(
-			Object.values(worksByEventId).flat(),
+			Object.values(ag.worksByEventId).flat(),
 			editionOptionsByRowId,
-			libraryEditionsPartial,
+			ag.libraryEditionsPartial,
 			editionsResolvedWorkIds
 		)
 	);
@@ -1421,16 +727,16 @@
 		if (workIds.length === 0) return;
 		const cfg = manageCfg();
 		if (!cfg) return;
-		const thisRequest = requestId;
+		const thisRequest = seq.requestId;
 		for (const workId of workIds) {
-			if (scopedEditionWorkIdsRequested.has(workId)) continue;
-			scopedEditionWorkIdsRequested.add(workId);
+			if (seq.scopedEditionWorkIdsRequested.has(workId)) continue;
+			seq.scopedEditionWorkIdsRequested.add(workId);
 			listEditions(cfg, workId)
 				.then((read) => {
-					if (thisRequest !== requestId) return;
+					if (thisRequest !== seq.requestId) return;
 					if (read.truncated) return;
-					scopedEditionsByWorkId = {
-						...scopedEditionsByWorkId,
+					ag.scopedEditionsByWorkId = {
+						...ag.scopedEditionsByWorkId,
 						[workId]: read.items.map((edition) => ({
 							id: edition.id,
 							label: editionLabel(edition)
@@ -1443,8 +749,8 @@
 	});
 
 	const pickableEditionsByEventId = $derived.by(() => {
-		const workById = new Map(libraryWorks.map((work) => [work.id, work]));
-		const all: PickerOption[] = libraryEditions.map((edition) => {
+		const workById = new Map(ag.libraryWorks.map((work) => [work.id, work]));
+		const all: PickerOption[] = ag.libraryEditions.map((edition) => {
 			const work = workById.get(edition.workId ?? '');
 			const prefix = work === undefined ? '' : workLabel(work);
 			return {
@@ -1453,7 +759,7 @@
 			};
 		});
 		const out: Record<string, PickerOption[]> = {};
-		for (const [eventId, rows] of Object.entries(worksByEventId)) {
+		for (const [eventId, rows] of Object.entries(ag.worksByEventId)) {
 			const programmed = new Set(
 				rows.filter((row) => row.kind === 'program').map((row) => row.editionId)
 			);
@@ -1463,7 +769,7 @@
 	});
 
 	$effect(() => {
-		if (libraryPickersLoading || worksRowsLoading) return;
+		if (ag.libraryPickersLoading || ag.worksRowsLoading) return;
 		const next: Record<string, boolean> = {};
 		for (const [eventId, options] of Object.entries(pickableEditionsByEventId)) {
 			next[eventId] = options.length > 0;
@@ -1471,39 +777,39 @@
 		pickableEditionsVisibleByEventId = next;
 	});
 
-	const pickableWorksList = $derived(pickableWorks(libraryWorks, seasonRepertoire));
+	const pickableWorksList = $derived(pickableWorks(ag.libraryWorks, ag.seasonRepertoire));
 
 	$effect(() => {
-		if (libraryPickersLoading || !libraryPickersLoadSucceeded) return;
+		if (ag.libraryPickersLoading || !ag.libraryPickersLoadSucceeded) return;
 		pickableWorksVisible = pickableWorksList.length > 0;
 	});
 
-	const panelWorkRowSources = $derived(collectSources(panelWorks, panelEditions, panelCopies));
+	const panelWorkRowSources = $derived(collectSources(ag.panelWorks, ag.panelEditions, ag.panelCopies));
 	const panelWorkRows = $derived(
-		buildWorkRows({ source: 'repertoire', items: panelRepertoire }, panelWorkRowSources)
+		buildWorkRows({ source: 'repertoire', items: ag.panelRepertoire }, panelWorkRowSources)
 	);
-	const panelPickableWorksList = $derived(pickableWorks(panelWorks, panelRepertoire));
+	const panelPickableWorksList = $derived(pickableWorks(ag.panelWorks, ag.panelRepertoire));
 
 	$effect(() => {
-		if (panelRepertoireLoading || !panelRepertoireItemsOk || !panelWorksSourcesOk) return;
+		if (ag.panelRepertoireLoading || !ag.panelRepertoireItemsOk || !ag.panelWorksSourcesOk) return;
 		panelPickableWorksVisible = panelPickableWorksList.length > 0;
 	});
 
 	const worksManage = $derived.by<WorksManage | undefined>(() => {
-		const anyEventRight = Object.values(eventManageRights).some((right) => right === 'editor');
-		if (seasonManageRights !== 'editor' && !anyEventRight) return undefined;
+		const anyEventRight = Object.values(ag.eventManageRights).some((right) => right === 'editor');
+		if (ag.seasonManageRights !== 'editor' && !anyEventRight) return undefined;
 		return {
-			seasonRights: seasonManageRights,
-			eventRightsByEventId: eventManageRights,
+			seasonRights: ag.seasonManageRights,
+			eventRightsByEventId: ag.eventManageRights,
 			pickableWorksList,
 			pickableWorksVisible,
-			pickableWorksPartial: libraryWorksPartial,
-			pickableEditionsPartial: libraryEditionsPartial,
+			pickableWorksPartial: ag.libraryWorksPartial,
+			pickableEditionsPartial: ag.libraryEditionsPartial,
 			pickableEditionsByEventId,
 			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
 			editionsResolvedWorkIds,
-			pendingKeys: managePendingKeys,
+			pendingKeys: ag.managePendingKeys,
 			onaddwork: handleAddWork,
 			onstatuschange: handleStatusChange,
 			onpinedition: handlePinEdition,
@@ -1513,202 +819,32 @@
 		};
 	});
 
-	function openAttendancePanel(item: AgendaItem) {
-		if (!selected) return;
-		if (!attendanceEventIds.has(item.id)) return;
-		attendanceItem = item;
-		attendanceLoading = true;
-		attendanceError = false;
-		attendanceRoster = [];
-		attendanceMap = {};
-		attendanceRsvpMap = {};
-		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(item.id);
-		attendanceFailedMemberIds = new Set(attendanceFailedByEvent.get(item.id) ?? []);
-		attendanceSavedMemberIds = new Set();
-
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const thisRequest = ++attendanceRequestId;
-
-		const rosterPromise = getRoster(cfg);
-
-		const requestIssuedAt = Date.now();
-		Promise.all([rosterPromise, listAttendance(cfg, item.id), listAllRsvpsForEvent(cfg, item.id)])
-			.then(([roster, records, rsvps]) => {
-				if (thisRequest !== attendanceRequestId) return;
-				attendanceRoster = roster;
-				const pendingMembers = attendanceQueue.pendingMembersForEvent(item.id);
-				const serverMap = attendanceByMemberId(records);
-				const merged = { ...serverMap };
-				for (const mid of pendingMembers) {
-					if (mid in attendanceMap) merged[mid] = attendanceMap[mid];
-					else delete merged[mid];
-				}
-				for (const mid of Object.keys(attendanceMap)) {
-					if (pendingMembers.has(mid)) continue;
-					const liveEntry = attendanceMap[mid];
-					const serverEntry = serverMap[mid];
-					if (liveEntry && (!serverEntry || serverEntry.attendanceId !== liveEntry.attendanceId)) {
-						merged[mid] = liveEntry;
-					}
-				}
-				attendanceMap = merged;
-				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
-				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
-				attendanceRsvpMap = rsvpMap;
-				attendanceLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== attendanceRequestId) return;
-				attendanceLoading = false;
-				attendanceError = true;
-			});
-	}
-
-	function closeAttendancePanel() {
-		const closedItemId = untrack(() => attendanceItem?.id);
-		attendanceRequestId++;
-		attendanceItem = null;
-		attendanceLoading = false;
-		attendanceError = false;
-		if (closedItemId) {
-			tick().then(() => {
-				document
-					.querySelector<HTMLElement>(
-						`[data-testid="agenda-recent-row-${closedItemId}"] [data-testid="take-attendance-btn"]`
-					)
-					?.focus();
-			});
-		}
-	}
-
-	const attendanceQueue = createAttendanceChangeQueue({
-		setOptimistic(eventId, memberId, entry) {
-			if (eventId !== attendanceItem?.id) return;
-			const next = { ...attendanceMap };
-			if (entry) next[memberId] = entry;
-			else delete next[memberId];
-			attendanceMap = next;
-		},
-		setPending(eventId, memberId, isPending) {
-			if (isPending) {
-				const eventFailed = attendanceFailedByEvent.get(eventId);
-				if (eventFailed?.has(memberId)) {
-					const cleared = new Set(eventFailed);
-					cleared.delete(memberId);
-					const nextMap = new Map(attendanceFailedByEvent);
-					if (cleared.size === 0) nextMap.delete(eventId);
-					else nextMap.set(eventId, cleared);
-					attendanceFailedByEvent = nextMap;
-				}
-			}
-			if (eventId !== attendanceItem?.id) return;
-			const next = new Set(attendancePendingMemberIds);
-			if (isPending) next.add(memberId);
-			else next.delete(memberId);
-			attendancePendingMemberIds = next;
-			if (isPending && attendanceFailedMemberIds.has(memberId)) {
-				const cleared = new Set(attendanceFailedMemberIds);
-				cleared.delete(memberId);
-				attendanceFailedMemberIds = cleared;
-			}
-			if (isPending && attendanceSavedMemberIds.has(memberId)) {
-				const cleared = new Set(attendanceSavedMemberIds);
-				cleared.delete(memberId);
-				attendanceSavedMemberIds = cleared;
-			}
-		},
-		reconcile(eventId, targetMemberId, entry) {
-			seasonRatesLoaded = false;
-			if (targetMemberId === memberId) {
-				if (entry) {
-					const idx = myAttendance.findIndex((a) => a.eventId === eventId);
-					const record = { attendanceId: entry.attendanceId, eventId, status: entry.status };
-					if (idx >= 0) {
-						const next = [...myAttendance];
-						next[idx] = record;
-						myAttendance = next;
-					} else {
-						myAttendance = [...myAttendance, record];
-					}
-				} else {
-					myAttendance = myAttendance.filter((a) => a.eventId !== eventId);
-				}
-			}
-
-			if (eventId !== attendanceItem?.id) return;
-			const next = { ...attendanceMap };
-			if (entry) next[targetMemberId] = entry;
-			else delete next[targetMemberId];
-			attendanceMap = next;
-			const saved = new Set(attendanceSavedMemberIds);
-			saved.add(targetMemberId);
-			attendanceSavedMemberIds = saved;
-		},
-		revert(eventId, targetMemberId, before) {
-			seasonRatesLoaded = false;
-
-			const eventFailed = new Set(attendanceFailedByEvent.get(eventId) ?? []);
-			eventFailed.add(targetMemberId);
-			const nextMap = new Map(attendanceFailedByEvent);
-			nextMap.set(eventId, eventFailed);
-			attendanceFailedByEvent = nextMap;
-
-			if (targetMemberId === memberId) {
-				if (before) {
-					const idx = myAttendance.findIndex((a) => a.eventId === eventId);
-					const record = { attendanceId: before.attendanceId, eventId, status: before.status };
-					if (idx >= 0) {
-						const next = [...myAttendance];
-						next[idx] = record;
-						myAttendance = next;
-					} else {
-						myAttendance = [...myAttendance, record];
-					}
-				} else {
-					myAttendance = myAttendance.filter((a) => a.eventId !== eventId);
-				}
-			}
-
-			if (eventId !== attendanceItem?.id) return;
-			const next = { ...attendanceMap };
-			if (before) next[targetMemberId] = before;
-			else delete next[targetMemberId];
-			attendanceMap = next;
-			const failed = new Set(attendanceFailedMemberIds);
-			failed.add(targetMemberId);
-			attendanceFailedMemberIds = failed;
-			if (attendanceSavedMemberIds.has(targetMemberId)) {
-				const cleared = new Set(attendanceSavedMemberIds);
-				cleared.delete(targetMemberId);
-				attendanceSavedMemberIds = cleared;
-			}
-		}
-	});
+	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag));
 
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
-		if (!selected || !attendanceItem) return;
+		if (!selected || !ag.attendanceItem) return;
 		if (isOffline) return;
 		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const current = attendanceMap[memberId];
+		const current = ag.attendanceMap[memberId];
 		const existing: EventAttendance | null = current
 			? { attendanceId: current.attendanceId, memberId, status: current.status }
 			: null;
-		attendanceQueue.request({ cfg, eventId: attendanceItem.id, memberId, existing, newStatus });
+		attendanceQueue.request({ cfg, eventId: ag.attendanceItem.id, memberId, existing, newStatus });
 	}
 
 	const attendancePanel = $derived.by<AttendancePanel | undefined>(() => {
-		if (!attendanceItem) return undefined;
+		if (!ag.attendanceItem) return undefined;
 		return {
-			item: attendanceItem,
-			members: attendanceRoster,
-			attendanceByMemberId: attendanceMap,
-			rsvpByMemberId: attendanceRsvpMap,
-			loading: attendanceLoading,
-			error: attendanceError,
-			pendingMemberIds: attendancePendingMemberIds,
-			failedMemberIds: attendanceFailedMemberIds,
-			savedMemberIds: attendanceSavedMemberIds,
-			membersPartial: rosterPartial,
+			item: ag.attendanceItem,
+			members: ag.attendanceRoster,
+			attendanceByMemberId: ag.attendanceMap,
+			rsvpByMemberId: ag.attendanceRsvpMap,
+			loading: ag.attendanceLoading,
+			error: ag.attendanceError,
+			pendingMemberIds: ag.attendancePendingMemberIds,
+			failedMemberIds: ag.attendanceFailedMemberIds,
+			savedMemberIds: ag.attendanceSavedMemberIds,
+			membersPartial: ag.rosterPartial,
 			ontoggle: handleAttendanceToggle,
 			onclose: closeAttendancePanel
 		};
@@ -1716,60 +852,20 @@
 
 	const myAttendanceByEventId = $derived.by(() => {
 		const map: Record<string, AttendanceStatus> = {};
-		for (const a of myAttendance) map[a.eventId] = a.status;
+		for (const a of ag.myAttendance) map[a.eventId] = a.status;
 		return map;
 	});
 	const mySeasonAttendance = $derived((() => {
-		const recentIds = new Set(recentItems.map((i) => i.id));
-		return myAttendance.filter((a) => recentIds.has(a.eventId));
+		const recentIds = new Set(ag.recentItems.map((i) => i.id));
+		return ag.myAttendance.filter((a) => recentIds.has(a.eventId));
 	})());
-	const mySeasonRate = $derived(deriveAttendanceRate(mySeasonAttendance, recentItems.length));
-
-	function handleExpandSeasonSummary() {
-		if (!selected) return;
-		if (seasonSummaryExpanded) {
-			seasonSummaryExpanded = false;
-			return;
-		}
-		seasonSummaryExpanded = true;
-		if (seasonRatesLoaded) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
-		const events = recentItems;
-		const thisRequestSnapshot = requestId;
-		seasonRatesLoading = true;
-		seasonRatesError = false;
-		Promise.all([
-			loadActiveAndArchivedRosters(cfg),
-			Promise.all(events.map((event) => listAttendance(cfg, event.id)))
-		])
-			.then(([rosters, perEventRecords]) => {
-				if (thisRequestSnapshot !== requestId) return;
-				const rosterRead = rosters.active;
-				const inactiveRead = rosters.inactive;
-				seasonRatesPartial = rosterRead.truncated || inactiveRead.truncated;
-				seasonMemberRates = deriveAllMemberRates(
-					perEventRecords.flat(),
-					rosterRead.items,
-					events.length,
-					inactiveRead.items
-				);
-				seasonRatesLoaded = true;
-				seasonRatesLoading = false;
-			})
-			.catch(() => {
-				if (thisRequestSnapshot !== requestId) return;
-				seasonRatesLoading = false;
-				seasonRatesError = true;
-				seasonMemberRates = [];
-				seasonRatesPartial = false;
-			});
-	}
+	const mySeasonRate = $derived(deriveAttendanceRate(mySeasonAttendance, ag.recentItems.length));
 
 	let seasonCreateOpen = $state(false);
 	let seasonCreateSubmitting = $state(false);
 	let seasonCreateStatus = $state('');
 
-	const showSeasonCreate = $derived(seasonCreateRights === 'editor');
+	const showSeasonCreate = $derived(ag.seasonCreateRights === 'editor');
 
 	function openSeasonCreateForm(): void {
 		if (createEntryPointsBlocked) return;
@@ -1798,19 +894,19 @@
 		seasonManageOpen = false;
 		seasonManageSwitchGeneration += 1;
 		seasonManagePanel?.resetPanelState();
-		panelRepertoire = [];
-		panelRepertoireSeasonId = null;
-		panelWorks = [];
-		panelWorksPartial = false;
-		panelEditions = [];
-		panelCopies = [];
+		ag.panelRepertoire = [];
+		seq.panelRepertoireSeasonId = null;
+		ag.panelWorks = [];
+		ag.panelWorksPartial = false;
+		ag.panelEditions = [];
+		ag.panelCopies = [];
 		panelPendingKeys = new Set();
-		panelRepertoireError = false;
+		ag.panelRepertoireError = false;
 		panelManageError = false;
 		panelManageStatus = '';
-		panelRepertoireLoading = false;
-		panelRepertoireItemsOk = false;
-		panelWorksSourcesOk = false;
+		ag.panelRepertoireLoading = false;
+		ag.panelRepertoireItemsOk = false;
+		ag.panelWorksSourcesOk = false;
 		panelPickableWorksVisible = undefined;
 	}
 
@@ -1824,61 +920,6 @@
 
 	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
 		seasonManagePanel?.refreshSeasonManageLists(cfg, seasonId);
-	}
-
-	function loadPanelRepertoire(cfg: ManageCfg, seasonId: string): void {
-		const thisRequest = requestId;
-		const thisSwitch = seasonManageSwitchGeneration;
-		panelRepertoireSeasonId = seasonId;
-		panelRepertoireError = false;
-		panelRepertoireLoading = true;
-		panelRepertoireItemsOk = false;
-		panelWorksSourcesOk = false;
-		let itemsSettled = false;
-		let sourcesSettled = false;
-		const maybeStopLoading = () => {
-			if (itemsSettled && sourcesSettled) panelRepertoireLoading = false;
-		};
-		listRepertoireItems(cfg, seasonId)
-			.then((items) => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				panelRepertoire = items;
-				panelRepertoireItemsOk = true;
-			})
-			.catch((e) => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				console.error('agenda: loading the season-manage repertoire failed', e);
-				panelRepertoire = [];
-				panelRepertoireError = true;
-			})
-			.finally(() => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				itemsSettled = true;
-				maybeStopLoading();
-			});
-		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
-			.then(([worksRead, editionsRead, copiesRead]) => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				panelWorks = worksRead.items;
-				panelEditions = editionsRead.items;
-				panelCopies = copiesRead.items;
-				panelWorksPartial = worksRead.truncated;
-				panelWorksSourcesOk = true;
-			})
-			.catch((e) => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				console.error('agenda: loading the season-manage repertoire sources failed', e);
-				panelWorks = [];
-				panelEditions = [];
-				panelCopies = [];
-				panelWorksPartial = false;
-				panelRepertoireError = true;
-			})
-			.finally(() => {
-				if (thisRequest !== requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				sourcesSettled = true;
-				maybeStopLoading();
-			});
 	}
 
 	let eventCreateOpen = $state(false);
@@ -1970,7 +1011,7 @@
 	const seasonCardCollapseDisabled = $derived(seasonManageOpen && seriesRunUnfinished);
 
 	function openSeriesCreateForm(): void {
-		if (manageableSeasonId === null) return;
+		if (ag.manageableSeasonId === null) return;
 		if (createEntryPointsBlocked) return;
 		closeSeasonCreateForm();
 		eventCreateOpen = false;
@@ -1986,7 +1027,7 @@
 		if (seriesCreateOpen || (seriesCreateSubmitting && seriesRunDb === current.db)) return;
 		const entry = seriesCreateResumeByDb[current.db];
 		if (!entry) return;
-		if (manageableSeasonId !== entry.form.seasonId) {
+		if (ag.manageableSeasonId !== entry.form.seasonId) {
 			console.warn(
 				'agenda: dropping a series resume record whose season is no longer manageable',
 				current.db,
@@ -2000,14 +1041,14 @@
 	}
 
 	const gatedMembership = $derived(
-		membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : membership
+		ag.membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : ag.membership
 	);
 	const gatedCanRsvp = $derived(
-		rsvpRights === 'not-editor'
+		ag.rsvpRights === 'not-editor'
 			? 'not-editor'
 			: $completionGateStore !== 'complete'
 				? 'loading'
-				: rsvpRights
+				: ag.rsvpRights
 	);
 
 	$effect(() => {
@@ -2050,9 +1091,9 @@
 					{/if}
 				</header>
 				<div class="rounded-lg bg-paper p-4">
-					{#if sessionExpired}
+					{#if ag.sessionExpired}
 						<SessionExpiredNotice centered />
-					{:else if agendaError}
+					{:else if ag.agendaError}
 						<div data-testid="agenda-error" class="flex flex-col items-center gap-3 py-10 text-center">
 							<p class="text-sm text-ink-2">{m.agenda_load_error()}</p>
 							<button
@@ -2075,7 +1116,7 @@
 								{m.agenda_downloads_link()}
 							</a>
 						{/if}
-						{#if rsvpPartial}
+						{#if ag.rsvpPartial}
 							<p
 								data-testid="rsvp-partial-notice"
 								role="status"
@@ -2084,7 +1125,7 @@
 								{m.rsvp_partial_notice()}
 							</p>
 						{/if}
-						{#if attendancePartial}
+						{#if ag.attendancePartial}
 							<p
 								data-testid="attendance-partial-notice"
 								role="status"
@@ -2093,7 +1134,7 @@
 								{m.attendance_partial_notice()}
 							</p>
 						{/if}
-						{#if !agendaLoading && seasons.length === 0 && seasonCreateRights === 'editor' && !seasonCreateOpen}
+						{#if !ag.agendaLoading && ag.seasons.length === 0 && ag.seasonCreateRights === 'editor' && !seasonCreateOpen}
 							<div
 								data-testid="agenda-onboarding"
 								class="mb-3 flex flex-col gap-2 rounded-md border border-dashed border-ink-4 p-3"
@@ -2119,10 +1160,10 @@
 						<SeasonManagePanel
 							bind:this={seasonManagePanel}
 							{selected}
-							{seasons}
-							bind:manageableSeasonId
-							bind:manageableSeasonRights
-							{manageableSeasonRightsById}
+							seasons={ag.seasons}
+							bind:manageableSeasonId={ag.manageableSeasonId}
+							bind:manageableSeasonRights={ag.manageableSeasonRights}
+							manageableSeasonRightsById={ag.manageableSeasonRightsById}
 							bind:seasonManageOpen
 							bind:seasonManagePanelEl
 							bind:seriesCreateOpen
@@ -2133,21 +1174,21 @@
 							{seasonCardCollapseDisabled}
 							{createEntryPointsBlocked}
 							{eventCreateOpen}
-							{rosterRows}
-							{rosterPartial}
-							{sectionsReadFailed}
+							rosterRows={ag.rosterRows}
+							rosterPartial={ag.rosterPartial}
+							sectionsReadFailed={ag.sectionsReadFailed}
 							locationSuggestionsId={LOCATION_SUGGESTIONS_ID}
-							{heldFileIds}
+							heldFileIds={ag.heldFileIds}
 							{panelWorkRows}
 							{panelPickableWorksList}
 							{panelPickableWorksVisible}
-							{panelWorksPartial}
+							panelWorksPartial={ag.panelWorksPartial}
 							{panelPendingKeys}
 							panelAddWorkKey={PANEL_ADD_WORK_KEY}
-							{panelRepertoireError}
+							panelRepertoireError={ag.panelRepertoireError}
 							{panelManageError}
 							{panelManageStatus}
-							currentRequestId={() => requestId}
+							currentRequestId={() => seq.requestId}
 							switchGeneration={() => seasonManageSwitchGeneration}
 							{getRoster}
 							{getSections}
@@ -2186,8 +1227,8 @@
 						{#if showSeasonCreate && seasonCreateOpen}
 							<SeasonCreateForm
 								{selected}
-								{rosterPartial}
-								{sectionsReadFailed}
+								rosterPartial={ag.rosterPartial}
+								sectionsReadFailed={ag.sectionsReadFailed}
 								bind:submitting={seasonCreateSubmitting}
 								bind:status={seasonCreateStatus}
 								{getRoster}
@@ -2211,12 +1252,12 @@
 						{#if eventCreateOpen}
 							<EventCreateForm
 								{selected}
-								{manageableSeasonId}
-								{seasons}
-								{agendaTypeFilter}
+								manageableSeasonId={ag.manageableSeasonId}
+								seasons={ag.seasons}
+								agendaTypeFilter={ag.agendaTypeFilter}
 								{agendaFilterBucketOf}
-								{rosterPartial}
-								{sectionsReadFailed}
+								rosterPartial={ag.rosterPartial}
+								sectionsReadFailed={ag.sectionsReadFailed}
 								locationSuggestionsId={LOCATION_SUGGESTIONS_ID}
 								bind:submitting={eventCreateSubmitting}
 								bind:status={eventCreateStatus}
@@ -2242,8 +1283,8 @@
 									<button
 										type="button"
 										data-testid="agenda-filter-all"
-										aria-pressed={agendaTypeFilter === 'all' ? 'true' : 'false'}
-										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeFilter ===
+										aria-pressed={ag.agendaTypeFilter === 'all' ? 'true' : 'false'}
+										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {ag.agendaTypeFilter ===
 										'all'
 											? 'border-ink bg-ink text-paper'
 											: 'border-ink-4 text-ink-2'}"
@@ -2255,7 +1296,7 @@
 										<button
 											type="button"
 											data-testid="agenda-filter-{type}"
-											aria-pressed={agendaTypeFilter === type ? 'true' : 'false'}
+											aria-pressed={ag.agendaTypeFilter === type ? 'true' : 'false'}
 											class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeChipClass(
 												type
 											)}"
@@ -2320,24 +1361,24 @@
 							{#key selected?.db}
 							<AgendaList
 								items={filteredAgendaItems}
-								loading={agendaLoading}
-								{rsvpByEventId}
+								loading={ag.agendaLoading}
+								rsvpByEventId={ag.rsvpByEventId}
 								membership={gatedMembership}
 								canRsvp={gatedCanRsvp}
 								{pendingEventIds}
-								{failedEventIds}
-								{savedEventIds}
+								failedEventIds={ag.failedEventIds}
+								savedEventIds={ag.savedEventIds}
 								recentItems={filteredRecentItems}
-								conductorEventIds={attendanceEventIds}
+								conductorEventIds={ag.attendanceEventIds}
 								{myAttendanceByEventId}
-								{worksByEventId}
+								worksByEventId={ag.worksByEventId}
 								{worksManage}
-								{heldFileIds}
-								scheduleItemsByEventId={scheduleByEventId}
+								heldFileIds={ag.heldFileIds}
+								scheduleItemsByEventId={ag.scheduleByEventId}
 								{attendancePanel}
 								{justCreatedEventId}
-								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
-								recentEmptyState={agendaTypeFilter !== 'all' && recentItems.length > 0
+								emptyState={ag.agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
+								recentEmptyState={ag.agendaTypeFilter !== 'all' && ag.recentItems.length > 0
 									? agendaRecentFilterEmptyState
 									: undefined}
 								onpdfclick={handlePdfClick}
@@ -2347,12 +1388,12 @@
 								{#snippet seasonSummary()}
 									<SeasonSummary
 										myRate={mySeasonRate}
-										canExpand={seasonManageRights === 'editor'}
-										expanded={seasonSummaryExpanded}
-										memberRates={seasonMemberRates}
-										membersPartial={seasonRatesPartial}
-										loading={seasonRatesLoading}
-										error={seasonRatesError}
+										canExpand={ag.seasonManageRights === 'editor'}
+										expanded={ag.seasonSummaryExpanded}
+										memberRates={ag.seasonMemberRates}
+										membersPartial={ag.seasonRatesPartial}
+										loading={ag.seasonRatesLoading}
+										error={ag.seasonRatesError}
 										onexpand={handleExpandSeasonSummary}
 									/>
 								{/snippet}
@@ -2361,17 +1402,17 @@
 						{:else}
 							<AgendaMonthView
 								items={filteredAgendaItems}
-								loading={agendaLoading}
+								loading={ag.agendaLoading}
 								{justCreatedEventId}
-								emptyState={agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
+								emptyState={ag.agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 							/>
 						{/if}
-						{#if pdfError}
+						{#if ag.pdfError}
 							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_pdf_error()}
 							</p>
 						{/if}
-						{#if manageError}
+						{#if ag.manageError}
 							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
 								{m.repertoire_manage_error()}
 							</p>
