@@ -56,6 +56,7 @@
 //   sitting server-side and the caller must say so.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { deletePhantomProperty, putUploadBytes, type UploadObject } from '$lib/files/entuUpload';
 
 /** One file that fully landed: property created AND bytes stored. Carries NO
  *  url — download URLs have a 60s TTL and are minted at click time by
@@ -86,12 +87,6 @@ export type FailedEditionFile =
 export interface UploadEditionFilesResult {
 	uploaded: UploadedEditionFile[];
 	failed: FailedEditionFile[];
-}
-
-interface UploadObject {
-	url: string;
-	method: string;
-	headers: Record<string, string | number>;
 }
 
 /** One created property value as the live envelope returns it. Only `_id` and
@@ -240,13 +235,7 @@ export async function uploadEditionFiles(
 			putOk = false;
 		} else {
 			try {
-				const putRes = await fetchImpl(upload.url, {
-					method: upload.method,
-					// EXACTLY the four returned headers, verbatim — the signed URL's
-					// signature covers precisely this set (files/index.md).
-					headers: upload.headers as HeadersInit,
-					body: file
-				});
+				const putRes = await putUploadBytes(upload, file, fetchImpl);
 				putOk = putRes.ok;
 			} catch {
 				// Network death mid-upload gets the same cleanup as a non-2xx.
@@ -270,19 +259,9 @@ export async function uploadEditionFiles(
 		// properties/index.md:124-141 (see module header). The property-VALUE
 		// endpoint (never entity/{id} — the wire-shape split), through
 		// entuFetch (API base + auth).
-		let cleanup: FailedEditionFile['cleanup'];
-		try {
-			const delRes = await entuFetch(
-				cfg.db,
-				`property/${entry._id}`,
-				cfg.token,
-				{ method: 'DELETE' },
-				fetchImpl
-			);
-			cleanup = delRes.ok ? 'deleted' : 'delete-failed';
-		} catch {
-			cleanup = 'delete-failed';
-		}
+		const cleanup: FailedEditionFile['cleanup'] = (await deletePhantomProperty(cfg, entry._id, fetchImpl))
+			? 'deleted'
+			: 'delete-failed';
 
 		// A nameless drifted entry is still named by SOMETHING the caller can act
 		// on: its property id.

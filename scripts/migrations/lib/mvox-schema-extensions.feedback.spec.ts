@@ -65,7 +65,8 @@ const EXPECTED_FEEDBACK_DEF = {
 		'mvox app extension — not part of the canonical v4E schema (upstream flow retired 2026-09-06; entu/research is historical reference only).',
 		'Created by the member with their own key (`creators: self`) — Entu auto-grants the creator `_owner` on create; no extra grant.',
 		"Instance `_sharing` is set EXPLICITLY to `domain` at create time, as #265 does: a type's `_sharing` is a ceiling, not a default (ER-1), and a child copies its parent's `_sharing` only when the parent is non-private (ER-13) — a feedback under a still-private member would otherwise stay private (PO ruling, Gama, 2026-09-28).",
-		'`_inheritrights: true` — inheritance left natural (Mihkel, #390): rights on the member cascade to its feedback.'
+		'`_inheritrights: true` — inheritance left natural (Mihkel, #390): rights on the member cascade to its feedback.',
+		'Instances carry a `name` VALUE with no prop-def: page path + UTC submission date, never a member name or description text; the type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).'
 	],
 	commissionedBy: 'mvox-app#395'
 };

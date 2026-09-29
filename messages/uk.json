@@ -720,5 +720,6 @@
 	"strokes_erase_aria_label": "Стерти позначки",
 	"strokes_undo_aria_label": "Скасувати",
 	"write_unavailable_no_signal": "Немає сигналу — зараз нічого не можна зберегти.",
-	"write_held_no_signal": "Немає сигналу — ваша зміна на місці, не збережена."
+	"write_held_no_signal": "Немає сигналу — ваша зміна на місці, не збережена.",
+	"feedback_screenshot_alt": "Знімок екрана сторінки, якої стосується цей відгук"
 }

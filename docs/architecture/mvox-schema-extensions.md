@@ -235,8 +235,8 @@ that `CreatorRule` kind here (`admin_member_record`'s only precedent is
 **`_sharing`**: `domain` on the type and on every one of the three fields,
 each set EXPLICITLY (the #265 inherit-from-parent trap: a type's `_sharing`
 is a ceiling, not a default — ER-1 — and a child copies its parent's
-`_sharing` only when the parent is non-private — ER-13). The create path (a
-later slice) also sets `_sharing: domain` explicitly on each feedback
+`_sharing` only when the parent is non-private — ER-13). The create path
+also sets `_sharing: domain` explicitly on each feedback
 instance at create time, as `admin_member_record` does on #265 — otherwise a
 feedback under a member still sitting at its own default `private` tier
 would silently stay private too (PO ruling, Gama, #395 body, 2026-09-28).
@@ -244,6 +244,10 @@ Intended, not yet provisioned: the `feedback` type-def exists on no Entu
 database as of this writing — this slice adds the definition and the
 provisioning script only; the live crede run (separately authorized) is where
 `assertPropDefSharing` reads the tier back.
+
+**`name`**: each instance carries a `name` value with no prop-def — page
+path + UTC submission date, never a member name or description text; the
+type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).
 
 **`_inheritrights: true`** — inheritance left natural (Mihkel, #390 ruling,
 quoted in the #395 body): rights on the member cascade to their feedback,
