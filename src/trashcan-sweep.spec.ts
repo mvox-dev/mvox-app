@@ -77,7 +77,10 @@ function buttonBlock(path: string, testidLiteral: string): string {
 describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink empties the idiom)', () => {
 	const chips: Array<[string, string]> = [
 		['routes/+page.svelte', 'data-testid="season-manage-conductor-remove-{personId}"'],
-		['routes/+page.svelte', 'data-testid="season-create-conductor-remove-{conductor.id}"'],
+		[
+			'lib/components/agenda/SeasonCreateForm.svelte',
+			'data-testid="season-create-conductor-remove-{conductor.id}"'
+		],
 		[
 			'lib/components/agenda/EventCreateForm.svelte',
 			'data-testid="event-create-conductor-remove-{conductor.id}"'

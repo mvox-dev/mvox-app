@@ -14,6 +14,7 @@ const FILES = [
 	'src/routes/event/[id]/+page.svelte',
 	'src/routes/library/+page.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
+	'src/lib/components/agenda/SeasonCreateForm.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
 	'src/lib/components/profile/ProfileField.svelte'
