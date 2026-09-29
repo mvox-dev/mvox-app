@@ -70,6 +70,13 @@ describe('#395 FeedbackView renders one feedback', () => {
 		expect(img?.closest(`[${REDACT_ATTR}]`)).not.toBeNull();
 	});
 
+	// The screenshot is the feedback's content, not decoration: it needs a name.
+	it('the screenshot <img> carries the translated alt text', () => {
+		const { container } = mount();
+		const img = container.querySelector(`img[src="${URL_}"]`);
+		expect(img?.getAttribute('alt')).toBe('Screenshot of the page this feedback is about');
+	});
+
 	// REVIEW ROUND (#395, F3): StrokeSurface's box is sized only by
 	// `aspect-ratio` and its ink SVG spans all of it (`inset: 0; width: 100%;
 	// height: 100%`). A bare inline <img> takes Tailwind preflight's `max-width:

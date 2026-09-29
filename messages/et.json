@@ -718,5 +718,6 @@
 	"strokes_erase_aria_label": "Kustuta märgid",
 	"strokes_undo_aria_label": "Võta tagasi",
 	"write_unavailable_no_signal": "Signaali pole — praegu ei saa midagi salvestada.",
-	"write_held_no_signal": "Signaali pole — sinu muudatus on alles, salvestamata."
+	"write_held_no_signal": "Signaali pole — sinu muudatus on alles, salvestamata.",
+	"feedback_screenshot_alt": "Kuvatõmmis lehest, mille kohta see tagasiside on"
 }

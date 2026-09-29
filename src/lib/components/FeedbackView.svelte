@@ -20,6 +20,7 @@
 	//
 	// No route yet (#395 slice 2: no route or compose UI — screenshot capture
 	// is a later issue).
+	import { m } from '$lib/paraglide/messages.js';
 	import type { StrokeData } from '$lib/strokes/strokes';
 	import RedactedText from './RedactedText.svelte';
 	import StrokeSurface from './StrokeSurface.svelte';
@@ -41,7 +42,7 @@
 
 {#snippet base()}
 	<RedactedText class="block">
-		<img src={screenshotUrl} alt="" class="block w-full" />
+		<img src={screenshotUrl} alt={m.feedback_screenshot_alt()} class="block w-full" />
 	</RedactedText>
 {/snippet}
 

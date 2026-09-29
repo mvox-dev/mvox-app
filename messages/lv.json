@@ -719,5 +719,6 @@
 	"strokes_erase_aria_label": "Dzēst iezīmes",
 	"strokes_undo_aria_label": "Atsaukt",
 	"write_unavailable_no_signal": "Nav signāla — pašlaik neko nevar saglabāt.",
-	"write_held_no_signal": "Nav signāla — jūsu izmaiņas joprojām šeit, nesaglabātas."
+	"write_held_no_signal": "Nav signāla — jūsu izmaiņas joprojām šeit, nesaglabātas.",
+	"feedback_screenshot_alt": "Ekrānuzņēmums no lapas, par kuru ir šī atsauksme"
 }

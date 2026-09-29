@@ -718,5 +718,6 @@
 	"strokes_erase_aria_label": "Erase strokes",
 	"strokes_undo_aria_label": "Undo",
 	"write_unavailable_no_signal": "No signal — nothing can be saved right now.",
-	"write_held_no_signal": "No signal — your change is still here, unsaved."
+	"write_held_no_signal": "No signal — your change is still here, unsaved.",
+	"feedback_screenshot_alt": "Screenshot of the page this feedback is about"
 }
