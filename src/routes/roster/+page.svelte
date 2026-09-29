@@ -1,56 +1,25 @@
 <script lang="ts">
-	// T3.3/#19 — the collective roster: active members' shared name+email subset.
-	// TS.1/#95 — rewritten from a flat list into a SECTION-GROUPED collapsible
-	// layout (default) with a column-header toggle to a flat alphabetical view.
-	// Protected automatically (not on guard.ts's allowlist, `isProtectedPath('/roster')`
-	// is true by default). No `completionGate` import here — the CURRENT-user
-	// application of #28 is the layout's redirect; the OTHER-members application (a
-	// nameless member never appearing as a row) lives entirely in `rosterData.ts`'s
-	// `toRosterRow` — this component only renders whatever the roster producer returns.
 	import { tick, untrack } from 'svelte';
-	// #470 — the per-member section-write freeze set (AttendanceSurface's
-	// `pendingMemberIds` precedent, reactive-native here rather than a plain
-	// prop-threaded Set: this page owns the writes, so it owns the freeze).
 	import { SvelteSet } from 'svelte/reactivity';
 	import { m } from '$lib/paraglide/messages.js';
 	import { rovingNextIndex } from '$lib/a11y/roving';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	// #469 (Mihkel, 2026-09-23, supersedes Henry's 2026-09-06 roster-only
-	// ruling) — `loadRoster` is now the ONE shared producer and carries the
-	// real-names overlay itself; every consumer (this route, agenda, event
-	// detail, admin roles) obeys `roster_show_real_names` the same way. See
-	// rosterData.ts's `loadRoster`/`applyRealNames` docs for the contract.
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import type { ListRead } from '$lib/entu/listRead';
-	// #294 — join-state read (per-row, three states) + the two write producers
-	// the roster's controls reuse verbatim: mintSelfLinkInvite serves BOTH
-	// `kutsu` and `saada uuesti` (sweep-then-mint is the atomic replace), and
-	// withdrawInvite is that sweep WITHOUT the mint (`tühista kutse`). The
-	// roster NEVER calls createInvite — that mints a SECOND person+member,
-	// and every row here already has a person.
-	// #467 — the page reads through `listJoinStateDetails` (state + the dated
-	// stamp, ONE round of reads) and derives the bare 3-value `JoinState`
-	// record the owner-controls block routes on from that SAME answer — never
-	// a second call to `listJoinStates`.
+	// Write producers: mintSelfLinkInvite (kutsu/saada uuesti) and withdrawInvite
+	// (tühista kutse) — never createInvite, which mints a second person+member.
+	// listJoinStateDetails is the one read; JoinState never triggers a second call.
 	import {
 		listJoinStateDetails,
 		type JoinState,
 		type JoinStateDetail
 	} from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, withdrawInvite, INVITE_LIFETIME_MS } from '$lib/invite/inviteData';
-	// #467 — the dated lines' formatter: en-CA yyyy-mm-dd, NO timeZone argument
-	// (the InviteSurface.svelte:160 convention, #207 rule 7: ISO calendar date,
-	// never browser locale).
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
-	// #346 — the token this row mints is a bearer secret; the row must hand an
-	// ADMIN a real URL (scheme + host + /invite/<token>), never a bare JWT (a
-	// bare JWT pasted into a browser is a search query). `buildInviteUrl` is
-	// the SAME composer InviteSurface.svelte uses (#345/f501a78) — one
-	// implementation, not a second one growing here. `createInviteLinkCopier`
-	// is that same landed copy semantics, extracted (#346) so this row's
-	// click-to-copy is byte-identical to the admin surface's, not a second
-	// copy path with a second set of failure semantics.
+	// The invite token is a bearer secret: the row hands out a full URL, never
+	// a bare JWT (pasted into a browser it becomes a leaking search query). The
+	// URL composer and the copy-click both share their code with InviteSurface.
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { createInviteLinkCopier, type InviteLinkCopier } from '$lib/invite/copy-invite-link';
 	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
@@ -69,10 +38,6 @@
 		type MemberRecordLookup,
 		type MemberRecord
 	} from '$lib/roster/memberRecord';
-	// #285 — the pure EVS 585 checksum validator, called inline from the save
-	// handler's guard slot (the `birthdateToWire` precedent: one exported
-	// function, unit-tested in isolation, invoked from the page — no
-	// machinery of its own here).
 	import { isValidIdCode } from '$lib/roster/idCode';
 	import { resolveMyLibraryId } from '$lib/library/librarianStore';
 	import { listSections, groupBySection, type SectionNode, type SectionGroup } from '$lib/sections/sectionData';
@@ -100,11 +65,9 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import EntuRef from '$lib/components/EntuRef.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
-	// #434 slice 6 review F1 — the write gate. Every write on this page (member
-	// lifecycle, the member record, invite mint/withdraw, and the whole section
-	// tree: assign/unassign/move, create, rename, reorder, reparent, delete) is
-	// disabled and refused while there is no usable signal, with one sentence
-	// saying why. Nothing is queued.
+	// The write gate: every write here (member lifecycle, record, invites,
+	// section tree) disables together while there is no usable online signal —
+	// one sentence saying why, and nothing queued for later.
 	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveStore);
@@ -114,125 +77,34 @@
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<RosterRow[]>([]);
 
-	// #321 — true when one of THIS page's member reads came back partial (server
-	// count > the raw entities array on that read's own request — see
-	// $lib/entu/listRead). Two independent facts, one notice:
-	//   `membersPartial`  — `loadRoster`: the active-member list, OR
-	//                       the `admin_member_record` overlay read behind the real
-	//                       names (a truncated overlay silently reverts SOME rows
-	//                       to profile names, indistinguishable on screen from "no
-	//                       record" — see that producer's doc). Re-derived on every
-	//                       load, cleared in `reset` alongside the other per-load
-	//                       facts so it cannot outlive the list it describes.
-	//   `inactivePartial` — the archived half of `readRosterHalves` (#469 review
-	//                       F1: the same one-pass read that produces the active
-	//                       rows while the panel is open) — the panel, which
-	//                       only ever grows (deactivate never deletes). Cleared
-	//                       under `isSwitch` alongside `inactiveRows`, the same
-	//                       scoping that panel's own state follows — and (#321
-	//                       review F3) when the panel CLOSES, since the notice it
-	//                       feeds renders at page level over the active roster.
-	// The section tree is deliberately NOT here: `listSections` is class (1), with
-	// its bound stated at the query (sectionData.ts).
+	// Two independent truncation causes share one notice: membersPartial (the
+	// active list or its real-names overlay) and inactivePartial (the archived
+	// half) — a silently-reverted row looks identical to "no record" on screen.
 	let membersPartial = $state(false);
 	let inactivePartial = $state(false);
 	const rosterPartial = $derived(membersPartial || inactivePartial);
 
-	// #294 — the three-state join read, keyed by personId (the producer's own
-	// `Record<string, JoinState>` shape — see linkedIdentities.ts). Every
-	// row's controls are a PURE function of this record: there is no separate
-	// "which button" flag, so a mint/withdraw success routes the row to its
-	// next control set for free the moment the record is re-read.
 	let joinStates = $state<Record<string, JoinState>>({});
-	// #467 — the SAME answer's dated half: state + the linked-identity
-	// property value's own `created.at` (invited/joined). `joinStates` above
-	// is DERIVED from this on every read, never fetched separately — one
-	// round of reads.
 	let joinStateDetails = $state<Record<string, JoinStateDetail>>({});
-	// The DISPLAY gates on the READ alone (#454, Mihkel 2026-09-22, superseding
-	// the 2026-09-09 every-admin framing for this half): a chip renders iff
-	// this record carries a state for the row. The three CONTROLS
-	// (kutsu/saada uuesti/tühista kutse) gate on `_owner` alone (PO ruling
-	// 2026-09-09, unchanged) (probe-observed: `_owner` mint → HTTP 200, `_editor` →
-	// HTTP 403 "User not in _owner property"). 'loading' fails CLOSED — same
-	// discipline as `adminStore`'s own initial state — so a control never
-	// renders ahead of knowing whether this caller actually holds it.
 	let ownerTier = $state<OwnerTier | 'loading'>('loading');
-	// Per-row transient UI state for the three write actions — NOT part of
-	// `RosterRow` (that stays the profile-names producer's own shape; #294's
-	// read is a genuinely separate fetch, mirroring `loadRoster`'s own
-	// per-member profile fan-out rather than widening it). Reset on an actual
-	// collective SWITCH only (routeLoad's `reset({isSwitch})` below) — the
-	// underlying identity property is PER-COLLECTIVE (a person entity exists
-	// per db), so nothing minted or erred under one collective may leak into
-	// another's rows (the #287 bug class, kept out of this feature).
 	let inviteLinkByMemberId = $state<Record<string, string>>({});
 	let inviteErrorByMemberId = $state<Record<string, boolean>>({});
 	let withdrawErrorByMemberId = $state<Record<string, boolean>>({});
-	// #346 — one `InviteLinkCopier` per row (lazily created on the row's FIRST
-	// click), plus its rendered outcome: `copiedByMemberId`/`copyFailedByMemberId`
-	// are this component's own reactive mirror of the copier's flags (the
-	// module itself carries no runes — see copy-invite-link.ts), refreshed
-	// synchronously at copy() entry and again on settle, same two-step read
-	// InviteSurface.svelte uses. Reused across a row's later mints — the
-	// copier's `getText` reads `inviteLinkByMemberId[memberId]` live, so a
-	// fresh token never needs a fresh instance.
 	let inviteCopierByMemberId = $state<Record<string, InviteLinkCopier>>({});
 	let copiedByMemberId = $state<Record<string, boolean>>({});
 	let copyFailedByMemberId = $state<Record<string, boolean>>({});
-	// A single shared in-flight guard, mirroring `deactivatePending`'s
-	// whole-block shape rather than a per-row map: #294 has no requirement for
-	// concurrent invite actions across rows, and one flag is the smaller
-	// surface.
 	let inviteActionPending = $state(false);
 	let sections = $state<SectionNode[]>([]);
-	// F3 code-review fix: the two loads are DECOUPLED (Promise.allSettled, not
-	// Promise.all) — a section-tree failure must not black out a roster the app
-	// could otherwise show. `sectionsError` is set when ONLY the section load
-	// failed (rows loaded fine); the page then renders the flat list plus a
-	// visible banner — still loud (console.error + banner), never silent.
 	let sectionsError = $state(false);
 
-	// F5 code-review fix: a failed section write used to be INVISIBLE — the
-	// control settled back and the failure went to a bare console.error, so the
-	// user tapped and nothing appeared: no group, no error. The failure has to be
-	// SAID. Rendered inline in the member's own row rather than as a page-top
-	// banner: that is where the user is looking, and a long roster can scroll a
-	// top banner out of sight entirely.
-	// #470 F4 review fix — this used to carry a `kind: 'create' | 'assign'`
-	// discriminator for the picker's own inline create form. That form is gone
-	// (creating a section left the assignment flow entirely; the page-level
-	// `roster-new-section` entry owns creation and reports through
-	// `pageCreateError`), so every writer of this slot is an assign/unassign/move
-	// failure and the member id is the whole payload.
 	let sectionWriteError = $state<{ memberId: string } | null>(null);
 
-	// #470 — per-member freeze: a memberId sits in here from the moment one of
-	// handleAssign/handleUnassign/handleMove fires its optimistic patch until
-	// the write(s) settle. The SectionPicker on THAT row reads it as `busy`;
-	// every OTHER row's picker is unaffected — same "own one row's writes"
-	// discipline as `pendingRemoveId`/`renamingSectionId` above.
 	let sectionBusyIds = new SvelteSet<string>();
 
-	// TS.1/#95 — grouped ↔ flat toggle, default grouped. groupBySection is the
-	// GENUINE data-layer function (sectionData.ts) — the page never re-derives
-	// grouping/counts ad hoc. Declared here (not near its other UI derivations
-	// below) because F3's section-load failure path forces it to 'flat'.
 	let view = $state<'grouped' | 'flat'>('grouped');
 
-	// TS.2/#96 — the cfg the picker's writes fire against. Set once loadForSelected
-	// has a real token+db (mirrors `generation`: plain module-scope state, not
-	// `$state` — writes read it at tap time, it never needs to drive a render).
 	let currentCfg: EntuCfg | null = null;
 
-	// #232 — the shared route-load machine owns the Status union, the
-	// generation guard and the loadForSelected sequencing (reset →
-	// no-collective → token check → 'loading' → this page's fetch body →
-	// 4-branch error classification). `reset`'s `isSwitch` replaces the old
-	// `current?.db !== loadedDb` comparison (#255 review r3 F2 semantics,
-	// unchanged): the inactive panel is scoped-reset only on an actual
-	// collective switch, never on a same-db refresh (the deactivate/reinstate
-	// paths call this as a refresh and reload the panel themselves).
 	const routeLoad = createRouteLoadMachine({
 		name: 'roster',
 		selected: () => selected,
@@ -240,101 +112,15 @@
 			status = s;
 		},
 		reset: ({ isSwitch }) => {
-			// #99 review F2/F3 — a reload re-derives the tree from scratch, so neither a
-			// previous reorder's alert nor its "moved to position 2" announcement is
-			// about anything on screen any more (a collective switch replaces the tree
-			// outright).
 			reorderError = false;
 			reorderStatus = '';
-			// #296 — mirrors `removePending`/`renamePending` below: a reorder or
-			// reparent armed/in-flight for the OLD collective must not leave the
-			// NEW collective's structural controls disabled via
-			// `structuralWritePending`; each writer's own `finally` is separately
-			// generation-guarded (below) to close the late-settle half of the gap.
 			reorderPending = false;
-			// #110 review F1/F4 — the remove path's two pieces of transient state are
-			// about a tree that is being replaced: a failure message naming a section
-			// the next tree may not even contain, and a half-armed confirm on a header
-			// that is about to be re-rendered from different data. Both drop here,
-			// alongside the reorder pair, for the same reason.
 			removeError = null;
 			pendingRemoveId = null;
-			// #299 — `sectionWriteError` (the per-member section-write error) and
-			// `pageCreateError` (the page-level create's error) are the same shape
-			// as `removeError` immediately above: each names a member/section the
-			// next tree may not even contain. Neither was in this callback at all
-			// before #299 — a create failure from a previous visit to this
-			// collective, or from the collective just left, would otherwise
-			// resurface as if it just happened.
 			sectionWriteError = null;
 			pageCreateError = null;
-			// #470 — a freeze armed for the OLD collective's write must not leave
-			// the NEW collective's pickers permanently disabled; each handler's own
-			// `finally` is separately guarded against a late settle (below), same
-			// split as `reorderPending`/`removePending` above.
 			sectionBusyIds.clear();
-			// #287 — a section-remove write armed/in-flight for the OLD collective
-			// must not keep the NEW collective's structural controls disabled via
-			// `structuralWritePending`; its own `finally` is separately
-			// generation-guarded (below) to close the late-settle half of the gap.
 			removePending = false;
-			// #297 — the rename trio gets the identical treatment, one write seam
-			// over: `renamingSectionId` is a half-armed per-row input id exactly
-			// like `pendingRemoveId` above, `renameValue` is its paired typed-but-
-			// unsaved text (cleared together, same pairing `cancelRename` already
-			// enforces), and `renameError` names a section the next tree may not
-			// even contain, exactly `removeError`'s reasoning. `renamePending`
-			// mirrors `removePending` immediately above it: an armed/in-flight
-			// rename for the OLD collective must not leave the NEW collective's
-			// structural controls disabled via `structuralWritePending`, and its
-			// own `finally` is separately generation-guarded (below) for the
-			// late-settle half. `renameStatus` itself is cleared alongside
-			// `removeStatus`/`pageCreateStatus`/`reorderStatus`/`recordStatus`
-			// below, not here — see the comment at that block (#299 review
-			// superseded the #287-era "invisible success" exception).
-			//
-			// #303 [DECISION-Mihkel, 2026-09-09, via Gama]: this used to be an
-			// UNCONDITIONAL discard of an open rename — exactly the silent-drop
-			// ruling (b) removes. A reload (switch or same-db refresh alike, this
-			// block is unconditional) now COMMITS an open rename instead, through
-			// the same `submitRename()` guards blur and section-switch already
-			// reuse (never a parallel writer) — `submitRename` itself is a no-op
-			// when `renamingSectionId` is already null, so this fires exactly
-			// once whether or not something is actually open.
-			//
-			// THE GENERATION HAZARD (research-303, source-confirmed): routeLoad.ts
-			// bumps `generation` BEFORE calling this callback, so reading
-			// `routeLoad.generation` live here would capture the INCOMING
-			// collective's generation — the outgoing write's own `g !==
-			// routeLoad.generation` settle-guard would then never trip as
-			// superseded, and its success announcement would land in the NEW
-			// collective's live region, defeating #297's cross-collective guard by
-			// construction. `generation` only ever advances by exactly one full
-			// integer per load (`++generation`), so `routeLoad.generation - 1` at
-			// this exact point IS the pre-bump value the outgoing write's own
-			// callers saw. Passing it explicitly (the parameter shape) keeps this
-			// fix confined to this page; reordering routeLoad's shared
-			// bump-before-reset would touch roster/library/profile alike and is
-			// not proven safe for the other two.
-			//
-			// `refocus: false` — the whole tree is being replaced; there is
-			// nothing sensible to refocus back to.
-			//
-			// `untrack()` — this whole `reset` callback runs SYNCHRONOUSLY inside
-			// the page's own `$effect(() => { void selected; loadForSelected()… })`
-			// (routeLoad.ts calls `reset` before its first `await`), so any $state
-			// read here during that synchronous window — `submitRename`'s own
-			// `renamingSectionId`/`sections`/`currentCfg`/`structuralWritePending`
-			// reads included — would otherwise register as a DEPENDENCY of that
-			// effect. Without `untrack`, opening a rename (which writes
-			// `renamingSectionId`) would re-trigger the very effect that calls
-			// `loadForSelected()`, running THIS reset AGAIN with the just-opened
-			// row live — which promptly "switch-commits" and null-out-clears a
-			// rename the user only just started, on every keystroke's worth of
-			// re-render. (Caught empirically: `page.roster-arrange-crud.spec.ts`'s
-			// plain "tap to open" test failed until this was added — a second,
-			// spurious `reset()` fired the instant `startRename` wrote
-			// `renamingSectionId`, in the SAME synchronous tick as the click.)
 			untrack(() => {
 				void submitRename({ refocus: false, generation: routeLoad.generation - 1 });
 			});
@@ -342,122 +128,31 @@
 			renameValue = '';
 			renamePending = false;
 			renameError = null;
-			// #255 (A) — same reasoning: a half-armed deactivate confirm or a stale
-			// refusal message is about a row the next tree may not even contain.
 			pendingDeactivateId = null;
 			deactivateRefusal = null;
 			deactivateActionError = null;
-			// #287 — mirrors `removePending` above: a deactivate write armed/in-flight
-			// for the OLD collective must not leave the NEW collective's confirm/
-			// cancel/trigger buttons disabled; its `finally` is separately
-			// generation-guarded (below).
 			deactivatePending = false;
-			// #296 — `reinstatePending` gets the identical treatment: it names the
-			// memberId a reinstate write is in flight for, and `handleReinstate`
-			// gains its own entry-level generation capture (below) so its
-			// `finally` can close the late-settle half the same way
-			// `deactivatePending`'s already does, immediately above.
 			reinstatePending = null;
-			// #294 review — the other half of #287's two-part discipline, for the
-			// invite controls' shared in-flight flag. Its `finally` clears it only
-			// when the generation still matches (closing the LATE-settle half), so
-			// without an unconditional clear here a generation bump during an
-			// in-flight mint/withdraw — a collective switch, or simply a
-			// deactivate/reinstate on the SAME collective, both of which call
-			// `loadForSelected()` — would strand `inviteActionPending` true for the
-			// life of the page, rendering kutsu/saada uuesti/tühista kutse
-			// permanently `disabled` on rows whose state is perfectly actionable.
-			// Unconditional (not under `isSwitch`), exactly like the two above.
 			inviteActionPending = false;
-			// #268 — same reasoning as the deactivate trio above: an open editor,
-			// a mid-flight save, or a stale save error all describe a row the next
-			// tree may not even contain (or a rewritten `_id`). Reset unconditionally
-			// on EVERY load, not just an actual switch (matching `reorderStatus`
-			// above and `recordStatus` below), and unlike the
-			// isSwitch-gated inactive-panel trio below): the record editor is a
-			// per-row transient exactly like the deactivate confirm/refusal it sits
-			// beside, not data keyed to the tree's identity.
 			recordEditorMemberId = null;
 			recordEditorLookup = null;
 			recordSaveError = null;
-			// #268 review F3 — `recordSavingMemberId` is deliberately NOT reset
-			// here. It names a write that is genuinely still in flight; clearing it
-			// from a path that knows nothing about that write is exactly the defect
-			// this scope fixes. The save's own `finally` clears it (and only when it
-			// still names that save's row), so it self-heals on settle.
 			recordStatus = '';
-			// #299 (PO amendment, issue comment) — `removeStatus`/`renameStatus`/
-			// `pageCreateStatus` join `reorderStatus`/`recordStatus` above: all four
-			// status regions now behave identically. The #287-era exception kept a
-			// surviving `renameStatus` on the stated belief that it could otherwise
-			// swallow the NEXT announcement (identical-string, no DOM change, no
-			// re-announce) — that belief was checked and refuted on the issue
-			// (`startRename` already clears `renameStatus` before arming, so the
-			// success write is always a genuine '' → text change; no announcement is
-			// ever missed) and is not the reason for this clear. The reason is
-			// narrower: a status region carries no collective identity of its own,
-			// so "Tenor removed"/"Sopranos renamed"/"Chorus created" left over from
-			// collective A reads, inside B, as a statement about B. Unconditional
-			// (every load, not `isSwitch`-gated), matching `reorderStatus`/
-			// `recordStatus` exactly.
 			removeStatus = '';
 			renameStatus = '';
 			pageCreateStatus = '';
-			// #321 — the partial notice is a claim about the list that is being
-			// replaced. Unconditional (every load, not `isSwitch`-gated) and set again
-			// by `load` below from the read it belongs to: leaving it standing through
-			// a reload would let a truncation from the collective just left, or from a
-			// list that has since shrunk, keep asserting itself over new rows. The
-			// inactive panel's own flag is scoped to a SWITCH instead, below, matching
-			// `inactiveRows`.
 			membersPartial = false;
-			// #255 review r3 F2 — the inactive panel is the one surface this function
-			// does NOT re-derive, so without this a switch left collective A's inactive
-			// members rendered under B's roster, each with a live Reinstate button
-			// pointing at A's member ids. Same rule `expandedIds` follows (state keyed
-			// to data that is being replaced) — but scoped to an actual SWITCH, because
-			// the deactivate/reinstate paths call this as a REFRESH and reload the panel
-			// themselves; a blanket reset here would slam it shut under them.
 			if (isSwitch) {
 				showInactive = false;
 				inactiveRows = [];
 				inactiveLoadError = false;
-				// #321 — same scoping as `inactiveRows` directly above: a truncation
-				// detected in A's archived-member list must not keep the notice up over
-				// B's roster, and a same-collective refresh must not clear it out from
-				// under the panel it describes.
 				inactivePartial = false;
-				// #294 — a minted link or a mint/withdraw error names a row from the
-				// OLD collective; the underlying identity property is PER-COLLECTIVE
-				// (a person entity exists per db), so nothing minted or erred under A
-				// may leak onto B's rows (the #287 bug class, kept out of this
-				// feature). `joinStates` and `ownerTier` are NOT reset here — `load`
-				// below overwrites both on every load, same as `rows`/`sections`, and
-				// each of those writes is generation-guarded so a superseded load's
-				// tail can no longer be the one that writes last.
 				inviteLinkByMemberId = {};
 				inviteErrorByMemberId = {};
 				withdrawErrorByMemberId = {};
-				// #346 — a row's copier/copy-outcome names a link from the OLD
-				// collective same as `inviteLinkByMemberId` above; scoped identically.
 				inviteCopierByMemberId = {};
 				copiedByMemberId = {};
 				copyFailedByMemberId = {};
-				// #299 (PO ruling, Gama) — `pageCreateParentId` is not cosmetic form
-				// state: it is a cross-collective reference. The parent `<select>`'s
-				// options rebuild from the new collective's `ownOrgFlatSections`, so
-				// after a switch no option matches the retained id and the select
-				// DISPLAYS "top level" while the variable still names a section in
-				// the collective just left; `submitPageCreate` reads the VARIABLE,
-				// not the select, so a submit from that state would parent a new
-				// section in B into a tree that only exists in A. Scoped to an actual
-				// SWITCH (not every load) — a same-collective refresh (e.g. another
-				// admin's deactivate calling `loadForSelected()`) must not slam an
-				// in-progress draft shut. Once `pageCreateParentId` must go,
-				// `pageCreateOpen`/`pageCreateName` go with it: keeping the form open
-				// and named without a parent that still matches would hand the user
-				// a half-form pointing at the wrong tree, which is worse than losing
-				// an unsaved draft on an explicit context switch.
 				pageCreateOpen = false;
 				pageCreateName = '';
 				pageCreateParentId = '';
@@ -466,99 +161,46 @@
 		onNoCollective: () => {
 			rows = [];
 			sections = [];
-			// #321 — no collective, no list, nothing for the notice to be about.
 			membersPartial = false;
 			inactivePartial = false;
-			// #110 review F3 — collapse state is keyed by section id, so it must never
-			// outlive the tree it describes. Ids from the previous collective would
-			// otherwise keep `expandedIds` non-empty over a tree that has none of them
-			// on screen, and accumulate across every switch. Every site that REPLACES
-			// the tree wholesale drops the set (see the two below).
 			expandedIds = new Set();
 			sectionsError = false;
 			currentCfg = null;
-			// #294 — no collective, no rights/state to claim.
 			joinStates = {};
 			joinStateDetails = {};
 			ownerTier = 'loading';
 			inviteLinkByMemberId = {};
 			inviteErrorByMemberId = {};
 			withdrawErrorByMemberId = {};
-			// #346 — no collective, no copy state to claim either.
 			inviteCopierByMemberId = {};
 			copiedByMemberId = {};
 			copyFailedByMemberId = {};
 		},
 		onNoToken: () => {
-			// F3 code-review fix: drop `currentCfg` too — a write cfg must never
-			// outlive the load state that produced it (otherwise a stale token from
-			// a previous collective could still back picker writes on an errored
-			// page).
 			currentCfg = null;
 		},
 		async load({ cfg, selected, isCurrent }) {
 			currentCfg = cfg;
-			// #294 — `resolveOwnerTier` depends only on `cfg` + the VIEWER's own
-			// personId (never on `rows`), so it runs in the SAME parallel batch as
-			// the roster/section reads rather than after them — one fewer
-			// sequential round-trip. `listJoinStates` (below) is different: its
-			// input is the set of personIds `loadRoster` resolves, so
-			// it structurally CANNOT start until `rows` is known — the fan-out
-			// mirrors `loadRoster`'s own per-member profile fan-out (rosterData.ts)
-			// in STYLE (Promise.all, one read per row), not in literal parallelism
-			// with the row list itself.
 			const [rowResult, sectionResult, ownerTierResult] = await Promise.allSettled([
 				readRosterHalves(cfg),
 				listSections(cfg),
 				resolveOwnerTier(cfg, selected.personId)
 			]);
-			if (!isCurrent()) return; // superseded by a newer collective selection
+			if (!isCurrent()) return;
 
 			if (rowResult.status === 'rejected') {
-				// #107 — a dead token kills BOTH parallel reads uniformly; say so
-				// truthfully instead of the generic load error (whose Retry can never
-				// succeed against a dead token).
 				if (isAuthExpiredError(rowResult.reason)) {
 					status = 'session-expired';
 					return;
 				}
-				// The roster itself couldn't be read — nothing presentable regardless of
-				// how the section load went. Full loud error, matching pre-F3 behavior.
 				console.error('roster: load failed', rowResult.reason);
 				status = 'load-error';
 				return;
 			}
 			applyRosterHalves(rowResult.value);
 
-			// #294 — the owner-tier read is a DIFFERENT admin-boundary question from
-			// the roster/section reads above (see `ownerTier`'s own doc comment) and
-			// fails CLOSED on its own: a rejected/unresolved read never takes the
-			// roster itself down, it just means no invite control renders this load.
 			ownerTier = ownerTierResult.status === 'fulfilled' ? ownerTierResult.value : 'error';
 
-			// #294 — join-state fan-out, now that `rows` (and therefore every row's
-			// personId) is known. Degrades on failure rather than taking the whole
-			// roster down with it — same precedent `loadRoster`'s own real-names
-			// overlay sets (rosterData.ts): the base roster (names/emails, already
-			// resolved above) is the critical read; the join-state badge/controls
-			// are supplementary admin information layered over it. A failed read
-			// here logs loudly and leaves `joinStates` empty, so no row shows a
-			// badge or a control this reader couldn't verify — never a WRONG one.
-			//   The `isCurrent()` guard goes BEFORE each write, never after: this
-			// fan-out is the one await in this body that outlives `rows` (loads are
-			// not cancelled — routeLoad only bumps a generation counter), so a
-			// superseded load's tail settles LAST and would otherwise overwrite the
-			// CURRENT collective's `joinStates` with a personId-keyed record from
-			// the old db. No key would match, so every badge and every
-			// invite/reinvite/withdraw control would vanish from the new roster
-			// until the next load, with nothing to heal it. Same for the catch: a
-			// superseded load's FAILURE must not blank the current collective's
-			// states (nor log about a page nobody is looking at — matching
-			// `handleDeactivate`'s stale-failure convention below).
-			// #467 — ONE round of reads: `listJoinStateDetails` answers state PLUS
-			// the dated stamp, and `joinStates` (the bare 3-value record the
-			// owner-controls block routes on, byte-unchanged) is DERIVED from
-			// that same answer — never a second call to `listJoinStates`.
 			try {
 				const details = await listJoinStateDetails(cfg, rows.map((r) => r.personId));
 				if (!isCurrent()) return;
@@ -580,8 +222,6 @@
 				sections = [];
 				expandedIds = new Set();
 				sectionsError = true;
-				// Grouping is meaningless without a tree — fall back to the flat view so
-				// the toggle button's label stays truthful about what's on screen.
 				view = 'flat';
 			} else {
 				sections = sectionResult.value;
@@ -596,59 +236,13 @@
 		return routeLoad.loadForSelected();
 	}
 
-	/** The two member lists THIS page can have on screen at once, plus whether the
-	 *  archived half was asked for and failed. `inactive: null` means "not asked
-	 *  for" (the panel is closed), never "empty". */
 	type RosterHalves = {
 		active: ListRead<RosterRow>;
 		inactive: ListRead<RosterRow> | null;
 		archivedFailed: boolean;
 	};
 
-	/**
-	 * #469 review F1 — the page's ONE roster read, and therefore ONE real-names
-	 * overlay per refresh however many member lists are on screen.
-	 *
-	 * Before this fix the page ran the overlay TWICE whenever the archived panel
-	 * was open: `loadRoster` for the active list and `loadInactiveRoster` for the
-	 * panel, each of which resolves the database entity, reads
-	 * `roster_show_real_names` and pulls the PII-bearing
-	 * `admin_member_record?limit=500` for itself. That is the exact shape the F1
-	 * round removed from the agenda's season-rate table, and it cost the same two
-	 * things here: the bulk records read twice for one action, and — worse — two
-	 * INDEPENDENT degrades. One leg's records read returning non-2xx while the
-	 * other's succeeded rendered real names in the active roster directly above
-	 * profile names in the archived panel, which `applyRealNames`' own doc calls
-	 * byte-indistinguishable from "she has no record".
-	 *
-	 * `loadActiveAndArchivedRosters` (memberLifecycle.ts) is the one-pass producer
-	 * for exactly this: the two RAW reads in parallel, ONE `applyRealNames` over
-	 * their concatenation, then the overlaid rows partitioned back into the two
-	 * halves. So the two lists on screen are all real names or all profile names,
-	 * never half of each.
-	 *
-	 * The archived half is still LAZY: with the panel closed this is `loadRoster`
-	 * alone, unchanged — the archived read is the collective's whole membership
-	 * history and is not a read to pay for when nothing shows its answer (the
-	 * reasoning `loadRosterIncludingArchived`'s doc gives for future events).
-	 *
-	 * FALLBACK, not fail-loud: `loadActiveAndArchivedRosters` rejects if EITHER
-	 * raw read fails, and a failed ARCHIVED read must not take the active roster
-	 * down with it (pre-#469 a failed panel refresh only logged). So an archived
-	 * failure retries the active list alone and reports `archivedFailed`, which
-	 * puts the PANEL into its own error state. If it was the ACTIVE read that
-	 * failed, this second `loadRoster` fails too and the rejection reaches the
-	 * load body's error classification exactly as before. The extra read is paid
-	 * on the failure path only, and it cannot reintroduce the mixed-name window:
-	 * a failed panel shows an error, not names.
-	 */
 	async function readRosterHalves(cfg: EntuCfg): Promise<RosterHalves> {
-		// `untrack()`, for the same reason `reset`'s rename-commit needs it (see
-		// there): the load body's first statements run SYNCHRONOUSLY inside the
-		// page's `$effect`, so reading `showInactive` bare would make the effect
-		// DEPEND on it — and `toggleInactive` writes it, so every panel open would
-		// re-fire `loadForSelected()`, blank the page back to 'loading' and spend a
-		// second overlay. Exactly the double this function exists to remove.
 		const wantArchived = untrack(() => showInactive);
 		if (!wantArchived) {
 			return { active: await loadRoster(cfg), inactive: null, archivedFailed: false };
@@ -662,23 +256,14 @@
 		}
 	}
 
-	/** Writes both halves from ONE read — see `readRosterHalves`. Callers must
-	 *  have checked their own staleness guard first (this only writes state). */
 	function applyRosterHalves(read: RosterHalves): void {
 		rows = read.active.items;
-		// #321 — set from the SAME read that produced the rows, so the notice can
-		// never describe a different load's list.
 		membersPartial = read.active.truncated;
 		if (read.inactive) {
 			inactiveRows = read.inactive.items;
-			// #321 — re-derived from THIS read, so a panel that has just shrunk back
-			// under the cap stops claiming to be partial.
 			inactivePartial = read.inactive.truncated;
 			inactiveLoadError = false;
 		} else if (read.archivedFailed) {
-			// The panel is open and its own half is unreadable. A failed read says
-			// nothing about completeness — drop the claim with the rows rather than
-			// leave it standing over an empty panel.
 			inactiveRows = [];
 			inactivePartial = false;
 			inactiveLoadError = true;
@@ -686,9 +271,6 @@
 	}
 
 	$effect(() => {
-		// Depend on `selected`; run the async load out-of-band so a rejection can never
-		// escape as an unhandled rejection from the effect (loadForSelected already
-		// fails loud into `status`, but its synchronous prologue must not throw here).
 		void selected;
 		loadForSelected().catch((e) => {
 			console.error('roster: load failed', e);
@@ -696,76 +278,12 @@
 		});
 	});
 
-	// ── #124 (F3) — which sections belong to THIS collective ────────────────────
-	//
-	// `listSections` queries `entity?_type.string=section&…&limit=500` with NO org
-	// scoping, and sections are created `_sharing: 'public'` (federation
-	// discoverability, v4E) — so EVERY readable section in the db lands in
-	// `sections`, not just this collective's. The dev/test collective holds 16
-	// sections across FOUR test orgs, all org-parented.
-	//
-	// SPIKE root cause (2026-08-12, #124 check 4): `currentDbEntityId` used to read
-	// `rows.find((r) => r.dbEntityId)?.dbEntityId` — i.e. whichever roster row `loadRoster`
-	// happened to sort first (alphabetically), NOT the viewer. `loadRoster`'s
-	// member query is not org-scoped either, so on a multi-org db the first row
-	// can legitimately belong to another org, silently migrating every
-	// destructive control onto the wrong collective's sections and rendering a
-	// FOREIGN org's empty "(0)" section without its remove control while the
-	// viewer's own kept one — two headers reading identically, disagreeing.
-	// "Whose roster is this?" is answered from the AUTHENTICATED VIEWER's own
-	// roster row (matched by `personId`, carried on `selected` from the token's
-	// accounts map — see `Collective.personId`), never a guess from row order.
-	/** #161 (collective = database) — the collective's DATABASE entity id, read
-	 *  off the VIEWER's own roster row (matched by `personId`) — falls back to
-	 *  the first row exposing a `dbEntityId` ONLY when the viewer has no row of her
-	 *  own on this roster (an admin auditing a roster she isn't a member of, or
-	 *  a fixture that never gave the viewer a matching `personId`); null when
-	 *  neither answers anything (collective unknown to this reader entirely).
-	 *  The fallback is intentionally the OLD heuristic, kept as a last resort
-	 *  rather than removed outright: in a single-collective database, "the
-	 *  first row's collective" and "the viewer's collective" are the same
-	 *  answer — the multi-org ambiguity #124/F3 fixes only bites when the
-	 *  viewer's OWN row is present but sorts non-first, which the primary
-	 *  lookup above already handles before the fallback is ever reached. */
 	const currentDbEntityId = $derived(
 		rows.find((r) => r.personId === selected?.personId)?.dbEntityId ??
 			rows.find((r) => r.dbEntityId)?.dbEntityId ??
 			null
 	);
 
-	/** #124 (F3) — the section tree filtered to the viewer's OWN org: a
-	 *  top-level (root) section is kept only when its `dbEntityId` matches
-	 *  `currentDbEntityId`; a kept root's WHOLE subtree comes along with it (a
-	 *  sub-section carries no org `_parent` of its own — v4E
-	 *  `parentConstraint: 'exactly_one_of'` — so it can never be split from its
-	 *  root). Permissive when `currentDbEntityId` is unknown (an unauthenticated
-	 *  reader, or a pre-#124 fixture with no `dbEntityId` on any row) — keeps
-	 *  everything, same "unknown means don't restrict" rule `isOwnDbEntitySection`
-	 *  below already followed. This is what actually fixes the F3
-	 *  inconsistency: a foreign org's section is no longer RENDERED at all, so
-	 *  there is no "(0)" without a ✕ left on screen to disagree with the
-	 *  viewer's own — pinned as-is (no membership exception) by
-	 *  page.roster-sections-live-wire.spec.ts: a member the live DATA bug
-	 *  mis-parents into another org's flat section (TU.1/#109's own
-	 *  investigation-verdict fixture) is meant to surface as the data defect it
-	 *  is, not be masked by keeping a foreign-org group on screen for her sake —
-	 *  the fix for that is the data fix (reparent to a REAL sub-section),
-	 *  tracked separately, not a rendering carve-out here.
-	 *
-	 *  #264 review F1 — DAMAGED nodes (`parentDamaged`, ≠1 `_parent` values) are
-	 *  EXEMPT from this filter. `listSections` forces a damaged node to a root
-	 *  while still reading `dbEntityId` off a `database` `_parent` value — which
-	 *  the shapes that carry none (all values SECTION refs, e.g. a half-landed
-	 *  sub-section indent/unindent; or ZERO values) simply do not have. Those
-	 *  resolved `dbEntityId: null`, failed this filter and VANISHED from the
-	 *  render entirely: no marker, no name, no trace — the same #258 fail-open
-	 *  class item 5 exists to close, trading a silent wrong placement for a
-	 *  silent disappearance. Safe under #161 (one collective per database, and
-	 *  `listSections` queries `cfg.db`), so every returned section already
-	 *  belongs to this collective; this filter guards only the legacy
-	 *  multi-org-within-one-db case. An unattributable damaged section is
-	 *  ANNOUNCED by name (the marker) rather than guessed at or swallowed, and
-	 *  it carries no arrange affordances either way. */
 	const visibleSections = $derived(
 		currentDbEntityId === null
 			? sections
@@ -782,8 +300,6 @@
 	});
 	const unassignedGroup = $derived(groups.find((g) => g.sectionId === null) ?? null);
 
-	// Section name lookup (id → name), for the flat view's secondary text — walks
-	// the SAME tree `groupBySection` is joining against.
 	const sectionNameById = $derived.by(() => {
 		const map = new Map<string, string>();
 		function walk(nodes: SectionNode[]): void {
@@ -798,18 +314,6 @@
 
 	const flatRows = $derived([...rows].sort((a, b) => a.name.localeCompare(b.name)));
 
-	// ── #110 review F2 / #124 F3: `isOwnDbEntitySection` — a defense-in-depth backstop.
-	//
-	// `currentDbEntityId`/`visibleSections` above already keep a foreign org's section
-	// OUT of the render entirely (#124/F3), so in practice every node reaching
-	// `canRemove` below has already passed that filter. `isOwnDbEntitySection` stays as
-	// a second, independent check on the same question (never trust one gate for
-	// a destructive control) — see #110 review F2's original ruling: a
-	// destructive affordance on another org's entity must never ship, belt AND
-	// braces.
-	/** section id → the OWNING org id of its top-level root. Sub-sections carry no
-	 *  org `_parent` of their own (v4E `parentConstraint: 'exactly_one_of'`), so
-	 *  the root's org is propagated down the subtree. */
 	const rootDbEntityBySectionId = $derived.by(() => {
 		const map = new Map<string, string | null>();
 		function walk(nodes: SectionNode[], rootOrg: string | null): void {
@@ -823,25 +327,12 @@
 		return map;
 	});
 
-	/**
-	 * True when `id` is NOT known to belong to a different collective (#161: the
-	 * database entity). Permissive when either side is unknown — a reader who
-	 * cannot see any collective `_parent` (rosterData never throws on that) or a
-	 * tree from a pre-#161 fixture must not lose its own controls; the check
-	 * exists to exclude sections we can POSITIVELY place in another collective.
-	 */
 	function isOwnDbEntitySection(id: string): boolean {
 		const org = rootDbEntityBySectionId.get(id) ?? null;
 		if (org === null || currentDbEntityId === null) return true;
 		return org === currentDbEntityId;
 	}
 
-	// TU.2/#110 (finding #9) — collapse state is an OPT-IN set (every section
-	// starts COLLAPSED; expanding adds its id). Supersedes the TS.1/#95
-	// opt-out/expanded-by-default shape per PO decision in #110 — see
-	// page.roster-sections-ux.spec.ts. Same `new Set(...)` copy-then-reassign
-	// pattern as the library browse tree (library/+page.svelte's
-	// expandedWorks/expandedEditions).
 	let expandedIds = $state<Set<string>>(new Set());
 	function toggleSection(id: string): void {
 		const next = new Set(expandedIds);
@@ -850,9 +341,6 @@
 		expandedIds = next;
 	}
 
-	/** Every section id in the live tree, recursively, plus 'unassigned' when
-	 *  that pseudo-group is on screen — the full set collapse-all/expand-all
-	 *  operates over. */
 	const allSectionIdsList = $derived.by(() => {
 		const ids: string[] = [];
 		function walk(nodes: SectionNode[]): void {
@@ -866,33 +354,14 @@
 		return ids;
 	});
 
-	// #155/S1 — the collapse-all/expand-all toggle is REPLACED by a 3-chip
-	// selector (Collapsed / Expanded / Arrange). Collapsed and Expanded are
-	// display modes over the SAME `expandedIds` opt-in set finding #9 shipped;
-	// Arrange swaps `roster-groups` out for the compact section list entirely
-	// (no member rows at all) and is where ALL section management will live
-	// (S2–S4). Radio-style, not a flip: each chip sets `expandedIds`
-	// DETERMINISTICALLY (empty / full) rather than toggling off the CURRENT
-	// state, so "Collapsed" and "Expanded" are idempotent regardless of what a
-	// user did with an individual section's own disclosure toggle in between —
-	// and switching OUT of Arrange always lands on a truthful collapsed/expanded
-	// screen, never a stale one.
 	let viewMode = $state<'collapsed' | 'expanded' | 'arrange'>('collapsed');
 
 	function setViewMode(mode: 'collapsed' | 'expanded' | 'arrange'): void {
 		viewMode = mode;
 		if (mode === 'collapsed') expandedIds = new Set();
 		else if (mode === 'expanded') expandedIds = new Set(allSectionIdsList);
-		// 'arrange' leaves `expandedIds` as-is — the arrange list doesn't read it,
-		// and whichever collapsed/expanded shape was live comes right back when
-		// the user switches to one of the other two chips.
 	}
 
-	// #156 — view-mode chip roving tabindex. Radiogroup semantics (arrow moves
-	// AND selects): `viewMode` already models single selection, so there is no
-	// separate roving $state to keep in sync — the pressed chip IS the tab
-	// stop. Membership is resolved live at keypress (the Arrange chip is
-	// conditionally rendered for non-admins), matching the nav's own walk.
 	function handleViewModeKeydown(e: KeyboardEvent): void {
 		const group = e.currentTarget as HTMLElement;
 		const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
@@ -907,11 +376,6 @@
 		chips[next].focus();
 	}
 
-	/** #155/S1 arrange-mode shell — one row per section, EVERY nesting level, in
-	 *  tree pre-order, over the SAME `visibleSections` the grouped view renders
-	 *  (org-filtered, #124/F3). `memberCount` is read off the SAME `groupById`
-	 *  map the grouped headers use, so the arrange list's "(n)" is always the
-	 *  identical roll-up, never a re-derivation that could drift from it. */
 	type ArrangeRow = { id: string; name: string; depth: number; memberCount: number };
 	const arrangeRows = $derived.by(() => {
 		const list: ArrangeRow[] = [];
@@ -925,51 +389,20 @@
 		return list;
 	});
 
-	// Tailwind v4 needs full static class names (no dynamic template literals) —
-	// a fixed per-depth lookup, clamped at the deepest entry for any section
-	// tree that somehow nests beyond it.
 	const ARRANGE_INDENT_CLASSES = ['pl-0', 'pl-4', 'pl-8', 'pl-12', 'pl-16'] as const;
 	function arrangeIndentClass(depth: number): string {
 		return ARRANGE_INDENT_CLASSES[Math.min(depth, ARRANGE_INDENT_CLASSES.length - 1)];
 	}
 
-	// TS.2/#96 — section-picker wiring. Per-tap immediate write + optimistic-and-
-	// reconcile: `rows` (already `$state`) is patched IMMEDIATELY on tap, which
-	// alone moves the row (`groups`/`groupById` are `$derived` off `rows`) — no
-	// separate optimistic-state map needed. On write failure the patch is
-	// reverted to the PRE-tap value and the failure logged; on success it simply
-	// stays (no roster refetch — `loadRoster` runs once, at load).
 	function currentSectionIds(memberId: string): string[] {
 		return rows.find((r) => r.memberId === memberId)?.sectionIds ?? [];
 	}
 
-	// #470 review round 3 — belt-and-braces over the extraction-boundary dedupe
-	// in `listActiveMembers`. Both optimistic adds (`handleAssign`, and
-	// `handleMove`'s server-confirmed half) are bare spreads onto the live row,
-	// and these ids are the KEY of the section pickers' `{#each}`: a repeat makes
-	// Svelte throw `each_key_duplicate` and the roster stops rendering. One
-	// distinct-ing here covers every writer at the single choke point, including
-	// the next one. It is NOT the load-bearing guard — a duplicate can arrive
-	// from Entu without any UI path (see the rosterData.ts comment) — so it must
-	// never be read as making the boundary one redundant.
 	function patchMemberSectionIds(memberId: string, sectionIds: string[]): void {
 		const distinct = [...new Set(sectionIds)];
 		rows = rows.map((r) => (r.memberId === memberId ? { ...r, sectionIds: distinct } : r));
 	}
 
-	// F1 code-review fix: a membership edit must touch EXACTLY THE ONE MEMBERSHIP
-	// its own call owns, computed against the row as it is NOW — never restore a
-	// whole-array pre-tap snapshot. Two bugs the snapshot restore had:
-	//   - partial failure: "(Unassigned)" on a two-section member where one DELETE
-	//     succeeds and the other 403s restored BOTH sections, permanently diverging
-	//     from the server (the page never refetches by design);
-	//   - concurrent taps on one member: a later tap's already-persisted change was
-	//     silently discarded when an earlier tap's write failed and overwrote the
-	//     row with its own stale snapshot.
-	// `dropBack` therefore reads the LIVE row and touches one id only. (Its
-	// `addBack` twin went with #470's F3 fix: the only caller was the unassign
-	// revert, and unassign no longer patches before the write lands, so there is
-	// nothing to put back.)
 	function dropBack(memberId: string, sectionId: string): void {
 		patchMemberSectionIds(
 			memberId,
@@ -977,42 +410,16 @@
 		);
 	}
 
-	// #470 — replaces `handlePick` (the toggle-onpick popup wiring) with three
-	// handlers, one per SectionPicker callback. Each owns exactly one member's
-	// `sectionBusyIds` entry for its own duration (`finally`, so a thrown/early
-	// return can never leave that row stuck disabled) and, on a genuine write
-	// failure, sets `sectionWriteError` — that banner used to fire only from the
-	// retired picker-create's assign half; the assign/unassign path only
-	// console.errored, the fail-loudly gap this slice closes.
 
-	/** Blank picker → a section: optimistic add, frozen until the POST lands. */
 	async function handleAssign(memberId: string, sectionId: string): Promise<void> {
-		// #434 slice 6 review F1 — offline: nothing written, nothing queued. BEFORE
-		// the `sectionWriteError` clear, so a refused pick cannot wipe the banner
-		// from the write that really did fail. (The picker renders `busy` offline,
-		// so this is the backstop for a change that beat the re-render.)
 		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section assign with no cfg', memberId, sectionId);
-			// F4 review fix — the retired `handleCreate` set the banner in exactly
-			// this branch; dropping the function dropped the line with it, leaving
-			// the one path where the user picks a section and NOTHING happens on
-			// screen. "Fail loudly over fallbacks" applies here too.
-			// DEFENSIVE, and knowingly unspecced: no page path reaches it today —
-			// member rows render only while `status === 'ready'`, and every
-			// callback that nulls `currentCfg` (`onNoCollective`, `onNoToken`)
-			// leaves the page off 'ready', so a test could only get here by
-			// hand-setting state. The same three lines guard all three handlers.
 			sectionWriteError = { memberId };
 			return;
 		}
-		// #299 / F3 review fix — captured before the only await, same idiom as
-		// `submitPageCreate` and `handleRemoveSection`. A write that settles after
-		// the user switched collectives must touch NOTHING: the row patches would
-		// aim at a roster that no longer exists and the banner would pin a foreign
-		// member id into `sectionWriteError`.
 		const g = routeLoad.generation;
 		sectionBusyIds.add(memberId);
 		patchMemberSectionIds(memberId, [...currentSectionIds(memberId), sectionId]);
@@ -1020,7 +427,7 @@
 			await assignMemberSection(cfg, memberId, sectionId);
 		} catch (e) {
 			console.error('roster: section assign failed', memberId, sectionId, e);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			dropBack(memberId, sectionId);
 			sectionWriteError = { memberId };
 		} finally {
@@ -1028,35 +435,24 @@
 		}
 	}
 
-	/** Held picker → Määramata: NOT optimistic — the picker stays on screen,
-	 *  frozen, until the GET+DELETE lands, and only then disappears. #470
-	 *  done-when 4 verbatim (Mihkel): "the controls get freezed while entu
-	 *  syncs. as soon as synced, the unassigned picker goes away." F3 review
-	 *  fix — dropping first showed the opposite: the select vanished at once,
-	 *  so on a single-section member the freeze had nothing left to freeze, and
-	 *  a refused DELETE flicked her row out of its group and back in. Optimism
-	 *  buys nothing here anyway: one DELETE, no follow-up write waiting on it.
-	 *  `isSectionMembershipMissing` = the server already agrees (the F1(b)
-	 *  reconcile-forward rule the old `handlePick` pinned) — the removal goes
-	 *  through, no banner. */
 	async function handleUnassign(memberId: string, sectionId: string): Promise<void> {
 		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section unassign with no cfg', memberId, sectionId);
-			sectionWriteError = { memberId }; // F4 review fix — never silently
+			sectionWriteError = { memberId };
 			return;
 		}
-		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
+		const g = routeLoad.generation;
 		sectionBusyIds.add(memberId);
 		try {
 			await unassignMemberSection(cfg, memberId, sectionId);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			dropBack(memberId, sectionId);
 		} catch (e) {
 			console.error('roster: section unassign failed', memberId, sectionId, e);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			if (isSectionMembershipMissing(e)) {
 				dropBack(memberId, sectionId);
 			} else {
@@ -1067,33 +463,27 @@
 		}
 	}
 
-	/** Held picker → another section: Gama's write order — assign the NEW
-	 *  section FIRST, only then unassign the OLD one. A failed add changes
-	 *  nothing (no patch, no lookup, no delete): the member was never in
-	 *  danger of losing her only section. A failed delete leaves her visibly
-	 *  in BOTH (never in neither) — fixable, never silently lost. */
 	async function handleMove(memberId: string, fromId: string, toId: string): Promise<void> {
 		if (isOffline) return;
 		sectionWriteError = null;
 		const cfg = currentCfg;
 		if (!cfg) {
 			console.error('roster: section move with no cfg', memberId, fromId, toId);
-			sectionWriteError = { memberId }; // F4 review fix — never silently
+			sectionWriteError = { memberId };
 			return;
 		}
-		const g = routeLoad.generation; // #299 / F3 review fix — see handleAssign
+		const g = routeLoad.generation;
 		sectionBusyIds.add(memberId);
 		try {
 			try {
 				await assignMemberSection(cfg, memberId, toId);
 			} catch (e) {
 				console.error('roster: move — assigning the new section failed', memberId, fromId, toId, e);
-				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return;
 				sectionWriteError = { memberId };
-				return; // nothing changed yet: no patch, no lookup, no delete
+				return;
 			}
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-			// Server-confirmed add — safe to show it optimistically now.
+			if (g !== routeLoad.generation) return;
 			patchMemberSectionIds(memberId, [...currentSectionIds(memberId), toId]);
 			try {
 				await unassignMemberSection(cfg, memberId, fromId);
@@ -1105,33 +495,22 @@
 					toId,
 					e
 				);
-				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return;
 				if (isSectionMembershipMissing(e)) {
-					// Server already agrees the old membership is gone — same
-					// reconcile-forward rule as handleUnassign, no banner.
 					dropBack(memberId, fromId);
 					return;
 				}
-				// Gama: a failed delete must never leave her in NONE — keep BOTH.
 				sectionWriteError = { memberId };
 				return;
 			}
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			dropBack(memberId, fromId);
 		} finally {
 			sectionBusyIds.delete(memberId);
 		}
 	}
 
-	// TS.3/#97 — inline "+ New section…" wiring. Two ordered, SERVER-CONFIRMED
-	// writes: createSection resolves with the new id first, only THEN
-	// assignMemberSection fires (the id doesn't exist to assign against until
-	// the create round-trips — no optimism on the create half). On success the
-	// new node is inserted into the LOCAL tree + the member's local row —
-	// `loadRoster`/`listSections` are never refetched (same "runs once at load"
-	// contract as the rest of this page).
 
-	/** Depth-first search for a node by id — used to derive the new node's depth. */
 	function findSectionNode(nodes: SectionNode[], id: string): SectionNode | null {
 		for (const node of nodes) {
 			if (node.id === id) return node;
@@ -1141,9 +520,6 @@
 		return null;
 	}
 
-	/** Immutable insert: appended as a new ROOT when parentId is null, else spliced
-	 *  into the matching ancestor's `children` (rebuilding every node on the path
-	 *  so `sections` reassignment is enough to notify Svelte). */
 	function insertSectionNode(
 		nodes: SectionNode[],
 		newNode: SectionNode,
@@ -1157,30 +533,14 @@
 		});
 	}
 
-	// TU.2/#110 (finding #7) — "Remove" wiring. `canRemove` in `sectionGroup`
-	// already enforces admin-only + zero-members + zero-children before this
-	// control even renders, so this handler trusts its `id` argument the same
-	// way `submitPageCreate`'s tree insertion trusts its just-created section
-	// id. Optimistic-and-reconcile, same shape as `performReorder`: the
-	// LOCAL tree is patched immediately (no roster/section refetch anywhere on
-	// this page), and a rejected write reverts the WHOLE snapshot taken before
-	// the patch — safe here (unlike the per-membership reverts above) because a
-	// remove touches exactly one node with no concurrent writes racing it.
 
-	/** Immutable remove: drops `id` wherever it sits in the tree (top level or
-	 *  nested inside some ancestor's `children`). */
 	function removeSectionNode(nodes: SectionNode[], id: string): SectionNode[] {
 		return nodes
 			.filter((n) => n.id !== id)
 			.map((n) => (n.children.length === 0 ? n : { ...n, children: removeSectionNode(n.children, id) }));
 	}
 
-	// #155/S4 — RENAME tree-mutation helper. Unlike remove/reparent, a rename
-	// touches exactly one node's `name` in place — no relocation, no depth
-	// recompute, children untouched.
 
-	/** Immutable rename: rewrites `name` on `id` wherever it sits in the tree
-	 *  (top level or nested), children untouched. */
 	function renameSectionNode(nodes: SectionNode[], id: string, name: string): SectionNode[] {
 		return nodes.map((n) => {
 			if (n.id === id) return { ...n, name };
@@ -1189,24 +549,11 @@
 		});
 	}
 
-	// #155/S3 — indent/unindent tree-mutation helpers. Unlike `insertSectionNode`
-	// (new node, no prior home) and `removeSectionNode` (gone for good), a
-	// reparent RELOCATES an existing node+subtree: it has to come out of wherever
-	// it sits, get its own (and every descendant's) `depth` recomputed relative
-	// to its NEW parent, and go back in at a SPECIFIC position among its new
-	// siblings — "last child" for indent, "right after the former parent" for
-	// unindent (see `applyReparent`'s callers below).
 
-	/** Rewrite `node.depth` to `depth`, and cascade `depth + 1, +2, …` down every
-	 *  descendant — the whole subtree moves as one relative shape, only its
-	 *  ANCHOR depth changes. */
 	function withDepth(node: SectionNode, depth: number): SectionNode {
 		return { ...node, depth, children: node.children.map((c) => withDepth(c, depth + 1)) };
 	}
 
-	/** Immutable extract: pulls `id` (with its whole subtree, untouched) out of
-	 *  wherever it sits — top level or nested — and returns BOTH the pruned tree
-	 *  and the removed node (null if `id` isn't anywhere in it). */
 	function extractSectionNode(nodes: SectionNode[], id: string): [SectionNode[], SectionNode | null] {
 		let removed: SectionNode | null = null;
 		function walk(list: SectionNode[]): SectionNode[] {
@@ -1224,9 +571,6 @@
 		return [next, removed];
 	}
 
-	/** Immutable insert at a SPECIFIC index (unlike `insertSectionNode`, which
-	 *  always appends): `parentId === null` targets the top level, `atIndex`
-	 *  undefined means "append" (used for indent's "last child"). */
 	function insertSectionNodeAt(
 		nodes: SectionNode[],
 		newNode: SectionNode,
@@ -1247,20 +591,8 @@
 		});
 	}
 
-	/** Where a reparent's new parent is: a SECTION (indent's previous sibling,
-	 *  unindent's grandparent) or the ORGANIZATION (unindent promoting to top
-	 *  level) — `reparentSection`'s wire call takes either id verbatim, but the
-	 *  LOCAL tree update needs to know which so it can set `depth`/`parentId`/
-	 *  `dbEntityId` correctly (see `SectionNode.dbEntityId`'s own doc: only top-level
-	 *  nodes carry it). */
 	type ReparentTarget = { kind: 'section'; sectionId: string } | { kind: 'org'; dbEntityId: string };
 
-	/** Move `id` (with its subtree) to `target`, landing right after
-	 *  `insertAfterId` among its NEW siblings (`null` = append at the end — used
-	 *  for indent's "last child of the previous sibling"). Depths of `id` and
-	 *  every descendant are recomputed relative to the new parent; nodes
-	 *  elsewhere in the tree are untouched. No-op (returns `nodes` as-is) if
-	 *  `id` isn't found. */
 	function applyReparent(
 		nodes: SectionNode[],
 		id: string,
@@ -1286,78 +618,18 @@
 		return insertSectionNodeAt(withoutNode, movedNode, newParentId, atIndex);
 	}
 
-	// #110 review F1 — a FAILED remove used to be SILENT: the catch reverted
-	// `sections` and logged, so the user tapped ✕, watched the group vanish, and
-	// watched it reappear with nothing on screen explaining why. That is precisely
-	// the failure mode this page's own F5 fix (`sectionWriteError`) and #99's F2
-	// fix (`reorderError`) were added to eliminate — the remove path, added last,
-	// had neither. It is not a rare path either: Entu only lets `_owner` delete an
-	// entity, `_owner` is auto-assigned to the CREATOR, and `createSection`'s body
-	// deliberately carries no `_inheritrights` — so an admin who did not
-	// personally create the section (every seeded or migration-created one, and
-	// every section made by another admin) gets a 403.
-	//
-	//   'write'     — the delete was attempted and rejected (403, network, no cfg).
-	//   'not-empty' — REFUSED before any write: the server still reports members
-	//                 or sub-sections under it (see deleteSection's contract). The
-	//                 on-screen "(0)" is the roster's active-and-named-only count,
-	//                 which is not the same question.
-	//
-	// Carries the NAME, not the id: it is rendered once, above the groups (next to
-	// the reorder alert), and by then the section it names is back on screen but
-	// not otherwise marked.
 	let removeError = $state<{ name: string; kind: 'write' | 'not-empty' } | null>(null);
 
-	// #110 review F4 — a two-step inline confirm, because a section delete is
-	// IRREVERSIBLE and this page is mobile-shaped (`max-w-md`): the ✕ sat one
-	// mis-tap away from destroying an entity. Inline rather than a blocking
-	// `confirm()` — the page's own idiom (SectionPicker's inline create form) and
-	// testable without stubbing a window global. `pendingRemoveId` is the section
-	// whose header is currently showing "confirm / cancel" instead of the ✕; only
-	// one at a time, and arming one disarms the other.
 	let pendingRemoveId = $state<string | null>(null);
 
-	// ── #255 (A) — deactivate a member: admin-only, never self, two-step
-	// confirm reusing the SAME idiom as `pendingRemoveId` above, REFUSAL while
-	// the person holds a manageable `_owner`/`_editor` grant (accepted rec 1 —
-	// deactivate refuses rather than auto-stripping rights; see
-	// memberLifecycle.ts's doc for why). GREEN's stated choice: the control is
-	// NOT pre-disabled at render for a blocker — computing `listDeactivateBlockers`
-	// for every row on every render would mean N rights reads (2 Entu calls
-	// each) on a page that already does real work just listing the roster; the
-	// refusal instead surfaces the ONE TIME it matters, at confirm, which is
-	// also the only point the rights answer needs to be fresh (a grant could
-	// be added between page-load and this tap). The trade is one wasted tap
-	// for an admin who already knows the target holds a role, against a
-	// roster-wide fan-out of rights reads most renders never need.
 	let pendingDeactivateId = $state<string | null>(null);
 	let deactivateRefusal = $state<{ memberId: string; blockers: DeactivateBlocker[] } | null>(null);
 	let deactivatePending = $state(false);
 
-	// #255 review F2 — the two lifecycle writes must fail LOUD, not just closed.
-	// Both catches previously only logged, so a rejected rights read, a 4xx on the
-	// status write or a dropped network left the control disarming itself with the
-	// row unchanged and nothing on screen — indistinguishable from a no-op or a UI
-	// bug. Modelled on `removeError` above (the page's own idiom for exactly this):
-	// carries the member id, because unlike the section alert this renders IN the
-	// row that was tapped. Copy binding still holds — neither string may say
-	// removed/deleted; both say the state is unchanged.
 	let deactivateActionError = $state<{ memberId: string; kind: 'deactivate' | 'reinstate' } | null>(
 		null
 	);
 
-	// #286 — entry guard closes the SECOND-ARM vector: `pendingDeactivateId` is
-	// a single $state slot (same shape as `pendingRemoveId`), so arming a
-	// DIFFERENT row while one is in flight would repoint the slot and orphan
-	// the in-flight row's confirm/cancel. The trigger's own
-	// `disabled={deactivatePending}` at the render site is the visible,
-	// render-level closure (matches every other trigger on this page); this
-	// guard is the backstop for a click that reaches the handler regardless of
-	// that attribute — the same "twice over" shape `handleRemoveSection`'s own
-	// `if (structuralWritePending) return` already is for confirm double-tap
-	// (#273). STATED CHOICE: both, not one — the issue's "(or an entry guard)"
-	// alternative is not an either/or here, because the trigger's `disabled`
-	// alone does not guarantee a direct `.click()` call is inert.
 	async function armDeactivate(memberId: string): Promise<void> {
 		if (deactivatePending) return;
 		deactivateRefusal = null;
@@ -1367,25 +639,6 @@
 		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-confirm-${memberId}"]`)?.focus();
 	}
 
-	/** #286 — no in-flight guard added here: the cancel button that calls this
-	 *  is itself `disabled={deactivatePending}` at the render site, so a
-	 *  disabled control cannot dispatch the click that would reach this
-	 *  function while a deactivation is in flight — the same reasoning #273's
-	 *  own `disarmRemove` relies on (and the agenda's `disarmSeasonManageDelete`
-	 *  before it, which carries no pending-guard either).
-	 *
-	 *  What #286 ADDS here: `deactivateRefusal`/`deactivateActionError` are now
-	 *  cleared too, not just `pendingDeactivateId`. Done-when 4 says no alert
-	 *  may stand against a row the admin has disarmed — and unlike #273's
-	 *  remove (whose failure/refusal alert is impossible to orphan because the
-	 *  pair and the error live under the SAME `pendingRemoveId` gate), this
-	 *  page's deactivate alerts render off `.memberId` alone (see the
-	 *  `{#if deactivateRefusal?.memberId === row.memberId}` /
-	 *  `{#if deactivateActionError?.memberId === row.memberId …}` blocks below,
-	 *  now further gated on `pendingDeactivateId === row.memberId` for the
-	 *  in-flight half of the same guarantee) — an explicit cancel is the other
-	 *  half: it must not merely swap the trigger back in, it must retire the
-	 *  alert with it, so a fresh arm never inherits a stale one. */
 	async function disarmDeactivate(memberId: string): Promise<void> {
 		pendingDeactivateId = null;
 		deactivateRefusal = null;
@@ -1394,176 +647,43 @@
 		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-${memberId}"]`)?.focus();
 	}
 
-	/** Confirm branch of the two-step deactivate. FAIL-CLOSED throughout: the
-	 *  rights read (`listDeactivateBlockers`) rejecting, or any other failure,
-	 *  must never let the write proceed — caught below, nothing sent.
-	 *
-	 *  #286 — BINDING INVARIANT: the pair is disabled/aria-busy on
-	 *  `deactivatePending` itself, DELIBERATELY not `structuralWritePending`.
-	 *  Deactivation is not a section-structural write (it doesn't touch
-	 *  `sections`/`_parent`); the page's own `reinstatePending`-gated
-	 *  member-reinstate button is the existing precedent for a lifecycle write
-	 *  carrying its own flag rather than borrowing the arrange-mode one.
-	 *
-	 *  #286 — the arm-state lifecycle (#273, adopted): `pendingDeactivateId`
-	 *  now clears in exactly ONE place — the SUCCESS path below. Every failure
-	 *  path leaves it set, INCLUDING the refusal branch (previously nulled in
-	 *  the same breath `deactivateRefusal` was set) and the outer catch
-	 *  (previously nulled before `deactivateActionError`) — both of those
-	 *  `pendingDeactivateId = null` lines are gone. The pair stays ARMED,
-	 *  re-enabled, next to whichever alert fired, for direct retry through the
-	 *  SAME confirm — no re-arming dance. */
 	async function handleDeactivateConfirm(row: RosterRow): Promise<void> {
 		if (isOffline) return;
 		if (deactivatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
-		// #286 — captured BEFORE `deactivatePending` disables the button: real
-		// browsers blur a focused control the instant it goes `disabled`, so by
-		// the time this settles the confirm that was just tapped may already
-		// have lost focus to <body>. Only RESTORE it in the `finally` below if
-		// this write is what owns it — the same `ownsFocus` discipline
-		// `handleRemoveSection` (#273) uses before its own await.
 		const activeAtStart = document.activeElement;
 		const ownsFocus =
 			!activeAtStart ||
 			activeAtStart === document.body ||
 			activeAtStart ===
 				document.querySelector(`[data-testid="member-deactivate-confirm-${row.memberId}"]`);
-		// #287 — captured at FUNCTION ENTRY, before `deactivatePending` is even
-		// set, so it can guard TWO things: the canonical #260 checkpoint right
-		// after `await deactivateMember(...)` below (before writing ANY success
-		// state — same shape as `handleRemoveSection`'s `g`), and the outer
-		// `finally`. Deliberately a DIFFERENT capture from `g` further down
-		// (which reads `routeLoad.generation` only after `loadForSelected()` has
-		// already bumped it — scoped narrowly to the inner inactive-panel
-		// reload; reusing it here would either not compile in `finally` or,
-		// mid-refactor, silently defeat the guard). `gEntry` is intentionally
-		// left UN-rebased past `loadForSelected()`'s own self-bump: on the
-		// success path, once the checkpoint below passes, `reset()` (above) has
-		// already unconditionally cleared `deactivatePending` for THIS load
-		// before the fetch even started, so the `finally` reading `gEntry` as
-		// stale afterward is harmless (redundant, not a gap) — and is exactly
-		// what stops this stale `finally` from clobbering a DIFFERENT write's
-		// `deactivatePending = true` if one legitimately starts before it runs.
-		// A rebased capture was tried and rejected: two DIFFERENT deactivates on
-		// the same collective, with no reload between them, share one
-		// generation number, so a rebased guard cannot tell them apart and can
-		// clobber the second one's flag out from under it.
 		const gEntry = routeLoad.generation;
 		deactivatePending = true;
 		deactivateRefusal = null;
 		deactivateActionError = null;
 		try {
-			// #255 review r3 F1 — the database entity id is the SUBJECT of both rights
-			// reads below, so an unresolvable one is a FAILED check, never "nothing to
-			// check". The `?? ''` this replaces made it the latter: an empty id turns
-			// `listAdmins`'s rights GET into entu-api's entity LIST route, which
-			// answers 200 with no `entity` key, so the blocker list came back EMPTY
-			// and the deactivate proceeded past an unverified grant — silently, on the
-			// one guard the whole refuse-don't-strip design rests on. Thrown (not
-			// returned) so the outer catch renders the same loud alert every other
-			// fail-closed path here already renders.
 			const dbEntityId = row.dbEntityId ?? currentDbEntityId;
 			if (!dbEntityId) {
 				throw new Error(`roster: cannot resolve the database entity id for member ${row.memberId}`);
 			}
-			// #255 review round 2 F1 — the library lookup is part of the FAIL-CLOSED
-			// chain, NOT a best-effort side read. `resolveMyLibraryId` THROWS on any
-			// non-2xx library list (`LibraryLookupError`) and reserves `null` for the
-			// one factual emptiness it can assert: no library entity under the
-			// database entity. Swallowing the throw into `null` would convert a
-			// transient 500 into the factual claim "this collective has no library",
-			// which makes `listDeactivateBlockers` skip the `listLibrarians` read
-			// entirely and lets the deactivate proceed past an UNVERIFIED librarian
-			// grant — exactly the grant-outlives-active-member state (invariant B2 /
-			// v4E trigger 5) that must be unreachable by construction. So it rejects
-			// into the outer catch like every other read here.
 			const libraryId = await resolveMyLibraryId(cfg, undefined, dbEntityId);
 			const blockers = await listDeactivateBlockers(cfg, row.personId, dbEntityId, libraryId);
 			if (blockers.length > 0) {
-				// #296 — the rights read above (`listDeactivateBlockers`) is an
-				// await this write can outlive: a refusal settling after a
-				// collective switch must write nothing for the stale collective,
-				// same #260 checkpoint `gEntry` already gives the success path
-				// below.
-				if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
-				// #286 — `pendingDeactivateId` is DELIBERATELY left set: the refusal
-				// is the designed outcome of the normal mistake (#255's
-				// refuse-don't-strip rule), and it must not disarm the pair it
-				// stands beside (done-when 4/5, #273 lifecycle).
+				if (gEntry !== routeLoad.generation) return;
 				deactivateRefusal = { memberId: row.memberId, blockers };
 				return;
 			}
 			await deactivateMember(cfg, row.memberId);
-			// #287 — the canonical #260 checkpoint, right after the write settles
-			// and before writing ANY state: a first pass guarded only the outer
-			// `finally` and reasoned `pendingDeactivateId = null` below was a safe
-			// no-op against a switched-to collective — that reasoning missed the
-			// LATE-SETTLE CLOBBER case (pinned in
-			// page.roster-pending-collective-switch.spec.ts): if a GENUINE new
-			// deactivate has since armed a DIFFERENT row on the collective now on
-			// screen, this unconditional null would unmount THAT write's own armed
-			// confirm/cancel pair mid-write. Also skips this stale write's own
-			// `loadForSelected()` call below entirely — reloading for a collective
-			// that is no longer selected would only flicker the newer collective's
-			// screen with the old one's (momentarily bumped-then-irrelevant) load.
-			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (gEntry !== routeLoad.generation) return;
 			pendingDeactivateId = null;
-			// She drops out of every active-scoped read — re-derive from the
-			// server rather than patch a local delta (same discipline the section
-			// remove/reorder paths already follow on this page).
-			// #255 review r3 F2 — and she drops INTO the inactive panel, so an open
-			// panel is stale the moment this write lands; both halves have to be
-			// re-read, and `handleReinstate` does the mirror image.
-			//
-			// #469 review F1 — that panel refresh USED TO BE a second
-			// `loadInactiveRoster(cfg)` right here, after this `loadForSelected()`:
-			// two reads, two real-names overlays, two `admin_member_record?limit=500`
-			// reads for one deactivate, and a window where the active list above and
-			// the panel below could disagree about whether this collective shows
-			// real names. `loadForSelected()` now reads BOTH halves in one pass when
-			// the panel is open (`readRosterHalves`), so this write's refresh is
-			// exactly the line above and nothing more — including the #259
-			// stale-settle guard, which lives inside the load body's own
-			// `isCurrent()` checks rather than needing a post-`loadForSelected()`
-			// generation capture out here.
 			await loadForSelected();
 		} catch (e) {
-			// FAIL-CLOSED (Gama binding): a rejected rights read, or a rejected
-			// write, must never leave the deactivate looking like it went through.
-			// And fail-LOUD (#255 review F2): the confirm disarms itself and the row
-			// is unchanged, so without this alert the tap reads as "nothing happened".
 			console.error('roster: deactivate failed', row.memberId, e);
-			// #296 — same #260 checkpoint as the refusal branch above: a failure
-			// settling after a collective switch must not raise a banner against
-			// whatever collective is now on screen.
-			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
-			// #286 — `pendingDeactivateId` is left set here too (the #273 retry
-			// convention): the pair sits armed beside `deactivateActionError`
-			// above for a direct retry through the same confirm.
+			if (gEntry !== routeLoad.generation) return;
 			deactivateActionError = { memberId: row.memberId, kind: 'deactivate' };
 		} finally {
-			// #287 — a stale settle must not flip `deactivatePending` back to false
-			// out from under a write that has since become the current one —
-			// another collective's (the reset() callback above already owns
-			// clearing it on an actual switch, this closes the LATE-settle half)
-			// or even another write on THIS SAME collective started after this
-			// one's own reload already released the flag. On the refusal/failure
-			// paths (no `loadForSelected()` call, so no self-bump) `gEntry` still
-			// equals `routeLoad.generation` here in the ordinary case, so the
-			// clear still fires exactly as before #287. Reuse of the #260 idiom,
-			// same shape as `handleRemoveSection`'s `finally`.
 			if (gEntry === routeLoad.generation) deactivatePending = false;
-			// #286 — land focus back on the (now re-enabled) confirm for the two
-			// outcomes that leave the pair mounted — refusal and failure — the
-			// same landing `focusableByTestId` already gives `disarmRemove`/
-			// `placeFocusAfterFailedRemove` (#273). Gated on `pendingDeactivateId`
-			// still matching this row: on SUCCESS it is already null and the row
-			// is on its way out via `loadForSelected()` above — a different shape
-			// (async full-roster reload, not a local splice) with no same-render
-			// neighbour to land on, so it is left untouched here, unchanged from
-			// pre-#286 behaviour.
 			if (ownsFocus && pendingDeactivateId === row.memberId) {
 				await tick();
 				focusableByTestId(`member-deactivate-confirm-${row.memberId}`)?.focus();
@@ -1571,12 +691,6 @@
 		}
 	}
 
-	// ── #255 (B) — the inactive-members surface: OUT of the roster's normal
-	// flow (engineering's placement call — a collapsed, admin-only panel below
-	// the main list, closed by default and loaded lazily on first open, never
-	// preloaded alongside the active roster). Shows each inactive member's
-	// SECTION assignment (adopted binding — explains the section
-	// ghost-blocker), reinstates with ONE action and no fresh invitation.
 	let showInactive = $state(false);
 	let inactiveRows = $state<RosterRow[]>([]);
 	let inactiveLoadError = $state(false);
@@ -1585,78 +699,26 @@
 		const opening = !showInactive;
 		showInactive = opening;
 		if (!opening) {
-			// #321 review F3 — the notice is PAGE-level (`rosterPartial`), so a
-			// truncation detected in the archived panel kept standing over the
-			// ACTIVE roster after the panel closed: a claim about a list that is no
-			// longer on screen, read as a claim about the one that is. The cached
-			// `inactiveRows` may stay (reopening reloads and re-derives the flag
-			// below), but the claim goes down with the panel.
 			inactivePartial = false;
 			return;
 		}
 		const cfg = currentCfg;
 		if (!cfg) return;
-		// #259 (filed from #255 r4 review) — this load's await can outlive a
-		// mid-flight collective switch: a stale settle would silently write
-		// `inactiveRows` for a collective that is no longer selected, so the
-		// next open renders the wrong collective's members with live
-		// Reinstate buttons aimed at foreign ids. Guarded via the route-load
-		// machine's external co-guard seam (`generation`/`isCurrent`). This
-		// function never calls `loadForSelected()` itself, so entry-capture is
-		// correct here. (Before #469 review F1 the two lifecycle handlers needed
-		// a capture of their own, taken AFTER their own `loadForSelected()` call
-		// because that call bumps the generation; their panel refresh is now
-		// inside that load, guarded by the load body's own `isCurrent()`.)
 		const g = routeLoad.generation;
-		// #469 review F1 — the open reads BOTH halves and replaces BOTH lists, so
-		// the two member lists now on screen together come out of ONE real-names
-		// overlay. Reading only the archived half here (what this did before) left
-		// the panel's names resolved by a different, later overlay pass than the
-		// active list already rendered above it: two `admin_member_record` reads
-		// for one panel open, and — when only one of them degraded — real names in
-		// one list directly above profile names in the other, which the overlay's
-		// own doc calls byte-indistinguishable from "she has no record". The
-		// active half is not waste: it is the same read the next refresh would do
-		// anyway, and it is what makes the panel and the roster agree.
-		//
-		// The join-state fan-out (`listJoinStateDetails`) is deliberately NOT
-		// re-run here — it is 2 reads per member and its answers are keyed by
-		// personId, so every row already on screen keeps its badge and controls. A
-		// member added by another admin since the last full load renders without
-		// them until the next load: the template already guards on
-		// `joinStates[row.personId] !== undefined`, so that is a missing control,
-		// never a wrong one — the same degrade that read's own failure path takes.
 		try {
 			inactiveLoadError = false;
 			const read = await readRosterHalves(cfg);
-			if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
-			// #321 — the archived-member list only grows (deactivate never deletes),
-			// so this is the roster read most likely to hit its cap; the page-level
-			// roster-partial-notice covers it (re-derived inside `applyRosterHalves`).
+			if (!routeLoad.isCurrent(g)) return;
 			applyRosterHalves(read);
 		} catch (e) {
 			if (!routeLoad.isCurrent(g)) return;
 			console.error('roster: inactive roster load failed', e);
 			inactiveLoadError = true;
 			inactiveRows = [];
-			// A failed read says nothing about completeness — drop the claim with the
-			// rows rather than leaving it standing over an empty panel.
 			inactivePartial = false;
 		}
 	}
 
-	// #255 review round 2 F2 / #264 review F2 — mirrors `deactivatePending`.
-	// `reinstateMember` is an atomic overwrite (#264): two concurrent runs both
-	// GET the same status value id, the first POST's atomic overwrite consumes
-	// it, and the second POST still carries that now-stale `_id`. That second
-	// POST does NOT fail — `_id` names the value to soft-delete, it is not a
-	// precondition, so entu-api inserts the new value and its unchecked
-	// `markPropertiesDeleted` matches nothing: HTTP 200, and the member is left
-	// holding TWO `status` values. Nothing throws, nothing is shown, and the
-	// next read picks whichever value comes back first — a member whose status
-	// is decided by list order. So a second tap is refused while one is in
-	// flight, and this guard is the ONLY thing refusing it: the wire is silent
-	// here.
 	let reinstatePending = $state<string | null>(null);
 
 	async function handleReinstate(memberId: string): Promise<void> {
@@ -1664,77 +726,29 @@
 		if (reinstatePending) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
-		// #296 — captured at FUNCTION ENTRY, before `reinstatePending` is even
-		// set, mirroring the placement `handleDeactivateConfirm`'s `gEntry`
-		// (#287) established: this handler had NO usable capture at all before
-		// this fix. `gEntry` guards the catch-write and the `finally` clear.
-		// (Until #469 review F1 there was a SECOND, narrower capture below,
-		// scoped to an inner inactive-panel reload that no longer exists — the
-		// panel is refreshed by `loadForSelected()` itself now.)
 		const gEntry = routeLoad.generation;
 		reinstatePending = memberId;
 		deactivateActionError = null;
 		try {
 			await reinstateMember(cfg, memberId);
-			// Back in the active reads AND out of the open panel — the page
-			// re-reads rather than patching, same discipline as
-			// `handleDeactivateConfirm` above.
-			//
-			// #469 review F1 — the panel half used to be a SECOND
-			// `loadInactiveRoster(cfg)` here, with its own real-names overlay and
-			// its own `admin_member_record?limit=500`: two overlays per reinstate,
-			// able to degrade independently and show the two lists disagreeing
-			// about whether this collective shows real names. `loadForSelected()`
-			// reads both halves in one pass when the panel is open
-			// (`readRosterHalves`), including the #259 stale-settle guard, so this
-			// one line is the whole refresh.
 			await loadForSelected();
 		} catch (e) {
-			// #255 review F2 — a failed reinstate produces NO visible change at all
-			// otherwise (the row is already in the inactive panel and stays there),
-			// so the tap is silently indistinguishable from a dead button.
 			console.error('roster: reinstate failed', memberId, e);
-			// #296 — same #260 checkpoint `handleDeactivateConfirm`'s catch now
-			// carries: a failure settling after a collective switch must not
-			// raise a banner against whatever collective is now on screen.
-			if (gEntry !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (gEntry !== routeLoad.generation) return;
 			deactivateActionError = { memberId, kind: 'reinstate' };
 		} finally {
-			// #296 — a stale settle must not flip `reinstatePending` back to
-			// null out from under a GENUINE reinstate that has since started on
-			// the collective now on screen (the LATE-SETTLE CLOBBER shape #287
-			// already closed for `deactivatePending`'s own `finally`).
 			if (gEntry === routeLoad.generation) reinstatePending = null;
 		}
 	}
 
-	// ── #294 — invite / re-send / withdraw, owner-gated ─────────────────────────
-	//
-	// Re-reads THIS ROW's join state after a write settles rather than patching
-	// it locally: the controls that render next are a pure function of
-	// `joinStates`, so the re-read IS the state-routing (kutsu → saada
-	// uuesti/tühista kutse, or the reverse on withdraw) — no separate "which
-	// button" flag to keep in sync. A single shared `inviteActionPending` flag
-	// (mirroring `deactivatePending`'s whole-block shape) blocks a second tap
-	// while one write is in flight; each row's OWN link/error state is keyed by
-	// `memberId` so one row's outcome never overwrites another's.
 
-	/** Re-reads one person's join state and merges it in — used after every
-	 *  successful mint/withdraw so the row's controls follow the CONTENTS,
-	 *  never an optimistic local guess. */
 	async function refreshJoinState(cfg: EntuCfg, personId: string, g: number): Promise<void> {
 		const updated = await listJoinStateDetails(cfg, [personId]);
-		if (!routeLoad.isCurrent(g)) return; // superseded — stale settle writes nothing
+		if (!routeLoad.isCurrent(g)) return;
 		joinStateDetails = { ...joinStateDetails, ...updated };
 		joinStates = { ...joinStates, ...bareJoinStates(updated) };
 	}
 
-	/** `kutsu` (absent → invited) AND `saada uuesti` (invited → invited, atomic
-	 *  replace) are THE SAME call: `mintSelfLinkInvite` sweeps any stale
-	 *  placeholder before minting, so it is already the one-live-link
-	 *  invariant Gama's ruling requires, regardless of which state routed the
-	 *  admin here. NEVER `createInvite` — every row already has a person; that
-	 *  function mints a SECOND one. */
 	async function handleMintInvite(row: RosterRow): Promise<void> {
 		if (isOffline) return;
 		if (inviteActionPending) return;
@@ -1747,16 +761,10 @@
 			if (!routeLoad.isCurrent(g)) return;
 			const { [row.memberId]: _dropped, ...restErrors } = inviteErrorByMemberId;
 			inviteErrorByMemberId = restErrors;
-			// #346 — the composed URL (scheme + host + /invite/<token>), the SAME
-			// helper InviteSurface.svelte uses; never the bare token.
 			inviteLinkByMemberId = {
 				...inviteLinkByMemberId,
 				[row.memberId]: buildInviteUrl(window.location.origin, inviteToken)
 			};
-			// A fresh link starts with a clean copy outcome — a stale "copied"/
-			// failure from a link that no longer exists must not linger over it
-			// (the same discipline InviteSurface's submit() applies to its own
-			// `copied`/`copyFailed`).
 			copiedByMemberId = { ...copiedByMemberId, [row.memberId]: false };
 			copyFailedByMemberId = { ...copyFailedByMemberId, [row.memberId]: false };
 			await refreshJoinState(cfg, row.personId, g);
@@ -1766,9 +774,6 @@
 				status = 'session-expired';
 				return;
 			}
-			// #294 item 6 — a 403 (missing owner-rights on the target person) or any
-			// other failure surfaces as a NAMED, visible alert on the row — never a
-			// button that silently does nothing. `kutsu` stays put for a retry.
 			console.error('roster: invite mint failed', row.memberId, e);
 			inviteErrorByMemberId = { ...inviteErrorByMemberId, [row.memberId]: true };
 		} finally {
@@ -1776,12 +781,6 @@
 		}
 	}
 
-	/** `tühista kutse` — the sweep WITHOUT the mint (`withdrawInvite`, #294).
-	 *  All-or-report is enforced entirely BY `withdrawInvite` itself: it either
-	 *  resolves (every placeholder gone) or rejects (nothing here is treated as
-	 *  a partial success). On success the row's next read comes back `absent`
-	 *  — withdrawn and never-invited are the SAME state (Mihkel ruling); no
-	 *  local "withdrawn" flag is set, because there is no state left to flag. */
 	async function handleWithdrawInvite(row: RosterRow): Promise<void> {
 		if (isOffline) return;
 		if (inviteActionPending) return;
@@ -1803,10 +802,6 @@
 				status = 'session-expired';
 				return;
 			}
-			// A surviving placeholder is a live credential the admin has just been
-			// told is dead — so this MUST render loudly, and the row's controls
-			// (driven by `joinStates`, left untouched here) truthfully stay exactly
-			// as they were: still `invited`, still offering `tühista kutse` again.
 			console.error('roster: withdraw failed', row.memberId, e);
 			withdrawErrorByMemberId = { ...withdrawErrorByMemberId, [row.memberId]: true };
 		} finally {
@@ -1814,14 +809,6 @@
 		}
 	}
 
-	/** #360 — click-to-copy via the row's own copy BUTTON (the readonly input
-	 *  it used to run through is gone — nothing on screen to `.select()`
-	 *  anymore). Runs this row's `InviteLinkCopier` — lazily created on first
-	 *  use, reused after. Both `copiedByMemberId`/`copyFailedByMemberId` are
-	 *  read TWICE — synchronously right after `copy()` is invoked (its
-	 *  entry-reset, visible even while THIS attempt is still pending) and
-	 *  again once it settles — because the copier itself carries no runes;
-	 *  this component owns the only reactive mirror of its flags. */
 	async function copyInviteLink(memberId: string): Promise<void> {
 		let copier = inviteCopierByMemberId[memberId];
 		if (!copier) {
@@ -1836,37 +823,6 @@
 		copyFailedByMemberId = { ...copyFailedByMemberId, [memberId]: copier.copyFailed };
 	}
 
-	// ── #268 — admin member records: the in-row editor (real name, phone,
-	// email, date of birth). Release ruling (2026-09-07): in-row expansion,
-	// roster only, "labels as proposed". ONE editor open at a time — a single
-	// top-level `recordEditorMemberId` (not per-row state) makes that true by
-	// construction: opening a second row's editor overwrites it, and the
-	// FIRST row's `{#if recordEditorMemberId === row.memberId}` guard in
-	// `memberRow` stops rendering its fields on the very next tick, before
-	// the new row's lookup even resolves.
-	//
-	// PREFILL (R4, ruling 2026-09-07 correction) — `name` and `email` prefill
-	// from the ROW, never a fresh `resolveField`/`listMyProfiles` call:
-	// `row.profileName` IS the roster's own domain-or-public scan (rosterData.ts's
-	// `toRosterRow`, never private-tier) and `row.email` IS already
-	// `resolveField`'s narrower-wins result — both computed once at roster-load
-	// time. Re-deriving either here would be redundant AND, for name, dangerous: a
-	// naive `resolveField('name', …)` prefers private-first and would promote a
-	// member's private-tier name into the domain-shared record on save (the
-	// #28/#58 leak class this ruling exists to close). Phone/date of birth have
-	// no profile source at all — they simply start empty.
-	//
-	// #269 review F2 — read `row.profileName`, NOT `row.name`: since #269
-	// `row.name` is the DISPLAYED name and may itself be an admin_member_record
-	// real name (real-names overlay, rosterData.ts). Nothing that WRITES to a
-	// record may read it — prefilling a fresh create from it would echo a record
-	// name back into a record, and after a record is deleted between roster load
-	// and pencil tap the stale displayed name would resurrect the deleted real
-	// name into the new one. `row.profileName` is unchanged by #269 and is what
-	// R4's "prefill from the profile display name" actually means; the `?? row.name`
-	// fallback covers only pre-#269 row shapes (`toRosterRow`'s bare output),
-	// where the two are equal by construction — every producer this page reads
-	// has carried `profileName` on BOTH halves since #469.
 	let recordEditorMemberId = $state<string | null>(null);
 	let recordEditorLookup = $state<MemberRecordLookup | null>(null);
 	let recordForm = $state<{
@@ -1882,56 +838,17 @@
 		birthdate: '',
 		id_code: ''
 	});
-	/** #268 review F3 — the in-flight guard is ROW-SCOPED, not a bare boolean:
-	 *  it names the member whose save is running, and ONLY that save's own
-	 *  `finally` may clear it. A plain boolean was clearable by paths that knew
-	 *  nothing about which row was writing (opening another row's editor, a
-	 *  superseded save's finally, a roster reload), which could re-enable a save
-	 *  control while its write was still in flight — and replaceProperty.ts's
-	 *  header states plainly that the calling surface's single-flight guard is
-	 *  now the ONLY thing standing between a double-fire and a duplicate value.
-	 *  Non-null therefore means "a member-record write is in flight somewhere":
-	 *  every editor's save is refused (and shown disabled) until it settles. */
 	let recordSavingMemberId = $state<string | null>(null);
 	type RecordSaveError =
 		| { memberId: string; kind: 'failed' }
 		| { memberId: string; kind: 'partial'; savedFields: string[] }
-		// #268 review F2 — the required-name refusal. `required` on the input is
-		// inert here (the editor is not wrapped in a <form> and the save control
-		// is a type="button" with an onclick), so the gate lives in the save
-		// handler and reports through this same slot.
 		| { memberId: string; kind: 'name-required' }
-		// #283 — phone letters refusal. Same idiom as name-required: same slot,
-		// same "refuse loudly, write nothing, keep typed values" contract.
 		| { memberId: string; kind: 'phone-invalid' }
-		// #283 — email refusal, routed through the browser's OWN checkValidity()
-		// on the type=email element (Gama's ruling) — no regex of ours.
 		| { memberId: string; kind: 'email-invalid' }
-		// #285 — isikukood checksum refusal. Third guard in the same slot, same
-		// "refuse loudly, write nothing, keep typed values" contract — strict
-		// where #283's email rule is deliberately permissive, because the
-		// isikukood has a precise, closed, checksummable specification and an
-		// email address does not.
 		| { memberId: string; kind: 'id-code-invalid' };
 	let recordSaveError = $state<RecordSaveError | null>(null);
-	// #283 — the email input element, bound so the save handler can ask the
-	// browser's own constraint validation `checkValidity()` rather than write a
-	// regex. Not wrapped in a <form> (see name-required note above), so this is
-	// the only way to reach the browser's email rule at all.
 	let emailInputEl = $state<HTMLInputElement | null>(null);
-	// #268 (E) — the fifth sr-only role="status" region's text, same contract as
-	// `reorderStatus`/`removeStatus`/`pageCreateStatus`/`renameStatus` above.
 	let recordStatus = $state('');
-	/** The diff baseline `updateMemberRecord` is sent ONLY the fields that
-	 *  differ from — either the loaded record's own field values (R4's
-	 *  "independent from the moment a record exists"), or, when no record
-	 *  existed yet at open time, the PREFILL `openRecordEditor` showed (#280):
-	 *  an untouched prefill is a display of the profile, not an assertion
-	 *  about the record, and must diff as unchanged even if the save turns
-	 *  out to be a create-turned-update. Read at save time only, never drives
-	 *  a render (same non-`$state` idiom as `currentCfg`). `null` only while
-	 *  no editor is open, or on the `damaged` open branch (no form, nothing to
-	 *  diff — that branch never reaches a save). */
 	let recordEditorOriginal: {
 		name: string;
 		phone: string;
@@ -1948,10 +865,6 @@
 		id_code: m.roster_record_id_code_label
 	};
 
-	// #467 — the chip becomes ONE DATED STATUS LINE, four DISPLAY states.
-	// `expired` is DISPLAY-ONLY (invited + past INVITE_LIFETIME_MS) — it is
-	// never a fifth producer value and never reaches the owner-controls block,
-	// which keeps routing on the bare 3-value `JoinState` exactly as before.
 	type JoinDisplayState = 'absent' | 'invited' | 'expired' | 'joined';
 
 	const JOIN_STATE_LABEL: Record<JoinDisplayState, (params: { date: string }) => string> = {
@@ -1966,28 +879,8 @@
 		expired: 'border-red-700 text-red-700',
 		absent: 'border-ink-4 text-ink-2'
 	};
-	// en-CA yyyy-mm-dd, NO timeZone argument — the InviteSurface.svelte:160
-	// convention (#207 rule 7).
 	const joinStateDateFmt = isoDateFormatter();
 
-	/** #467 — the ONE line to render for a row, or undefined to render
-	 *  NOTHING (withheld bucket, or the date for that state could not be
-	 *  read — no guessed line, ever). Date source per state: absent → the
-	 *  row's own member `_created` (row.createdAt); invited/expired/joined →
-	 *  the linked-identity property value's `created.at` (detail.at).
-	 *
-	 *  #467 review F1 — the ONE parse gate for every display state. Both date
-	 *  sources are unvalidated strings off the wire (`readPropertyCreatedAt`
-	 *  returns `body.created?.at`, rosterData/memberLifecycle take
-	 *  `_created[0].datetime`), so a JSON `null` or a malformed value reaches
-	 *  here typed `string`. Unguarded that is two different bugs at the render
-	 *  site: `Intl.DateTimeFormat.format(new Date('garbage'))` THROWS
-	 *  `RangeError: Invalid time value` out of the snippet and takes the whole
-	 *  roster render down (the trap #101 F1 and +page.svelte:formatSeasonDate
-	 *  already paid for), while `new Date(null)` quietly formats 1970-01-01 —
-	 *  the fabricated date done-when 3 forbids. `Date.parse` stringifies its
-	 *  argument, so `Date.parse(null)` is NaN and both cases land on the same
-	 *  "render nothing" answer. */
 	function joinStateLine(row: RosterRow): { display: JoinDisplayState; at: string } | undefined {
 		const detail = joinStateDetails[row.personId];
 		if (detail === undefined) return undefined;
@@ -2001,18 +894,10 @@
 		return { display: 'joined', at };
 	}
 
-	/** The bare 3-value record the owner-controls block routes on — derived
-	 *  from the SAME `listJoinStateDetails` answer the dated line reads, never
-	 *  a second fetch. Function declaration (hoisted) so `load()`'s use above
-	 *  its lexical position in the file still resolves. */
 	function bareJoinStates(details: Record<string, JoinStateDetail>): Record<string, JoinState> {
 		return Object.fromEntries(Object.entries(details).map(([id, d]) => [id, d.state]));
 	}
 
-	/** Pencil tap: (re)loads the ONE db-scoped record lookup for `row` and opens
-	 *  its editor in place — closing whichever row's editor was open before (see
-	 *  module doc above). Db-scoped generation guard (#259): a collective switch
-	 *  mid-load must write nothing from a stale settle. */
 	async function openRecordEditor(row: RosterRow): Promise<void> {
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -2020,103 +905,48 @@
 		recordEditorMemberId = memberId;
 		recordEditorLookup = null;
 		recordSaveError = null;
-		// #268 review F3 — NOT cleared here: opening another row cannot cancel a
-		// write already in flight, and pretending otherwise re-enables a save
-		// button whose POST has not landed.
 		recordEditorOriginal = null;
 		recordForm = { name: '', phone: '', email: '', birthdate: '', id_code: '' };
 		const g = routeLoad.generation;
 		try {
 			const result = await loadMemberRecord(cfg, row.personId);
-			// Superseded by a collective switch, or by opening a DIFFERENT row's
-			// editor while this lookup was in flight — either way, a stale settle
-			// writes nothing.
 			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
 			recordEditorLookup = result;
 			if (result.state === 'none') {
-				// First open, no record yet (R4) — prefill from the ROW (see module
-				// doc): name/email from the roster's own resolution, phone/date of
-				// birth start empty (the profile holds neither). #269 review F2 —
-				// `profileName`, never the DISPLAYED `name`.
 				recordForm = {
 					name: row.profileName ?? row.name,
 					phone: '',
 					email: row.email,
 					birthdate: '',
-					// #285 — no prefill: nothing to prefill from, the profile layer has
-					// no such field. Opens empty like phone/birthdate.
 					id_code: ''
 				};
-				// #280 — capture the PREFILL itself as the diff baseline, not just the
-				// loaded-record case below. name/email are non-empty here without the
-				// admin having typed anything; an untouched prefill is a DISPLAY of the
-				// profile, not an assertion about the record, and must diff as
-				// unchanged if a save-time re-read later finds a record was created by
-				// someone else (the create-turned-update path in `saveRecordEditor`).
-				// Reusing the same `recordEditorOriginal` slot the loaded-record branch
-				// already populates, rather than adding a second piece of state, is the
-				// point: the prefill object above already IS the exact baseline this
-				// path needs — nothing else to build.
 				recordEditorOriginal = { ...recordForm };
 			} else if (result.state === 'one') {
-				// A record already exists — show THE RECORD, never the profile (R4):
-				// no re-prefill, no merge, a deliberately-cleared field stays cleared.
 				recordForm = {
 					name: result.record.name,
 					phone: result.record.phone,
 					email: result.record.email,
 					birthdate: result.record.birthdate,
-					// `?? ''` — defensive against pre-#285 fixtures/mocks whose record
-					// literal predates this field; the data layer itself always sends a
-					// string (memberRecord.ts's `raw.id_code?.[0]?.string ?? ''`).
 					id_code: result.record.id_code ?? ''
 				};
 				recordEditorOriginal = { ...recordForm };
 			}
-			// 'damaged' (#264) — no form to prefill; the alert below names the
-			// member and nothing is written.
 		} catch (e) {
 			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
-			// PRIVACY (memberRecord.ts header) — `e` carries a static message only,
-			// never a field value; safe to log verbatim.
 			console.error('roster: member record load failed', memberId, e);
 			recordEditorMemberId = null;
 		}
 	}
 
-	/** Close-without-save (B): creates nothing, writes nothing. */
 	function cancelRecordEditor(): void {
 		recordEditorMemberId = null;
 		recordEditorLookup = null;
 		recordSaveError = null;
-		// #268 review F3 — same reasoning as `openRecordEditor`: closing the
-		// editor writes nothing and cancels nothing already on the wire.
 		recordEditorOriginal = null;
 	}
 
-	/** Save (E) — server-confirmed, never optimistic: `recordSavingMemberId` disables
-	 *  the control and gates every state write below on the SAME generation +
-	 *  still-open-on-this-row guard `openRecordEditor` uses, so a save that
-	 *  settles after a collective switch (or after the admin opened a
-	 *  different row) writes nothing and announces nothing (#259). Lazy
-	 *  create (no record yet) vs. atomic per-field update (#264) branches on a
-	 *  FRESH lookup taken here, inside the write (review r3 F2) — the cached
-	 *  `recordEditorLookup` only decides whether a save may start at all;
-	 *  update sends ONLY the fields that changed from `recordEditorOriginal`
-	 *  (R4). A `MemberRecordPartialSaveError` that actually landed something
-	 *  (#253) gets its own distinct copy naming those fields; every other
-	 *  failure — including a partial error with an EMPTY landed list — states
-	 *  plainly that nothing was saved. All of them leave the typed values in
-	 *  the form. */
 	async function saveRecordEditor(row: RosterRow): Promise<void> {
-		// Single-flight across the WHOLE surface (review F3): any member-record
-		// write still on the wire refuses the next one, whichever row it belongs
-		// to. The controls render disabled to match, so this is never a silent
-		// no-op.
 		if (recordSavingMemberId !== null) return;
-		// #434 slice 6 review F1/F2 — offline: nothing written, and the editor stays
-		// open on the typed record. BEFORE the `recordSaveError` clear below, so a
-		// refused save cannot wipe the message from the one that really failed.
 		if (isOffline) return;
 		const cfg = currentCfg;
 		if (!cfg) return;
@@ -2124,65 +954,19 @@
 		if (!lookup || lookup.state === 'damaged') return;
 		const memberId = row.memberId;
 		recordSaveError = null;
-		// #268 review — a fresh attempt owns the live region too, same discipline
-		// as `armedRemove`/`submitPageCreate`/`startRename` above. Two things break
-		// without it: (1) a SECOND consecutive success reassigns the identical
-		// string, the DOM text never changes, and `aria-live="polite"` announces
-		// nothing; (2) a save that FAILS would leave the previous "Member details
-		// saved." sitting in the status region beside the role="alert" that says
-		// nothing was saved — the #253 lying-banner class, in the accessibility
-		// tree. Cleared BEFORE the required-name gate below so a refusal clears it
-		// too.
 		recordStatus = '';
-		// REQUIRED NAME (review F2) — enforced HERE, where the write happens. The
-		// input's `required` attribute cannot enforce anything: the editor is not
-		// wrapped in a <form> and the save control is a type="button" with an
-		// onclick, so browser constraint validation never runs; and Entu's
-		// `mandatory` prop-def flag is a UI hint, not enforcement. Without this
-		// gate an emptied name writes `{ type: 'name', string: '' }` — and `name`
-		// is the DOMAIN-shared field, so the result is a domain-visible record
-		// with no name at all. Refuse loudly, write NOTHING, and keep the editor
-		// open with everything the admin typed still in it.
 		if (recordForm.name.trim() === '') {
 			recordSaveError = { memberId, kind: 'name-required' };
 			return;
 		}
-		// #283 — PHONE LETTERS (Joosep, same idiom as name-required above): a
-		// rejection-of-letters-only rule, never an allowlist (an allowlist that
-		// forgets a legitimate character rejects a valid number while claiming to
-		// be a fix). `/\p{L}/u` matches a letter in ANY alphabet — `/[a-z]/i`
-		// would miss Estonian õäöü and Cyrillic. The field stays optional: an
-		// empty string has no letter in it, so it passes through untouched. This
-		// guard sits BEFORE the generation capture and single-flight arm below,
-		// same as name-required, because a refusal is NOT a write: it must never
-		// arm the single-flight lock or reach the fresh-lookup re-read.
 		if (/\p{L}/u.test(recordForm.phone)) {
 			recordSaveError = { memberId, kind: 'phone-invalid' };
 			return;
 		}
-		// #283 — EMAIL FORMAT (Gama's ruling): routed through the browser's OWN
-		// constraint validation on the type=email element — `checkValidity()` —
-		// never a hand-rolled regex. The HTML spec's email rule is deliberately
-		// permissive (a willful violation of RFC 5322) so it accepts real-world
-		// addresses; this is the WEAKEST-RULE FENCE — `a@b` must keep saving, and
-		// a future guard that rejects it is a regression, not an improvement.
-		// `emailInputEl` is null only before the element has mounted, which
-		// cannot happen here (the editor is already open); the null check is
-		// defensive, not a live branch. Same placement as phone above: before the
-		// single-flight arm, because a refusal is not a write.
 		if (emailInputEl && !emailInputEl.checkValidity()) {
 			recordSaveError = { memberId, kind: 'email-invalid' };
 			return;
 		}
-		// #285 — ISIKUKOOD CHECKSUM (issue #285 + Gama's promotion comment): the
-		// THIRD guard in this established slot, same placement reasoning as the
-		// two above — before the generation capture and single-flight arm,
-		// because a refusal is not a write and must never arm the lock or reach
-		// the fresh-lookup re-read. `isValidIdCode` is pure (idCode.ts) and
-		// already treats an empty value as valid, so the optional field passes
-		// through untouched. Unlike #283's deliberately-permissive email rule,
-		// this one is strict: the isikukood has a precise, closed, checksummable
-		// specification, so the rule follows the shape of the data.
 		if (!isValidIdCode(recordForm.id_code)) {
 			recordSaveError = { memberId, kind: 'id-code-invalid' };
 			return;
@@ -2190,29 +974,9 @@
 		const g = routeLoad.generation;
 		recordSavingMemberId = memberId;
 		try {
-			// #268 review r3 F2 — the one-record-per-person invariant is a
-			// CHECK-THEN-CREATE, and the check belongs to the WRITE, not to the
-			// editor open. Branching on the lookup cached by `openRecordEditor`
-			// meant the create could fire on an arbitrarily stale reading: a retry
-			// after an ambiguous create failure (a dropped connection after the
-			// POST, or the 2xx-carrying-no-`_id` apparent-success trap the data
-			// layer throws on) issued a SECOND create, and two admins with editors
-			// open on the same pre-record member both took the create branch. The
-			// product of either is `state: 'damaged'` — the one state #264 forbids
-			// the app to repair. So the branch below reads the db again, HERE,
-			// inside the single-flight guard.
 			const fresh = await loadMemberRecord(cfg, row.personId);
-			// The re-read is a second suspension point: everything
-			// `openRecordEditor` guards against can happen across it too (a
-			// collective switch, the admin opening another row), so the same
-			// generation + still-open-on-this-row pair is re-checked before any
-			// write — not just before the state writes further down.
 			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
 			if (fresh.state === 'damaged') {
-				// #264 — the duplicate we were racing already exists. Write NOTHING,
-				// repair NOTHING: hand the row's lookup to the damaged alert (which
-				// replaces the form) and leave the typed values untouched in
-				// `recordForm`.
 				recordEditorLookup = fresh;
 				return;
 			}
@@ -2231,18 +995,6 @@
 					id_code: recordForm.id_code
 				});
 			} else {
-				// The record id comes from the FRESH read, never from the cached
-				// lookup — on the create-turned-update path there is no cached id at
-				// all. `recordEditorOriginal` there is the PREFILL baseline
-				// `openRecordEditor` captured on the `state === 'none'` open (#280):
-				// diffing against it — rather than against empty strings — is what
-				// keeps an untouched prefilled name/email out of `changes`, since
-				// they equal their own baseline, while a typed value still differs
-				// and still wins. The `?? { all-empty }` fallback below is now only a
-				// defensive backstop (every reachable open branch sets a real
-				// baseline before a save can fire); it is kept rather than asserted
-				// away because it costs nothing and a future open branch that forgot
-				// to set one would otherwise silently regress to sending everything.
 				const original = recordEditorOriginal ?? {
 					name: '',
 					phone: '',
@@ -2260,84 +1012,43 @@
 				if (recordForm.id_code !== original.id_code) changes.id_code = recordForm.id_code;
 				await updateMemberRecord(cfg, fresh.record._id, changes);
 			}
-			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return; // superseded — write nothing
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
 			recordEditorMemberId = null;
 			recordEditorLookup = null;
 			recordEditorOriginal = null;
 			recordStatus = m.roster_record_saved();
 		} catch (e) {
-			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return; // stale failure — write nothing
+			if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;
 			if (e instanceof MemberRecordPartialSaveError) {
 				console.error('roster: member record save incomplete', memberId, e.failedField);
-				// #268 review r3 F1 — `landedFields` is EMPTY whenever the FIRST
-				// attempted field failed, which is the commonest failure there is (a
-				// single-field update whose one write 500s). Routing that to the
-				// partial copy renders "saved: " with nothing after it — a broken
-				// sentence claiming a write that never happened, the #253 lying-banner
-				// class this branch exists to prevent. Only a NON-empty landed list
-				// earns the partial message; an empty one is a plain failure, and the
-				// plain failure copy is the one that says nothing was saved.
 				recordSaveError =
 					e.landedFields.length > 0
 						? { memberId, kind: 'partial', savedFields: e.landedFields }
 						: { memberId, kind: 'failed' };
 			} else {
-				// PRIVACY — `e`'s message is a static string + status code only
-				// (createMemberRecord/updateMemberRecord's own contract); safe to log.
 				console.error('roster: member record save failed', memberId, e);
 				recordSaveError = { memberId, kind: 'failed' };
 			}
 		} finally {
-			// Review F3 — clear the guard ONLY while it still names this save. A
-			// superseded save (collective switch, another row opened) must not free
-			// a control on behalf of a write it does not own.
 			if (recordSavingMemberId === memberId) recordSavingMemberId = null;
 		}
 	}
 
-	// #113 RED — arming/disarming the two-step confirm each unmount the very
-	// button that held focus (the ✕ → confirm/cancel swap, and the reverse on
-	// cancel), so without explicit placement focus drops to <body> (WCAG
-	// 2.4.3). Async: `tick()` lets the swapped-in button render before the
-	// query for it runs.
 	async function armRemove(id: string): Promise<void> {
-		// A fresh attempt owns the error slot — a previous failure's message must
-		// not outlive the retry that fixed it (same discipline as `submitPageCreate`
-		// and `performReorder`).
 		removeError = null;
 		pendingRemoveId = id;
 		await tick();
 		document.querySelector<HTMLElement>(`[data-testid="section-remove-confirm-${id}"]`)?.focus();
 	}
 
-	/** Query `[data-testid="{testid}"]` and return it only if present AND not
-	 *  disabled — a disabled control cannot take focus, so a `??` landing chain
-	 *  must step OVER one rather than stopping on it (#155/S4 review F1
-	 *  follow-up; shared by `disarmRemove` and `placeFocusAfterFailedRemove`,
-	 *  #273). */
 	function focusableByTestId(testid: string): HTMLElement | null {
 		const el = document.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 		return el && !(el as HTMLButtonElement).disabled ? el : null;
 	}
 
-	/** #273 — no in-flight guard added here: the cancel button that calls this
-	 *  is itself `disabled={structuralWritePending}` at the render site, so a
-	 *  disabled control cannot dispatch the click that would reach this
-	 *  function while a write is in flight — the same reasoning the agenda's
-	 *  own `disarmSeasonManageDelete` relies on, which carries no pending-guard
-	 *  either. What DOES change under #273: disarming after a FAILED delete can
-	 *  restore a ✕ that the failure's own reconcile has made ineligible
-	 *  (`canDelete` now false — e.g. a newly-discovered child), present but
-	 *  disabled, so the landing has to step over it exactly the way
-	 *  `placeFocusAfterFailedRemove` already does, rather than dropping to
-	 *  <body>. */
 	async function disarmRemove(id: string): Promise<void> {
 		pendingRemoveId = null;
 		await tick();
-		// #155/S4 review F2 — same two-UI lookup as `placeFocusAfterRemove`/
-		// `placeFocusAfterFailedRemove`: `section-toggle-*` is dead in arrange
-		// mode (delete only renders there today), kept as the same defensive
-		// middle rung.
 		const target =
 			focusableByTestId(`section-remove-${id}`) ??
 			focusableByTestId(`section-toggle-${id}`) ??
@@ -2348,19 +1059,7 @@
 		}
 	}
 
-	// #113 review F1 — the COMPLETING half of the same WCAG 2.4.3 story as
-	// `armRemove`/`disarmRemove`, and the only irreversible one: a SUCCESSFUL
-	// remove unmounts the focused Confirm button together with the whole
-	// `section-group-<id>` subtree, so unlike the cancel path there is no
-	// restored twin to hand focus back to and it drops to <body>. The neighbour
-	// has to be resolved from the PRE-removal tree — afterwards the node is gone
-	// and its parentage with it.
 
-	/** The section whose header should catch focus once `id` is gone: its
-	 *  PREVIOUS sibling (focus moves UP the list rather than jumping across it),
-	 *  else its parent, else null — "no neighbouring header", and the caller
-	 *  falls back to the Collapsed view-mode chip that always renders above the
-	 *  groups (#155/S1 — supersedes the old collapse-all control). */
 	function removeFocusFallbackId(id: string): string | null {
 		const siblingNodes = siblingsOf(sections, id);
 		if (!siblingNodes) return null;
@@ -2369,23 +1068,8 @@
 		return findSectionNode(sections, id)?.parentId ?? null;
 	}
 
-	/** Place focus once a SUCCESSFUL removal has settled. `tick()` first, same
-	 *  shape as `armRemove`: the group only leaves the DOM after the
-	 *  `sections` reassignment renders. */
 	async function placeFocusAfterRemove(targetId: string | null): Promise<void> {
-		// #155/S4 review F2 — delete MOVED into arrange mode, where there is no
-		// `section-toggle-*` at all (that is the collapsed/expanded group's expand
-		// control). Resolving the neighbour by that selector alone therefore always
-		// missed and fell through to the view-mode chip — so the natural next
-		// keypress straight after Confirm silently switched the page OUT of arrange
-		// mode. Two selectors, in render order, exactly like `handleElementFor`:
-		// only one of the two UIs is ever mounted, so trying both is unambiguous.
-		// The chip stays as the genuine last resort — "no neighbouring header".
 		if (targetId && viewMode === 'arrange') {
-			// Keep the roving tab stop WITH the focus: an arrange row is only at
-			// `tabindex="0"` when `activeArrangeRowId` names it, and landing focus
-			// on a `tabindex="-1"` row would put the widget's tab stop somewhere
-			// else than the caret.
 			rovingHandleId = targetId;
 		}
 		await tick();
@@ -2396,89 +1080,31 @@
 		(neighbour ?? document.querySelector<HTMLElement>('[data-testid="roster-view-chip-collapsed"]'))?.focus();
 	}
 
-	/** …and after a FAILED one (write error OR refusal): #273 — the armed pair
-	 *  is no longer restored to the ✕ here, because it no longer UNMOUNTS on a
-	 *  failure at all: `pendingRemoveId` clears only on success (see
-	 *  `handleRemoveSection`), so the pair sits ARMED next to the error for a
-	 *  direct retry, and the honest landing is the re-enabled CONFIRM itself —
-	 *  the ✕ it used to target does not exist while armed. `arrange-row-${id}`
-	 *  is kept as the one fallback, for the pathological case where confirm is
-	 *  somehow still disabled (e.g. another structural write raced in before
-	 *  this ran) — never <body> (WCAG 2.4.3). The row-that-was-ineligible
-	 *  scenario this used to resolve directly now surfaces one step later, at
-	 *  CANCEL time (`disarmRemove`), once the user disarms out of the error.
-	 *  The error text itself is announced separately by `section-remove-error`'s
-	 *  role="alert". */
 	async function placeFocusAfterFailedRemove(id: string): Promise<void> {
 		await tick();
-		// #155/S4 review F1 (follow-up) / #273 — PRESENT is not the same as
-		// FOCUSABLE: `focusableByTestId` steps over a disabled candidate (a
-		// disabled <button> cannot take focus) rather than stopping the `??`
-		// chain on one and silently dropping to <body>.
 		const target =
 			focusableByTestId(`section-remove-confirm-${id}`) ?? focusableByTestId(`arrange-row-${id}`);
 		if (!target) return;
 		target.focus();
-		// Landing on the ROW means landing inside the roving-tabindex widget, where
-		// focus and the tab stop must stay together (the same reasoning
-		// `placeFocusAfterRemove` spells out) — a focused row at `tabindex="-1"`
-		// leaves the widget's Tab entry point on some other row.
 		if (target === document.querySelector(`[data-testid="arrange-row-${id}"]`)) {
 			rovingHandleId = id;
 		}
 	}
 
-	// #113 review F1 — a SUCCESSFUL remove was also the one outcome with no
-	// announcement at all: the failure path has `section-remove-error`
-	// (role="alert") and the reorder path has `roster-reorder-status`, so the
-	// delete that actually worked was the one thing a screen-reader user got no
-	// confirmation of (WCAG 4.1.3). Its own visually-hidden role="status"
-	// region, mirroring `reorderStatus` — see `roster-section-remove-status`.
 	let removeStatus = $state('');
 
-	// #155/S4 review F1 — the delete's own in-flight flag, the third member of the
-	// single-flight set (`reorderPending`/`renamePending` are the other two, see
-	// `structuralWritePending` below). Before S4, delete rendered only in the
-	// collapsed/expanded views and indent/unindent only in arrange, so a delete
-	// could never be on screen beside another structural control; S4 puts rename,
-	// delete, indent and unindent on the SAME row, and without this flag a delete
-	// in flight left every one of its neighbours live.
 	let removePending = $state(false);
 
 	async function handleRemoveSection(id: string): Promise<void> {
-		// #155/S4 review F1 — one structural write at a time, the same refusal
-		// `performReorder`/`performReparent` already make. The primary guard is the
-		// UI disabling the controls (see `structuralWritePending` at the render
-		// site, #273); this is the defensive backstop for the moment BEFORE that
-		// render lands and for any path the UI can't disable.
 		if (structuralWritePending) return;
-		if (isOffline) return; // #434 slice 6 review F1 — no signal, no structural write
-		// Both resolved BEFORE the tree is mutated below — that mutation destroys
-		// the evidence this needs (the pre-removal sibling list, the pre-removal
-		// activeElement comparison).
+		if (isOffline) return;
 		const fallbackId = removeFocusFallbackId(id);
 		const active = document.activeElement;
-		// Only restore focus if the REMOVAL is what lost it — the same `ownsFocus`
-		// discipline as the picker's `closeMenu`: focus already sitting elsewhere
-		// is the user's own doing and yanking it back would fight them.
 		const ownsFocus =
 			!active ||
 			active === document.body ||
 			active === document.querySelector(`[data-testid="section-remove-confirm-${id}"]`);
-		// #273 — `pendingRemoveId` is DELIBERATELY left set here (unchanged from
-		// whatever `armRemove` put in it). Before #273 this function nulled it
-		// SYNCHRONOUSLY at this exact point, before any `await`, which unmounted
-		// the armed pair in the same tick as the (also-synchronous) optimistic
-		// `sections` mutation this used to do next — so double-submit and
-		// cancel-mid-flight never reproduced, but only by render-timing accident,
-		// not by construction (research + PO ruling on #273). It now clears in
-		// exactly ONE place: the success branch below. Every failure path —
-		// including this function's own early `!cfg` bail-out — leaves it set, so
-		// the pair stays ARMED next to the error for a direct retry, mirroring the
-		// agenda's `onSeasonManageSeriesDelete` lifecycle.
 		removeError = null;
-		// A fresh attempt owns the live region too — a previous "Tenor removed."
-		// must not sit in it while a new removal is in flight.
 		removeStatus = '';
 		const name = findSectionNode(sections, id)?.name ?? id;
 		const cfg = currentCfg;
@@ -2488,52 +1114,15 @@
 			if (ownsFocus) await placeFocusAfterFailedRemove(id);
 			return;
 		}
-		// #155/S4 review F1 — the same collective-switch guard `performReorder`/
-		// `performReparent` carry: a reconcile resolving after the user switched
-		// collectives must not clobber the newer collective's tree.
 		const g = routeLoad.generation;
 		const before = sections;
-		// #155/S4 review F1 (follow-up) — the failure landing is DEFERRED to the
-		// `finally`, because the CONFIRM button it wants to land on is
-		// `disabled={structuralWritePending}` (#273) and `removePending` is still
-		// true for the whole of the `catch`. Focusing from there was a no-op that
-		// dropped focus to <body> (WCAG 2.4.3). Same ordering `submitRename`
-		// already gets right: clear the flag, THEN `tick()` + focus. Left null on
-		// every path that must NOT move focus — success (which places its own),
-		// and the collective-switch bail-outs, where the tree on screen is no
-		// longer this removal's.
 		let failedRemoveId: string | null = null;
 		removePending = true;
 		try {
 			await deleteSection(cfg, id);
-			// #287 — the canonical #260 checkpoint: compare BEFORE writing ANY
-			// state. A first pass at this fix guarded only the `removeStatus`
-			// announcement below, reasoning the sibling writes were harmless no-ops
-			// against a switched-to tree — that reasoning missed the LATE-SETTLE
-			// CLOBBER case (pinned in page.roster-pending-collective-switch.spec.ts):
-			// if a GENUINE new remove has since armed a section on the collective
-			// now on screen, `pendingRemoveId = null` below is not a no-op at all —
-			// it unmounts that OTHER write's own armed confirm/cancel pair
-			// mid-write. A stale settle must write NOTHING once superseded, full
-			// stop; the `finally` (guarded separately, same `g`) still runs.
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-			// #273 — the tree mutation MOVES here, from before the `await`: agenda
-			// parity (`onSeasonManageSeriesDelete` splices its list only in
-			// `.then()`, never optimistically) means the write is now PESSIMISTIC,
-			// which is also exactly what keeps the armed pair — and therefore the
-			// row it lives in — on screen for the whole of the write, rather than
-			// vanishing with the optimistic update the instant the write starts.
+			if (g !== routeLoad.generation) return;
 			sections = removeSectionNode(sections, id);
-			// The one and only place this clears: a SUCCESSFUL removal.
 			pendingRemoveId = null;
-			// #110 review F3 — the node is gone for good, so its collapse-state entry
-			// is dead weight. Pruned only AFTER the write lands: a rejected delete
-			// leaves the tree untouched (see the comment on the mutation above), and
-			// the section's expanded state must survive with it. (Neither view-mode
-			// chip's `aria-pressed` depends on this pruning for correctness — #155/S1
-			// reads `viewMode` directly, never a live re-derivation off
-			// `expandedIds` — but the set should not keep growing across removals
-			// either.)
 			if (expandedIds.has(id)) {
 				const next = new Set(expandedIds);
 				next.delete(id);
@@ -2543,86 +1132,33 @@
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
 			console.error('roster: section remove failed', id, e);
-			// #155/S4 review F1 — STOP GUESSING, re-derive from the server. #273:
-			// `sections` was NEVER optimistically mutated above, so this is no
-			// longer restoring a blind pre-write snapshot over a discarded optimistic
-			// edit — it is reconciling in whatever landed elsewhere since load, which
-			// matters in its own right for the refusal case: `section-not-empty`
-			// means the server holds members/sub-sections this stale tree does not
-			// know about (that is the whole reason `canDelete` couldn't gate it —
-			// see sectionErrors.ts), so the honest thing to put on screen is the
-			// server's tree, not the client's stale guess. Exactly the `listSections`
-			// reconcile `performReparent` uses, with the same `generation` guard;
-			// `before` survives only as the fallback for when the refetch ALSO fails
-			// (at which point it is a no-op — nothing here has changed it yet).
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return;
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed remove failed', refetchError);
 				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
-			// #299 — the refetch/reconcile branches above already return early on a
-			// stale generation; this is the terminal write itself, reusing the same
-			// `g` captured at entry (no second capture) rather than relying on the
-			// two branches above having covered every path here by position.
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
-			// #110 review F1/F3 — say it, don't just log it. `section-not-empty` is
-			// its own message: nothing was written, and "it's not actually empty" is
-			// a different instruction to the user than "the delete was refused".
+			if (g !== routeLoad.generation) return;
 			removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
 			failedRemoveId = id;
-			// `pendingRemoveId` is left set — #273's retry convention: the pair
-			// stays armed beside `removeError` above.
 		} finally {
-			// #287 — a stale settle must not flip `removePending` back to false for
-			// a collective that isn't the one this write belongs to; the reset()
-			// callback (above) already owns clearing it on an actual switch. `g` was
-			// captured before the write started, so this is a straight reuse of the
-			// #260 idiom already applied to this same function's reconcile branches.
 			if (g === routeLoad.generation) removePending = false;
 			if (ownsFocus && failedRemoveId !== null) await placeFocusAfterFailedRemove(failedRemoveId);
 		}
 	}
 
 
-	// #124 (F1+F2) — page-level "+ New section" entry point. SEPARATE from the
-	// inline SectionPicker's own create form above (kept as-is; its own specs
-	// keep pinning it) — this one lives in the roster header, needs no member
-	// row, no picker, and no expansion state to reach.
-	//
-	// SPIKE root cause (2026-08-12, #124 check 1): section creation "does
-	// nothing" in live NOT because the writes were broken, but because the ONLY
-	// entry point was the picker's "+ New section…" — the LAST row of a member's
-	// dropdown, one mis-tap away from the adjacent "(Unassigned)" row (identical
-	// 24px height; a tap there is `pick(null)`, which no-ops and closes the
-	// picker silently on an already-unassigned member — exactly the reported
-	// symptom). A 16-section live tree also made that dropdown ~440px tall, so
-	// the inline create form it swapped in was off-screen on a phone. This
-	// control needs none of that: reachable with every section collapsed,
-	// admin-only (fail-closed, same gate as every other admin control here).
 	let pageCreateOpen = $state(false);
 	let pageCreateName = $state('');
 	let pageCreateParentId = $state('');
 	let pageCreateError = $state<(() => string) | null>(null);
 	let pageCreateNameInput = $state<HTMLInputElement | null>(null);
 
-	// Announced result, mirroring `removeStatus`/`reorderStatus` above — the
-	// "invisible success" half of the SPIKE finding: a create used to sort LAST
-	// (`displayOrder: POSITIVE_INFINITY`, unchanged here — out of this fix's
-	// scope) with nothing on screen saying a create even happened. role="status",
-	// mounted from first render (a live region announces only CHANGES to its
-	// contents).
 	let pageCreateStatus = $state('');
 
-	/** Pre-order flatten, same shape as SectionPicker's own `flatten` — the
-	 *  parent `<select>`'s options and the sibling-scoped duplicate check both
-	 *  walk this. Built off `visibleSections` (already filtered to the viewer's
-	 *  own org, #124/F3) — a foreign org's section is never offered as a parent
-	 *  (finding F2) and never blocks a same-named create (finding #10 B, same
-	 *  discipline as SectionPicker's own org-scoped check). */
 	function flattenSections(nodes: SectionNode[]): SectionNode[] {
 		const out: SectionNode[] = [];
 		for (const node of nodes) {
@@ -2633,9 +1169,6 @@
 	}
 	const ownOrgFlatSections = $derived(flattenSections(visibleSections));
 
-	/** Indent the parent `<select>`'s option labels so the tree shape survives a
-	 *  flat option list — NBSP, since leading ordinary spaces collapse in
-	 *  rendered option text (same fix as SectionPicker's `parentOptionLabel`). */
 	function pageCreateParentLabel(node: SectionNode): string {
 		return '  '.repeat(node.depth) + node.name;
 	}
@@ -2654,8 +1187,6 @@
 		pageCreateError = null;
 	}
 
-	// Same "Enter submits" affordance as SectionPicker's name input — this is not
-	// wrapped in a <form>, so there is no implicit submit otherwise.
 	function onPageCreateNameKeydown(event: KeyboardEvent): void {
 		if (event.key !== 'Enter') return;
 		event.preventDefault();
@@ -2663,12 +1194,7 @@
 	}
 
 	async function submitPageCreate(): Promise<void> {
-		// #434 slice 6 review F1 — offline: nothing written, and the typed name is
-		// left in the form. BEFORE the attempt-start clears, so a refused submit
-		// cannot wipe the error from the create that really did fail.
 		if (isOffline) return;
-		// A fresh attempt owns both the error slot and the status slot — a
-		// previous failure/success must not sit alongside a new attempt in flight.
 		pageCreateError = null;
 		pageCreateStatus = '';
 		const name = pageCreateName.trim();
@@ -2677,10 +1203,6 @@
 			return;
 		}
 		const parentId = pageCreateParentId === '' ? null : pageCreateParentId;
-		// Sibling-scoped, not global (finding #10 root cause B) — siblings are the
-		// chosen parent's DIRECT CHILDREN, or the top-level roots when parentId is
-		// null. `ownOrgFlatSections` is already own-org-scoped (#124/F3), so
-		// another org's same-named root never blocks this create.
 		const isDuplicate = ownOrgFlatSections.some(
 			(node) => node.parentId === parentId && node.name.toLowerCase() === name.toLowerCase()
 		);
@@ -2695,8 +1217,6 @@
 			pageCreateError = m.roster_section_create_failed;
 			return;
 		}
-		// #299 — captured before the ONLY await, same idiom as `handleRemoveSection`
-		// above. This function previously carried no guard of any kind.
 		const g = routeLoad.generation;
 
 		let newId: string;
@@ -2704,25 +1224,18 @@
 			newId = await createSection(cfg, { name, parentId, dbEntityId: currentDbEntityId });
 		} catch (e) {
 			console.error('roster: page-level section create failed', name, parentId, e);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			pageCreateError = m.roster_section_create_failed;
 			return;
 		}
-		if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+		if (g !== routeLoad.generation) return;
 
-		// LOCAL insertion — the page's "never refetch" contract.
-		// There is no MEMBER context here (this is the page-level control, not a
-		// picker pinned to one row) — `assignMemberSection` never fires.
 		const depth = parentId ? (findSectionNode(sections, parentId)?.depth ?? 0) + 1 : 0;
 		const newNode: SectionNode = {
 			id: newId,
 			name,
 			displayOrder: Number.POSITIVE_INFINITY,
 			parentId,
-			// Mirrors what `listSections` would read back for it: a top-level
-			// section is parented to the VIEWER's own org, a sub-section is
-			// section-parented and carries no org `_parent` at all (v4E
-			// `parentConstraint: 'exactly_one_of'`).
 			dbEntityId: parentId ? null : (currentDbEntityId ?? null),
 			depth,
 			children: []
@@ -2733,27 +1246,11 @@
 		closePageCreateForm();
 	}
 
-	// Auto-focus the name input the instant the page-level form appears, same
-	// contract as SectionPicker's own create form.
 	$effect(() => {
 		if (pageCreateOpen && pageCreateNameInput) pageCreateNameInput.focus();
 	});
 
-	// TS.4/#98 — drag-reorder on COLLAPSED section headers (admin only). ALL THREE
-	// input paths (native HTML5 drop, touch long-press drag, keyboard up/down)
-	// funnel into `performReorder`, which
-	// does the SAME optimistic-and-reconcile as `handlePick` above: the tree is
-	// patched immediately (`sections` is `$state`, `groups`/`groupById` are
-	// `$derived` off it), `reorderSections` fires, and a rejection reverts to
-	// the pre-move order and logs — no refetch of roster or sections either way.
-	//
-	// A "sibling group" is either the top-level `sections` array or one node's
-	// `children` array — `siblingsOf` walks the live tree to find whichever one
-	// holds a given id, so the same helpers work at any depth without the
-	// caller tracking parentage explicitly.
 
-	/** The live sibling array (top-level `sections`, or some node's `children`)
-	 *  that currently holds `id` — null if `id` isn't anywhere in the tree. */
 	function siblingsOf(nodes: SectionNode[], id: string): SectionNode[] | null {
 		if (nodes.some((n) => n.id === id)) return nodes;
 		for (const n of nodes) {
@@ -2763,40 +1260,12 @@
 		return null;
 	}
 
-	/** #152 review F1 — the sibling group AS RENDERED, which is what every
-	 *  reorder path must index, clamp, announce and write over.
-	 *
-	 *  `siblingsOf` walks the RAW `sections` tree, but the top level on screen is
-	 *  `visibleSections`: `listSections` is not org-scoped and sections are
-	 *  `_sharing: public`, so on a multi-collective db the raw top level also
-	 *  holds roots belonging to OTHER collectives, which #124/F3 filters out of
-	 *  the render entirely. Indexing the raw array therefore counts slots the
-	 *  user can neither see nor reach — a keypress that appears to do nothing, an
-	 *  announcement that contradicts the screen, and a `reorderSections` payload
-	 *  that renumbers another collective's sections.
-	 *
-	 *  Only the ROOT level needs the filter: a sub-section carries no org
-	 *  `_parent` of its own (v4E `parentConstraint: 'exactly_one_of'`), so a
-	 *  rendered root's whole subtree is org-coherent by construction — the same
-	 *  reasoning `visibleSections`/`rootDbEntityBySectionId` above already rest on. */
 	function visibleSiblingsOf(id: string): SectionNode[] | null {
 		const siblings = siblingsOf(sections, id);
 		if (siblings === null) return null;
-		// Identity, not a content test: `siblingsOf(sections, …)` returns the very
-		// array it was handed when `id` is a root.
 		return siblings === sections ? visibleSections : siblings;
 	}
 
-	/** Immutable reorder: whichever level holds ALL of `orderedIds` gets those
-	 *  nodes rebuilt in that order (nodes themselves, incl. `children`, untouched
-	 *  — only the array's order changes); every ancestor on the path down to it
-	 *  is rebuilt too, so reassigning `sections` is enough to notify Svelte.
-	 *
-	 *  #152 review F1 — `orderedIds` may be a SUBSET of its level: a reorder now
-	 *  carries only the VISIBLE siblings (`visibleSiblingsOf`), so a foreign
-	 *  collective's root sitting in the same raw array is not part of the move.
-	 *  Those nodes keep the slots they already occupy; only the listed ones are
-	 *  permuted among the slots they held between them. */
 	function applySiblingOrder(nodes: SectionNode[], orderedIds: string[]): SectionNode[] {
 		const wanted = new Set(orderedIds);
 		if (orderedIds.length > 0 && nodes.filter((n) => wanted.has(n.id)).length === orderedIds.length) {
@@ -2809,107 +1278,20 @@
 		);
 	}
 
-	// F2 code-review fix (#98 review): an IN-FLIGHT GUARD on the reorder write.
-	// `reorderSections` renumbers the WHOLE sibling group, so two overlapping
-	// runs write the same entities: both GET a section's display_order value id,
-	// the first run's atomic overwrite-POST consumes it, and the second POST —
-	// still carrying that now-stale `_id` — matches nothing to soft-delete.
-	//
-	// #264 review F2: that second POST does NOT fail. The `_id` is a
-	// soft-delete target, not a precondition (entu-api `insertProperties` +
-	// `markPropertiesDeleted`, an unchecked `updateMany`), so it returns 200 and
-	// silently APPENDS a SECOND display_order value. `listSections` reads
-	// `display_order[0]`, so the order on next load is whichever value Entu
-	// returns first — and this page never refetches, so it is permanent and
-	// completely silent. The old GET→POST→DELETE wire at least 404'd here; the
-	// atomic wire does not, which makes THIS FLAG — both the UI disable it
-	// drives and the early return below — the ONLY protection, rather than a
-	// belt over a wire that also complained.
-	//
-	// Same fix as the programme reorder one slice earlier (#91 review F4, see
-	// `handleMoveItem` in routes/+page.svelte): the key is the SIBLING GROUP, not
-	// the row, because a reorder's blast radius is the whole group — and one
-	// page-wide flag is that key here, since only one group can be mid-move at a
-	// time on this page. The primary guard is the UI disabling the controls
-	// (`draggable="false"` on the handle) so a double-tap is visibly refused
-	// rather than silently swallowed; the early return below is the defensive
-	// backstop for the paths the UI can't disable.
 	let reorderPending = $state(false);
 
-	// #99 review F2 — a failed reorder used to be SILENT to the user: the catch
-	// path below logs, refetches, and swaps `sections`, so the list visibly snaps
-	// to a different order (the server's partial truth) with nothing on screen
-	// saying why, and a screen-reader user gets nothing at all. Every other write
-	// path on this page surfaces `role="alert"` (section-write-error-*,
-	// roster-load-error, roster-sections-load-error) — the reorder path, the one
-	// TS.4 added, had none.
 	let reorderError = $state(false);
 
-	// #253 — a reparent is TWO writes (`_parent` move, then destination-group
-	// renumber); `reorderError` alone can't say WHICH failed, and the two
-	// outcomes need DIFFERENT copy: the move itself failing means nothing
-	// landed (today's `roster_section_reorder_failed` stays exactly right),
-	// but a landed move whose renumber then fails means the section IS at its
-	// new parent — telling the user "the order couldn't be saved" as if
-	// nothing happened would be a lie. True only when `performReparent`'s
-	// `reorderSections` call (the renumber) is what rejected — never set by
-	// `performReorder`'s own pure-reorder failures, which keep today's single
-	// copy regardless (PO ruling #253: two banner states, not three). Reset at
-	// the top of every fresh attempt in both write paths so a PREVIOUS
-	// failure's state can never leak into a new one (no-cfg early-returns
-	// included).
 	let reparentPartial = $state(false);
 
-	// #99 review F3 — the reorder path had no result announcement at all: a drag
-	// moved the section, the DOM reordered silently, and a screen-reader user got
-	// no confirmation anything happened beyond the drag's own aria-grabbed/
-	// aria-dropeffect state. Rendered into a visually-hidden role="status"
-	// region — see `roster-reorder-status` below.
 	let reorderStatus = $state('');
 
-	// F3 code-review fix (#98 review): a reorder write is NOT all-or-nothing, so a
-	// blind revert can make the screen LIE. `reorderSections` renumbers the sibling
-	// group SERIALLY and throws on the first non-2xx — every section written before
-	// that throw keeps its NEW display_order server-side. Reverting the whole
-	// optimistic order then puts the screen back to an order the server no longer
-	// holds (e.g. Alto=1 landed, Soprano 403'd: the server sorts Alto first, the
-	// screen shows Soprano first), and this page never refetches, so the two
-	// disagree until the next full page load with nothing saying so.
-	//
-	// Fix: on failure STOP GUESSING — re-derive from the server. `listSections` is
-	// the same read the page loaded with, so whatever partial state landed is what
-	// renders. Guarded by `generation` (the collective-switch guard) so a refetch
-	// resolving after a switch can't clobber the newer collective's tree. The
-	// `beforeIds` revert survives only as the fallback for when the refetch ALSO
-	// fails — at that point there is no server truth to be had, and the pre-move
-	// order is the best available guess (logged loudly either way).
-	//
-	// #99 review F2/F3: the same run owns BOTH user-visible outcomes — the
-	// `role="alert"` on failure and the `role="status"` announcement on success —
-	// so every input path (native drop, touch drop) gets them for free.
-	// `movedId` is the section the user acted on; it is what the announcement has
-	// to name (`afterIds` alone can't say which one moved).
-	//
-	// Returns whether the write LANDED — false for a refused attempt (a write
-	// already in flight, no cfg) as well as for a failed one. #152 review F2:
-	// the keyboard drop path needs to tell "committed" from "announced
-	// provisionally and then nothing happened" before it overwrites the live
-	// region with its own committed-drop wording; `reorderError` alone can't say
-	// that, since the early returns above leave it untouched or set it without a
-	// request ever going out.
 	async function performReorder(
 		beforeIds: string[],
 		afterIds: string[],
 		movedId: string
 	): Promise<boolean> {
-		// #155/S4 review F1 — `structuralWritePending`, not `reorderPending` alone:
-		// a rename or a delete started on a neighbouring arrange row is just as
-		// much an outstanding write on this tree.
 		if (structuralWritePending) return false;
-		// #434 slice 6 review F1 — offline: no reorder. Before `reorderError`/
-		// `reparentPartial` are touched, so a refused drag reports nothing at all.
-		// (Reorder is reachable by drag, which has no `disabled` to set — this IS
-		// the gate for that path.)
 		if (isOffline) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
@@ -2920,22 +1302,13 @@
 		}
 		const g = routeLoad.generation;
 		reorderPending = true;
-		// A fresh attempt owns both slots — a previous failure's alert must not
-		// outlive the retry that fixed it, and a stale "moved to position 2" must
-		// not sit in the live region while a new move is in flight. #253: this is
-		// the PURE-reorder path — it never sets `reparentPartial`, so it always
-		// renders today's one copy regardless of a previous reparent's state.
 		reorderError = false;
 		reparentPartial = false;
 		reorderStatus = '';
 		sections = applySiblingOrder(sections, afterIds);
 		try {
 			await reorderSections(cfg, afterIds);
-			// #264 item 4 — a SUCCESS settling after a collective switch must write
-			// NOTHING for the stale collective: no announcement, no banner, no tree
-			// state. Mirrors the failure/refetch branches' own `g` check below,
-			// which this success branch was missing (the #259/#260 class).
-			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return false;
 			reorderStatus = m.roster_section_moved({
 				name: findSectionNode(sections, movedId)?.name ?? movedId,
 				position: afterIds.indexOf(movedId) + 1,
@@ -2944,49 +1317,23 @@
 			return true;
 		} catch (e) {
 			console.error('roster: section reorder failed', e);
-			// #296 — same #260/#264-item-4 checkpoint the success branch already
-			// carries above: a failure settling after a collective switch must
-			// write NOTHING for the stale collective, banner included. The
-			// refetch reconcile below is for THIS write's own tree, which is
-			// only relevant while `g` is still current, so this one check covers
-			// both.
-			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return false;
 			reorderError = true;
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return false;
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed reorder failed', refetchError);
 				if (g === routeLoad.generation) sections = applySiblingOrder(sections, beforeIds);
 			}
 		} finally {
-			// #296 — the finally's own late-settle half: a stale settle must not
-			// flip `reorderPending` back to false out from under a GENUINE
-			// reorder/reparent that has since started on the collective now on
-			// screen. Nothing else in this block needs to run unconditionally
-			// (no focus restoration here, unlike `submitRename`'s finally), so
-			// the write itself is what's gated.
 			if (g === routeLoad.generation) reorderPending = false;
 		}
 		return false;
 	}
 
-	// ── #155/S3 — indent/unindent (structural reparent, arrange mode) ──────────
-	//
-	// A DIFFERENT write from the reorder above: `reparentSection` changes a
-	// section's `_parent` REFERENCE (which sibling group it belongs to), never
-	// its `display_order` (position within one). Same in-flight guard
-	// (`reorderPending` — one outstanding structural write at a time, reused
-	// rather than a second flag, per the RED contract) and the same
-	// `roster-reorder-status` live region / failure-reconcile shape as
-	// `performReorder`, so every structural write on this page — reorder or
-	// reparent — behaves identically to the user and to a screen reader.
 
-	/** The immediate previous sibling AT THE SAME LEVEL, or null when `id` is
-	 *  already first (nothing to nest under) or not found. `visibleSiblingsOf`
-	 *  is the exact helper the reorder/drag paths use, so a top-level id is
-	 *  scoped to the viewer's own collective the same way (#124/F3). */
 	function prevSiblingId(id: string): string | null {
 		const siblingIds = visibleSiblingsOf(id)?.map((n) => n.id) ?? [];
 		const idx = siblingIds.indexOf(id);
@@ -2994,60 +1341,21 @@
 		return siblingIds[idx - 1];
 	}
 
-	/** Indent guard: something to nest under. */
 	function canIndent(id: string): boolean {
 		return prevSiblingId(id) !== null;
 	}
 
-	/** Unindent guard: not already top-level (a top-level section's `parentId`
-	 *  is null — its parent is the collective's database entity (#161), and there
-	 *  is no level above that to promote to). */
 	function canUnindent(id: string): boolean {
 		return (findSectionNode(sections, id)?.parentId ?? null) !== null;
 	}
 
-	/** The one write seam both `handleIndent`/`handleUnindent` and the
-	 *  ArrowRight/ArrowLeft keyboard branch funnel through — the ATOMIC
-	 *  overwrite-POST via `reparentSection` (#264: GET the existing `_parent`
-	 *  value id, then ONE POST whose entry pairs that `_id` with the new
-	 *  reference so Entu soft-deletes the old value in the SAME call; zero
-	 *  property DELETEs, and a ≠1-value section is REFUSED outright with
-	 *  `SectionParentDamagedError` rather than guessed at), local tree patched
-	 *  optimistically first, reconciled
-	 *  against the server (refetch via `listSections`) on failure exactly like
-	 *  `performReorder` (#98 AC-8). Returns whether the write landed, same
-	 *  contract as `performReorder`.
-	 *
-	 *  #155/S3 review F2 — a reparent is TWO writes, not one. `reparentSection`
-	 *  moves `_parent`, and that is all it moves: the section keeps whatever
-	 *  `display_order` it held in its OLD sibling group, which is a number that
-	 *  means nothing among its NEW siblings. `listSections` sorts every level by
-	 *  `displayOrder` (name as tie-break, sectionData.ts pass 5), so without a
-	 *  renumber the POSITION on screen is a lie that survives only until the next
-	 *  full load — indent Alto (display_order 2) under Soprano ▸ [Soprano 1 = 1,
-	 *  Soprano 2 = 2] shows and announces "last child", and reloads as
-	 *  [Soprano 1, Alto, Soprano 2]. So the reparent is followed by ONE
-	 *  `reorderSections` over the DESTINATION sibling group, in the order the
-	 *  freshly-patched local tree holds it (`visibleSiblingsOf` — the group AS
-	 *  RENDERED, #152 review F1, which is `visibleSections` for a promote-to-org
-	 *  and the new parent's `children` for everything else). The SOURCE group is
-	 *  deliberately left alone: pulling a node out leaves a GAP in its old
-	 *  numbering (1, 3, 4), and a gap sorts identically to a dense run.
-	 *
-	 *  Both writes live inside the one `reorderPending` guard and the one
-	 *  catch: a renumber that fails after the `_parent` landed is exactly the
-	 *  partial state #98/F3 built the `listSections` reconcile for — the screen
-	 *  re-derives from the server rather than guessing. */
 	async function performReparent(
 		node: SectionNode,
 		target: ReparentTarget,
 		insertAfterId: string | null,
 		announce: () => string
 	): Promise<boolean> {
-		// #155/S4 review F1 — see `performReorder`: one structural write at a time,
-		// counting rename and delete.
 		if (structuralWritePending) return false;
-		// Offline: no reparent — the drag path's gate, same as `performReorder`.
 		if (isOffline) return false;
 		const cfg = currentCfg;
 		if (!cfg) {
@@ -3064,90 +1372,40 @@
 		const before = sections;
 		sections = applyReparent(sections, node.id, target, insertAfterId);
 		const newParentId = target.kind === 'org' ? target.dbEntityId : target.sectionId;
-		// #253 review F1 — the banner state is decided by WHICH PHASE we were in
-		// when the rejection arrived, NOT by the rejection's shape. `reorderSections`
-		// can reject untyped after the `_parent` move already landed (a network
-		// rejection propagated verbatim by `entuFetch`, a SyntaxError from a
-		// malformed body, an `AuthExpiredError` on a 401) — every one of those
-		// leaves the section AT ITS NEW PARENT, so a type-gated decision would show
-		// "the order couldn't be saved" over a screen that shows the move.
 		let moveLanded = false;
 		try {
 			await reparentSection(cfg, node.id, newParentId);
 			moveLanded = true;
-			// #264 item 4 — a SUCCESS settling after a collective switch must write
-			// NOTHING for the stale collective: no follow-up renumber fired against
-			// whatever tree is now CURRENT, no announcement, no banner (the
-			// #259/#260 class — mirrors the failure/refetch branches' own `g` check
-			// below, which this success branch was missing).
-			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
-			// Read AFTER the optimistic patch above: this is the destination group
-			// in its new on-screen order, including the moved section itself.
+			if (g !== routeLoad.generation) return false;
 			const destinationIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
 			if (destinationIds.length > 0) await reorderSections(cfg, destinationIds);
-			if (g !== routeLoad.generation) return false; // superseded mid-renumber
+			if (g !== routeLoad.generation) return false;
 			reorderStatus = announce();
 			return true;
 		} catch (e) {
-			// #253 — full typed-error evidence (status + response body, when the
-			// rejection carries them) logged where a human can read it after the
-			// fact; `e` itself, not a stringified summary, so the object's fields
-			// stay inspectable. Two failure phases: `reparentSection` rejecting
-			// means NOTHING landed (`moveLanded` still false — today's copy is
-			// correct); anything rejecting after it resolved means the `_parent`
-			// move ALREADY landed and only the renumber failed — the section DID
-			// move, so the banner must say so, whatever shape that rejection has.
-			// The typed fields (step, k-of-N, status, body) are DIAGNOSIS ONLY:
-			// they ride along in the logged `e` and decide nothing on screen. No
-			// retry, no automatic unwind either way (PO #253 refusals) — the catch
-			// below is the SAME single refetch-reconcile + snapshot fallback
-			// `performReorder` uses, untouched.
-			// #264 item 5 — a `SectionParentDamagedError` rejection is a REFUSAL
-			// (the lookup GET was the only request; nothing was written), not a
-			// failed write like every other rejection this catch handles. The
-			// banner stays the pinned TWO-state contract above (PO ruling #253:
-			// "two states, not three") — the damaged-data marker (sectionData's
-			// `parentDamaged`, rendered from the refetch below) is what tells the
-			// user WHY. This only sharpens the diagnostic log line so the refusal
-			// is not misread as an ordinary write failure after the fact.
 			console.error(
 				isSectionParentDamaged(e)
 					? 'roster: section reparent refused — parent data damaged, nothing written'
 					: 'roster: section reparent failed',
 				e
 			);
-			// #296 — same #260/#264-item-4 checkpoint the success branch already
-			// carries above: a failure settling after a collective switch must
-			// write NOTHING for the stale collective. `reparentPartial` rides
-			// along here since it decides the SAME banner as `reorderError`
-			// (which of the two failure states renders) and neither means
-			// anything against a collective that is no longer on screen.
-			if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return false;
 			reorderError = true;
 			reparentPartial = moveLanded;
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== routeLoad.generation) return false; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return false;
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed reparent failed', refetchError);
 				if (g === routeLoad.generation) sections = before;
 			}
 		} finally {
-			// #296 — the finally's own late-settle half, same reasoning as
-			// `performReorder`'s: a stale settle must not flip `reorderPending`
-			// back to false out from under a GENUINE reorder/reparent that has
-			// since started on the collective now on screen. This block does
-			// nothing else that needs to run unconditionally, so the write
-			// itself is what's gated.
 			if (g === routeLoad.generation) reorderPending = false;
 		}
 		return false;
 	}
 
-	/** INDENT: nest `node` under its immediate previous sibling, as that
-	 *  sibling's LAST child (`insertAfterId: null` → append). Refuses silently
-	 *  when there's no previous sibling (guard already gates the button/key). */
 	async function handleIndent(node: SectionNode): Promise<void> {
 		const prevId = prevSiblingId(node.id);
 		if (prevId === null) return;
@@ -3157,29 +1415,13 @@
 		);
 	}
 
-	/** UNINDENT: promote `node` one level — to its parent's own parent (a
-	 *  section), or to the ORGANIZATION when the parent is already top-level.
-	 *  Lands right after the former parent among the new siblings
-	 *  (`insertAfterId: parent.id`). Refuses silently when `node` is already
-	 *  top-level (no parent to promote FROM). */
 	async function handleUnindent(node: SectionNode): Promise<void> {
 		if (node.parentId === null) return;
 		const parent = findSectionNode(sections, node.parentId);
 		if (!parent) return;
 		if (parent.parentId === null) {
-			// The parent is top-level — promoting past it lands on the collective's database entity (#161).
 			const dbEntityId = parent.dbEntityId ?? currentDbEntityId;
 			if (!dbEntityId) {
-				// #155/S3 review F3 — this used to log and return SILENTLY while the
-				// button stayed ENABLED (`canUnindent` only asks whether there IS a
-				// parent, not whether the promote target is resolvable): the user
-				// tapped a live control, nothing moved, nothing was announced, no
-				// banner appeared. Reachable whenever no visible root carries an
-				// `dbEntityId` — the same permissive-when-unknown state `visibleSections`
-				// deliberately tolerates. Every other failure on this page raises
-				// `reorderError` (the role="alert" banner above the groups), and so
-				// does this one now: fail loudly over silent degradation, same shape
-				// as `performReparent`'s own no-cfg path.
 				console.error('roster: unindent to top level with no known collective (database entity) id', node.id);
 				reorderError = true;
 				reparentPartial = false;
@@ -3197,84 +1439,19 @@
 		);
 	}
 
-	// ── #155/S4 — inline RENAME (arrange mode only) ─────────────────────────────
-	//
-	// "Tap the name → it turns into a text input → Enter saves → Escape
-	// cancels" (issue #155). Only ONE row can be renaming at a time
-	// (`renamingSectionId`), same single-flight posture as the grab/drag state
-	// machines above. The row stays draggable=false and its own grab/keydown
-	// machinery is bypassed while renaming — see the template's guards.
 
 	let renamingSectionId = $state<string | null>(null);
 	let renameValue = $state('');
 	let renamePending = $state(false);
-	// A fresh attempt owns the slot — a previous failure must not outlive the
-	// retry that fixed it (same discipline as `sectionWriteError`/`removeError`).
 	let renameError = $state<{ id: string; name: string } | null>(null);
 	let renameInputEl = $state<HTMLInputElement | null>(null);
-	// Announced result — same "invisible success" concern `pageCreateStatus`/
-	// `removeStatus` exist for: a rename that silently succeeds says nothing to
-	// a screen-reader user.
 	let renameStatus = $state('');
 
-	// ── #155/S4 review F1 — the single-flight set ───────────────────────────────
-	//
-	// ONE structural write on the section tree at a time, whichever control
-	// started it. `reorderPending` (reorder + reparent), `renamePending` and
-	// `removePending` used to guard only themselves, which was harmless while the
-	// controls lived in different views: before S4, delete rendered only in
-	// collapsed/expanded and indent/unindent only in arrange, so two of them could
-	// never be on screen together. S4 puts rename, delete, indent and unindent
-	// side by side on every arrange row — so a rename could be started over an
-	// outstanding reorder, a delete over an outstanding rename, and each one's
-	// failure path would then restore a tree snapshot taken before the other's
-	// write, silently discarding it.
-	//
-	// Every one of the four controls' `disabled` reads this, and every write seam
-	// (`performReorder`, `performReparent`, `handleRemoveSection`, `submitRename`)
-	// refuses on it as the defensive backstop.
 	const structuralWritePending = $derived(reorderPending || renamePending || removePending);
 
 	function startRename(node: SectionNode): void {
-		// The trigger is disabled offline; this is the backstop for a tap that beat
-		// the re-render. Arming an editor whose every commit would be refused is
-		// just a trap.
 		if (isOffline) return;
-		// #303 review F1 — `reorderPending || removePending`, NOT the page-wide
-		// `structuralWritePending`. ARMING an editor writes nothing: it sets
-		// `renamingSectionId`/`renameValue` and mounts an input. The single-flight
-		// rule (#155/S4 review F1) is about WRITES, and it is still enforced where
-		// it belongs — `submitRename`'s own `structuralWritePending` refusal, which
-		// keeps the input open with its text intact until the floor is free.
-		//
-		// Excluding `renamePending` here is what makes ruling (b)'s section-switch
-		// REACHABLE IN A BROWSER at all. A browser fires the open input's blur
-		// during MOUSEDOWN, before the click handler on the row being clicked runs
-		// — so by the time this function is entered, the blur-commit has already
-		// flipped `renamePending` true synchronously. Gating arming on that flag
-		// makes the outgoing commit eat the very click that caused it: the rename
-		// commits, but the new editor never opens and the user has to click again.
-		// (The pre-#303 gate was harmless only because nothing used to commit on
-		// blur.) The switch-commit branch below is likewise only reachable when no
-		// blur preceded the click — a programmatic/synthetic open — which is why
-		// it must not assume it is the only commit path.
 		if (reorderPending || removePending) return;
-		// #303 [DECISION-Mihkel, 2026-09-09, via Gama]: starting a rename on
-		// ANOTHER section used to silently overwrite the open edit — no write,
-		// the typed text evaporating. Ruling (b) removes that discard: commit
-		// the outgoing row first, through the same `submitRename()` guards blur
-		// and the reload-reset commit reuse (never a parallel writer) — it
-		// re-derives `id`/`name` from live state itself, so nothing here needs
-		// to name the outgoing row.
-		//
-		// `submitRename` runs every guard AND `renamingSectionId = null`
-		// SYNCHRONOUSLY, before its first `await` — so the moment this call
-		// returns, a still-non-null `renamingSectionId` means it REFUSED (another
-		// write holds the floor, or the value is blank). Reassigning below would
-		// then discard text the user typed, which is exactly what ruling (b)
-		// forbids — so leave the outgoing editor alone and do not arm the new row.
-		// `refocus: false` — the new editor's own autofocus effect (below) owns
-		// focus now; the settle must not yank it back to the row just committed.
 		if (renamingSectionId !== null && renamingSectionId !== node.id) {
 			void submitRename({ refocus: false });
 			if (renamingSectionId !== null) return;
@@ -3294,73 +1471,15 @@
 	}
 
 	async function submitRename(opts?: {
-		// #303 — blur's own reconciliation ("decide-and-pin", RED's exact pins):
-		// a blank value has nothing real to lose, a value equal to the section's
-		// CURRENT name has nothing to write — either way there is nothing to
-		// COMMIT, so the editor closes silently (no write, no error, no
-		// announcement). This differs from Enter/section-switch/collective-switch,
-		// which keep the pre-#303 blank refusal (stays open — the user is still
-		// IN the field there, unlike blur where they have already left it).
-		// Default false = every non-blur trigger.
 		blurTrigger?: boolean;
-		// #303 — Enter's `finally` unconditionally refocuses the trigger the user
-		// was just in (their own input unmounted under them — WCAG 2.4.3). Every
-		// trigger that puts focus somewhere else on the user's behalf — blur
-		// (they already moved focus away; "BLUR COMMIT DOES NOT STEAL FOCUS"),
-		// section-switch (the NEW row's input takes it), the reload-reset commit
-		// (the whole tree is gone) — must NOT yank it back. Default true = Enter's
-		// existing, unchanged contract.
 		refocus?: boolean;
-		// #303 THE GENERATION HAZARD (research-303, source-confirmed) — see the
-		// reload `reset` callback above for the full account. `routeLoad.ts` bumps
-		// `generation` BEFORE calling that callback, so a commit fired FROM it
-		// must not read `routeLoad.generation` live: that would capture the
-		// INCOMING collective's generation and its own settle-guard below would
-		// never trip as superseded. Every other trigger fires before any bump has
-		// happened this cycle, so the default (read live, at call time) is
-		// correct for them.
 		generation?: number;
 	}): Promise<void> {
 		const blurTrigger = opts?.blurTrigger ?? false;
 		const refocus = opts?.refocus ?? true;
 		const id = renamingSectionId;
-		if (id === null) return; // nothing armed — every trigger's no-op case
+		if (id === null) return;
 		const name = renameValue.trim();
-		// #155/S4 review F1 — another structural write is outstanding (a reorder or
-		// reparent started on a NEIGHBOURING row, which stays live while this input
-		// is open). Refuse — nothing written, the input stays open exactly as it
-		// was, for the user to retry once it clears or Escape out of — never a
-		// silent discard of what they typed. #303: this refusal takes priority
-		// over every trigger's own reconciliation below, blur's included — "the
-		// refused rename stays open — its text is not discardable" (RED's pin).
-		//
-		// `pendingRemoveId !== null` joins `structuralWritePending` here (#303).
-		// Plainly, without dressing it up: an armed-but-unconfirmed remove HOLDS
-		// THE FLOOR, so EVERY rename trigger refuses while it is armed — blur and
-		// Enter alike, whichever row the remove is armed on. (#303 review F2
-		// struck the original justification, which claimed `armRemove`'s
-		// confirm-button autofocus is what blurs the open input: that is
-		// happy-dom's ordering only. A browser fires the input's blur on
-		// MOUSEDOWN, before `armRemove` runs at all.)
-		//
-		// Why keep it rather than let the rename commit: `pendingRemoveId` means
-		// the user has a confirm/cancel pair on screen waiting for an answer, and
-		// both of those buttons are `disabled={structuralWritePending}`. Letting
-		// blur (or Enter) start a rename write under an armed pair would disable
-		// the answer the user is reaching for — the same click-swallow F1 removed
-		// from the rename trigger, but on a control that cannot simply be
-		// relaxed, since confirming IS a write. Refusing is the cheap side:
-		// nothing is written and nothing is discarded — the input stays open with
-		// its text, exactly the `structuralWritePending` refusal's shape — and
-		// `armRemove`'s own success/cancel path clears `pendingRemoveId`, so it
-		// only ever blocks for as long as the pair is genuinely on screen.
-		// Pinned by "AN ARMED-BUT-UNCONFIRMED DELETE HOLDS THE FLOOR" in
-		// page.roster-rename-abandon-commits.spec.ts.
-		// #434 slice 6 review F1/F2 — offline joins the two refusals above, and
-		// inherits their exact shape: nothing written, nothing discarded, the input
-		// stays open with its text for a retry once the signal is back. It is
-		// checked BEFORE blur's own reconciliation for the same reason
-		// `structuralWritePending` is — a refusal is not a commit decision.
 		if (structuralWritePending || pendingRemoveId !== null || isOffline) return;
 		if (blurTrigger) {
 			const original = findSectionNode(sections, id)?.name ?? '';
@@ -3371,8 +1490,6 @@
 				return;
 			}
 		} else if (!name) {
-			// Empty name — same "nothing written" refusal as a blank create; the
-			// input just stays open for the user to fix or Escape out of.
 			return;
 		}
 		const cfg = currentCfg;
@@ -3381,11 +1498,6 @@
 			renameError = { id, name };
 			return;
 		}
-		// #155/S4 review F1 — the collective-switch guard `performReparent` carries,
-		// for the same reason: a reconcile resolving after a switch must not clobber
-		// the newer collective's tree. #303 — `opts.generation` lets the
-		// reload-reset commit above pass its PRE-bump snapshot explicitly instead
-		// of this live read (see the generation-hazard comment on the parameter).
 		const g = opts?.generation ?? routeLoad.generation;
 		const before = sections;
 		renamePending = true;
@@ -3393,51 +1505,23 @@
 		sections = renameSectionNode(sections, id, name);
 		try {
 			await renameSection(cfg, id, name);
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			renameStatus = m.roster_section_renamed({ name });
 		} catch (e) {
 			console.error('roster: section rename failed', id, e);
-			// #155/S4 review F1 — re-derive from the server rather than blind-
-			// restoring a pre-write snapshot (the #98/F3 reconcile `performReorder`
-			// and `performReparent` already use). `renameSection` is a replace, i.e.
-			// GET → POST → DELETE: a rejection can leave the old and the new value
-			// BOTH present server-side, which the snapshot cannot represent either.
-			// The snapshot survives only as the fallback for when the refetch ALSO
-			// fails.
 			try {
 				const fresh = await listSections(cfg);
-				if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+				if (g !== routeLoad.generation) return;
 				sections = fresh;
 			} catch (refetchError) {
 				console.error('roster: section refetch after a failed rename failed', refetchError);
 				if (g !== routeLoad.generation) return;
 				sections = before;
 			}
-			if (g !== routeLoad.generation) return; // superseded by a newer collective selection
+			if (g !== routeLoad.generation) return;
 			renameError = { id, name };
 		} finally {
-			// Flag-clear only, generation-guarded (#297): an in-flight rename
-			// superseded by a newer collective selection must not clear
-			// `renamePending` for a tree it no longer belongs to — that would
-			// re-enable the NEW collective's structural controls mid-write.
 			if (g === routeLoad.generation) renamePending = false;
-			// The focus restoration below stays UNCONDITIONAL WITHIN ITSELF (never
-			// generation-gated): the rename input unmounts the instant
-			// `renamingSectionId` cleared above — same WCAG 2.4.3 concern
-			// `armRemove`/`disarmRemove` already carry on this page — so on every
-			// SUPERSEDED-OR-NOT settle of an Enter-triggered commit, the input is
-			// already gone and focus must land back on the trigger that opened it
-			// rather than drop to <body>. An early `return` above would both skip
-			// this restoration and discard a pending return/throw from the
-			// `try`/`catch` — gate the write, never the block.
-			//
-			// #303 — `refocus` (not generation) is the gate that changed: Enter's
-			// own trigger IS where focus belongs, but blur ("BLUR COMMIT DOES NOT
-			// STEAL FOCUS" — the user already moved focus elsewhere deliberately),
-			// section-switch (the NEW row's input owns it) and the reload-reset
-			// commit (the whole tree is gone) all pass `refocus: false` — stealing
-			// focus back to a row the settle finished committing, out from under
-			// wherever the user or the next editor already put it, is a focus trap.
 			if (refocus) {
 				await tick();
 				document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
@@ -3446,9 +1530,6 @@
 	}
 
 	function onRenameKeydown(event: KeyboardEvent): void {
-		// Never let the rename input's own keys reach the row's grab/reorder
-		// keydown machine (Space/Enter grab, arrows move, Escape cancel-grab) —
-		// the input has its own, incompatible, meaning for every one of those.
 		event.stopPropagation();
 		if (event.key === 'Enter') {
 			event.preventDefault();
@@ -3459,8 +1540,6 @@
 		}
 	}
 
-	// Auto-focus + select the input the instant rename mode opens, same
-	// contract as the page-level create form's name input.
 	$effect(() => {
 		if (renamingSectionId !== null && renameInputEl) {
 			renameInputEl.focus();
@@ -3468,108 +1547,48 @@
 		}
 	});
 
-	// Drag source, tracked between dragstart and drop. #99/TS.5 — now `$state`
-	// (was a plain variable, read only at drop time): the drag handle's
-	// `aria-grabbed` and the sibling headers' `aria-dropeffect` both need to
-	// reflect it live, in the DOM, the instant a drag starts/ends — not just at
-	// the moment of drop.
 	let draggedSectionId = $state<string | null>(null);
 
-	// TU.2/#110 (finding #11) — the section currently under the drag, native
-	// path only (`handleDragOver` below); the touch long-press path already has
-	// its own equivalent (`touchOverId`). Drives the dashed drop-target hint in
-	// `sectionGroup`'s `showDropIndicator`. Cleared on dragend AND on drop —
-	// synthetic test drops don't always fire a trailing dragend, so both paths
-	// own the clear (see `handleDragEnd`/`handleDrop`).
 	let dragOverId = $state<string | null>(null);
 
-	// F1 code-review fix (#98 review): a dragstart handler MUST populate the drag
-	// data store. Firefox refuses to START a drag session at all when the store is
-	// left empty — dragstart fires, then no dragover/drop ever follows, so the
-	// whole drop path was dead there. `draggedSectionId` stays the source of
-	// truth on drop — it survives the cross-handler hop just as it did before;
-	// `setData` is here to satisfy the browser's drag-initiation precondition,
-	// not to carry state.
 	function handleDragStart(id: string, event: DragEvent): void {
 		draggedSectionId = id;
-		dragOverId = null; // a fresh drag owns its own hover trail, not a stale one
+		dragOverId = null;
 		if (event.dataTransfer) {
 			event.dataTransfer.setData('text/plain', id);
 			event.dataTransfer.effectAllowed = 'move';
 		}
 	}
 
-	// F1 code-review fix (#98 review): `dragend` ALWAYS fires — including on an
-	// aborted drag (Esc, or a release outside any drop zone), where `drop` never
-	// does. Without it `draggedSectionId` outlived its drag and stayed live
-	// forever, arming the next drop that reached a header with a stale source id.
 	function handleDragEnd(): void {
 		draggedSectionId = null;
-		dragOverId = null; // TU.2/#110 finding #11 — no stale hint after an aborted drag
+		dragOverId = null;
 	}
 
 	function handleDragOver(id: string, event: DragEvent): void {
-		// F1 code-review fix (#98 review): accept the drop ONLY while one of OUR
-		// section handles is being dragged. `preventDefault()` is what MAKES an
-		// element a drop zone, so calling it unconditionally turned every collapsed
-		// admin header into a drop target for ANY drag — a file, a selection, a link
-		// from another window — and the resulting `drop` then reordered against
-		// whatever `draggedSectionId` happened to hold. Bail BEFORE preventDefault:
-		// a foreign drag must never be accepted as a drop in the first place.
 		if (draggedSectionId === null) return;
-		// Permits the drop in real browsers (a DragEvent target is not a drop
-		// zone by default); harmless no-op under the test harness's synthetic events.
 		event.preventDefault();
-		// Move cursor rather than the default copy affordance.
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		// TU.2/#110 (finding #11) — this header is now the drop-target hint's
-		// home; the binding (`ondragover={acceptsDrop ? ... : undefined}`) already
-		// restricts calls here to valid sibling targets, so `id` is always a legal
-		// hover target.
 		dragOverId = id;
 	}
 
-	// #110 review F4 — the hint has to LEAVE when the cursor does. `dragOverId` was
-	// only ever cleared on dragstart/dragend/drop, so moving off a sibling header
-	// into a non-target area (the gap between groups, a member row, the page
-	// margin) left the dashed line pinned to the last hovered header for the rest
-	// of the drag — promising a landing slot a release right there would not
-	// produce. Guarded on the id: `dragleave` on the header being left fires AFTER
-	// `dragenter`/`dragover` on the header being entered, so an unguarded clear
-	// would blank a hint that had just legitimately moved.
 	function handleDragLeave(id: string, event: DragEvent): void {
 		if (dragOverId !== id) return;
-		// `dragleave` BUBBLES, so a pointer travelling between this header's own
-		// descendants (the toggle button, the name span, the drag handle) reports
-		// one too. Only a leave whose destination is OUTSIDE the header row counts
-		// — otherwise the hint flickers off and back on across every internal hop.
-		// (`relatedTarget` is null when the pointer leaves for nothing, and under
-		// the synthetic events of the test harness; both mean "gone".)
 		const row = event.currentTarget as HTMLElement | null;
 		const to = event.relatedTarget as Node | null;
 		if (row && to && row.contains(to)) return;
 		dragOverId = null;
 	}
 
-	/** The shared reorder computation behind BOTH pointer paths (native HTML5 drop
-	 *  and the touch long-press drag below): "the dragged section takes the drop
-	 *  target's ORIGINAL position". Silently does nothing for a non-sibling target
-	 *  (a sub-section dropped on a top-level header is a STRUCTURAL move, not an
-	 *  order change — #98) or a self-drop. */
 	function dropOnto(fromId: string, targetId: string): void {
 		if (!fromId || fromId === targetId) return;
 
-		// #152 review F1 — the RENDERED sibling group (see `visibleSiblingsOf`):
-		// a foreign collective's root is not a slot the pointer can land on
-		// either, and must never end up in the `reorderSections` payload.
 		const siblingNodes = visibleSiblingsOf(fromId);
 		if (!siblingNodes) return;
 		const siblingIds = siblingNodes.map((n) => n.id);
 		const targetIndex = siblingIds.indexOf(targetId);
 		if (targetIndex === -1) return;
 
-		// Drop it back in at `targetId`'s pre-removal index (clamped to the
-		// shortened array's length so a drop past the end still lands last).
 		const withoutFrom = siblingIds.filter((id) => id !== fromId);
 		const insertAt = Math.min(targetIndex, withoutFrom.length);
 		const afterIds = [...withoutFrom.slice(0, insertAt), fromId, ...withoutFrom.slice(insertAt)];
@@ -3579,57 +1598,33 @@
 	function handleDrop(targetId: string, event: DragEvent): void {
 		const fromId = draggedSectionId;
 		draggedSectionId = null;
-		dragOverId = null; // TU.2/#110 finding #11 — the hint doesn't outlive the drop
-		// Backstop only, now that `handleDragOver` refuses to accept foreign drags:
-		// no live internal drag → not our drop, so don't even swallow the browser's
-		// default handling of it.
+		dragOverId = null;
 		if (!fromId) return;
 		event.preventDefault();
 		dropOnto(fromId, targetId);
 	}
 
-	// F2 code-review fix (#98 review): TOUCH drag-reorder. Native HTML5 `draggable`
-	// is a POINTER-ONLY protocol — a long-press on a `draggable="true"` element does
-	// not synthesise `dragstart` on Android Chrome or iOS Safari — so on a page this
-	// mobile-shaped (`max-w-md`) the drag half of #98's "works on mobile (long-press)
-	// and desktop" was simply absent. This is the pointer-event twin of the native
-	// path: long-press to pick up, move to hit-test sibling headers, release to drop.
-	// Only the INPUT layer is new — it funnels into the same `dropOnto` the native
-	// drop does, so both paths share one set of reorder semantics.
-	//
-	// Mouse pointers are deliberately EXCLUDED: the native path already owns them
-	// (and its `dragstart` would otherwise race this one on the same gesture).
 	const LONG_PRESS_MS = 400;
-	/** Finger drift (px) that cancels a pending long-press — that gesture was a scroll. */
 	const LONG_PRESS_SLOP_PX = 10;
 
-	// Active touch drag (both `$state` — unlike `draggedSectionId` these DO drive a
-	// render: the picked-up handle and the hovered target both need an affordance,
-	// since a touch drag has no browser-drawn drag image).
 	let touchDragId = $state<string | null>(null);
 	let touchOverId = $state<string | null>(null);
-	// Pending-press bookkeeping — read at gesture time, never rendered.
 	let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 	let pressOrigin: { x: number; y: number } | null = null;
 	let pressHandle: HTMLElement | null = null;
 	let pressPointerId: number | null = null;
 
-	/** Drop every trace of an in-progress or pending touch drag. Idempotent — it is
-	 *  the single teardown for success, cancel, abort and pointer loss alike. */
 	function endTouchDrag(): void {
 		if (longPressTimer !== null) {
 			clearTimeout(longPressTimer);
 			longPressTimer = null;
 		}
 		if (pressHandle && pressPointerId !== null) {
-			// Releasing an uncaptured pointer throws in some engines — the capture is
-			// best-effort (touch pointers are implicitly captured anyway).
 			try {
 				if (pressHandle.hasPointerCapture?.(pressPointerId)) {
 					pressHandle.releasePointerCapture(pressPointerId);
 				}
 			} catch {
-				/* nothing to release */
 			}
 		}
 		pressOrigin = null;
@@ -3639,21 +1634,7 @@
 		touchOverId = null;
 	}
 
-	/** Hit-test: which SECTION group's header is under this point, if any. Returns
-	 *  the innermost match (sub-sections render nested inside their parent's
-	 *  `<section>`), and never the Unassigned pseudo-group — it is not a section
-	 *  entity and always sorts last (#98). */
 	function sectionIdUnderPointer(x: number, y: number): string | null {
-		// #155/S2 — arrange mode has no `section-group-*` wrapper at all (its
-		// ROWS are the drop target, not a handle's containing group), so the
-		// touch hit test also recognises `arrange-row-*`.
-		// #205 review F3 — …and `data-drop-row`, the arrange row's LAYOUT wrapper.
-		// The rename activator is a SIBLING of `arrange-row-*`, not a descendant,
-		// so once it grew to cover the name column a finger over it resolved to
-		// null here — `touchOverId` dropped mid-gesture and the release was
-		// discarded. The wrapper spans the whole visual row (row + action
-		// cluster) and carries the same id, which is also where the native
-		// `ondrop` now lives, so both pointer paths agree on the target.
 		const under = document.elementFromPoint?.(x, y);
 		const match =
 			under?.closest(
@@ -3669,17 +1650,9 @@
 	}
 
 	function handlePointerDown(id: string, event: PointerEvent): void {
-		if (event.pointerType === 'mouse') return; // the native dnd path owns mouse
-		if (structuralWritePending) return; // same in-flight refusal as `draggable="false"`
+		if (event.pointerType === 'mouse') return;
+		if (structuralWritePending) return;
 		endTouchDrag();
-		// Derived from `target`, not `currentTarget`: Svelte 5 DELEGATES pointer
-		// events from the root, so `currentTarget` is a patched property rather than
-		// the real one — `closest` off the actual target is the version that cannot
-		// be wrong.
-		// #155/S2 — arrange mode has no `section-drag-handle-*`; its touch pickup
-		// zone is the narrow `arrange-grip-*` bar at the head of each row (review
-		// F4 — the row itself keeps `touch-action: pan-y` so the list still
-		// scrolls under a finger, so only the grip can start a drag).
 		const handle = (event.target as HTMLElement | null)?.closest?.(
 			'[data-testid^="section-drag-handle-"], [data-testid^="arrange-grip-"]'
 		) as HTMLElement | null;
@@ -3694,22 +1667,18 @@
 			try {
 				handle.setPointerCapture(pressPointerId as number);
 			} catch {
-				/* pointer already gone — the implicit touch capture still routes moves here */
 			}
 		}, LONG_PRESS_MS);
 	}
 
 	function handlePointerMove(event: PointerEvent): void {
 		if (touchDragId === null) {
-			// Still in the long-press window: drift past the slop means the user is
-			// scrolling, not picking a section up.
 			if (longPressTimer === null || !pressOrigin) return;
 			const dx = event.clientX - pressOrigin.x;
 			const dy = event.clientY - pressOrigin.y;
 			if (Math.hypot(dx, dy) > LONG_PRESS_SLOP_PX) endTouchDrag();
 			return;
 		}
-		// Picked up — this gesture is a drag now, not a scroll.
 		event.preventDefault();
 		touchOverId = sectionIdUnderPointer(event.clientX, event.clientY);
 	}
@@ -3717,53 +1686,19 @@
 	function handlePointerUp(event: PointerEvent): void {
 		const fromId = touchDragId;
 		if (fromId === null) {
-			endTouchDrag(); // a plain tap (or an abandoned press) — nothing to drop
+			endTouchDrag();
 			return;
 		}
-		// Prefer the release point; fall back to the last hovered header for engines
-		// that report a released pointer as over nothing.
 		const targetId = sectionIdUnderPointer(event.clientX, event.clientY) ?? touchOverId;
 		endTouchDrag();
 		if (targetId) dropOnto(fromId, targetId);
 	}
 
-	// #150 — the up/down arrow buttons that used to live here (`reorderButton`/
-	// `moveSection`) are gone; the drag handle below is now the only reorder
-	// input. That leaves this page with NO keyboard-operable reorder path (the
-	// handle is deliberately `tabindex="-1"`, see the drag handle rendering) —
-	// an open a11y gap, not a design decision made here. Tracked in #152:
-	// restore a keyboard path on the handle itself (roving tabindex +
-	// ArrowUp/ArrowDown + Space to grab), reusing `performReorder` and the
-	// `roster-reorder-status` live region, which already announce the outcome.
 
-	// #152 — keyboard section reorder on the drag handle (WCAG 2.1.1). A
-	// SEPARATE input path from the native/touch drag handlers above (those are
-	// untouched) that funnels its own commit through the SAME `performReorder`
-	// write seam and the same `roster-reorder-status` live region, so a write —
-	// drag, touch, or keyboard — is always reconciled and announced identically.
-	//
-	// `grabbedSectionId` is this state machine's own flag (idle ⇄ grabbed),
-	// independent of the drag path's `draggedSectionId` — a keyboard grab and a
-	// pointer drag never occur on the same gesture, but nothing here assumes
-	// that; `aria-grabbed` on a handle is true when EITHER path holds it (see
-	// the handle's template below).
 	let grabbedSectionId = $state<string | null>(null);
-	// Non-reactive — the pre-grab sibling order, snapshotted once at grab time
-	// so Escape can restore it exactly regardless of how many provisional
-	// moves happened in between. Never drives a render on its own.
 	let grabSiblingIds: string[] | null = null;
-	// Non-reactive — true only for the instant a PROVISIONAL move is re-homing
-	// focus onto the moved handle. Reordering the tree MOVES that handle's
-	// element in the DOM, which blurs it; `handleHandleBlur` below must not read
-	// that as the user leaving the control (see #152 review F2).
 	let grabRefocusPending = false;
 
-	// Roving tabindex — one handle in the Tab order at a time.
-	// `reorderableHandleIds` walks the SAME collapsed/expanded shape the
-	// template renders (a node contributes its own handle when COLLAPSED, else
-	// its children are walked instead of it — mirrors `canReorder`/`isExpanded`
-	// in `sectionGroup` exactly), so this is always "every handle actually on
-	// screen", in document order.
 	const reorderableHandleIds = $derived.by(() => {
 		if (admin !== 'admin') return [] as string[];
 		const ids: string[] = [];
@@ -3777,10 +1712,6 @@
 		return ids;
 	});
 	let rovingHandleId = $state<string | null>(null);
-	/** The handle currently at tabindex="0" — `rovingHandleId` when it still
-	 *  names a rendered handle, else the first rendered one (covers the
-	 *  initial render, and a roving id that vanished from under it via an
-	 *  expand/collapse elsewhere on the page). */
 	const activeHandleId = $derived(
 		rovingHandleId !== null && reorderableHandleIds.includes(rovingHandleId)
 			? rovingHandleId
@@ -3788,25 +1719,13 @@
 	);
 
 	function handleElementFor(id: string): HTMLElement | null {
-		// #155/S2 — arrange mode's whole ROW is a second possible home for this
-		// same refocus lookup; only one of the two ever renders at a time
-		// (`viewMode` picks exactly one UI), so trying both selectors in order
-		// is unambiguous.
 		return (
 			document.querySelector<HTMLElement>(`[data-testid="section-drag-handle-${id}"]`) ??
 			document.querySelector<HTMLElement>(`[data-testid="arrange-row-${id}"]`)
 		);
 	}
 
-	/** IDLE-state ArrowUp/ArrowDown: move the roving tabindex to the
-	 *  next/previous reorderable handle and focus it. Clamps at either end (no
-	 *  wrap) — ArrowUp/ArrowDown while GRABBED is a completely different
-	 *  branch, below, and never calls this. */
 	function moveFocus(direction: 1 | -1): void {
-		// #155/S2 — arrange mode's rows are a SEPARATE reorderable set (every
-		// row is on screen regardless of collapse state, unlike the
-		// collapsed-only `reorderableHandleIds`), so idle-state Up/Down roves
-		// whichever list is actually rendered.
 		const ids = viewMode === 'arrange' ? arrangeReorderableIds : reorderableHandleIds;
 		const currentId = viewMode === 'arrange' ? activeArrangeRowId : activeHandleId;
 		if (currentId === null) return;
@@ -3818,25 +1737,7 @@
 		tick().then(() => handleElementFor(nextId)?.focus());
 	}
 
-	/** Grab ⇄ drop, the one place the toggle lives.
-	 *
-	 *  #152 review F1 — `role="button"` promises ACTIVATION, and activation does
-	 *  not always arrive as a keydown. NVDA/JAWS browse-mode Enter/Space on a
-	 *  role="button" synthesises a `click`; TalkBack/VoiceOver double-tap fires a
-	 *  click; Voice Control / Dragon ("click Reorder Soprano") fires a click.
-	 *  Wiring the toggle to keydown alone left every one of those users with a
-	 *  control that announces itself as a button and then does nothing — the
-	 *  4.1.2 half of the promise unmet even though 2.1.1 (sighted keyboard) was
-	 *  satisfied. Both `onkeydown` and `onclick` now funnel here, so the grab
-	 *  state machine has exactly one implementation.
-	 *
-	 *  Grab is refused while `reorderPending` (#4 — no new grab over an
-	 *  outstanding write). Drop commits through `performReorder` — the SAME seam
-	 *  the drag path writes through — and only when the order actually changed;
-	 *  a drop back in place writes nothing. */
 	async function toggleGrab(node: SectionNode): Promise<void> {
-		// Belt-and-braces, same guard `handleHandleKeydown` applies: a handle that
-		// does not own the grab never drives the state machine.
 		if (grabbedSectionId !== null && grabbedSectionId !== node.id) return;
 
 		if (grabbedSectionId === null) {
@@ -3853,7 +1754,6 @@
 		grabbedSectionId = null;
 		grabSiblingIds = null;
 		if (before.length === after.length && before.every((id, i) => id === after[i])) {
-			// Dropped back in place — nothing to write, but still worth saying so.
 			reorderStatus = m.roster_section_dropped({
 				name: node.name,
 				position: after.indexOf(node.id) + 1,
@@ -3861,14 +1761,6 @@
 			});
 			return;
 		}
-		// #152 review F2 — "moved" is the PROVISIONAL word (what an arrow press
-		// announces), "dropped" is the COMMITTED one. `performReorder` announces
-		// `roster_section_moved` for the drag path, where there is no provisional
-		// step and "moved" IS the commit; on this path that string has already
-		// been in the live region since the arrow press, so re-announcing it
-		// would make "saved" indistinguishable from "not saved yet". Only a write
-		// that actually landed earns the overwrite — a failure leaves
-		// `performReorder`'s own error handling (role="alert" + refetch) to speak.
 		const wrote = await performReorder(before, after, node.id);
 		if (!wrote) return;
 		const committed = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? after;
@@ -3879,45 +1771,11 @@
 		});
 	}
 
-	/** The keyboard state machine for one handle.
-	 *
-	 *  Idle (`grabbedSectionId === null`): Space/Enter grabs (refused while
-	 *  `reorderPending`); ArrowUp/ArrowDown rove focus between handles.
-	 *
-	 *  Grabbed: ArrowUp/ArrowDown move the section one SIBLING slot per press
-	 *  — PROVISIONAL (the local tree reorders, focus follows the moved handle,
-	 *  the move is announced, but nothing is written yet), clamped at either
-	 *  end; Space/Enter drops (`toggleGrab`) — commits through `performReorder`
-	 *  (the SAME write seam and `roster-reorder-status` region the drag path
-	 *  uses) only when the order actually changed, a no-op drop writes nothing,
-	 *  and the committed drop is announced with its OWN wording so "saved"
-	 *  never sounds like the provisional "moved" (#152 review F2); Escape
-	 *  cancels — restores the pre-grab order from `grabSiblingIds`, announces,
-	 *  never writes.
-	 *
-	 *  `visibleSiblingsOf` is the exact helper `dropOnto` (the drag path) also
-	 *  uses, so a keyboard move can never escape its own sibling group (a
-	 *  sub-section's parent's `children`, or the top-level list AS RENDERED —
-	 *  #152 review F1) — the Unassigned pseudo-group is never reachable either
-	 *  way, since it isn't part of the `sections` tree `siblingsOf` walks. */
 	async function handleHandleKeydown(node: SectionNode, event: KeyboardEvent): Promise<void> {
-		// #155/S3 review F1 — only a keydown on the handle ITSELF drives this state
-		// machine; one from a descendant control is that control's business. The
-		// idle branch below `preventDefault()`s Space/Enter, which would SUPPRESS a
-		// nested control's own native activation — a keyboard user pressing it
-		// would grab the row instead (WCAG 2.1.1 / predictable activation), and
-		// ArrowUp/ArrowDown would rove focus off it.
-		// The indent/unindent buttons no longer rely on this: review R2/F1 moved
-		// them OUT of the row's subtree entirely (they are siblings now), so
-		// nothing they emit reaches here in the first place. The guard stays as
-		// belt-and-braces, and it covers the grouped-view handle for free.
 		if (event.target !== event.currentTarget) return;
 
 		const key = event.key;
 
-		// #152 review F2 (belt-and-braces) — the grabbed branch below assumes it
-		// is acting on the grabbed section. Never let a handle that does NOT own
-		// the grab drive the state machine, whatever put focus there.
 		if (grabbedSectionId !== null && grabbedSectionId !== node.id) return;
 
 		if (grabbedSectionId === null) {
@@ -3938,21 +1796,15 @@
 			return;
 		}
 
-		// Grabbed — every branch below acts on THIS node's own section, which is
-		// always the grabbed one: focus follows the grab throughout, losing focus
-		// CANCELS it (`handleHandleBlur`), and the guard at the top of this
-		// function refuses a handle that does not own the grab either way.
 		if (key === 'ArrowUp' || key === 'ArrowDown') {
 			event.preventDefault();
 			const siblingIds = visibleSiblingsOf(node.id)?.map((n) => n.id) ?? [];
 			const idx = siblingIds.indexOf(node.id);
 			const nextIdx = idx + (key === 'ArrowUp' ? -1 : 1);
-			if (idx === -1 || nextIdx < 0 || nextIdx >= siblingIds.length) return; // clamp, no wrap
+			if (idx === -1 || nextIdx < 0 || nextIdx >= siblingIds.length) return;
 			const reordered = [...siblingIds];
 			reordered.splice(idx, 1);
 			reordered.splice(nextIdx, 0, node.id);
-			// The reorder relocates this handle's element, which blurs it — see
-			// `grabRefocusPending`/`handleHandleBlur` (#152 review F2).
 			grabRefocusPending = true;
 			sections = applySiblingOrder(sections, reordered);
 			reorderStatus = m.roster_section_moved({
@@ -3969,39 +1821,16 @@
 			return;
 		}
 
-		// #155/S3 — ArrowRight indents, ArrowLeft unindents, both IMMEDIATE
-		// commits (unlike Up/Down above, which stay provisional until drop): a
-		// reparent changes the sibling GROUP itself, so `grabSiblingIds` (the
-		// restore snapshot Escape/blur would replay) no longer describes
-		// anything meaningful afterwards. The grab therefore ENDS with the
-		// commit — same guards as the buttons (`prevSiblingId`/`node.parentId`),
-		// and a refused move (no previous sibling / already top-level) writes
-		// nothing and LEAVES the grab exactly as Up/Down's own clamp does.
-		//
-		// #264 review F3 — the DAMAGED guard belongs here too, not only on the
-		// buttons and `draggable`. The stated choice is "no arrange affordance on
-		// the damaged node", and this keyboard seam funnels into the SAME
-		// `performReparent`. Without it, ArrowRight on a damaged row that has any
-		// preceding top-level sibling (a damaged node is forced to `parentId:
-		// null`, so it always sits at top level and `prevSiblingId` alone does not
-		// refuse it) reaches `reparentSection`, which correctly throws
-		// `SectionParentDamagedError` and writes nothing — but the user has
-		// already been given the optimistic patch, the generic "couldn't be
-		// saved" banner and a refetch, i.e. a failed-write experience where the
-		// promise was a disabled control. ArrowLeft is refused for the same
-		// reason ASSERTED rather than left safe-by-accident (its `parentId ===
-		// null` guard happens to cover every damaged node today; that is a
-		// property of the forcing, not of this branch).
 		if (key === 'ArrowRight' || key === 'ArrowLeft') {
 			if (findSectionNode(sections, node.id)?.parentDamaged === true) {
 				event.preventDefault();
-				return; // damaged data — no reparent affordance at all; grab stays
+				return;
 			}
 		}
 
 		if (key === 'ArrowRight') {
 			event.preventDefault();
-			if (prevSiblingId(node.id) === null) return; // guard — grab stays
+			if (prevSiblingId(node.id) === null) return;
 			grabbedSectionId = null;
 			grabSiblingIds = null;
 			await handleIndent(node);
@@ -4010,7 +1839,7 @@
 
 		if (key === 'ArrowLeft') {
 			event.preventDefault();
-			if (node.parentId === null) return; // guard — grab stays (already top-level)
+			if (node.parentId === null) return;
 			grabbedSectionId = null;
 			grabSiblingIds = null;
 			await handleUnindent(node);
@@ -4031,11 +1860,6 @@
 		}
 	}
 
-	/** Abandon the grab on `node`: the pre-grab sibling order comes back, the
-	 *  state machine returns to idle, and the cancellation is announced. NEVER
-	 *  writes — a provisional move that is cancelled must leave no trace on the
-	 *  server. State is cleared BEFORE the tree is patched so the DOM churn that
-	 *  patch causes can't re-enter this through `handleHandleBlur`. */
 	function cancelGrab(node: SectionNode): void {
 		const restore = grabSiblingIds;
 		grabbedSectionId = null;
@@ -4044,89 +1868,25 @@
 		reorderStatus = m.roster_section_move_cancelled({ name: node.name });
 	}
 
-	/** #152 review F2 — a grab must not outlive the handle's focus.
-	 *
-	 *  Without this, Tab (or any other focus move) left `grabbedSectionId` set
-	 *  and the PROVISIONAL, unwritten reorder on screen: this page never
-	 *  refetches, so the order shown disagreed with the server until the next
-	 *  full load — the same "the screen lies" failure `performReorder`'s #98/F3
-	 *  comment exists to prevent — and the dangling grab then hijacked the next
-	 *  handle the user pressed an arrow on, on an element whose `aria-grabbed`
-	 *  read "false".
-	 *
-	 *  Cancels exactly like Escape, minus the focus restore: focus has
-	 *  legitimately moved on, and dragging it back would trap the user.
-	 *  `grabRefocusPending` excludes the blur a PROVISIONAL move causes by
-	 *  relocating the grabbed handle in the DOM — that one is ours, not the
-	 *  user's. */
 	function handleHandleBlur(node: SectionNode): void {
 		if (grabRefocusPending) return;
 		if (grabbedSectionId !== node.id) return;
 		cancelGrab(node);
 	}
 
-	// ── #155/S2 — arrange-mode reorder ──────────────────────────────────────
-	//
-	// The whole ARRANGE ROW is now the drag target (GH#155: "Whole row is the
-	// drag target (no separate handle needed)"), for BOTH pointer paths
-	// (native dragstart/dragover/drop, and the touch long-press twin) and for
-	// the keyboard grab/move/drop/cancel machine #152 shipped. None of
-	// `toggleGrab`/`handleHandleKeydown`/`cancelGrab`/`handleHandleBlur`/
-	// `handleDragStart`/`handleDragEnd`/`handleDragOver`/`handleDragLeave`/
-	// `handleDrop`/`handlePointerDown`/`handlePointerMove`/`handlePointerUp`
-	// above needed to change to serve rows instead of drag handles — every one
-	// of them already operates purely on a section id/SectionNode and its
-	// SIBLING GROUP (`visibleSiblingsOf`), never on which UI rendered the
-	// control. `findSectionNode(sections, row.id)` is what supplies the
-	// SectionNode arrange rows don't carry themselves (`ArrangeRow` is a
-	// flattened name/depth/count projection, not the tree node).
-	//
-	// "The subtree moves with its grabbed/dragged parent" (S2 point 5) is true
-	// of the WRITE for free: `applySiblingOrder` moves a node's `children`
-	// array along with it, and `arrangeRows` walks the CURRENT tree pre-order,
-	// so the flat list simply reflects wherever the parent landed — no extra
-	// code needed for that half. What follows is the VISUAL half (S2 point 3):
-	// which rows currently belong to whichever section is held, so they can be
-	// shown grouped with it.
 
-	/** Every arrange row is reorderable (unlike the collapsed-only
-	 *  `reorderableHandleIds` above, arrange mode has no expand/collapse gate
-	 *  — the whole tree is always on screen), in the SAME pre-order the list
-	 *  renders in.
-	 *
-	 *  #155/S4 review F3 — EXCEPT the row currently in rename mode, which does
-	 *  not render an `arrange-row-*` element at all (it renders the rename
-	 *  `<input>` block instead — see the template). Leaving it in this list let
-	 *  `activeArrangeRowId` name a row that isn't there, and then EVERY rendered
-	 *  row sat at `tabindex="-1"`: the reorder widget lost its roving tab stop
-	 *  entirely and was unreachable by Tab for as long as the input stayed open
-	 *  (there is no blur-close, so that is indefinitely). Excluding it here is
-	 *  what makes the tab stop fall through to a row that actually renders —
-	 *  the same "still-rendered-or-first" contract `activeHandleId` holds for
-	 *  the collapsed view. */
 	const arrangeReorderableIds = $derived(
 		arrangeRows.filter((r) => r.id !== renamingSectionId).map((r) => r.id)
 	);
 
-	/** The row currently at tabindex="0" in the arrange list — same
-	 *  still-rendered-or-first-row fallback as `activeHandleId`. */
 	const activeArrangeRowId = $derived(
 		rovingHandleId !== null && arrangeReorderableIds.includes(rovingHandleId)
 			? rovingHandleId
 			: (arrangeReorderableIds[0] ?? null)
 	);
 
-	/** The section currently HELD by whichever input path owns it right now —
-	 *  keyboard grab, a live native drag, or a live touch drag. Only one of
-	 *  the three is ever non-null at once (a keyboard grab and a pointer drag
-	 *  never occur on the same gesture — the same assumption `aria-grabbed`
-	 *  above already makes). */
 	const heldSectionId = $derived(grabbedSectionId ?? draggedSectionId ?? touchDragId ?? null);
 
-	/** Every DESCENDANT id of `heldSectionId` — the rows that visually belong
-	 *  WITH it while it's being moved (S2 point 3: "subtree rows visually
-	 *  grouped with grabbed parent"). Never includes `heldSectionId` itself —
-	 *  that row gets its own `data-grabbed`, not this. */
 	const heldSubtreeIds = $derived.by(() => {
 		const ids = new Set<string>();
 		if (heldSectionId === null) return ids;
@@ -4142,29 +1902,8 @@
 		return ids;
 	});
 
-	/** Sentinel for "the hint belongs AFTER the last arrange row" — a slot, not a
-	 *  section id, so it can never collide with one. */
 	const ARRANGE_DROP_HINT_END = '__end__';
 
-	/** #155/S2 review F2 — WHERE the dashed landing hint goes in the ARRANGE list,
-	 *  as the id of the row it renders IMMEDIATELY BEFORE (or the end sentinel).
-	 *  One place computes it, so "one indicator, never two" holds by construction
-	 *  the same way `sectionGroup`'s two-slot `hintBefore` does.
-	 *
-	 *  Why not simply reuse `hintBefore` per row: `sectionGroup` renders the hint
-	 *  around a section's HEADER, and its children live in a nested region. The
-	 *  arrange list is FLAT pre-order — a parent's descendants are rows of the
-	 *  same list, right after it. So the "lands below the target" slot is not
-	 *  after the target's row, it is after the target's whole SUBTREE, otherwise
-	 *  a downward drag onto a parent would draw the hint wedged between that
-	 *  parent and its own children.
-	 *
-	 *  Direction is the same `dropOnto` fact #110 review F1 pinned: the dragged
-	 *  section takes the target's ORIGINAL index, so an UPWARD move (source below
-	 *  the target) lands ABOVE the target and a downward move lands BELOW it.
-	 *  Gated on exactly what the drop itself accepts (live drag, distinct target,
-	 *  same visible sibling group), so the hint and the `bg-ink-5` target tint can
-	 *  never disagree about whether a drop will act. */
 	const arrangeDropHintBeforeId = $derived.by((): string | null => {
 		if (viewMode !== 'arrange') return null;
 		const fromId = draggedSectionId ?? touchDragId;
@@ -4185,25 +1924,10 @@
 </script>
 
 {#snippet rowInfo(row: RosterRow, showSection: boolean, rowSectionNames: string[])}
-	<!-- #467 — one DATED status line, directly under name + email, BEFORE the
-	     section name. Four display states (absent/invited/expired/joined);
-	     `expired` is display-only, `joined` now RENDERS ("member since
-	     <date>", silent no longer). The read is still the gate (#454, Mihkel
-	     2026-09-22): `joinStateLine` returns undefined — no line at all — for
-	     a row `listJoinStateDetails` omitted (THE WITHHELD-BUCKET TELL,
-	     lib/profile/linkedIdentities.ts) or whose date could not be read
-	     (#467 done-when 3: no guessed line, ever). Shared between the
-	     collapsed card (rendered as this snippet's caller, wrapped in the
-	     activator button) and the non-admin/open-editor callers, so the info
-	     itself is defined exactly once regardless of which state renders it. -->
 	<span data-testid="roster-row-name" class="text-sm text-ink"><RedactedText>{row.name}</RedactedText></span>
 	{#if row.email}
 		<span data-testid="roster-row-email" class="text-xs text-ink-2"><RedactedText>{row.email}</RedactedText></span>
 	{/if}
-	<!-- #467 review F1 — resolved ONCE per row: the guard and the render read
-	     the same answer (the two calls each ran their own `Date.now()`, so an
-	     invite expiring between them could have been tested as live and
-	     rendered as expired). -->
 	{@const line = joinStateLine(row)}
 	{#if line !== undefined}
 		<span
@@ -4221,26 +1945,6 @@
 	{/if}
 {/snippet}
 
-<!-- `groupSectionId` — F2 review fix (#470). In the GROUPED view `groupBySection`
-     emits one row per MEMBERSHIP: a member in Soprano and Alto renders a card
-     under each. Handing every one of those cards her FULL `sectionIds` put all
-     her selects on all her cards (4 selects + 2 [+] for a two-section member,
-     with the same `section-picker-select-<member>-<section>` testid twice in the
-     document). A card belongs to ONE section, so it shows THAT membership and
-     nothing else; the [+] (which adds a membership, not a section-scoped thing)
-     stays on every card. `null` = no group scope — the flat list, where one card
-     is the member's only card and carries all her memberships, and the
-     Unassigned group, where she holds no known section at all.
-
-     Review round 3 (#470) — the scoped list is passed as `renderIds` ONLY, and
-     the member's FULL `sectionIds` goes to `selectedIds`. The picker uses the
-     two for different jobs: `renderIds` decides which selects are drawn here,
-     `selectedIds` is subtracted from every option list. Handing the scoped list
-     to both made a held section that this card does not draw look unheld: Mia's
-     Soprano card offered Alto, choosing it POSTed a `_parent` she already had,
-     and the optimistic `sectionIds` then carried 'sec-alto' twice — a keyed
-     {#each} over duplicate ids throws each_key_duplicate. Verified on the live
-     page by review, pinned by page.roster-picker.spec.ts's option-list suite. -->
 {#snippet memberRow(row: RosterRow, showSection: boolean, groupSectionId: string | null)}
 	{@const rowSectionNames = (row.sectionIds ?? [])
 		.map((id) => sectionNameById.get(id))
@@ -4250,102 +1954,24 @@
 		groupSectionId === null
 			? memberSectionIds
 			: memberSectionIds.filter((id) => id === groupSectionId)}
-	<!-- #302 review F1 — `relative` is what makes the card activator below a
-	     STRETCHED OVERLAY (`absolute inset-0`) rather than a strip of its own:
-	     the whole card area activates while the name/email/chip stay plain,
-	     unwrapped text. `min-h-11` keeps the 44px touch-target floor on the
-	     row itself now that the activator contributes no height of its own
-	     (a name-only row would otherwise fall under it). -->
 	<li
 		data-testid="roster-row-{row.memberId}"
 		class="relative flex min-h-11 flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"
 	>
-		<!-- #302 — name/email/badge/section render exactly once, unconditionally,
-		     as the FIRST children of this <li> regardless of admin tier or
-		     editor state (the #269 widget-detail pin: `roster-row-name` is
-		     `li.firstElementChild` on every row, always — a card activator that
-		     WRAPPED this content would silently break that pin the moment a row
-		     went from non-admin-shaped to admin-shaped). The activator below is
-		     therefore a SEPARATE sibling control, never a wrapper. -->
 		{@render rowInfo(row, showSection, rowSectionNames)}
-		<!-- #302 item 1 — the collapsed card IS the activator now (the ✎ pencil
-		     is retired). The record editor renders inside this same <li>, so a
-		     naive "wrap everything in a button" refactor would nest interactive
-		     controls inside a button (WCAG 4.1.2) the moment it opens — the
-		     arrange-row lesson (below, #152/#205) this page already learned.
-		     The fix mirrors this file's OWN two precedents for
-		     activator-with-nested-editor rather than inventing a third: the
-		     collapsed state and the open state are mutually exclusive
-		     alternatives (button XOR form), swapped by this `{#if}`, never one
-		     wrapping the other. Whole-block gated on `admin` alone — the
-		     contract has NO self-row exclusion (unlike the deactivate block
-		     below, which never lets an admin act on her own row), so the card
-		     activator renders on EVERY row including the admin's own —
-		     deliberately not copy-pasting the `row.personId !== selected?.personId`
-		     guard. -->
 		{#if admin === 'admin' && recordEditorMemberId !== row.memberId}
-			<!-- #262 lesson, now scaled to the whole card: the accessible name is
-			     content-derived (an sr-only action label plus the row's own
-			     name), NEVER a templated aria-label — an aria-label would compute
-			     the SAME literal text for every row (a static i18n string has no
-			     room for `{name}`), leaving a screen reader unable to tell cards
-			     apart. A real `<button>` gives native Enter/Space activation and
-			     tab order for free — no hand-rolled keydown handler needed.
-			     REVIEW F1 — it is a STRETCHED OVERLAY, not a strip. As a
-			     self-sized sibling (`block w-full min-h-11`) it painted as an
-			     empty 44px box BETWEEN the section name and the picker: the only
-			     clickable thing on the row was blank space, and clicking the
-			     member's own name did nothing — "the whole card is active" was
-			     false. `absolute inset-0` over the `relative` <li> above gives
-			     the card its whole area as the hit region while keeping the text
-			     out of the button (so `roster-row-name` stays
-			     `li.firstElementChild`, #269) and keeping the activator free of
-			     nested interactive content (WCAG 4.1.2). The two controls that
-			     can render on a COLLAPSED row — the SectionPicker and an
-			     armed/in-flight deactivate pair — are lifted above the overlay
-			     at their own render sites, but NOT with the same class: the
-			     deactivate pair (and its refusal/failure alerts) uses a bare
-			     `relative`, staying in flow; the SectionPicker uses `absolute
-			     top-1 right-1` (#468 floats it in the card's upper-right corner),
-			     taking its offsets from this same already-`relative` <li>. Copy
-			     the INVARIANT, not either class: be POSITIONED at `z-index: auto`
-			     and be written AFTER this button, so tree order puts you on top —
-			     no z-index, which would make each row a stacking context and trap
-			     the picker's drop-down menu inside it. Which of the two shapes to
-			     copy is a layout question: `absolute` takes the control out of
-			     flow (shrink-to-fit, so keep prose out of it — #468 review F1),
-			     `relative` leaves it in the <li>'s flex column.
-			     Anything else added to a collapsed row needs the same lift, and
-			     must be written after this button, or it becomes unclickable.
-			     The resting border is the affordance the retired ✎ glyph used
-			     to be: an overlay with no box of its own would leave
-			     the card looking inert, so it carries a visible border at rest,
-			     a darker one on hover, and its own focus-visible state (the
-			     button has no other visible box to take the focus ring). -->
 			<button
 				type="button"
 				data-testid="roster-row-card-{row.memberId}"
 				class="absolute inset-0 rounded-md border border-ink-5 text-left hover:border-ink-3 focus-visible:border-ink focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-ink"
 				onclick={() => openRecordEditor(row)}
 			>
-				<!-- #269 — this label is OUT of the contracted surface (the roster-only
-				     scope ruling names the `roster-row-name` span alone); it keeps
-				     naming the member by her PROFILE name even while her row shows a
-				     real one. -->
 				<span class="sr-only">{m.roster_record_edit_label()} <RedactedText>{row.profileName ?? row.name}</RedactedText></span>
 			</button>
 		{/if}
 		{#if admin === 'admin' && recordEditorMemberId === row.memberId}
-			<!-- #268 — the admin member-record editor, open state. -->
 			<div class="mt-1 flex flex-col gap-2">
 				{#if recordEditorLookup?.state === 'damaged'}
-					<!-- (D) #264 — damaged data: loud, refuses to guess. No form
-					     renders; nothing is ever written from here.
-					     #388 — the alert no longer names the member (a capture
-					     marker cannot blank part of a sentence); it carries an
-					     EntuRef to the PERSON instead — duplicate detection is
-					     keyed on personId, and the details to fix live on the
-					     person. -->
 					<p
 						data-testid="roster-record-damaged-{row.memberId}"
 						role="alert"
@@ -4355,8 +1981,6 @@
 						<EntuRef id={row.personId} />
 					</p>
 				{:else if recordEditorLookup !== null}
-					<!-- (B) #222 same-frame idiom: the editor is plain markup INSIDE
-					     this <li>, not a dialog/drawer/overlay. -->
 					<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
 						<RedactedField
 							label={m.roster_record_name_label()}
@@ -4381,8 +2005,6 @@
 							bind:value={recordForm.email}
 							disabled={recordSavingMemberId !== null}
 						/>
-						<!-- #207 — the platform's OWN date picker, never a custom
-						     calendar. -->
 						<RedactedField
 							label={m.roster_record_birthdate_label()}
 							type="date"
@@ -4407,10 +2029,6 @@
 							>
 								{m.roster_record_save()}
 							</button>
-							<!-- Review F3 — cancel stays live while ANOTHER row's write is in
-							     flight: closing this editor writes nothing and cancels nothing
-							     already on the wire, so trapping the admin behind an unrelated
-							     save would be worse than useless. -->
 							<button
 								type="button"
 								data-testid="roster-record-cancel"
@@ -4422,12 +2040,6 @@
 							</button>
 						</div>
 						{#if recordSaveError?.memberId === row.memberId}
-							<!-- (E) failure tells the truth (#253): a plain failure says
-							     nothing was saved; a MemberRecordPartialSaveError gets its
-							     OWN copy naming exactly which fields landed — never the
-							     all-or-nothing message, and never a field VALUE. Typed
-							     values stay in the inputs above either way (they're
-							     `bind:value`d to `recordForm`, untouched by either branch). -->
 							<p data-testid="roster-record-save-error" role="alert" class="text-xs text-red-700">
 								{#if recordSaveError.kind === 'partial'}
 									{m.roster_record_save_partial({
@@ -4450,25 +2062,9 @@
 						{/if}
 					</div>
 				{/if}
-				<!-- #302 item 3 — invite controls, RELOCATED here from the collapsed
-				     row (render-location move only: `handleMintInvite`/
-				     `handleWithdrawInvite`, `inviteActionPending` and every generation
-				     guard behind them are byte-untouched — see the module doc by their
-				     definitions). Same gate shape as before
-				     (`joinStates[row.personId] !== undefined`, admin already
-				     guaranteed true by the enclosing block) — only the badge itself
-				     moved OUT to `rowInfo` above; this is the owner-only control
-				     cluster plus its link/error paragraphs, unchanged otherwise. -->
 				{#if joinStates[row.personId] !== undefined}
 					{@const state = joinStates[row.personId]}
 					{#if ownerTier === 'owner'}
-						<!-- The three controls, `_owner` ONLY (PO ruling — the platform
-						     itself enforces this: the 2026-09-09 admin-cascade probe minted
-						     onto another person as a db-entity `_owner`, HTTP 200; refused as
-						     `_editor`, HTTP 403 "User not in _owner property"). Routed PURELY
-						     off `state` — `kutsu` on a live-link row would be a state-routing
-						     bug, not a case handled here. An editor-admin gets the single
-						     global note below instead of THIS block; see its own comment. -->
 						<div class="flex flex-wrap items-center gap-2">
 							{#if state === 'absent'}
 								<button
@@ -4503,16 +2099,6 @@
 						</div>
 					{/if}
 					{#if inviteLinkByMemberId[row.memberId]}
-						<!-- `kutsu` and `saada uuesti` share this same producer and this same
-						     render — the fresh token IS the deliverable of both. Reuses the
-						     standalone invite page's own copy (`admin_invite_link_label`,
-						     `admin_invite_bearer_warning`) rather than duplicating it: the
-						     bearer-secret risk is identical, this is the same mechanism.
-						     #360 (Mihkel: "lets not show them on screen at no time — copy to
-						     clipboard is enough") — the readonly input holding the composed
-						     URL is GONE. A copy button, InviteSurface's affordance, is the
-						     row's only remaining trigger; the label stays (it still names
-						     what the button copies). -->
 						<p class="text-xs">{m.admin_invite_link_label()}</p>
 						<button
 							type="button"
@@ -4522,10 +2108,6 @@
 						>
 							{m.admin_invite_copy()}
 						</button>
-						<!-- #346 — the confirmation's OWN persistent node, one per row, the
-						     same shape InviteSurface's `invite-copy-status` uses (#345):
-						     mounted with the link panel regardless of `copied`, visible,
-						     reserved min-height, no timer. -->
 						<p
 							data-testid="roster-invite-copy-status-{row.memberId}"
 							role="status"
@@ -4566,39 +2148,7 @@
 				{/if}
 			</div>
 		{/if}
-		<!-- #302 item 3 — deactivate armed-pair, RELOCATED here from the
-		     collapsed row (render-location move only:
-		     `handleDeactivateConfirm`/`armDeactivate`/`disarmDeactivate`,
-		     `deactivatePending` and every #286/#287/#296 generation guard
-		     behind them are byte-untouched). The SELF-ROW ASYMMETRY survives
-		     the shared container on purpose: this gate
-		     (`row.personId !== selected?.personId`, #255 done-when 7) does NOT
-		     merge with the editor's own deliberate no-self-row-exclusion gate —
-		     the editor opens on the admin's own row, but this block still
-		     refuses to render there, exactly as before the move.
-		     ARMED-PAIR EXCEPTION (#286, pinned by
-		     page.roster-deactivate.spec.ts "a SECOND row cannot be armed
-		     mid-flight"): the normal path to this control is the editor
-		     (`recordEditorMemberId === row.memberId`), but an ARMED or
-		     in-flight pair (`pendingDeactivateId === row.memberId`) must stay
-		     MOUNTED even after the admin opens a DIFFERENT row's editor (one
-		     editor open at a time closes this one) — destructive in-flight UI
-		     never silently unmounts out from under its own write. Hence the OR:
-		     the block is NOT nested inside the editor's own `{#if}` above. -->
 		{#if admin === 'admin' && row.personId !== selected?.personId && (recordEditorMemberId === row.memberId || pendingDeactivateId === row.memberId)}
-			<!-- #302 review F1 — `relative` because of the armed-pair exception
-			     directly above: this block CAN render on a collapsed row (armed
-			     or in-flight while another row's editor is open), and on a
-			     collapsed row the card activator is an `absolute inset-0`
-			     overlay covering the whole <li>. Without the lift, confirm and
-			     cancel sit UNDER that overlay and a tap on either would open the
-			     editor instead of firing — the in-flight UI that "never silently
-			     unmounts" would instead be silently unusable. No z-index on
-			     purpose: this and the overlay are both positioned at
-			     `z-index: auto`, so they paint in TREE order and this block,
-			     written after the activator, is already on top; a z-index would
-			     make the row a stacking context and trap the SectionPicker's
-			     drop-down menu inside it. -->
 			<div class="relative mt-1 flex flex-wrap items-center gap-2">
 				{#if pendingDeactivateId === row.memberId}
 					<span class="text-xs text-ink-2">{m.roster_member_deactivate_confirm_prompt()}</span>
@@ -4634,18 +2184,6 @@
 				{/if}
 			</div>
 			{#if pendingDeactivateId === row.memberId && deactivateRefusal?.memberId === row.memberId}
-				<!-- Gama binding: the refusal NAMES THE REMEDY — who holds what role
-				     and where to remove it — never a bare "cannot deactivate" (the
-				     #252 failure in message form).
-				     #286 — gated on `pendingDeactivateId === row.memberId` too (not
-				     `deactivateRefusal.memberId` alone): a disarmed row can never
-				     carry this alert, by construction of the render condition itself,
-				     not merely by `disarmDeactivate` remembering to clear the state
-				     (done-when 4). -->
-				<!-- `relative` for the same reason as the pair above: an armed
-				     row can be collapsed, and text sitting under the full-card
-				     overlay is unselectable and swallows clicks into "open the
-				     editor". -->
 				<p
 					data-testid="member-deactivate-refused-{row.memberId}"
 					role="alert"
@@ -4659,15 +2197,6 @@
 				</p>
 			{/if}
 			{#if pendingDeactivateId === row.memberId && deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'deactivate'}
-				<!-- #255 review F2 — the loud failure, mirroring `removeError`'s alert
-				     over the section groups.
-				     #286 — the pair no longer disarms itself on failure (the #273
-				     lifecycle): it stays ARMED and re-enabled next to this alert for a
-				     direct retry, so the copy's "nothing moved" claim stays honest.
-				     Gated on `pendingDeactivateId === row.memberId` for the same
-				     by-construction reason as the refusal alert above.
-				     #388 — names no member; carries an EntuRef to the MEMBER
-				     entity instead — the stuck record is the membership. -->
 				<p
 					data-testid="member-deactivate-failed-{row.memberId}"
 					role="alert"
@@ -4679,48 +2208,6 @@
 			{/if}
 		{/if}
 		{#if row.ownerIds?.includes(selected?.personId ?? '') && !sectionsError}
-			<!-- #468 — the gate is the member's own `_owner` grant, read off the
-			     entity (`row.ownerIds`, threaded from `listActiveMembers`'s wire read),
-			     NOT an app-computed role: whoever the reader's own person id shows up
-			     for on THIS row may actually move the member (ER-14: a move deletes a
-			     `_parent`, owner-gated — reparenting is unconditionally a delete+add
-			     pair, so owner is the gate for the whole control, not just half of it).
-			     `admin`/`$adminStore` no longer decides this control; its other
-			     consumers on this page are untouched. -->
-			<!-- F2 code-review fix: no section tree → nothing meaningful to pick. Every
-			     select's option list would hold only "(Unassigned)", its sole reachable
-			     action being the destructive clear-all. The section-load-error banner
-			     above already explains the absence; hide the write control rather than
-			     offer one whose options are known-incomplete. -->
-			<!-- #155/S4 review F4 — SCOPE CALL, recorded so code and acceptance text
-			     agree. S4's "collapsed/expanded are display-only — no add/rename/
-			     delete" is about the SECTION-TREE management controls that used to sit
-			     on every section header (drag handle, ✕, and the page-level "+ New
-			     section"); all three moved into Arrange mode. This picker is a
-			     different thing: MEMBER→section ASSIGNMENT, which has no home in
-			     arrange mode at all (arrange renders no member rows), so it stays on
-			     the member row in Expanded view.
-			     #470 — the picker's own inline create entry (`section-picker-new` →
-			     `section-create-form`) is RETIRED; creation lives only in arrange
-			     mode's `roster-new-section`, so S4's wording now holds literally.
-			     `page.roster-arrange-crud.spec.ts`'s STRIP suite asserts the
-			     assignment control's placement explicitly (present in Expanded, absent
-			     in Collapsed where no member rows render) so the choice is visible to
-			     the gate rather than invisible to it. -->
-			<!-- #302 review F1 / #468 — `absolute top-1 right-1` wrapper, floating the
-			     picker upper right on the card (deliberately NO z-index). The picker
-			     renders on every COLLAPSED row an owner may move, where the card
-			     activator is an `absolute inset-0` overlay across the whole <li>;
-			     unlifted, the selects and the [+] would sit under it and a tap meant
-			     for "assign a section" would open the record editor instead. The
-			     enclosing <li> is already `relative` (its containing block for these
-			     offsets — no second positioned wrapper needed); this block and the
-			     overlay are both positioned with `z-index: auto`, so they paint in TREE
-			     order and this block — written after the activator — wins. Same reason
-			     the deactivate block above uses bare `relative`.
-			     The wrapper rather than a prop keeps SectionPicker presentational, and
-			     keeps the roster off the assumption that the component's own root
-			     happens to be positioned. -->
 			<div class="absolute top-1 right-1">
 				<SectionPicker
 					memberId={row.memberId}
@@ -4735,24 +2222,6 @@
 				/>
 			</div>
 			{#if sectionWriteError?.memberId === row.memberId}
-				<!-- F5 code-review fix — the section-write path's loud failure (see
-				     `sectionWriteError` above). role="alert" because it appears with
-				     nothing else on screen necessarily changing (a refused move leaves
-				     the row exactly where it was).
-				     #468 review F1 — this alert is an IN-FLOW child of the <li>, deliberately
-				     OUTSIDE the `absolute top-1 right-1` wrapper above. That wrapper is out of
-				     flow with `right` set and `left: auto`, so its used width is shrink-to-fit
-				     over its contents: the picker's short inline-block trigger. A
-				     full-sentence alert inside it would widen the box to the message's width
-				     the moment a write failed — painting red text across the row's own
-				     name/email (in flow at the left of the same <li>) and visibly dragging the
-				     left-aligned trigger sideways, at the exact moment the user needs the
-				     control to stay put for a retry. In flow here it wraps under the row text
-				     like the deactivate alerts above, and the corner wrapper keeps the
-				     trigger's width. `relative` for the same reason those alerts carry it: an
-				     alert on a COLLAPSED row sits under the full-card `absolute inset-0`
-				     activator, where its text is unselectable and clicks on it fall through to
-				     "open the record editor". -->
 				<p
 					data-testid="section-write-error-{row.memberId}"
 					role="alert"
@@ -4765,10 +2234,6 @@
 	</li>
 {/snippet}
 
-<!-- TU.2/#110 (finding #11) — the dashed landing-position hint. ONE definition
-     rendered from ONE of two slots in `sectionGroup` (above or below the target's
-     header row, per the drag's direction — see `hintBefore`), so "one indicator,
-     never two" holds by construction. -->
 {#snippet dropIndicator()}
 	<div
 		data-testid="section-drop-indicator"
@@ -4780,22 +2245,6 @@
 {#snippet sectionGroup(node: SectionNode)}
 	{@const group = groupById.get(node.id)}
 	{@const isExpanded = expandedIds.has(node.id)}
-	<!--
-		F2 code-review fix: a child's <section> is rendered NESTED inside its
-		parent's (below, `{#each node.children as child}{@render sectionGroup(child)}{/each}`
-		lives INSIDE this same <section>) — so each level's own margin-left ALREADY
-		stacks on top of every ancestor's. `node.depth * 1rem` therefore compounded
-		quadratically (a depth-2 node got 1+2=3rem of visual indent, not 2rem). A
-		CONSTANT 1rem on every non-root node gives each level exactly 1rem of
-		indent relative to its immediate parent — nesting itself does the rest.
-
-		#155/S4 — COLLAPSED and EXPANDED are DISPLAY-ONLY now: no drag handle, no
-		remove control, no rename. Every section-management affordance that used
-		to live on this header (TS.4/#98 drag, TU.2/#110 remove) moved exclusively
-		to Arrange mode — see the `roster-arrange-list` rendering below, which is
-		the ONLY place `section-remove-*`/rename/add now render. This snippet
-		keeps just the toggle + header display + nested member rows/children.
-	-->
 	<section
 		data-testid="section-group-{node.id}"
 		data-depth={node.depth}
@@ -4818,19 +2267,11 @@
 			</button>
 		</div>
 		{#if node.parentDamaged}
-			<!-- #264 item 5 — DAMAGED `_parent` data (≠1 value; sectionData's
-			     detection) surfaces here loudly, never a silent `.find()` guess. The
-			     rest of the tree still renders (siblings/children untouched). -->
 			<p data-testid="section-parent-damaged-{node.id}" role="alert" class="text-sm text-red-700">
 				{m.roster_section_parent_damaged({ name: node.name })}
 			</p>
 		{/if}
 		{#if isExpanded}
-			<!-- #99/TS.5 — the id the toggle's aria-controls points at. `display:
-			     contents` (Tailwind `contents`) keeps this wrapper invisible to
-			     layout: the ul and the nested child sections flow exactly as they
-			     did as bare siblings before — only a real DOM node (with an id) was
-			     added, nothing about the flex column changed. -->
 			<div id="section-region-{node.id}" class="contents">
 				<ul class="flex flex-col pl-5">
 					{#each group?.members ?? [] as row (row.memberId)}
@@ -4849,21 +2290,6 @@
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.roster_title()}</h1>
 
-		<!-- #321 — persistent, visible: a truncated list is a standing fact, not a
-		     transient toast, so this is never sr-only. Absent from the DOM (not
-		     hidden) once every read is complete. Deliberately the SAME markup the
-		     library and agenda notices use (visible <p>, role="status", dashed
-		     border, own testid, copy through i18n) — one pattern for one meaning, no
-		     second visual language. `rosterPartial` and the two flags behind it are
-		     declared at the top of the script; `reset` is what keeps this from
-		     surviving a collective switch. -->
-		<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
-		     this page: member deactivate/reinstate, the member-record editor, the
-		     invite mint/withdraw trio, the section pickers, and the whole arrange
-		     surface (create, rename, indent/unindent, drag-reorder, delete). Each is
-		     disabled (or, for drag, refused in the handler) while there is no signal;
-		     this says why once. Admin-gated — a plain member sees no write control
-		     here to explain. -->
 		{#if admin === 'admin' && isOffline}
 			<p data-testid="roster-write-unavailable" class="text-sm text-ink-2">
 				{m.write_unavailable_no_signal()}
@@ -4880,27 +2306,10 @@
 			</p>
 		{/if}
 
-		<!-- #99 review F3 — the reorder result, for the keyboard/AT path. Present from
-		     first render (a live region announces only CHANGES to its contents, so one
-		     mounted alongside its own text is announced by nothing) and visually
-		     hidden: sighted users already SEE the row move. `sr-only` is absolutely
-		     positioned, so it takes no slot in this flex column. -->
 		<div data-testid="roster-reorder-status" role="status" aria-live="polite" class="sr-only">
 			{reorderStatus}
 		</div>
 
-		<!-- #152 review F1 — the drag handle's keyboard protocol (Space grabs,
-		     arrows move, Space drops, Escape cancels) is not guessable from a
-		     name that only says "Drag to reorder". Every handle points its
-		     aria-describedby here, so the protocol is READ OUT when the control
-		     takes focus instead of having to be discovered. One node for the whole
-		     page (the handles are rendered by a RECURSIVE snippet — a per-handle
-		     copy would duplicate the id). Admin-gated on the same condition that
-		     renders the handles at all (`canReorder` = `admin === 'admin' &&
-		     !isExpanded`), so the id resolves exactly when something references
-		     it, and a non-admin is not described a control she never gets. NOT a
-		     live region: it never changes, and role="status" here would make it
-		     compete with the reorder announcements above. -->
 		{#if admin === 'admin'}
 			<span
 				id="section-reorder-instructions"
@@ -4911,11 +2320,6 @@
 			</span>
 		{/if}
 
-		<!-- #113 review F1 — the removal result, same contract as the reorder region
-		     above: mounted from first render (a live region announces only CHANGES
-		     to its contents) and visually hidden, because a sighted user watched the
-		     group vanish. Only the SUCCESS text lands here; a refused remove is a
-		     role="alert" (`section-remove-error`), not a status. -->
 		<div
 			data-testid="roster-section-remove-status"
 			role="status"
@@ -4925,10 +2329,6 @@
 			{removeStatus}
 		</div>
 
-		<!-- #124 (F1) — the page-level create's result, same contract as the reorder
-		     and remove regions above: mounted from first render, visually hidden.
-		     The "invisible success" half of the SPIKE finding — a create used to
-		     land nothing on screen saying it happened. -->
 		<div
 			data-testid="roster-section-create-status"
 			role="status"
@@ -4938,9 +2338,6 @@
 			{pageCreateStatus}
 		</div>
 
-		<!-- #155/S4 — the rename result, same contract as the create/remove regions
-		     above: mounted from first render, visually hidden. Only the SUCCESS
-		     text lands here; a failed rename is a role="alert" (`arrange-rename-error-*`). -->
 		<div
 			data-testid="roster-section-rename-status"
 			role="status"
@@ -4950,10 +2347,6 @@
 			{renameStatus}
 		</div>
 
-		<!-- #268 — the member-record editor's save result, same contract as the
-		     four regions above: mounted from first render, visually hidden. Only
-		     the SUCCESS text lands here; a failed/partial save is a role="alert"
-		     (`roster-record-save-error`), not a status. -->
 		<div
 			data-testid="roster-member-record-status"
 			role="status"
@@ -4994,57 +2387,26 @@
 				</button>
 			</div>
 		{:else if rows.length === 0 && sections.length === 0}
-			<!-- F4 code-review fix: gated on BOTH rows and sections being empty — when
-			     sections exist but no member has loaded into them yet, the section
-			     structure itself (with (0) counts) is real information and must
-			     render, not be suppressed behind a "nothing here" placeholder. -->
 			<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
 				<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
 			</div>
 		{:else}
 			{#if admin === 'admin' && ownerTier !== 'owner' && ownerTier !== 'loading'}
-				<!-- #294 — PO ruling 2026-09-09: the three controls (kutsu/saada
-				     uuesti/tühista kutse) gate on `_owner`, but an editor-admin must
-				     never see three disabled buttons, three failing buttons, or
-				     silence where they'd be — she gets exactly this ONE LINE instead.
-				     Rendered ONCE for the whole page (not per row): the fact being
-				     stated ("you don't hold this") is the same wherever a control
-				     would have sat, so one line says it once rather than repeating
-				     itself once per not-yet-invited/invited row. -->
 				<p data-testid="roster-invite-owner-note" class="text-xs text-ink-2">
 					{m.roster_member_invite_owner_only()}
 				</p>
 			{/if}
 			{#if sectionsError}
-				<!-- F3 code-review fix: the section-tree load failed but the roster
-				     itself loaded fine — render loudly (banner + the already-logged
-				     console.error above), not silently, and fall back to the flat
-				     list since there's no tree left to group by. -->
 				<div data-testid="roster-sections-load-error" class="flex flex-col gap-1" role="alert">
 					<p class="text-sm text-red-700">{m.roster_sections_load_error()}</p>
 				</div>
 			{/if}
 			{#if reorderError}
-				<!-- #99 review F2 — the reorder path's loud failure. The list has already
-				     been re-derived from the server by then (see `performReorder`), so
-				     without this the user watches the order snap to something they did
-				     not choose with no explanation. role="alert" for the same reason the
-				     create-failure paragraph carries it: nothing else on screen names the
-				     cause. #253 — TWO states, not one: `reparentPartial` is only ever true
-				     when a reparent's `_parent` move LANDED and its renumber then failed
-				     (see `performReparent`'s catch) — that copy says the section DID move.
-				     Every other failure (pure reorder, or a reparent that never landed)
-				     keeps this original copy unchanged. -->
 				<p data-testid="section-reorder-error" role="alert" class="text-sm text-red-700">
 					{reparentPartial ? m.roster_section_reparent_partial() : m.roster_section_reorder_failed()}
 				</p>
 			{/if}
 			{#if removeError}
-				<!-- #110 review F1/F3 — the remove path's loud failure, mirroring the
-				     reorder alert directly above. The section is already back on screen
-				     by the time this renders (the catch reverts the tree), so without it
-				     the whole event reads as "nothing happened". Names the section: the
-				     alert sits above the groups, not in the header that was tapped. -->
 				<p data-testid="section-remove-error" role="alert" class="text-sm text-red-700">
 					{removeError.kind === 'not-empty'
 						? m.roster_section_remove_not_empty({ name: removeError.name })
@@ -5052,12 +2414,6 @@
 				</p>
 			{/if}
 			{#if reorderPending}
-				<!-- TU.2/#110 (finding #6) — a visible loading indicator while the
-				     display_order write is outstanding. `reorderPending` already gates
-				     both drag/keyboard controls (disables them, see `sectionGroup`
-				     below); this is the same flag surfaced as an on-screen affordance,
-				     clearing on both success AND failure (see `performReorder`'s
-				     finally). -->
 				<div
 					data-testid="section-reorder-pending"
 					role="status"
@@ -5075,8 +2431,6 @@
 			<div class="flex items-center justify-between border-b border-ink-5 pb-1.5">
 				<span class="text-xs tracking-wide text-ink-2 uppercase">{m.roster_column_name()}</span>
 				{#if !sectionsError}
-					<!-- F3: no grouped view is on offer without a section tree, so the
-					     toggle that would switch INTO it is hidden, not just disabled. -->
 					<button
 						type="button"
 						data-testid="roster-sort-toggle"
@@ -5090,21 +2444,6 @@
 			</div>
 
 			{#if view === 'grouped' && !sectionsError}
-				<!-- #155/S1 — the 3-chip view-mode selector, ABOVE the groups (pinned
-				     document-order contract the old collapse-all/expand-all toggle
-				     held). Radio-style single selection — and since #156 it says so:
-				     `role="radiogroup"` + `role="radio"` + `aria-checked`, exactly one
-				     chip "true". The role is load-bearing, not decoration: arrows here
-				     both MOVE and SELECT (`handleViewModeKeydown`), which is radiogroup
-				     behaviour and NOT what the app's other roving groups do (those are
-				     `role="toolbar"`, arrows move only) — under a bare `role="group"`
-				     nothing in the markup told a screen-reader user which of the two
-				     they were in. `aria-checked` REPLACES `aria-pressed`: pressed-state
-				     on `role="radio"` is an invalid ARIA mix, the same trap
-				     page.sections-a11y.spec.ts caught on `role="option"`.
-				     Arrange is rights-gated (admin-only, fail-closed on
-				     'loading'/'error' same as every other admin control on this page)
-				     — non-editors get exactly the two display chips. -->
 				<div
 					data-testid="roster-view-modes"
 					role="radiogroup"
@@ -5159,19 +2498,6 @@
 					{/if}
 				</div>
 				{#if viewMode === 'arrange' && admin === 'admin'}
-					<!-- #155/S1 — the arrange-mode SHELL: a compact section list (name +
-					     recursive member count, nesting by indentation only), replacing
-					     `roster-groups` on screen. No member rows, no per-section expand
-					     toggle/picker/new-section/remove yet — S3–S4 add those.
-					     #155/S2 — every row is now the reorder control itself: the WHOLE
-					     row is draggable (native + touch) and carries the SAME keyboard
-					     grab/move/drop/cancel machine #152 shipped on the old drag handle
-					     (`toggleGrab`/`handleHandleKeydown`, unmodified — see the script-
-					     side "#155/S2" comment block above `</script>` for why nothing
-					     there needed to change). `node` is the row's own SectionNode
-					     (`ArrangeRow` itself carries no tree reference); it always resolves
-					     because `arrangeRows` is built by walking the very tree
-					     `findSectionNode` searches. -->
 					<div data-testid="roster-arrange-list" class="flex flex-col">
 						{#each arrangeRows as row (row.id)}
 							{@const node = findSectionNode(sections, row.id)}
@@ -5186,42 +2512,10 @@
 									touchOverId === row.id &&
 									touchOverId !== touchDragId &&
 									siblingIds.includes(touchDragId)}
-								<!-- #155/S4 — DELETE eligibility. Same rule `sectionGroup`'s old
-								     `canRemove` enforced (TU.2/#110 finding #7/#110 review F2/F3):
-								     zero members (the roster's active + name-complete roll-up),
-								     zero sub-sections (would orphan them), and not a foreign org's
-								     section (belt-and-braces — `visibleSections`/`arrangeRows`
-								     already keep a foreign root off this list entirely). UNLIKE the
-								     old conditional-render, the control here is ALWAYS rendered and
-								     DISABLED when ineligible (task #155/S4: "Disable for sections
-								     with children/members"), matching indent/unindent's own
-								     always-shown-sometimes-disabled shape. -->
 								{@const canDelete =
 									row.memberCount === 0 && node.children.length === 0 && isOwnDbEntitySection(row.id)}
-								<!-- #252 — applicability, read ONCE per row for both the `disabled`
-								     wiring below (unchanged: `structuralWritePending || renaming ||
-								     !can*`) and the presentation-only `invisible` treatment, which
-								     must key on APPLICABILITY ALONE, not the combined `disabled`
-								     value — a transient structural-write lock dims an otherwise-
-								     applicable direction (`disabled:opacity-60`, still on screen), it
-								     does not disappear it. Only "this direction does not exist here"
-								     (GH#252 item 2, Mihkel: "show only active actions") earns
-								     `invisible`, and `invisible` (not `hidden`) is what keeps the
-								     `min-h-11 min-w-11` box reserved so the row never jumps. -->
 								{@const indentApplicable = canIndent(row.id)}
 								{@const unindentApplicable = canUnindent(row.id)}
-								<!-- #264 item 5 — a section whose raw `_parent` held ≠1 values
-								     (sectionData.listSections' detection) is DAMAGED DATA, never a
-								     silent `.find()` guess: it surfaces here with NO arrange
-								     affordances (no enabled indent/unindent, nothing draggable) —
-								     the marker below names it, and `damaged` guards every control
-								     that would otherwise let the page write over an unknowable
-								     parent reference. #264 review F3: the KEYBOARD reparent path is
-								     not a control this `@const` can disable (the handle's
-								     `onkeydown` is bound unconditionally so grab/rove keep working),
-								     so ArrowRight/ArrowLeft are refused inside
-								     `handleHandleKeydown` itself, from the same `parentDamaged`
-								     flag. -->
 								{@const damaged = node?.parentDamaged === true}
 								{#if arrangeDropHintBeforeId === row.id}
 									{@render dropIndicator()}
@@ -5235,112 +2529,6 @@
 										{m.roster_section_parent_damaged({ name: row.name })}
 									</p>
 								{/if}
-								<!-- #155/S2 review F1 / #205 review F2 — the row's `aria-label` is
-								     "{name} ({count})". S2 named this role="button" from its own CONTENTS
-								     to keep the member roll-up in the name (WCAG 2.5.3 Label in Name) —
-								     the failure mode then was `aria-label={row.name}` alone, which
-								     announced "Soprano" over a visible "Soprano (3)". #205 moved the
-								     NAME's home into the rename activator beside this row (that
-								     containment is what makes "tap the name" open the editor), leaving
-								     the row's own content as the "(3)" roll-up. The label restores the
-								     full "Soprano (3)" the S2 fix was defending and still CONTAINS the
-								     visible "(3)", so Label in Name holds; it is composed from the same
-								     two values the row and its neighbour render, so there is no second
-								     string for Comenius to keep in sync. The reorder protocol is
-								     unaffected: it was never in the label, it comes from
-								     `aria-describedby` below. -->
-								<!-- #155/S2 review F2 — the HELD SUBTREE and the DROP TARGET must not
-								     look the same. Both used to paint `bg-ink-5`, so mid-drag "these
-								     rows are coming with me" and "the section lands here" were the
-								     one tint. The subtree now reads `bg-indigo-soft`, tying it to the
-								     held row's own indigo dashed outline; `bg-ink-5` stays the drop
-								     target's alone. (Tint, not a border — a left border would shift
-								     every subtree row by its width the moment a drag started.) The
-								     two can never both apply to one row anyway: a descendant of the
-								     dragged section is by construction not its sibling, and only
-								     siblings accept the drop. -->
-								<!-- #155/S2 review F3 — `reorderPending` dims NOTHING here. In the
-								     collapsed view that `opacity-30` sat on the ≡ glyph alone, so an
-								     in-flight write faded one character; on a whole row it washed
-								     out the entire section list, names and counts included, for
-								     every reorder round-trip. The refusal is already real and
-								     announced elsewhere — `draggable="false"` plus the guards in
-								     `handlePointerDown`/`performReorder` — so the cursor is the only
-								     affordance that still needs to change. -->
-								<!-- #155/S2 review F4 — `touch-action` is `pan-y` on the ROW, `none` on
-								     the leading GRIP alone. In the collapsed view `touch-action: none`
-								     sat on the ~12px ≡ glyph; hoisted onto a whole row it covered the
-								     entire arrange list, and since touch-action is latched at gesture
-								     START (neither the 10px long-press slop cancel nor `pointercancel`
-								     can hand the scroll back afterwards) a finger swipe beginning
-								     anywhere on the list could no longer scroll this deliberately
-								     mobile-shaped (`max-w-md`) page. Zoning it is what keeps both:
-								     press the grip and the browser never claims the gesture, press
-								     anywhere else on the row and `pan-y` scrolls as normal.
-								     Only the touch PICKUP is zoned — the whole row stays the native
-								     `draggable` surface for mouse and stays the keyboard control. -->
-								<!-- #155/S3 review R2/F1 — the SLOT wrapper. The two nesting buttons used
-								     to sit INSIDE the `role="button"` row below, which cost two things at
-								     once. (a) Accessible name: the row is deliberately named from its own
-								     CONTENTS (#155/S2 review F1, so the "(3)" roll-up survives — WCAG 2.5.3
-								     Label in Name), and name computation recurses into every child using
-								     that child's OWN name — an `aria-label`/`title` first. The row therefore
-								     computed to "Soprano (3) Indent Soprano Unindent Soprano". A
-								     `textContent` assertion structurally cannot catch that (both buttons
-								     hold only an `aria-hidden` SVG), which is why the S2 guard test stayed
-								     green over the regression. (b) Focusable `<button>`s inside a
-								     `role="button"` is the `nested-interactive` violation (WCAG 4.1.2):
-								     `button` has presentational children in ARIA, so AT exposure of the
-								     nested controls is implementation-defined, and they added two extra tab
-								     stops per row inside a composite widget #152 gave ONE roving tab stop.
-								     Hoisting them out of the subtree removes both at the source rather than
-								     guarding around the symptom. Everything the KEYBOARD/DRAG-SOURCE machine
-								     resolves by (`data-testid="arrange-row-*"` for `handleElementFor`,
-								     `tabindex`, `aria-grabbed`, `data-grabbed*`, `draggable`, `dragstart`,
-								     the depth padding) stays on the row itself. -->
-								<!-- #205 review F3 — the wrapper owns the DROP semantics. Once the rename
-								     activator grew to `flex-1` beside the row, the row no longer covered the
-								     full width a user perceives as "the row": `ondragover`/`ondrop` bound on
-								     the row never fired over the rename band, and the touch hit-test
-								     (`sectionIdUnderPointer` → `closest`) returned null there because the
-								     button is a SIBLING of the row, not a descendant. A drop released on the
-								     right half of a row was silently discarded. Binding the drop handlers and
-								     the `data-drop-row` hit-test hook here makes the drop target equal the
-								     visual row — including the action cluster — while the row keeps being the
-								     drag SOURCE and the keyboard control. `closest` returns the innermost
-								     match, so a point over the row still resolves through `arrange-row-*` to
-								     the same id. -->
-								<!-- #205 review F2 (round 2) — the HOLD affordances belong here too, for the
-								     same reason the drop tint does. `outline-dashed` (the row you are
-								     holding), `bg-indigo-soft` (its subtree) and `opacity-50` (the
-								     touch-dragged row) used to sit on `arrange-row-*`, which since #205
-								     spans the GRIP alone: the dashed "this is what you picked up" outline
-								     enclosed a bare grip and visibly EXCLUDED the section name that
-								     identifies it, while the drop target painted the full width. That is
-								     exactly the held-vs-target asymmetry S2 review F2 (below) exists to
-								     prevent — both must read as whole rows, distinguishable by TINT only.
-								     The mutual-exclusion argument in that comment survives the move
-								     unchanged: a descendant of the dragged section is by construction not
-								     its sibling, and only siblings accept the drop. Everything BEHAVIOURAL
-								     (role, tabindex, draggable, aria-grabbed, data-grabbed*, the handlers,
-								     the depth padding, and the grab cursor on the drag surface itself)
-								     stays on the row. -->
-								<!-- #205 review F2 (round 3) — the FOCUS indicator joins hold and drop
-								     on this wrapper. The row was the last thing still painting at grip
-								     size: since #205 `arrange-row-*` spans the ~16px grip alone, so the
-								     browser's default outline ringed a bare glyph while pressing Space
-								     immediately drew the held-row dashed outline around the full width
-								     — focus and hold disagreeing about what a row is, which is the same
-								     asymmetry round 2 fixed for hold-vs-drop. `focus-within` (not
-								     `focus`): the wrapper is `role="presentation"` and never itself
-								     focusable, and every focusable thing a user reaches inside it — the
-								     reorder row, the rename activator, delete — is part of the same
-								     visual row, so "focus is somewhere in this row" is exactly the state
-								     worth painting. A RING, not an outline: `outline-dashed` for the
-								     held state lives on this element too, and two outline-style
-								     utilities on one element fight over which wins. Ring and outline
-								     compose (box-shadow vs outline), so a held-and-focused row shows
-								     both, as it should. -->
 								<div
 									class="flex items-center focus-within:ring-2 focus-within:ring-indigo {(acceptsDrop &&
 										dragOverId === row.id) ||
@@ -5358,22 +2546,6 @@
 									ondrop={acceptsDrop ? (event: DragEvent) => handleDrop(row.id, event) : undefined}
 								>
 									{#if renamingSectionId === row.id}
-										<!-- #155/S4 — RENAME mode: a SEPARATE, non-draggable row, never the
-										     `role="button"` reorder row with an `<input>` nested inside it
-										     (that would be the same `nested-interactive` violation — WCAG
-										     4.1.2 — review R2/F1 above already fixed for indent/unindent).
-										     Enter saves (`onRenameKeydown` → `submitRename`), Escape cancels;
-										     no Save/Cancel buttons — matches the issue's literal "tap the
-										     name → input → Enter saves → Escape cancels" contract. #303
-										     [DECISION-Mihkel, 2026-09-09, via Gama]: `onblur` COMMITS too now
-										     — Escape is the only remaining discard path. Calls `submitRename`
-										     directly (never a parallel writer) with NO closure over `row.id` —
-										     it re-derives `id` from live `renamingSectionId` state itself, so
-										     a blur delivered after the row already committed/cancelled (a
-										     real browser fires blur on an unmounting focused node; this
-										     input's own optimistic unmount after Enter/Escape/takeover is
-										     exactly that case) is a guaranteed no-op rather than a
-										     double-write racing the row's own id. -->
 										<div class="flex grow items-center gap-2 py-1.5 {arrangeIndentClass(row.depth)}">
 											<span aria-hidden="true" class="w-4 shrink-0"></span>
 											<input
@@ -5417,10 +2589,6 @@
 											onlostpointercapture={endTouchDrag}
 											onkeydown={(event: KeyboardEvent) => void handleHandleKeydown(node, event)}
 											onclick={(event: MouseEvent) => {
-												// Same "honour the role=button activation promise arriving as
-												// a click, without letting a pointer gesture near the grab
-												// state machine" contract as the old handle's onclick — see
-												// #152 review F1 in `sectionGroup` above.
 												if (event.detail !== 0) return;
 												handleElementFor(row.id)?.focus();
 												void toggleGrab(node);
@@ -5428,31 +2596,6 @@
 											onfocus={() => (rovingHandleId = row.id)}
 											onblur={() => handleHandleBlur(node)}
 										>
-											<!-- The touch grab zone, and since #205 review F2 (round 2) the row's
-											     ONLY child. `aria-hidden` and drawn from bars rather than a `≡`
-											     character on purpose: nothing here may carry text — the row now
-											     renders NO visible text at all, which is what makes its explicit
-											     `aria-label` trivially satisfy WCAG 2.5.3 (nothing visible inside
-											     it for the name to have to contain).
-											     #205 review F2 (round 3) — grip-only drag is the intended
-											     tradeoff (team decision recorded on #205): it matches the touch
-											     pickup zone and keeps the drag gesture from competing with the
-											     rename activator's click, which now covers the rest of the row.
-											     What it owed was LEGIBILITY — three static bars at `text-ink-2`
-											     with no state at all told a pointer user nothing about where a
-											     drag can start. `hover:`/`active:` give it that affordance, and
-											     `min-h-11` stretches the reactive surface to the row's own
-											     height (set by the rename activator's `min-h-11` beside it), so
-											     what lights up is the whole strip you can actually grab rather
-											     than the ~18px the bars occupy. The bars stay centred
-											     (`justify-center`) and the strip stays `w-4`, so the no-scroll
-											     `touch-action: none` region grows in HEIGHT only and the rest
-											     of the row still pans (#155/S2 review F4).
-											     The affordance is gated on `structuralWritePending` for the
-											     same reason the row's `cursor-grab` is: while a structural
-											     write is outstanding `handlePointerDown` refuses the pickup
-											     outright, and a strip that still lights up under the cursor
-											     would be advertising a gesture the page will not honour. -->
 											<span
 												data-testid="arrange-grip-{row.id}"
 												aria-hidden="true"
@@ -5468,38 +2611,6 @@
 											</span>
 										</div>
 									{/if}
-									<!-- #205 whole-field shape (see admin/+page.svelte:513-540 and the
-									     season panel above for the full rationale) — the rename trigger
-									     WRAPS the section name so tapping the name area (not just the
-									     pencil) activates it. Still a sibling of the `role="button"` row
-									     (#155/S3 review R2/F1 nested-interactive fix stays intact) — the
-									     NAME simply moved out of the row and into this button, which is
-									     what makes the name area itself the tab-reachable activator.
-									     `flex-1 min-w-0` — not `w-full`, which would fight the fixed-width
-									     grip/indent/unindent/remove siblings in this flex row — grows the
-									     button to the remaining name-column width rather than
-									     shrink-wrapping the ✎ glyph (#165 review F3 trap). The drop target
-									     the button now covers is restored by the wrapper's `data-drop-row`
-									     (review F3, see above).
-									     #205 review F2 — the sr-only label is the BARE action verb, not
-									     `roster_section_rename({ name })`: the name is rendered visibly
-									     inside the button, so the parameterised string made the computed
-									     name stutter ("Rename Soprano Soprano"). Bare verb + visible value
-									     gives "Rename Soprano", the same "<action> <value>" contract the
-									     admin/season/profile activators use. `title` keeps the full
-									     parameterised string for the mouse tooltip (it never reaches the
-									     accessible name — contents win over title).
-									     #303 review F1 — `disabled` reads `reorderPending || removePending`,
-									     deliberately NOT the page-wide `structuralWritePending`: this trigger
-									     only ARMS an editor (local state, no write), and a browser fires the
-									     open input's blur — which starts the outgoing commit and flips
-									     `renamePending` synchronously — during MOUSEDOWN, before this
-									     button's click. Gated on the page-wide flag, a disabled button
-									     swallows the very click that caused the commit, so ruling (b)'s
-									     "switch commits the outgoing rename AND arms the new row" would only
-									     ever do the first half in a real browser. Single-flight stays where
-									     it belongs: on the WRITE seam, where `submitRename` refuses while
-									     `structuralWritePending` and leaves the input open, text intact. -->
 									<button
 										type="button"
 										data-testid="arrange-rename-{row.id}"
@@ -5509,12 +2620,6 @@
 										onclick={() => startRename(node)}
 									>
 										<span class="sr-only">{m.roster_section_rename_action()}</span>
-										<!-- The in-flight refusal dims the GLYPH, never the name (#155/S2 review
-										     F3): with the name living in here, `disabled:opacity-30` on the button
-										     washed out every section name on the page for the length of a reorder
-										     write — the exact regression F3 removed from the row. The refusal is
-										     already real (`disabled`), so the affordance only has to show on the
-										     control itself. -->
 										<svg
 											aria-hidden="true"
 											viewBox="0 0 16 16"
@@ -5524,101 +2629,13 @@
 												d="M11.3 1.3a1 1 0 0 1 1.4 0l2 2a1 1 0 0 1 0 1.4l-8 8-3.7 1 1-3.7 8-8z"
 											/>
 										</svg>
-										<!-- While THIS row is being renamed the editor beside it already shows the
-										     name in an <input>; printing it here too would show it twice. The
-										     button itself stays mounted-and-disabled (the #155/S4 "ALWAYS
-										     rendered" contract). -->
 										{#if renamingSectionId !== row.id}
 											<span class="truncate text-sm">{row.name}</span>
 										{/if}
 									</button>
-									<!-- #205 review F1 (round 2) — the "(n)" roll-up reads AFTER the name, as it
-									     always has ("Soprano (3)"). The first GREEN left it inside the reorder
-									     row while the name moved into the activator BESIDE that row, so each
-									     row reversed to "grip (3) ✎ Soprano" — and, because the row was
-									     `grow` (basis auto) next to a `flex-1` (basis 0) activator, the free
-									     width split between them and pushed the name to roughly mid-row. The
-									     count is a SIBLING here rather than a child of the activator so that
-									     tapping it is not "rename", and outside the row so the row keeps no
-									     visible text of its own. The row is `shrink-0` around the grip now, so
-									     the activator's `flex-1` starts immediately after the depth indent and
-									     the indent step lands on the NAME, where the tree cue belongs. -->
 									<span data-testid="arrange-count-{row.id}" class="shrink-0 pl-2 text-sm text-ink"
 										>({row.memberCount})</span
 									>
-									<!-- #155/S3 — indent/unindent: ALWAYS rendered (not grab-gated), so a
-									     pointer-only admin can restructure the tree without ever touching
-									     the keyboard grab machine. SIBLINGS of the row, never children of
-									     it (review R2/F1, see the wrapper comment above): the row is the
-									     `role="button"` reorder control, and nesting a real `<button>`
-									     inside one both pollutes its accessible name and creates the
-									     `nested-interactive` violation. Sitting outside the row's subtree
-									     also means nothing they emit can reach `handleHandleKeydown`, so
-									     no `stopPropagation()` on either handler is needed any more
-									     (review F1 shipped one when they were still children; the
-									     containment fix retires it — the
-									     `event.target !== event.currentTarget` guard inside
-									     `handleHandleKeydown` stays as belt-and-braces).
-									     TABINDEX="-1" — POINTER/TOUCH ONLY, deliberately. Mihkel's
-									     ruling, recorded in `.claude/workflows/roving-tabindex-pipeline.js`
-									     (#156 SPIKE brief: "EXCLUDED: buttons with tabindex=-1 that are
-									     mouse/touch only (like indent/unindent per Mihkel ruling)"), and
-									     re-affirmed by #156 review checklist item 10. These two are the
-									     ONLY controls in the row action cluster with a full keyboard
-									     equivalent elsewhere: focus the row, Space/Enter to grab, then
-									     ArrowRight indents / ArrowLeft unindents through the SAME
-									     `handleIndent`/`handleUnindent` seam (`handleHandleKeydown`,
-									     ~line 2100). Two tab stops per row for a move the row itself
-									     already offers is noise, so they are dropped from the tab order
-									     rather than roved. Rename and delete have NO such equivalent, so
-									     they stay real tab stops until a row-level story exists for them
-									     — the asymmetry inside this wrapper is intentional, not an
-									     oversight. Pinned in page.roster-indent.spec.ts.
-									     No text nodes inside either button (SVG glyph only,
-									     `aria-hidden`): the accessible name comes from `aria-label`, and
-									     a text glyph here would land in the slot's own text — leaking
-									     into `textContent` assertions (e.g. "Soprano (4)") the moment two
-									     rows sit in the same list — the grip bars beside them use the
-									     same no-text-node trick for the same reason. `reorderPending`
-									     disables EVERY button while any structural write (reorder or
-									     reparent) is outstanding — the same one-at-a-time posture
-									     `reorderPending` already enforces on the drag handle. -->
-									<!-- #252 — findable and tappable (Joosep's report + Gama's
-									     correction: this is a real usability defect on its own merits,
-									     sequenced after #253's write-integrity fix). Four stated choices
-									     (issue demands stated, not silent, decisions):
-									     (a) TOUCH TARGET — `min-h-11 min-w-11` on the `<button>` itself,
-									     the same 44px standard the season trashcan/gear/create/close
-									     controls already keep elsewhere on this page and admin/+page;
-									     the glyph inside stays a small `h-4 w-4` — only the hit area
-									     grows, chosen over enlarging the glyph so the row doesn't visibly
-									     thicken to reach it.
-									     (b) INAPPLICABLE DIRECTION — `invisible` (not `hidden`/removed),
-									     keyed on applicability ALONE (`indentApplicable`/
-									     `unindentApplicable` above), never on the full `disabled` value:
-									     a transient `structuralWritePending` lock still shows the glyph,
-									     dimmed (`disabled:opacity-60`) — only a direction that does not
-									     exist here disappears. `invisible` keeps the `min-h-11 min-w-11`
-									     box in the layout (`display` untouched), so a row never jumps
-									     when applicability flips (e.g. unindenting Soprano 1 out from
-									     under Soprano). Picked over restyled-disabled because Mihkel's
-									     own direction on this issue is "show only active actions" — a
-									     faded-but-still-shaped triangle is still a ghost control.
-									     (c) DISTINGUISHABILITY — indent stays a SOLID triangle
-									     (`fill-current`); unindent is now an OUTLINE triangle
-									     (`fill-none stroke-current`), same geometry mirrored. Solid vs.
-									     outline is a categorical (fill/no-fill) difference on top of the
-									     existing left/right orientation, not just a mirror of one shape
-									     — at 16px that reads as "adding a level" vs. "releasing one"
-									     even before orientation is parsed, which a same-weight mirror
-									     pair cannot offer (mirror symmetry is exactly what a quick glance
-									     struggles to tell apart — the pinned defect, GH#252 item 3).
-									     (d) TONE — base `text-ink` (this page's normal control ink),
-									     not `text-ink-2`: a control the user is being asked to LOCATE
-									     must not be the quietest thing on the row (GH#252 item 4, #238
-									     finding) — even though `text-ink-2` is otherwise this page's own
-									     icon-button convention (the grip, :3258), that convention is
-									     exactly what read as invisible here. -->
 									<button
 										type="button"
 										data-testid="arrange-indent-{row.id}"
@@ -5663,35 +2680,6 @@
 											<path d="M12 2 L4 8 L12 14 Z" />
 										</svg>
 									</button>
-									<!-- #155/S4 — DELETE: reuses `armRemove`/`disarmRemove`/
-									     `handleRemoveSection`/`pendingRemoveId` VERBATIM (same testids
-									     too — `section-remove-*`), the exact two-step-confirm write seam
-									     `sectionGroup` used to render. Only the RENDERING moved: always
-									     shown, `disabled` when `!canDelete` rather than absent, per the
-									     task's own "Disable for sections with children/members".
-									     #273 — the armed pair now adopts the agenda's arm-state
-									     lifecycle (`onSeasonManageSeriesDelete`): `pendingRemoveId`
-									     stays set through the write (see `handleRemoveSection`), so
-									     this pair stays MOUNTED here rather than unmounting on confirm.
-									     `disabled` binds to `structuralWritePending` — the same guard
-									     the ✕ trigger below already uses — rather than to `removePending`
-									     alone: this pair can only ever be showing for `pendingRemoveId`,
-									     and `structuralWritePending` is the page's one-structural-write-
-									     at-a-time invariant (reorder/rename/remove), so freezing BOTH
-									     halves under it (not just during this row's own write) matches
-									     the ✕ trigger's existing face and needs no separate dedicated
-									     pending-id: only one row can ever be armed
-									     (`pendingRemoveId` is a single slot) and arming a second is
-									     itself blocked by the ✕ trigger's own `structuralWritePending`
-									     disable, so there is no second armed pair a bespoke id would need
-									     to distinguish from this one — a double-tap on THIS confirm is
-									     stopped twice over (disabled cannot dispatch a click, and
-									     `handleRemoveSection`'s own `if (structuralWritePending) return`
-									     backstops it regardless). `aria-busy` on confirm alone binds to
-									     `removePending` specifically — this row's own write, not any
-									     structural write — since aria-busy communicates "recompute your
-									     region, this is the crossing element", which is only true for the
-									     write actually in progress here. -->
 									{#if pendingRemoveId === row.id}
 										<button
 											type="button"
@@ -5715,14 +2703,6 @@
 											{m.roster_section_remove_cancel_short()}
 										</button>
 									{:else}
-										<!-- #237 — joins the shared red-trashcan unit: 44px BY
-										     CONSTRUCTION replaces the old p-1 (~20px) face, and the
-										     tone follows #252's precedent (destructive red, not the
-										     muted convention #252 found invisible). The disabled face
-										     (ineligible section: has children/members, mid-rename, or a
-										     structural write in flight) now comes FROM the unit —
-										     disabled:opacity-60 + disabled:hover:text-red-700, per #237
-										     review F2 — rather than from a per-site class string. -->
 										<DeleteTrigger
 											data-testid="section-remove-{row.id}"
 											aria-label={m.roster_section_remove({ name: row.name })}
@@ -5735,9 +2715,6 @@
 									{/if}
 								</div>
 								{#if renameError?.id === row.id}
-									<!-- #155/S4 — same "say it, don't just log it" discipline as
-									     `sectionWriteError`/`removeError` above. role="alert": nothing
-									     else on screen names the failure (the input has already closed). -->
 									<p
 										data-testid="arrange-rename-error-{row.id}"
 										role="alert"
@@ -5753,10 +2730,6 @@
 						{/if}
 					</div>
 					{#if admin === 'admin'}
-						<!-- #155/S4 — "Add section" RELOCATED into Arrange mode exclusively
-						     (was page-level, rendered regardless of viewMode — #124). Reuses
-						     `createSection`/`pageCreateOpen`/`submitPageCreate` VERBATIM, same
-						     testids too (`roster-new-section*`) — only WHERE it renders moved. -->
 						<div class="flex flex-col gap-1.5 border-t border-dashed border-ink-5 pt-3">
 							{#if !pageCreateOpen}
 								<button
@@ -5801,9 +2774,6 @@
 										{/each}
 									</select>
 									{#if pageCreateError}
-										<!-- F5-style loud inline failure, same discipline as the picker's
-										     own create-error paragraph: role="alert" + aria-describedby
-										     on the input above. -->
 										<p
 											id="roster-new-section-error"
 											role="alert"
@@ -5878,13 +2848,6 @@
 		{/if}
 
 		{#if admin === 'admin' && status === 'ready'}
-			<!-- #255 (B) — the inactive-members surface: deliberately OUT of the
-			     normal roster flow (a collapsed, closed-by-default panel below
-			     everything else, never preloaded alongside the active roster —
-			     engineering's placement call). Shows each inactive member's SECTION
-			     assignment (adopted binding — this is what explains a section that
-			     refuses deletion while holding only inactive members, with zero
-			     write-path change) and reinstates with ONE action, no invitation. -->
 			<div class="flex flex-col gap-2 border-t border-dashed border-ink-5 pt-3">
 				<button
 					type="button"
@@ -5928,11 +2891,6 @@
 										{m.roster_member_reinstate()}
 									</button>
 									{#if deactivateActionError?.memberId === row.memberId && deactivateActionError.kind === 'reinstate'}
-										<!-- #255 review F2 — same loud-failure idiom as the deactivate
-										     alert above: a failed reinstate leaves this row exactly
-										     where it is, which on its own reads as a dead button.
-										     #388 — names no member; carries an EntuRef to the MEMBER
-										     entity instead — the stuck record is the membership. -->
 										<p
 											data-testid="member-reinstate-failed-{row.memberId}"
 											role="alert"

@@ -807,7 +807,7 @@ function submitEventCreateBody(source: string): string {
 function surfaceWatcherBody(source: string): string {
 	const start = source.indexOf('function surfaceCreatedEvent');
 	expect(start, 'surfaceCreatedEvent exists in +page.svelte').toBeGreaterThan(-1);
-	const end = source.indexOf('/** Cancel / Escape:', start);
+	const end = source.indexOf('function dismissEventCreateForm(', start);
 	expect(end, 'a bounded slice for the surfacing watcher').toBeGreaterThan(start);
 	return stripComments(source.slice(start, end));
 }
