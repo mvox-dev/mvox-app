@@ -1,27 +1,3 @@
-/**
- * #305 — Roadmap board renderer.
- *
- * Pure core of the roadmap build: issues JSON in → complete static HTML out.
- * The GitHub Action is thin plumbing around this module (scripts/roadmap/fetch-issues.ts
- * does the GitHub reads; this file only ever sees the normalized shape below).
- * Contract pinned by scripts/roadmap/render.spec.ts and scripts/roadmap/cli.spec.ts.
- *
- * YAML lib: `yaml` (eemeli/yaml), not `js-yaml` — it ships its own TypeScript
- * types (no separate @types/js-yaml devDependency) and has zero runtime
- * dependencies, where `js-yaml` pulls in `argparse` for its bundled CLI even
- * when only the library API is used. Confirmed via `pnpm info js-yaml
- * dependencies` (`{ argparse: '^2.0.1' }`) vs `pnpm info yaml dependencies`
- * (empty) on 2026-09-10.
- *
- * CLI contract (what the Action invokes, and what cli.spec.ts spawns):
- *   node --import tsx scripts/roadmap/render.ts --input <issues.json> --out <dir>
- * writes:
- *   <dir>/roadmap/index.html   — the board page (full document)
- *   <dir>/roadmap/stamp.txt    — build stamp; same value the page shows as generated-at
- *   <dir>/CNAME                — "docs.mvox.eu"
- *
- * (*MVOX:Palestrina*)
- */
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -29,49 +5,33 @@ import { parse as parseYaml } from 'yaml';
 import { field, isKindLabel, kindFromType, kindOf, type IssueKind } from './issue-model';
 import { labelTextColor } from './label-color';
 
-/** One label as GitHub reports it: name plus its colour (hex, no leading '#'), or null when absent. */
 export interface RoadmapLabel {
 	name: string;
 	color: string | null;
 }
 
-/** Normalized issue shape the Action feeds the renderer (GitHub API → this). */
 export interface RoadmapIssue {
 	number: number;
 	title: string;
 	state: 'open' | 'closed';
-	/** GitHub state_reason for closed issues; null for open. */
+
 	stateReason: 'completed' | 'not_planned' | null;
 	labels: RoadmapLabel[];
 	body: string | null;
-	/** ISO date-time the issue was (most recently) closed; null while open or never recorded. */
+
 	closedAt: string | null;
-	/**
-	 * #403: ISO date-time GitHub last recorded a change to the issue — an edit,
-	 * a comment, a label or a close. Optional so pre-#403 fixtures stay valid
-	 * input; a card with no value renders no corner.
-	 */
+
 	updatedAt?: string | null;
-	/** The issue's own GitHub page. Carried verbatim from the API's `html_url` — never assembled. */
+
 	htmlUrl: string;
-	/** Native GitHub sub-issues, already resolved by the fetch step. Empty = flat. */
+
 	subIssues?: RoadmapIssue[];
-	/**
-	 * #373: the native issue type's NAME (e.g. "Task"), or null/absent for the
-	 * pre-type archive. Optional so pre-#373 fixtures stay valid input. The
-	 * board's kind read is issue-model.ts's kindOf — type first, kind label
-	 * fallback; this field is the only trace of GitHub's `type` object here.
-	 */
+
 	issueType?: string | null;
 }
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
-/**
- * Parse a YAML frontmatter block at the very head of an issue body
- * (`---\n…\n---`). Returns the parsed mapping, or null when the block is
- * absent, malformed, or not a mapping — never throws.
- */
 export function parseFrontmatter(body: string | null | undefined): Record<string, unknown> | null {
 	if (!body) return null;
 	const match = FRONTMATTER_RE.exec(body);
@@ -83,20 +43,13 @@ export function parseFrontmatter(body: string | null | undefined): Record<string
 		}
 		return null;
 	} catch {
-		// Malformed YAML is treated as absent frontmatter, never a crash.
+
 		return null;
 	}
 }
 
-/**
- * The title the board displays for an issue: the frontmatter `slugline`
- * (Estonian) when present and a non-empty string; the English title otherwise.
- */
 export function displayTitle(issue: RoadmapIssue): string {
-	// Both body shapes carry sluglines now: `### Slugline` sections (the #384
-	// issue forms) and legacy `---` frontmatter. issue-model's field() reads
-	// both; without it the 2026-09 groomed issues silently lost their
-	// Estonian face on the board.
+
 	const slugline = field(issue.body ?? '', 'slugline') ?? parseFrontmatterField(issue, 'slugline');
 	return slugline ?? issue.title;
 }
@@ -106,46 +59,14 @@ function parseFrontmatterField(issue: RoadmapIssue, key: string): string | null 
 	return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
-/**
- * The frontmatter `lead` (Estonian, one short line) when present and a
- * non-empty string; null otherwise — ADDITIONAL to displayTitle, never a
- * replacement. Same type-guard shape as displayTitle's slugline check.
- */
 export function displayLead(issue: RoadmapIssue): string | null {
 	return field(issue.body ?? '', 'lead') ?? parseFrontmatterField(issue, 'lead');
 }
 
-/**
- * Content of the build stamp file. Carries the build identity — the same
- * generated-at value the page displays (one stamp, not two).
- */
 export function buildStamp(generatedAt: string): string {
 	return generatedAt;
 }
 
-/**
- * Format an ISO instant as the human-facing generated-at time: Estonian
- * convention, `Europe/Tallinn`, to the minute, with a zone marker (#308).
- *
- * No `Intl.DateTimeFormat` preset produces the target punctuation — `dateStyle`
- * / `timeStyle` presets insert a comma before the time and a two-digit year
- * (verified live: `01.07.26, 15:00`, not `01.07.2026 15:00`). So this builds
- * the string from `formatToParts` instead of trusting any preset: pull
- * day/month/year and hour/minute/zone-name parts out and join them with the
- * exact literal punctuation the issue's example uses (single space, not a
- * comma) — `10.09.2026 06:33 GMT +3`.
- *
- * `hourCycle: 'h23'` (not `hour12: false`) is deliberate — Node's ICU can
- * resolve `hour12: false` to `hourCycle: 'h24'`, which renders midnight as
- * `24:00` instead of `00:00`; `h23` pins the 00–23 range explicitly.
- *
- * The IANA zone name `Europe/Tallinn` is the whole point: this is an offset
- * conversion by zone rule, not a fixed number, so the same code renders
- * `GMT +3` (EEST) in summer and `GMT +2` (EET) in winter with zero changes —
- * `timeZoneName: 'shortOffset'` computes that offset from the zone and the
- * instant, never hardcoded. The literal space inside `GMT +3` / `GMT +2` is
- * Intl's own output for this zone/locale, kept as-is rather than stripped.
- */
 export function formatGeneratedAt(generatedAt: string): string {
 	const parts = new Intl.DateTimeFormat('et-EE', {
 		timeZone: 'Europe/Tallinn',
@@ -161,11 +82,6 @@ export function formatGeneratedAt(generatedAt: string): string {
 	return `${part('day')}.${part('month')}.${part('year')} ${part('hour')}:${part('minute')} ${part('timeZoneName')}`;
 }
 
-// Untrusted content (titles, sluglines, labels) is only ever placed inside
-// element text content below, never inside an attribute value — so escaping
-// &, < and > is sufficient to stop markup injection. Quotes are left alone
-// deliberately: entity-encoding them would corrupt a plain apostrophe in an
-// issue title when read back as text (e.g. "this board's issues").
 const HTML_ESCAPES: Record<string, string> = {
 	'&': '&amp;',
 	'<': '&lt;',
@@ -176,89 +92,34 @@ function escapeHtml(value: string): string {
 	return value.replace(/[&<>]/g, (ch) => HTML_ESCAPES[ch] ?? ch);
 }
 
-/**
- * A closed issue's sort key: its closedAt as epoch millis, or -Infinity when
- * absent/unparseable — sorting descending on this key puts "no closedAt"
- * last, never first, per #307's explicit fallback.
- */
 function closedAtRank(issue: RoadmapIssue): number {
 	if (!issue.closedAt) return -Infinity;
 	const parsed = Date.parse(issue.closedAt);
 	return Number.isNaN(parsed) ? -Infinity : parsed;
 }
 
-// #310: this match is against the exact label strings the mvox team uses on
-// GitHub — 'in process', 'prepped', and 'in research' (#315) — not an id or a
-// stable enum. Rename any of the three in the repo's label settings and this
-// silently stops floating anything; nothing here will fail or warn, the
-// board just quietly goes back to plain number order. There is deliberately
-// no test pinning these strings (see active-float.spec.ts) because a
-// fixture-based test cannot see a GitHub-side rename either — it would stay
-// green through the same failure it exists to catch. Catching the rename
-// itself would mean the build reading the repo's live label set, which was
-// judged not worth the extra API call for an ordering nicety (Gama, #310
-// comment). The warning has already come true once: `prepped` was renamed
-// from `researched` two minutes after it was created, before it ever reached
-// this code (#315). The next rename will not announce itself either.
 const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'in research'] as const;
 
-/**
- * #354 — the five labels that describe where work sits in the queue, not what
- * it was. A closed issue is not in the queue, so renderIssue filters these off
- * closed issues' chip rows (kind labels — task/epic/bug/enhancement — stay).
- * Same exact-string, case-sensitive idiom as ACTIVE_TIER_LABELS / hasLabel:
- * these are the live GitHub label names, not a stable enum, and no comparison
- * in this file folds case.
- */
 export const MOTION_LABELS = ['ready', 'in process', 'prepped', 'in research', 'blocked'] as const;
 
-/** Pure predicate over MOTION_LABELS — the one instrument closed-motion-labels.spec.ts pins. */
 export function isMotionLabel(name: string): boolean {
 	return (MOTION_LABELS as readonly string[]).includes(name);
 }
 
-/**
- * An open issue's activity tier: 0 when it carries `in process` (which wins
- * over the other two even in combination), 1 when it carries `prepped`
- * without `in process`, 2 when it carries `in research` alone, 3 otherwise.
- * Lower sorts first. Never consulted for closed issues.
- */
 function activityTier(issue: RoadmapIssue): number {
-	// #340's never-fail fixture smuggles `labels: null` past the type at the
-	// renderBoard boundary — `?? []` keeps this a plain lookup, not a crash.
+
 	const names = (issue.labels ?? []).map((label) => label?.name);
 	const rank = ACTIVE_TIER_LABELS.findIndex((label) => names.includes(label));
 	return rank === -1 ? ACTIVE_TIER_LABELS.length : rank;
 }
 
-/**
- * All OPEN issues in the tree, top-level and nested (subIssues), as one flat
- * list, each issue exactly once. fetchBoard reparents open sub-issues under
- * their epic, so an idle groomed task nested under a container (#338's own
- * shape) would otherwise be invisible to a check that only looked at the top
- * level.
- *
- * `seen` is the same identity guard renderIssue's `rendered` set is, for the
- * same two reasons: fetchBoard shares ONE object per issue number across
- * parents, so a child reported under two epics would otherwise be listed
- * twice (and named twice in the warning line); and a parent cycle
- * (289 → 290 → 289, the shape fetch-issues.ts explicitly defends against)
- * would otherwise recurse until the stack died — at which point
- * stalenessViolators' catch would swallow the RangeError and the check would
- * go silent on exactly the malformed board where a violator matters.
- *
- * Also defensive against a missing/malformed `subIssues` or `state` — #340's
- * never-fail contract needs this to degrade, not throw.
- */
 function flattenOpenIssues(
 	issues: RoadmapIssue[],
 	seen: Set<number> = new Set<number>()
 ): RoadmapIssue[] {
 	const result: RoadmapIssue[] = [];
 	for (const issue of issues ?? []) {
-		// Identity is the issue number; an entry arriving without one (malformed
-		// input smuggled past the type) is not deduplicated because it cannot be
-		// identified — it still gets walked rather than dropped.
+
 		const number: number | undefined = issue?.number;
 		if (typeof number === 'number') {
 			if (seen.has(number)) continue;
@@ -271,21 +132,14 @@ function flattenOpenIssues(
 	return result;
 }
 
-/** #340: either label switches the whole staleness check off — see stalenessViolators. */
 const STALENESS_SUPPRESSOR_LABELS = ['in research', 'blocks research'] as const;
-/** #340: any of these on a ready task satisfies the check — it is not a violator. */
+
 const STALENESS_SATISFIER_LABELS = ['in process', 'prepped', 'blocked'] as const;
 
-/** Same label-name matching idiom as activityTier, one label at a time. */
 function hasLabel(issue: RoadmapIssue, name: string): boolean {
 	return (issue?.labels ?? []).some((label) => label?.name === name);
 }
 
-/**
- * #373 — one issue's kind, read through the model: native type first, kind
- * label only as fallback for the pre-type archive. Defensive over labels for
- * the same #340 never-fail reason as activityTier.
- */
 function issueKind(issue: RoadmapIssue): IssueKind | null {
 	return kindOf(
 		issue?.issueType,
@@ -293,21 +147,6 @@ function issueKind(issue: RoadmapIssue): IssueKind | null {
 	);
 }
 
-/**
- * #340 — the staleness predicate: issue numbers of open issues of kind task
- * (#373: native type first, `task` label for the archive) carrying `ready`
- * and none of `in process` / `prepped` / `blocked`, evaluated
- * only when no open issue anywhere carries `in research` or `blocks
- * research` (either suppresses the whole check — Mihkel's ruling that a
- * build merely running is not itself an excuse; only an explicit `blocks
- * research` is). Scoped to `task` so an open epic's own `ready` (its
- * children are the dispatchable work, #316's shape) never fires.
- *
- * Wrapped in a local try/catch mirroring parseFrontmatter's precedent: a bug
- * here must default to no warning, never crash into main()'s exitCode=1 path
- * — that would freeze the deployed page, the exact inversion #340 exists to
- * prevent. The page always deploys.
- */
 function stalenessViolators(issues: RoadmapIssue[]): number[] {
 	try {
 		const open = flattenOpenIssues(issues);
@@ -315,27 +154,17 @@ function stalenessViolators(issues: RoadmapIssue[]): number[] {
 			STALENESS_SUPPRESSOR_LABELS.some((label) => hasLabel(issue, label))
 		);
 		if (suppressed) return [];
-		// #373: scope is the KIND task — the native type since #393's forms, the
-		// `task` label for the archive — so a typed Task with no labels at all
-		// still fires. Motion (`ready` and the satisfiers below) stays labels.
+
 		return open
 			.filter((issue) => issueKind(issue) === 'task' && hasLabel(issue, 'ready'))
 			.filter((issue) => !STALENESS_SATISFIER_LABELS.some((label) => hasLabel(issue, label)))
 			.map((issue) => issue.number);
 	} catch {
-		// A crash here must never reach main()'s exitCode=1 path — default to
-		// no warning, same posture as parseFrontmatter's local catch.
+
 		return [];
 	}
 }
 
-/**
- * The warning line itself: the Estonian sentence plus one `#N` link per
- * violator, in the page's own link idiom (an `.issue-link` anchor to the
- * issue's real `htmlUrl`, carried verbatim like renderIssue's own link).
- * Empty string when there are no violators — renderBoard then omits the
- * element entirely rather than rendering an empty shell.
- */
 function renderStalenessWarning(issues: RoadmapIssue[], violators: number[]): string {
 	if (violators.length === 0) return '';
 	const open = flattenOpenIssues(issues);
@@ -349,15 +178,6 @@ function renderStalenessWarning(issues: RoadmapIssue[], violators: number[]): st
 	return `<p class="staleness-warning">Valmis tööd seisavad ja keegi ei uuri: ${links}</p>`;
 }
 
-/**
- * Open issues first — tiered by activity label (#310: in process, then in
- * research, then the rest), issue number ascending within each tier — then
- * closed (most recently finished first, missing closedAt sorts last; labels
- * play no part here, so a stale activity label left on a closed issue can
- * never reorder it). One function for both the top-level board and every
- * nested sub-issue walk (renderIssue calls this same function on its own
- * children) — there is no second ordering path to keep in sync.
- */
 function boardOrder(issues: RoadmapIssue[]): RoadmapIssue[] {
 	const open = issues
 		.filter((i) => i.state === 'open')
@@ -368,13 +188,6 @@ function boardOrder(issues: RoadmapIssue[]): RoadmapIssue[] {
 
 const NO_COLOR_HEX_RE = /^[0-9a-fA-F]{6}$/;
 
-/**
- * #373 — the kind chip's canonical colours: the live palette of the legacy
- * kind labels (gh api repos/mvox-dev/mvox-app/labels, 2026-09-18), so a
- * type-derived chip is indistinguishable from the label chip it replaces.
- * `feature` wears `enhancement`'s colour — the repo never had a `feature`
- * label.
- */
 const KIND_CHIP_COLORS: Record<IssueKind, string> = {
 	task: '1d76db',
 	bug: 'd73a4a',
@@ -382,16 +195,6 @@ const KIND_CHIP_COLORS: Record<IssueKind, string> = {
 	epic: '6f42c1'
 };
 
-/**
- * One label chip. Background is the label's own colour (GitHub sends hex
- * without the leading '#', prefixed here); text colour is derived from that
- * colour's relative luminance (label-color.ts), not fixed, so both a very
- * dark (`blocked` #b60205) and a near-white (`wontfix` #ffffff) chip stay
- * readable. A label with no colour, or one that isn't valid 6-digit hex,
- * falls back to the plain `.label` class — today's neutral grey chip. The
- * hairline border lives on the `.label` class itself so every chip gets it,
- * including the fallback and the near-white worst case.
- */
 function renderLabel(label: RoadmapLabel): string {
 	const name = escapeHtml(label?.name ?? '');
 	if (!label?.color || !NO_COLOR_HEX_RE.test(label.color)) {
@@ -402,32 +205,6 @@ function renderLabel(label: RoadmapLabel): string {
 	return `<span class="label" style="background-color: ${background}; color: ${text};">${name}</span>`;
 }
 
-/**
- * Render one issue and its sub-issue subtree.
- *
- * `rendered` carries the issue numbers already placed on the page; an issue
- * already there renders as the empty string. That is what keeps the walk
- * finite: fetch-issues.ts nests the SAME object an issue occupies at top level
- * (that shared identity is what makes two-level nesting work), so a parent link
- * pointing back up its own chain would otherwise recurse until the build died.
- * It also holds the one-entry-per-issue contract here in the renderer rather
- * than resting on the fetch step alone — a child reported under two epics lands
- * under the first and is skipped under the second instead of appearing twice.
- */
-/**
- * The card's upper-right corner (#403): when anyone last touched the issue.
- *
- * Read ONLY from `updatedAt` — never from `closedAt`, a label, or the build
- * stamp. That is what makes the corner's claim true: GitHub moves `updated_at`
- * on an edit, a comment, a label and a close, and leaves it alone when a commit
- * or another issue merely references this one.
- *
- * The instant is re-emitted from `Date.parse` rather than interpolated raw.
- * `escapeHtml` deliberately leaves quotes alone (it is built for text content),
- * so nothing unvalidated may reach the `datetime` ATTRIBUTE — a normalized
- * ISO string cannot carry one. An unparseable value renders nothing at all,
- * which is also the empty-field case.
- */
 export function renderUpdatedAt(updatedAt: string | null | undefined): string {
 	if (!updatedAt) return '';
 	const parsed = Date.parse(updatedAt);
@@ -444,23 +221,12 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	const stateReasonAttr =
 		issue.stateReason != null ? ` data-state-reason="${escapeHtml(issue.stateReason)}"` : '';
 	const leadHtml = lead != null ? `<span class="issue-lead">${escapeHtml(lead)}</span>` : '';
-	// #340's never-fail fixture smuggles `labels: null` and a name-less label
-	// object past the type — `?? []` and renderLabel's own guard keep this a
-	// plain render, not a crash.
-	// #354: a closed issue is not in the queue, so its motion labels (ready /
-	// in process / prepped / in research / blocked) are filtered off before
-	// rendering; kind labels (task/epic/bug/enhancement) always render. Open
-	// issues are unchanged. stalenessViolators reads flattenOpenIssues, which
-	// never touches labelsHtml, so this filter cannot move that fence.
+
 	const visibleLabels =
 		issue.state === 'open'
 			? (issue.labels ?? [])
 			: (issue.labels ?? []).filter((label) => !isMotionLabel(label?.name ?? ''));
-	// #373: an issue with a native type chips its kind FROM THE TYPE — whatever
-	// labels it carries — and its legacy kind labels come off the row so a
-	// retyped issue never shows two contradicting kinds. An issue with no type
-	// (the pre-type archive) renders its labels exactly as before: the kind
-	// label IS its kind chip. Motion labels pass through untouched either way.
+
 	const typedKind = kindFromType(issue.issueType);
 	const kindChipHtml = typedKind ? renderLabel({ name: typedKind, color: KIND_CHIP_COLORS[typedKind] }) : '';
 	const chipLabels = typedKind
@@ -517,17 +283,10 @@ const REFRESH_SCRIPT = (stamp: string) => `(function () {
 	setInterval(poll, 60000);
 })();`;
 
-/**
- * Render the whole board as one complete, self-contained static HTML document.
- * Pure: same inputs → identical output (the clock is injected, never read).
- */
 export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string {
 	const stamp = buildStamp(generatedAt);
 	const rendered = new Set<number>();
-	// boardOrder is the single ordering function — the same call the nested
-	// sub-issue walk in renderIssue uses on its own children — so splitting
-	// its output by state here to place the divider is not a second sort,
-	// just where the one ordered list happens to change state.
+
 	const ordered = boardOrder(issues);
 	const openHtml = ordered
 		.filter((issue) => issue.state === 'open')
@@ -541,14 +300,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 		.join('\n');
 	const violators = stalenessViolators(issues);
 	const warningHtml = renderStalenessWarning(issues, violators);
-	// "Pooleli" / "Tehtud" are hardcoded Estonian literals by design: this
-	// page is a standalone node CLI build step, outside the SvelteKit app and
-	// its Paraglide i18n entirely (see this file's own doc comment) — do not
-	// route these through Paraglide, there is nothing here for it to plug
-	// into. Top-level only: renderIssue's own recursive walk over subIssues
-	// never calls this, so a closed child inside an open epic never spawns a
-	// heading of its own. An empty group (nothing open, or nothing closed)
-	// omits its heading rather than showing a caption over no entries.
+
 	const groupsHtml = [
 		openHtml.length > 0 ? `<section class="board-group"><h2>Pooleli</h2>\n${openHtml}\n</section>` : '',
 		closedHtml.length > 0 ? `<section class="board-group"><h2>Tehtud</h2>\n${closedHtml}\n</section>` : ''
