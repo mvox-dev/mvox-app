@@ -1,7 +1,7 @@
+export const v0 = 0;
 /*
  * why
  */
-export const v0 = 0;
 export const v1 = 1;
 export const v2 = 2;
 export const v3 = 3;

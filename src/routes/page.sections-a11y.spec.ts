@@ -5,6 +5,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
 	isMessageEmpty,
@@ -86,7 +87,9 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { ROSTER_SURFACES } from '$lib/roster/rosterSurfaces';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+
+const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
 // Fixtures: Soprano (one sub-section), Alto, Tenor, and one unassigned member.
 
@@ -243,39 +246,16 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	return container;
 }
 
-// Source-scan helpers: strip script, HTML comments and Svelte expressions; any bare text
-// node left with letters in it is a hardcoded user-facing string.
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
-function bareTextNodes(source: string): string[] {
-	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		// Decorative glyph-only nodes (disclosure carets, drag handle, move
-		// arrows, separators) are fine — they must be aria-hidden or labelled,
-		// which the DOM tests below check; they are not TRANSLATABLE strings.
-		if (/^[▸▾▲▼≡·×♫\s\-–—|(),]+$/.test(text)) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
-}
-
 // 1 — i18n: every sections surface renders via Paraglide keys only
 describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', () => {
+	it('the derived ROSTER_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(ROSTER_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
+
 	it.each(ROSTER_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
 		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});

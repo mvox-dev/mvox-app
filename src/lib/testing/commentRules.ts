@@ -186,9 +186,12 @@ export function checkCommentRules(file: string, source: string): CommentViolatio
 		}
 	}
 
-	const commentCount = kinds.filter((k) => k.isComment).length;
+	// One comment line at the top of a file says what the file is, so it is outside the share.
+	const top = lines.findIndex((line) => line.trim() !== '');
+	const counted = (i: number) => kinds[i].isComment && i !== top;
+	const commentCount = kinds.filter((_, i) => counted(i)).length;
 	if (lines.length > 0 && commentCount / lines.length >= MAX_COMMENT_SHARE) {
-		const firstCommentLine = kinds.findIndex((k) => k.isComment);
+		const firstCommentLine = kinds.findIndex((_, i) => counted(i));
 		const share = Math.round((commentCount / lines.length) * 100);
 		violations.push({
 			file,

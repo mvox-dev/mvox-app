@@ -7,6 +7,7 @@
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
 
 const FILES = [
 	'src/routes/admin/+page.svelte',
@@ -175,45 +176,85 @@ describe('#361 — name-bearing sentences sit whole inside a RedactedText', () =
 });
 
 // THE CLOSED RULE: the shapes above are silent on anything unlisted. This finds
-// EVERY bare name-ish interpolation and demands a marker or a listed
-// not-a-person token, per file (`row.name` is a schedule row here, a person elsewhere).
-const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
-	'src/routes/admin/+page.svelte': ['nameMarker.name'],
-	// the selected collective
-	'src/routes/+page.svelte': ['selected.name'],
-	// a season (manageable / delete confirm / edit field) or event series
-	'src/lib/components/agenda/SeasonManagePanel.svelte': [
-		'ms.name',
-		'seasonManageDeleteName',
-		'seasonManageName',
-		'series.name'
-	],
-	'src/lib/components/agenda/EventCreateForm.svelte': ['eventCreateSeriesDefaults.name'],
-	'src/routes/event/[id]/+page.svelte': [],
-	// the event's own name, and a schedule (agenda) row
-	'src/lib/events/EventFieldEdit.svelte': ['detail.name'],
-	'src/lib/events/EventScheduleSection.svelte': ['row.name'],
-	'src/lib/events/EventRsvpSection.svelte': [],
-	'src/lib/events/EventConvertForm.svelte': [],
-	'src/lib/events/EventWorksSection.svelte': [],
-	'src/lib/events/EventAttendanceSection.svelte': [],
-	'src/lib/events/EventDangerZone.svelte': [],
-	'src/routes/library/+page.svelte': [],
-	// catalogue name fields, and uploaded score filenames
-	'src/lib/library/WorkRow.svelte': ['work.name'],
-	'src/lib/library/EditionRow.svelte': ['edition.name'],
-	'src/lib/library/CopyRow.svelte': ['copy.name'],
-	'src/lib/library/MyLoansSection.svelte': ['copyName'],
-	'src/lib/library/EditionFiles.svelte': ['file.filename', 'broken.filename', 'filename'],
-	'src/lib/library/BulkCheckoutPanel.svelte': [],
-	// the AgendaItem this panel belongs to
-	'src/lib/components/attendance/AttendanceSurface.svelte': ['item.name'],
-	'src/lib/components/attendance/SeasonSummary.svelte': [],
-	'src/lib/profile/ProfileField.svelte': [],
-	'src/lib/profile/RosterNamesToggle.svelte': [],
-	'src/lib/profile/LinkedAccountsSection.svelte': ['scopeName'],
-	'src/lib/profile/ProfileStorageSection.svelte': ['storagePartNames'],
-	'src/lib/components/admin/InviteSurface.svelte': []
+// EVERY bare name-ish interpolation and demands a marker or a not-a-person token
+// with its reason, per file (`row.name` is a schedule row here, a person elsewhere).
+const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+	'src/routes/admin/+page.svelte': {
+		'nameMarker.name': 'the collective name'
+	},
+	'src/routes/+page.svelte': {
+		'selected.name': 'the selected collective'
+	},
+	'src/lib/components/agenda/SeasonManagePanel.svelte': {
+		'ms.name': 'a season',
+		seasonManageDeleteName: 'the season being deleted',
+		seasonManageName: 'the season name being edited',
+		'series.name': 'an event series'
+	},
+	'src/lib/components/agenda/EventCreateForm.svelte': {
+		'eventCreateSeriesDefaults.name': 'the series the event is created in'
+	},
+	'src/lib/events/EventFieldEdit.svelte': {
+		'detail.name': 'the event\'s own name'
+	},
+	'src/lib/events/EventScheduleSection.svelte': {
+		'row.name': 'a schedule (agenda) row'
+	},
+	'src/lib/library/WorkRow.svelte': {
+		'work.name': 'a catalogue work'
+	},
+	'src/lib/library/EditionRow.svelte': {
+		'edition.name': 'a catalogue edition'
+	},
+	'src/lib/library/CopyRow.svelte': {
+		'copy.name': 'a catalogue copy'
+	},
+	'src/lib/library/EditionFiles.svelte': {
+		'file.filename': 'an uploaded score file',
+		'broken.filename': 'an uploaded score file',
+		filename: 'an uploaded score file'
+	},
+	'src/lib/components/attendance/AttendanceSurface.svelte': {
+		'item.name': 'the AgendaItem (event) this panel belongs to'
+	},
+	'src/lib/profile/LinkedAccountsSection.svelte': {
+		scopeName: 'a collective scope'
+	},
+	'src/lib/profile/ProfileStorageSection.svelte': {
+		storagePartNames: 'stored score parts'
+	},
+	'src/lib/components/DeleteTrigger.svelte': {
+		className: 'the class prop, inside a quoted class attribute'
+	},
+	'src/lib/components/agenda/AgendaList.svelte': {
+		'item.name': 'the event name'
+	},
+	'src/lib/components/agenda/AgendaMonthView.svelte': {
+		'item.name': 'the event name'
+	},
+	'src/lib/components/agenda/RepertoireElement.svelte': {
+		'row.workName': 'a repertoire work'
+	},
+	'src/lib/roster/MemberDeactivate.svelte': {
+		'selected.name': 'the selected collective'
+	},
+	'src/lib/sections/SectionArrangeRow.svelte': {
+		'row.name': 'a section',
+		'arrange.renameError.name': 'the section whose rename failed'
+	},
+	'src/routes/+layout.svelte': {
+		'$selectedCollectiveStore.name': 'the selected collective'
+	},
+	'src/routes/downloads/+page.svelte': {
+		'row.label.filename': 'a downloaded score file'
+	},
+	'src/routes/links/+page.svelte': {
+		'row.name': 'a saved link'
+	},
+	'src/routes/roster/+page.svelte': {
+		'node.name': 'a section',
+		'arrange.removeError.name': 'the section whose removal failed'
+	}
 };
 
 const NAME_ISH = /(?:\.\s*names?\b|\b[A-Za-z_$][\w$]*[Nn]ames?\b|\bfilenames?\b)/;
@@ -247,7 +288,10 @@ function textInterpolations(src: string): Array<[number, string]> {
 
 // The name-ish VALUE tokens an expression reads (Paraglide message ids stripped first).
 function nameTokens(expr: string): string[] {
-	const stripped = expr.replace(/\bm\.[a-z0-9_]+/g, 'm.MSG');
+	const stripped = expr
+		.replace(/\bm\.[a-z0-9_]+/g, 'm.MSG')
+		.replace(/\?\./g, '.')
+		.replace(/([{,]\s*)[A-Za-z_$][\w$]*\s*:/g, '$1');
 	const chains = stripped.match(/[A-Za-z_$][\w$]*(?:\s*\.\s*[\w$]+)*/g) ?? [];
 	const out = new Set<string>();
 	for (const raw of chains) {
@@ -266,8 +310,24 @@ function nameIshSites(file: string): Array<[number, string, string[]]> {
 		.map(([i, expr]) => [i, expr, nameTokens(expr)]);
 }
 
+describe('#361 — the guard itself: which tokens read a name value', () => {
+	it('a shorthand `{ name }` key passes the value, so it is still caught', () => {
+		expect(nameTokens('{m.x({ name })}')).toEqual(['name']);
+	});
+
+	it('optional chaining is still caught, folded to a plain chain', () => {
+		expect(nameTokens('{x?.name}')).toEqual(['x.name']);
+	});
+
+	it('an object key is not a value, and a ternary keeps both branches', () => {
+		expect(nameTokens('{m.x({ name: row.id })}')).toEqual([]);
+		expect(nameTokens('{ok ? row.name : other.name}')).toEqual(['row.name', 'other.name']);
+	});
+});
+
 describe('#361 — a name-ish interpolation is marked, or written down as not-a-person', () => {
-	for (const [file, exempt] of Object.entries(NOT_A_PERSONS_NAME)) {
+	for (const file of svelteSurfaces()) {
+		const exempt = Object.keys(NOT_A_PERSONS_NAME[file] ?? {});
 		it(`${file}: every name-ish text interpolation is marked or exempt`, () => {
 			const src = markup(readFileSync(resolve(process.cwd(), file), 'utf-8'));
 			const bare: string[] = [];
@@ -287,14 +347,15 @@ describe('#361 — a name-ish interpolation is marked, or written down as not-a-
 
 	// NON-VACUOUS, both ways: the scanner really matches, and no exemption is stale.
 	it('the scanner matches real interpolations, and every exemption is still in use', () => {
-		const scanned = Object.keys(NOT_A_PERSONS_NAME).reduce(
+		const scanned = svelteSurfaces().reduce(
 			(n, file) => n + nameIshSites(file).length,
 			0
 		);
 		expect(scanned, 'the scanner must actually match name-ish interpolations').toBeGreaterThan(15);
 
 		const stale: string[] = [];
-		for (const [file, tokens] of Object.entries(NOT_A_PERSONS_NAME)) {
+		for (const [file, reasons] of Object.entries(NOT_A_PERSONS_NAME)) {
+			const tokens = Object.keys(reasons);
 			const seen = new Set(nameIshSites(file).flatMap(([, , t]) => t));
 			for (const token of tokens) if (!seen.has(token)) stale.push(`${file}: ${token}`);
 		}

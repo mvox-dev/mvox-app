@@ -4,7 +4,8 @@ import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
+import { bareTextNodes } from '$lib/testing/bareText';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -40,6 +41,8 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
+const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
+
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function readSource(relPath: string): string {
@@ -48,28 +51,6 @@ function readSource(relPath: string): string {
 
 function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
-}
-
-function bareTextNodes(source: string): string[] {
-	const templateMatch = source.match(/<\/script>\s*([\s\S]*)$/);
-	let template = templateMatch ? templateMatch[1] : source;
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
 }
 
 function json(body: unknown, status = 200) {
@@ -246,6 +227,10 @@ function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 }
 
 describe('#105 — i18n: the event detail page renders via Paraglide keys only', () => {
+	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
+
 	it.each(EVENT_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
 		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});

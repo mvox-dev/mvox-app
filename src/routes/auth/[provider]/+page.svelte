@@ -6,11 +6,10 @@
 	import { safeRedirectTarget } from '$lib/auth/redirect';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	import { buildOAuthInitUrl } from './build-oauth-init-url';
+	import { m } from '$lib/paraglide/messages.js';
 
-	// Client-side OAuth kickoff: read provider + return target from the URL (no
-	// server load), build the Entu OAuth-init URL, and redirect the browser to it.
-	// Wrapped: a localStorage write failure (private mode / quota) must not strand
-	// the "Redirecting…" spinner — fall back to the login screen with an error.
+	// A localStorage write failure (private mode, quota) must not strand the redirecting
+	// notice, so any throw falls back to the login screen with an error.
 	onMount(() => {
 		try {
 			const provider = page.params.provider ?? '';
@@ -50,5 +49,5 @@
 </script>
 
 <main class="flex min-h-screen items-center justify-center bg-paper text-ink">
-	<p class="font-sans text-sm text-ink">Redirecting to sign-in…</p>
+	<p class="font-sans text-sm text-ink">{m.auth_redirecting()}</p>
 </main>

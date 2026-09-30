@@ -1,28 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #86 TA.5 RED — i18n + a11y coverage for all Attendance 1.0 surfaces:
-//   - AgendaList's recent-row attendance badge + 'Take attendance' entry point
-//   - AttendanceSurface (the conductor's inline P/A/L panel)
-//   - SeasonSummary (my rate + conductor's all-members expansion)
-//
-// Follows the #75/TL.4 precedent (page.library.a11y.spec.ts): source-scan tests
-// for i18n hygiene + rendered-DOM tests for aria semantics. These are RED —
-// they assert a11y attributes the TA.2–TA.4 components do not yet carry
-// (toggle aria-labels, badge dot aria-hidden, role="alert" on load errors,
-// aria-controls + list semantics on the season summary, a descriptive
-// aria-label on the take-attendance button). A few guard tests pin down
-// behaviour that already exists (aria-pressed, save-failed role="alert",
-// locale key parity) so GREEN can't regress it.
+
+// i18n + a11y for the attendance surfaces: AgendaList's badge, AttendanceSurface, SeasonSummary.
 import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
-// Paraglide mock: real English strings for the keys that exist today, plus a
-// Proxy fallback so aria-label keys ADDED by the GREEN pass resolve without
-// this file needing to know their names — the fallback renders
-// "<key> <param values...>", so assertions like "the label contains the member
-// name" hold for any key shape as long as the name is passed as a param.
+// Unknown keys fall back to "<key> <param values...>", so a label assertion like "contains the
+// member name" holds for any key that takes the name as a param.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const known: Record<string, (p?: Record<string, unknown>) => string> = {
 		agenda_empty_no_events: () => 'No upcoming events.',
@@ -78,9 +65,7 @@ import type { AgendaItem } from '$lib/agenda/types';
 
 afterEach(cleanup);
 
-// ---------------------------------------------------------------------------
 // Fixtures
-// ---------------------------------------------------------------------------
 function agendaItem(id: string, overrides: Partial<AgendaItem> = {}): AgendaItem {
 	return {
 		id,
@@ -105,54 +90,21 @@ const memberRatesTwo = [
 	{ memberId: 'm2', name: 'Berta Bass', attended: 0, total: 4 }
 ];
 
-// ---------------------------------------------------------------------------
-// Source-scan helpers (i18n hygiene) — same strategy as page.library.a11y.spec.ts:
-// strip Svelte expressions + HTML comments from the template, then any remaining
-// bare text node with letters in it is a hardcoded user-facing string.
-// ---------------------------------------------------------------------------
-const ATTENDANCE_SURFACE_FILES = [
-	'src/lib/components/attendance/AttendanceSurface.svelte',
-	'src/lib/components/attendance/SeasonSummary.svelte',
-	'src/lib/components/agenda/AgendaList.svelte'
-];
+const ATTENDANCE_SURFACE_FILES = surfacesUnder(
+	'src/lib/components/attendance/',
+	'src/lib/components/agenda/'
+);
 
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
-function bareTextNodes(source: string): string[] {
-	const templateMatch = source.match(/<\/script>\s*([\s\S]*)$/);
-	// A component may be template-only (no <script>) — then the whole file is template.
-	let template = templateMatch ? templateMatch[1] : source;
-	// Strip HTML comments — they carry prose but render nothing.
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	// Repeatedly remove innermost { … } blocks until none remain.
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		// Pure punctuation / decorative unicode is fine.
-		if (/^[▸▾·×\s\-–—|]+$/.test(text)) continue;
-		// HTML entities (&times; &nbsp; …) are decorative glyphs, not prose.
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		// Must contain at least one letter to count as user-facing prose.
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
-}
-
-// ---------------------------------------------------------------------------
 // 1 — i18n: every attendance surface renders via Paraglide keys only
-// ---------------------------------------------------------------------------
 describe('#86 — i18n: no hardcoded user-facing strings on attendance surfaces', () => {
+	it('the derived ATTENDANCE_SURFACE_FILES list is not empty (a moved folder would scan nothing)', () => {
+		expect(ATTENDANCE_SURFACE_FILES.length).toBeGreaterThanOrEqual(3);
+	});
+
 	for (const relPath of ATTENDANCE_SURFACE_FILES) {
 		it(`${relPath} contains no bare text nodes outside m.* calls`, () => {
 			expect(bareTextNodes(readSource(relPath))).toEqual([]);
@@ -181,9 +133,7 @@ describe('#86 — i18n: no hardcoded user-facing strings on attendance surfaces'
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 2 — P/A/L toggle buttons: aria-pressed + aria-label
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: P/A/L toggles carry aria-pressed and aria-label', () => {
 	function renderPanel() {
 		return render(AttendanceSurface, {
@@ -242,9 +192,7 @@ describe('#86 — a11y: P/A/L toggles carry aria-pressed and aria-label', () => 
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 3 — recent-row attendance badge: screen-reader text, decorative dot hidden
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: attendance badge is readable without color', () => {
 	function renderRecent(myAttendanceByEventId: Record<string, 'present' | 'absent' | 'late' | 'not-recorded'> = {}) {
 		return render(AgendaList, {
@@ -287,9 +235,7 @@ describe('#86 — a11y: attendance badge is readable without color', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 4 — error surfaces announce themselves: role="alert"
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: attendance error surfaces use role="alert"', () => {
 	it('the panel load-error has role="alert"', () => {
 		const { container } = render(AttendanceSurface, {
@@ -326,10 +272,8 @@ describe('#86 — a11y: attendance error surfaces use role="alert"', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 5 — season summary: aria-expanded/aria-controls on the toggle, list
 //     semantics on the per-member rates
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: season summary expansion + member-rates semantics', () => {
 	it('the all-members toggle reflects state via aria-expanded', () => {
 		const collapsed = render(SeasonSummary, {
@@ -408,9 +352,7 @@ describe('#86 — a11y: season summary expansion + member-rates semantics', () =
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 6 — 'Take attendance' button: descriptive aria-label
-// ---------------------------------------------------------------------------
 describe("#86 — a11y: 'Take attendance' button identifies its event", () => {
 	it("the button's aria-label names the event — several recent rows each carry one, and 'Take attendance' alone doesn't say which rehearsal", async () => {
 		const { container } = render(AgendaList, {
@@ -439,9 +381,7 @@ describe("#86 — a11y: 'Take attendance' button identifies its event", () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 7 — aria-busy on toggle group while a write is in flight (F2)
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: toggle group carries aria-busy while pending', () => {
 	it('pending member — the toggle wrapper advertises aria-busy="true"', () => {
 		const { container } = render(AttendanceSurface, {
@@ -471,9 +411,7 @@ describe('#86 — a11y: toggle group carries aria-busy while pending', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 8 — tally line uses aria-live so screen readers announce updates (F3)
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: attendance tally is a live region', () => {
 	it('the tally <p> carries aria-live="polite"', () => {
 		const { container } = render(AttendanceSurface, {
@@ -487,9 +425,7 @@ describe('#86 — a11y: attendance tally is a live region', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 9 — P/A/L toggles are keyboard-operable (F5)
-// ---------------------------------------------------------------------------
 describe('#86 — a11y: P/A/L toggles are keyboard-operable', () => {
 	it('every toggle is a native <button> reachable via Tab (roving tabindex — one "0" stop per member group, the rest "-1" and still arrow-key operable)', () => {
 		const { container } = render(AttendanceSurface, {
@@ -502,10 +438,8 @@ describe('#86 — a11y: P/A/L toggles are keyboard-operable', () => {
 		toggles.forEach((toggle) => {
 			expect(toggle.tagName).toBe('BUTTON');
 		});
-		// #156 — roving tabindex: each member's P/A/L group has exactly ONE
-		// tabindex="0" stop (Tab reaches the group once), the other two sit at
-		// "-1" and remain reachable via the group's own arrow-key handler —
-		// still WCAG 2.1.1 keyboard-operable, just not each its own Tab stop.
+		// Roving tabindex (#156): one tabindex="0" stop per P/A/L group; the other two sit at
+		// "-1", reachable by the group's arrow keys, so it stays keyboard-operable (WCAG 2.1.1).
 		for (const memberId of ['m1', 'm2']) {
 			const group = container.querySelector(`[data-testid="attendance-status-group-${memberId}"]`);
 			const zeroStops = group?.querySelectorAll('button[tabindex="0"]');
@@ -641,9 +575,7 @@ describe('#86 — a11y: P/A/L toggles are keyboard-operable', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // Guards on a11y that already exists — GREEN must not regress these
-// ---------------------------------------------------------------------------
 describe('#86 — a11y guards: existing attendance semantics stay intact', () => {
 	it('the panel collapse button keeps its i18n aria-label', () => {
 		const { container } = render(AttendanceSurface, {

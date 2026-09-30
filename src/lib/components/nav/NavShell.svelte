@@ -3,6 +3,7 @@
 	import type { Snippet } from 'svelte';
 	import type { NavEntry, NavContext } from '$lib/nav/entries';
 	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { m } from '$lib/paraglide/messages.js';
 
 	let {
 		entries,
@@ -10,10 +11,8 @@
 		completionLocked = false,
 		anonymous = false,
 		isAdmin = false,
-		// #338 — no real NAV_ENTRIES entry reads this any more (the collectives
-		// entry died with its page; the picker lives in the agenda header). It
-		// stays as NavContext's second visibility axis, exercised by NavShell.spec,
-		// so a future entry can gate on it without re-threading the shell.
+		// No NAV_ENTRIES entry reads this now; it stays as NavContext's second visibility
+		// axis so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
 		children,
 	}: {
@@ -29,21 +28,16 @@
 	const ctx: NavContext = $derived({ isAdmin, hasMultipleCollectives });
 	const visibleEntries = $derived(entries.filter((e) => e.visible(ctx)));
 
-	// Completion-lock disables every entry but Profile. Hoisted OUT of the
-	// markup (#156 review F2) because the roving-tabindex resolution below has
-	// to consult it too — a tab stop parked on a disabled link is a tab stop
-	// the keyboard can never reach, and since the disabled links carry
-	// tabindex="-1" unconditionally, that silently drops the WHOLE nav out of
-	// the tab order.
+	// Completion-lock disables every entry but Profile. Out of the markup because the roving
+	// tabindex below needs it too: a tab stop parked on a disabled link (tabindex="-1")
+	// drops the whole nav out of the tab order.
 	function isDisabled(entry: NavEntry): boolean {
 		return completionLocked && entry.route !== '/profile';
 	}
 	const enabledEntries = $derived(visibleEntries.filter((e) => !isDisabled(e)));
 
-	// Route matching is SEGMENT-aware and LONGEST-WINS. Two entries can share a
-	// prefix ('/admin' and '/admin/invite'); a per-entry `startsWith` test would
-	// mark BOTH current on /admin/invite (two aria-current="page", two active
-	// tabs). Resolve the single winning entry once, over the visible set.
+	// Route matching is segment-aware and longest-wins: '/admin' and '/admin/invite' share a
+	// prefix, so a per-entry `startsWith` would mark both current on /admin/invite.
 	function matchesRoute(route: string): boolean {
 		if (route === '/') return activeRoute === '/';
 		return activeRoute === route || activeRoute.startsWith(route + '/');
@@ -58,20 +52,12 @@
 		return best?.key ?? null;
 	});
 
-	// #156 — roving tabindex. `rovingKey` is the last entry focus landed on;
-	// `activeNavKey` falls back to the current page's entry (so Tab lands on
-	// where you are), then to the first entry, covering first render AND a
-	// roving key that vanished from under it (entries can change with
-	// `isAdmin`/`hasMultipleCollectives`/completion-lock).
-	//
-	// EVERY candidate is checked against `enabledEntries`, not `visibleEntries`
-	// (#156 review F2). A disabled entry is visible-but-unfocusable, so naming
-	// one the tab stop leaves zero links with tabindex="0" and strands the
-	// user — including out of reach of Profile, the only link that clears the
-	// lock. Both routes into that state are real: clicking a greyed link
-	// focuses it in Chrome (writing `rovingKey`), and the current route's own
-	// entry is disabled on any locked non-/profile render, since the layout's
-	// redirect is an $effect that runs after the first paint.
+	// Roving tabindex: the last focused entry, else the current page's, else the first, so a
+	// roving key that vanished with a context change still leaves one tab stop.
+
+	// Every candidate must be ENABLED: a disabled tab stop leaves no tabindex="0" link and
+	// strands the user away from Profile, the only link that clears the lock. Chrome focuses
+	// a clicked greyed link, and the locked route's own entry renders before the redirect.
 	let rovingKey = $state<string | null>(null);
 	const activeNavKey = $derived.by(() => {
 		if (rovingKey !== null && enabledEntries.some((e) => e.key === rovingKey)) return rovingKey;
@@ -95,11 +81,8 @@
 
 	function handleKeydown(e: KeyboardEvent): void {
 		const nav = (e.currentTarget as HTMLElement);
-		// Members are every ENABLED link, not just the current tab stop — with
-		// roving tabindex only one link carries tabindex="0" at a time, so
-		// filtering on tabindex here (the old selector) would leave arrow-nav
-		// with a group of one. `aria-disabled` is the real enabled/disabled
-		// signal now.
+		// Members are every enabled link, not the tab stop: with roving tabindex only one link
+		// has tabindex="0", so filtering on it would leave arrow-nav a group of one.
 		const links = Array.from(
 			nav.querySelectorAll<HTMLAnchorElement>('a:not([aria-disabled="true"])')
 		);
@@ -120,7 +103,7 @@
 	<div class="nav-shell" class:rail-right={railSide === 'right'}>
 		<nav
 			role="navigation"
-			aria-label="Main navigation"
+			aria-label={m.nav_main_label()}
 			class="nav-bar"
 			onkeydown={handleKeydown}
 		>

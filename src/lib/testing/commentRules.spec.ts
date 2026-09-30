@@ -66,7 +66,7 @@ describe('checkCommentRules — the four violations, each from a planted fixture
 		expect(check('line-too-long.ts')).toEqual([{ rule: 'line-too-long', line: 2 }]);
 	});
 
-	it('comments at 15% of a file are too many', () => {
+	it('comments at or over 10% of a file are too many', () => {
 		expect(check('too-many-comments.ts').map((v) => v.rule)).toEqual(['too-many-comments']);
 	});
 
@@ -154,6 +154,59 @@ describe('checkCommentRules — what is not a violation', () => {
 
 	it('a code line with a trailing // is not a comment line', () => {
 		expect(check('trailing-comments.ts')).toEqual([]);
+	});
+});
+
+describe('checkCommentRules — one comment line at the top of a file is outside the share', () => {
+	const code = (n: number) => Array.from({ length: n }, (_, i) => `export const v${i} = ${i};`);
+	function found(file: string, lines: string[]): Array<Pick<CommentViolation, 'rule' | 'line'>> {
+		return checkCommentRules(file, lines.join('\n') + '\n').map(({ rule, line }) => ({
+			rule,
+			line
+		}));
+	}
+
+	it('a short file whose only comment is the top line passes, in every one-line syntax', () => {
+		expect(found('src/x.ts', ['// what this is', ...code(1)])).toEqual([]);
+		expect(found('src/x.ts', ['/* what this is */', ...code(1)])).toEqual([]);
+		expect(found('src/X.svelte', ['<!-- what this is -->', '<p>x</p>'])).toEqual([]);
+	});
+
+	it('leading blank lines do not move the top: the first non-blank line is it', () => {
+		expect(found('src/x.ts', ['', '', '// what this is', ...code(1)])).toEqual([]);
+	});
+
+	it('a second comment line still counts, reported at that line', () => {
+		expect(found('src/x.ts', ['// top', ...code(4), '// second', ...code(4)])).toEqual([
+			{ rule: 'too-many-comments', line: 6 }
+		]);
+		expect(found('src/x.ts', ['// top', '// second', ...code(8)])).toEqual([
+			{ rule: 'too-many-comments', line: 2 }
+		]);
+	});
+
+	it('a comment after code is not the top line', () => {
+		expect(found('src/x.ts', [...code(1), '// not top'])).toEqual([
+			{ rule: 'too-many-comments', line: 2 }
+		]);
+	});
+
+	it('the top line still obeys the length, narration and run rules', () => {
+		expect(found('src/x.ts', [`// ${'q'.repeat(98)}`, ...code(19)])).toEqual([
+			{ rule: 'line-too-long', line: 1 }
+		]);
+		expect(found('src/x.ts', ['// slice 4 moved this', ...code(19)])).toEqual([
+			{ rule: 'review-history', line: 1 }
+		]);
+		expect(found('src/x.ts', ['// a', '// b', '// c', '// d', ...code(36)])).toEqual([
+			{ rule: 'comment-too-long', line: 1 }
+		]);
+	});
+
+	it('a svelte file opening with <script> gets no allowance', () => {
+		expect(found('src/X.svelte', ['<script>', '\t// why', '</script>', '<p>x</p>'])).toEqual([
+			{ rule: 'too-many-comments', line: 2 }
+		]);
 	});
 });
 
