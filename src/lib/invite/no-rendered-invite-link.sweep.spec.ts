@@ -1,25 +1,6 @@
-// #360 — the done-when sweep AS A TEST: "A search of the tree finds no
-// remaining render of a composed invite URL." This spec walks every non-spec
-// source file under src/, classifies every site where invite-link material
-// appears (buildInviteUrl / buildInviteProviderHref / `/invite/${…}`
-// interpolation, or an identifier assigned from one of those), and:
-//
-//   1. proves the INSTRUMENT on inline fixtures first (negative-from-the-
-//      instrument law: a clean negative is a claim about the instrument until
-//      the instrument is shown to catch the leak it exists for);
-//   2. asserts the FORBIDDEN kinds (markup-value, markup-text) are EMPTY —
-//      the #360 ruling: the invite URL/token never renders, in any state;
-//   3. asserts the full enumeration of remaining (allowed) sites equals a
-//      maintained allowlist of the copy-only / navigation-only sites — so a
-//      FUTURE file that starts composing or navigating invite URLs fails the
-//      suite and forces a conscious allowlist decision.
-//
-// REDEEM-PATH BOUNDARY (Gama, #360, verbatim): "'not shown on screen' governs
-// admin surfaces where someone else's bearer secret sits before a third
-// party; on the redeem path the token is in its owner's hands and carrying it
-// is what an invite link is." — which is why the invite/[token] landing's
-// href={…} sites and the auth callback's redirect composition are ALLOWED
-// entries below, not violations.
+// #360 — no rendered invite URL: prove the classifier on fixtures, assert no forbidden site
+// in the tree, and match every allowed site to the allowlist. The redeem path is allowed: there
+// the token is in its owner's hands (Gama, #360).
 import { describe, expect, it } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
@@ -152,10 +133,7 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 					.map((s) => `${s.file} :: ${s.kind}`)
 			)
 		].sort();
-		// The maintained allowlist. Adding an entry here is a CONSCIOUS decision
-		// that a new site is copy-only or navigation-only — see the redeem-path
-		// boundary comment at the top of this file for why invite/[token] and the
-		// auth callback belong on it.
+		// Adding an entry is a conscious call that the new site is copy-only or navigation-only.
 		expect(found).toEqual(
 			[
 				// the one composer module (script only, exports pure builders)
@@ -163,8 +141,8 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 				// admin surface — composes in script, egress is the clipboard only
 				'src/lib/components/admin/InviteSurface.svelte :: script-compose',
 				// roster rows — compose in script, {#if} guards gate the copy panel
-				'src/routes/roster/+page.svelte :: script-compose',
-				'src/routes/roster/+page.svelte :: markup-guard',
+				'src/lib/roster/rosterMemberOps.ts :: script-compose',
+				'src/lib/roster/MemberInvite.svelte :: markup-guard',
 				// REDEEM PATH (owner's own hands — see boundary comment above):
 				// the landing page navigates/hrefs the token, never shows it as text
 				'src/routes/invite/[token]/+page.svelte :: script-compose',
@@ -176,5 +154,4 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 	});
 });
 
-// (*MVOX:Tallis* — #360 RED: the done-when sweep as a standing suite — fixture-
-//  proven classifier, forbidden-kinds-empty, full enumeration over an allowlist)
+// (*MVOX:Tallis*)

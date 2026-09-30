@@ -1,27 +1,6 @@
-// #360 — pure classifier behind the no-rendered-invite-link sweep
-// (src/lib/invite/no-rendered-invite-link.sweep.spec.ts). Scans ONE source
-// file's text for every site where invite-link material (buildInviteUrl /
-// buildInviteProviderHref / a `/invite/${…}` interpolation, or an identifier
-// assigned from one of those) appears, and classifies HOW it is used:
-//
-//   script-compose  — composition/import in script code (never rendered)
-//   markup-guard    — a carrier inside {#if}/{:else if}/{#each} control flow
-//   markup-handler  — a carrier inside an event-handler attribute
-//   markup-href     — a carrier/builder inside href={…} (navigation-only)
-//   markup-value    — a carrier/builder inside value={…}      ← FORBIDDEN
-//   markup-text     — a carrier/builder reaching rendered text ← FORBIDDEN
-//
-// The FORBIDDEN kinds are the #360 ruling as machine-checkable fact: the
-// invite URL/token never renders as text or as an element's value, in any
-// state. Guard-instrument law: this module is pure (string in, sites out) so
-// the sweep spec can prove ON INLINE FIXTURES that the instrument actually
-// catches a leak before trusting its clean pass over the real tree.
-//
-// Known limit (stated, not hidden): classification context is LINE-based. A
-// carrier referenced on the continuation line of a multi-line attribute is
-// classified `markup-text` — a FALSE POSITIVE that fails the sweep loudly and
-// is resolved by keeping the reference on the attribute's own line. Loud
-// false positive over silent false negative, by design.
+// #360 — pure classifier behind the no-rendered-invite-link sweep: finds each invite-link site
+// in one file and classifies its use. markup-value and markup-text are forbidden. Context is
+// line-based: a carrier on an attribute's continuation line reads as text, a loud false positive.
 
 export type InviteSiteKind =
 	| 'script-compose'
@@ -47,12 +26,10 @@ export const FORBIDDEN_KINDS: ReadonlySet<InviteSiteKind> = new Set([
 const BUILDERS = /buildInviteUrl|buildInviteProviderHref/;
 /** A template-literal interpolation composing an /invite/<token> path. */
 const INVITE_INTERPOLATION = /\/invite\/\$\{/;
-/** Identifiers that are invite-link material wherever they appear in markup,
- *  independent of any assignment the scan can see. */
-const BUILTIN_CARRIERS = ['inviteToken'];
+/** Invite-link material wherever it appears in markup, whatever the scan sees assigned. */
+const BUILTIN_CARRIERS = ['inviteToken', 'inviteLinkByMemberId'];
 
-/** Split a .svelte source into script text and markup text, preserving line
- *  positions (non-owned regions are blanked line-by-line, never removed). */
+/** Split a .svelte source into script and markup, blanking the other region line by line. */
 function splitSvelte(source: string): { script: string; markup: string } {
 	const lines = source.split('\n');
 	const scriptLines: string[] = [];
@@ -136,5 +113,4 @@ export function scanInviteUrlSites(file: string, source: string): InviteSite[] {
 	return sites;
 }
 
-// (*MVOX:Tallis* — #360 RED instrument: the pure classifier the sweep spec
-//  proves on inline fixtures before trusting over the tree)
+// (*MVOX:Tallis*)

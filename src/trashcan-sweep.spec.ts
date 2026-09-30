@@ -54,7 +54,7 @@ describe('#237 — every Table-A route imports the shared unit (integration floo
 		'lib/components/agenda/SeasonManagePanel.svelte',
 		'lib/events/EventScheduleSection.svelte',
 		'lib/events/EventDangerZone.svelte',
-		'routes/roster/+page.svelte'
+		'lib/sections/SectionArrangeRow.svelte'
 	];
 	for (const route of routes) {
 		it(`${route} imports $lib/components/DeleteTrigger.svelte`, () => {
