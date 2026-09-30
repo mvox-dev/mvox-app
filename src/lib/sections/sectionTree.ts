@@ -140,15 +140,21 @@ export function listArrangeRows(
 	nodes: SectionNode[],
 	memberCountOf: (id: string) => number
 ): ArrangeRow[] {
-	const list: ArrangeRow[] = [];
-	function walk(level: SectionNode[]): void {
-		for (const n of level) {
-			list.push({ id: n.id, name: n.name, depth: n.depth, memberCount: memberCountOf(n.id) });
-			walk(n.children);
-		}
-	}
-	walk(nodes);
-	return list;
+	return flattenSections(nodes).map((n) => ({
+		id: n.id,
+		name: n.name,
+		depth: n.depth,
+		memberCount: memberCountOf(n.id)
+	}));
+}
+
+export function sectionNamesFor(
+	sectionIds: string[] | undefined,
+	nameById: Map<string, string>
+): string[] {
+	return (sectionIds ?? [])
+		.map((id) => nameById.get(id))
+		.filter((name): name is string => Boolean(name));
 }
 
 // (*MVOX:Josquin*)

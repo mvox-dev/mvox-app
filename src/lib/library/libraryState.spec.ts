@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
+	applyLendings,
 	createEditionDrafts,
+	createLibraryState,
 	createWorkForm,
 	editionDraftView,
 	workFormView
@@ -66,5 +69,34 @@ describe('editionDraftView', () => {
 		expect([...drafts.open]).toEqual(['w2']);
 		expect([...drafts.name]).toEqual([['w2', '']]);
 		expect([...drafts.publisher]).toEqual([['w2', '']]);
+	});
+});
+
+describe('applyLendings', () => {
+	const lending = {
+		id: 'l1',
+		copyId: 'c1',
+		memberId: 'm1',
+		assignedAt: '2026-09-01',
+		assignedUntil: '',
+		returnedAt: ''
+	};
+
+	it('stores the lendings and borrower names and returns the truncation flag', () => {
+		const lib = createLibraryState();
+		const borrowerNames = new Map([['m1', 'Ada']]);
+		const truncated = applyLendings(lib, {
+			lendings: { ...toListRead([lending]), truncated: true },
+			borrowerNames
+		});
+		expect(truncated).toBe(true);
+		expect(lib.lendings).toEqual([lending]);
+		expect(lib.borrowerNames).toBe(borrowerNames);
+	});
+
+	it('returns false for a complete read', () => {
+		const lib = createLibraryState();
+		expect(applyLendings(lib, { lendings: toListRead([]), borrowerNames: new Map() })).toBe(false);
+		expect(lib.lendings).toEqual([]);
 	});
 });

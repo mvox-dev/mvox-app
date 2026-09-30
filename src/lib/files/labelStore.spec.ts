@@ -234,12 +234,17 @@ describe('#353 — composition + call sites: the label index is WIRED, not besid
 		}
 	);
 
+	it('openPart hands the part label to the viewer through the navigation state', () => {
+		const source = src('src/lib/parts/openPart.ts');
+		expect(source).toContain('partLabel');
+		expect(source).toMatch(/goto\([^;]*state:/s);
+	});
+
 	it.each(['src/routes/library/+page.svelte', 'src/lib/events/EventWorksSection.svelte'])(
-		'%s hands the part label to the viewer through the navigation state',
+		'%s opens a part through openPart',
 		(page) => {
-			const source = src(page);
-			expect(source).toContain('partLabel');
-			expect(source).toMatch(/goto\([^;]*state:/s);
+			expect(src(page)).toMatch(/import \{ openPart \} from '\$lib\/parts\/openPart'/);
+			expect(src(page)).toContain('openPart(');
 		}
 	);
 });

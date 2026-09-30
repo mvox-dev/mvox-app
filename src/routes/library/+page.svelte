@@ -1,7 +1,7 @@
 <script lang="ts">
 	// #54/#73 — the library: works, editions and copies with availability from lending, the
 	// member's own loans, and the librarian's tools. The page owns every load and every write.
-	import { goto } from '$app/navigation';
+	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -36,6 +36,7 @@
 	import { writesAvailable } from '$lib/net/online';
 	import { createLendingView } from '$lib/library/lendingView';
 	import {
+		applyLendings,
 		applyUploadFailures,
 		closeEditionDraft,
 		closeWorkForm,
@@ -182,9 +183,7 @@
 			if (!isCurrent()) return;
 			lib.works = listing.works.items;
 			worksPartial = listing.works.truncated;
-			lib.lendings = listing.lendings.items;
-			lendingsPartial = listing.lendings.truncated;
-			lib.borrowerNames = listing.borrowerNames;
+			lendingsPartial = applyLendings(lib, listing);
 			status = 'ready';
 
 			// Cache-backed, so my-loans survives offline; a rejection must not take the listing down.
@@ -396,19 +395,13 @@
 		applyUploadFailures(fileUploads, editionId, result.failed);
 	}
 
-	// #427 — Open navigates to the part viewer. The label rides in the navigation state:
-	// work, composer and edition are known here and nowhere in the viewer.
 	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
-		goto(`/part/${fileId}?db=${selected.db}`, {
-			state: {
-				partLabel: {
-					work: work.name,
-					composer: work.composer,
-					edition: edition.name,
-					filename
-				}
-			}
+		openPart(selected.db, fileId, {
+			work: work.name,
+			composer: work.composer,
+			edition: edition.name,
+			filename
 		});
 	}
 
@@ -516,9 +509,7 @@
 			});
 			// Stores without serving: the live answer or a rejection, never pre-write availability.
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
 			const errNext = new Map(lib.inlineCheckoutErrors);
@@ -538,9 +529,7 @@
 		try {
 			await returnLending(cfg, lendingId);
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 		} catch (e) {
 			console.error('library: return failed', e);
 			returnError = e instanceof Error ? e.message : 'Return failed';
@@ -570,9 +559,7 @@
 				bulk.error = `${result.failed.length} checkout(s) failed`;
 			}
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 			bulk.members = new Set();
 			bulk.dueDate = '';
 		} catch (e) {

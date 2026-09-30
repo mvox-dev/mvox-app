@@ -3,6 +3,7 @@ import type { UploadEditionFilesResult } from '$lib/library/editionFiles';
 import type { ActiveMember } from '$lib/roster/rosterData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { CopySortKey } from '$lib/library/copySort';
+import type { ListRead } from '$lib/entu/listRead';
 import { withItem, without } from '$lib/collections/immutable';
 
 export type NodeStatus = 'idle' | 'loading' | 'error';
@@ -178,6 +179,16 @@ export function setEditionDraftError(
 
 export function setEditionDraftPending(drafts: EditionDrafts, workId: string, on: boolean): void {
 	drafts.pending = withItem(drafts.pending, workId, on);
+}
+
+// Returns whether the lendings read was truncated; the page holds that flag, not `lib`.
+export function applyLendings(
+	lib: LibraryState,
+	read: { lendings: ListRead<Lending>; borrowerNames: Map<string, string> }
+): boolean {
+	lib.lendings = read.lendings.items;
+	lib.borrowerNames = read.borrowerNames;
+	return read.lendings.truncated;
 }
 
 /** What InlineCreateForm reads and calls, over either state shape. */
