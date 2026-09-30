@@ -146,6 +146,10 @@ afterEach(() => {
 // Test 1: All user-facing strings come from Paraglide (no hardcoded strings)
 // ---------------------------------------------------------------------------
 describe('#75 — i18n: no hardcoded user-facing strings', () => {
+	it('the derived LIBRARY_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(LIBRARY_SURFACES.length).toBeGreaterThanOrEqual(9);
+	});
+
 	it.each(LIBRARY_SURFACES)('%s contains no hardcoded user-facing text outside m.* calls', (file) => {
 		expect(bareTextNodes(readFileSync(resolve(process.cwd(), file), 'utf-8'))).toEqual([]);
 	});

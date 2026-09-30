@@ -209,9 +209,6 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/library/CopyRow.svelte': {
 		'copy.name': 'a catalogue copy'
 	},
-	'src/lib/library/MyLoansSection.svelte': {
-		copyName: 'a catalogue copy'
-	},
 	'src/lib/library/EditionFiles.svelte': {
 		'file.filename': 'an uploaded score file',
 		'broken.filename': 'an uploaded score file',
@@ -239,11 +236,10 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 		'row.workName': 'a repertoire work'
 	},
 	'src/lib/roster/MemberDeactivate.svelte': {
-		name: 'selected?.name, the collective'
+		'selected.name': 'the selected collective'
 	},
 	'src/lib/sections/SectionArrangeRow.svelte': {
 		'row.name': 'a section',
-		name: 'the message param carrying a section name',
 		'arrange.renameError.name': 'the section whose rename failed'
 	},
 	'src/routes/+layout.svelte': {
@@ -257,7 +253,6 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	},
 	'src/routes/roster/+page.svelte': {
 		'node.name': 'a section',
-		name: 'the message param carrying a section name',
 		'arrange.removeError.name': 'the section whose removal failed'
 	}
 };
@@ -293,7 +288,10 @@ function textInterpolations(src: string): Array<[number, string]> {
 
 // The name-ish VALUE tokens an expression reads (Paraglide message ids stripped first).
 function nameTokens(expr: string): string[] {
-	const stripped = expr.replace(/\bm\.[a-z0-9_]+/g, 'm.MSG');
+	const stripped = expr
+		.replace(/\bm\.[a-z0-9_]+/g, 'm.MSG')
+		.replace(/\?\./g, '.')
+		.replace(/([{,]\s*)[A-Za-z_$][\w$]*\s*:/g, '$1');
 	const chains = stripped.match(/[A-Za-z_$][\w$]*(?:\s*\.\s*[\w$]+)*/g) ?? [];
 	const out = new Set<string>();
 	for (const raw of chains) {
@@ -311,6 +309,21 @@ function nameIshSites(file: string): Array<[number, string, string[]]> {
 		.filter(([, expr]) => NAME_ISH.test(expr))
 		.map(([i, expr]) => [i, expr, nameTokens(expr)]);
 }
+
+describe('#361 — the guard itself: which tokens read a name value', () => {
+	it('a shorthand `{ name }` key passes the value, so it is still caught', () => {
+		expect(nameTokens('{m.x({ name })}')).toEqual(['name']);
+	});
+
+	it('optional chaining is still caught, folded to a plain chain', () => {
+		expect(nameTokens('{x?.name}')).toEqual(['x.name']);
+	});
+
+	it('an object key is not a value, and a ternary keeps both branches', () => {
+		expect(nameTokens('{m.x({ name: row.id })}')).toEqual([]);
+		expect(nameTokens('{ok ? row.name : other.name}')).toEqual(['row.name', 'other.name']);
+	});
+});
 
 describe('#361 — a name-ish interpolation is marked, or written down as not-a-person', () => {
 	for (const file of svelteSurfaces()) {

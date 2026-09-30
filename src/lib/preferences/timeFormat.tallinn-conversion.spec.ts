@@ -150,8 +150,12 @@ describe('toTallinnLocalInputValue and tallinnWallClockParts (Tallinn wall clock
 describe('#230 — extraction wiring (integration: both event routes consume the SHARED helpers, duplicates deleted)', () => {
 	const SRC_ROOT = resolve(__dirname, '../..'); // …/src
 	const rootPage = () => readFileSync(resolve(SRC_ROOT, 'routes/+page.svelte'), 'utf8');
+	const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
+	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
 	const eventSurfaces = () =>
-		surfacesUnder('src/routes/event/', 'src/lib/events/').map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
+		EVENT_SURFACES.map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
 	const timeFormatSource = () => readFileSync(resolve(SRC_ROOT, 'lib/preferences/timeFormat.ts'), 'utf8');
 	const TALLINN_TO_UTC_CALLERS = [
 		'src/lib/events/EventConvertForm.svelte',

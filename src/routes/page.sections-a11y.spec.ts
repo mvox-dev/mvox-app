@@ -252,6 +252,10 @@ function readSource(relPath: string): string {
 
 // 1 — i18n: every sections surface renders via Paraglide keys only
 describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', () => {
+	it('the derived ROSTER_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(ROSTER_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
+
 	it.each(ROSTER_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
 		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});

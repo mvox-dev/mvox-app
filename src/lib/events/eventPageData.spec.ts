@@ -28,6 +28,12 @@ import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
+describe('the derived event surfaces', () => {
+	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
+});
+
 const eventSurfacesSource = () =>
 	EVENT_SURFACES.map((file) => readFileSync(resolve(process.cwd(), file), 'utf-8')).join('\n');
 

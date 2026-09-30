@@ -101,6 +101,10 @@ function readSource(relPath: string): string {
 
 // 1 — i18n: every attendance surface renders via Paraglide keys only
 describe('#86 — i18n: no hardcoded user-facing strings on attendance surfaces', () => {
+	it('the derived ATTENDANCE_SURFACE_FILES list is not empty (a moved folder would scan nothing)', () => {
+		expect(ATTENDANCE_SURFACE_FILES.length).toBeGreaterThanOrEqual(3);
+	});
+
 	for (const relPath of ATTENDANCE_SURFACE_FILES) {
 		it(`${relPath} contains no bare text nodes outside m.* calls`, () => {
 			expect(bareTextNodes(readSource(relPath))).toEqual([]);

@@ -227,6 +227,10 @@ function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 }
 
 describe('#105 — i18n: the event detail page renders via Paraglide keys only', () => {
+	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
+		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
+	});
+
 	it.each(EVENT_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
 		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});
