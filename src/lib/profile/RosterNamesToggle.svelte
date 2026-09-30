@@ -4,13 +4,12 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { adminStore } from '$lib/nav/adminStore';
 	import { readRosterNamesSetting, updateRosterShowRealNames } from '$lib/collective/rosterNames';
-
-	type Cfg = { db: string; token: string };
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		isOffline: boolean;
 		generation: () => number;
-		activeContext: () => { cfg: Cfg; personId: string } | null;
+		activeContext: () => { cfg: EntuCfg; personId: string } | null;
 	}
 
 	let { isOffline, generation, activeContext }: Props = $props();
@@ -38,7 +37,7 @@
 
 	// Fired apart from the profile-fields read, so a fields load-error cannot take this
 	// control down. console.warn, not .error: a failed read leaves the default standing.
-	export async function load(cfg: Cfg, g: number): Promise<void> {
+	export async function load(cfg: EntuCfg, g: number): Promise<void> {
 		try {
 			const setting = await readRosterNamesSetting(cfg);
 			if (g !== generation()) return;

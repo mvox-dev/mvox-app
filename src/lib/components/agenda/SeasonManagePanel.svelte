@@ -4,7 +4,7 @@
 	import { type ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RepertoireElement from '$lib/components/agenda/RepertoireElement.svelte';
@@ -27,8 +27,8 @@
 		isSeasonCascadePartial
 	} from '$lib/seasons/deleteErrors';
 	import { focusAfterRender, focusOnMount, focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-	type Cfg = { db: string; token: string };
 	type RepertoireProps = ComponentProps<typeof RepertoireElement>;
 
 	interface Props {
@@ -63,12 +63,12 @@
 		panelManageStatus: string;
 		currentRequestId: () => number;
 		switchGeneration: () => number;
-		getRoster: (cfg: Cfg) => Promise<RosterRow[]>;
-		getSections: (cfg: Cfg) => Promise<SectionNode[]>;
+		getRoster: (cfg: EntuCfg) => Promise<RosterRow[]>;
+		getSections: (cfg: EntuCfg) => Promise<SectionNode[]>;
 		rosterPickerOptions: (excludeIds: readonly string[]) => Array<{ id: string; label: string }>;
 		pickerPromptText: (optionCount: number, addPrompt: string) => string;
 		loadForSelected: (opts?: { keepSeasonManage?: boolean }) => void;
-		loadPanelRepertoire: (cfg: Cfg, seasonId: string) => void;
+		loadPanelRepertoire: (cfg: EntuCfg, seasonId: string) => void;
 		resetSeasonManage: () => void;
 		openEventCreateForm: () => void;
 		openSeriesCreateForm: () => void;
@@ -286,7 +286,7 @@
 			seasonManageConductorIds = season?.conductors ?? [];
 			seasonManageFieldsLoaded = true;
 		}
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisRequest = currentRequestId();
 		const thisSwitch = switchGeneration();
@@ -421,7 +421,7 @@
 			return;
 		}
 
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisSeasonManage = switchGeneration();
 		clearSeasonFieldError(field);
@@ -473,7 +473,7 @@
 		if (!selection.id || !selected || manageableSeasonId === null) return;
 		const personId = selection.id;
 		if (seasonManageConductorIds.includes(personId)) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisSeasonManage = switchGeneration();
 		seasonManageConductorError = false;
@@ -498,7 +498,7 @@
 	function onSeasonManageConductorRemove(personId: string, index: number): void {
 		if (seasonManageConductorPending || isOffline) return;
 		if (!selected || manageableSeasonId === null) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisSeasonManage = switchGeneration();
 		const before = seasonManageConductorIds;
@@ -524,7 +524,7 @@
 			});
 	}
 
-	export function refreshSeasonManageLists(cfg: Cfg, seasonId: string): void {
+	export function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
 		const thisRequest = currentRequestId();
 		const thisSwitch = switchGeneration();
 		loadPanelRepertoire(cfg, seasonId);
@@ -552,7 +552,7 @@
 
 	async function armSeasonManageSeriesDelete(series: SeriesListItem): Promise<void> {
 		if (isOffline) return;
-		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		const cfg = selected ? cfgFor(selected.db) : null;
 		await armSeasonManageDelete(series.id, `season-manage-series-delete-confirm-${series.id}`);
 		if (!cfg) return;
 		try {
@@ -575,7 +575,7 @@
 
 	async function armSeasonManageSeasonDelete(): Promise<void> {
 		if (isOffline) return;
-		const cfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		const cfg = selected ? cfgFor(selected.db) : null;
 		const seasonId = manageableSeasonId;
 		const generation = seasonManageDeleteGeneration;
 		await armSeasonManageDelete(SEASON_DELETE_ROW_ID, 'season-manage-delete-season-confirm');
@@ -640,7 +640,7 @@
 		}
 	}
 
-	function refreshAfterSeasonManageDelete(cfg: Cfg): void {
+	function refreshAfterSeasonManageDelete(cfg: EntuCfg): void {
 		const panelSeasonId = manageableSeasonId;
 		loadForSelected({ keepSeasonManage: true });
 		if (panelSeasonId !== null) refreshSeasonManageLists(cfg, panelSeasonId);
@@ -650,7 +650,7 @@
 		if (!selected) return;
 		if (seasonManageDeletePendingId !== null) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		seasonManageDeleteError = null;
 		seasonManageDeleteProgress = null;
 		seasonManageDeletePendingId = series.id;
@@ -684,7 +684,7 @@
 		if (!selected || manageableSeasonId === null) return;
 		if (seasonManageDeletePendingId !== null) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const seasonName = seasonManageDeleteName;
 		seasonManageDeleteError = null;

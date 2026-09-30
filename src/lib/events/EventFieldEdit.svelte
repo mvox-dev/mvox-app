@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { listEventLocations, type EventDetail } from '$lib/events/eventDetail';
 	import {
 		tallinnLocalToUtcIso,
@@ -55,7 +55,7 @@
 		if (edit.locationCorpusRequested) return;
 		edit.locationCorpusRequested = true;
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		listEventLocations(cfg)
 			.then((result) => {
 				edit.locationSuggestions = result.items;
@@ -232,7 +232,7 @@
 			}
 			edit.editingField = null;
 			edit.pendingFocusRestore[field] = restoreFocus;
-			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const cfg = cfgFor(selected.db);
 			const evId = detail.id;
 			editWriteQueue.request(
 				field,
@@ -255,7 +255,7 @@
 		}
 		edit.editingField = null;
 		edit.pendingFocusRestore[field] = restoreFocus;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		editWriteQueue.request(
 			field,

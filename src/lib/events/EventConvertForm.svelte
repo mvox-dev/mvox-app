@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { tallinnLocalToUtcIso, tallinnWallClockParts } from '$lib/preferences/timeFormat';
@@ -154,7 +154,7 @@
 			return;
 		}
 
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const seasonId = detail.seasonId;
 		const eventId = detail.id;
 		const g = generation();

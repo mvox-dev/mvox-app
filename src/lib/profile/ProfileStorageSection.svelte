@@ -6,13 +6,12 @@
 	import { formatFileSize } from '$lib/files/fileSize';
 	import type * as LibraryData from '$lib/library/libraryData';
 	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
-
-	type Cfg = { db: string; token: string };
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		ready: boolean;
 		generation: () => number;
-		activeContext: () => { cfg: Cfg; personId: string } | null;
+		activeContext: () => { cfg: EntuCfg; personId: string } | null;
 		listAllEditions: typeof LibraryData.listAllEditions;
 	}
 
@@ -50,7 +49,7 @@
 	// Presence-only reads, never store.get(): a profile visit must not stamp opens and
 	// reorder LRU eviction. All three read metadata only, so running them together is safe.
 	export async function load(
-		cfg: Cfg,
+		cfg: EntuCfg,
 		identity: { db: string; personId: string },
 		g: number,
 		opts: { joinNames?: boolean } = {}

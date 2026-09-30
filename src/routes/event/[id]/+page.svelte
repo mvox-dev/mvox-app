@@ -7,6 +7,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
 		EventDetailLoadError,
@@ -83,6 +84,7 @@
 	import EventWorksSection from '$lib/events/EventWorksSection.svelte';
 	import EventAttendanceSection from '$lib/events/EventAttendanceSection.svelte';
 	import EventDangerZone from '$lib/events/EventDangerZone.svelte';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	const selected = $derived($selectedCollectiveStore);
 	const eventId = $derived(page.params.id ?? '');
@@ -181,7 +183,7 @@
 		resetEventPageState(ev);
 		resetServedFromCache();
 		try {
-			const cfg = { db: current.db, token: getToken() ?? '' };
+			const cfg = cfgFor(current.db);
 			const loaded = await loadEventPageDetail(cfg, id);
 			if (g !== generation) return;
 			detail = loaded;
@@ -201,7 +203,7 @@
 		}
 	}
 
-	function loadMembership(cfg: ComposeCfg, personId: string, g: number): void {
+	function loadMembership(cfg: EntuCfg, personId: string, g: number): void {
 		findMyMemberId(cfg, personId)
 			.then((id) => {
 				if (g !== generation) return;
@@ -238,9 +240,7 @@
 		});
 	});
 
-	type ComposeCfg = { db: string; token: string };
-
-	function loadComposeSurfaces(cfg: ComposeCfg, loaded: EventDetail, personId: string, g: number): void {
+	function loadComposeSurfaces(cfg: EntuCfg, loaded: EventDetail, personId: string, g: number): void {
 		const sid = loaded.seasonId;
 		ev.seasonId = sid;
 		const seasonRights: ManageRightsState =
@@ -295,7 +295,7 @@
 		}
 	}
 
-	function loadSeriesOptions(cfg: ComposeCfg, sid: string, g: number): void {
+	function loadSeriesOptions(cfg: EntuCfg, sid: string, g: number): void {
 		listSeriesOptionsForSeason(cfg, sid, fetch)
 			.then((list) => {
 				if (g !== generation) return;
@@ -356,7 +356,7 @@
 		seriesArmedTarget = { id: newId };
 		seriesPreviewDefaults = null;
 		if (newId === '') return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		try {
 			const defaults = await getSeriesDefaults(cfg, newId);
 			if (seriesArmedTarget?.id !== newId) return;
@@ -396,7 +396,7 @@
 		seriesPending = true;
 		seriesError = null;
 		seriesStatus = '';
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		try {
 			if (newId === '') {
 				await unassignEventSeries(cfg, evId);
@@ -424,7 +424,7 @@
 	async function refreshEventDetail(evId: string, g: number): Promise<void> {
 		if (!selected) return;
 		try {
-			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const cfg = cfgFor(selected.db);
 			const refreshed = await refreshEventPageDetail(cfg, evId);
 			if (g !== generation) return;
 			detail = refreshed;
@@ -434,7 +434,7 @@
 		}
 	}
 
-	function loadManagePickers(cfg: ComposeCfg, sid: string | null, g: number): void {
+	function loadManagePickers(cfg: EntuCfg, sid: string | null, g: number): void {
 		Promise.all([
 			listWorks(cfg),
 			listAllEditions(cfg),

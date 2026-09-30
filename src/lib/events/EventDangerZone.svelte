@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { isDeleteForbidden, isEventCascadePartial } from '$lib/seasons/deleteErrors';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import type { Collective } from '$lib/collectives/types';
@@ -49,7 +49,7 @@
 		if (isOffline) return;
 		deletePending = true;
 		deleteError = null;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		try {
 			await actions.deleteEvent(cfg, evId);

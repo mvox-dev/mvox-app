@@ -4,7 +4,7 @@
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { createSeason } from '$lib/entity/entityCreate';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
@@ -58,7 +58,7 @@
 	untrack(() => {
 		const current = selected;
 		if (!current) return;
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 		getRoster(cfg).catch((e) => {
 			console.error('agenda: loading the roster for the conductor picker failed', e);
 		});
@@ -124,7 +124,7 @@
 			setSeasonCreateError(m.season_create_failed, null);
 			return;
 		}
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 
 		submitting = true;
 		try {

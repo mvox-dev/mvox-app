@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
@@ -88,7 +88,7 @@
 		attendancePanelLoading = true;
 		attendancePanelError = false;
 		attendanceSavedMemberIds = new Set();
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		const g = generation();
 		Promise.all([loadRoster(cfg), actions.listAttendance(cfg, evId), actions.listAllRsvpsForEvent(cfg, evId)])
@@ -180,7 +180,7 @@
 	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
 		if (!selected || !detail) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const current = ev.attendanceMap[targetMemberId];
 		const existing: EventAttendance | null = current
 			? { attendanceId: current.attendanceId, memberId: targetMemberId, status: current.status }

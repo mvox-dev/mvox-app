@@ -11,15 +11,14 @@
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
 	import { focusAfterRender } from '$lib/a11y/focusable';
-
-	type Cfg = { db: string; token: string };
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		ready: boolean;
 		isOffline: boolean;
 		scopeName: string;
 		generation: () => number;
-		activeContext: () => { cfg: Cfg; personId: string } | null;
+		activeContext: () => { cfg: EntuCfg; personId: string } | null;
 		onSessionExpired: () => void;
 		mintSelfLinkInvite: typeof InviteData.mintSelfLinkInvite;
 		mintErrorMessage: (e: unknown) => string;
@@ -116,7 +115,7 @@
 
 	// Never rejects: a failure is the rendered `linkedLoadFailed` state, except an
 	// expired session, which is a different failure class (#107).
-	export async function load(cfg: Cfg, personId: string, g: number): Promise<void> {
+	export async function load(cfg: EntuCfg, personId: string, g: number): Promise<void> {
 		try {
 			const linked = await listLinkedIdentities(cfg, personId);
 			if (g !== generation()) return;

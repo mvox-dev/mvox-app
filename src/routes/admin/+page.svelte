@@ -33,15 +33,15 @@
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
-	type Cfg = { db: string; token: string };
 
 	let status = $state<Status>('loading');
 	// Only the invite label reads this; what the page acts on keys off the identity store.
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
-	let cfg = $state<Cfg | null>(null);
+	let cfg = $state<EntuCfg | null>(null);
 	let dbEntityId = $state<string | null>(null);
 	let libraryId = $state<string | null>(null);
 	let viewerId = $state<string | null>(null);
@@ -154,7 +154,7 @@
 			status = 'load-error';
 			return;
 		}
-		const c: Cfg = { db: target.db, token };
+		const c: EntuCfg = { db: target.db, token };
 		cfg = c;
 		viewerId = target.personId;
 		canManageAdmins = false;

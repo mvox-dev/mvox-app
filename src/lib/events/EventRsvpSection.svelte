@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { listActiveMembers, loadRoster } from '$lib/roster/rosterData';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
@@ -138,7 +138,7 @@
 		const loaded = detail;
 		if (!current || !loaded) return;
 		tallyError = false;
-		loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation(), isPastDetail(loaded));
+		loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
 	}
 
 	const showTallyCardToggle = $derived(
@@ -188,7 +188,7 @@
 		if (!current || !loaded) return;
 		const g = generation();
 		const evId = loaded.id;
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 		tallyCardNamesError = false;
 		const read = isPastDetail(loaded) ? actions.loadRosterIncludingArchived(cfg) : loadRoster(cfg);
 		read
@@ -243,7 +243,7 @@
 				const current = selected;
 				const loaded = detail;
 				if (current && loaded) {
-					loadTally({ db: current.db, token: getToken() ?? '' }, loaded.id, generation(), isPastDetail(loaded));
+					loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
 				}
 			},
 			revert(evId, before) {
@@ -260,7 +260,7 @@
 	function handleRsvpChange(newStatus: RsvpStatus | null): void {
 		if (!selected || !detail) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const personId = selected.personId;
 		const g = generation();
 		const existing: MyRsvp | null = myRsvp
@@ -286,7 +286,7 @@
 
 	untrack(() => {
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const g = generation();
 		loadRsvpControl(cfg, selected.personId, detail.id, g);
 		loadTally(cfg, detail.id, g, isPastDetail(detail));

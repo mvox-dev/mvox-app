@@ -6,7 +6,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { createEvent, createEventSeries } from '$lib/entity/entityCreate';
@@ -298,7 +298,7 @@
 			setSeriesCreateError(m.series_create_failed, null);
 			return;
 		}
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 		const panelSeasonId = manageableSeasonId;
 		const runDb = cfg.db;
 		const dbChanged = (): boolean => selected?.db !== runDb;

@@ -2,7 +2,7 @@
 // also write reach this file through `deps`, so the write-gate fence still sees them in the page.
 import { untrack } from 'svelte';
 import { m } from '$lib/paraglide/messages.js';
-import { getToken } from '$lib/auth/storage';
+import { cfgFor } from '$lib/entu/cfg';
 import { loadFullAgenda } from '$lib/agenda/agendaData';
 import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 import { deriveAllMemberRates } from '$lib/attendance/attendanceSummary';
@@ -35,8 +35,8 @@ import type * as RsvpData from '$lib/rsvp/rsvpData';
 import type * as ScheduleData from '$lib/schedule/scheduleData';
 import type { CollectiveState } from '$lib/collectives/types';
 import { focusAfterRender } from '$lib/a11y/focusable';
+import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-type ManageCfg = { db: string; token: string };
 type AgendaTypeFilter = 'all' | (typeof CANONICAL_EVENT_TYPES)[number];
 
 export function createAgendaLoadState() {
@@ -364,7 +364,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 						ag.recentItems = recent;
 						ag.seasons = fullSeasons;
 
-						const worksCfg = { db: current.db, token: getToken() ?? '' };
+						const worksCfg = cfgFor(current.db);
 						const events = [...upcoming, ...recent];
 						const eventIds = events.map((item) => item.id);
 						ag.currentSeasonId = seasonId;
@@ -474,7 +474,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 
 			{
-				const rightsCfg = { db: current.db, token: getToken() ?? '' };
+				const rightsCfg = cfgFor(current.db);
 				const rightsIdentity = { db: current.db, personId };
 				resolveManageRights(rightsCfg, personId, personId).then((state) => {
 					if (!sameCollectiveIdentity(deps.collectiveIdentity(), rightsIdentity)) return;
@@ -482,13 +482,13 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 			}
 
-			findMyMemberId({ db: current.db, token: getToken() ?? '' }, personId)
+			findMyMemberId(cfgFor(current.db), personId)
 				.then((id) => {
 					if (thisRequest !== seq.requestId) return;
 					ag.memberId = id;
 					ag.membership = id ? 'member' : 'non-member';
 					if (id) {
-						listMyAttendance({ db: current.db, token: getToken() ?? '' }, id)
+						listMyAttendance(cfgFor(current.db), id)
 							.then((result) => {
 								if (thisRequest !== seq.requestId) return;
 								ag.myAttendance = result.items;
@@ -510,7 +510,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 					ag.membership = 'loading';
 				});
 
-			listMyRsvps({ db: current.db, token: getToken() ?? '' }, personId)
+			listMyRsvps(cfgFor(current.db), personId)
 				.then((result) => {
 					if (thisRequest !== seq.requestId) return;
 					ag.rsvpByEventId = rsvpsByEventId(result.items);
@@ -563,7 +563,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 
 		const databaseEntityRightsByDbPerson = new Map<string, Promise<ManageRightsState>>();
 
-		function loadDatabaseEntityRights(cfg: ManageCfg, personId: string): Promise<ManageRightsState> {
+		function loadDatabaseEntityRights(cfg: EntuCfg, personId: string): Promise<ManageRightsState> {
 			const key = `${cfg.db}::${personId}`;
 			const cached = databaseEntityRightsByDbPerson.get(key);
 			if (cached) return cached;
@@ -587,7 +587,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		}
 
 		function upgradeRepertoireManagement(
-			cfg: ManageCfg,
+			cfg: EntuCfg,
 			eventIds: string[],
 			seasonId: string | null,
 			thisRequest: number
@@ -608,7 +608,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		}
 
 		function loadWorksAndManagement(
-			cfg: ManageCfg,
+			cfg: EntuCfg,
 			eventIds: string[],
 			seasonId: string | null,
 			thisRequest: number
@@ -686,7 +686,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 		}
 
-		function loadScheduleItems(cfg: ManageCfg, eventIds: string[], thisRequest: number) {
+		function loadScheduleItems(cfg: EntuCfg, eventIds: string[], thisRequest: number) {
 			const thisScheduleLoad = ++seq.scheduleLoadId;
 			listScheduleItemsByEventId(cfg, eventIds, fetch)
 				.then((byEvent) => {
@@ -699,7 +699,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 		}
 
-		function loadManagePickers(cfg: ManageCfg, seasonId: string | null, thisRequest: number) {
+		function loadManagePickers(cfg: EntuCfg, seasonId: string | null, thisRequest: number) {
 			ag.libraryPickersLoading = true;
 			Promise.all([
 				listWorks(cfg),
@@ -754,7 +754,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		function refreshWorksAfterWrite() {
 			const selected = deps.selected();
 			if (!selected) return;
-			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const cfg = cfgFor(selected.db);
 			const eventIds = [...ag.agendaItems, ...ag.recentItems].map((item) => item.id);
 			const seasonId = ag.currentSeasonId;
 			const thisRequest = seq.requestId;
@@ -855,7 +855,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 			ag.attendanceFailedMemberIds = new Set(ag.attendanceFailedByEvent.get(item.id) ?? []);
 			ag.attendanceSavedMemberIds = new Set();
 
-			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const cfg = cfgFor(selected.db);
 			const thisRequest = ++seq.attendanceRequestId;
 
 			const rosterPromise = getRoster(cfg);
@@ -917,7 +917,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 			}
 			ag.seasonSummaryExpanded = true;
 			if (ag.seasonRatesLoaded) return;
-			const cfg = { db: selected.db, token: getToken() ?? '' };
+			const cfg = cfgFor(selected.db);
 			const events = ag.recentItems;
 			const thisRequestSnapshot = seq.requestId;
 			ag.seasonRatesLoading = true;
@@ -949,7 +949,7 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 		}
 
-		function loadPanelRepertoire(cfg: ManageCfg, seasonId: string): void {
+		function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): void {
 			const thisRequest = seq.requestId;
 			const thisSwitch = deps.seasonManageSwitchGeneration();
 			seq.panelRepertoireSeasonId = seasonId;

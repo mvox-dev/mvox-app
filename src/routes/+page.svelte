@@ -18,7 +18,7 @@
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
 	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import {
 		findMyMemberId,
 		listMyRsvps,
@@ -122,6 +122,7 @@
 	import { writesAvailable } from '$lib/net/online';
 	import { withItem, without } from '$lib/collections/immutable';
 	import { focusAfterRender } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	const auth = $derived($authStore);
 	const collectives = $derived($collectiveState);
@@ -358,7 +359,7 @@
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const personId = selected.personId;
 		const identity = { db: selected.db, personId };
 
@@ -395,7 +396,7 @@
 
 	function handlePdfClick(fileId: string) {
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const identity = get(selectedCollectiveIdentityStore);
 		if (!identity) return;
 		ag.pdfError = false;
@@ -434,8 +435,6 @@
 			});
 	}
 
-	type ManageCfg = { db: string; token: string };
-
 	const managePendingMarks = new Map<string, string[]>();
 
 	const repertoireQueue = createRepertoireWriteQueue({
@@ -461,9 +460,9 @@
 		}
 	});
 
-	function manageCfg(): ManageCfg | null {
+	function manageCfg(): EntuCfg | null {
 		if (!selected) return null;
-		return { db: selected.db, token: getToken() ?? '' };
+		return cfgFor(selected.db);
 	}
 
 	function handleAddWork(workId: string) {
@@ -810,7 +809,7 @@
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
 		if (!selected || !ag.attendanceItem) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const current = ag.attendanceMap[memberId];
 		const existing: EventAttendance | null = current
 			? { attendanceId: current.attendanceId, memberId, status: current.status }
@@ -904,7 +903,7 @@
 		seasonManagePanel?.closeSeasonManagePanel();
 	}
 
-	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
+	function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
 		seasonManagePanel?.refreshSeasonManageLists(cfg, seasonId);
 	}
 
