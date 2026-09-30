@@ -1,14 +1,3 @@
-// #384 — the board's own issue model. Derived from what the board does, not
-// from anyone else's framework: flat `kind` discriminator, base + per-kind
-// required fields, containment as references, motion orthogonal to kind.
-//
-// This module is the ENFORCEMENT half of the task template
-// (.github/ISSUE_TEMPLATE/task.yml). Web-form filings arrive as `### Heading`
-// sections; the board's existing issues carry `---` YAML frontmatter with
-// slugline/lead. `parseTaskIssue` reads both shapes and refuses — with named
-// reasons, never a throw — anything missing a required field. A refusal is a
-// value the caller renders (the board can list unparseable issues); silence
-// is what let unshaped issues onto the board.
 import { parse as parseYaml } from 'yaml';
 
 export type IssueKind = 'task' | 'bug' | 'feature' | 'epic';
@@ -18,6 +7,7 @@ export type MotionLabel =
 	| 'blocked'
 	| 'in process'
 	| 'in research'
+	| 'researched'
 	| 'prepped'
 	| 'needs-po';
 
@@ -26,42 +16,37 @@ export const MOTION_LABELS: readonly MotionLabel[] = [
 	'blocked',
 	'in process',
 	'in research',
+	'researched',
 	'prepped',
 	'needs-po'
 ];
 
-/** What every issue on this board has, whatever its kind. */
 export interface BaseIssue {
 	number: number;
 	title: string;
 	state: 'open' | 'closed';
 	kind: IssueKind;
 	motion: MotionLabel[];
-	/** Estonian one-liner for the public board. Required on Task and Epic by
-	 *  kind, and on ANY kind once released (#405) — a Bug or Feature may
-	 *  arrive from the field without one, but not reach readers without one. */
+
 	slugline?: string;
-	/** Estonian lead — what it changes and for whom. Same rule as slugline. */
+
 	lead?: string;
-	/** The in-body author marker, e.g. `(*PO:Gama*)`, or the GitHub login for
-	 *  issues filed after per-person accounts (2026-09-18). */
+
 	author: string;
 }
 
-/** A shaped piece of work: the done-when is the contract. */
 export interface TaskIssue extends BaseIssue {
 	kind: 'task';
 	slugline: string;
 	lead: string;
-	/** Checkable statements; never empty — an empty contract is not a task. */
+
 	doneWhen: string[];
-	/** Parent epic by reference, never by type structure. */
+
 	epic?: number;
-	/** ER-identifiers, only when the task touches rights mechanics (#319). */
+
 	rightsRules?: string[];
 }
 
-/** A field report: what was seen, where. Arrives raw — no slugline required. */
 export interface BugIssue extends BaseIssue {
 	kind: 'bug';
 	whatWasSeen: string;
@@ -69,14 +54,12 @@ export interface BugIssue extends BaseIssue {
 	whoIsAffected?: string;
 }
 
-/** Intake, unshaped by definition. One required field: the ask, verbatim. */
 export interface FeatureIssue extends BaseIssue {
 	kind: 'feature';
 	request: string;
 	whoIsItFor?: string;
 }
 
-/** A PO-owned initiative: the story, children by reference as gates are named. */
 export interface EpicIssue extends BaseIssue {
 	kind: 'epic';
 	slugline: string;
@@ -87,7 +70,6 @@ export interface EpicIssue extends BaseIssue {
 
 export type MvoxIssue = TaskIssue | BugIssue | FeatureIssue | EpicIssue;
 
-/** A parse refusal names every missing piece; it is data, not an exception. */
 export interface ParseRefusal {
 	ok: false;
 	missing: string[];
@@ -98,24 +80,16 @@ export interface Parsed<T extends MvoxIssue> {
 	issue: T;
 }
 
-/** @deprecated shape kept one slice for the merged Task parser's callers. */
 export interface ParsedTask {
 	ok: true;
 	task: TaskIssue;
 }
 
-/** The native issue type's kind, or null when the type is absent/unknown. */
 export function kindFromType(issueType: string | null | undefined): IssueKind | null {
 	const t = issueType?.toLowerCase();
 	return t === 'task' || t === 'bug' || t === 'feature' || t === 'epic' ? t : null;
 }
 
-/**
- * #373 — the legacy kind labels, in fallback precedence order, for issues
- * that predate native types. `enhancement` is the pre-type spelling of
- * feature (the repo never had a `feature` label). Exact live label strings,
- * same rename caveat as every label match on this board.
- */
 export const KIND_LABELS: readonly (readonly [string, IssueKind])[] = [
 	['task', 'task'],
 	['bug', 'bug'],
@@ -123,12 +97,10 @@ export const KIND_LABELS: readonly (readonly [string, IssueKind])[] = [
 	['enhancement', 'feature']
 ];
 
-/** Is this label name one of the legacy kind labels? */
 export function isKindLabel(name: string): boolean {
 	return KIND_LABELS.some(([label]) => label === name);
 }
 
-/** Kind from the legacy kind labels alone — the pre-type archive's read. */
 export function kindFromLabels(labelNames: readonly string[]): IssueKind | null {
 	for (const [label, kind] of KIND_LABELS) {
 		if (labelNames.includes(label)) return kind;
@@ -136,12 +108,6 @@ export function kindFromLabels(labelNames: readonly string[]): IssueKind | null 
 	return null;
 }
 
-/**
- * #373 — the board's one kind read: the native type first, the kind label
- * only as fallback for issues that predate types. The type wins over a
- * conflicting label — retyping an issue on GitHub retypes it on the board,
- * stale labels notwithstanding.
- */
 export function kindOf(
 	issueType: string | null | undefined,
 	labelNames: readonly string[]
@@ -149,7 +115,6 @@ export function kindOf(
 	return kindFromType(issueType) ?? kindFromLabels(labelNames);
 }
 
-/** The raw shape the GitHub fetch hands us — the only place it appears. */
 export interface RawIssue {
 	number: number;
 	title: string;
@@ -157,15 +122,12 @@ export interface RawIssue {
 	body: string | null;
 	labels: string[];
 	issueType: string | null;
-	/** GitHub login of the filing account, when the fetch carries it. */
+
 	authorLogin?: string | null;
 }
 
-/** Logins that historically carried EVERY actor's writes — as an author they
- *  identify nobody, so the in-body marker stays the authorship for them. */
 const SHARED_LOGINS = new Set(['mitselek']);
 
-/** In-body marker wins; a personal GitHub account stands on its own. */
 function resolveAuthor(raw: RawIssue): string | null {
 	const marker = AUTHOR_MARKER_RE.exec(raw.body ?? '');
 	if (marker) return marker[0];
@@ -176,7 +138,6 @@ function resolveAuthor(raw: RawIssue): string | null {
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---/;
 const AUTHOR_MARKER_RE = /\(\*(?:PO|MVOX):[A-Za-zÀ-ž]+\*\)/;
 
-/** `### Heading` (or deeper `##`) sections as the issue-form output emits them. */
 function formSections(body: string): Map<string, string> {
 	const sections = new Map<string, string>();
 	const re = /^##+ (.+)$/gm;
@@ -201,15 +162,13 @@ function frontmatterField(body: string, key: string): string | null {
 			if (typeof value === 'string' && value.length > 0) return value;
 		}
 	} catch {
-		// Malformed YAML is absent frontmatter, never a crash (render.ts precedent).
+
 	}
 	return null;
 }
 
-/** Both shapes: form `### Slugline` section, or frontmatter `slugline:`. */
 export function field(body: string, name: string): string | null {
-	// The author marker ends the body, not the last section — strip it from
-	// section content so it never reads as a field value.
+
 	const fromForm = formSections(body).get(name)?.replace(AUTHOR_MARKER_RE, '').trim();
 	if (fromForm !== undefined && fromForm !== '' && fromForm !== '_No response_') return fromForm;
 	return frontmatterField(body, name);
@@ -224,37 +183,14 @@ function checklistItems(text: string): string[] {
 		.filter((line) => line.length > 0);
 }
 
-/**
- * Released = carrying any motion label. That is the moment an issue stops
- * being intake: Mihkel has put it in front of the team, and the board renders
- * it to readers who are not us.
- */
 export function isReleased(raw: RawIssue): boolean {
 	return raw.labels.some((l) => (MOTION_LABELS as readonly string[]).includes(l));
 }
 
-/** Push a missing-field name once, so two rules asking for the same field
- *  (kind and release both wanting a slugline) name it a single time. */
 function pushMissing(missing: string[], item: string): void {
 	if (!missing.includes(item)) missing.push(item);
 }
 
-/**
- * The public board's own requirement (#405), Mihkel 2026-09-18: *"the board is
- * a public surface and thus should read homogenous"*. A released issue carries
- * an Estonian slugline and lead WHATEVER ITS KIND — #374 and #375 sat on the
- * board in English because the requirement was tied to kind alone.
- *
- * Intake keeps its exemption, which is the half that was right: a field report
- * from a phone and a one-line request still file without either. The bar moves
- * at release, not at filing.
- *
- * Called from the Bug and Feature parsers only. Task and Epic already demand
- * both unconditionally, so calling it there would name one missing field
- * twice; their stricter rule stands, because the ruling raises Bug and Feature
- * and dropping a fence that already holds would be a regression dressed up as
- * symmetry.
- */
 function requireBoardFaceWhenReleased(raw: RawIssue, missing: string[]): void {
 	if (!isReleased(raw)) return;
 	const body = raw.body ?? '';
@@ -262,12 +198,6 @@ function requireBoardFaceWhenReleased(raw: RawIssue, missing: string[]): void {
 	if (!field(body, 'lead')) pushMissing(missing, 'lead (released issues carry one, any kind)');
 }
 
-/**
- * Parse one raw issue into a TaskIssue, or refuse with every missing field
- * named. Strictness is the point: a task without a done-when, slugline, lead
- * or author is refused, not defaulted — defaults are how unshaped issues got
- * onto the board.
- */
 export function parseTaskIssue(raw: RawIssue): ParsedTask | ParseRefusal {
 	const missing: string[] = [];
 	const body = raw.body ?? '';
@@ -289,10 +219,6 @@ export function parseTaskIssue(raw: RawIssue): ParsedTask | ParseRefusal {
 
 	if (missing.length > 0) return { ok: false, missing };
 
-	// First line only: the last form section swallows any trailing free text
-	// (there is no next heading to stop at), and a number followed by prose
-	// must still read as the number — silently dropping it is the failure this
-	// module exists to refuse (caught live on the board's first round-trip, #388).
 	const epicLine = field(body, 'parent epic')?.split('\n')[0].trim().replace('#', '');
 	const epic = epicLine && /^\d+$/.test(epicLine) ? Number(epicLine) : undefined;
 
@@ -390,7 +316,6 @@ export function parseFeatureIssue(raw: RawIssue): Parsed<FeatureIssue> | ParseRe
 	};
 }
 
-/** `- #372` / `372` lines under Children — numbers by reference. */
 function childNumbers(text: string): number[] {
 	return text
 		.split('\n')
@@ -426,10 +351,6 @@ export function parseEpicIssue(raw: RawIssue): Parsed<EpicIssue> | ParseRefusal 
 	};
 }
 
-/**
- * Dispatch on the native issue type. An absent or unknown type is a refusal —
- * the board has no kindless issues; the compiler has no fifth kind.
- */
 export function parseIssue(raw: RawIssue): Parsed<MvoxIssue> | ParseRefusal {
 	switch (raw.issueType?.toLowerCase() ?? '') {
 		case 'task': {
@@ -446,5 +367,3 @@ export function parseIssue(raw: RawIssue): Parsed<MvoxIssue> | ParseRefusal {
 			return { ok: false, missing: [`issue type is ${raw.issueType ?? 'absent'} — not one of Task, Bug, Feature, Epic`] };
 	}
 }
-
-// (*PO:Gama*)
