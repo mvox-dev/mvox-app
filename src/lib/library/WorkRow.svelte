@@ -3,15 +3,16 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Work } from '$lib/library/libraryData';
-	import type {
-		EditionDrafts,
-		EditionFilesState,
-		LibraryState,
-		TreeActions
+	import {
+		editionDraftView,
+		type EditionDrafts,
+		type EditionFilesState,
+		type LibraryState,
+		type TreeActions
 	} from '$lib/library/libraryState';
 	import type { LendingView } from '$lib/library/lendingView';
 	import EditionRow from '$lib/library/EditionRow.svelte';
-	import CreateEditionForm from '$lib/library/CreateEditionForm.svelte';
+	import InlineCreateForm from '$lib/library/InlineCreateForm.svelte';
 
 	interface Props {
 		work: Work;
@@ -111,9 +112,10 @@
 			     the one that needs this most. Only once 'idle': inserting into a list never
 			     fetched would leave the work half-populated. -->
 			{#if isLibrarian && lib.editionNodeStatus.get(work.id) === 'idle'}
-				<CreateEditionForm
-					workId={work.id}
-					bind:drafts
+				<InlineCreateForm
+					kind="edition"
+					suffix="-{work.id}"
+					view={editionDraftView(drafts, work.id)}
 					{isOffline}
 					submit={() => actions.submitEdition(work.id)}
 				/>

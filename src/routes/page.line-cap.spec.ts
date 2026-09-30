@@ -29,9 +29,7 @@ function walk(dir: string): string[] {
 }
 
 function lineCount(path: string): number {
-	const lines = readFileSync(path, 'utf-8').split('\n');
-	if (lines[lines.length - 1] === '') lines.pop();
-	return lines.length;
+	return countLines(readFileSync(path, 'utf-8'));
 }
 
 describe('#508 — no agenda file over the line cap', () => {

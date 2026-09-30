@@ -4,6 +4,7 @@
 	import EntuRef from '$lib/components/EntuRef.svelte';
 	import type { MemberOpsState, RosterState } from '$lib/roster/rosterPageState';
 	import type { MemberOps } from '$lib/roster/rosterMemberOps';
+	import { sectionNamesFor } from '$lib/sections/sectionTree';
 
 	let {
 		roster,
@@ -40,9 +41,7 @@
 		{:else}
 			<ul data-testid="roster-inactive-list" class="flex flex-col">
 				{#each roster.inactiveRows as row (row.memberId)}
-					{@const inactiveSectionNames = (row.sectionIds ?? [])
-						.map((id) => sectionNameById.get(id))
-						.filter((name): name is string => Boolean(name))}
+					{@const inactiveSectionNames = sectionNamesFor(row.sectionIds, sectionNameById)}
 					<li
 						data-testid="inactive-member-row-{row.memberId}"
 						class="flex flex-col gap-0.5 border-b border-dashed border-ink-5 py-2 last:border-b-0"

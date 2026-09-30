@@ -59,7 +59,7 @@
 		resetArrange
 	} from '$lib/sections/sectionArrangeOps';
 	import { createArrangeDrag } from '$lib/sections/sectionDrag';
-	import { listArrangeRows } from '$lib/sections/sectionTree';
+	import { flattenSections, listArrangeRows } from '$lib/sections/sectionTree';
 	import MemberRow from '$lib/roster/MemberRow.svelte';
 	import InactiveList from '$lib/roster/InactiveList.svelte';
 	import SectionArrange from '$lib/sections/SectionArrange.svelte';
@@ -224,17 +224,9 @@
 	});
 	const unassignedGroup = $derived(groups.find((g) => g.sectionId === null) ?? null);
 
-	const sectionNameById = $derived.by(() => {
-		const map = new Map<string, string>();
-		function walk(nodes: SectionNode[]): void {
-			for (const n of nodes) {
-				map.set(n.id, n.name);
-				walk(n.children);
-			}
-		}
-		walk(roster.sections);
-		return map;
-	});
+	const sectionNameById = $derived(
+		new Map(flattenSections(roster.sections).map((n) => [n.id, n.name]))
+	);
 
 	const flatRows = $derived([...roster.rows].sort((a, b) => a.name.localeCompare(b.name)));
 
@@ -261,18 +253,10 @@
 		roster.expandedIds = toggled(roster.expandedIds, id);
 	}
 
-	const allSectionIdsList = $derived.by(() => {
-		const ids: string[] = [];
-		function walk(nodes: SectionNode[]): void {
-			for (const n of nodes) {
-				ids.push(n.id);
-				walk(n.children);
-			}
-		}
-		walk(visibleSections);
-		if (unassignedGroup) ids.push('unassigned');
-		return ids;
-	});
+	const allSectionIdsList = $derived([
+		...flattenSections(visibleSections).map((n) => n.id),
+		...(unassignedGroup ? ['unassigned'] : [])
+	]);
 
 	function setViewMode(mode: RosterViewMode): void {
 		roster.viewMode = mode;

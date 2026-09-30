@@ -35,7 +35,7 @@ interface LineKind {
 
 // A trailing newline splits into a phantom empty final element; drop it here
 // so callers count real lines only, once.
-function splitLines(source: string): string[] {
+export function splitLines(source: string): string[] {
 	const lines = source.split('\n');
 	if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop();
 	return lines;

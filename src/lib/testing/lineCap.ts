@@ -1,4 +1,4 @@
-import { COMMENT_FIXTURES_DIR, changedFiles, type GitRunner } from './commentRules';
+import { COMMENT_FIXTURES_DIR, changedFiles, splitLines, type GitRunner } from './commentRules';
 
 export const STEP = 1500;
 export const NEXT_STEP = 1000;
@@ -24,9 +24,7 @@ export interface CapViolation {
 }
 
 export function countLines(source: string): number {
-	const lines = source.split('\n');
-	if (lines[lines.length - 1] === '') lines.pop();
-	return lines.length;
+	return splitLines(source).length;
 }
 
 export function selectSourceFiles(paths: string[]): string[] {

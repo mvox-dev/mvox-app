@@ -55,13 +55,7 @@
 		if (heldSectionId === null) return ids;
 		const node = findSectionNode(roster.sections, heldSectionId);
 		if (!node) return ids;
-		function walk(n: SectionNode): void {
-			for (const child of n.children) {
-				ids.add(child.id);
-				walk(child);
-			}
-		}
-		walk(node);
+		for (const child of flattenSections(node.children)) ids.add(child.id);
 		return ids;
 	});
 

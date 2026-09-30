@@ -2,9 +2,9 @@
 	lookups run whether or not the section shows. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
+	import { resolveLocalFirst } from '$lib/library/resolveLocalFirst';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
@@ -49,41 +49,16 @@
 	$effect(() => {
 		const loans = myActiveLoans;
 		const g = ++copyNameGen;
-		if (loans.length === 0) {
-			copyNames = new Map();
-			return;
-		}
-		const current = selected;
-		if (!current) {
-			copyNames = new Map();
-			return;
-		}
-		const token = getToken();
-		if (!token) return;
-		const localNames = new Map<string, string>();
-		const unresolved: string[] = [];
-		for (const id of loans.map((l) => l.copyId)) {
-			const cached = allCopies.find((c) => c.id === id);
-			if (cached) {
-				localNames.set(id, cached.name || (cached.copyNumber ? `#${cached.copyNumber}` : ''));
-			} else {
-				unresolved.push(id);
-			}
-		}
-		if (unresolved.length === 0) {
-			if (g !== copyNameGen) return;
-			copyNames = localNames;
-			return;
-		}
-		loadCopyNames({ db: current.db, token }, unresolved)
-			.then((names) => {
-				if (g !== copyNameGen) return;
-				for (const [id, name] of localNames) names.set(id, name);
-				copyNames = names;
-			})
-			.catch((e) => {
-				console.error('library: copy name resolution failed', e);
-			});
+		resolveLocalFirst({
+			loans,
+			selected: () => selected,
+			allCopies: () => allCopies,
+			local: (copy) => copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : ''),
+			fetch: (cfg, ids) => loadCopyNames(cfg, ids),
+			isCurrent: () => g === copyNameGen,
+			apply: (names) => (copyNames = names),
+			what: 'name'
+		});
 	});
 
 	// #129 — copy, edition and work for each loan's label; same local-first split.
@@ -91,47 +66,24 @@
 	$effect(() => {
 		const loans = myActiveLoans;
 		const g = ++chainGen;
-		if (loans.length === 0) {
-			copyChains = new Map();
-			return;
-		}
-		const current = selected;
-		if (!current) {
-			copyChains = new Map();
-			return;
-		}
-		const token = getToken();
-		if (!token) return;
-		const localChains = new Map<string, LoanChain>();
-		const unresolved: string[] = [];
-		for (const id of loans.map((l) => l.copyId)) {
-			const cached = allCopies.find((c) => c.id === id);
-			if (cached) {
-				const edition = allEditions.find((e) => e.id === cached.editionId);
+		resolveLocalFirst<LoanChain>({
+			loans,
+			selected: () => selected,
+			allCopies: () => allCopies,
+			local: (copy) => {
+				const edition = allEditions.find((e) => e.id === copy.editionId);
 				const work = edition ? works.find((w) => w.id === edition.workId) : undefined;
-				localChains.set(id, {
-					copyNumber: cached.copyNumber,
+				return {
+					copyNumber: copy.copyNumber,
 					workName: work?.name ?? '',
 					editionName: edition?.name ?? ''
-				});
-			} else {
-				unresolved.push(id);
-			}
-		}
-		if (unresolved.length === 0) {
-			if (g !== chainGen) return;
-			copyChains = localChains;
-			return;
-		}
-		loadCopyChains({ db: current.db, token }, unresolved, works)
-			.then((chains) => {
-				if (g !== chainGen) return;
-				for (const [id, chain] of localChains) chains.set(id, chain);
-				copyChains = chains;
-			})
-			.catch((e) => {
-				console.error('library: copy chain resolution failed', e);
-			});
+				};
+			},
+			fetch: (cfg, ids) => loadCopyChains(cfg, ids, works),
+			isCurrent: () => g === chainGen,
+			apply: (chains) => (copyChains = chains),
+			what: 'chain'
+		});
 	});
 
 	function loanLabel(copyId: string): string {

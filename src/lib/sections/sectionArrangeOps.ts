@@ -145,6 +145,25 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		return siblings === roster.sections ? deps.visibleSections() : siblings;
 	}
 
+	// Reloads the tree after a failed write; false when a switch superseded it meanwhile.
+	async function restoreSections(
+		cfg: EntuCfg,
+		g: number,
+		restore: () => SectionNode[],
+		what: string
+	): Promise<boolean> {
+		try {
+			const fresh = await actions.listSections(cfg);
+			if (g !== generation()) return false;
+			roster.sections = fresh;
+		} catch (refetchError) {
+			console.error(`roster: section refetch after a failed ${what} failed`, refetchError);
+			if (g !== generation()) return false;
+			roster.sections = restore();
+		}
+		return true;
+	}
+
 	async function armRemove(id: string): Promise<void> {
 		a.removeError = null;
 		a.pendingRemoveId = id;
@@ -230,16 +249,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
 		} catch (e) {
 			console.error('roster: section remove failed', id, e);
-			try {
-				const fresh = await actions.listSections(cfg);
-				if (g !== generation()) return;
-				roster.sections = fresh;
-			} catch (refetchError) {
-				console.error('roster: section refetch after a failed remove failed', refetchError);
-				if (g !== generation()) return;
-				roster.sections = before;
-			}
-			if (g !== generation()) return;
+			if (!(await restoreSections(cfg, g, () => before, 'remove'))) return;
 			a.removeError = { name, kind: isSectionNotEmpty(e) ? 'not-empty' : 'write' };
 			failedRemoveId = id;
 		} finally {
@@ -355,14 +365,12 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			console.error('roster: section reorder failed', e);
 			if (g !== generation()) return false;
 			a.reorderError = true;
-			try {
-				const fresh = await actions.listSections(cfg);
-				if (g !== generation()) return false;
-				roster.sections = fresh;
-			} catch (refetchError) {
-				console.error('roster: section refetch after a failed reorder failed', refetchError);
-				if (g === generation()) roster.sections = applySiblingOrder(roster.sections, beforeIds);
-			}
+			await restoreSections(
+				cfg,
+				g,
+				() => applySiblingOrder(roster.sections, beforeIds),
+				'reorder'
+			);
 		} finally {
 			if (g === generation()) a.reorderPending = false;
 		}
@@ -427,14 +435,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			if (g !== generation()) return false;
 			a.reorderError = true;
 			a.reparentPartial = moveLanded;
-			try {
-				const fresh = await actions.listSections(cfg);
-				if (g !== generation()) return false;
-				roster.sections = fresh;
-			} catch (refetchError) {
-				console.error('roster: section refetch after a failed reparent failed', refetchError);
-				if (g === generation()) roster.sections = before;
-			}
+			await restoreSections(cfg, g, () => before, 'reparent');
 		} finally {
 			if (g === generation()) a.reorderPending = false;
 		}
@@ -534,16 +535,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			a.renameStatus = m.roster_section_renamed({ name });
 		} catch (e) {
 			console.error('roster: section rename failed', id, e);
-			try {
-				const fresh = await actions.listSections(cfg);
-				if (g !== generation()) return;
-				roster.sections = fresh;
-			} catch (refetchError) {
-				console.error('roster: section refetch after a failed rename failed', refetchError);
-				if (g !== generation()) return;
-				roster.sections = before;
-			}
-			if (g !== generation()) return;
+			if (!(await restoreSections(cfg, g, () => before, 'rename'))) return;
 			a.renameError = { id, name };
 		} finally {
 			if (g === generation()) a.renamePending = false;

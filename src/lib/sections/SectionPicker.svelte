@@ -1,79 +1,21 @@
+<!-- Native single-choice section pickers for one member, one per held section, plus a [+]. -->
 <script lang="ts">
-	// #470 GREEN — REWRITTEN from the TS.2/#96 popup-listbox into NATIVE
-	// single-choice pickers, one per membership, plus a [+]. The custom listbox
-	// (trigger/menu/role="option"/toggle-onpick) and the inline "+ New
-	// section…" create form are RETIRED — creation left the assignment flow
-	// entirely (the page-level `roster-new-section` entry in arrange mode is
-	// the only create surface now, #124/#155, untouched). This file supersedes
-	// the whole previous contract; see SectionPicker.spec.ts.
-	//
-	// Still PRESENTATIONAL (no fetch, no cfg): the write dispatch + optimistic
-	// state + per-member freeze live in the roster page's wiring
-	// (handleAssign/handleUnassign/handleMove, page.roster-picker.spec.ts).
-	//
-	// CONTRACT (pinned by SectionPicker.spec.ts):
-	//   - Mihkel 1a/1b/1c: no held section → just the [+]; one held section →
-	//     its own select (with an unassign choice) + the [+]; several → one
-	//     select each + the [+].
-	//   - The [+] opens ONE blank select valued '' (Määramata); Mihkel: the [+]
-	//     is HIDDEN while a blank picker is open.
-	//   - A held select's options: Määramata + that section + every section NOT
-	//     held by this member — "not held" reads the member's WHOLE membership
-	//     (`selectedIds`), never just what this instance draws (`renderIds`).
-	//     Choosing Määramata fires onunassign(thatId); choosing another section
-	//     fires onmove(thatId, newId).
-	//   - The blank select's options: Määramata + every section NOT held by
-	//     this member (Gama: "a blank picker lists only sections she is not
-	//     in" — nothing to gain by choosing one twice). Choosing a section
-	//     fires onassign(newId) and the blank picker closes (the [+] returns).
-	//     Left at Määramata, it writes nothing.
-	//   - `busy` freezes EVERY control on THIS picker (disabled + aria-busy) —
-	//     nothing visual beyond the native disabled state (no "saving…" text).
-	//   - Every control names itself with `aria-label` — NOT an `id` + `<label
-	//     for>` pair. F2 review fix: the roster's grouped view renders one row
-	//     per MEMBERSHIP (groupBySection puts a member in every section she
-	//     holds), so a two-section member mounts this component twice with the
-	//     same `memberId` — each instance now scoped to its own card's section
-	//     (the page passes that card's id as `renderIds`), but both still
-	//     carrying the [+],
-	//     whose testid and name are keyed by member alone. An id built from
-	//     memberId would be duplicated in the document and `label[for]` would
-	//     resolve to the first match only, leaving the second card's controls
-	//     unnamed. aria-label carries the name on the element itself, so it
-	//     survives any number of instances.
+	// aria-label, not id + label[for]: a two-section member mounts this twice with one memberId.
 	import { m } from '$lib/paraglide/messages.js';
 	import type { SectionNode } from './sectionData';
+	import { flattenSections } from './sectionTree';
 
 	interface Props {
 		memberId: string;
-		/** Names every control ("whose sections is this?") — the caller picks
-		 *  which name is in scope; the roster page passes the PROFILE name. */
 		memberName: string;
-		/** The section tree, as returned by listSections. */
 		sections: SectionNode[];
-		/** The member's CURRENT section entity ids, ALL of them ([] =
-		 *  unassigned) — the EXCLUSION set. Every option list below is built by
-		 *  subtracting this, so a section she already holds is never offered
-		 *  anywhere. Pass the WHOLE membership even when this instance renders
-		 *  only one of them (see `renderIds`). */
 		selectedIds: string[];
-		/** Which of `selectedIds` THIS instance renders a select for — the
-		 *  per-card scope. The roster's grouped view mounts one picker per
-		 *  MEMBERSHIP (a card belongs to ONE section), so it passes that card's
-		 *  single id; the flat list passes the whole set. Kept separate from
-		 *  `selectedIds` because the two answer different questions — "what do I
-		 *  draw here" vs "what does she already hold" — and conflating them is
-		 *  exactly the #470 review-3 defect: a scoped list made her OTHER held
-		 *  section look free, and choosing it POSTed a duplicate `_parent`. */
+		// Kept apart from selectedIds: what this card draws vs what she holds. One list for both
+		// offered her other held section as free, and choosing it posted a duplicate `_parent`.
 		renderIds: string[];
-		/** Freeze: every select AND the [+] disabled, root aria-busy — Mihkel:
-		 *  "the controls get freezed while entu syncs". */
 		busy: boolean;
-		/** A blank picker chose a section. */
 		onassign: (sectionId: string) => void;
-		/** A held section's picker chose Määramata. */
 		onunassign: (sectionId: string) => void;
-		/** A held section's picker chose ANOTHER section. */
 		onmove: (fromId: string, toId: string) => void;
 	}
 
@@ -89,57 +31,23 @@
 		onmove
 	}: Props = $props();
 
-	/** One blank (Määramata-valued) picker open at a time — Mihkel's [+] rule. */
 	let blankOpen = $state(false);
 
-	/** Flatten the tree PRE-ORDER — each node's own depth rides along already
-	 *  (same shape as the old component's `flatten`/`parentOptionLabel`). */
-	function flatten(nodes: SectionNode[]): SectionNode[] {
-		const out: SectionNode[] = [];
-		for (const node of nodes) {
-			out.push(node);
-			out.push(...flatten(node.children));
-		}
-		return out;
-	}
+	const flatSections = $derived(flattenSections(sections));
 
-	const flatSections = $derived(flatten(sections));
-
-	/** `<option>` can't be styled portably — depth is carried in the label text
-	 *  itself via NBSP indent (ordinary leading spaces collapse in rendered
-	 *  option labels). */
+	// `<option>` can't be styled portably, so depth is an NBSP indent in the label text.
 	function optionLabel(node: SectionNode): string {
 		return '  '.repeat(node.depth) + node.name;
 	}
 
-	/** A held picker's own option list: Määramata + that section + every
-	 *  section NOT held by this member (the held section is kept even though
-	 *  it IS held — it is THIS select's own current value).
-	 *
-	 *  Review round 3 (#470): this filter reads `selectedIds` — the member's
-	 *  FULL membership — and NOT `renderIds`. While the grouped view passed one
-	 *  scoped list for both jobs, Mia's Soprano card offered her Alto (absent
-	 *  from that card's list, so it looked free); choosing it fired
-	 *  onmove(sop → alto), POSTing a `_parent` she already had, and the row's
-	 *  optimistic ids then carried 'sec-alto' twice — Svelte's keyed {#each}
-	 *  threw each_key_duplicate. Exclusion is a question about the MEMBER;
-	 *  rendering is a question about the CARD. */
+	// A held select keeps its own section; exclusion reads the whole membership, not the card.
 	function heldOptions(thisId: string): SectionNode[] {
 		return flatSections.filter((node) => node.id === thisId || !selectedIds.includes(node.id));
 	}
 
-	/** The blank picker's option list: Määramata + every section NOT held —
-	 *  Gama: "a blank picker lists only sections she is not in". Same
-	 *  `selectedIds` (whole-membership) read as `heldOptions` above. */
 	const blankOptions = $derived(flatSections.filter((node) => !selectedIds.includes(node.id)));
 
-	// Closes the blank picker the moment its own choice fires (synchronous —
-	// the [+] returns without waiting on the parent's optimistic prop update)
-	// AND, redundantly, whenever `selectedIds` itself grows while a blank
-	// picker is still open — the FULL membership, so an assign made on the
-	// member's other group card closes this one's blank picker too (a belt-and-braces close for any path that lands a
-	// new membership without going through `chooseBlank` below — e.g. a
-	// second control on the same row).
+	// Also closes the blank picker when the membership grows from elsewhere, e.g. another card.
 	let prevSelectedCount = -1;
 	$effect(() => {
 		const count = selectedIds.length;
@@ -175,18 +83,8 @@
 			value={sectionId}
 			disabled={busy}
 			onchange={(e) => {
-				// F1 review fix — RE-ASSERT the DOM value from state before
-				// delegating. `value={sectionId}` is one-way and `sectionId` is this
-				// {#each} block's own key, so it never changes: Svelte's select-value
-				// effect never re-runs and the user's own DOM change is the ONLY thing
-				// that can move this select. When the parent's write fails it
-				// deliberately patches nothing, and the select was left showing a
-				// section the member is not in — a lie the user then could not even
-				// retry away (re-picking the same target fires no `change`). Resetting
-				// here makes the parent's optimistic state the single source of what is
-				// on screen: on a successful move this select unmounts anyway, so the
-				// reset is invisible; on a failure the select stays truthful and the
-				// same choice can be made again.
+				// `value` is one-way and keyed, so after a failed write the select would keep showing
+				// a section she is not in; re-assert it from state before delegating.
 				const el = e.currentTarget as HTMLSelectElement;
 				const chosen = el.value;
 				el.value = sectionId;
@@ -207,9 +105,7 @@
 			value=""
 			disabled={busy}
 			onchange={(e) => {
-				// Same re-assert as the held selects above: a blank picker that stays
-				// open (Määramata chosen, or an assign the parent could not land) must
-				// show Määramata, not the section it failed to enter.
+				// Same re-assert: a blank picker left open shows Määramata, not the failed choice.
 				const el = e.currentTarget as HTMLSelectElement;
 				const chosen = el.value;
 				el.value = '';
@@ -239,5 +135,4 @@
 	{/if}
 </div>
 
-<!-- (*MVOX:Palestrina* — #470 GREEN: native per-membership pickers + [+],
-     replacing the TS.2/#96 popup-listbox + inline create form wholesale) -->
+<!-- (*MVOX:Palestrina*) -->

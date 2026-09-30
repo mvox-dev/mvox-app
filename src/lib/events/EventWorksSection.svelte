@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { refreshEventPageWorkRows } from '$lib/events/eventPageData';
@@ -55,18 +55,18 @@
 	function handlePdfClick(fileId: string): void {
 		if (!selected) return;
 		const row = ev.workRows.find((r) => r.fileId === fileId);
-		goto(`/part/${fileId}?db=${selected.db}`, {
-			state: row
+		openPart(
+			selected.db,
+			fileId,
+			row
 				? {
-						partLabel: {
-							work: row.workName,
-							composer: row.composer,
-							edition: row.editionName,
-							filename: row.fileName
-						}
+						work: row.workName,
+						composer: row.composer,
+						edition: row.editionName,
+						filename: row.fileName
 					}
-				: {}
-		});
+				: undefined
+		);
 	}
 
 	function refreshWorks(): void {

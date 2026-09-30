@@ -14,6 +14,7 @@
 		joinStateLine
 	} from '$lib/roster/joinStateView';
 	import MemberRecordEditor from '$lib/roster/MemberRecordEditor.svelte';
+	import { sectionNamesFor } from '$lib/sections/sectionTree';
 	import MemberInvite from '$lib/roster/MemberInvite.svelte';
 	import MemberDeactivate from '$lib/roster/MemberDeactivate.svelte';
 
@@ -41,11 +42,7 @@
 		sectionNameById: Map<string, string>;
 	} = $props();
 
-	const rowSectionNames = $derived(
-		(row.sectionIds ?? [])
-			.map((id) => sectionNameById.get(id))
-			.filter((name): name is string => Boolean(name))
-	);
+	const rowSectionNames = $derived(sectionNamesFor(row.sectionIds, sectionNameById));
 	const memberSectionIds = $derived(row.sectionIds ?? []);
 	const pickerRenderIds = $derived(
 		groupSectionId === null

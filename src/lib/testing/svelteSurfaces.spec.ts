@@ -27,7 +27,7 @@ describe('svelteSurfaces', () => {
 		const surfaces = svelteSurfaces();
 		expect(surfaces).toContain('src/lib/components/nav/NavShell.svelte');
 		expect(surfaces).toContain('src/routes/auth/callback/+page.svelte');
-		expect(surfaces.length).toBeGreaterThanOrEqual(73);
+		expect(surfaces.length).toBeGreaterThanOrEqual(72);
 		expect(surfaces.some((path) => path.includes('comment-rules-fixtures'))).toBe(false);
 	});
 

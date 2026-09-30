@@ -3,6 +3,7 @@ import type { UploadEditionFilesResult } from '$lib/library/editionFiles';
 import type { ActiveMember } from '$lib/roster/rosterData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { CopySortKey } from '$lib/library/copySort';
+import type { ListRead } from '$lib/entu/listRead';
 import { withItem, without } from '$lib/collections/immutable';
 
 export type NodeStatus = 'idle' | 'loading' | 'error';
@@ -178,6 +179,60 @@ export function setEditionDraftError(
 
 export function setEditionDraftPending(drafts: EditionDrafts, workId: string, on: boolean): void {
 	drafts.pending = withItem(drafts.pending, workId, on);
+}
+
+// Returns whether the lendings read was truncated; the page holds that flag, not `lib`.
+export function applyLendings(
+	lib: LibraryState,
+	read: { lendings: ListRead<Lending>; borrowerNames: Map<string, string> }
+): boolean {
+	lib.lendings = read.lendings.items;
+	lib.borrowerNames = read.borrowerNames;
+	return read.lendings.truncated;
+}
+
+/** What InlineCreateForm reads and calls, over either state shape. */
+export interface InlineCreateView {
+	open: boolean;
+	name: string;
+	second: string;
+	error: (() => string) | null;
+	pending: boolean;
+	status: string;
+	onopen: () => void;
+	onclose: () => void;
+	onname: (value: string) => void;
+	onsecond: (value: string) => void;
+}
+
+export function workFormView(form: WorkForm): InlineCreateView {
+	return {
+		open: form.open,
+		name: form.name,
+		second: form.composer,
+		error: form.error,
+		pending: form.pending,
+		status: form.status,
+		onopen: () => openWorkForm(form),
+		onclose: () => closeWorkForm(form),
+		onname: (value) => (form.name = value),
+		onsecond: (value) => (form.composer = value)
+	};
+}
+
+export function editionDraftView(drafts: EditionDrafts, workId: string): InlineCreateView {
+	return {
+		open: drafts.open.has(workId),
+		name: drafts.name.get(workId) ?? '',
+		second: drafts.publisher.get(workId) ?? '',
+		error: drafts.errors.get(workId) ?? null,
+		pending: drafts.pending.has(workId),
+		status: drafts.statuses.get(workId) ?? '',
+		onopen: () => openEditionDraft(drafts, workId),
+		onclose: () => closeEditionDraft(drafts, workId),
+		onname: (value) => (drafts.name = new Map(drafts.name).set(workId, value)),
+		onsecond: (value) => (drafts.publisher = new Map(drafts.publisher).set(workId, value))
+	};
 }
 
 export interface BrokenFile {

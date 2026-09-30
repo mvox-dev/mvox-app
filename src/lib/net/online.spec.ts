@@ -1,20 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED — the ONE online/offline signal.
-//
-// CONTRACT (GREEN creates src/lib/net/online.ts):
-//   export const online: Readable<boolean>
-//     • reads `navigator.onLine` when its first subscriber arrives (a readable
-//       start function — not a value frozen at import time);
-//     • follows the window's `online` / `offline` events while subscribed;
-//     • is the only place in src/ that reads navigator.onLine or listens to
-//       those events — every write control consumes THIS store.
-// Nothing is queued: the store is a signal only. It gates writes; it never
-// gates reads (readCache serves on a rejected fetch, not on this flag).
+// The one online/offline signal: it gates writes, never reads, and nothing is queued.
 import { afterEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 import { goOffline, goOnline, resetOnLine } from '$lib/testing/networkSignal';
 import { online } from './online';
 
@@ -54,23 +44,13 @@ describe('online — the network signal store (#434 slice 6)', () => {
 });
 
 describe('online — the one reader of navigator.onLine', () => {
-	function walk(dir: string): string[] {
-		const out: string[] = [];
-		for (const name of readdirSync(dir)) {
-			const p = join(dir, name);
-			if (statSync(p).isDirectory()) out.push(...walk(p));
-			else if (/\.(ts|svelte)$/.test(name) && !/\.spec\.ts$/.test(name)) out.push(p);
-		}
-		return out;
-	}
-
 	it('no other src/ module reads navigator.onLine or listens for online/offline events', () => {
 		const root = resolve(process.cwd(), 'src');
 		const allowed = new Set([
 			resolve(root, 'lib/net/online.ts'),
 			resolve(root, 'lib/testing/networkSignal.ts')
 		]);
-		const offenders = walk(root)
+		const offenders = findSourceFiles(root, ['.ts', '.svelte'], { excludeSpecs: true })
 			.filter((p) => !allowed.has(p))
 			.filter((p) => {
 				const src = readFileSync(p, 'utf-8');
@@ -84,4 +64,4 @@ describe('online — the one reader of navigator.onLine', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)

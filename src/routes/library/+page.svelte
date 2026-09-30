@@ -1,7 +1,7 @@
 <script lang="ts">
 	// #54/#73 — the library: works, editions and copies with availability from lending, the
 	// member's own loans, and the librarian's tools. The page owns every load and every write.
-	import { goto } from '$app/navigation';
+	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -36,6 +36,7 @@
 	import { writesAvailable } from '$lib/net/online';
 	import { createLendingView } from '$lib/library/lendingView';
 	import {
+		applyLendings,
 		applyUploadFailures,
 		closeEditionDraft,
 		closeWorkForm,
@@ -52,11 +53,12 @@
 		setEditionDraftPending,
 		startUpload,
 		updateEditionFiles,
+		workFormView,
 		type TreeActions
 	} from '$lib/library/libraryState';
 	import MyLoansSection from '$lib/library/MyLoansSection.svelte';
 	import BulkCheckoutPanel from '$lib/library/BulkCheckoutPanel.svelte';
-	import CreateWorkForm from '$lib/library/CreateWorkForm.svelte';
+	import InlineCreateForm from '$lib/library/InlineCreateForm.svelte';
 	import WorkRow from '$lib/library/WorkRow.svelte';
 	import { withItem, without } from '$lib/collections/immutable';
 
@@ -181,9 +183,7 @@
 			if (!isCurrent()) return;
 			lib.works = listing.works.items;
 			worksPartial = listing.works.truncated;
-			lib.lendings = listing.lendings.items;
-			lendingsPartial = listing.lendings.truncated;
-			lib.borrowerNames = listing.borrowerNames;
+			lendingsPartial = applyLendings(lib, listing);
 			status = 'ready';
 
 			// Cache-backed, so my-loans survives offline; a rejection must not take the listing down.
@@ -395,19 +395,13 @@
 		applyUploadFailures(fileUploads, editionId, result.failed);
 	}
 
-	// #427 — Open navigates to the part viewer. The label rides in the navigation state:
-	// work, composer and edition are known here and nowhere in the viewer.
 	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
-		goto(`/part/${fileId}?db=${selected.db}`, {
-			state: {
-				partLabel: {
-					work: work.name,
-					composer: work.composer,
-					edition: edition.name,
-					filename
-				}
-			}
+		openPart(selected.db, fileId, {
+			work: work.name,
+			composer: work.composer,
+			edition: edition.name,
+			filename
 		});
 	}
 
@@ -441,14 +435,25 @@
 	let librarianGen = 0;
 	$effect(() => {
 		const current = selected;
-		const g = ++librarianGen;
 		if (!current) {
+			++librarianGen;
 			resetLibrarian();
 			resetLibrarianPickerPartial();
 			return;
 		}
 		resetLibrarian();
 		resetLibrarianPickerPartial();
+		loadLibrarian(current);
+	});
+
+	function retryLibrarianLoad(): void {
+		if (!selected) return;
+		resetLibrarianPickerPartial();
+		loadLibrarian(selected);
+	}
+
+	function loadLibrarian(current: { db: string; personId: string }): void {
+		const g = ++librarianGen;
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
 		loadLibrarianState(cfg, current.personId).then(async (result) => {
@@ -482,40 +487,6 @@
 			if (g !== librarianGen) return;
 			librarianStore.set(result.state);
 		});
-	});
-
-	function retryLibrarianLoad(): void {
-		if (!selected) return;
-		const token = getToken();
-		const cfg = { db: selected.db, token: token ?? '' };
-		resetLibrarianPickerPartial();
-		loadLibrarianState(cfg, selected.personId).then(async (result) => {
-			if (result.state === 'librarian') {
-				try {
-					const {
-						editions: editionsRead,
-						copies: copiesRead,
-						members: membersRead
-					} = await loadLibrarianPickers(cfg);
-					lib.allEditions = editionsRead.items;
-					lib.allCopies = copiesRead.items;
-					lib.allMembers = membersRead.items;
-					lib.optionsPartial = editionsRead.truncated || copiesRead.truncated;
-					lib.membersPartial = membersRead.truncated;
-					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-					loadLibrarianMemberNames(cfg, memberIdList)
-						.then((names) => {
-							lib.memberNames = names;
-						})
-						.catch((e) => console.error('library: member name resolution failed', e));
-				} catch (e) {
-					console.error('library: checkout data load failed', e);
-					librarianStore.set('error');
-					return;
-				}
-			}
-			librarianStore.set(result.state);
-		});
 	}
 
 	// #76 — picking a member checks out at once. Lendings are re-read after the write, so
@@ -538,9 +509,7 @@
 			});
 			// Stores without serving: the live answer or a rejection, never pre-write availability.
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
 			const errNext = new Map(lib.inlineCheckoutErrors);
@@ -560,9 +529,7 @@
 		try {
 			await returnLending(cfg, lendingId);
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 		} catch (e) {
 			console.error('library: return failed', e);
 			returnError = e instanceof Error ? e.message : 'Return failed';
@@ -592,9 +559,7 @@
 				bulk.error = `${result.failed.length} checkout(s) failed`;
 			}
 			const refreshed = await refreshLibraryLendings(cfg);
-			lib.lendings = refreshed.lendings.items;
-			lendingsPartial = refreshed.lendings.truncated;
-			lib.borrowerNames = refreshed.borrowerNames;
+			lendingsPartial = applyLendings(lib, refreshed);
 			bulk.members = new Set();
 			bulk.dueDate = '';
 		} catch (e) {
@@ -661,7 +626,12 @@
 					submit={handleBulkCheckout}
 				/>
 
-				<CreateWorkForm bind:form={workForm} {isOffline} submit={submitCreateWork} />
+				<InlineCreateForm
+					kind="work"
+					view={workFormView(workForm)}
+					{isOffline}
+					submit={submitCreateWork}
+				/>
 			</section>
 		{:else if $librarianStore === 'error'}
 			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
