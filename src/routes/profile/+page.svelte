@@ -21,9 +21,9 @@
 	import { createFieldMoveQueue } from '$lib/profile/fieldMoveQueue';
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 	import { createAutosave } from '$lib/profile/autosave';
-	import ProfileField from '$lib/components/profile/ProfileField.svelte';
+	import ProfileField from '$lib/profile/ProfileField.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
-	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+	import VisibilityRepairBanner from '$lib/profile/VisibilityRepairBanner.svelte';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import { timeFormatStore, setTimeFormat, type TimeFormat } from '$lib/preferences/timeFormat';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -34,9 +34,9 @@
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
 	import { providerLabel } from '$lib/auth/providers';
 	import { listAllEditions } from '$lib/library/libraryData';
-	import RosterNamesToggle from '$lib/components/profile/RosterNamesToggle.svelte';
-	import LinkedAccountsSection from '$lib/components/profile/LinkedAccountsSection.svelte';
-	import ProfileStorageSection from '$lib/components/profile/ProfileStorageSection.svelte';
+	import RosterNamesToggle from '$lib/profile/RosterNamesToggle.svelte';
+	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
+	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
 	// #408 — a pure subscriber: the root layout starts the `beforeinstallprompt` adapter,
 	// because Chromium fires that event once per page load, before this page mounts.
 	import { installAffordance, promptInstall } from '$lib/install/installState';

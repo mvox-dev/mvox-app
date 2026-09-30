@@ -27,8 +27,8 @@ const CHANGED_SURFACES = [
 	'src/lib/components/agenda/SeasonCreateForm.svelte',
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	// #529 splits the profile page into these.
-	'src/lib/components/profile/RosterNamesToggle.svelte',
-	'src/lib/components/profile/ProfileStorageSection.svelte'
+	'src/lib/profile/RosterNamesToggle.svelte',
+	'src/lib/profile/ProfileStorageSection.svelte'
 ] as const;
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;

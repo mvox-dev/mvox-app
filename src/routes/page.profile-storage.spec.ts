@@ -717,7 +717,7 @@ describe('/profile — storage controls are native classed <button>s', () => {
 describe('/profile — the page states the naming-scope boundary where the reader meets it', () => {
 	it('ProfileStorageSection.svelte cites #353 as the owner of offline naming', () => {
 		const source = readFileSync(
-			resolve(process.cwd(), 'src/lib/components/profile/ProfileStorageSection.svelte'),
+			resolve(process.cwd(), 'src/lib/profile/ProfileStorageSection.svelte'),
 			'utf-8'
 		);
 		expect(source).toMatch(/#353/);

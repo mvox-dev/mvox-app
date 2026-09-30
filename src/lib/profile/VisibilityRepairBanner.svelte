@@ -1,11 +1,6 @@
-<!--
-	T4.7/#27 AC3 — the ACTIVE interrupted-move surface. A value living in two entities is
-	an inconsistency (an unfinished move), NOT a legitimate state. Narrower-wins hides it on
-	OUR render, but for a tightening the wider copy is genuinely readable off the Entu API
-	(Flag 3) — so this is a PRIVACY repair, and "Finish now" COMPLETES THE DELETE on the
-	wider entity. It is dismissible only by acting (never a toast, never auto-cleared); a
-	failed repair KEEPS the banner (preserve-on-error).
--->
+<!-- #27 — a value in two entities is an unfinished move; the wider copy stays readable
+	through the API, so "Finish now" completes the delete. Dismissed only by acting, and a
+	failed repair keeps the banner. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';

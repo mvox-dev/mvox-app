@@ -9,7 +9,7 @@
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
 	import { createNonce } from '$lib/auth/state';
-	import { buildOAuthInitUrl } from '../../../routes/auth/[provider]/build-oauth-init-url';
+	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
 
 	type Cfg = { db: string; token: string };
