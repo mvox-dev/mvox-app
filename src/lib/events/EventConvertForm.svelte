@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { generateIntervalDates } from '$lib/events/recurrence';
@@ -9,6 +8,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
+	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -84,9 +84,7 @@
 	const eventConvertLocked = $derived(eventConvertResume !== null);
 
 	function restoreEventConvertFocus(): void {
-		tick().then(() =>
-			document.querySelector<HTMLElement>('[data-testid="event-detail-convert"]')?.focus()
-		);
+		void focusTestIdAfterRender('event-detail-convert');
 	}
 
 	function dismissEventConvertForm(): void {

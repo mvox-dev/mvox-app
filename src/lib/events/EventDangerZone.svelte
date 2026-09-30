@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
@@ -8,6 +7,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
+	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -35,15 +35,13 @@
 		if (isOffline) return;
 		deleteError = null;
 		deleteArmed = true;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="event-detail-delete-confirm"]')?.focus();
+		await focusTestIdAfterRender('event-detail-delete-confirm');
 	}
 
 	async function cancelDelete(): Promise<void> {
 		deleteArmed = false;
 		deleteError = null;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="event-detail-delete"]')?.focus();
+		await focusTestIdAfterRender('event-detail-delete');
 	}
 
 	async function confirmDelete(): Promise<void> {

@@ -1,7 +1,7 @@
 <!-- #508 — season card + season-manage panel. The page keeps what it shares (open flag,
 	panel element, switch generation, panel repertoire) and passes it in. -->
 <script lang="ts">
-	import { tick, type ComponentProps } from 'svelte';
+	import { type ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { getToken } from '$lib/auth/storage';
@@ -26,6 +26,7 @@
 		isSeriesCascadePartial,
 		isSeasonCascadePartial
 	} from '$lib/seasons/deleteErrors';
+	import { focusAfterRender, focusOnMount, focusTestIdAfterRender } from '$lib/a11y/focusable';
 
 	type Cfg = { db: string; token: string };
 	type RepertoireProps = ComponentProps<typeof RepertoireElement>;
@@ -338,13 +339,11 @@
 		seasonManageDeleteScope = null;
 		seasonManageDeleteError = null;
 		const closedSeasonId = manageableSeasonId;
-		tick().then(() => {
-			seasonCardEl
-				?.querySelector<HTMLButtonElement>(
-					`[data-testid="season-card-expand"][data-season-manage-id="${closedSeasonId}"]`
-				)
-				?.focus();
-		});
+		void focusAfterRender(() =>
+			seasonCardEl?.querySelector<HTMLButtonElement>(
+				`[data-testid="season-card-expand"][data-season-manage-id="${closedSeasonId}"]`
+			)
+		);
 	}
 
 	$effect(() => {
@@ -352,7 +351,7 @@
 	});
 
 	function refocusSeasonManagePanel(): void {
-		tick().then(() => seasonManagePanelEl?.focus());
+		void focusAfterRender(() => seasonManagePanelEl);
 	}
 
 	function onSeasonManagePanelKeydown(event: KeyboardEvent): void {
@@ -469,10 +468,6 @@
 		}
 	}
 
-	function focusSeasonInputOnMount(node: HTMLElement): void {
-		node.focus();
-	}
-
 	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
 		if (seasonManageConductorPending || isOffline) return;
 		if (!selection.id || !selected || manageableSeasonId === null) return;
@@ -552,8 +547,7 @@
 		seasonManageDeleteArmed = rowId;
 		seasonManageArmedSeriesCount = null;
 		seasonManageDeleteScope = null;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="${confirmTestid}"]`)?.focus();
+		await focusTestIdAfterRender(confirmTestid);
 	}
 
 	async function armSeasonManageSeriesDelete(series: SeriesListItem): Promise<void> {
@@ -576,8 +570,7 @@
 		seasonManageDeleteArmed = null;
 		seasonManageArmedSeriesCount = null;
 		seasonManageDeleteScope = null;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="${disarmTestid}"]`)?.focus();
+		await focusTestIdAfterRender(disarmTestid);
 	}
 
 	async function armSeasonManageSeasonDelete(): Promise<void> {
@@ -873,7 +866,7 @@
 						data-testid="season-edit-input-name"
 						aria-label={m.season_manage_name_label()}
 						value={seasonEditDraft}
-						use:focusSeasonInputOnMount
+						use:focusOnMount
 						oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
 						onblur={() => confirmSeasonFieldEdit('name')}
 						onkeydown={(e) => handleSeasonFieldKeydown(e, 'name')}
@@ -914,7 +907,7 @@
 							data-testid="season-edit-input-start_date"
 							aria-label={m.season_manage_start_date_label()}
 							value={seasonEditDraft}
-							use:focusSeasonInputOnMount
+							use:focusOnMount
 							oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
 							onblur={() => confirmSeasonFieldEdit('start_date')}
 							onkeydown={(e) => handleSeasonFieldKeydown(e, 'start_date')}
@@ -961,7 +954,7 @@
 							data-testid="season-edit-input-end_date"
 							aria-label={m.season_manage_end_date_label()}
 							value={seasonEditDraft}
-							use:focusSeasonInputOnMount
+							use:focusOnMount
 							oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
 							onblur={() => confirmSeasonFieldEdit('end_date')}
 							onkeydown={(e) => handleSeasonFieldKeydown(e, 'end_date')}

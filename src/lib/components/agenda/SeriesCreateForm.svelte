@@ -2,7 +2,7 @@
 	Mounted only while open: untracked prop reads seed the form once at construction, deliberately.
 	submitting/resumeByDb/seriesRunDb stay bindable: the page reads them across unmounts. -->
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -22,6 +22,7 @@
 		type SeriesCreateFormSnapshot,
 		type SeriesCreateResumeByDb
 	} from '$lib/agenda/seriesCreateResume';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	interface Props {
 		selected: Collective | null;
@@ -207,7 +208,7 @@
 	}
 
 	function restoreSeriesCreateFocus(): void {
-		tick().then(() => seasonManagePanelEl?.focus());
+		void focusAfterRender(() => seasonManagePanelEl);
 	}
 
 	function dismissSeriesCreateForm(): void {

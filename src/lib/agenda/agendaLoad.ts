@@ -1,6 +1,6 @@
 // Agenda data load: the page owns the state object and every write; reads from modules that
 // also write reach this file through `deps`, so the write-gate fence still sees them in the page.
-import { tick, untrack } from 'svelte';
+import { untrack } from 'svelte';
 import { m } from '$lib/paraglide/messages.js';
 import { getToken } from '$lib/auth/storage';
 import { loadFullAgenda } from '$lib/agenda/agendaData';
@@ -34,6 +34,7 @@ import type * as RepertoireData from '$lib/repertoire/repertoireData';
 import type * as RsvpData from '$lib/rsvp/rsvpData';
 import type * as ScheduleData from '$lib/schedule/scheduleData';
 import type { CollectiveState } from '$lib/collectives/types';
+import { focusAfterRender } from '$lib/a11y/focusable';
 
 type ManageCfg = { db: string; token: string };
 type AgendaTypeFilter = 'all' | (typeof CANONICAL_EVENT_TYPES)[number];
@@ -899,13 +900,11 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 			ag.attendanceLoading = false;
 			ag.attendanceError = false;
 			if (closedItemId) {
-				tick().then(() => {
-					document
-						.querySelector<HTMLElement>(
-							`[data-testid="agenda-recent-row-${closedItemId}"] [data-testid="take-attendance-btn"]`
-						)
-						?.focus();
-				});
+				void focusAfterRender(() =>
+					document.querySelector<HTMLElement>(
+						`[data-testid="agenda-recent-row-${closedItemId}"] [data-testid="take-attendance-btn"]`
+					)
+				);
 			}
 		}
 

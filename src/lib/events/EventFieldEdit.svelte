@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import { getToken } from '$lib/auth/storage';
@@ -17,6 +17,7 @@
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventActions, EventEditState } from '$lib/events/eventPageState';
+	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -74,10 +75,6 @@
 		const owed = edit.pendingFocusRestore[field] === true;
 		delete edit.pendingFocusRestore[field];
 		if (owed && edit.editingField === null) restorePencilFocus(field);
-	}
-
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
 	}
 
 	let editStatus = $state('');
@@ -173,7 +170,7 @@
 	}
 
 	function restorePencilFocus(field: EditableEventField): void {
-		tick().then(() => edit.pencilRefs[field]?.focus());
+		void focusAfterRender(() => edit.pencilRefs[field]);
 	}
 
 	function cancelFieldEdit(field: EditableEventField, restoreFocus: boolean): void {

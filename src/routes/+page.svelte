@@ -121,6 +121,7 @@
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
 	import { withItem, without } from '$lib/collections/immutable';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	const auth = $derived($authStore);
 	const collectives = $derived($collectiveState);
@@ -920,9 +921,7 @@
 	}
 
 	function restoreEventCreateFocus(): void {
-		tick().then(() => {
-			seasonManagePanelEl?.focus();
-		});
+		void focusAfterRender(() => seasonManagePanelEl);
 	}
 
 	let pendingSurfaceEventId = $state<string | null>(null);

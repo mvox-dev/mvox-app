@@ -11,6 +11,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -34,10 +35,6 @@
 	$effect(() => () => {
 		mounted = false;
 	});
-
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
-	}
 
 	function manageCfg(): { db: string; token: string } | null {
 		return selected ? { db: selected.db, token: getToken() ?? '' } : null;

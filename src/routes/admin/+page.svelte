@@ -1,23 +1,5 @@
+<!-- /admin: role management (admins, librarians), the collective name, and invites. -->
 <script lang="ts">
-	// #134/S3 GREEN — the /admin role-management surface (admin + librarian
-	// assignment). Contract: src/routes/page.admin.spec.ts (route integration)
-	// + src/lib/admin/roleManagement.spec.ts (data layer).
-	//
-	// Access gate mirrors admin/invite/+page.svelte's shape (loading →
-	// no-collective / no-access / load-error → ready), but the "which
-	// collective" resolution reuses the ROOT LAYOUT's pattern instead —
-	// `selectedCollectiveStore` (URL → persisted pick → first collective), not
-	// the invite page's own db-picker (this surface acts on the person's
-	// CURRENTLY selected collective, same as every other rights-gated page).
-	//
-	// #173 — the database entity is resolved ONCE, here, and threaded into both
-	// `resolveAdmin` and `resolveLibrarian` via their pre-resolved-dbEntityId
-	// param (adminStore.preresolved.spec.ts / librarianStore.preresolved.spec.ts).
-	// Previously this page's own `resolveDatabaseEntityId` call plus the ones
-	// buried inside `resolveAdmin` and `resolveLibrarian` -> `resolveMyLibraryId`
-	// made THREE identical round-trips per load for one db-scoped, load-constant
-	// id; now there is exactly one.
-	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import {
@@ -44,32 +26,19 @@
 		removeLibrarian,
 		type RolePerson
 	} from '$lib/admin/roleManagement';
-	// #209 (PO standing rule 1) — the add-admin/add-librarian pickers are NATIVE
-	// <select> elements, fed in ROSTER ORDER (Gama ruling 3) by the SAME
-	// `rosterOrder` helper the roster page's own grouping runs through
-	// (`listSections` + `groupBySection`), not a re-derived ordering.
 	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
-	// #140/S3 — the invite functionality merges into this page as a distinct
-	// section, sharing the SAME live component the standalone /admin/invite
-	// route still renders (backward compat) — see
-	// src/lib/components/admin/InviteSurface.svelte.
 	import InviteSurface from '$lib/components/admin/InviteSurface.svelte';
-	// #434 slice 6 review F1 — the write gate. Role grants/revokes and the
-	// collective rename are writes: disabled and refused while there is no usable
-	// signal, with one sentence saying why. Nothing is queued. (The invite section
-	// reads the same gate inside InviteSurface itself.)
+	// Role writes and the rename are refused while offline; nothing is queued.
 	import { writesAvailable } from '$lib/net/online';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
+	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 
 	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
 	type Cfg = { db: string; token: string };
 
 	let status = $state<Status>('loading');
-	// The full selected collective — read ONLY for its display label (the invite
-	// section's `presetDbName`), so it deliberately DOES track a rename. Anything
-	// that decides "which collective is this page acting on" keys off
-	// `selectedCollectiveIdentityStore` instead (see the load effect below).
+	// Only the invite label reads this; what the page acts on keys off the identity store.
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
 	let cfg = $state<Cfg | null>(null);
@@ -78,64 +47,31 @@
 	let viewerId = $state<string | null>(null);
 	let admins = $state<RolePerson[]>([]);
 	let librarians = $state<RolePerson[]>([]);
-	// Write gate, per entity. `resolveAdmin` (the ACCESS gate above) answers
-	// 'admin' for an org `_editor` too, but entu-api refuses EVERY rights write
-	// from a caller who is not in the entity's aggregated `private._owner` — POST
-	// entity/{id} and DELETE property/{id} both 403. Showing an editing surface
-	// that is guaranteed to 403 is exactly the silent-failure shape the house
-	// rule forbids, so the lists stay readable and the write controls disappear.
+	// Write controls need _owner, not just the access gate: entu-api 403s every rights write
+	// from a non-owner, so the lists stay readable and the controls disappear.
 	let canManageAdmins = $state(false);
 	let canManageLibrarians = $state(false);
 	let roster = $state<RosterRow[]>([]);
-	/** #321 (PO ruling 2026-09-11) — the member read behind BOTH person selects
-	 *  was partial. These are closed sets: a person missing from the options
-	 *  cannot be granted a role at all, and the gap reads as "they are not a
-	 *  member" rather than as a list cut short — the case the ruling calls out by
-	 *  name. Assigned from every roster load and cleared where the load starts,
-	 *  so it can never describe a collective the page has left. */
+	/** The member read was partial: a missing person would read as "not a member". */
 	let rosterPartial = $state(false);
-	// #209 — the section tree behind ROSTER ORDER; [] (no sections) degrades
-	// `rosterOrder` to the roster's own (name) order.
+	// [] (no sections) falls back to the roster's own name order.
 	let sections = $state<SectionNode[]>([]);
-	/** #209 review F2 — the section read is a picker ORDERING input, not a role
-	 *  input: `listSections` throws on any non-2xx AND on data conditions of its
-	 *  own (an unplaceable parent, a parent cycle), none of which say anything
-	 *  about who may administer this collective. It is read OUTSIDE the load's
-	 *  blocking `Promise.all` for exactly that reason — a failure annotates the
-	 *  two selects (name order instead of roster order) and leaves the rest of
-	 *  this page, including the read-only tier that renders no select at all,
-	 *  untouched. Same posture the agenda's pickers take (+page.svelte's
-	 *  `sectionsReadFailed`). */
+	/** The section read only orders the pickers, so it sits outside the blocking load: a
+	 *  failure falls back to name order and leaves the rest of the page alone. */
 	let sectionsError = $state(false);
 	let actionError = $state(false);
-	// #325 — true while an admin/librarian grant/revoke write is in flight.
-	// Guards BOTH selects and every remove button on this page: any of them
-	// could otherwise fire a second direct-grant write for the same reference
-	// while the first is still settling. ER-6 (docs/architecture/
-	// entu-rights-and-visibility-model.md): a reference holds at most one
-	// active direct rights-tier grant per entity, and a second grant write
-	// silently retires the first. ER-9 qualifies it for the creator-owner
-	// case. This flag makes the concurrent write IMPOSSIBLE, not merely
-	// unlikely — the handlers below check it themselves, since `disabled` is
-	// a double-tap guard, not a state signal.
+	// Blocks a second grant or revoke while one is in flight: a second direct grant for a
+	// reference silently retires the first (ER-6). Handlers check it; disabled is only a guard.
 	let rolesPending = $state(false);
-	// #434 slice 6 review F1/F2 — a name confirm the signal refused, with the
-	// editor still open on the typed draft. Cleared on the next open, on an
-	// explicit cancel, and by the signal returning.
+	// A name confirm refused offline, with the editor still open on the draft.
 	let nameHeldOffline = $state(false);
 	$effect(() => {
 		if (!isOffline) nameHeldOffline = false;
 	});
-	// #325/#267 shape — persistent role="status" region, mounted blank, text
-	// set imperatively on a successful settle, cleared at the START of the
-	// next attempt (never on a timer).
+	// Live region: mounted blank, set on a settle, cleared when the next attempt starts.
 	let rolesStatus = $state('');
 
-	// #165 — the editable collective NAME (the `mvox_collective` marker's own
-	// `name`, not the store's picker label — see collectiveName.ts module doc).
-	// Same inline-edit shape as event/[id]/+page.svelte's field editing
-	// (beginFieldEdit/confirmFieldEdit, editingField, pencilRefs, focus
-	// management), collapsed to ONE field: no per-field key is needed.
+	// The marker's own name, not the picker label (see collectiveName.ts).
 	let nameMarker = $state<CollectiveNameMarker | null>(null);
 	let editingName = $state(false);
 	let nameDraft = $state('');
@@ -157,11 +93,7 @@
 			.map((r) => ({ id: r.personId, label: r.name }))
 	);
 
-	/** #209 review F1 — with nobody left to offer, say WHICH empty this is. The
-	 *  roster here is read INSIDE the load's blocking `Promise.all`, so by the
-	 *  time a select renders it has resolved (a failed read is the page's own
-	 *  load-error, never a picker state): the only two empties left are "this
-	 *  collective has no members" and "everyone is already granted". */
+	/** Says which empty this is: no members, or everyone already granted. */
 	function pickerPromptText(optionCount: number, addPrompt: string): string {
 		if (optionCount > 0) return addPrompt;
 		return roster.length === 0 ? m.picker_no_members() : m.picker_everyone_added();
@@ -171,46 +103,28 @@
 		return person.role === 'owner' && adminOwnerCount === 1;
 	}
 
-	// A library OWNER's grant is not this surface's to revoke: `removeLibrarian`
-	// runs 'editor-only' scope and rejects with RoleGrantMissingError before any
-	// write, so an enabled button here would be a guaranteed dead click.
+	// removeLibrarian rejects a library owner's grant, so its button would be a dead click.
 	function isLibraryOwner(person: RolePerson): boolean {
 		return person.role === 'owner';
 	}
 
-	// #147 — self-lockout guard. `isLastOwner` only catches the LAST org
-	// _owner; an admin holding _editor (or an _owner when other owners remain)
-	// could otherwise remove HERSELF and lose access to this page with no way
-	// back in. Applies to both lists — a librarian can self-lock out of the
-	// library section the same way.
+	// Self-lockout guard: isLastOwner only catches the last owner.
 	function isSelf(person: RolePerson): boolean {
 		return person.id === viewerId;
 	}
 
-	// `RolePerson.role` is a wire-level enum ('owner' | 'editor'), never a label.
-	// The badge is user-visible text, so it goes through `m.*` like every other
-	// string on the page (house convention — cf. rsvp_status_*).
 	function roleLabel(role: RolePerson['role']): string {
 		return role === 'owner' ? m.admin_roles_role_owner() : m.admin_roles_role_editor();
 	}
 
-	// Request-sequence guard. Switching collectives is an IN-PLACE store update
-	// (`selectCollective` sets the store then `goto`s the same pathname) and the
-	// root layout renders `{@render children?.()}` with no `{#key}` — so this
-	// component is never remounted and a slow load(A) can resolve after load(B)
-	// started, pairing B's `cfg.db` with A's org/library/rows/canManage. Every
-	// state write that follows an `await` is fenced behind `thisLoad`, the same
-	// pattern src/routes/+page.svelte uses for its own collective switch.
+	// A collective switch updates the store in place, so a slow load can land after a newer
+	// one. Every state write after an await is fenced behind thisLoad.
 	let loadSeq = 0;
 
 	async function refreshAdmins(thisLoad: number): Promise<void> {
 		if (thisLoad !== loadSeq) return; // the collective moved on before this read
 		if (!cfg || !dbEntityId || !viewerId) return;
-		// #146 — roster rides along as the id→name lookup for rows whose display
-		// name hasn't caught up in Entu's aggregated read yet (see
-		// resolveNamesFromRoster in roleManagement.ts). `undefined` for fetchImpl
-		// keeps its own default (real `fetch`) rather than reaching for the
-		// browser global here.
+		// The roster maps ids to names for rows whose aggregated name has not caught up yet.
 		const listing = await listAdmins(cfg, dbEntityId, viewerId, undefined, roster);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		admins = listing.persons;
@@ -226,16 +140,11 @@
 		canManageLibrarians = listing.canManage;
 	}
 
-	// `target` is the collective IDENTITY (db + personId) — the page's data all
-	// hangs off those two, never off the display label.
 	async function load(target: CollectiveIdentity): Promise<void> {
 		const thisLoad = ++loadSeq;
 		status = 'loading';
 		actionError = false;
-		// #325 — a collective switch (loadSeq bump) is the same "walk away
-		// cleanly" boundary the write handlers already fence their own settle
-		// on (`if (thisLoad !== loadSeq) return`); the visible trace of an
-		// in-flight write must not carry over onto the collective just loaded.
+		// A collective switch drops the trace of an in-flight write.
 		rolesPending = false;
 		rolesStatus = '';
 		const token = getToken();
@@ -256,10 +165,7 @@
 		nameError = false;
 		nameWritePending = false;
 
-		// #173 — resolve the database entity ONCE, here. It is db-scoped and
-		// constant for the whole load, so it is safe to thread the SAME id into
-		// both `resolveAdmin` and `resolveLibrarian` below instead of letting
-		// each resolve it again internally.
+		// Resolve the database entity once and pass it to both resolvers.
 		let resolvedDbEntityId: string | null;
 		try {
 			resolvedDbEntityId = await resolveDatabaseEntityId(c);
@@ -271,8 +177,6 @@
 		}
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
 		if (!resolvedDbEntityId) {
-			// No visible database entity: mirrors `resolveAdmin`'s own "cannot
-			// evaluate any rights" answer for the same condition.
 			status = 'load-error';
 			return;
 		}
@@ -288,15 +192,10 @@
 			return;
 		}
 
-		// #209 review F2 — the section tree behind ROSTER ORDER (Gama ruling 3),
-		// read ALONGSIDE the blocking resolutions below but never as one of them:
-		// a section-tree failure costs the two selects their roster order (they
-		// fall back to the roster's own name order, with `picker_order_fallback`
-		// saying so), not the whole role surface.
+		// Read alongside the blocking reads, never as one: a failure costs only the picker order.
 		sections = [];
 		sectionsError = false;
-		// #321 — the claim about the option list goes down while the list behind it
-		// is being re-read.
+		// The partial notice goes down while the list is re-read.
 		rosterPartial = false;
 		listSections(c)
 			.then((tree) => {
@@ -316,18 +215,12 @@
 			const [libResult, rosterRead, resolvedNameMarker] = await Promise.all([
 				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
 				loadRoster(c),
-				// #165 — a FAILED marker read must land here, in the SAME catch as every
-				// sibling resolution (load-error + retry), never rendered as "no name".
+				// A failed marker read is a load-error, never "no name".
 				resolveCollectiveNameMarker(c)
 			]);
 			if (thisLoad !== loadSeq) return; // superseded by a newer selection
-			// `resolveLibrarian` SWALLOWS its failures (non-2xx / throw) into
-			// { state: 'error', libraryId: null } — the same libraryId shape it
-			// returns for the legitimate "this collective has no library" case.
-			// Reading libraryId alone would render a failed fetch as the factual
-			// claim "no library entity is visible in this collective". Branch on
-			// `state` first, so a broken read fails loudly (load-error + retry,
-			// same as its sibling resolutions, which throw and land in the catch).
+			// resolveLibrarian turns a failed read into libraryId null, the same as "no library".
+			// Branch on state first, so a failed read fails loudly.
 			if (libResult.state === 'error') {
 				console.error('admin roles: librarian resolution failed');
 				status = 'load-error';
@@ -355,13 +248,8 @@
 		if (loadedIdentity) void load(loadedIdentity);
 	}
 
-	// #165 — inline edit of the collective name. `beginNameEdit`/`cancelNameEdit`/
-	// `confirmNameEdit` mirror event/[id]/+page.svelte's beginFieldEdit/
-	// cancelFieldEdit/confirmFieldEdit shape, collapsed to the ONE field this
-	// surface owns (no per-field key needed).
 	function beginNameEdit(): void {
-		// Offline the whole-field button is disabled; this is the backstop for a tap
-		// that beat the re-render (the event page's beginFieldEdit shape).
+		// Backstop for a tap that beat the offline re-render.
 		if (isOffline) return;
 		if (!nameMarker || nameWritePending) return;
 		nameError = false;
@@ -369,49 +257,22 @@
 		editingName = true;
 	}
 
-	/** Escape AND blur both dismiss without writing — #165 AC deliberately
-	 *  diverges from the event page's blur-confirms for THIS surface.
-	 *  `restoreFocus` — same #105-shaped rule as the event page: a KEYBOARD
-	 *  dismissal (Escape) owes the pencil its focus back; a blur means the
-	 *  viewer already moved focus somewhere else deliberately. */
+	/** Escape and blur dismiss without writing. Only a keyboard dismissal returns focus to
+	 *  the pencil; after a blur the viewer already chose where focus went. */
 	function cancelNameEdit(restoreFocus: boolean): void {
 		editingName = false;
 		nameDraft = '';
-		// An explicit abandon leaves no draft for the held-draft notice to be about.
 		nameHeldOffline = false;
-		if (restoreFocus) tick().then(() => namePencilRef?.focus());
+		if (restoreFocus) void focusAfterRender(() => namePencilRef);
 	}
 
-	/** Enter confirms: an immediate write, no optimistic-then-reconcile queue
-	 *  needed (one field, one caller) — the editor closes at once and the
-	 *  pencil is disabled for the write's duration (`nameWritePending`), same
-	 *  posture as every other write surface on this page. A failed write
-	 *  reverts the displayed name and surfaces `nameError`; a successful one
-	 *  also renames the SELECTED COLLECTIVE STORE entry so the picker + agenda
-	 *  header pick it up without a reload (#165 AC).
-	 *
-	 *  The draft is TRIMMED once, up front, and the trimmed value is what the
-	 *  guards compare AND what goes on the wire (#165 review F4): the read side
-	 *  (`resolveCollectiveNameMarker`) trims, so writing the raw draft would
-	 *  round-trip padding — a "  Koor  " edit would fire a full GET/POST/DELETE
-	 *  cycle, show the padded label until the next reload, and then silently
-	 *  undo itself. Trimming first also makes a whitespace-only edit read as
-	 *  what it is: no change.
-	 *
-	 *  `restoreFocus` — the #105 rule, governing BOTH branches (review F2).
-	 *  Enter is a KEYBOARD dismissal, so it owes the pencil its focus back
-	 *  exactly like Escape does; the no-change branch hands that straight to
-	 *  `cancelNameEdit`, and the write branch cannot act on it immediately
-	 *  (the pencil is `disabled` for the write's duration and `focus()` is a
-	 *  no-op on a disabled element) so it lands in the `finally`, after
-	 *  `nameWritePending` has flipped back. A blur passes `false`: the viewer
-	 *  already moved focus somewhere deliberate. */
+	/** Enter writes at once. The draft is trimmed first because the read side trims, so an
+	 *  untrimmed write would round-trip padding. Focus returns in the finally, once the pencil
+	 *  is enabled again: focus on a disabled element does nothing. */
 	async function confirmNameEdit(restoreFocus: boolean): Promise<void> {
 		if (!editingName || !cfg || !nameMarker) return;
-		// #434 slice 6 review F1/F2 — the signal dropped with the editor open. No
-		// write, nothing queued, and the editor STAYS on the typed draft: a blur is
-		// not a discard gesture, and closing here would eat the admin's retyping.
-		// `nameHeldOffline` says why nothing saved.
+		// Offline: no write, and the editor stays on the typed draft; closing would lose the
+		// retyping. nameHeldOffline says why nothing saved.
 		if (isOffline) {
 			nameError = false;
 			nameHeldOffline = true;
@@ -442,11 +303,9 @@
 		} finally {
 			if (thisLoad === loadSeq) {
 				nameWritePending = false;
-				// `!editingName` — a re-opened editor since this write started owns
-				// focus now; a late restore would rip it out of the input.
+				// A re-opened editor owns focus now; a late restore would pull it out of the input.
 				if (restoreFocus && !editingName) {
-					await tick();
-					namePencilRef?.focus();
+					await focusAfterRender(() => namePencilRef);
 				}
 			}
 		}
@@ -455,38 +314,18 @@
 	function handleNameKeydown(e: KeyboardEvent): void {
 		if (e.key === 'Escape') {
 			e.preventDefault();
-			// Keyboard dismissal — the pencil owes this focus back.
 			cancelNameEdit(true);
 		} else if (e.key === 'Enter') {
 			e.preventDefault();
-			// Keyboard dismissal too — same rule, whichever branch confirm takes.
 			void confirmNameEdit(true);
 		}
 	}
 
-	/** Svelte action: focus the element the instant it mounts — same helper
-	 *  event/[id]/+page.svelte uses for its own edit inputs. */
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
-	}
-
-	// Which identity this page's data belongs to — also what `retryLoad` re-runs
-	// against, so a retry can never silently target a different collective than
-	// the failed load did.
+	// Also what retryLoad re-runs against, so a retry never targets a different collective.
 	let loadedIdentity = $state<CollectiveIdentity | null>(null);
 
-	// EFFECT — react to the resolved selected collective: no-collective gate, or
-	// (re-)load. Same "no selected collective ⇒ no-collective" collapse the
-	// admin/invite page uses for its own picker (loading and none read the
-	// same to the user here — there is nothing actionable to distinguish).
-	//
-	// Keyed on `selectedCollectiveIdentityStore`, NOT `selectedCollectiveStore`
-	// (#165 review F1): this page's own `renameCollectiveInStore` republishes a
-	// fresh `Collective` object (same db, new label) and the raw store re-emits
-	// it, which would re-run `load()` on the page's OWN successful write and
-	// clobber the just-set optimistic name with whatever
-	// `resolveCollectiveNameMarker` answers next. The identity store emits only
-	// on a genuine db/person change, so no per-page guard is needed here.
+	// Keyed on the identity store, not selectedCollectiveStore: a rename republishes the
+	// collective, and re-running load() would clobber the name just set.
 	$effect(() => {
 		const id = $selectedCollectiveIdentityStore;
 		loadedIdentity = id;
@@ -497,17 +336,11 @@
 		void load(id);
 	});
 
-	// The write handlers SNAPSHOT the current sequence (they do not bump it —
-	// this is a same-collective refresh, not a switch). A collective switch that
-	// lands mid-write invalidates the snapshot, so neither the refetched rows nor
-	// the error banner can leak into the collective the viewer moved to.
+	// Handlers snapshot the sequence; a collective switch mid-write drops their results.
 	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
-		// #434 slice 6 review F1 — no signal, no rights write. FIRST, before the
-		// attempt-start clears below, so a refused pick cannot wipe the error from
-		// the grant that really did fail. Nothing is queued.
+		// Before the attempt-start clears, so a refused pick keeps the last real error.
 		if (isOffline) return;
-		// #325 — wire-level refusal: checked before anything else, since
-		// `disabled` on the select is a double-tap guard, not a state signal.
+		// Checked first: disabled on the select is a double-tap guard, not a state signal.
 		if (rolesPending) return;
 		if (!selection.id || !cfg || !dbEntityId) return;
 		const thisLoad = loadSeq;
@@ -622,12 +455,7 @@
 				</button>
 			</div>
 		{:else}
-			<!-- ready -->
-			<!-- #165 — the editable collective name, at the top of the ready view.
-			     `nameMarker === null` (marker resolved but not found in this db) hides
-			     the whole surface — nothing to edit. A FAILED resolution never reaches
-			     here: it lands in 'load-error' above, alongside every other sibling
-			     resolution (house rule). -->
+			<!-- ready. A missing marker hides the name surface; a failed read is a load-error. -->
 			{#if nameMarker}
 				<div class="flex flex-col gap-1.5">
 					{#if editingName}
@@ -643,20 +471,8 @@
 							onkeydown={handleNameKeydown}
 						/>
 					{:else}
-						<!-- #157's whole-field shape (the one event/[id]/+page.svelte settled
-						     on), not a bare pencil glyph: the WHOLE field is the button, so the
-						     tap target is `min-h-11 w-full` instead of a ~12px ✎ (#165 review
-						     F3 — `min-h-11` alone with `p-0` collapses the width to the glyph,
-						     under the 44x44 house minimum). `aria-labelledby` keeps the
-						     control's own accessible name pinned to the value span while the
-						     button carries its action label in an `sr-only` child.
-						     #165 review F6/F7 — this is page-level context (which collective
-						     you're administering), not a content section like "Administrators"
-						     below, so it is a plain <div>, not an <h2>: an empty-name marker
-						     would otherwise render a blank heading to screen readers. F7 — an
-						     empty marker name falls back to a translated "Unnamed collective"
-						     placeholder so the control is never blank, styled to read as a
-						     placeholder rather than real content. -->
+						<!-- The whole field is the button, for a 44px target. A div, not h2: this is page
+						     context, and an empty name must not read as a blank heading. -->
 						<div
 							data-testid="admin-collective-name"
 							aria-labelledby="admin-collective-name-value"
@@ -671,10 +487,7 @@
 								onclick={beginNameEdit}
 							>
 								<span class="sr-only">{m.admin_collective_name_edit_aria_label()}</span>
-								<!-- `group-hover:text-ink` — Tailwind's preflight sets no
-								     `cursor: pointer` on <button>, so growing the target to the
-								     whole field would otherwise leave a mouse user with no
-								     pointer cue at all (same note as the event page). -->
+								<!-- Preflight sets no pointer cursor on buttons; the hover colour is the cue. -->
 								<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 								{#if nameMarker.name}
 									<span id="admin-collective-name-value">{nameMarker.name}</span>
@@ -694,17 +507,12 @@
 				</div>
 			{/if}
 
-			<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
-			     this surface (the name field, both role selects, every remove): each
-			     is disabled while there is no signal; this says why once. The invite
-			     section below carries its own, inside InviteSurface. -->
 			{#if isOffline}
 				<p data-testid="admin-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
 				</p>
 			{/if}
-			<!-- Review F2's rule on this page's one inline editor: a confirm the
-			     signal refused keeps the draft, and says so. -->
+			<!-- A confirm refused offline keeps the draft, and says so. -->
 			{#if nameHeldOffline}
 				<p data-testid="admin-name-held-offline" role="alert" class="text-sm text-ink-2">
 					{m.write_held_no_signal()}
@@ -716,20 +524,13 @@
 					{m.admin_roles_action_error()}
 				</p>
 			{/if}
-			<!-- #325 — the caveat-slot paragraph shape #321 already uses beside
-			     these selects (partial-notice/order-note below), so a write in
-			     flight is VISIBLE, not merely a disabled control
-			     (docs/qa/autosave-field-inventory.md: `disabled` alone is a
-			     double-tap guard, not a state signal). -->
+			<!-- A write in flight is visible, not only a disabled control. -->
 			{#if rolesPending}
 				<p data-testid="admin-roles-pending-notice" role="status" class="text-sm text-ink-2">
 					{m.admin_roles_saving()}
 				</p>
 			{/if}
-			<!-- #325/#267 shape — persistent role="status" region, mounted blank
-			     from first render (a live region announces only CHANGES to its
-			     contents) so a settle is distinguishable from silence even when
-			     nothing failed. -->
+			<!-- Mounted blank: a live region announces only changes. -->
 			<div data-testid="admin-roles-status" role="status" aria-live="polite" class="sr-only">
 				{rolesStatus}
 			</div>
@@ -746,14 +547,7 @@
 								><PersonName name={person.name} />
 								<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 							>
-							<!-- #164 — the viewer's OWN row renders NO Remove button at all
-							     (not merely disabled): a disabled control was still read as
-							     clickable on live /admin. Same shape #148 chose for the
-							     library-owner row.
-							     #175 — the explanatory reason moves INLINE, into the button's
-							     own position in this same row, instead of a separate paragraph
-							     below the whole list (which read as detached from the row it
-							     explained). -->
+							<!-- The viewer's own row gets no Remove button; the reason sits in its place. -->
 							{#if !isSelf(person)}
 								<button
 									type="button"
@@ -776,11 +570,7 @@
 					{#if adminOwnerCount === 1}
 						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
 					{/if}
-					<!-- #209 (PO standing rule 1) — native <select>, no custom widget.
-					     Prompt option (value '') is `disabled selected hidden` (Gama
-					     ruling 1) so it can never be committed. Everyone-added stays
-					     MOUNTED-but-disabled with the shared exhausted-state prompt
-					     (Gama ruling 2), never hidden. -->
+					<!-- The prompt option cannot be committed; with everyone added the select stays, disabled. -->
 					<select
 						data-testid="admin-add-admin-select"
 						aria-label={m.admin_roles_add_admin_label()}
@@ -803,21 +593,12 @@
 							<option value={option.id}>{option.label}</option>
 						{/each}
 					</select>
-					<!-- #321 (PO ruling 2026-09-11) — a truncated roster makes a member
-					     UNGRANTABLE with nothing on screen saying so: the missing option reads
-					     as "not a member". In the picker's own caveat slot (beside the order
-					     note below) rather than as a trailing option inside the list, because
-					     this select goes `disabled` once its options run out — and the prompt
-					     it then shows, "everyone is already added", is the truncation's most
-					     misleading face. A notice inside a dropdown that cannot be opened would
-					     be unreachable exactly when it matters most. -->
+					<!-- Beside the select, not inside it: once options run out the select is disabled. -->
 					{#if rosterPartial}
 						<p data-testid="admin-add-admin-partial-notice" role="status" class="text-xs text-ink-2">
 							{m.picker_partial_members_notice()}
 						</p>
 					{/if}
-					<!-- #209 review F2 — the section read failed: the select still works
-					     off the roster's own name order, and says so. -->
 					{#if sectionsError}
 						<p data-testid="admin-add-admin-order-note" class="text-xs text-ink-2">
 							{m.picker_order_fallback()}
@@ -845,12 +626,7 @@
 									><PersonName name={person.name} />
 									<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 								>
-								<!-- #148 — a library OWNER's grant is not this surface's to
-								     revoke (removeLibrarian is 'editor-only' scope and would
-								     reject before any write). The role badge above already says
-								     "omanik" — a disabled button plus an explanatory note was
-								     confusing; the fix is to not offer a control that can never
-								     do anything, full stop. -->
+								<!-- A library owner's grant is not revocable here, so no control is offered. -->
 								{#if !isLibraryOwner(person)}
 									<button
 										type="button"
@@ -867,15 +643,11 @@
 						{/each}
 					</ul>
 					{#if canManageLibrarians}
-						<!-- Same visible-reason rule as the admin list. A library OWNER row
-						     renders no button at all (#148), so it needs no explanation —
-						     only a self row that IS rendered-but-disabled does. -->
 						{#if librarians.some((p) => isSelf(p) && !isLibraryOwner(p))}
 							<p data-testid="admin-roles-librarians-self-hint" class="text-xs text-ink-2">
 								{m.admin_roles_remove_self_hint()}
 							</p>
 						{/if}
-						<!-- #209 — same native-select pattern as the admin picker above. -->
 						<select
 							data-testid="admin-add-librarian-select"
 							aria-label={m.admin_roles_add_librarian_label()}
@@ -901,21 +673,12 @@
 								<option value={option.id}>{option.label}</option>
 							{/each}
 						</select>
-						<!-- #321 (PO ruling 2026-09-11) — a truncated roster makes a member
-						     UNGRANTABLE with nothing on screen saying so: the missing option reads
-						     as "not a member". In the picker's own caveat slot (beside the order
-						     note below) rather than as a trailing option inside the list, because
-						     this select goes `disabled` once its options run out — and the prompt
-						     it then shows, "everyone is already added", is the truncation's most
-						     misleading face. A notice inside a dropdown that cannot be opened would
-						     be unreachable exactly when it matters most. -->
+						<!-- Beside the select, not inside it: once options run out the select is disabled. -->
 						{#if rosterPartial}
 							<p data-testid="admin-add-librarian-partial-notice" role="status" class="text-xs text-ink-2">
 								{m.picker_partial_members_notice()}
 							</p>
 						{/if}
-						<!-- #209 review F2 — the section read failed: the select still works
-						     off the roster's own name order, and says so. -->
 						{#if sectionsError}
 							<p data-testid="admin-add-librarian-order-note" class="text-xs text-ink-2">
 								{m.picker_order_fallback()}
@@ -929,15 +692,9 @@
 				{/if}
 			</section>
 
-			<!-- #140/S3 — merged invite surface (was the standalone /admin/invite
-			     nav tab). Same live component the backward-compat /admin/invite
-			     route still renders — no duplicated state machine. -->
 			<section data-testid="admin-invite-section" class="flex flex-col gap-3">
-				<!-- Controlled: this page has ALREADY resolved (db, org) for the
-				     SELECTED collective and hands BOTH — so the embedded surface renders
-				     no db picker of its own and an invite can never be minted against a
-				     different collective than the role sections above act on (review F1).
-				     `heading="h2"` keeps it under this page's h1 (review F2). -->
+				<!-- Controlled: db and org come from this page, so an invite cannot target another
+				     collective. -->
 				<InviteSurface
 					presetDb={cfg?.db ?? ''}
 					presetDbEntityId={dbEntityId ?? ''}

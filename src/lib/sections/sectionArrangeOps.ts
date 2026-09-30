@@ -10,7 +10,7 @@ import type {
 	reparentSection
 } from '$lib/sections/sectionActions';
 import { isSectionNotEmpty, isSectionParentDamaged } from '$lib/sections/sectionErrors';
-import { focusableByTestId } from '$lib/a11y/focusable';
+import { focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
 import {
 	applyReparent,
 	applySiblingOrder,
@@ -148,8 +148,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 	async function armRemove(id: string): Promise<void> {
 		a.removeError = null;
 		a.pendingRemoveId = id;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="section-remove-confirm-${id}"]`)?.focus();
+		await focusTestIdAfterRender(`section-remove-confirm-${id}`);
 	}
 
 	async function disarmRemove(id: string): Promise<void> {
@@ -549,8 +548,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		} finally {
 			if (g === generation()) a.renamePending = false;
 			if (refocus) {
-				await tick();
-				document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+				await focusTestIdAfterRender(`arrange-rename-${id}`);
 			}
 		}
 	}

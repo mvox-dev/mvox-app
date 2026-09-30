@@ -7,6 +7,7 @@
 	import { rovingKeydown } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { REDACT_ATTR } from '$lib/redact/redact';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	interface Props {
 		field: FieldKey;
@@ -103,11 +104,6 @@
 			e.preventDefault();
 			cancelEdit(true);
 		}
-	}
-
-	/** Svelte action: focus the element the instant it mounts. */
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
 	}
 
 	// #131 — first tap on a conflicting tier previews it, a second resolves. A preview

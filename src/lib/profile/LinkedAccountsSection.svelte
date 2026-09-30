@@ -2,7 +2,6 @@
 	return-link verdict read once from the URL outlives reloads; the page calls load() and
 	reset() through bind:this. -->
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { isAuthExpiredError } from '$lib/entu/request';
@@ -11,6 +10,7 @@
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	type Cfg = { db: string; token: string };
 
@@ -147,17 +147,17 @@
 		returnLinkError = null;
 		linkSucceeded = false;
 		linkNoop = null;
-		await tick();
-		linkPickerEl
-			?.querySelector<HTMLButtonElement>('[data-testid^="profile-link-provider-"]:not([disabled])')
-			?.focus();
+		await focusAfterRender(() =>
+			linkPickerEl?.querySelector<HTMLButtonElement>(
+				'[data-testid^="profile-link-provider-"]:not([disabled])'
+			)
+		);
 	}
 
 	async function closeLinkPicker(): Promise<void> {
 		linkPickerOpen = false;
 		linkError = null;
-		await tick();
-		linkAnotherEl?.focus();
+		await focusAfterRender(() => linkAnotherEl);
 	}
 
 	// Mint a self-invite at click time, then start the OAuth round trip with intent 'link'.

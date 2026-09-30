@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
@@ -13,6 +13,7 @@
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
 	import { withItem, without } from '$lib/collections/immutable';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -112,13 +113,11 @@
 
 	function closeAttendancePanel(): void {
 		attendancePanelOpen = false;
-		tick().then(() => {
-			document
-				.querySelector<HTMLElement>(
-					'[data-testid="event-detail-attendance"] [data-testid="take-attendance-btn"]'
-				)
-				?.focus();
-		});
+		void focusAfterRender(() =>
+			document.querySelector<HTMLElement>(
+				'[data-testid="event-detail-attendance"] [data-testid="take-attendance-btn"]'
+			)
+		);
 	}
 
 	const attendanceWriteGenerations = new Map<string, number>();
