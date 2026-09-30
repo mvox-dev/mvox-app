@@ -519,7 +519,7 @@
 		<div class="flex flex-col items-start gap-1">
 			{#if identityAccount}
 				<!-- #361 — with no email the account is a real name, so the sentence is wrapped
-				     whole in the marker; recorded in $lib/redact/redact.ts. -->
+				     whole in the marker. -->
 				<p data-testid="profile-identity" class="text-sm text-ink-2">
 					<RedactedText
 						>{#if identityProvider}{m.profile_signed_in_as({

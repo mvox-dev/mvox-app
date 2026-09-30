@@ -234,7 +234,7 @@
 		<label class="flex flex-col gap-1 text-sm">
 			{FIELD_LABEL[field]()}
 			<!-- #361 — the name editor is marked through a wrapping span (::after cannot render
-			     on an <input>); the email editor stays unmarked (see redact.ts). -->
+			     on an <input>); the email editor stays unmarked (see #361). -->
 			{#if field === 'name'}
 				<span {...{ [REDACT_ATTR]: '' }} class="relative flex flex-col">
 					{@render fieldInput()}

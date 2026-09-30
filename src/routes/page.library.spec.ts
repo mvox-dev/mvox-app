@@ -958,7 +958,7 @@ describe('#76 — inline checkout on browse tree', () => {
 
 	// ── #361 — member names on the library surfaces carry the marker ────────
 	// The lent-to sentence sits whole in one RedactedText; the bulk-checkout names go
-	// through PersonName; the inline-checkout <option>s are recorded in redact.ts.
+	// through PersonName; the inline-checkout <option>s are recorded in #361.
 	it('#361 — the lent-to badge: the whole "Out — {name}" text sits in exactly one marker', async () => {
 		mockTreeWithOneLending();
 		setAuthedWithOneCollective();
