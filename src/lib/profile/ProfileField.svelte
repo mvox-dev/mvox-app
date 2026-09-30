@@ -1,6 +1,5 @@
 <!-- src/lib/profile/ProfileField.svelte -->
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
@@ -66,17 +65,29 @@
 	/** #205 — the activator the editor replaced, so closing can put focus back (WCAG 2.4.3). */
 	let activatorRef = $state<HTMLButtonElement | undefined>(undefined);
 
+	const activatorDisabled = $derived((saving && disabled) || offline);
+	let focusPending = $state(false);
+
 	/** Restore only on keyboard dismissals: after a blur the user already chose where
 	 *  focus went. */
-	async function restoreActivatorFocus(): Promise<void> {
-		await tick();
-		activatorRef?.focus();
+	function restoreActivatorFocus(): void {
+		focusPending = true;
 	}
+
+	// #565: an Enter-save disables the activator until the write settles; focus it then,
+	// unless the user has moved focus somewhere in the meantime.
+	$effect(() => {
+		if (!focusPending || !activatorRef || activatorDisabled) return;
+		focusPending = false;
+		const current = document.activeElement;
+		if (current === null || current === document.body) activatorRef.focus();
+	});
 
 	function openEditor() {
 		// Opening the editor exits a #131 preview, so the value the user clicked is the
 		// value they edit, not the draft underneath it.
 		previewLevel = null;
+		focusPending = false;
 		preEditValue = value;
 		editing = true;
 	}
@@ -84,7 +95,7 @@
 	function confirmEdit(restoreFocus = false) {
 		if (!editing) return;
 		editing = false;
-		if (restoreFocus) void restoreActivatorFocus();
+		if (restoreFocus) restoreActivatorFocus();
 		onblur(field);
 	}
 
@@ -92,7 +103,7 @@
 		if (!editing) return;
 		editing = false;
 		value = preEditValue;
-		if (restoreFocus) void restoreActivatorFocus();
+		if (restoreFocus) restoreActivatorFocus();
 		oncancel(field);
 	}
 
@@ -241,7 +252,7 @@
 				type="button"
 				data-testid="profile-{field}-edit"
 				bind:this={activatorRef}
-				disabled={(saving && disabled) || offline}
+				disabled={activatorDisabled}
 				class="group flex min-h-11 w-full appearance-none items-center gap-2 rounded-md border border-ink px-3 py-2 text-left disabled:opacity-50"
 				onclick={openEditor}
 			>
