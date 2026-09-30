@@ -43,7 +43,7 @@ A comment says why the code is as it is (Mihkel, 2026-09-29, #506):
 
 - At most 3 lines, each at most 100 characters.
 - At most one comment per function or component, and only where the why is not obvious.
-- Comments are under 10% of a file's lines.
+- Comments are under 10% of a file's lines. One comment line at the top of a file, saying what it is, is not counted (Mihkel, 2026-09-30, #562).
 - No review rounds, finding numbers, or "slice N" narration — those go in the commit message or PR, never the source.
 - When in doubt, leave comment out (Mihkel, 2026-09-29).
 
@@ -51,6 +51,7 @@ How `src/comment-rules.spec.ts` counts these, on every code file a change touche
 
 - Consecutive comment lines are ONE comment, whatever their syntax — a 3-line block touching a `//` line is a 4-line comment, and a blank line between them is the fix.
 - A block comment costs every line it spans, toward both the 3-line limit and the 10% share.
+- The top line is the file's first non-blank line, if it is a whole-line comment (`// x`, `/* x */`, `<!-- x -->`); the rest of its run counts, and it still obeys the 3-line, 100-character and narration rules. A `.svelte` file gets it only for a `<!-- -->` line above `<script>`.
 - The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
 - A comment TRAILING code (`const x = 1; // why`) is exempt from the 3-line and 10% counts — that line is code — but NOT from the narration and 100-character rules, which read the comment text alone. A `//` inside a string opens no comment, so URLs are safe.
 
