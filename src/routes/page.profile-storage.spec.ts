@@ -1,81 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #352 RED — the profile page's STORAGE section: "Remove downloaded parts
-// from this device". #343 ruled that logout and token expiry do NOT clear the
-// byte store; the honest answer to a shared device is a control the person
-// can actually reach — this section is that control.
-//
-// CONTRACT (GREEN implements in src/routes/profile/+page.svelte, on top of
-// the #352 store members pinned in src/lib/files/byteStore.storage-controls.spec.ts):
-//
-//   THE SECTION — [data-testid="profile-storage"], inside the ready branch
-//   (the storage answer is scoped to the signed-in (db, personId) identity,
-//   so there is nothing truthful to show without a selected collective).
-//   Headed by an <h2> from profile_storage_title.
-//
-//   THIS ACCOUNT ON THIS DEVICE — [data-testid="profile-storage-mine"]:
-//   count + total size (profile_storage_mine_summary, params count + size),
-//   and the parts NAMED, one row per held fileId
-//   ([data-testid="profile-storage-part-{fileId}"]).
-//     NAMING IS ONLINE-PATH ONLY IN THIS SLICE: the issue's "the list the
-//     page already has" is stale — /profile loads no parts data today. The
-//     fileId→filename join comes from the library metadata read
-//     (listAllEditions: each edition's files[] carries {id, filename}), which
-//     needs the network. OFFLINE naming (reading names without a fetch) is
-//     #353's scope, not this slice's — GREEN must say so in a comment
-//     (source pin below: the page cites #353). A FAILED metadata read
-//     degrades to count + size with no names — never a crash, and the
-//     destructive control keeps working (removal must not depend on being
-//     able to pretty-print what is removed).
-//
-//   THE READ IS NEVER AN OPEN (#351's trap, again): the section's numbers
-//   come from usageForPartition/usageForOthers and the ids from heldFileIds —
-//   the page must NOT call store.get() to render, because a get() stamps an
-//   open and would collapse LRU eviction order to profile-visit order.
-//
-//   EVERYTHING ELSE ON THIS DEVICE — [data-testid="profile-storage-others"]:
-//   count and size ONLY, NO TITLES. PO ruling, verbatim from #352:
-//
-//     > The device may hold bytes for other identities — a second singer, or
-//     > this same human in another collective. Two things are simultaneously
-//     > true: the member must not be told the device is clean when it is not,
-//     > and the app must not become the convenient way to read another
-//     > person's repertoire. Devtools already exposes everything to anyone
-//     > determined; a titled list in our own UI would lower that bar for the
-//     > merely curious, which is a different population.
-//     >
-//     > So: say that other downloads are present, size them, do not name
-//     > them, and offer "Remove everything downloaded on this device" as a
-//     > second, separately-confirmed action.
-//
-//   The "others" bucket INCLUDES the same human's partition in another
-//   collective (partitions are (db, personId) — identity-C precedent from
-//   the pinned store suites).
-//
-//   TWO DESTRUCTIVE ACTIONS, THE HOUSE ARMED-SLOT PATTERN (the season-manage
-//   delete / linked-accounts picker precedent — an armed-state var, a
-//   confirm/cancel pair REPLACING the trigger, focus handed to the confirm on
-//   arm and back to the trigger on cancel; NEVER window.confirm, NEVER a
-//   modal):
-//     - [data-testid="profile-storage-remove-mine"] arms
-//       -remove-mine-confirm / -remove-mine-cancel, beside a note
-//       ([data-testid="profile-storage-remove-mine-note"],
-//       profile_storage_remove_mine_note) stating plainly that the parts
-//       will need a network to open again.
-//     - [data-testid="profile-storage-remove-all"] arms its OWN pair
-//       (-remove-all-confirm / -remove-all-cancel) with its own note
-//       (profile_storage_remove_all_note). Confirming clears EVERY partition
-//       on the device — including identities not signed in.
-//     - The two arm INDEPENDENTLY; each confirm fires ONLY its own action.
-//
-//   FENCES: nothing here touches auth — the #343 RETAIN suite
-//   (src/lib/auth/storage.spec.ts) passes UNMODIFIED beside this file. No
-//   string may claim the bytes were secure/private/encrypted/protected
-//   (locale pins at the bottom, all four locales, et kaitstud/turvaline
-//   family included).
-//
-// INTEGRATION (house rule): the ACTUAL /profile route renders; only the read
-// seams and the $lib/files/appByteStore persistence seam are substituted.
+// #352 — the /profile storage section: counts, online-only part names (offline is #353),
+// two independently armed removals, and "others" sized but never titled (PO ruling).
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
@@ -143,9 +68,8 @@ let fakeByteStore: FakeByteStore;
 const q = (c: HTMLElement, testid: string) => c.querySelector(`[data-testid="${testid}"]`);
 
 // ── identities on the device ─────────────────────────────────────────────────
-// P is signed in. B is a second singer on the same collective's db. C is the
-// SAME human (same personId) in ANOTHER collective — the pinned identity-C
-// precedent: C's holdings land in the "everything else" bucket.
+// P is signed in; B is a second singer on the same db; C is the same human in another
+// collective, whose holdings land in the "everything else" bucket.
 const P = { db: 'sampledb', personId: 'person-p' };
 const OTHER_B = { db: 'sampledb', personId: 'person-b' };
 const OTHER_C = { db: 'crede', personId: 'person-p' };
@@ -196,10 +120,8 @@ type StorageControls = {
 	clearAllPartitions: ReturnType<typeof vi.fn>;
 };
 
-/** Installs the #352 store members on the fake (they land on the REAL
- *  interface via byteStore.storage-controls.spec.ts; here they answer LIVE
- *  from the fake's own state, so the page's re-query after a removal shows
- *  moved numbers). Returns the spies. */
+/** Installs the #352 store members on the fake, answering live from its own state so
+ *  the re-query after a removal shows moved numbers. Returns the spies. */
 function installStorageControls(): StorageControls {
 	function usageOf(db: string, personId: string): Usage {
 		const held = fakeByteStore.heldFor(db, personId);
@@ -559,10 +481,8 @@ describe('/profile — "Remove everything downloaded on this device" is separate
 		await fireEvent.click(q(container, 'profile-storage-remove-all-confirm') as Element);
 
 		await waitFor(() => expect(controls.clearAllPartitions).toHaveBeenCalledTimes(1));
-		// Page code went through the device-wide member — never a partition
-		// sweep of its own invention (page code cannot enumerate partitions,
-		// and a sweep over the ones it CAN name would miss not-signed-in
-		// identities: the exact holdings this action exists to clear).
+		// The device-wide member, never a sweep of the partitions the page can name:
+		// that would miss the identities not signed in.
 		expect(clearPartitionSpy).not.toHaveBeenCalled();
 	});
 
@@ -586,12 +506,8 @@ describe('/profile — "Remove everything downloaded on this device" is separate
 });
 
 // ── a FAILED removal is a user-visible answer, not a console line ───────────
-//
-// #352 review F1. The whole point of this control is that a member on a shared
-// device gets a TRUE answer. A rejected clear that only console.errors leaves
-// the original numbers on screen with no word that nothing was deleted — which
-// is indistinguishable from a removal that worked. Same shape the page already
-// uses for its other mutating action (rosterError → profile-roster-names-error).
+// A rejected clear that only logs leaves the old numbers on screen with no word that
+// nothing was deleted, which reads as a removal that worked.
 
 describe('/profile — a removal that FAILS says so, and the numbers stay honest', () => {
 	it('remove-mine rejects → profile-storage-error appears AND the counts still show the PRE-removal numbers', async () => {
@@ -677,11 +593,8 @@ describe('/profile — a removal that FAILS says so, and the numbers stay honest
 });
 
 // ── the name join is a CATALOGUE-SIZED network read: scope it ───────────────
-//
-// #352 review F3. listAllEditions fetches every edition in the collective with
-// its file metadata, purely to build a fileId→filename map for the handful of
-// downloaded parts. A settings page must not pay that when it cannot change
-// what is shown. (#353's stored-filename record is the durable fix.)
+// listAllEditions fetches every edition in the collective; a settings page must not pay
+// that when it cannot change what is shown.
 
 describe('/profile — the fileId→filename join only fires when it can change the answer', () => {
 	it('nothing downloaded → the catalogue read never happens (the section still renders its zeroes)', async () => {
@@ -802,9 +715,9 @@ describe('/profile — storage controls are native classed <button>s', () => {
 // ── source pin: this slice's naming is the ONLINE path; offline is #353 ─────
 
 describe('/profile — the page states the naming-scope boundary where the reader meets it', () => {
-	it('src/routes/profile/+page.svelte cites #353 as the owner of offline naming', () => {
+	it('ProfileStorageSection.svelte cites #353 as the owner of offline naming', () => {
 		const source = readFileSync(
-			resolve(process.cwd(), 'src/routes/profile/+page.svelte'),
+			resolve(process.cwd(), 'src/lib/components/profile/ProfileStorageSection.svelte'),
 			'utf-8'
 		);
 		expect(source).toMatch(/#353/);
@@ -833,10 +746,7 @@ describe('#352 — string honesty (byteStore.ts:8 — a correctness boundary, NO
 		'profile_storage_remove_error',
 		'profile_storage_names_partial'
 	] as const;
-	// The secure/private/encrypted/protected/was-safe family, across all four
-	// locales: en private/secure/protected/encrypted/safe, et privaatne/
-	// kaitstud/turvaline/krüpteeritud, lv privāts/aizsargāts/drošs/šifrēts,
-	// uk приватний/захищений/безпечний/зашифрований.
+	// The secure/private/encrypted/protected/safe family, in all four locales.
 	const FORBIDDEN = [
 		/priv/i,
 		/secur/i,

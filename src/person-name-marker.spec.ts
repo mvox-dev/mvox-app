@@ -200,6 +200,9 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/components/attendance/AttendanceSurface.svelte': ['item.name'],
 	'src/lib/components/attendance/SeasonSummary.svelte': [],
 	'src/lib/components/profile/ProfileField.svelte': [],
+	'src/lib/components/profile/RosterNamesToggle.svelte': [],
+	'src/lib/components/profile/LinkedAccountsSection.svelte': ['scopeName'],
+	'src/lib/components/profile/ProfileStorageSection.svelte': ['storagePartNames'],
 	'src/lib/components/admin/InviteSurface.svelte': []
 };
 

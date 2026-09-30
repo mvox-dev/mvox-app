@@ -1,20 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #193 RED — profile page: linked auth providers + "Link another account".
-//
-// Design (issue #193 + SPIKE 2026-09-01, Gama/Mihkel-approved self-invite
-// mechanism): the profile page shows the person entity's ACTUAL bound
-// identities (read via listLinkedIdentities — the entu_user array, NOT the
-// localStorage last-provider, which only knows how THIS session logged in).
-// "Link another account" opens native per-provider controls; picking one mints
-// a self-invite on the user's OWN person AT CLICK TIME (never pre-minted — the
-// token is a live 24h bearer credential) and launches the second-provider OAuth
-// round trip with `intent: 'link'` riding the localStorage state blob. The
-// token never enters any URL. Redemption appends the second identity server-side.
-//
-// These are the page-INTEGRATION pins: the data function is called from the
-// real route with the real selected collective's cfg + personId, and the flow
-// is reachable from the rendered page — not just in isolation.
+// #193 — /profile linked accounts: the person's bound identities, and "Link another
+// account", which mints a self-invite at click time and starts an OAuth round trip.
+
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -101,10 +88,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		// changed. Neutral copy, NOT an error (Gama ruling on #219).
 		profile_link_noop_same_identity: () => 'That sign-in was already linked. Nothing changed.',
 		profile_link_cancel: () => 'Cancel',
-		// #218 — provider display names resolve through Paraglide (single source
-		// in $lib/auth/providers). AUTH_PROVIDERS binds `label` to these message
-		// functions AT MODULE LOAD, so a missing key here would make the page
-		// render throw. Bare nouns per Gama's #218 ruling.
+		// #218 — AUTH_PROVIDERS binds `label` to these at module load, so a missing key
+		// here would make the render throw.
 		auth_provider_smart_id: () => 'Smart-ID',
 		auth_provider_mobile_id: () => 'Mobile-ID',
 		auth_provider_id_card: () => 'ID-card',
@@ -233,11 +218,8 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/**
- * Render, wait for the linked-identities read to LAND (the picker's per-provider
- * disabled state is derived from it — asserting before it resolves would race),
- * then open the provider picker.
- */
+/** Render, wait for the identities read to land (the picker's disabled state derives
+ *  from it), then open the provider picker. */
 async function openPicker(): Promise<HTMLElement> {
 	const container = await renderReady();
 	await waitFor(() =>
@@ -340,11 +322,8 @@ describe('/profile — linked accounts section (#193 AC1: display from the entit
 });
 
 // ── review F1: the copy must not claim more than the mechanism delivers ─────────
-//
-// The mint runs against the SELECTED collective's {db, personId}, so the second
-// identity is appended to that collective's person entity and nothing else. The
-// list was already per-collective; only the labels ("Linked accounts", "linked to
-// your account") read account-wide. These pin the scope into the words.
+// The mint binds the identity to the selected collective's person only, so the labels
+// name the collective.
 
 describe('/profile — linking copy is scoped to the collective (#193 review F1)', () => {
 	it('the section heading names the selected collective', async () => {
@@ -497,14 +476,8 @@ describe('/profile — "Link another account" flow (#193 AC2/AC3: native control
 });
 
 // ── #219: an already-linked provider is a legitimate pick — the block is gone ───
-//
-// The #193 review-F3 pre-mint block punished the everyday "which Google was it?"
-// case. The guard MOVED to the callback: entu-api's same-person branch still
-// reports a clean `redeemed` with no conflict flag, so the round trip runs and
-// run-link-callback.ts detects the no-op afterwards against the pre-mint
-// snapshot riding the OAuth-state blob (see run-link-callback.spec.ts,
-// "same-identity re-link"). The picker's only remaining disabling condition is
-// linkedLoadFailed (review F1 — unchanged).
+// The same-identity guard lives in run-link-callback.ts, against the pre-mint snapshot.
+// The picker's only disabling condition is linkedLoadFailed.
 
 describe('/profile — already-linked providers stay offered (#219)', () => {
 	it('the already-bound provider is ENABLED and carries no "already linked" sub-label', async () => {
@@ -566,12 +539,8 @@ describe('/profile — already-linked providers stay offered (#219)', () => {
 });
 
 // ── #219: the linked-identities list de-duplicates by uid+provider ──────────────
-//
-// The same-identity re-link the callback now cleans up can leave (or, before the
-// cleanup lands server-side, HAS left) two entu_user entries with identical
-// uid+provider and different _ids. One identity must render as ONE row — first
-// occurrence in entity order wins — while two genuinely different accounts at
-// the same provider stay two rows.
+// A same-identity re-link can leave two entries with equal uid+provider: one row, first
+// wins. Two different accounts at the same provider stay two rows.
 
 describe('/profile — linked-identities list de-duplicates by uid+provider (#219)', () => {
 	const GOOGLE_DUP = { _id: 'eu-9', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
@@ -613,11 +582,8 @@ describe('/profile — linked-identities list de-duplicates by uid+provider (#21
 });
 
 // ── review F1: the RETURN leg of the round trip must speak ──────────────────────
-//
-// run-link-callback.ts redirects every redemption-side failure to
-// `/profile?link_error=<code>` and success to `/profile?linked=1`. Before this
-// fix nothing on the profile page read either, so a user whose second provider
-// was already bound to another member came back to a normal-looking profile.
+// run-link-callback.ts lands failures on `/profile?link_error=<code>` and success on
+// `/profile?linked=1`; the page must say which.
 
 describe('/profile — link round-trip outcome from the URL (#193 review F1)', () => {
 	const CASES: ReadonlyArray<[string, string]> = [
@@ -706,11 +672,8 @@ describe('/profile — link round-trip outcome from the URL (#193 review F1)', (
 });
 
 // ── review F1: a FAILED identity read is not an empty identity list ─────────────
-//
-// Every user has at least one bound identity, so falling back to `[]` was a
-// display lie AND a safety hole: `linkedProviderIds` went empty, which defeats
-// both duplicate-link guards (the per-provider `disabled` and the check at the
-// top of handleLinkProvider) at the same time.
+// Every user has at least one bound identity, so an empty list after a failed read
+// would be false, and linking must stay blocked.
 
 describe('/profile — linked-identities read failure (#193 review F1)', () => {
 	it('says WHICH step failed instead of rendering an empty "Linked accounts" list', async () => {
@@ -764,11 +727,8 @@ describe('/profile — linked-identities read failure (#193 review F1)', () => {
 });
 
 // ── review F2: the mint phase must reach the user ───────────────────────────────
-//
-// SelfLinkMintError carries a three-value phase. Collapsing every non-rights
-// failure into "Linking failed — you can try again." hid the one case where a
-// retry cannot help: `stale-invite-cleanup` aborts before the mint and will keep
-// aborting until the stale property is cleared server-side.
+// Every non-rights mint failure names its phase: `stale-invite-cleanup` is one no retry
+// can fix.
 
 describe('/profile — mint failures name their step (#193 review F2)', () => {
 	const PHASES: ReadonlyArray<string> = ['identity-read', 'stale-invite-cleanup', 'mint'];
@@ -821,17 +781,12 @@ describe('/profile — mint failures name their step (#193 review F2)', () => {
 });
 
 // ── review F3: focus custody across the activator→picker swap ───────────────────
-//
-// The picker REPLACES the CTA, so activating it by keyboard removed the focused
-// node from the DOM and dropped focus to <body>. And once open there was no way
-// back out.
+// The picker replaces the CTA, so focus is handed over both ways, and there is a way out.
 
 describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => {
 	it('opening the picker focuses the FIRST provider button — an already-linked leader is a real pick now (#219)', async () => {
-		// #219 fixture: bind whichever provider LEADS AUTH_PROVIDERS (smart-id
-		// since #206). Under the old regime it was disabled and focus had to skip
-		// to mobile-id; with the block gone every provider is focusable, so focus
-		// lands on the true first button — the already-linked smart-id itself.
+		// Bind the provider that leads AUTH_PROVIDERS: every provider is focusable, so focus
+		// lands on it even though it is already linked.
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [SMART_ID],
 			pendingInvites: 0
@@ -861,12 +816,8 @@ describe('/profile — the picker keeps keyboard focus (#193 review F3)', () => 
 });
 
 // ── #219: the same-identity no-op speaks in the NEUTRAL voice ───────────────────
-//
-// Gama ruling on #219: the after-the-fact case ("you completed a round trip and
-// nothing changed") is NOT an error — the user did nothing wrong. It gets its
-// own key (profile_link_noop_same_identity) rendered through the same
-// non-error styling path as profile_link_success, never through the
-// role="alert" error node.
+// Gama ruling on #219: a round trip that changed nothing is not an error; it renders as
+// a status, never through the alert node.
 
 describe('/profile — same-identity no-op notice is neutral (#219)', () => {
 	it('?link_noop=same_identity renders the noop message as a status, NOT inside the error node', async () => {
@@ -961,19 +912,16 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 });
 
 // ── #218 — ONE source for provider display names ────────────────────────────────
-//
-// Gama's scope addition on #218 (2026-09-02): the profile page's local
-// PROVIDER_LABELS map (from #60, predates #193) is DELETED; the linked-identity
-// rows and the 'Signed in as … via …' banner resolve through the same
-// Paraglide-keyed providerLabel exported from $lib/auth/providers as every
-// other consumer. After this there is exactly one place a provider's display
-// name comes from.
+// #218 — the identity rows and the signed-in banner read provider names from
+// providerLabel in $lib/auth/providers; no local PROVIDER_LABELS map.
 
 describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () => {
-	const profileSource = readFileSync(
-		resolve(process.cwd(), 'src/routes/profile/+page.svelte'),
-		'utf-8'
-	);
+	const profileSource = [
+		'src/routes/profile/+page.svelte',
+		'src/lib/components/profile/LinkedAccountsSection.svelte'
+	]
+		.map((path) => readFileSync(resolve(process.cwd(), path), 'utf-8'))
+		.join('\n');
 
 	it('the profile page no longer defines its own PROVIDER_LABELS map', () => {
 		expect(profileSource).not.toContain('PROVIDER_LABELS');
