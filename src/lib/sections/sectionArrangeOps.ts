@@ -23,6 +23,7 @@ import {
 	type ReparentTarget
 } from '$lib/sections/sectionTree';
 import type { RosterState } from '$lib/roster/rosterPageState';
+import { without } from '$lib/collections/immutable';
 
 export interface ArrangeActions {
 	listSections: typeof listSections;
@@ -224,9 +225,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			roster.sections = removeSectionNode(roster.sections, id);
 			a.pendingRemoveId = null;
 			if (roster.expandedIds.has(id)) {
-				const next = new Set(roster.expandedIds);
-				next.delete(id);
-				roster.expandedIds = next;
+				roster.expandedIds = without(roster.expandedIds, id);
 			}
 			a.removeStatus = m.roster_section_removed({ name });
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);

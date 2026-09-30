@@ -3,6 +3,7 @@ import type { UploadEditionFilesResult } from '$lib/library/editionFiles';
 import type { ActiveMember } from '$lib/roster/rosterData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { CopySortKey } from '$lib/library/copySort';
+import { withItem, without } from '$lib/collections/immutable';
 
 export type NodeStatus = 'idle' | 'loading' | 'error';
 
@@ -152,18 +153,6 @@ export function createEditionDrafts(): EditionDrafts {
 	};
 }
 
-function without<K, V>(map: Map<K, V>, key: K): Map<K, V> {
-	const next = new Map(map);
-	next.delete(key);
-	return next;
-}
-
-function withoutItem<T>(set: Set<T>, item: T): Set<T> {
-	const next = new Set(set);
-	next.delete(item);
-	return next;
-}
-
 export function openEditionDraft(drafts: EditionDrafts, workId: string): void {
 	drafts.name = new Map(drafts.name).set(workId, '');
 	drafts.publisher = new Map(drafts.publisher).set(workId, '');
@@ -173,7 +162,7 @@ export function openEditionDraft(drafts: EditionDrafts, workId: string): void {
 }
 
 export function closeEditionDraft(drafts: EditionDrafts, workId: string): void {
-	drafts.open = withoutItem(drafts.open, workId);
+	drafts.open = without(drafts.open, workId);
 	drafts.name = without(drafts.name, workId);
 	drafts.publisher = without(drafts.publisher, workId);
 	drafts.errors = without(drafts.errors, workId);
@@ -188,7 +177,7 @@ export function setEditionDraftError(
 }
 
 export function setEditionDraftPending(drafts: EditionDrafts, workId: string, on: boolean): void {
-	drafts.pending = on ? new Set(drafts.pending).add(workId) : withoutItem(drafts.pending, workId);
+	drafts.pending = withItem(drafts.pending, workId, on);
 }
 
 export interface BrokenFile {
@@ -228,13 +217,13 @@ export function markUploadBatchError(files: EditionFilesState, editionId: string
 export function startUpload(files: EditionFilesState, editionId: string): void {
 	files.pending = new Set(files.pending).add(editionId);
 	files.errors = without(files.errors, editionId);
-	files.batchError = withoutItem(files.batchError, editionId);
+	files.batchError = without(files.batchError, editionId);
 	files.notCreated = without(files.notCreated, editionId);
 	files.statuses = new Map(files.statuses).set(editionId, '');
 }
 
 export function endUpload(files: EditionFilesState, editionId: string): void {
-	files.pending = withoutItem(files.pending, editionId);
+	files.pending = without(files.pending, editionId);
 }
 
 export function applyUploadFailures(

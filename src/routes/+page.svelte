@@ -120,6 +120,7 @@
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
+	import { withItem, without } from '$lib/collections/immutable';
 
 	const auth = $derived($authStore);
 	const collectives = $derived($collectiveState);
@@ -326,19 +327,12 @@
 			ag.rsvpByEventId = next;
 		},
 		setPending(eventId, isPending) {
-			const next = new Set(pendingEventIds);
-			if (isPending) next.add(eventId);
-			else next.delete(eventId);
-			pendingEventIds = next;
+			pendingEventIds = withItem(pendingEventIds, eventId, isPending);
 			if (isPending && ag.failedEventIds.has(eventId)) {
-				const cleared = new Set(ag.failedEventIds);
-				cleared.delete(eventId);
-				ag.failedEventIds = cleared;
+				ag.failedEventIds = without(ag.failedEventIds, eventId);
 			}
 			if (isPending && ag.savedEventIds.has(eventId)) {
-				const cleared = new Set(ag.savedEventIds);
-				cleared.delete(eventId);
-				ag.savedEventIds = cleared;
+				ag.savedEventIds = without(ag.savedEventIds, eventId);
 			}
 		},
 		reconcile(eventId, entry) {
@@ -359,9 +353,7 @@
 			failed.add(eventId);
 			ag.failedEventIds = failed;
 			if (ag.savedEventIds.has(eventId)) {
-				const cleared = new Set(ag.savedEventIds);
-				cleared.delete(eventId);
-				ag.savedEventIds = cleared;
+				ag.savedEventIds = without(ag.savedEventIds, eventId);
 			}
 		}
 	});
@@ -573,10 +565,7 @@
 
 	const panelQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
-			const next = new Set(panelPendingKeys);
-			if (pending) next.add(key);
-			else next.delete(key);
-			panelPendingKeys = next;
+			panelPendingKeys = withItem(panelPendingKeys, key, pending);
 			if (pending) {
 				panelManageError = false;
 				panelManageStatus = '';

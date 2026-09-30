@@ -63,6 +63,7 @@
 	import MemberRow from '$lib/roster/MemberRow.svelte';
 	import InactiveList from '$lib/roster/InactiveList.svelte';
 	import SectionArrange from '$lib/sections/SectionArrange.svelte';
+	import { toggled } from '$lib/collections/immutable';
 
 	const selected = $derived($selectedCollectiveStore);
 	const admin = $derived($adminStore);
@@ -257,10 +258,7 @@
 	}
 
 	function toggleSection(id: string): void {
-		const next = new Set(roster.expandedIds);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		roster.expandedIds = next;
+		roster.expandedIds = toggled(roster.expandedIds, id);
 	}
 
 	const allSectionIdsList = $derived.by(() => {

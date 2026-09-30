@@ -58,6 +58,7 @@
 	import BulkCheckoutPanel from '$lib/library/BulkCheckoutPanel.svelte';
 	import CreateWorkForm from '$lib/library/CreateWorkForm.svelte';
 	import WorkRow from '$lib/library/WorkRow.svelte';
+	import { withItem, without } from '$lib/collections/immutable';
 
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
@@ -233,10 +234,7 @@
 		try {
 			const result = await loadLibraryEditions({ db: current.db, token }, workId);
 			lib.editionsByWork = new Map(lib.editionsByWork).set(workId, result.items);
-			const nextPartial = new Set(editionsPartialWorkIds);
-			if (result.truncated) nextPartial.add(workId);
-			else nextPartial.delete(workId);
-			editionsPartialWorkIds = nextPartial;
+			editionsPartialWorkIds = withItem(editionsPartialWorkIds, workId, result.truncated);
 			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'idle');
 		} catch (e) {
 			// #107 — an expired session on a node read shows the page's session notice.
@@ -250,14 +248,11 @@
 	}
 
 	function toggleWork(workId: string): void {
-		const next = new Set(lib.expandedWorks);
-		if (next.has(workId)) {
-			next.delete(workId);
-			lib.expandedWorks = next;
+		if (lib.expandedWorks.has(workId)) {
+			lib.expandedWorks = without(lib.expandedWorks, workId);
 			return;
 		}
-		next.add(workId);
-		lib.expandedWorks = next;
+		lib.expandedWorks = new Set(lib.expandedWorks).add(workId);
 		if (lib.editionsByWork.has(workId)) return;
 		void loadEditionsFor(workId);
 	}
@@ -324,10 +319,7 @@
 		try {
 			const result = await loadLibraryCopies({ db: current.db, token }, editionId);
 			lib.copiesByEdition = new Map(lib.copiesByEdition).set(editionId, result.items);
-			const nextPartial = new Set(copiesPartialEditionIds);
-			if (result.truncated) nextPartial.add(editionId);
-			else nextPartial.delete(editionId);
-			copiesPartialEditionIds = nextPartial;
+			copiesPartialEditionIds = withItem(copiesPartialEditionIds, editionId, result.truncated);
 			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'idle');
 		} catch (e) {
 			if (isAuthExpiredError(e)) {
@@ -340,14 +332,11 @@
 	}
 
 	function toggleEdition(editionId: string): void {
-		const next = new Set(lib.expandedEditions);
-		if (next.has(editionId)) {
-			next.delete(editionId);
-			lib.expandedEditions = next;
+		if (lib.expandedEditions.has(editionId)) {
+			lib.expandedEditions = without(lib.expandedEditions, editionId);
 			return;
 		}
-		next.add(editionId);
-		lib.expandedEditions = next;
+		lib.expandedEditions = new Set(lib.expandedEditions).add(editionId);
 		if (lib.copiesByEdition.has(editionId)) return;
 		void loadCopiesFor(editionId);
 	}
@@ -533,9 +522,7 @@
 	// availability is server-confirmed, never an optimistic flip.
 	async function handleInlineCheckout(copyId: string, memberId: string): Promise<void> {
 		if (isOffline) return;
-		const nextErrors = new Map(lib.inlineCheckoutErrors);
-		nextErrors.delete(copyId);
-		lib.inlineCheckoutErrors = nextErrors;
+		lib.inlineCheckoutErrors = without(lib.inlineCheckoutErrors, copyId);
 		const current = selected;
 		if (!current) return;
 		const token = getToken();

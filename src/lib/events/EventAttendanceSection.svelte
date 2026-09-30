@@ -12,6 +12,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { withItem, without } from '$lib/collections/immutable';
 
 	let {
 		detail,
@@ -141,17 +142,10 @@
 			setPending(evId, targetMemberId, pending) {
 				if (pending) attendanceWriteGenerations.set(targetMemberId, generation());
 				if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
-				const next = new Set(attendancePendingMemberIds);
-				if (pending) next.add(targetMemberId);
-				else next.delete(targetMemberId);
-				attendancePendingMemberIds = next;
+				attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
 				if (pending) {
-					const failed = new Set(attendanceFailedMemberIds);
-					failed.delete(targetMemberId);
-					attendanceFailedMemberIds = failed;
-					const saved = new Set(attendanceSavedMemberIds);
-					saved.delete(targetMemberId);
-					attendanceSavedMemberIds = saved;
+					attendanceFailedMemberIds = without(attendanceFailedMemberIds, targetMemberId);
+					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
 				}
 			},
 			reconcile(evId, targetMemberId, entry) {
@@ -178,9 +172,7 @@
 				failed.add(targetMemberId);
 				attendanceFailedMemberIds = failed;
 				if (attendanceSavedMemberIds.has(targetMemberId)) {
-					const cleared = new Set(attendanceSavedMemberIds);
-					cleared.delete(targetMemberId);
-					attendanceSavedMemberIds = cleared;
+					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
 				}
 			}
 		})

@@ -15,6 +15,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { withItem } from '$lib/collections/immutable';
 
 	let {
 		detail,
@@ -97,10 +98,7 @@
 	const repertoireQueue = untrack(() =>
 		actions.createRepertoireWriteQueue({
 			setPending(key, pending) {
-				const next = new Set(managePendingKeys);
-				if (pending) next.add(key);
-				else next.delete(key);
-				managePendingKeys = next;
+				managePendingKeys = withItem(managePendingKeys, key, pending);
 				if (pending) {
 					manageError = false;
 					manageStatus = '';
