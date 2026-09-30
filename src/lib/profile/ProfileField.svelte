@@ -4,7 +4,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { REDACT_ATTR } from '$lib/redact/redact';
 
@@ -192,14 +192,7 @@
 			previewLevel = null;
 			return;
 		}
-		const group = e.currentTarget as HTMLElement;
-		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
-		const idx = buttons.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, buttons.length);
-		if (next < 0) return;
-		e.preventDefault();
-		buttons[next].focus();
+		rovingKeydown(e, { selector: 'button:not([disabled])' });
 	}
 
 	function handleInput(e: Event) {

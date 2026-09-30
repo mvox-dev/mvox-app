@@ -1,105 +1,10 @@
-<!-- src/lib/components/agenda/RepertoireElement.svelte -->
-<!--
-	#90 TR.2 — the collapsed/expanded "Works" element on an agenda event row.
-	Prop-driven and fetch-free (same unit-level seam as AgendaList/RsvpControl:
-	the page resolves data via loadWorksByEventId, this component only renders
-	the already-resolved view model).
-
-	Collapsed: a single tappable line — ♫ + work names joined by ' · '. Absent
-	entirely when `rows` is empty (never an empty "Works" placeholder). Only
-	ACTIVE rows are named: a season editor reads the repertoire unfiltered
-	(#91's `includeInactive`, so the status toggle is two-way), and a dropped
-	work must not advertise itself on a rehearsal row as if it were live rep —
-	it is counted instead ("+N inactive") and shown, de-emphasised, on expand.
-
-	Expanded: one row per work — name + composer, status badge (translated via
-	the same STATUS_OPTIONS lookup the management buttons use), pinned edition (or a
-	work-no-edition placeholder), program notes when present, and the functional
-	links: PDF, Borrow (static /library link, present only when copies exist),
-	and one link per external_link value (text = the link's domain; the producer
-	buildWorkRows has already dropped any non-http(s) value, so these hrefs are
-	safe to bind).
-
-	The PDF link is a BUTTON, not an anchor with an href. Entu's signed S3
-	download url lives 60 seconds (entu-www src/api/files/index.md), so it
-	cannot be resolved at agenda load and parked in an href — it would be long
-	dead by the time a member expands a row and taps. The row carries the file
-	PROPERTY id instead, and `onpdfclick(fileId)` lets the page sign it at click
-	time (repertoire/fileUrls.ts). Entu's `?download=true` shortcut is not an
-	option either: entuFetch is browser-direct with a Bearer header, and a plain
-	<a> navigation carries no Authorization header.
-
-	Concert ordering: when every row carries an ordinal (a programmed concert),
-	renders numbered (ol/li) in ordinal order. When ordinals are absent (the
-	season-repertoire fallback, which carries no concert position), renders as
-	an unnumbered list (ul/li) in the given row order — a repertoire is still a
-	list of works, and a screen reader should get the "list, N items" count on
-	both surfaces; only the 1./2./3. positions are concert-specific.
-
-	Neither <li> may carry a display utility (`flex`, `grid`, `block`, …):
-	`display: flex` replaces the UA's `display: list-item`, ::marker is only
-	generated for list-item boxes, and the ol's numbering would disappear with
-	no test noticing (a DOM-shape spec cannot see computed display). Row layout
-	therefore lives on an inner <div>; a spec guard in
-	page.repertoire-a11y.spec.ts asserts the <li> class list stays display-free.
-
-	#91 TR.3 — management controls (rights-gated writes). Still prop-driven and
-	fetch-free: the page resolves rights (repertoireActions.resolveManageRights),
-	picker candidates, and per-key pending state, and owns the actual writes
-	(repertoireActions functions, queued through createRepertoireWriteQueue) —
-	this component only renders controls and forwards taps via callback props,
-	same seam as RsvpControl/onrsvpchange. Controls render iff
-	`manageRights === 'editor'`; any other value (including the default
-	'not-editor') renders nothing extra — existing read-only callers are
-	unaffected.
-
-	`context` distinguishes the two management surfaces sharing this element:
-	  - 'repertoire' — status cycle, pin edition, remove, "Add work" (from
-	    `pickableWorksList`, TR.3's pickableWorks()).
-	  - 'programme'  — move up/down (ordinal reorder), remove, "Add to
-	    programme" (from `pickableEditions` — {id,label} pairs the caller
-	    composes, e.g. "Work — Edition", so this component stays decoupled
-	    from the Work/Edition shapes).
-	Rows with no works AND editor rights still show the "Add" control (there is
-	nothing to collapse, so it renders directly, no disclosure).
-
-	The two surfaces are governed by DIFFERENT entities (`_editor` on the season
-	vs on the event), so `seasonRights`/`eventRights` may be supplied
-	independently; `manageRights` stays the single gate for whichever surface
-	`context` names, and is what a caller holding only one set of rights passes.
-	Two consequences worth stating:
-	  - Row controls are gated on `row.kind`, NOT on `context` alone. An event
-	    with no program_items renders the SEASON repertoire as fallback (TR.2's
-	    hierarchy), so a programme surface can be showing repertoire_item ids —
-	    forwarding one of those to a "remove from tonight" handler would delete
-	    the whole collective's season-repertoire entry, not tonight's programme.
-	  - "Add to programme" renders wherever `eventRights === 'editor'`, including
-	    on a repertoire-context (fallback) row. That is the ONLY entry point for
-	    creating the FIRST program_item on an event: until one exists the event
-	    has no programme of its own to hang controls on.
-
-	Pending state: `pendingKeys` is the caller's write-queue key set (per
-	repertoire_item/program_item id for row actions; the sentinels
-	`ADD_WORK_KEY`/`ADD_PROGRAMME_KEY` exported below for the two "Add"
-	controls) — every management button disables while its key is pending, the
-	same double-tap guard as attendance/rsvp. A caller rendering two repertoire
-	surfaces on one page overrides the "Add work" sentinel via `addWorkKey` so
-	the two surfaces' add controls stay independent.
--->
+<!-- The "Works" element on an agenda event row: names, expanded rows and manage controls. -->
 <script module lang="ts">
-	// Svelte 5: a plain `export` inside the instance script creates a component
-	// PROP, not a static module export — these need `<script module>` so
-	// `import RepertoireElement, { ADD_WORK_KEY } from './RepertoireElement.svelte'`
-	// actually works for callers (and the spec).
+	// Svelte 5: a plain export in the instance script makes a prop, so these live here.
 
-	// The (id, label) picker pair lives in $lib/repertoire/types alongside the
-	// row view model, so non-Svelte callers (the page's derived pickers, their
-	// specs) can name it without importing a component. Re-exported here for
-	// callers that already reach for it through the component.
 	export type { PickerOption } from '$lib/repertoire/types';
 
-	/** Fixed pending-key sentinels for the two "Add" controls (row actions use
-	 *  their own item id as the key instead). */
+	/** Pending keys for the two "Add" controls; row actions key on their own item id. */
 	export const ADD_WORK_KEY = '__add_work__';
 	export const ADD_PROGRAMME_KEY = '__add_programme__';
 </script>
@@ -115,15 +20,10 @@
 		rowEditionUnknown as isEditionUnknown,
 		readerEditionUnknownReason as getReaderEditionUnknownReason
 	} from '$lib/repertoire/editionUnknown';
-	import { rovingNextIndex } from '$lib/a11y/roving';
-	// #434 slice 6 — the ONE online/offline signal, read directly here (same
-	// shape as RsvpControl/AttendanceSurface) so every host surface (agenda
-	// event row, agenda season-manage panel, event page) gets the write gate
-	// with no wiring of its own.
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import { writesAvailable } from '$lib/net/online';
 
-	/** Stable identity for the `editionsResolvedWorkIds` default — a fresh
-	 *  `new Set()` per render would be a new prop value every time. */
+	// Stable default: a fresh Set per render would be a new prop value every time.
 	const NO_RESOLVED_WORK_IDS: ReadonlySet<string> = new Set<string>();
 
 	const STATUS_OPTIONS: { value: RepertoireStatus; label: () => string }[] = [
@@ -133,22 +33,12 @@
 		{ value: 'dropped', label: m.repertoire_status_dropped }
 	];
 
-	/** The badge text. Routed through the SAME lookup the management buttons use
-	 *  (#91 review F6) — printing `row.status` verbatim leaked raw 'retired' /
-	 *  'dropped' into all four locales, two snippets away from the translated
-	 *  options. An unknown value would fall back to itself, but narrowStatus
-	 *  (workRows.ts) already nulls those out before they reach a row. */
+	/** Same lookup as the management buttons, so no raw status leaks into a locale. */
 	function statusLabel(status: RepertoireStatus): string {
 		return STATUS_OPTIONS.find((opt) => opt.value === status)?.label() ?? status;
 	}
 
-	// #156 — roving tabindex, PER ROW. `manageRowControls` is a snippet
-	// rendered inside an {#each} in ONE component instance, so a scalar
-	// roving key would sync every row's tab stop together — keyed by row.id
-	// instead. The `?? 'active'` default (same one the badge/pressed-state
-	// use) already guarantees exactly one pressed chip, so no first-button
-	// fallback is needed; the [disabled] filter still is, since the whole set
-	// disables during a pending write.
+	// Keyed by row: every row renders in this one instance, so a scalar would move all stops.
 	let rovingStatusByRow = $state<Record<string, RepertoireStatus>>({});
 	function activeStatusFor(row: WorkRow): RepertoireStatus {
 		const roving = rovingStatusByRow[row.id];
@@ -157,23 +47,10 @@
 	}
 
 	function handleStatusGroupKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
-		const idx = buttons.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, buttons.length);
-		if (next < 0) return;
-		e.preventDefault();
-		buttons[next].focus();
+		rovingKeydown(e, { selector: 'button:not([disabled])' });
 	}
 
-	/** #434 slice 5 review finding 1 — ONE affordance per row. When this row
-	 *  renders the part LINK (caller opted in AND the bytes are on the device),
-	 *  the older `work-link-pdf` button must NOT also render: both went to the
-	 *  same `/part/<fileId>?db=<db>` destination, so a held row showed two
-	 *  controls with different labels and identical behaviour. The held case
-	 *  keeps the real `<a href>` (right-click, open-in-new-tab, works with no
-	 *  JS); every other row keeps the button unchanged. */
+	/** A held part renders the link instead of the PDF button: same destination, one control. */
 	function isPartLinked(row: WorkRow): boolean {
 		if (partLinkDb === undefined || partLinkDb === '') return false;
 		if (row.fileId === '') return false;
@@ -189,117 +66,38 @@
 
 	interface Props {
 		rows: WorkRow[];
-		/** Sign + open this edition file NOW (see the header note on the 60s url). */
+		/** Sign and open the file at click time: Entu's signed url lives only 60 seconds. */
 		onpdfclick?: (fileId: string) => void;
-		/** #351 — fileIds the byte store holds for the CURRENT identity's
-		 *  partition, from ONE heldFileIds(db, personId) call the caller makes
-		 *  per render (never per row — see byteStore.ts heldFileIds doc). `null`
-		 *  means the store has not answered yet: no badge renders for ANY row,
-		 *  rather than a default-then-correct flicker. */
+		/** fileIds the byte store holds; null until it answers, so no badge flickers. */
 		heldFileIds?: ReadonlySet<string> | null;
-		/** #434 slice 5 — the collective's db, so a row whose part is already on
-		 *  the device (`heldFileIds.has(row.fileId)`) can link straight to
-		 *  `/part/<fileId>?db=<partLinkDb>` — the SAME route `/downloads` opens.
-		 *  Absent (default) renders no such link at all: this is an explicit
-		 *  per-caller opt-in, not a blanket addition to every RepertoireElement
-		 *  surface — the agenda's season-manage panel (routes/+page.svelte)
-		 *  passes nothing here and is unaffected. A row whose part is NOT on the
-		 *  device gets no link either way (no dead link offline). On a row that
-		 *  DOES get the link, the link REPLACES the `work-link-pdf` button (same
-		 *  destination — see isPartLinked). */
+		/** Opt-in: with a db, a row whose part is on the device links to /part (see isPartLinked). */
 		partLinkDb?: string;
-		/** Rights for the surface `context` names. */
 		manageRights?: ManageRightsState;
-		/** `_editor` on the SEASON — governs repertoire_item writes. Defaults to
-		 *  `manageRights` when `context === 'repertoire'`, so a single-surface
-		 *  caller needs only `manageRights`. */
+		/** Governs repertoire_item writes; defaults to manageRights in repertoire context. */
 		seasonRights?: ManageRightsState;
-		/** `_editor` on the EVENT — governs program_item writes. Defaults to
-		 *  `manageRights` when `context === 'programme'`. */
+		/** Governs program_item writes; defaults to manageRights in programme context. */
 		eventRights?: ManageRightsState;
 		context?: 'repertoire' | 'programme';
-		/** 'repertoire' context only — works not yet in the season's repertoire. */
 		pickableWorksList?: Work[];
-		/** The pending-key the "Add work" control watches. Defaults to the
-		 *  module-level `ADD_WORK_KEY` — what every single-surface caller uses.
-		 *  A page rendering TWO repertoire surfaces at once (#234: the
-		 *  season-manage panel's section alongside an event's fallback works
-		 *  line) gives each surface its own sentinel so one's in-flight create
-		 *  does not disable the other's button; that key has to reach THIS
-		 *  control, or the surface simply never shows pending (review F3). */
+		/** Lets a page with two repertoire surfaces keep their "Add work" pending states apart. */
 		addWorkKey?: string;
-		/** #311 — whether "Add work" (the select built from `pickableWorksList`)
-		 *  should render. Defaults to `true`, NOT `pickableWorksList.length > 0`
-		 *  — the INVERTED default from its sibling `pickableEditionsVisible`
-		 *  below, deliberately: `length === 0` has three causes (confirmed
-		 *  empty, not-loaded-yet, load FAILED) and only the first should ever
-		 *  hide the control, but a component-level default can't tell them
-		 *  apart from a list alone. Hiding is therefore an explicit opt-in —
-		 *  only a caller that can PROVE "load completed successfully, nothing
-		 *  left to pick" passes `false`. An un-migrated (or async, still-
-		 *  loading, or failed) caller keeps today's behaviour: visible. The
-		 *  follow-up brings `pickableEditionsVisible` to this same safe
-		 *  default; it does not pull this prop back to `length > 0` to match. */
+		/** Defaults to true: an empty list may be unloaded or failed, so only a caller that knows
+		 *  the load completed with nothing left passes false. */
 		pickableWorksVisible?: boolean;
-		/** #321 (PO ruling 2026-09-11) — the `listWorks` read behind
-		 *  `pickableWorksList` came back TRUNCATED. This select is a CLOSED SET:
-		 *  a work missing from its options cannot be added to the repertoire at
-		 *  all, and the gap reads as "that piece isn't in the library" — the
-		 *  false absence the ruling is about, not a short list. Own flag per feed
-		 *  (this one and `pickableEditionsPartial` below), because a truncated
-		 *  edition read says nothing about the works list and a shared flag would
-		 *  put a false claim in the other picker. Default false: a caller that
-		 *  hands over an already-resolved list has nothing to declare. */
+		/** The works read was truncated: a missing work would read as "not in the library". */
 		pickableWorksPartial?: boolean;
-		/** 'programme' context only — editions not yet on tonight's programme. */
 		pickableEditions?: PickerOption[];
-		/** #288 — whether "Add to programme" (the select built from
-		 *  `pickableEditions`) should render. Defaults to
-		 *  `pickableEditions.length > 0`, the original pre-#288 rule, for any
-		 *  caller that hands this component an already-resolved list (every
-		 *  component-level spec does, synchronously, with no page async in
-		 *  play). A page-level caller juggling an async, resettable picker
-		 *  SOURCE overrides this explicitly and STICKILY: `libraryWorks`/
-		 *  `libraryEditions` (which `pickableEditions` is derived from) get
-		 *  blanked synchronously on every reload and refilled async, so
-		 *  `pickableEditions.length === 0` alone cannot tell "confirmed empty"
-		 *  apart from "not back yet" — the override lets the caller key
-		 *  visibility off "no options once loading has COMPLETED" instead,
-		 *  computed and held by the caller (survives this component
-		 *  remounting on an agenda-skeleton flip, which loses any state kept
-		 *  in here). */
+		/** Defaults to options present; a page with an async, resettable source overrides it. */
 		pickableEditionsVisible?: boolean;
-		/** #321 — the same fact for the `listAllEditions` read behind
-		 *  `pickableEditions`: an edition it does not offer cannot be put on
-		 *  tonight's programme. See `pickableWorksPartial` for why these are two
-		 *  flags rather than one. */
+		/** The editions read was truncated; a flag of its own, since the two reads are separate. */
 		pickableEditionsPartial?: boolean;
-		/** Per-row edition choices for "Pin edition" ('repertoire' context). A row
-		 *  id absent (or mapped to []) hides that row's pin control ONLY when
-		 *  `pickableEditionsPartial` is false — a COMPLETE read with no match is a
-		 *  known absence, nothing to pick from. Under a truncated edition read the
-		 *  same empty entry is not an absence: the row renders the unknown state
-		 *  and KEEPS the control (#329), its leading option saying "unknown" and
-		 *  disabled when the row holds a pin the read could not name.
-		 *  The caller merges its scoped per-work reads into this same map, so a
-		 *  resolved work's options arrive here exactly like the join's. */
+		/** Per-row pin choices. An empty entry hides the pin control only under a complete read;
+		 *  under a truncated read the row shows unknown and keeps the control. */
 		editionOptionsByRowId?: Record<string, PickerOption[]>;
-		/** #329 (review) — work ids whose editions have since been read SCOPED
-		 *  (`listEditions(workId)`, one request, its own reachable cap), settled,
-		 *  and merged into `editionOptionsByRowId`. Those rows are facts again
-		 *  however the collective-wide read fared: an empty option list for a
-		 *  resolved work IS a known absence. Absent/empty = no scoped read has
-		 *  landed, so a zero-match row under truncation stays unknown — which is
-		 *  also what a FAILED scoped read leaves behind, correctly: a read that
-		 *  did not answer proves nothing either way. */
+		/** Works whose editions a scoped read has settled: their empty options are a known absence. */
 		editionsResolvedWorkIds?: ReadonlySet<string>;
 		pendingKeys?: ReadonlySet<string>;
-		/** #103 TE.3 — force the expanded region open with NO tap needed. The event
-		 *  detail page IS the expanded view (a member never has to open her own
-		 *  event's works), so it passes `true`; default `false` preserves the
-		 *  agenda row's own collapsed-until-tapped behaviour verbatim. When true,
-		 *  the collapsed `works-line` toggle does not render at all — there being
-		 *  no "collapsed" state on this surface for it to reveal. */
+		/** The event page is the expanded view: open with no tap and no collapsed toggle. */
 		expanded?: boolean;
 		onaddwork?: (workId: string) => void;
 		onstatuschange?: (itemId: string, status: RepertoireStatus) => void;
@@ -348,14 +146,8 @@
 	);
 	const canManage = $derived(canManageRepertoire || canManageProgramme);
 
-	// #434 slice 6 — the signal down is a second disable reason for EVERY
-	// management control this element renders (status, pin edition, remove,
-	// move, add work, add to programme). Unlike `pendingKeys` it SAYS why:
-	// one visible sentence per manage surface, rendered below.
 	const isOffline = $derived(!$writesAvailable);
 
-	/** #288 — see the `pickableEditionsVisible` prop doc: fall back to the
-	 *  original rule when no caller override is given. */
 	const pickableEditionsVisible = $derived(
 		pickableEditionsVisibleProp ?? pickableEditions.length > 0
 	);
@@ -365,42 +157,21 @@
 	function canEditRepertoireRow(row: WorkRow): boolean {
 		return canManageRepertoire && context === 'repertoire' && row.kind === 'repertoire';
 	}
-	/** Programme ops (move / remove) may touch this row. Gated on `kind`, not on
-	 *  `ordinal !== null`: a fallback row's id is a repertoire_item id, and a
-	 *  program_item whose ordinal failed to read defaults to 0 (Entu's
-	 *  `mandatory` is a soft hint), so ordinal is no proof of provenance. */
+	/** Gated on kind, not ordinal: a missing ordinal defaults to 0, so it proves nothing. */
 	function canEditProgrammeRow(row: WorkRow): boolean {
 		return canManageProgramme && context === 'programme' && row.kind === 'program';
 	}
 
-	/** #329 — this row's edition options, whatever source resolved them: the
-	 *  caller merges its scoped per-work reads into the same map. */
 	function optionsFor(row: WorkRow): PickerOption[] {
 		return editionOptionsByRowId[row.id] ?? [];
 	}
 
-	/** #329 — UNKNOWN vs stated fact, and the NAME to print. Both live in
-	 *  `$lib/repertoire/editionUnknown` because the caller decides which works
-	 *  to read scoped off the very same predicate (see `editionsResolvedWorkIds`
-	 *  and the two pages' effects) — a second copy here would drift into rows
-	 *  that say "unknown" with no read behind them. */
+	/** Shared with the caller, which picks the works to read scoped from the same predicate. */
 	function rowEditionUnknown(row: WorkRow): boolean {
 		return isEditionUnknown(row, optionsFor(row), pickableEditionsPartial, editionsResolvedWorkIds);
 	}
-	/** #331 — the READER's unknown/fact split. Two things differ from the editor
-	 *  feed above, and both are in `editionUnknown.ts` (no second predicate):
-	 *  the flag is the row's OWN `truncated` (set by `loadWorksByEventId`)
-	 *  rather than `pickableEditionsPartial` — a reader with no manage rights
-	 *  never triggers the manage picker read that flag reports on, so it reaches
-	 *  her as `false` on both pages however truncated the label lookup behind
-	 *  `row.editionName` was; and an unnameable PIN is unknown for her even
-	 *  under a complete read (#331 item 4), which is safe here precisely because
-	 *  she has no picker whose unpin choice it could take away. */
-	/** #342 — WHY, not just whether: 'truncated' names an incomplete read (may
-	 *  still resolve), 'dangling' a pin under a COMPLETE read that resolves to
-	 *  nothing (nothing left to wait for). Same wiring as the boolean it
-	 *  replaces at this call site — computed once so the render branch below
-	 *  never evaluates the predicate twice. */
+	/** The reader's split uses the row's own truncated flag; 'dangling' is a pin that a
+	 *  complete read cannot name. */
 	function readerEditionUnknownReason(row: WorkRow): 'truncated' | 'dangling' | null {
 		return getReaderEditionUnknownReason(
 			row,
@@ -413,35 +184,18 @@
 		return pinnedEditionLabel(row, optionsFor(row));
 	}
 
-	/** The picker's VALUE. `row.editionId` verbatim would be a lie whenever it
-	 *  matches no option: a <select> renders an unmatched value as its first
-	 *  option, so a pin the read could not resolve would display as whatever
-	 *  happens to sit at the top of the list — "nothing pinned" (the
-	 *  placeholder) or, worse, some OTHER edition of the work. Unmatched → '',
-	 *  which selects the row's own leading option, and on an unknown row that
-	 *  option says so and cannot be chosen. */
+	/** Unmatched pin → '': a select shows an unmatched value as its first option. */
 	function pickerValue(row: WorkRow): string {
 		return optionsFor(row).some((opt) => opt.id === row.editionId) ? row.editionId : '';
 	}
 
-	/** An unknown row that HOLDS a pin gets no "" (= unpin) choice: with the
-	 *  pinned edition unnameable, unpinning would be an offer to destroy a value
-	 *  we cannot even show. Its leading option says UNKNOWN and is disabled, so
-	 *  the control still opens (#329's ruling — gating it out is itself the
-	 *  false assertion) and still re-pins, but nothing in it erases the pin.
-	 *
-	 *  #331 — reads `rowEditionUnknown` (the EDITOR feed), never
-	 *  `readerEditionUnknown`: under the looser reader rule this removal would
-	 *  become PERMANENT on a complete read, where no scoped read is owed that
-	 *  could ever name the pin — an editor could not clear a reference she
-	 *  cannot read. See `editionUnknown.ts`'s header. */
+	/** An unknown pin gets no unpin choice: that would erase a value we cannot show. Reads
+	 *  the editor feed; the looser reader rule would make the removal permanent. */
 	function pickerPinIsUnknown(row: WorkRow): boolean {
 		return row.editionId !== '' && rowEditionUnknown(row);
 	}
 
 	let expandedState = $state(false);
-	/** #103 TE.3 — `forceExpanded` short-circuits the toggle entirely (see the
-	 *  Props doc); otherwise this is exactly the old `expanded` local. */
 	const isExpanded = $derived(forceExpanded || expandedState);
 
 	let selectedWorkId = $state('');
@@ -486,11 +240,7 @@
 	const componentId = $props.id();
 	const expandedRegionId = `works-expanded-${componentId}`;
 
-	// #91 review F6 — the at-a-glance line names the music actually being sung.
-	// A season editor reads the repertoire unfiltered so the status toggle stays
-	// two-way, but that must not make a dropped work advertise itself on an
-	// upcoming rehearsal row as if it were live rep; the count keeps it honest
-	// without hiding that the rows are there to be expanded and managed.
+	// Only active rows are named; inactive ones are counted, not advertised as live rep.
 	const activeRows = $derived(rows.filter((r) => !isInactive(r)));
 	const inactiveCount = $derived(rows.length - activeRows.length);
 	const collapsedLine = $derived(
@@ -503,10 +253,7 @@
 	);
 
 	const hasOrdinals = $derived(rows.length > 0 && rows.every((r) => r.ordinal !== null));
-	// Only meaningful (and only sorted) when hasOrdinals — the unordered branch
-	// renders `rows` as given (season repertoire carries no concert position to
-	// sort by). Ties keep source order (Array.prototype.sort is stable), so two
-	// program_items that both defaulted to ordinal 0 still render in read order.
+	// Sorted only with ordinals; the sort is stable, so tied ordinals keep read order.
 	const orderedRows = $derived(
 		hasOrdinals ? [...rows].sort((a, b) => (a.ordinal ?? 0) - (b.ordinal ?? 0)) : rows
 	);
@@ -521,10 +268,6 @@
 </script>
 
 {#snippet editionPicker(row: WorkRow)}
-	<!-- #125 F5b — ONE unified picker replaces the old pick-select + [Pin]
-	     button pair AND this row's read-only edition line: its VALUE is the
-	     currently pinned edition ('' when none), and a change fires
-	     onpinedition immediately, no confirm step. -->
 	<select
 		data-testid="work-edition-picker"
 		class="w-full sm:w-auto"
@@ -534,9 +277,7 @@
 		onchange={(e) => handlePinEdition(row.id, (e.currentTarget as HTMLSelectElement).value)}
 	>
 		{#if pickerPinIsUnknown(row)}
-			<!-- #329 review — the pin is real, only unnameable: no unpin offer (see
-			     `pickerPinIsUnknown`). Disabled, so the control opens and re-pins
-			     but cannot erase what it cannot show. -->
+			<!-- The pin is real but unnameable: no unpin offer, see pickerPinIsUnknown. -->
 			<option value="" disabled>{m.repertoire_edition_unknown()}</option>
 		{:else}
 			<option value="">{m.repertoire_pin_edition_label()}</option>
@@ -551,11 +292,7 @@
 	<span data-testid="work-name" class="text-sm text-ink">{row.workName}</span>
 	<span data-testid="work-composer" class="text-xs text-ink-2">{row.composer}</span>
 	{#if row.status !== null && !canEditRepertoireRow(row)}
-		<!-- #111 finding 3 — where the bottom status/actions row renders (an
-		     editor on the repertoire surface), its status buttons ARE the
-		     status display; a separate header chip would show the same value
-		     twice. A plain member (no manage row) keeps the chip as her only
-		     status surface. -->
+		<!-- An editor's status buttons show the status, so the chip is for readers only. -->
 		<span
 			data-testid="work-status-badge"
 			class="w-fit rounded-full border border-ink-4 px-1.5 py-0.5 font-mono text-[9px] tracking-wide text-ink-2 uppercase"
@@ -563,23 +300,9 @@
 			{statusLabel(row.status)}
 		</span>
 	{/if}
-	<!-- #342 — computed once, before the chain below, so the reader branch can
-	     both GATE on it and SELECT its wording without calling the predicate
-	     twice. null (editor row, or a reader row that is a stated fact) short-
-	     circuits the reader branch exactly as `!canEditRepertoireRow(row) &&
-	     readerEditionUnknown(row)` used to. -->
 	{@const readerReason = canEditRepertoireRow(row) ? null : readerEditionUnknownReason(row)}
 	{#if canEditRepertoireRow(row) && rowEditionUnknown(row)}
-		<!-- #329 — the edition state under a TRUNCATED read that no scoped
-		     per-work read has settled yet: UNKNOWN, not known-absent, and the
-		     picker stays OPEN rather than disappearing with the "no edition"
-		     line — gating it out is itself the false assertion this fix removes.
-		     Checked BEFORE the matched branch below: a row can have SOME matched
-		     options and still hold a pin that fell past the cap, and that row's
-		     picker must say so rather than render its pin as the placeholder.
-		     The caller reads `listEditions` for this work meanwhile (one request,
-		     scoped), and the row becomes a fact — a named pin or a genuine
-		     known-absence — the moment that lands. -->
+		<!-- Truncated read not yet settled by a scoped read: unknown, and the picker stays open. -->
 		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
 			{m.repertoire_edition_unknown()}
 		</span>
@@ -589,22 +312,8 @@
 	{:else if rowEditionLabel(row) !== ''}
 		<span data-testid="work-edition" class="text-xs text-ink-2">{rowEditionLabel(row)}</span>
 	{:else if readerReason !== null}
-		<!-- #329 — same unknown state for a non-editor viewer: no picker to open
-		     (management is gated on `canEditRepertoireRow` everywhere else), but
-		     "no edition" is still a claim a truncated read cannot back.
-		     #331 — fed from `readerEditionUnknownReason` (the row's OWN
-		     `truncated`), not `rowEditionUnknown`/`pickableEditionsPartial`: that
-		     flag is always false for a reader (she never triggers the manage
-		     picker read it reports on), which is exactly why this branch could
-		     never fire before. The reader feed is also the LOOSER of the two
-		     (item 4: an unnameable pin is unknown for her under a complete read
-		     as well), so `readerReason` being null-for-editors above is
-		     load-bearing, not belt-and-braces: without it an editor could reach
-		     this branch on a row her own feed correctly calls a fact.
-		     #342 — WHICH sentence depends on `readerReason`: 'truncated' keeps
-		     the old key (incompleteness is a true claim there), 'dangling' (a
-		     pin under a COMPLETE read, #331 item 4's shape) gets the new one —
-		     nothing is incomplete, and nothing the reader waits for resolves it. -->
+		<!-- Reader's unknown state. readerReason is null for editors on purpose: the reader rule
+		     is looser, and an editor must not reach this branch. -->
 		<span data-testid="work-edition-unknown" class="text-xs text-ink-3 italic">
 			{readerReason === 'dangling'
 				? m.repertoire_edition_unknown_pinned()
@@ -618,9 +327,7 @@
 	{/if}
 	<span class="flex flex-wrap items-center gap-2">
 		{#if row.fileId !== ''}
-			<!-- #351 — presence indicator: NOT a control (no role/tabindex,
-			     unwrapped by any button/link). Absent entirely while heldFileIds
-			     has not answered (null) — an absent badge is not a claim. -->
+			<!-- Not a control. Absent until heldFileIds answers: an absent badge is no claim. -->
 			{#if heldFileIds !== null}
 				<span data-testid="file-presence-{row.fileId}" class="text-xs text-ink-2">
 					{heldFileIds.has(row.fileId)
@@ -628,19 +335,9 @@
 						: m.file_presence_needs_network()}
 				</span>
 			{/if}
-			<!-- #434 slice 5 — the part link: only when this caller opted in
-			     (`partLinkDb`) AND the part is actually on the device. No dead
-			     link offline: a row not yet held renders no anchor at all, exactly
-			     like the badge above already tells her. -->
 			{#if isPartLinked(row)}
-				<!-- Review finding 1: this anchor REPLACES the button below on a
-				     held row (see isPartLinked) — same destination, so two
-				     controls would be two labels for one action. It stays a real
-				     link (href), and a plain left click still goes through
-				     `onpdfclick` so the #353/#427 `partLabel` handoff keeps
-				     refreshing a stale label on re-open. A modifier/middle click
-				     is left to the browser: that is the open-in-new-tab the
-				     button never had. -->
+				<!-- A plain click goes through onpdfclick so a stale label refreshes; modifier and
+				     middle clicks are left to the browser. -->
 				<a
 					data-testid="part-link-{row.fileId}"
 					href="/part/{row.fileId}?db={partLinkDb}"
@@ -677,12 +374,8 @@
 				{m.repertoire_borrow_link()}
 			</a>
 		{/if}
-		<!-- Deliberately UNKEYED: `external_link` is an implicitly multi-valued
-		     Entu string prop (POST appends), so an edition can legitimately hold
-		     the same url twice. Keying on the url would throw each_key_duplicate
-		     and take down the page — same failure mode the ordinal note below
-		     guards against. These anchors carry no per-item state, so a key buys
-		     nothing here. Hrefs are pre-filtered to http(s) by buildWorkRows. -->
+		<!-- Unkeyed: external_link is multi-valued, so a url can repeat and a key would throw
+		     each_key_duplicate. -->
 		{#each row.externalLinks as link}
 			<a
 				data-testid="work-link-external"
@@ -716,24 +409,12 @@
 
 {#snippet manageRowControls(row: WorkRow, index: number)}
 	{#if canEditRepertoireRow(row) || canEditProgrammeRow(row)}
-		<!-- #111 finding 3 — status picker + Remove (or move + Remove) share ONE
-		     row, set apart from the content above with its own border + padding
-		     so it reads as the panel's action bar, not another content line. -->
 		<div
 			data-testid="work-manage-row"
 			class="flex flex-wrap items-center gap-2 border-t border-ink-5 pt-2 mt-1"
 		>
 			{#if canEditRepertoireRow(row)}
-				<!-- #125 F5a — four inline toggle buttons replace the status <select>:
-				     the CURRENT status is exposed via aria-pressed, not just a class,
-				     so it stays legible to assistive tech. Labels still route through
-				     STATUS_OPTIONS — no raw schema string leaks into a locale. -->
-				<!-- #156 — WAI-APG TOOLBAR: arrows MOVE focus only, never activate.
-				     `role="toolbar"` says so in the markup — the old bare `role="group"`
-				     did not distinguish this from the app's arrow-SELECTS radiogroups
-				     (roster view chips, library copy-sort), and svelte-check flagged the
-				     keydown handler on a non-interactive role. `aria-pressed` toggle
-				     buttons inside a toolbar are the APG pattern; state pin unchanged. -->
+				<!-- Toolbar: arrows move focus only, never activate. -->
 				<div
 					data-testid="work-status-group-{row.id}"
 					role="toolbar"
@@ -762,11 +443,8 @@
 						</button>
 					{/each}
 				</div>
-				<!-- Remove lives INSIDE each branch, never alongside them: the id it
-				     forwards is a repertoire_item id here and a program_item id below,
-				     and the two go to different DELETE handlers. A single shared button
-				     outside the branches rendered on season-fallback rows in programme
-				     context and handed a repertoire_item id to "remove from tonight". -->
+				<!-- Remove sits inside each branch: the id is a repertoire_item here and a program_item
+				     below, and they go to different delete handlers. -->
 				{@render removeButton(row)}
 			{:else if canEditProgrammeRow(row)}
 				<button
@@ -796,25 +474,12 @@
 {/snippet}
 
 {#snippet manageAddControls()}
-	<!-- #434 slice 6 — ONE visible reason for this whole management surface (not
-	     one per control, matching AttendanceSurface): every row control and add
-	     control above/below is disabled while offline; this says why once. Only
-	     for a caller that actually renders management controls — a read-only
-	     element has nothing to explain. -->
 	{#if canManage && isOffline}
 		<p data-testid="repertoire-write-unavailable" class="text-xs text-ink-2">
 			{m.write_unavailable_no_signal()}
 		</p>
 	{/if}
 	{#if canManageRepertoire && context === 'repertoire'}
-		<!-- #311 — the gate is on the inner select+button, not this wrapper
-		     (mirrors #272 part 4's rule for the programme control below): the
-		     wrapper's presence is governed by rights, the controls' by
-		     pickableWorksVisible. Deliberately asymmetric with the
-		     pickableEditionsVisible gate just below — that one already wraps
-		     only its own select because its button has its own `{#if
-		     selectedEditionForAdd}`; this pair has no such split, so the whole
-		     pair sits under one `{#if pickableWorksVisible}` here instead. -->
 		<div data-testid="work-manage-add-work" class="flex flex-wrap items-center gap-2 pt-1">
 			{#if pickableWorksVisible}
 				<select
@@ -829,14 +494,7 @@
 					{#each pickableWorksList as w (w.id)}
 						<option value={w.id}>{workLabel(w)}</option>
 					{/each}
-					<!-- #321 (PO ruling) — a truncated library read hides works that
-					     exist, and a work the list does not offer cannot be added:
-					     "it isn't in the library" is what the gap says. This select can
-					     be opened whenever it renders (it is only `disabled` while a
-					     create is in flight), so the notice goes INSIDE the option list
-					     as a trailing disabled entry — unselectable, last, gone the
-					     moment the read is complete. Same copy as every other
-					     option-list surface. -->
+					<!-- A truncated read: a trailing disabled option says so inside the list. -->
 					{#if pickableWorksPartial}
 						<option data-testid="work-manage-add-work-partial-option" value="" disabled>
 							{m.picker_partial_options_notice()}
@@ -856,12 +514,8 @@
 			{/if}
 		</div>
 	{/if}
-	<!-- Deliberately NOT the `{:else}` of the branch above: "Add to programme" is
-	     the ONLY way to create an event's FIRST program_item, and until one
-	     exists the event renders the season repertoire (repertoire context) — so
-	     gating this on `context === 'programme'` made a new programme
-	     uncreatable. Rights still gate it: an EVENT editor sees it, a
-	     season-only editor does not. -->
+	<!-- Not the {:else} above: "Add to programme" creates an event's first program_item
+	     while the event still shows the season repertoire. -->
 	{#if canManageProgramme}
 		<div data-testid="work-manage-add-programme" class="flex flex-wrap items-center gap-2 pt-1">
 			{#if pickableEditionsVisible}
@@ -877,9 +531,6 @@
 					{#each pickableEditions as opt (opt.id)}
 						<option value={opt.id}>{opt.label}</option>
 					{/each}
-					<!-- #321 (PO ruling) — the same shape for the edition feed: an
-					     edition this list does not offer cannot be put on tonight's
-					     programme. -->
 					{#if pickableEditionsPartial}
 						<option data-testid="work-manage-add-programme-partial-option" value="" disabled>
 							{m.picker_partial_options_notice()}
@@ -921,15 +572,9 @@
 		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-2">
 			{#if hasOrdinals}
 				<ol class="list-decimal divide-y divide-dashed divide-ink-5 pl-4">
-					<!-- Keyed on the entity id, NEVER on ordinal: `mandatory: true` is a
-					     soft UI hint in Entu, so two program_items can both carry the
-					     default 0 — a duplicate key throws each_key_duplicate and takes
-					     down the whole agenda page, not just this element. -->
+					<!-- Keyed on id, never ordinal: two program_items can share the default 0. -->
 					{#each orderedRows as row, index (row.id)}
-						<!-- No `flex` (or any display utility) on the <li>: `display: flex`
-						     replaces the UA's `display: list-item`, and ::marker is only
-						     generated for list-item boxes — the list-decimal numbering
-						     would silently vanish. Column layout lives on an inner div. -->
+						<!-- No display utility on the <li>: display: flex drops list-item and the numbering. -->
 						<li
 							data-testid="work-row"
 							data-inactive={isInactive(row) ? 'true' : undefined}
@@ -945,17 +590,8 @@
 					{/each}
 				</ol>
 			{:else}
-				<!-- Season repertoire is still a list of works — it just has no concert
-				     position, so <ul> (no marker, no numbering) rather than <ol>. -->
-				<!-- #111 review — `data-status` mirrors the row's own status onto a
-				     surface the COMPONENT renders. Since finding 3 removed the chip on
-				     the editor surface, the <select> was the only remaining status
-				     display — and a test cannot assert on it, because
-				     fireEvent.change writes the DOM value itself, so the assertion
-				     holds whether or not the optimistic patch ever ran. The attribute
-				     is only ever written by the render, so it is a real guard for the
-				     optimistic-and-reconcile path. Absent (not 'active') when the row
-				     carries no status, e.g. a programme row. -->
+				<!-- Season repertoire has no concert position, so <ul>. data-status mirrors the row's
+				     status so specs can check the optimistic patch. -->
 				<ul class="divide-y divide-dashed divide-ink-5">
 					{#each orderedRows as row, index (row.id)}
 						<li

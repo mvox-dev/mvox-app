@@ -99,7 +99,7 @@
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
 	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { AttendancePanel } from '$lib/attendance/types';
@@ -237,17 +237,13 @@
 	}
 
 	function handleAgendaViewKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const segments = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
-		const idx = segments.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, segments.length);
-		if (next < 0) return;
-		e.preventDefault();
-		const view = segments[next].dataset.agendaView as 'list' | 'month' | undefined;
-		if (!view) return;
-		setAgendaView(view);
-		segments[next].focus();
+		rovingKeydown(e, {
+			beforeFocus: (member) => {
+				const view = member.dataset.agendaView as 'list' | 'month' | undefined;
+				if (!view) return false;
+				setAgendaView(view);
+			}
+		});
 	}
 
 	$effect(() => {
