@@ -1788,7 +1788,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 // compiles but renders empty.
 describe('#75 — i18n key existence', () => {
 	it('the derived LIBRARY_SURFACES list is not empty (a moved folder would scan nothing)', () => {
-		expect(LIBRARY_SURFACES.length).toBeGreaterThanOrEqual(9);
+		expect(LIBRARY_SURFACES.length).toBeGreaterThanOrEqual(8);
 	});
 
 	it.each(LIBRARY_SURFACES)('every m.* key referenced in %s exists in en.json', (file) => {

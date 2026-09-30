@@ -52,11 +52,12 @@
 		setEditionDraftPending,
 		startUpload,
 		updateEditionFiles,
+		workFormView,
 		type TreeActions
 	} from '$lib/library/libraryState';
 	import MyLoansSection from '$lib/library/MyLoansSection.svelte';
 	import BulkCheckoutPanel from '$lib/library/BulkCheckoutPanel.svelte';
-	import CreateWorkForm from '$lib/library/CreateWorkForm.svelte';
+	import InlineCreateForm from '$lib/library/InlineCreateForm.svelte';
 	import WorkRow from '$lib/library/WorkRow.svelte';
 	import { withItem, without } from '$lib/collections/immutable';
 
@@ -638,7 +639,12 @@
 					submit={handleBulkCheckout}
 				/>
 
-				<CreateWorkForm bind:form={workForm} {isOffline} submit={submitCreateWork} />
+				<InlineCreateForm
+					kind="work"
+					view={workFormView(workForm)}
+					{isOffline}
+					submit={submitCreateWork}
+				/>
 			</section>
 		{:else if $librarianStore === 'error'}
 			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">

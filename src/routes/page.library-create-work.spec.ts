@@ -1,25 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #198 — create works from within the mvox app (Noodikogu). The /library page
-// grows a librarian-only "create work" affordance:
-//
-//   - [data-testid="create-work-button"] renders ONLY when $librarianStore
-//     resolves 'librarian' (same fail-closed gating as every other librarian
-//     tool on this page — hidden while loading, hidden for not-librarian).
-//   - Clicking it opens an INLINE form [data-testid="create-work-form"] with a
-//     name input [data-testid="create-work-name"] (required) and a composer
-//     input [data-testid="create-work-composer"] (optional). No form in the
-//     DOM until the button is clicked.
-//   - Submitting calls createWork ($lib/entity/entityCreate — the shared
-//     entity CREATE write layer, same module as createSeason) with the
-//     library entity id from libraryEntityIdStore (resolveLibrarian's
-//     libraryId — the work's v4E parent is the LIBRARY entity, NOT the
-//     database entity), then adds the created work to the LOCAL works list —
-//     no listWorks refetch.
-//
-// INTEGRATION (house rule): these tests render the ACTUAL /library route
-// component (./library/+page.svelte), so the feature cannot go green as an
-// isolated component that no page ever mounts.
+// #198 — the librarian's inline create-work form, driven through the real /library route.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -125,9 +105,8 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-// #434 slice 4 review round 2, finding 2 — the new work's `_parent` is resolved
-// LIVE at submit time (`resolveMyLibraryId`), not read off a store the
-// cache-backed librarian resolution filled.
+// The new work's `_parent` is resolved live at submit time (`resolveMyLibraryId`), not read
+// off a store the cache-backed librarian resolution filled.
 const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
 	resolveLibrarianMock: vi.fn(),
 	resolveMyLibraryIdMock: vi.fn()
@@ -210,7 +189,7 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 	// Defaults; tests override resolveLibrarianMock per case.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	// #434 slice 4 review round 2, finding 2 — the LIVE write-path resolution.
+	// The live write-path resolution.
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -539,6 +518,16 @@ describe('#198 — the form is escapable', () => {
 		expect(createWorkMock).not.toHaveBeenCalled();
 	});
 
+	it('auto-focuses the name input the instant the form opens', async () => {
+		const container = await renderWithFormOpen();
+		const nameInput = container.querySelector(
+			'[data-testid="create-work-name"]'
+		) as HTMLInputElement;
+		await waitFor(() => {
+			expect(document.activeElement).toBe(nameInput);
+		});
+	});
+
 	it('the inline form is a group, not a dialog — it implements no dialog focus contract', async () => {
 		const container = await renderWithFormOpen();
 
@@ -586,9 +575,7 @@ describe('#198 — blank name is a field error, not a transport failure', () => 
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Review round 2: fail loudly, transport failure, double-submit
-// ---------------------------------------------------------------------------
+// Fail loudly, transport failure, double-submit.
 
 describe('#198 — a missing precondition fails LOUDLY, never silently', () => {
 	it('a librarian whose token vanished (session expired under the open form) sees the error and no write is attempted', async () => {
@@ -706,5 +693,5 @@ describe('#198 — the create is not double-submittable', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #198 RED)
-// (*MVOX:Byrd* — #198 review round 2)
+// (*MVOX:Tallis*)
+// (*MVOX:Byrd*)
