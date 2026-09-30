@@ -1,103 +1,18 @@
 // @vitest-environment happy-dom
-//
-// #304 RED — the event page's SERIES PICKER: choose the event's series, or
-// remove it from one, with the consequence visible BEFORE it is committed.
-//
-// WHY THIS IS NOT A METADATA EDIT: an event inherits up to FOUR fields from
-// its parent series whenever it carries no value of its own — name,
-// duration_minutes → durationMinutes, default_location → location,
-// default_description → description (eventDetail.ts's `??` merge). Picking a
-// different series can rewrite four things on screen at once; unassigning a
-// series child leaves it NAMELESS by design (#132 — series children carry no
-// own name). The picker must say so before the write, and only when true.
-//
-// THE INHERITANCE TEST IS RAW PRESENCE, NEVER TRUTHINESS: the merge fires only
-// when `event.<prop>?.[0]` is absent (array missing/empty). A stored `''` or
-// `0` BLOCKS inheritance while displaying blank — so the on-screen "inherited
-// fields" list must replicate the raw-array test. Pinned below: an event with
-// a STORED empty-string name inherits NOTHING and gets no ceremony.
-//
-// RIGHTS — the SPIKE's live gate finding (dated seed-results ledger
-// probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json), shaped by
-// Gama's ruling comment 5613471404 on #304 (the OWNER-GATED branch):
-//   - UNASSIGN is a DELETE of the series `_parent` value and that DELETE is
-//     OWNER-gated (editor → 403 "User not in _owner property"; the same
-//     editor deleted a plain property value fine — the gate is `_parent`-
-//     specific). REASSIGN (atomic-overwrite POST) is editor-reachable.
-//   - So: the "Ei kuulu sarja" option renders ONLY on resolved owner tier —
-//     ABSENT for a confirmed non-owner, never disabled — AND a visible
-//     rights-note renders for a confirmed non-owner on a series event
-//     (#301's precedent is absent PLUS a note: a missing option inside an
-//     otherwise-normal dropdown is invisible without one).
-//   - The note renders only when ACTIONABLE: confirmed non-owner tier AND the
-//     event currently belongs to a series. Loading renders neither the
-//     option nor the note — an unresolved tier is not a positive claim.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventDetail.ts — the EventDetail contract GROWS:
-//     seriesId: string | null       — the event's event_series parent
-//                                     (computed today at :200 and discarded);
-//                                     null when standalone (seasonId's rule:
-//                                     '' would read as a real id).
-//     inheritedFields: Array<'name'|'durationMinutes'|'location'|'description'>
-//                                   — the fields THIS event ACTUALLY inherits:
-//                                     event raw array absent/empty AND the
-//                                     series supplies a value. Display order
-//                                     pinned: name, durationMinutes, location,
-//                                     description.
-//
-//   src/routes/event/[id]/+page.svelte — the picker (rights-holders only,
-//   manageRightsFrom — the page's ONE rights rule; plain members see nothing):
-//     event-series-select        native <select>, label (label[for]) carrying
-//                                event_detail_series_label; options = the
-//                                none-option (value '', text
-//                                event_detail_series_none — the
-//                                event-create-series convention) + every
-//                                series of THIS event's SEASON (season-scoped
-//                                — a cross-season series would move the event
-//                                between seasons); current series preselected.
-//     event-series-inherited     names the inherited fields, one marker per
-//                                field: event-series-inherited-name /
-//                                -duration / -location / -description —
-//                                ONLY the ones this event actually inherits.
-//     event-series-confirm       the consequence block: appears BEFORE any
-//                                write when (and only when) ≥1 field is
-//                                inherited and the selection changed;
-//                                reassign → what the fields will BECOME (the
-//                                new series' values); unassign → which
-//                                fields clear, name-goes-empty named
-//                                (event_detail_series_unassign_name_empty).
-//                                event-series-confirm-apply commits,
-//                                event-series-confirm-cancel restores the
-//                                previous selection and writes NOTHING.
-//     event-series-rights-note   the non-owner explanation (see RIGHTS above).
-//     event-series-status        #289: SUCCESS announced server-confirmed —
-//                                never optimistic; the page then shows the
-//                                NEW values with no stale inherited text.
-//     event-series-error         #289: a FAILED write says so and leaves the
-//                                PREVIOUS series selected.
-//   The write path touches ONLY the `_parent` series value (see
-//   eventSeriesActions.spec.ts for the wire contract) — never the four field
-//   props, never the season's value id.
-//
-// Assertions match on DATA (values, wire bodies, testids) and `[key]` stubs,
-// never translated sentences — page.spec.ts's full-fallback paraglide posture.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — same hygiene as
-// page.spec.ts: only Date is faked, timers stay real so waitFor polls.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -133,11 +48,6 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-// ── Entu fixtures ─────────────────────────────────────────────────────────────
-// Same event as page.spec.ts, with per-value `_id`s on the `_parent` values —
-// the write path targets VALUE ids, so the fixtures must carry them (the
-// SPIKE's fixture-owner-read shape).
-
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
@@ -157,24 +67,18 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-/** Owner view — ownership subsumes editing (manageRightsFrom). */
 function ownerEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _owner: [{ reference: 'p-viewer' }], ...over });
 }
-/** Editor-not-owner view — the gated tier of the SPIKE's asymmetry. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
-/** The four inheritable props raw-ABSENT — the event inherits all four.
- *  The name slot is the EVENT's own `event_name` (#420); the series side of
- *  the merge stays `series.name`. */
 const INHERITING = {
 	event_name: undefined,
 	duration_minutes: undefined,
 	location: undefined,
 	description: undefined
 };
-/** Standalone: season parent only — no series value to unassign. */
 const STANDALONE_PARENTS = [
 	{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' },
 	{ _id: 'pv-season', reference: 'season1', entity_type: 'season' }
@@ -206,7 +110,6 @@ function series2Entity() {
 		default_description: [{ string: 'Bring scores.' }]
 	};
 }
-/** The OTHER collective's fixtures — the mid-write-switch race. */
 function credeEventEntity() {
 	return {
 		_id: 'ev1',
@@ -221,23 +124,11 @@ function credeEventEntity() {
 }
 
 type WireOpts = {
-	/** How many write POSTs against entity/ev1 fail with a 500 before the wire
-	 *  recovers. Default 0. */
 	failWritePosts?: number;
-	/** Hold every write POST open until release() — the mid-write-switch probe. */
 	holdWritePost?: boolean;
-	/** Hold the sampledb event GET open — the "loading claims nothing" probe. */
 	holdEventGet?: boolean;
 };
 
-/**
- * The #304 wire: page.spec.ts's liberal read stub (fixtures served whether the
- * impl reads by id or by query) + the series write choreography — a `_parent`
- * POST/DELETE is APPLIED to the in-memory event, so a GREEN that re-reads
- * after the write sees the NEW parent (and its inheritance), and one that
- * re-derives locally passes identically. Routes by db segment: `/crede/`
- * serves the OTHER collective (no series at all).
- */
 function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}) {
 	const event: Record<string, unknown> = eventOver ?? ownerEvent();
 	const season = seasonEntity();
@@ -258,7 +149,6 @@ function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}
 			if (url.includes('/entity/ev1')) return json({ entity: credeEvent });
 			if (url.includes('/entity/cseason')) return json({ entity: { _id: 'cseason' } });
 			if (url.includes('_type.string=event')) {
-				// event AND event_series queries both: crede has NO series.
 				return url.includes('event_series')
 					? json({ entities: [] })
 					: json({ entities: [credeEvent] });
@@ -387,10 +277,6 @@ function parentPosts(stub: ReturnType<typeof vi.fn>) {
 		.map((c) => JSON.parse(String(c.body)) as Array<Record<string, unknown>>);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — data layer: seriesId + inheritedFields join the EventDetail contract
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#304 loadEventDetail — seriesId joins the contract (computed today, discarded today)', () => {
 	it('carries the event_series parent id', async () => {
 		const { stub } = seriesWireStub(eventEntity());
@@ -435,8 +321,6 @@ describe('#304 loadEventDetail — inheritedFields: the RAW-PRESENCE test, never
 		const { stub } = seriesWireStub(
 			eventEntity({ location: undefined, description: undefined })
 		);
-		// series1 supplies default_location but the test needs a series WITHOUT
-		// default_description — rewire the series read only.
 		const inner = stub;
 		const wrapped = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
@@ -447,7 +331,6 @@ describe('#304 loadEventDetail — inheritedFields: the RAW-PRESENCE test, never
 						name: [{ string: 'Tuesday Series' }],
 						duration_minutes: [{ number: 120 }],
 						default_location: [{ string: 'Church Hall' }]
-						// no default_description
 					}
 				});
 			}
@@ -465,11 +348,6 @@ describe('#304 loadEventDetail — inheritedFields: the RAW-PRESENCE test, never
 		expect(detail.inheritedFields).toEqual([]);
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — the control: native, labelled, season-scoped, current preselected
-//     (integration: rendered by the ACTUAL page route)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#304 — the series select on the event page (owner view)', () => {
 	it('renders a NATIVE <select data-testid="event-series-select"> with a real <label for>', async () => {
@@ -489,8 +367,6 @@ describe('#304 — the series select on the event page (owner view)', () => {
 		expect(texts.some((t) => t.includes('[event_detail_series_none]'))).toBe(true);
 		expect(texts.some((t) => t.includes('Tuesday Series'))).toBe(true);
 		expect(texts.some((t) => t.includes('Wednesday Series'))).toBe(true);
-		// Current series preselected — option values are series ids, '' = none
-		// (the event-create-series convention).
 		expect(select.value).toBe('series1');
 	});
 
@@ -521,10 +397,6 @@ describe('#304 — the series select on the event page (owner view)', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — rights asymmetry (SPIKE: owner-gated DELETE; ruling 5613471404)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#304 — unassign is OWNER-gated: option absent below owner tier, PLUS the note', () => {
 	it('owner on a series event → the none-option is offered, no rights-note', async () => {
 		const { container } = renderSeriesPage(ownerEvent());
@@ -536,16 +408,11 @@ describe('#304 — unassign is OWNER-gated: option absent below owner tier, PLUS
 	it('editor-NOT-owner on a series event → none-option ABSENT (not disabled) AND the rights-note renders', async () => {
 		const { container } = renderSeriesPage(editorEvent());
 		const select = await waitSelect(container);
-		// ABSENT, not disabled: no option carries the none text, no option
-		// carries the '' value.
 		expect(optionTexts(select).some((t) => t.includes('[event_detail_series_none]'))).toBe(false);
 		expect(Array.from(select.options).some((o) => o.value === '')).toBe(false);
-		// …and the missing option is EXPLAINED — a hole inside a normal-looking
-		// dropdown is invisible without a note (#301's precedent: absent + note).
 		const note = q(container, 'event-series-rights-note');
 		expect(note).not.toBeNull();
 		expect(note!.textContent).toContain('[event_detail_series_rights_note]');
-		// The reassign half stays uniform: every season series is still offered.
 		expect(optionTexts(select).some((t) => t.includes('Tuesday Series'))).toBe(true);
 		expect(optionTexts(select).some((t) => t.includes('Wednesday Series'))).toBe(true);
 	});
@@ -554,8 +421,6 @@ describe('#304 — unassign is OWNER-gated: option absent below owner tier, PLUS
 		const { container } = renderSeriesPage(editorEvent({ _parent: STANDALONE_PARENTS }));
 		const select = await waitSelect(container);
 		expect(q(container, 'event-series-rights-note')).toBeNull();
-		// The none-option here is the CURRENT STATE, not the gated operation —
-		// withholding it would misrepresent the event.
 		expect(select.value).toBe('');
 		expect(select.selectedOptions[0]?.textContent ?? '').toContain('[event_detail_series_none]');
 	});
@@ -580,10 +445,6 @@ describe('#304 — unassign is OWNER-gated: option absent below owner tier, PLUS
 		]);
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — the inherited fields are NAMED on screen — raw presence, never truthiness
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#304 — the on-screen inherited-fields list (owner view)', () => {
 	it('an event inheriting all four names all four', async () => {
@@ -624,16 +485,10 @@ describe('#304 — the on-screen inherited-fields list (owner view)', () => {
 		expect(q(container, 'event-series-inherited-duration')).toBeNull();
 		expect(q(container, 'event-series-inherited-location')).toBeNull();
 		expect(q(container, 'event-series-inherited-description')).toBeNull();
-		// …and therefore NO ceremony either (pinned properly in block 5, but the
-		// causal pair belongs together: no inheritance → nothing to confirm).
 		await fireEvent.change(select, { target: { value: 'series2' } });
 		expect(q(container, 'event-series-confirm')).toBeNull();
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — the consequence is visible BEFORE the write; the safe case pays nothing
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#304 — consequence preview and confirmation (owner view)', () => {
 	it('REASSIGN with inherited fields: the confirm block shows what they will BECOME (the new series’ values) — and NOTHING is written yet', async () => {
@@ -644,7 +499,6 @@ describe('#304 — consequence preview and confirmation (owner view)', () => {
 			expect(q(container, 'event-series-confirm')).not.toBeNull();
 		});
 		const confirm = q(container, 'event-series-confirm')!;
-		// The NEW series' values, as data — name, duration, location, description.
 		expect(confirm.textContent).toContain('Wednesday Series');
 		expect(confirm.textContent).toContain('75');
 		expect(confirm.textContent).toContain('Chapel');
@@ -704,9 +558,7 @@ describe('#304 — consequence preview and confirmation (owner view)', () => {
 		const { container, fetchStub } = renderSeriesPage(ownerEvent());
 		const select = await waitSelect(container);
 		await fireEvent.change(select, { target: { value: 'series2' } });
-		// No ceremony…
 		expect(q(container, 'event-series-confirm')).toBeNull();
-		// …the write just happens, atomically targeting the series value id.
 		await waitFor(() => {
 			expect(parentPosts(fetchStub).length).toBeGreaterThan(0);
 		});
@@ -716,10 +568,6 @@ describe('#304 — consequence preview and confirmation (owner view)', () => {
 		expect(q(container, 'event-series-confirm')).toBeNull();
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 6 — the write itself: wire safety + #289's truthful-state rule
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#304 — the committed write (owner view)', () => {
 	it('REASSIGN apply: ONE atomic-overwrite POST pairing the OLD series value id with the new reference; the season value id in NO write; the four field props NEVER written', async () => {
@@ -737,10 +585,8 @@ describe('#304 — the committed write (owner view)', () => {
 			[{ _id: 'pv-series', type: '_parent', reference: 'series2' }]
 		]);
 		const writes = writeCalls(fetchStub);
-		// Season safety: pv-season appears in no write URL and no write body.
 		expect(writes.some((c) => c.url.includes('pv-season'))).toBe(false);
 		expect(writes.some((c) => String(c.body ?? '').includes('pv-season'))).toBe(false);
-		// No silent copying: no write touches the four inheritable props.
 		for (const post of parentPosts(fetchStub)) {
 			for (const entry of post) expect(entry.type).toBe('_parent');
 		}
@@ -750,7 +596,6 @@ describe('#304 — the committed write (owner view)', () => {
 	it('REASSIGN success is SERVER-CONFIRMED and announced; the page shows the NEW series’ values with no stale inherited text', async () => {
 		const { container } = renderSeriesPage(ownerEvent(INHERITING));
 		const select = await waitSelect(container);
-		// Before: series1's inheritance on screen.
 		expect(q(container, 'event-detail-location')?.textContent).toContain('Church Hall');
 		await fireEvent.change(select, { target: { value: 'series2' } });
 		await waitFor(() => {
@@ -789,8 +634,6 @@ describe('#304 — the committed write (owner view)', () => {
 			const status = q(container, 'event-series-status');
 			expect(status).not.toBeNull();
 		});
-		// No stale inherited text: 'Church Hall' came from the series and the
-		// series is gone.
 		expect(q(container, 'event-detail-location')?.textContent ?? '').not.toContain('Church Hall');
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('');
 	});
@@ -812,7 +655,6 @@ describe('#304 — the committed write (owner view)', () => {
 		});
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('series1');
 		expect(q(container, 'event-series-status')).toBeNull();
-		// The page still shows the OLD series' inheritance — the write did not land.
 		expect(q(container, 'event-detail-location')?.textContent ?? '').toContain('Church Hall');
 	});
 
@@ -828,20 +670,15 @@ describe('#304 — the committed write (owner view)', () => {
 			expect(q(container, 'event-series-confirm-apply')).not.toBeNull();
 		});
 		await fireEvent.click(q(container, 'event-series-confirm-apply')!);
-		// The write is in flight (held) — deterministic setup.
 		await waitFor(() => {
 			expect(parentPosts(fetchStub).length).toBeGreaterThan(0);
 		});
 
-		// Switch collectives — crede's SAME event id resolves to a different
-		// event with NO series at all.
 		selectedCollectiveDbStore.set('crede');
 		await waitFor(() => {
 			expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Event');
 		});
 
-		// NOW settle the held write. If the resolution is not generation-guarded
-		// it announces success into crede's view / repaints stale series data.
 		release();
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
@@ -857,14 +694,7 @@ describe('#304 — the committed write (owner view)', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 7 — i18n keys exist in all four locales (en/et/lv/uk), none empty
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#304 — i18n keys exist in all four locales, none empty', () => {
-	// The proposed key set — `event_detail_` prefix so the page's existing
-	// locale-completeness guard (page.i18n-a11y.spec.ts:349) covers them for
-	// free. Comenius authors the actual copy in GREEN; this pins presence.
 	const KEYS = [
 		'event_detail_series_label',
 		'event_detail_series_none',

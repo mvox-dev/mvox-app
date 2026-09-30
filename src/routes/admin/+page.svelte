@@ -1,7 +1,7 @@
 <!-- /admin: role management (admins, librarians), the collective name, and invites. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import {
 		selectedCollectiveStore,
 		selectedCollectiveIdentityStore,
@@ -147,14 +147,7 @@
 		// A collective switch drops the trace of an in-flight write.
 		rolesPending = false;
 		rolesStatus = '';
-		const token = getToken();
-		if (!token) {
-			// Inconsistency on a protected route — fail loudly, never as "not admin".
-			console.error('admin roles: no auth token in storage on a protected route');
-			status = 'load-error';
-			return;
-		}
-		const c: EntuCfg = { db: target.db, token };
+		const c: EntuCfg = cfgFor(target.db);
 		cfg = c;
 		viewerId = target.personId;
 		canManageAdmins = false;

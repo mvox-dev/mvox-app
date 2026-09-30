@@ -1,133 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #104 TE.4 (RED) — inline event editing on the detail page. Parent: #81
-// (Event detail 1.0). A rights-holder (`_owner` OR `_editor` on the EVENT —
-// the same one-rule gate the tally runs, manageRightsFrom) edits the header
-// fields in place: tap a pencil, the field becomes an input, blur/Enter
-// confirms with an immediate optimistic write, Escape cancels, a failed write
-// reverts with an inline error. Per-tap immediate writes, same posture as
-// attendanceData (no "save all" payload anywhere in the contract).
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventFieldEdit.ts (new)
-//     export type EditableEventField =
-//       'name' | 'start_datetime' | 'duration_minutes' | 'location' | 'description';
-//     export async function updateEventField(
-//       cfg: { db: string; token: string },
-//       eventId: string,
-//       field: EditableEventField,
-//       value: string | number,
-//       fetchImpl?: typeof fetch
-//     ): Promise<void>;
-//
-//     #264 (PO ruling, branch (i)) — ATOMIC overwrite via the shared
-//     `replaceEntityProperty` (entu/replaceProperty.ts): GET
-//     entity/{eventId}?props={field} → the existing value id(s) → ONE POST
-//     whose entry pairs the FIRST existing id with the new value (Entu's
-//     native overwrite; `setEntity` soft-deletes the old value in the SAME
-//     call). NO DELETE round-trip remains on the normal (≤1-value) path — a
-//     rejected POST leaves the old value untouched, closing the half-landing
-//     window the old GET→POST-new→DELETE-old choreography left open.
-//     Corrupted-state extras (2+ existing values) are swept at
-//     `/property/{id}` strictly AFTER the POST.
-//     Wire value key by field type: name/location/description → `string`;
-//     start_datetime → `datetime` (ISO instant, UTC); duration_minutes →
-//     `number` (a NUMBER on the wire, never a numeric string).
-//     Non-2xx anywhere → throw (fail loud, no silent success).
-//
-//   src/routes/event/[id]/+page.svelte — inline editing on the header:
-//     • event-edit-btn-{field} — a pencil <button> per editable field (the
-//       five above), rendered ONLY when manageRightsFrom(detail.ownerIds,
-//       detail.editorIds, personId) === 'editor' — the SAME event-rights rule
-//       the tally gate runs (ownership subsumes editing; rights props live in
-//       the private bucket, so a plain member reads NO rights lists at all).
-//       An EMPTY optional field (e.g. no description) still gets its button
-//       for a rights-holder — otherwise the field could never be SET inline.
-//     • tap → event-edit-input-{field}, seeded with the CURRENT value:
-//         name / location        → <input type="text">
-//         start_datetime         → #207 rule 5: a composite under this same
-//                                  testid (on a wrapper) — a native
-//                                  <input type="date"> at -date plus the
-//                                  TimeSelect -hour/-minute selects (24h
-//                                  default, 5-min steps by construction; -ampm
-//                                  only in AM/PM preference mode). Seeded with
-//                                  the TALLINN wall-clock value the header
-//                                  itself displays (never raw UTC — the user
-//                                  edits the time she sees). Commit = focus
-//                                  leaving the WHOLE composite (focusout with
-//                                  an outside/absent relatedTarget); moving
-//                                  between the composite's own parts is not a
-//                                  commit. A PARTIAL composite (date without
-//                                  time or vice versa) reads as EMPTY — it
-//                                  must never produce a malformed string.
-//         duration_minutes       → #243: the number input is GONE. The field
-//                                  keeps its duration_minutes IDENTITY (testids,
-//                                  wire, eventFieldEdit.ts all unchanged) but
-//                                  its EDITOR is now an END composite — the
-//                                  same rule-5 shape as start_datetime, under
-//                                  this same testid on a wrapper: -date native
-//                                  input + TimeSelect -hour/-minute. SEEDED
-//                                  with start + duration projected to Tallinn
-//                                  wall clock (Done-when 6: existing events
-//                                  with only a duration derive their end — no
-//                                  migration, no backfill). Commit derives
-//                                  minutes = (utc(end) − utc(start)), each
-//                                  endpoint converted INDEPENDENTLY (DST-safe:
-//                                  real elapsed minutes, never wall-clock
-//                                  arithmetic), and writes duration_minutes
-//                                  ONLY — an end edit never touches
-//                                  start_datetime, and NO end prop of any
-//                                  spelling ever reaches the wire (schema
-//                                  settled on the issue: event =
-//                                  start_datetime + duration_minutes). An end
-//                                  at or before the start writes NOTHING and
-//                                  surfaces event_end_before_start in the
-//                                  existing event-edit-error-duration_minutes
-//                                  slot; a cleared end cancels (a literal 0
-//                                  would mask a series-inherited duration).
-//         description            → <textarea> (multiline)
-//       Every edit input carries its OWN accessible name (aria-label, the same
-//       per-field key the pencil uses): the pencil <button> is UNMOUNTED the
-//       moment the input appears, so its label cannot name the textbox.
-//     • blur confirms; Enter ALSO confirms on single-line inputs (but NOT in
-//       the textarea, where Enter inserts a newline). Confirm = optimistic
-//       local value (the header updates immediately) + updateEventField fired
-//       at once; on success the optimistic value simply stands (the written
-//       value IS authoritative — no forced re-read required).
-//       start_datetime converts the Tallinn wall-clock input back to the UTC
-//       instant before writing.
-//     • Escape cancels: edit mode closes, the original value is restored,
-//       NOTHING is written. A blur WITHOUT a change cancels identically (#104:
-//       "Cancel: Escape or blur without change") — critical because name,
-//       duration_minutes, location and description may be INHERITED from the
-//       parent event_series, and writing the displayed value back would
-//       materialise the series default as a permanent event-level override.
-//       A blur on an empty/unparseable start_datetime, or on a cleared or
-//       negative duration, likewise writes nothing (and must never throw).
-//     • a FAILED write reverts the display to the pre-edit value and shows an
-//       inline error, event-edit-error-{field}; a later successful edit of
-//       the same field clears it.
-//     • NON-editable header surfaces get no pencil at all: event_type,
-//       capacity, conductors (conductor resolution is #77's season/event
-//       merge — not a single prop to inline-edit).
-//
-// Assertions match on DATA (values, wire bodies, testids), never translated
-// sentences — same posture as page.spec.ts (full-fallback paraglide proxy).
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — the page derives read-only
-// state from the clock for past events, and this suite must not start behaving
-// differently when real time passes the fixture. Only Date is faked; timers
-// stay real so waitFor polls normally. (Same hygiene as page.spec.ts.)
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -158,7 +40,6 @@ import {
 	optionValues,
 	readDateTime
 } from '$lib/testing/timeControls';
-// The TE.4 contract module — does not exist yet; GREEN creates it.
 import { updateEventField } from '$lib/events/eventFieldEdit';
 import { authStore } from '$lib/auth/session';
 import {
@@ -169,9 +50,6 @@ import {
 
 const cfg = { db: 'sampledb', token: 'jwt' };
 
-// UI field keys — these name the page's data-testids (event-edit-btn-<field>),
-// which are app-internal and did NOT move with #420's wire rename (the event's
-// name rides the wire as `event_name`; the UI slot is still called 'name').
 const EDITABLE_FIELDS = [
 	'name',
 	'start_datetime',
@@ -183,11 +61,6 @@ const EDITABLE_FIELDS = [
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
-
-// ── Entu fixtures ─────────────────────────────────────────────────────────────
-// Same event as page.spec.ts (2026-09-01T16:00Z = 19:00 Europe/Tallinn, EEST
-// UTC+3), with per-value `_id`s on every editable prop — the edit lookup needs
-// value ids to DELETE (replace semantics).
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -208,12 +81,10 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-/** The rights-holder's view: the viewer IS in the event's `_editor` list. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
 
-/** Ownership subsumes editing — `_owner` without `_editor` must gate open too. */
 function ownerOnlyEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _owner: [{ reference: 'p-viewer' }], ...over });
 }
@@ -244,23 +115,10 @@ const PROFILES: Record<string, unknown[]> = {
 };
 
 type EditWireOpts = {
-	/** How many edit POSTs against entity/ev1 fail with a 500 before the wire
-	 *  recovers. Default 0 (all succeed). */
 	failEditPosts?: number;
-	/** Hold every edit POST open until release() — the optimistic-window probe. */
 	holdEditPost?: boolean;
 };
 
-/**
- * The TE.4 wire: the same liberal read stub page.spec.ts uses (serves the
- * fixtures whether the impl reads by id or by query), PLUS the edit write
- * choreography — property DELETEs succeed, and a POST against entity/ev1 is
- * APPLIED to the in-memory event (each posted prop replaces that field
- * wholesale, which is exactly what delete-then-post semantics produce). So a
- * GREEN that chooses to re-read after a write sees the NEW value, and one that
- * keeps the optimistic value locally passes identically: the tests pin the
- * CONTRACT, not one reconcile choreography.
- */
 function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
 	const event: Record<string, unknown> = eventOver ?? eventEntity();
 	const season = seasonEntity();
@@ -338,7 +196,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-/** Every write POST the page issued against the event entity. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
 		(c) =>
@@ -351,7 +208,6 @@ function postedProps(call: unknown[]): Array<Record<string, unknown>> {
 	return JSON.parse(String((call[1] as RequestInit).body)) as Array<Record<string, unknown>>;
 }
 
-/** Tap the field's pencil and hand back the input it becomes. */
 async function beginEdit(
 	container: HTMLElement,
 	field: string
@@ -370,12 +226,6 @@ async function beginEdit(
 	});
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// data layer: updateEventField — replace-semantics single-field write
-// ═════════════════════════════════════════════════════════════════════════════
-
-/** A minimal wire for the data-layer tests: ONE entity, one field's existing
- *  value ids, and switches to fail each leg of the choreography. */
 function fieldWireStub(
 	field: string,
 	existing: Array<Record<string, unknown>>,
@@ -411,14 +261,10 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 			method: (c[1] as RequestInit | undefined)?.method ?? 'GET',
 			body: (c[1] as RequestInit | undefined)?.body
 		}));
-		// The lookup asked for the field it is about to replace.
 		const lookup = calls.find((c) => c.method === 'GET' && c.url.includes('/entity/ev1'));
 		expect(lookup, 'no lookup GET of the event').not.toBeUndefined();
 		expect(lookup!.url).toContain('props=');
 		expect(lookup!.url).toContain('event_name');
-		// #264 — the old value is replaced IN the POST (its `_id` rides the
-		// entry; setEntity soft-deletes it in the same call). A separate DELETE
-		// would reopen the half-landing window the atomic overwrite closed.
 		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/ev1'));
 		expect(postIdx, 'no POST of the new value').toBeGreaterThan(-1);
 		expect(JSON.parse(String(calls[postIdx].body))).toEqual([
@@ -439,11 +285,9 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 		const deletedIds = fetchImpl.mock.calls
 			.filter((c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'DELETE')
 			.map((c) => String(c[0]));
-		// val-loc-1 was replaced by the overwrite itself; only the phantom dies.
 		expect(deletedIds.some((u) => u.includes('val-loc-1'))).toBe(false);
 		expect(deletedIds.some((u) => u.includes('val-loc-2'))).toBe(true);
 		expect(deletedIds).toHaveLength(1);
-		// …and strictly after the POST — the sweep can never precede the write.
 		expect(methods.indexOf('POST')).toBeLessThan(methods.indexOf('DELETE'));
 	});
 
@@ -519,11 +363,6 @@ describe('updateEventField — atomic overwrite via replaceEntityProperty (#264)
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: edit buttons are rights-gated (integration — the real route, real data
-// layer, only the wire stubbed)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — edit buttons, gated on the event-rights rule (owner OR editor)', () => {
 	it('an _editor sees a pencil on ALL five editable header fields — and on nothing else', async () => {
 		const { container } = renderEditPage(editorEvent());
@@ -539,9 +378,6 @@ describe('/event/[id] — edit buttons, gated on the event-rights rule (owner OR
 			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
 			expect(btn.tagName, `event-edit-btn-${field} must be a real button`).toBe('BUTTON');
 		}
-		// EXACTLY the editable set, no stray pencil on any non-editable surface —
-		// #245 adds event_type as the sixth (its own contract lives in
-		// page.event-type-edit.spec.ts).
 		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(6);
 	});
 
@@ -570,15 +406,9 @@ describe('/event/[id] — edit buttons, gated on the event-rights rule (owner OR
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
 		});
-		// #245 — five original fields + event_type.
 		expect(container.querySelectorAll('[data-testid^="event-edit-btn-"]')).toHaveLength(6);
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// page: tap → the field becomes the right kind of input, seeded with the
-// current value
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('/event/[id] — tap edit → input, per field type', () => {
 	it('name → a text input seeded with the current name', async () => {
@@ -592,8 +422,6 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 	it('start_datetime → #207 composite (date input + 24h hour/minute selects) seeded with the TALLINN wall-clock the header displays (19:00, not 16:00 UTC)', async () => {
 		const { container } = renderEditPage(editorEvent());
 		const wrapper = await beginEdit(container, 'start_datetime');
-		// #207 rule 5 — the surface testid now sits on a WRAPPER, not a native
-		// datetime-local input (whose time half renders per browser locale).
 		expect(wrapper.tagName).not.toBe('INPUT');
 		const date = container.querySelector(
 			'[data-testid="event-edit-input-start_datetime-date"]'
@@ -615,16 +443,12 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 			container.querySelector('[data-testid="event-edit-input-start_datetime-ampm"]'),
 			'24h is the default mode'
 		).toBeNull();
-		// 2026-09-01T16:00Z = 19:00 Europe/Tallinn (EEST). The user edits the time
-		// she sees on this very page — never the raw UTC instant.
 		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:00');
 	});
 
 	it('duration_minutes → #243: an END composite seeded with start + duration as Tallinn wall clock (19:00 + 90 min → 20:30, Done-when 6)', async () => {
 		const { container } = renderEditPage(editorEvent());
 		const wrapper = await beginEdit(container, 'duration_minutes');
-		// The editor is the SAME composite shape as start_datetime — never a
-		// number input, never a hand-rolled second time control (Done-when 7).
 		expect(wrapper.tagName).not.toBe('INPUT');
 		const date = container.querySelector(
 			'[data-testid="event-edit-input-duration_minutes-date"]'
@@ -645,7 +469,6 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 			container.querySelector('[data-testid="event-edit-input-duration_minutes-ampm"]'),
 			'24h is the default mode'
 		).toBeNull();
-		// 2026-09-01T16:00Z (19:00 EEST) + 90 min → the END the header displays.
 		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('2026-09-01T20:30');
 	});
 
@@ -657,9 +480,6 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 			})
 		);
 		await beginEdit(container, 'duration_minutes');
-		// 1800 REAL minutes from 2026-10-24T07:00Z is 2026-10-25T13:00Z, which the
-		// fallen-back clock (EET, UTC+2) reads as 15:00 — wall-clock arithmetic
-		// (10:00 + 30h = 16:00) would show the viewer an end an hour late.
 		expect(readDateTime(container, 'event-edit-input-duration_minutes')).toBe('2026-10-25T15:00');
 	});
 
@@ -675,18 +495,12 @@ describe('/event/[id] — tap edit → input, per field type', () => {
 	});
 
 	it('an event with NO description still offers the pencil to a rights-holder — an empty field must be settable inline', async () => {
-		// No description on the event AND none inherited from the series would hide
-		// the display element entirely; the EDIT affordance must not vanish with it.
 		const { container } = renderEditPage(editorEvent({ description: undefined }));
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-description"]')).not.toBeNull();
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// page: confirm → immediate optimistic write; Escape cancels; failure reverts
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 	it('blur confirms: the header shows the new name IMMEDIATELY (write still in flight), and keeps it once the write lands', async () => {
@@ -697,27 +511,22 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		await fireEvent.input(input, { target: { value: 'Autumn Sing' } });
 		await fireEvent.blur(input);
 
-		// OPTIMISTIC: the POST is held open, yet the header already shows the new
-		// value — and no error surface, this is not a failure.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 				'Autumn Sing'
 			);
 		});
 		expect(container.querySelector('[data-testid="event-edit-error-name"]')).toBeNull();
-		// …and the write really is in flight (per-tap immediate, no "save" step).
 		await waitFor(() => {
 			expect(editPosts(fetchStub).length).toBeGreaterThan(0);
 		});
 
-		// RECONCILE: the write settles; the value stands, still no error.
 		release();
 		await new Promise((r) => setTimeout(r, 30));
 		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 			'Autumn Sing'
 		);
 		expect(container.querySelector('[data-testid="event-edit-error-name"]')).toBeNull();
-		// Edit mode closed — back to the display, not a lingering input.
 		expect(container.querySelector('[data-testid="event-edit-input-name"]')).toBeNull();
 	});
 
@@ -741,7 +550,6 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 		await fireEvent.keyDown(textarea, { key: 'Enter' });
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
-		// Still editing.
 		expect(container.querySelector('[data-testid="event-edit-input-description"]')).not.toBeNull();
 	});
 
@@ -782,7 +590,6 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 	it('duration_minutes: #243 — committing an END of 21:00 writes a NUMBER (120, not "120"), duration_minutes ONLY, and the duration line updates', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'duration_minutes');
-		// 19:00 start, end moved 20:30 → 21:00 the same day = 120 minutes.
 		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-01', '21:00');
 		await commitDateTime(container, 'event-edit-input-duration_minutes');
 		await waitFor(() => {
@@ -797,9 +604,6 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 				container.querySelector('[data-testid="event-detail-duration"]')?.textContent
 			).toContain('120');
 		});
-		// WIRE DISCIPLINE (full shape of everything written): editing the end
-		// writes duration_minutes and NOTHING else — start_datetime untouched, no
-		// end prop of any spelling invented.
 		await new Promise((r) => setTimeout(r, 30));
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
 		expect(allProps).toEqual([{ _id: 'val-dur-1', type: 'duration_minutes', number: 120 }]);
@@ -844,8 +648,6 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 	it('start_datetime: the Tallinn wall-clock input converts back to the UTC INSTANT on the wire, and the time line follows', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'start_datetime');
-		// The user picks 20:00 the next day, Tallinn time (EEST, UTC+3 in
-		// September) — the instant is therefore 17:00Z.
 		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-09-02', '20:00');
 		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await waitFor(() => {
@@ -854,12 +656,10 @@ describe('/event/[id] — confirm writes optimistically and reconciles', () => {
 			const props = postedProps(posts[0]);
 			expect(props).toHaveLength(1);
 			expect(props[0].type).toBe('start_datetime');
-			// Pin the INSTANT, not one serialisation ('Z' vs '+03:00' both name it).
 			expect(new Date(String(props[0].datetime)).getTime()).toBe(
 				new Date('2026-09-02T17:00:00.000Z').getTime()
 			);
 		});
-		// The header re-renders off the new value: 20:00 start, +90 min → 21:30.
 		await waitFor(() => {
 			const time = container.querySelector('[data-testid="event-detail-time"]')?.textContent ?? '';
 			expect(time).toContain('20:00');
@@ -881,9 +681,7 @@ describe('/event/[id] — Escape cancels the edit', () => {
 		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 			'Tuesday Rehearsal'
 		);
-		// The pencil is back — the field is editable again.
 		expect(container.querySelector('[data-testid="event-edit-btn-name"]')).not.toBeNull();
-		// Let any write Escape COULD have started settle before asserting none did.
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
 	});
@@ -891,9 +689,6 @@ describe('/event/[id] — Escape cancels the edit', () => {
 	it('#207 review F3 — Escape from INSIDE the start_datetime composite cancels: the gesture lives on the real controls, not on the role="group" wrapper', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'start_datetime');
-		// Change the time, then Escape from the minute <select> itself — a
-		// non-interactive role="group" must not own key listeners, so every
-		// control inside carries the gesture and the event originates there.
 		await fillTime(container, 'event-edit-input-start_datetime', '20:00');
 		const minute = container.querySelector(
 			'[data-testid="event-edit-input-start_datetime-minute"]'
@@ -927,10 +722,6 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 	});
 
 	it('an INHERITED field is not materialised as an event-level override by an idle pencil tap', async () => {
-		// No own `location`; the displayed 'Church Hall' comes from the parent
-		// event_series' `default_location`. Writing it back would sever
-		// inheritance — a later change to the series default would never reach
-		// this event again.
 		const { container, fetchStub } = renderEditPage(editorEvent({ location: undefined }));
 		await waitFor(() => {
 			expect(
@@ -956,8 +747,6 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 	});
 
 	it('#207 legacy minute: a stored :03 start renders with 03 as a selected EXTRA option — never silently snapped to the 5-minute grid', async () => {
-		// 2026-09-01T16:03Z = 19:03 Europe/Tallinn — pre-#207 data was written
-		// at 1-minute resolution and must keep rendering exactly.
 		const { container, fetchStub } = renderEditPage(
 			editorEvent({
 				start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:03:00.000Z' }]
@@ -971,8 +760,6 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 		expect(minute.value).toBe('03');
 		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('2026-09-01T19:03');
 
-		// Re-saving WITHOUT a change writes nothing — display-only, the value
-		// is never rewritten by merely opening the editor.
 		await commitDateTime(container, 'event-edit-input-start_datetime');
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
@@ -991,8 +778,6 @@ describe('/event/[id] — a blur WITHOUT a change cancels, exactly like Escape',
 			expect(editPosts(fetchStub).length).toBeGreaterThan(0);
 		});
 		await new Promise((r) => setTimeout(r, 30));
-		// FULL shape of everything written: the name (wire slot event_name, #420),
-		// and ONLY the name.
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
 		expect(allProps).toEqual([
 			{ _id: 'val-name-1', type: 'event_name', string: 'Renamed rehearsal' }
@@ -1006,8 +791,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		await beginEdit(container, 'start_datetime');
 		expect(readDateTime(container, 'event-edit-input-start_datetime')).toBe('');
 		await commitDateTime(container, 'event-edit-input-start_datetime');
-		// The editor closed (an uncaught RangeError out of the blur handler would
-		// strand the input open) and nothing was written.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="event-edit-input-start_datetime"]'),
@@ -1037,8 +820,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 	it('CLEARING an existing datetime and blurring writes nothing (there is no "unset the start" gesture here)', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'start_datetime');
-		// #207 — clearing the DATE part leaves a PARTIAL composite (time still
-		// selected): it must read as empty and never emit a malformed string.
 		await fireEvent.input(
 			container.querySelector('[data-testid="event-edit-input-start_datetime-date"]')!,
 			{ target: { value: '' } }
@@ -1050,7 +831,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		});
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
-		// The original start still stands.
 		expect(container.querySelector('[data-testid="event-detail-time"]')?.textContent).toContain(
 			'19:00'
 		);
@@ -1112,9 +892,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 	it('#243 — an end AT the start writes nothing and says WHY: event_end_before_start in the existing error slot (fail loudly, not a silent no-op)', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'duration_minutes');
-		// End == start (19:00 on the same day) — the rule is end <= start on
-		// DATETIMES; the date-flavoured copy of season/series/convert would be
-		// wrong here, hence the one new shared key.
 		await fillDateTime(container, 'event-edit-input-duration_minutes', '2026-09-01', '19:00');
 		await commitDateTime(container, 'event-edit-input-duration_minutes');
 		await waitFor(() => {
@@ -1129,7 +906,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		).toBe('[event_end_before_start]');
 		await new Promise((r) => setTimeout(r, 30));
 		expect(editPosts(fetchStub)).toEqual([]);
-		// The display never budged.
 		expect(
 			container.querySelector('[data-testid="event-detail-duration"]')?.textContent
 		).toContain('90');
@@ -1147,7 +923,6 @@ describe('/event/[id] — degenerate drafts cancel instead of throwing or writin
 		});
 		expect(editPosts(fetchStub)).toEqual([]);
 
-		// Reopening clears the stale refusal — the next commit re-decides.
 		await beginEdit(container, 'duration_minutes');
 		expect(
 			container.querySelector('[data-testid="event-edit-error-duration_minutes"]')
@@ -1175,9 +950,7 @@ describe('/event/[id] — every edit input carries its own accessible name', () 
 		for (const field of EDITABLE_FIELDS) {
 			const { container } = renderEditPage(editorEvent());
 			const input = await beginEdit(container, field);
-			// The pencil that named the affordance is gone…
 			expect(container.querySelector(`[data-testid="event-edit-btn-${field}"]`)).toBeNull();
-			// …so the textbox has to name itself.
 			const label = input.getAttribute('aria-label') ?? input.getAttribute('aria-labelledby');
 			expect(label, `event-edit-input-${field} has no accessible name`).toBeTruthy();
 			expect(label).toContain(`event_edit_${field}_aria_label`);
@@ -1192,9 +965,6 @@ describe('/event/[id] — every edit input carries its own accessible name', () 
 		});
 		for (const field of EDITABLE_FIELDS) {
 			const btn = container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!;
-			// #157 — since the button wraps the value, the label is an sr-only CHILD:
-			// an `aria-label` here would override name-from-contents and the value
-			// would never be announced.
 			expect(btn.getAttribute('aria-label')).toBeNull();
 			expect(btn.querySelector('.sr-only')?.textContent).toContain(
 				`event_edit_${field}_aria_label`
@@ -1219,7 +989,6 @@ describe('/event/[id] — a failed write reverts with an inline error', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-error-name"]')).not.toBeNull();
 		});
-		// REVERTED — the optimistic value must not stand as if it were saved.
 		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 			'Tuesday Rehearsal'
 		);
@@ -1230,14 +999,12 @@ describe('/event/[id] — a failed write reverts with an inline error', () => {
 
 	it('a later SUCCESSFUL edit of the same field clears the error and lands the value', async () => {
 		const { container } = renderEditPage(editorEvent(), { failEditPosts: 1 });
-		// First attempt fails…
 		const first = await beginEdit(container, 'name');
 		await fireEvent.input(first, { target: { value: 'Autumn Sing' } });
 		await fireEvent.blur(first);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-error-name"]')).not.toBeNull();
 		});
-		// …the retry succeeds (the wire recovered).
 		const second = await beginEdit(container, 'name');
 		await fireEvent.input(second, { target: { value: 'Autumn Sing' } });
 		await fireEvent.blur(second);
@@ -1252,10 +1019,6 @@ describe('/event/[id] — a failed write reverts with an inline error', () => {
 
 describe('/event/[id] — a field with a write still in flight cannot be edited again', () => {
 	it('the pencil is disabled while its write is open, and a second edit of the same field reaches the wire NOT AT ALL', async () => {
-		// Why this matters (review F1): `updateEventField` is GET-then-POST-then-
-		// DELETE. Two overlapping writes on one field both GET the same existing
-		// value id, both POST (leaving TWO values on the entity), and the losing
-		// DELETE 404s — an inline error over a value the server accepted.
 		const { container, fetchStub, release } = renderEditPage(editorEvent(), {
 			holdEditPost: true
 		});
@@ -1263,8 +1026,6 @@ describe('/event/[id] — a field with a write still in flight cannot be edited 
 		await fireEvent.input(input, { target: { value: 'Autumn Sing' } });
 		await fireEvent.blur(input);
 
-		// The write is open (the stub holds the POST) and the pencil is back —
-		// disabled, because this field is mid-write.
 		await waitFor(() => {
 			expect(editPosts(fetchStub).length).toBe(1);
 		});
@@ -1275,15 +1036,11 @@ describe('/event/[id] — a field with a write still in flight cannot be edited 
 		});
 		expect(pencil.disabled, 'the pencil must be disabled while its write is in flight').toBe(true);
 
-		// …and a tap that beats the re-render is refused too: no second input, so
-		// no second confirm, so no second write.
 		await fireEvent.click(pencil);
 		await new Promise((r) => setTimeout(r, 30));
 		expect(container.querySelector('[data-testid="event-edit-input-name"]')).toBeNull();
 		expect(editPosts(fetchStub).length, 'exactly ONE write per confirm').toBe(1);
 
-		// Once it settles the field is editable again — this is a per-write gate,
-		// not a one-shot lockout.
 		release();
 		await waitFor(() => {
 			expect(
@@ -1299,9 +1056,6 @@ describe('/event/[id] — a field with a write still in flight cannot be edited 
 
 describe('/event/[id] — clearing a text field cancels (there is no "unset" gesture in TE.4)', () => {
 	it('an INHERITED description cleared to empty writes nothing — an empty string would MASK the series default, not restore it', async () => {
-		// No own `description`; the displayed text comes from the parent series'
-		// `default_description`. `eventDetail` reads the event's own value with
-		// `??`, and '' is not nullish — writing it would sever inheritance for good.
 		const { container, fetchStub } = renderEditPage(editorEvent({ description: undefined }));
 		await waitFor(() => {
 			expect(
@@ -1336,9 +1090,6 @@ describe('/event/[id] — clearing a text field cancels (there is no "unset" ges
 
 describe('/event/[id] — DST transition days convert to the RIGHT instant', () => {
 	it('spring forward (29 Mar): 01:30 Tallinn is 23:30Z the day before, not 22:30Z', async () => {
-		// The naive single-pass conversion reads the offset at the wall clock
-		// re-read AS UTC — which on a transition day sits on the WRONG side of the
-		// changeover, writing an instant an hour off from what the editor picked.
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		await beginEdit(container, 'start_datetime');
 		await fillDateTime(container, 'event-edit-input-start_datetime', '2026-03-29', '01:30');
@@ -1352,7 +1103,6 @@ describe('/event/[id] — DST transition days convert to the RIGHT instant', () 
 				new Date('2026-03-28T23:30:00.000Z').getTime()
 			);
 		});
-		// …and the header renders back exactly the wall clock she typed.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-time"]')?.textContent).toContain(
 				'01:30'
@@ -1381,13 +1131,7 @@ describe('/event/[id] — DST transition days convert to the RIGHT instant', () 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: non-editable fields + the explicit end-to-end integration pin
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — non-editable header surfaces get no pencil', () => {
-	// #245 supersedes the original event_type pin here: the type badge is now
-	// the SIXTH editable field (contract in page.event-type-edit.spec.ts).
 	it('capacity and the conductor line have NO edit buttons, even for an _editor', async () => {
 		const { container } = renderEditPage(editorEvent());
 		await waitFor(() => {
@@ -1395,7 +1139,6 @@ describe('/event/[id] — non-editable header surfaces get no pencil', () => {
 		});
 		expect(container.querySelector('[data-testid="event-edit-btn-capacity"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-edit-btn-conductor"]')).toBeNull();
-		// The exhaustive form of the same claim: only the six editable fields.
 		const testids = [...container.querySelectorAll('[data-testid^="event-edit-btn-"]')].map((el) =>
 			el.getAttribute('data-testid')
 		);
@@ -1414,8 +1157,6 @@ describe('/event/[id] — integration: the edit surface is wired to the REAL pag
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			// The db path proves the page threaded the SELECTED collective's cfg into
-			// updateEventField — not a hardcoded db, not a bypassed data layer.
 			expect(String(posts[0][0])).toContain('/sampledb/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
 			expect(postedProps(posts[0])).toEqual([

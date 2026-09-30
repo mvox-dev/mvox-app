@@ -1,33 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (event-page integration) — inline event editing is
-// gated while offline, on the REAL /event/[id] page (harness:
-// page.event-editing.spec.ts — the wire stub applies edit POSTs; only global
-// fetch is stubbed).
-//
-// CONTRACT: an event `_editor` sees the six event-edit-btn-* pencils. With the
-// signal ($lib/net/online) offline —
-//   • every event-edit-btn-* is `disabled`;
-//   • ONE visible sentence [data-testid="event-edit-write-unavailable"] =
-//     m.write_unavailable_no_signal() is on the page (the header's edit area);
-//   • tapping a pencil opens no input and issues no fetch (nothing queued);
-//   • an edit OPEN when the signal drops cannot commit: blur writes nothing
-//     (no POST reaches the wire);
-//   • back online: pencils enabled, sentence gone, an edit commits again.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — the page derives read-only
-// state from the clock for past events, and this suite must not start behaving
-// differently when real time passes the fixture. Only Date is faked; timers
-// stay real so waitFor polls normally. (Same hygiene as page.spec.ts.)
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -68,11 +50,6 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-// ── Entu fixtures ─────────────────────────────────────────────────────────────
-// Same event as page.spec.ts (2026-09-01T16:00Z = 19:00 Europe/Tallinn, EEST
-// UTC+3), with per-value `_id`s on every editable prop — the edit lookup needs
-// value ids to DELETE (replace semantics).
-
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
@@ -92,7 +69,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-/** The rights-holder's view: the viewer IS in the event's `_editor` list. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
@@ -123,23 +99,10 @@ const PROFILES: Record<string, unknown[]> = {
 };
 
 type EditWireOpts = {
-	/** How many edit POSTs against entity/ev1 fail with a 500 before the wire
-	 *  recovers. Default 0 (all succeed). */
 	failEditPosts?: number;
-	/** Hold every edit POST open until release() — the optimistic-window probe. */
 	holdEditPost?: boolean;
 };
 
-/**
- * The TE.4 wire: the same liberal read stub page.spec.ts uses (serves the
- * fixtures whether the impl reads by id or by query), PLUS the edit write
- * choreography — property DELETEs succeed, and a POST against entity/ev1 is
- * APPLIED to the in-memory event (each posted prop replaces that field
- * wholesale, which is exactly what delete-then-post semantics produce). So a
- * GREEN that chooses to re-read after a write sees the NEW value, and one that
- * keeps the optimistic value locally passes identically: the tests pin the
- * CONTRACT, not one reconcile choreography.
- */
 function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
 	const event: Record<string, unknown> = eventOver ?? eventEntity();
 	const season = seasonEntity();
@@ -217,7 +180,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-/** Every write POST the page issued against the event entity. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
 		(c) =>
@@ -225,7 +187,6 @@ function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 			String(c[0]).includes('/entity/ev1')
 	);
 }
-
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -290,11 +251,6 @@ describe('/event/[id] — inline editing while offline (#434 slice 6)', () => {
 		expect(editPosts(fetchStub)).toEqual([]);
 	});
 
-	// ── review F2 ──────────────────────────────────────────────────────────────
-	// The first cut delegated the offline confirm to `cancelFieldEdit`, so a
-	// signal drop mid-edit closed the editor and silently discarded the typed
-	// text. An unchanged draft loses nothing when it closes; a changed one loses
-	// the editor's work, and a blur is not a "discard" gesture.
 	it('a signal drop mid-edit KEEPS the typed text — the draft is not discarded', async () => {
 		const { container, fetchStub } = await renderEditable();
 		await fireEvent.click(container.querySelector('[data-testid="event-edit-btn-name"]')!);
@@ -313,8 +269,6 @@ describe('/event/[id] — inline editing while offline (#434 slice 6)', () => {
 		expect(still, 'the editor stays open on her text').not.toBeNull();
 		expect(still!.value).toBe('Autumn Sing');
 		expect(editPosts(fetchStub)).toEqual([]);
-		// ...and the refusal is SAID, not left to the sentence that was already
-		// on screen before she typed.
 		expectVisibleReason(container, 'event-edit-held-offline', '[write_held_no_signal]');
 	});
 
@@ -332,7 +286,6 @@ describe('/event/[id] — inline editing while offline (#434 slice 6)', () => {
 		await settle();
 		expect(editPosts(fetchStub)).toEqual([]);
 
-		// The signal returns. NOTHING saves by itself — no queue, no retry.
 		await goOnline();
 		await settle();
 		expect(editPosts(fetchStub)).toEqual([]);
@@ -367,4 +320,4 @@ describe('/event/[id] — inline editing while offline (#434 slice 6)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)

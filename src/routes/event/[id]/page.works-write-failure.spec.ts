@@ -1,79 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #324 RED — repertoire/programme writes on the EVENT DETAIL page: failure
-// reaches the user (and success is distinguishable from silence).
-//
-// The defect (issue #324, delta-verified in research-323-328-delta.json): this
-// page's `repertoireQueue` (createRepertoireWriteQueue consumer) applies every
-// write kind — status change, pin edition, remove, move, add work, add
-// program item — OPTIMISTICALLY, and on rejection its `revert()` does only
-// `console.error` + a silent `refreshWorks()`. The rolled-back row snaps back
-// (or waits for the refetch) with nothing said to the person who tapped.
-//
-// INTEGRATION posture: the REAL +page.svelte with the REAL data layer
-// (workRows.ts / repertoireData / repertoireActions) running — only the global
-// fetch is stubbed at the wire, same harness family as page.schedule.spec.ts.
-// This is what forces GREEN to wire the signals into the route, not into an
-// isolated component.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   FAILURE — the agenda page's own #91 precedent PROPAGATED to this page
-//   (src/routes/+page.svelte:8197-8201 is the in-file reference shape; that
-//   agenda-side wiring itself stays BYTE-UNTOUCHED — it is already correct):
-//     • [data-testid="repertoire-manage-error"], role="alert", rendering
-//       m.repertoire_manage_error() (the existing four-locale key — same text
-//       family the agenda surface uses, truthfully naming that the change was
-//       not saved), INSIDE [data-testid="event-detail-works"].
-//     • Absent until a write fails. Appears for EVERY rejected write kind on
-//       both surfaces this page's queue serves: status change / pin edition /
-//       remove / add work (repertoire context), move / remove / add to
-//       programme (programme context).
-//     • The on-screen value after the failure is what the SERVER holds — the
-//       existing rollback+refetch semantics are pinned by VALUE (row status,
-//       pinned edition, row presence, programme order), not by mechanism.
-//     • A FRESH attempt clears the previous failure (the agenda precedent:
-//       trying again retires the old alert).
-//
-//   SAVED — the queue's reconcile is silent today; the minimum honest saved
-//   cue per the #267 shape (profile/+page.svelte:1005-1012 precedent):
-//     • [data-testid="repertoire-manage-status"], role="status",
-//       aria-live="polite", MOUNTED as soon as the works section renders
-//       (a live region announces only CHANGES — inserting it already
-//       populated announces nothing, the #197/#298 rule), textually blank
-//       until a write settles.
-//     • On a successful settle it carries m.repertoire_manage_saved() — a NEW
-//       key, all four locales (en/et/lv/uk), pinned below.
-//     • Never a stale "saved" beside a failure alert: once a later attempt
-//       fails, the saved text is gone.
-//
-//   BOUNDARY (stated per the task pins): #324 owns the saved/failure signals
-//   of the two REPERTOIRE queues — this page's `repertoireQueue` and the
-//   season panel's `panelQueue` (page.season-repertoire-write-failure.spec.ts,
-//   this file's sibling). The page's OTHER two createRepertoireWriteQueue
-//   instances — `scheduleQueue` and `editWriteQueue` — already surface their
-//   failures and belong to #328's saved-cue trio; nothing here touches them.
-//
-//   PRIMITIVE (stated per the task pins): the wiring is PER CALL SITE. The
-//   queue primitive's callback contract (repertoireActions.ts
-//   RepertoireWriteQueueCallbacks: setPending/reconcile/revert) is NOT
-//   widened — the alert/status state lives in the page, set inside the
-//   existing revert()/reconcile() callbacks exactly as the agenda's
-//   `manageError` does. repertoireActions.spec.ts stays green byte-for-byte;
-//   #328 shares the same unwidened interface.
-//
-//   RepertoireElement.svelte is NOT touched: no `failed` prop exists (grep:
-//   zero occurrences) and none is required — the alert is page-authored, the
-//   agenda precedent's own placement. (#321's pickableWorksPartial/
-//   pickableEditionsPartial and #329's scoped-edition props are adjacent in
-//   that component, not overlapping.)
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Lenient message mock — every key renders `[key]`; assertions pin KEYS, the
-// copy itself is Comenius's (locale-file pins below).
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get:
@@ -107,17 +38,12 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-// ── fixtures ─────────────────────────────────────────────────────────────────
-
-/** ISO instant `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
 }
 
 type EntityRaw = Record<string, unknown>;
 
-/** A FUTURE event (works section, no attendance section). The viewer holds
- *  `_editor` on the event — the programme-management gate. */
 function eventEntity(): EntityRaw {
 	return {
 		_id: 'ev1',
@@ -132,7 +58,6 @@ function eventEntity(): EntityRaw {
 	};
 }
 
-/** The viewer holds `_editor` on the SEASON — the repertoire-management gate. */
 function seasonEntity(): EntityRaw {
 	return {
 		_id: 'season1',
@@ -158,8 +83,6 @@ const EDITIONS: EntityRaw[] = [
 	{ _id: 'ed-3', name: [{ string: 'Carus' }], _parent: [{ reference: 'w-2', entity_type: 'work' }] }
 ];
 
-/** Season repertoire (repertoire context — the event has NO program_items):
- *  ri-1 active + pinned to ed-1, ri-2 learning + unpinned. w-3 stays pickable. */
 function repertoireItemsFixture(): EntityRaw[] {
 	return [
 		{
@@ -178,8 +101,6 @@ function repertoireItemsFixture(): EntityRaw[] {
 	];
 }
 
-/** Tonight's programme (programme context): ed-1 (w-1) then ed-3 (w-2).
- *  ed-2 stays pickable for "Add to programme". */
 function programItemsFixture(): EntityRaw[] {
 	return [
 		{
@@ -197,10 +118,6 @@ function programItemsFixture(): EntityRaw[] {
 	];
 }
 
-/** #324 review F1 — the OTHER collective's answer for the same event id: a
- *  different name (so "the switch happened" is readable off the page) and a
- *  single, different repertoire row (so the works section it renders is
- *  unmistakably not the one the failure was raised over). */
 function credeEventEntity(): EntityRaw {
 	return { ...eventEntity(), event_name: [{ _id: 'cval-name-1', string: 'Crede Rehearsal' }] };
 }
@@ -213,20 +130,12 @@ const CREDE_REPERTOIRE: EntityRaw[] = [
 	}
 ];
 
-// ── the Entu stand-in ─────────────────────────────────────────────────────────
-
 interface WorldOptions {
 	repertoireItems?: EntityRaw[];
 	programItems?: EntityRaw[];
-	/** Consulted per WRITE (entity create POST, property-replace POST, entity
-	 *  DELETE): while true every write answers 500. Reads stay healthy, so the
-	 *  revert-path refetch always serves the server's (unchanged) truth. */
 	failWrites?: () => boolean;
 }
 
-/** Db-aware stateful wire: successful writes MUTATE the state, so any refetch
- *  (reconcile or revert path alike) serves post-write truth — the pins accept
- *  optimistic-hold or refetch mechanics, value over choreography. */
 function installWorld(options: WorldOptions = {}) {
 	const failWrites = options.failWrites ?? (() => false);
 	let repertoireItems = options.repertoireItems ?? repertoireItemsFixture();
@@ -257,7 +166,6 @@ function installWorld(options: WorldOptions = {}) {
 		}
 
 		if (method === 'POST' && /\/entity(\?|$)/.test(url)) {
-			// Entity CREATE — repertoire_item or program_item, told apart by props.
 			if (failWrites()) return json({ error: 'nope' }, 500);
 			const props = JSON.parse(String(init?.body ?? '[]')) as Array<Record<string, unknown>>;
 			const workRef = props.find((p) => p.type === 'work')?.reference;
@@ -287,7 +195,6 @@ function installWorld(options: WorldOptions = {}) {
 		}
 
 		if (method === 'POST' && url.includes('/entity/')) {
-			// replaceEntityProperty's ONE atomic POST (status / edition / ordinal).
 			if (failWrites()) return json({ error: 'nope' }, 500);
 			const id = url.match(/\/entity\/([^/?]+)/)?.[1] ?? '';
 			const props = JSON.parse(String(init?.body ?? '[]')) as Array<Record<string, unknown>>;
@@ -297,7 +204,6 @@ function installWorld(options: WorldOptions = {}) {
 			return json({ _id: id });
 		}
 
-		// replaceEntityProperty's pre-write value-id lookups.
 		if (url.includes('?props=status')) {
 			const item = repertoireItems.find((e) => url.includes(`/entity/${e._id}?`));
 			return json({ entity: { status: item ? [{ _id: `val-status-${item._id}` }] : [] } });
@@ -311,13 +217,9 @@ function installWorld(options: WorldOptions = {}) {
 		}
 		if (url.includes('?props=ordinal')) return json({ entity: { ordinal: [{ _id: 'val-ord' }] } });
 
-		// Type-definition lookups (creates resolve `_type` to a reference).
 		if (url.includes('name.string=repertoire_item')) return json({ entities: [{ _id: 'type-ri' }] });
 		if (url.includes('name.string=program_item')) return json({ entities: [{ _id: 'type-pi' }] });
 
-		// The OTHER collective answers the SAME ids its own way — what makes a
-		// collective switch on this page a genuine subject change (#324 review F1:
-		// the cues must not ride across it). Reads only; no test writes under it.
 		if (url.includes('/crede/')) {
 			if (url.includes('/entity/ev1')) return json({ entity: credeEventEntity() });
 			if (url.includes('_type.string=repertoire_item')) return json({ entities: CREDE_REPERTOIRE });
@@ -331,8 +233,6 @@ function installWorld(options: WorldOptions = {}) {
 		if (url.includes('_type.string=repertoire_item')) return json({ entities: repertoireItems });
 		if (url.includes('_type.string=work')) return json({ entities: WORKS });
 		if (url.includes('_type.string=edition')) {
-			// The scoped per-work read (#329) filters by _parent; the collective-wide
-			// listAllEditions does not.
 			const workId = url.match(/_parent\.reference=([^&]+)/)?.[1];
 			return json({
 				entities:
@@ -350,8 +250,6 @@ function installWorld(options: WorldOptions = {}) {
 			return json({ entities: [{ _id: 'member-1' }] });
 		if (url.includes('_type.string=member')) return json({ entities: [] });
 
-		// Everything else this page reads on the side (rsvp, attendance, schedule,
-		// series options, profiles, database) — empty is a valid, quiet answer.
 		return json({ entities: [] });
 	});
 
@@ -405,16 +303,12 @@ function rowByName(scope: ParentNode, workName: string): HTMLElement {
 	return row;
 }
 
-/** The #324 failure alert, scoped to the works section. */
 function manageAlert(section: HTMLElement): HTMLElement | null {
 	return q(section, 'repertoire-manage-error');
 }
-/** The #324 saved-status live region, scoped to the works section. */
 function manageStatus(section: HTMLElement): HTMLElement | null {
 	return q(section, 'repertoire-manage-status');
 }
-/** Safe text of the saved region — '' while GREEN has not mounted it yet, so
- *  a RED failure reads as an assertion, never a null-deref. */
 function savedText(section: HTMLElement): string {
 	return manageStatus(section)?.textContent ?? '';
 }
@@ -432,8 +326,6 @@ function createAttempts(fetchMock: FetchMock) {
 			/\/entity(\?|$)/.test(String(url)) && (init as RequestInit | undefined)?.method === 'POST'
 	);
 }
-/** The tap really reached the wire — pins that a RED here is "the failure was
- *  swallowed", never "the control was inert in this harness". */
 async function expectWriteAttempted(probe: () => number): Promise<void> {
 	await waitFor(() => {
 		expect(probe(), 'the tap must actually fire the write').toBeGreaterThan(0);
@@ -450,6 +342,10 @@ async function expectFailureSurfaced(section: HTMLElement): Promise<HTMLElement>
 	return alert;
 }
 
+beforeEach(() => {
+	setToken('jwt-editor');
+});
+
 afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
@@ -460,18 +356,12 @@ afterEach(() => {
 	discoverMock.mockReset();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — repertoire context: every rejected write speaks, and the screen shows
-//     the server's value
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#324 — event page, repertoire surface: a rejected write reaches the user', () => {
 	it('status change: no alert before, role=alert naming the failure after — and the row shows the status the server still holds', async () => {
 		const fetchMock = installWorld({ failWrites: () => true });
 		const { container } = renderPage();
 		const section = await worksSection(container, 2);
 
-		// Nothing has failed yet — no alert anywhere in the section.
 		expect(manageAlert(section)).toBeNull();
 
 		const row = rowByName(section, 'Bogoróditse Djévo');
@@ -479,8 +369,6 @@ describe('#324 — event page, repertoire surface: a rejected write reaches the 
 
 		await expectWriteAttempted(() => writeAttempts(fetchMock, 'POST', '/entity/ri-1').length);
 		await expectFailureSurfaced(section);
-		// The server still holds 'active' — the reverted on-screen value is the
-		// server's truth, not the optimistic tap.
 		await waitFor(() => {
 			const after = rowByName(section, 'Bogoróditse Djévo');
 			expect(after.getAttribute('data-status')).toBe('active');
@@ -538,7 +426,6 @@ describe('#324 — event page, repertoire surface: a rejected write reaches the 
 		await waitFor(() => {
 			expect(qa(section, 'work-row').length).toBe(2);
 		});
-		// Still offered — the create did not happen.
 		const options = Array.from(
 			(q(section, 'work-manage-add-work-select') as HTMLSelectElement).querySelectorAll('option')
 		).map((o) => o.value);
@@ -546,17 +433,12 @@ describe('#324 — event page, repertoire surface: a rejected write reaches the 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — programme context: same queue, same contract
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#324 — event page, programme surface: a rejected write reaches the user', () => {
 	it('move: the rejected reorder surfaces the alert and the programme keeps its server order', async () => {
 		const fetchMock = installWorld({ programItems: programItemsFixture(), failWrites: () => true });
 		const { container } = renderPage();
 		const section = await worksSection(container, 2);
 
-		// Second row up — a real two-write renumber.
 		await fireEvent.click(q(rowByName(section, 'Locus iste'), 'work-manage-move-up')!);
 
 		await expectWriteAttempted(() => writeAttempts(fetchMock, 'POST', '/entity/pi-').length);
@@ -602,17 +484,12 @@ describe('#324 — event page, programme surface: a rejected write reaches the u
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — saved is distinguishable: the #267-shape live region
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#324 — event page: a settled write is distinguishable from silence', () => {
 	it('the status live region is MOUNTED with the section (role=status, aria-live=polite, blank) and carries the saved message once a status change settles — with no alert', async () => {
 		installWorld();
 		const { container } = renderPage();
 		const section = await worksSection(container, 2);
 
-		// Mounted BEFORE any write — a live region announces only changes.
 		const status = manageStatus(section);
 		expect(status, 'the saved live region must mount with the section').not.toBeNull();
 		expect(status!.getAttribute('role')).toBe('status');
@@ -621,11 +498,9 @@ describe('#324 — event page: a settled write is distinguishable from silence',
 
 		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);
 
-		// The write itself lands (harness evidence, passes today)…
 		await waitFor(() => {
 			expect(rowByName(section, 'Bogoróditse Djévo').getAttribute('data-status')).toBe('retired');
 		});
-		// …and the settle must SAY so (the #324 cue).
 		await waitFor(() => {
 			expect(savedText(section)).toContain('[repertoire_manage_saved]');
 		});
@@ -641,11 +516,9 @@ describe('#324 — event page: a settled write is distinguishable from silence',
 		await fireEvent.change(select, { target: { value: 'w-3' } });
 		await fireEvent.click(q(section, 'work-manage-add-work-button')!);
 
-		// The create lands and the refetch shows it (harness evidence)…
 		await waitFor(() => {
 			expect(qa(section, 'work-row').length).toBe(3);
 		});
-		// …and the settle must SAY so.
 		await waitFor(() => {
 			expect(savedText(section)).toContain('[repertoire_manage_saved]');
 		});
@@ -660,12 +533,10 @@ describe('#324 — event page: a settled write is distinguishable from silence',
 
 		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);
 		await expectFailureSurfaced(section);
-		// The failed attempt must never read as saved.
 		expect(savedText(section)).not.toContain('[repertoire_manage_saved]');
 
 		failing = false;
 		await waitFor(() => {
-			// rollback settled — the control is live again.
 			expect(
 				(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired') as HTMLButtonElement)
 					.disabled
@@ -679,18 +550,6 @@ describe('#324 — event page: a settled write is distinguishable from silence',
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — the cues belong to the event they were raised over
-// ═════════════════════════════════════════════════════════════════════════════
-//
-// #324 review F1 — both signals are per-SUBJECT claims, so they go down with
-// the rest of the compose state in `resetComposeState` (the page's own
-// `resetSeriesState` clears `seriesError`/`seriesStatus` for exactly this
-// reason). A subject switch here is a COLLECTIVE switch — the reactive half of
-// the page's one load effect (`void selected; void eventId`), the same probe
-// page.series-picker.spec.ts uses; the route-param half runs the identical
-// teardown.
 
 describe('#324 — the failure/saved cues do not outlive their event', () => {
 	it('a rejected write does not caption the NEXT event’s works section', async () => {
@@ -736,11 +595,6 @@ describe('#324 — the failure/saved cues do not outlive their event', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — locales: the saved key is NEW (four locales); the failure key already
-//     exists and must keep existing
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#324 — locale files', () => {
 	it.each(['en', 'et', 'lv', 'uk'] as const)(
 		'%s.json carries repertoire_manage_saved (new) and repertoire_manage_error (existing), both non-empty',
@@ -760,4 +614,3 @@ describe('#324 — locale files', () => {
 });
 
 // (*MVOX:Tallis* — #324 RED: repertoire/programme write failure + saved cue on
-// the event detail page; sibling suite: page.season-repertoire-write-failure.spec.ts)

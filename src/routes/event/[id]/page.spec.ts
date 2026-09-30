@@ -1,67 +1,18 @@
 // @vitest-environment happy-dom
-//
-// #101 TE.1 (RED) — the event detail page at /event/[id]: header (name, type
-// badge, time range, duration, location), conductor line, description, and the
-// back-to-agenda link — plus the data layer that feeds it, including read-time
-// series inheritance (same merge listEvents performs — entuSeasons.ts:104)
-// and the #77 conductor model via resolveConductors (conductorLogic.ts).
-//
-// CONTRACT under test (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventDetail.ts
-//     export type EventDetail = {
-//       id: string;
-//       name: string;              // event value, else series name, else ''
-//       eventType: string;         // event_type (e.g. 'rehearsal')
-//       startDatetime: string;     // ISO
-//       durationMinutes: number;   // event value, else series, else 0
-//       location: string;          // event value, else series.default_location, else ''
-//       description: string;       // event value, else series.default_description, else ''
-//       conductorIds: string[];    // resolveConductors(season.conductor, event.conductor)
-//       conductorNames: string[];  // display names, conductorIds order, nameless dropped
-//     };
-//     export async function loadEventDetail(
-//       cfg: { db: string; token: string },
-//       eventId: string,
-//       fetchImpl?: typeof fetch
-//     ): Promise<EventDetail>;
-//
-//   src/routes/event/[id]/+page.svelte
-//     Reads the event id from $app/state page.params.id, loads via
-//     loadEventDetail for the SELECTED collective (same store wiring as the
-//     agenda +page.svelte), renders the header. data-testids:
-//       event-detail-name / event-detail-type / event-detail-time /
-//       event-detail-duration / event-detail-location /
-//       event-detail-conductors / event-detail-description /
-//       event-detail-back (an <a href="/">)
-//
-// Conductor NAMES come from the person's shared profile subset — the SAME
-// domain-or-public rule the roster enforces (rosterData.ts toRosterRow): a
-// PRIVATE-only name must never leak into the conductor line, and a person with
-// no domain/public name is dropped from the display list (never rendered as a
-// raw entity id — "Entity IDs need names" cuts both ways).
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// #102 review fix (F3) — the page now derives "this event is over" from the
-// clock (a past event's RSVP is read-only, same boundary the agenda partitions
-// on), so "now" has to be PINNED: otherwise this suite would start failing on
-// 2026-09-01, when the fixture event slides into the past. Only `Date` is
-// faked — setTimeout/setInterval stay real, so testing-library's waitFor keeps
-// polling normally.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock: every key resolves to a `[key {params}]` stub,
-// so the page's (not-yet-written) i18n keys can never crash the mock. Copy
-// assertions below therefore match on DATA (names, numbers, times), not on
-// translated sentences.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -71,16 +22,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	})
 }));
 
-// ── #251 — the app-language source for the NARRATIVE date formatter ──────────
-//
-// Same construction as AgendaList.spec.ts: intercepts
-// '$lib/paraglide/runtime.js' (the specifier LanguageSelector.svelte:41 /
-// routes/+page.svelte:83 use — the implementation must import getLocale from
-// that path), backed by a SvelteMap so a REACTIVELY-constructed formatter
-// invalidates when a test switches the locale, while a construction-time
-// `new Intl.DateTimeFormat(undefined, …)` const cannot. happy-dom's own
-// default locale is en-US, so every non-'en' assertion proves device-locale
-// independence by construction.
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({
 	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
@@ -99,7 +40,6 @@ function setAppLocale(locale: AppLocale): void {
 	localeMock.state?.set('locale', locale);
 }
 
-// Mutable $app/state stub — the route param the page must read.
 const pageStub = vi.hoisted(() => ({
 	params: { id: 'ev1' } as Record<string, string>,
 	url: new URL('http://localhost/event/ev1')
@@ -108,10 +48,6 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 const { gotoMock, discoverMock } = vi.hoisted(() => ({ gotoMock: vi.fn(), discoverMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Sever the $env walls (same hygiene as page.agenda-error.spec.ts): discover.ts
-// and entu-config both reach $env/*, unavailable under happy-dom outside a
-// SvelteKit request context. The REAL data layer keeps running against the
-// stubbed base url.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
@@ -134,24 +70,15 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-// ── Entu fixtures ─────────────────────────────────────────────────────────────
-// 2026-09-01T16:00Z = 19:00 Europe/Tallinn (EEST, UTC+3); +90 min → 20:30.
-
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
-		// #420 — the EVENT's own name lives on `event_name`; `name` is retired on
-		// events. The season/series fixtures below keep `name` (only events moved).
 		event_name: [{ string: 'Tuesday Rehearsal' }],
 		event_type: [{ string: 'rehearsal' }],
 		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
 		duration_minutes: [{ number: 90 }],
 		location: [{ string: 'Rehearsal Hall' }],
 		description: [{ string: 'Come 15 minutes early for warm-ups.' }],
-		// #102 TE.2 — capacity is part of the default fixture (a rehearsal hall
-		// seats 20); `_editor` deliberately is NOT: rights props live in the private
-		// bucket, so the DEFAULT viewer reads this event the way a plain member does
-		// (no `_editor` visible at all). Editor-view tests opt in explicitly.
 		capacity: [{ number: 20 }],
 		_parent: [
 			{ reference: 'org1', entity_type: 'organization' },
@@ -183,9 +110,6 @@ function seriesEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-// Shared-profile fixtures per person id — the domain-or-public name source.
-// p-alice ALSO carries a private-tier profile with a different name: the
-// private name must never win (roster rule, #28/#58).
 const PROFILES: Record<string, unknown[]> = {
 	'p-mihkel': [
 		{ _id: 'prof-m', name: [{ string: 'Mihkel Putrinš' }], _sharing: [{ string: 'domain' }] }
@@ -207,11 +131,6 @@ type Fixtures = {
 	profiles?: Record<string, unknown[]>;
 };
 
-/**
- * A liberal Entu wire stub: serves the SAME fixtures whether the implementation
- * reads entities by id (`entity/{id}`) or by query (`_type.string=…`), so the
- * tests pin the CONTRACT (what renders / what resolves), not one query shape.
- */
 function entuFetchStub(fixtures: Fixtures = {}) {
 	const event = fixtures.event ?? eventEntity();
 	const season = fixtures.season ?? seasonEntity();
@@ -219,13 +138,6 @@ function entuFetchStub(fixtures: Fixtures = {}) {
 	const profiles = fixtures.profiles ?? PROFILES;
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
-		// #372 — the rsvp enablement read: ONE GET through the app's rights
-		// predicate (resolveManageRights(cfg, personId, personId)). Grant the
-		// viewer editor on her OWN person here, centrally, so every test built
-		// on this stub (and rsvpWireStub/composeWireStub, both layered on top of
-		// it) keeps rendering/writing the control exactly as it did before the
-		// grant became the gate — this file's subject is the rest of the page,
-		// not rsvp rights (those are pinned in page.rsvp-rights-gate.spec.ts).
 		if (url.includes('/entity/p-viewer') && url.includes('props=_owner')) {
 			return json({ entity: { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] } });
 		}
@@ -241,14 +153,6 @@ function entuFetchStub(fixtures: Fixtures = {}) {
 		}
 		if (url.includes('_type.string=season')) return json({ entities: [season] });
 		if (url.includes('_type.string=event_series')) return json({ entities: [series] });
-		// #255 (D) — the FUTURE-event going-tally join reads the active roster
-		// (listActiveMembers: `_type.string=member&status.string=active`, no
-		// `person.reference`). This suite's fixtures were all written before
-		// that read existed and don't care about membership status at all — so
-		// the active roster here is EVERY member id any rsvp fixture in this
-		// file references, keeping the join a no-op for every pre-existing
-		// test (the deactivation-specific counting is pinned separately in
-		// page.tally-deactivated.spec.ts, with its own roster mocks).
 		if (url.includes('_type.string=member') && url.includes('status.string=active')) {
 			return json({ entities: activeMemberEntitiesForEv1() });
 		}
@@ -257,13 +161,10 @@ function entuFetchStub(fixtures: Fixtures = {}) {
 	});
 }
 
-// ── data layer: loadEventDetail ───────────────────────────────────────────────
-
 describe('loadEventDetail — full header shape', () => {
 	it('fetches the event and maps the FULL EventDetail shape (event conductor empty → inherits season conductors)', async () => {
 		const fetchImpl = entuFetchStub();
 		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
-		// Full-shape toEqual, never objectContaining — partial assertions hide bugs.
 		expect(detail).toEqual({
 			id: 'ev1',
 			name: 'Tuesday Rehearsal',
@@ -274,28 +175,12 @@ describe('loadEventDetail — full header shape', () => {
 			description: 'Come 15 minutes early for warm-ups.',
 			conductorIds: ['p-mihkel', 'p-alice'],
 			conductorNames: ['Mihkel Putrinš', 'Alice Smith'],
-			// #102 TE.2 — the contract grew: capacity (event.capacity, null when
-			// unset) plus ownerIds/editorIds (the `_owner`/`_editor` refs VISIBLE to
-			// this caller — private-bucket, so a non-granted reader gets []).
 			capacity: 20,
 			ownerIds: [],
 			editorIds: [],
-			// #103 TE.3 review F1/F2 — the contract grew again: the parent SEASON's
-			// id (already in hand from the event's `_parent` — no second GET of the
-			// same entity) and the season's own rights tiers, read on the SAME GET
-			// the conductor list comes from, so season management rights are pure
-			// computation for the caller instead of another round-trip.
 			seasonId: 'season1',
 			seasonOwnerIds: [],
 			seasonEditorIds: [],
-			// #304 — the contract grew again: the parent SERIES' id (computed
-			// internally since #101, then discarded — the picker needs it to
-			// preselect the current series; null when standalone, seasonId's
-			// rule) plus the raw-presence inheritance list (which of
-			// name/durationMinutes/location/description THIS event ACTUALLY
-			// inherits — the `event.<prop>?.[0]` raw-array test, never the
-			// displayed value's truthiness). This fixture event carries own
-			// values for all four, so it inherits nothing.
 			seriesId: 'series1',
 			inheritedFields: []
 		});
@@ -312,16 +197,12 @@ describe('loadEventDetail — full header shape', () => {
 		expect(detail.seasonId).toBe('season1');
 		expect(detail.seasonOwnerIds).toEqual(['p-boss']);
 		expect(detail.seasonEditorIds).toEqual(['p-viewer']);
-		// The rights props were actually REQUESTED — an unrequested prop comes back
-		// absent, which reads as "no rights" for every caller.
 		const seasonUrls = fetchImpl.mock.calls
 			.map((c) => String(c[0]))
 			.filter((u) => u.includes('/entity/season1'));
 		expect(seasonUrls).toHaveLength(1);
 		expect(seasonUrls[0]).toContain('_owner');
 		expect(seasonUrls[0]).toContain('_editor');
-		// …and the EVENT was read exactly once: `seasonId` comes off that read's
-		// `_parent`, never a second `entity/ev1?props=_parent`.
 		expect(
 			fetchImpl.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('/entity/ev1'))
 		).toHaveLength(1);
@@ -437,13 +318,6 @@ describe('loadEventDetail — conductor resolution (#77 model via resolveConduct
 	});
 });
 
-// ── page: /event/[id] renders the header from route data ─────────────────────
-//
-// INTEGRATION posture: the page is rendered with the REAL data layer running —
-// only the global fetch is stubbed at the wire. This is what forces GREEN to
-// actually wire loadEventDetail into the route (a page that renders its header
-// from anything but the loaded detail cannot pass these).
-
 function setAuthedWithSampledb() {
 	authStore.set({
 		status: 'authenticated',
@@ -475,9 +349,6 @@ afterEach(() => {
 	vi.useRealTimers();
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
-	// #251 — every test runs under app language 'en' unless it says otherwise;
-	// the pre-#251 English weekday/month assertions are deliberate under this
-	// mock, not vacuous device-locale passes.
 	setAppLocale('en');
 });
 
@@ -495,7 +366,6 @@ describe('/event/[id] — header (integration: route param → loadEventDetail �
 		expect(type).not.toBeNull();
 		expect(type!.textContent).toMatch(/rehearsal/i);
 
-		// start 16:00Z = 19:00 Europe/Tallinn; +90 min = 20:30 — BOTH ends shown.
 		const time = container.querySelector('[data-testid="event-detail-time"]');
 		expect(time).not.toBeNull();
 		expect(time!.textContent).toContain('19:00');
@@ -566,9 +436,6 @@ describe('/event/[id] — back link', () => {
 		});
 	});
 
-	// #101 review fix (F1) — the ← is MARKUP, not message text: translators get
-	// words only, and the glyph is decorative (aria-hidden), so a screen reader
-	// announces the link as its words, never "left arrow, back to agenda".
 	it('renders the ← as decorative markup, not as part of the translated string', async () => {
 		const { container } = renderEventPage();
 		await waitFor(() => {
@@ -578,15 +445,10 @@ describe('/event/[id] — back link', () => {
 		const arrow = [...back.querySelectorAll('span')].find((s) => s.textContent?.includes('←'));
 		expect(arrow, 'the ← lives in its own span').not.toBeUndefined();
 		expect(arrow!.getAttribute('aria-hidden')).toBe('true');
-		// The paraglide stub renders keys as `[event_detail_back]` — the arrow must
-		// NOT be inside it (that would bake a glyph into the translators' string).
 		expect(back.textContent).toContain('[event_detail_back]');
 	});
 });
 
-// #101 review fix (F3) — every OTHER optional header field is {#if}-guarded; the
-// type badge was the lone exception, so an event carrying no `event_type`
-// rendered a bare bordered pill with nothing in it.
 describe('/event/[id] — optional type badge', () => {
 	it('renders no type badge at all when the event carries no event_type', async () => {
 		const { container } = renderEventPage({ event: eventEntity({ event_type: [] }) });
@@ -599,12 +461,6 @@ describe('/event/[id] — optional type badge', () => {
 	});
 });
 
-// #101 review fix (F1) — `loadEventDetail` defaults a missing `start_datetime`
-// to '' and the header formatted it unguarded, so `Intl.DateTimeFormat.format`
-// threw `RangeError: Invalid time value` DURING TEMPLATE RENDER. That throw is
-// unreachable from the load's try/catch, so the page did not even degrade to its
-// load-error surface: nothing of the header mounted at all. Entu's `mandatory`
-// is a UI hint, not enforced, so a timeless event is representable data.
 describe('/event/[id] — event with no start_datetime (renderable-invalid data)', () => {
 	it('still renders the whole header; the time line is simply absent (no RangeError mid-render)', async () => {
 		const { container } = renderEventPage({ event: eventEntity({ start_datetime: [] }) });
@@ -614,7 +470,6 @@ describe('/event/[id] — event with no start_datetime (renderable-invalid data)
 				'Tuesday Rehearsal'
 			);
 		});
-		// The header is WHOLE — everything except the one field with no data.
 		expect(container.querySelector('[data-testid="event-detail-time"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-location"]')?.textContent).toContain(
 			'Rehearsal Hall'
@@ -625,7 +480,6 @@ describe('/event/[id] — event with no start_datetime (renderable-invalid data)
 		expect(container.querySelector('[data-testid="event-detail-duration"]')?.textContent).toContain(
 			'90'
 		);
-		// …and this is NOT the load-error surface: the load succeeded.
 		expect(container.querySelector('[data-testid="event-detail-load-error"]')).toBeNull();
 	});
 
@@ -642,9 +496,6 @@ describe('/event/[id] — event with no start_datetime (renderable-invalid data)
 	});
 });
 
-// #101 review fix (F2) — duration was the lone unguarded optional header field:
-// an event with no duration on itself AND none on its series (loadEventDetail
-// defaults to 0) showed a literal "0 min" and a degenerate "19:00–19:00".
 describe('/event/[id] — unknown duration (0)', () => {
 	function noDurationAnywhere() {
 		return {
@@ -675,17 +526,12 @@ describe('/event/[id] — unknown duration (0)', () => {
 	});
 });
 
-// #101 review fix (F3) — the badge printed the raw Entu `event_type` string, the
-// only user-visible string on this page that never passed through paraglide (an
-// Estonian user read "REHEARSAL").
 describe('/event/[id] — type badge is translated', () => {
 	it('routes a KNOWN event_type through paraglide, not the raw Entu string', async () => {
 		const { container } = renderEventPage();
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-type"]')).not.toBeNull();
 		});
-		// The paraglide stub renders keys as `[key]` — seeing the key proves the
-		// string went through the message layer rather than straight from Entu.
 		expect(container.querySelector('[data-testid="event-detail-type"]')!.textContent).toContain(
 			'[event_type_rehearsal]'
 		);
@@ -706,7 +552,7 @@ describe('/event/[id] — type badge is translated', () => {
 	it('guard: every event_type_* key in en.json exists in et, lv and uk, and none is empty', () => {
 		const en = JSON.parse(readFileSync(resolve('messages/en.json'), 'utf8')) as MessageFile;
 		const typeKeys = Object.keys(en).filter((k) => k.startsWith('event_type_'));
-		expect(typeKeys.length).toBe(10); // the ten canonical event types (#266 adds trip + service) — a hard literal on purpose: an independent guard on the locale FILES, distinct from the constant pins
+		expect(typeKeys.length).toBe(10); // a hard literal on purpose: the locale files, not the constant
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(
 				readFileSync(resolve(`messages/${locale}.json`), 'utf8')
@@ -727,49 +573,24 @@ describe('/event/[id] — type badge is translated', () => {
 	});
 });
 
-// #101 review fix (F4) — the agenda supplies each event's DATE through its
-// day-group headers, which this page does not inherit: a bookmarked or shared
-// /event/<id> showed "19:00–20:30" with no indication of WHICH DAY.
 describe('/event/[id] — the date', () => {
 	it('shows the Tallinn-zoned weekday + date alongside the time', async () => {
 		const { container } = renderEventPage();
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-date"]')).not.toBeNull();
 		});
-		// 2026-09-01T16:00Z is Tuesday 1 September in Europe/Tallinn. The formatter
-		// takes the APP language (#251 — getLocale, mocked to 'en' file-wide;
-		// it used to pass `undefined`, i.e. the device locale — same defect as
-		// AgendaList's headerFmt). English parts asserted here deliberately;
-		// the per-language pins live in the #251 describe below.
 		const date = container.querySelector('[data-testid="event-detail-date"]')!.textContent ?? '';
 		expect(date).toMatch(/Tuesday/i);
 		expect(date).toMatch(/September/i);
 		expect(date).toContain('1');
-		// #207 rule 7, Gama ruling 2 — this header is a NARRATIVE date (weekday +
-		// month name), explicitly EXEMPT from the YYYY-MM-DD rule: it must never
-		// collapse to a bare ISO string.
 		expect(date.trim()).not.toMatch(/^\d{4}-\d{2}-\d{2}$/);
-		// …and it lives inside the time line, which still carries both ends.
 		const time = container.querySelector('[data-testid="event-detail-time"]')!.textContent ?? '';
 		expect(time).toContain('19:00');
 		expect(time).toContain('20:30');
 	});
 });
 
-// ── #251 — the event-detail date follows the APP language ────────────────────
-//
-// Second of the app's two narrative date surfaces (the other is AgendaList's
-// day-group header — same defect, same fix): `dateFmt` passed `undefined` as
-// its locale, i.e. the DEVICE language. Only the locale argument changes —
-// the timeZone/weekday/day/month options stay byte-identical to AgendaList's
-// headerFmt (#101 F4 pinned the two surfaces render a date identically), and
-// TZ/date math are untouched (done-when 6).
 describe('#251 — event-detail date renders in the app language', () => {
-	// done-when 1 + 4 — exact Intl output per app language for Tuesday
-	// 2026-09-01 (the fixture event's Tallinn day). Estonian first (pilot
-	// language). Note the natural case: 'teisipäev', lowercase — per done-when
-	// 5 the natural-case text is what the formatter emits; any uppercasing is
-	// CSS's business, not the formatter's.
 	const expectedDate: Record<AppLocale, string> = {
 		en: 'Tuesday, September 1',
 		et: 'teisipäev, 1. september',
@@ -786,19 +607,12 @@ describe('#251 — event-detail date renders in the app language', () => {
 			expect(
 				container.querySelector('[data-testid="event-detail-date"]')?.textContent?.trim()
 			).toBe(expectedDate[locale]);
-			// The clock time next to it is NOT this issue's surface — still 24h ISO-ish.
 			const time = container.querySelector('[data-testid="event-detail-time"]')?.textContent ?? '';
 			expect(time).toContain('19:00');
 			expect(time).toContain('20:30');
 		});
 	}
 
-	// done-when 2 — same trap as the agenda header: setLocale reloads the page
-	// today, so a construction-time const happens to work. Switch the app
-	// language on the MOUNTED page: the date must re-render in the new
-	// language without a reload/remount. A formatter frozen at construction
-	// fails; a reactive construction ($derived on getLocale() or equivalent)
-	// passes.
 	it('switching the app language re-renders the date WITHOUT a remount (formatter is rebuilt, not a construction-time constant)', async () => {
 		setAppLocale('en');
 		const { container } = renderEventPage();
@@ -815,10 +629,6 @@ describe('#251 — event-detail date renders in the app language', () => {
 	});
 });
 
-// #101 review fix (F5) — the load effect depends on the selected collective, so
-// switching collectives with a detail page open refetches the SAME id against
-// the new db, where it 403/404s. The page offered a Retry button that could
-// never succeed.
 describe('/event/[id] — event not readable in the selected collective', () => {
 	it('loadEventDetail throws an EventDetailLoadError carrying the status', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 403));
@@ -860,19 +670,12 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-not-available"]')).not.toBeNull();
 		});
-		// Retry is the one action that cannot possibly help here.
 		expect(container.querySelector('[data-testid="event-detail-retry"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-load-error"]')).toBeNull();
-		// The back link — the action that DOES help — is still there.
 		expect(container.querySelector('[data-testid="event-detail-back"]')).not.toBeNull();
 	});
 
 	it('still offers Retry for a genuinely transient failure (network throw)', async () => {
-		// #434 slice 3 — the page's own load is cache-backed, so a network throw
-		// is served from the read cache when a stored copy exists
-		// (page.offline.spec.ts). This pins the case where there is NONE: an
-		// explicit, EMPTY read cache under an identity that could have stored one
-		// — not "no IndexedDB at all", which never reaches the cache path.
 		setReadCacheFactory(new IDBFactory());
 		try {
 			vi.stubGlobal(
@@ -891,7 +694,6 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 			});
 			expect(container.querySelector('[data-testid="event-detail-retry"]')).not.toBeNull();
 			expect(container.querySelector('[data-testid="event-detail-not-available"]')).toBeNull();
-			// Nothing was served from a stored copy, so no age line either.
 			expect(container.querySelector('[data-testid="event-detail-as-of"]')).toBeNull();
 		} finally {
 			setReadCacheFactory(undefined);
@@ -899,72 +701,20 @@ describe('/event/[id] — event not readable in the selected collective', () => 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// #102 TE.2 (RED) — RSVP control + rights-gated tally + capacity on the detail
-// page. Parent: #81 (Event detail 1.0). Maps to epic ACs AC-3/AC-4/AC-5/AC-9.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventDetail.ts — EventDetail gains two fields:
-//     capacity: number | null;   // event.capacity, null when unset (0 ≠ unset)
-//     editorIds: string[];       // `_editor` refs VISIBLE to this caller.
-//                                // Rights props live in the private bucket, so
-//                                // a non-granted reader sees NONE — [] is both
-//                                // "no editors" and "not allowed to know".
-//
-//   src/routes/event/[id]/+page.svelte — an RSVP section,
-//   data-testid="event-detail-rsvp", holding:
-//     • the SAME RsvpControl component the agenda rows use (rsvp-control /
-//       rsvp-btn-{going,not_going,maybe,late} / rsvp-msg-line), seeded from the
-//       SAME read primitives the agenda uses — findMyMemberId + listMyRsvps
-//       (rsvpData) — so both surfaces read/write ONE rsvp entity per event.
-//       A status change on an event with an existing rsvp goes through the
-//       update path against THAT entity id (entity/{rsvpId}) — never a second
-//       create (which would fork the answer into two entities, AC-3's failure
-//       mode).
-//     • the tally — data-testid="event-detail-tally", with per-status counts in
-//       event-detail-tally-{going,not_going,maybe,late} — sourced from the
-//       domain-tier listAllRsvpsForEvent read (attendanceData, the #82 widen
-//       built exactly for conductor reads). Rendered ONLY when the viewer's
-//       person id is in editorIds ("_editor on event" gate — #102 spec). The
-//       epic offers formula props (`rsvp_going_count`) as an alternative
-//       source; this RED pins the count-the-rsvps road because it works against
-//       today's live schema with no new formula prop-defs.
-//     • capacity — data-testid="event-detail-capacity", "N / M capacity" where
-//       N = going count, M = event.capacity. SAME `_editor` gate as the tally;
-//       absent entirely when capacity is null.
-//
-// Assertions match on DATA (counts, ids, pressed state), never on translated
-// sentences — same posture as the header tests above (full-fallback paraglide
-// proxy). Per-status tally counts get their own testids so the words around
-// each number stay the translators' business.
-
-/** The TE.2 EventDetail shape — an intersection so this spec typechecks BEFORE
- *  GREEN lands the fields (and stays a no-op after). */
 type EventDetailTe2 = EventDetail & {
 	capacity: number | null;
 	ownerIds: string[];
 	editorIds: string[];
 };
 
-/** An event whose `_editor` list the viewer CAN see and IS in — the tally gate's
- *  positive case. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
 
-/** #102 review fix (F1) — the OTHER positive case: the viewer holds `_owner`
- *  and is NOT in `_editor`. Ownership subsumes editing everywhere else in the
- *  app (manageRightsFrom, repertoireActions.spec.ts:594). */
 function ownerOnlyEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _owner: [{ reference: 'p-viewer' }], ...over });
 }
 
-/**
- * The 15 domain-visible rsvps for ev1: 12 going (the viewer's own rsvp-77 among
- * them), 2 not_going, 1 maybe, 0 late — the tally fixture. Shape matches what
- * listAllRsvpsForEvent's props=member,status read returns.
- */
 function allRsvpsForEv1(): unknown[] {
 	const rows: unknown[] = [
 		{ _id: 'rsvp-77', member: [{ reference: 'member-1' }], status: [{ string: 'going' }] }
@@ -981,13 +731,6 @@ function allRsvpsForEv1(): unknown[] {
 	return rows;
 }
 
-/**
- * #255 (D) — `listActiveMembers`'s answer for the future-event tally join,
- * covering every member id `allRsvpsForEv1` (and its `mutatingTallyWire`
- * override, which reuses `rsvp-77`/`member-1`) ever references. `person` is
- * required (`listActiveMembers` throws without it) — the value itself is
- * never read by the join, only `_id`.
- */
 function activeMemberEntitiesForEv1(): unknown[] {
 	const memberIds = new Set<string>(
 		allRsvpsForEv1().map((row) => (row as { member: Array<{ reference: string }> }).member[0].reference)
@@ -995,14 +738,6 @@ function activeMemberEntitiesForEv1(): unknown[] {
 	return [...memberIds].map((id) => ({ _id: id, person: [{ reference: `p-${id}` }] }));
 }
 
-/**
- * The TE.1 wire stub, extended with the RSVP routes: the viewer's active member
- * row, her OWN rsvp list (`_parent.reference=p-viewer` — the agenda's seeding
- * read), the all-rsvps-for-event read (`event.reference=ev1` — the tally
- * source), and the update path against rsvp-77 (GET → property DELETEs → POST).
- * Same liberal posture as entuFetchStub: it serves every road so the tests pin
- * the CONTRACT, not one fetch choreography.
- */
 function rsvpWireStub(fixtures: Fixtures = {}, opts: { myRsvp?: boolean } = {}) {
 	const base = entuFetchStub(fixtures);
 	const myRsvp = opts.myRsvp ?? true;
@@ -1012,7 +747,6 @@ function rsvpWireStub(fixtures: Fixtures = {}, opts: { myRsvp?: boolean } = {}) 
 		if (url.includes('/property/')) return json({ deleted: true });
 		if (url.includes('/entity/rsvp-77')) {
 			if (method === 'POST') return json({});
-			// updateRsvpStatus's lookup: current status value-id, event ref, sentinel.
 			return json({
 				entity: {
 					_id: 'rsvp-77',
@@ -1042,8 +776,6 @@ function renderRsvpPage(fixtures: Fixtures = {}, opts: { myRsvp?: boolean } = {}
 	return renderWithFetch(rsvpWireStub(fixtures, opts));
 }
 
-/** Same render choreography, but with a caller-supplied wire — the review-fix
- *  cases need stubs that stall one route or mutate between reads. */
 function renderWithFetch(fetchStub: ReturnType<typeof vi.fn>) {
 	vi.stubGlobal('fetch', fetchStub);
 	pageStub.params = { id: 'ev1' };
@@ -1053,14 +785,11 @@ function renderWithFetch(fetchStub: ReturnType<typeof vi.fn>) {
 	return { ...rendered, fetchStub };
 }
 
-/** All four status buttons, in render order. */
 function rsvpButtons(container: HTMLElement): HTMLButtonElement[] {
 	return ['going', 'not_going', 'maybe', 'late'].map(
 		(s) => container.querySelector(`[data-testid="rsvp-btn-${s}"]`) as HTMLButtonElement
 	);
 }
-
-// ── data layer: capacity + editorIds on EventDetail ───────────────────────────
 
 describe('loadEventDetail — TE.2 capacity + _editor rights (contract extension)', () => {
 	it('maps event.capacity and the visible _editor refs into capacity/editorIds', async () => {
@@ -1083,17 +812,11 @@ describe('loadEventDetail — TE.2 capacity + _editor rights (contract extension
 			'ev1',
 			fetchImpl as unknown as typeof fetch
 		)) as EventDetailTe2;
-		// null ≠ 0: an explicit capacity of 0 would be a (weird but representable)
-		// real value, and 0 must not be conflated with "unset" by the hide-gate.
 		expect(detail.capacity).toBeNull();
 		expect(detail.ownerIds).toEqual([]);
 		expect(detail.editorIds).toEqual([]);
 	});
 
-	// #102 review fix (F1) — the rights read was `_editor`-only, a SECOND, narrower
-	// rights rule than the one the rest of the app runs (owner OR editor). Both
-	// tiers are read now, kept as separate lists so the caller can hand them to
-	// `manageRightsFrom` verbatim.
 	it('reads BOTH rights tiers and maps _owner into ownerIds (owner-or-editor is one rule, not two)', async () => {
 		const fetchImpl = entuFetchStub({
 			event: eventEntity({
@@ -1108,16 +831,12 @@ describe('loadEventDetail — TE.2 capacity + _editor rights (contract extension
 		)) as EventDetailTe2;
 		expect(detail.ownerIds).toEqual(['p-viewer']);
 		expect(detail.editorIds).toEqual(['p-other']);
-		// …and `_owner` was actually ASKED FOR over the wire — an unrequested prop
-		// comes back absent, which would read as "no owners" for every caller.
 		const eventUrl = fetchImpl.mock.calls
 			.map((c) => String(c[0]))
 			.find((u) => u.includes('/entity/ev1'));
 		expect(eventUrl).toContain('_owner');
 	});
 });
-
-// ── page: the RSVP control (same component, same entity as the agenda) ────────
 
 describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp entity as the agenda)', () => {
 	it('renders the RsvpControl — all four status buttons + the msg line — inside the RSVP section', async () => {
@@ -1133,8 +852,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 				`rsvp-btn-${s} missing`
 			).not.toBeNull();
 		}
-		// The msg line is RsvpControl's own internal (reserved hint/error space) —
-		// its presence pins REUSE of the component, not a lookalike button row.
 		expect(section.querySelector('[data-testid="rsvp-msg-line"]')).not.toBeNull();
 	});
 
@@ -1148,7 +865,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 			expect(btn!.disabled).toBe(false);
 		});
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
-		// Membership was RESOLVED for this viewer, not assumed.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.some((u) => u.includes('_type.string=member') && u.includes('p-viewer'))).toBe(
 			true
@@ -1157,7 +873,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 
 	it("seeds the control from the viewer's EXISTING rsvp — the same entity the agenda row owns", async () => {
 		const { container, fetchStub } = renderRsvpPage();
-		// rsvp-77 (going) came back from listMyRsvps → the going button is pressed.
 		await waitFor(() => {
 			expect(
 				container
@@ -1165,8 +880,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 					?.getAttribute('aria-pressed')
 			).toBe('true');
 		});
-		// …and it was read through the agenda's own primitive: the singer's rsvps
-		// under her OWN person (`_parent.reference`), not some detail-page-only read.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(
 			urls.some((u) => u.includes('_type.string=rsvp') && u.includes('_parent.reference=p-viewer'))
@@ -1175,8 +888,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 
 	it('a status change WRITES to that same rsvp entity (update rsvp-77) — never a second create', async () => {
 		const { container, fetchStub } = renderRsvpPage();
-		// Wait for BOTH: the seeded pressed state (so `existing` is the real rsvp,
-		// not null) and an enabled button (member resolved, nothing in flight).
 		await waitFor(() => {
 			expect(
 				container
@@ -1197,21 +908,11 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 				(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
 			);
 			expect(posts.length).toBeGreaterThan(0);
-			// EVERY write targets the EXISTING entity. A create would POST the bare
-			// `entity` collection and fork the viewer's answer into two rsvps — the
-			// agenda row and this page would then disagree forever.
 			for (const c of posts) expect(String(c[0])).toContain('/entity/rsvp-77');
 		});
 	});
 });
 
-// ── page: rights-gated tally + capacity ───────────────────────────────────────
-
-// #363 — the gate is GONE: rsvp rows are `_sharing: domain`, Entu already
-// answers the cross-person read for every member, so the tally renders from
-// the read's result for everyone (epic #362 rule 3 — readable data is never
-// hidden behind an app predicate). The editor/owner cases below stay green;
-// the three no-grant cases are FLIPPED from their pre-#363 "sees nothing" law.
 describe('/event/[id] — tally + capacity render from the domain rsvp read for EVERY member (#363)', () => {
 	it('an _editor on the event sees the tally: per-status counts from the domain rsvp read', async () => {
 		const { container } = renderRsvpPage({ event: editorEvent() });
@@ -1224,30 +925,23 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 		expect(count('going')!.textContent).toContain('12');
 		expect(count('not_going')!.textContent).toContain('2');
 		expect(count('maybe')!.textContent).toContain('1');
-		// 0 is a COUNT, not an absence — the late bucket renders its zero.
 		expect(count('late')!.textContent).toContain('0');
 	});
 
 	it('a plain member with NO grant on the event sees the tally AND capacity — the render follows the read, not a rights predicate (#363)', async () => {
-		// Default fixture: rights props invisible — the viewer holds no grant at
-		// all on the event (ownerIds/editorIds both []).
 		const { container, fetchStub } = renderRsvpPage();
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
 		const count = (s: string) =>
 			container.querySelector(`[data-testid="event-detail-tally-${s}"]`);
-		// Full-shape: every bucket from the real rsvp fixture, zeros included.
 		expect(count('going')!.textContent).toContain('12');
 		expect(count('not_going')!.textContent).toContain('2');
 		expect(count('maybe')!.textContent).toContain('1');
 		expect(count('late')!.textContent).toContain('0');
-		// Capacity OPENS WITH the tally (Gama ruling on #363): 12 going of 20.
 		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
 		expect(cap).toContain('12');
 		expect(cap).toContain('20');
-		// …and the domain-tier cross-person read was actually ISSUED for this
-		// non-editor — the fetch gate is gone, not just the render gate.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(
 			urls.some(
@@ -1278,11 +972,8 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 			expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
 		});
 		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
-		// DATA, not sentence: 12 going of 20 seats. The wording/order around the
-		// numbers belongs to the translators.
 		expect(cap).toContain('12');
 		expect(cap).toContain('20');
-		// …and the tally is right there with it, same gate.
 		expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 	});
 
@@ -1294,11 +985,6 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
 	});
 
-	// #102 review fix (F1) — the gate read `_editor` only, a narrower rule than the
-	// one the agenda runs for the SAME entity (routes/+page.svelte:284 →
-	// manageRightsFrom(item.owners, item.editors, personId)). An owner-only
-	// conductor got the programme-management controls on her agenda row and no
-	// tally at all on this page: two surfaces disagreeing about one event.
 	it('an `_owner` on the event who is NOT in `_editor` sees the tally + capacity — ownership subsumes editing', async () => {
 		const { container } = renderRsvpPage({ event: ownerOnlyEvent() });
 		await waitFor(() => {
@@ -1332,36 +1018,13 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
 		const section = container.querySelector('[data-testid="event-detail-rsvp"]')!;
-		// One SECTION, all three surfaces inside it — not a control here and a
-		// tally floating elsewhere on the page.
 		expect(section.querySelector('[data-testid="rsvp-control"]')).not.toBeNull();
 		expect(section.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		expect(section.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
 	});
 });
 
-// ── #102 review fixes: the RSVP control's disable reasons + tally freshness ───
-
-// F2, superseded by #372 (issue #362 paradigm) and re-fixed by its review: the
-// control USED to stay interactive-but-eventually-disabled while membership was
-// unresolved, on the theory that a tap could reach applyRsvpChange with a null
-// memberId — which THROWS on the create path. #372's ruling moved enablement OFF
-// membership entirely and onto the Entu grant (resolveManageRights(cfg,
-// personId, personId) — see page.rsvp-rights-gate.spec.ts's WIRE test, which
-// pins the control enabling WHILE the member lookup hangs, on the grant alone).
-//
-// #372 review F1 — accepting the create-path throw as the answer HERE was the
-// old bug re-admitted under a new name: the load-time lookup parks `memberId` at
-// null for the page's life, so every tap failed, forever, with no way out short
-// of a reload. The member id is now resolved LAZILY, at write time, by the tap
-// that needs it (rsvpChangeQueue's `resolveMemberId`): a lookup that merely
-// failed once no longer costs the singer her answer. The data-layer throw stays
-// where it was, as the backstop for the only case left — a lookup that answers
-// "no active member" — and that answer also swaps the control for the hint.
 describe('/event/[id] — RSVP control while membership is still unresolved (#372 supersedes #102 review F2)', () => {
-	/** The member query never settles; every other route serves normally
-	 *  (including the rsvp enablement read — rsvpWireStub's base grants the
-	 *  viewer editor on her own person). */
 	function stallingMemberWire(opts: { myRsvp?: boolean } = {}) {
 		const base = rsvpWireStub({}, opts);
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1370,9 +1033,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		});
 	}
 
-	/** The load-time member query never settles; the WRITE-TIME retry (a second
-	 *  request for the same route) answers with her real member row, and the rsvp
-	 *  create routes are served so the write can actually land. */
 	function lateMemberWire() {
 		const base = rsvpWireStub({}, { myRsvp: false });
 		let memberCalls = 0;
@@ -1384,7 +1044,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 				if (memberCalls === 1) return new Promise<Response>(() => {});
 				return json({ entities: [{ _id: 'member-1' }] });
 			}
-			// createRsvp's two legs: resolve the `rsvp` type definition, then POST.
 			if (url.includes('_type.string=entity') && url.includes('name.string=rsvp'))
 				return json({ entities: [{ _id: 'type-rsvp' }] });
 			if (method === 'POST' && /\/entity$/.test(url.split('?')[0])) return json({ _id: 'rsvp-new' });
@@ -1392,7 +1051,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		});
 	}
 
-	/** The member query REJECTS (500) every time — load-time and write-time. */
 	function failingMemberWire() {
 		const base = rsvpWireStub({}, { myRsvp: false });
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1402,7 +1060,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		});
 	}
 
-	/** The member query resolves to NO active member — she is not on the roster. */
 	function noMemberWire() {
 		const base = rsvpWireStub({}, { myRsvp: false });
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -1419,8 +1076,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 
 	it('ENABLES on the grant alone — membership staying unresolved decides nothing, no non-member hint', async () => {
 		const { container } = renderWithFetch(stallingMemberWire());
-		// The event read and the viewer's own rsvp read HAVE resolved (pressed
-		// state proves it) — only membership is outstanding.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
@@ -1429,16 +1084,10 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		await waitFor(() => {
 			for (const btn of rsvpButtons(container)) expect(btn.disabled).toBe(false);
 		});
-		// Silent disable was never about membership to begin with — a lookup in
-		// flight is not a verdict about this person, and now it isn't consulted
-		// for enablement at all.
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
 		expect(container.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
 	});
 
-	// The F1 fix in the open: her first tap resolves the member id itself rather
-	// than reading the parked null and failing. The create LANDS, carrying the
-	// member reference the rsvp entity requires.
 	it('a first tap RESOLVES the member id at write time when the load-time lookup never answered — the create lands', async () => {
 		const { container, fetchStub } = renderWithFetch(lateMemberWire());
 		const btn = await waitFor(() => {
@@ -1457,16 +1106,12 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		const body = JSON.parse(String((post[1] as RequestInit).body)) as Array<Record<string, unknown>>;
 		expect(body).toContainEqual({ type: 'member', reference: 'member-1' });
 		expect(body).toContainEqual({ type: 'event', reference: 'ev1' });
-		// A write that landed: no error line, and the answer stays pressed.
 		expect(container.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
 		expect(
 			container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
 		).toBe('true');
 	});
 
-	// The retry is not a promise that it will work: when the lookup rejects at
-	// write time too, the write fails the way every other rejected write does —
-	// revert + the save-failed banner, no POST, no false-pressed value left.
 	it('a write-time lookup that REJECTS fails safely — revert + save-failed, no POST ever issued', async () => {
 		const { container, fetchStub } = renderWithFetch(failingMemberWire());
 		const btn = await waitFor(() => {
@@ -1485,8 +1130,6 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 		).toBe('false');
 	});
 
-	// A lookup that ANSWERS "no active member" is a verdict, not a blip: the
-	// control gives way to the hint rather than staying up to be tapped again.
 	it('a confirmed non-member never gets the control at all — the hint stands in its place', async () => {
 		const { container, fetchStub } = renderWithFetch(noMemberWire());
 		await waitFor(() => {
@@ -1497,13 +1140,7 @@ describe('/event/[id] — RSVP control while membership is still unresolved (#37
 	});
 });
 
-// F3 — the agenda renders a PAST event's control read-only ("there is nothing
-// left to answer", AgendaList.svelte: `pending={true}` on Recent rows), and those
-// same rows link straight to this page, which had no past check at all: a singer
-// could re-answer a finished rehearsal — possibly after attendance was recorded.
 describe('/event/[id] — a past event is read-only (#102 review F3)', () => {
-	/** Yesterday, relative to the pinned NOW — past by the SAME boundary the
-	 *  agenda partitions on (`recentEvents`: start instant < now). */
 	function pastEvent(over: Partial<Record<string, unknown>> = {}) {
 		return eventEntity({
 			start_datetime: [{ datetime: '2026-08-19T16:00:00.000Z' }],
@@ -1519,7 +1156,6 @@ describe('/event/[id] — a past event is read-only (#102 review F3)', () => {
 			).toBe('true');
 		});
 		for (const btn of rsvpButtons(container)) expect(btn.disabled).toBe(true);
-		// Same silent-disable posture the agenda uses — no misleading non-member hint.
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
 	});
 
@@ -1554,12 +1190,7 @@ describe('/event/[id] — a past event is read-only (#102 review F3)', () => {
 	});
 });
 
-// F4 — the viewer's own rsvp is one of the rows the tally counts, and the
-// capacity line reads `tally.going`: changing her own answer left both stale
-// until a reload.
 describe('/event/[id] — the tally refreshes after the editor changes her OWN rsvp (#102 review F4)', () => {
-	/** The all-rsvps read reflects rsvp-77's CURRENT status: 'going' until the
-	 *  update POST lands, 'maybe' after — i.e. what Entu would serve. */
 	function mutatingTallyWire() {
 		const base = rsvpWireStub({ event: editorEvent() });
 		let mine = 'going';
@@ -1570,9 +1201,6 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 				mine = 'maybe';
 				return json({});
 			}
-			// #329 — cross-person tally shape only: excludes the scoped own-answer
-			// read (findMyRsvpForEvent), which also carries `event.reference=ev1`
-			// but is additionally scoped by `_parent.reference=`.
 			if (
 				url.includes('_type.string=rsvp') &&
 				url.includes('event.reference=ev1') &&
@@ -1609,13 +1237,9 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 			);
 		});
 		expect(c.querySelector('[data-testid="event-detail-tally-maybe"]')!.textContent).toContain('2');
-		// The capacity line is derived from the SAME counts — it must not lag.
 		expect(c.querySelector('[data-testid="event-detail-capacity"]')!.textContent).toContain('11');
 	});
 
-	// #363 — FLIPPED (was: "issues NO cross-person tally read at all"). rsvp
-	// rows are `_sharing: domain`; the F4 re-fetch runs for every viewer now,
-	// same as the initial load (epic #362 rule 3).
 	it("a plain member's F4 re-fetch DOES issue the cross-person tally read, same as the initial load (#363)", async () => {
 		const { container, fetchStub } = renderRsvpPage(); // default fixture: no rights visible
 		await waitFor(() => {
@@ -1630,28 +1254,13 @@ describe('/event/[id] — the tally refreshes after the editor changes her OWN r
 			expect(posts.length).toBeGreaterThan(0);
 		});
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		// #329 — the viewer's OWN answer is read via the scoped
-		// `findMyRsvpForEvent` (_parent.reference=p-viewer AND event.reference=ev1),
-		// which legitimately carries `event.reference=ev1` too; only a query WITHOUT
-		// `_parent.reference=` is the cross-person tally shape this test guards.
 		expect(
 			urls.some((u) => u.includes('event.reference=ev1') && !u.includes('_parent.reference='))
 		).toBe(true);
 	});
 });
 
-// ── #102 review round 2 ──────────────────────────────────────────────────────
-
-// F1 — the queue's callbacks are PER-EVENT so a late one cannot land on the
-// wrong state (rsvpChangeQueue.ts: the #15 root cause was a whole-map write
-// clobbering another event). This page collapses them into scalars, and ignored
-// both the callback's `eventId` and the load `generation`: a write started
-// before a collective switch (same id, different db) reconciled onto the page
-// that had since reloaded — seeding a pressed status the new collective has no
-// rsvp for, whose id then got REWRITTEN by the next tap.
 describe('/event/[id] — a write that settles after a collective switch never lands (#102 review round 2, F1)', () => {
-	/** Both dbs serve ev1; only `sampledb` has the viewer's rsvp-77. The update
-	 *  POST is held open until `release()`, so it settles AFTER the switch. */
 	function switchedCollectiveWire() {
 		let release: () => void = () => {};
 		const gate = new Promise<void>((r) => {
@@ -1696,7 +1305,6 @@ describe('/event/[id] — a write that settles after a collective switch never l
 		const { fetchStub, release } = switchedCollectiveWire();
 		const { container } = renderWithTwoCollectives(fetchStub);
 
-		// sampledb: the viewer's rsvp-77 seeds 'going', and the control is live.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
@@ -1704,11 +1312,8 @@ describe('/event/[id] — a write that settles after a collective switch never l
 			const maybe = container.querySelector('[data-testid="rsvp-btn-maybe"]') as HTMLButtonElement;
 			expect(maybe.disabled).toBe(false);
 		});
-		// Tap 'maybe' — the update against rsvp-77 is now in flight (held open).
 		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-maybe"]')!);
 
-		// …and while it is in flight, the collective switches. ev1 exists in `vox`
-		// too, with NO rsvp for this viewer: nothing may be pressed.
 		selectedCollectiveDbStore.set('vox');
 		await waitFor(() => {
 			const going = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement;
@@ -1717,7 +1322,6 @@ describe('/event/[id] — a write that settles after a collective switch never l
 				expect(btn.getAttribute('aria-pressed')).toBe('false');
 		});
 
-		// The sampledb write settles now, onto a page showing the vox load.
 		release();
 		await new Promise((r) => setTimeout(r, 30));
 		for (const btn of rsvpButtons(container))
@@ -1725,9 +1329,6 @@ describe('/event/[id] — a write that settles after a collective switch never l
 				'false'
 			);
 
-		// The reported consequence: with a stale rsvpId seeded, the NEXT tap issues
-		// an update against that id in the WRONG db — rewriting the previous
-		// collective's answer and recording nothing here.
 		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-going"]')!);
 		await new Promise((r) => setTimeout(r, 30));
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
@@ -1738,22 +1339,12 @@ describe('/event/[id] — a write that settles after a collective switch never l
 	});
 });
 
-// F2 — `isEditor && tally` renders a failed tally read exactly like a plain
-// member's view: a conductor read "nobody answered / I have no rights" instead
-// of "the counts failed to load", with nothing logged and no way back short of
-// a reload. Absence is the clean negative; a fetch failure is not (the rule
-// repertoireActions.resolveManageRights states out loud).
 describe('/event/[id] — a FAILED tally read is surfaced, not silently collapsed (#102 review round 2, F2)', () => {
-	/** The cross-person tally read 500s `failTimes` times, then recovers. */
 	function failingTallyWire(failTimes = Number.POSITIVE_INFINITY) {
 		const base = rsvpWireStub({ event: editorEvent() });
 		let left = failTimes;
 		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 			const url = String(input);
-			// #329 — cross-person tally shape only; the scoped own-answer read
-			// (findMyRsvpForEvent) also carries `event.reference=ev1` but is
-			// additionally scoped by `_parent.reference=` and must not eat this
-			// failure budget meant for the tally read.
 			if (
 				url.includes('_type.string=rsvp') &&
 				url.includes('event.reference=ev1') &&
@@ -1773,7 +1364,6 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
 		});
-		// The counts are DROPPED, not left standing as if current.
 		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
 		expect(
@@ -1802,9 +1392,6 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 		errorSpy.mockRestore();
 	});
 
-	// #363 — FLIPPED (was: a plain member issues no read, sees no error line).
-	// Every member issues the read now, so the failure of a read SHE issued is
-	// hers to be told about (Gama ruling on #363), Retry included.
 	it("a plain member's FAILED tally read shows HER the error line + Retry (#363)", async () => {
 		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const base = rsvpWireStub(); // default fixture: no rights visible
@@ -1823,60 +1410,11 @@ describe('/event/[id] — a FAILED tally read is surfaced, not silently collapse
 			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="event-detail-tally-retry"]')).not.toBeNull();
-		// The counts are dropped, never rendered stale beside the error.
 		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
 		errorSpy.mockRestore();
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// #103 TE.3 (RED) — compose the WORKS and ATTENDANCE surfaces onto the detail
-// page from the components + data layers that ALREADY exist. Parent: #81
-// (Event detail 1.0). Nothing here invents a new renderer or a new read — the
-// contract is composition:
-//
-//   src/routes/event/[id]/+page.svelte grows two sections:
-//
-//   • data-testid="event-detail-works" — RepertoireElement (the agenda's works
-//     element, $lib/components/agenda/RepertoireElement.svelte), fed by the
-//     SAME read pipeline the agenda runs: resolveEventWorks/-Batch
-//     (repertoireData: program_items, else the parent SEASON's
-//     repertoire_items) joined through buildWorkRows (workRows.ts) against the
-//     library lookups (listWorks/listAllEditions/listAllCopies). The detail
-//     page IS the expanded view: work rows (RepertoireElement's own
-//     works-expanded / work-row testids) are visible with NO tap — never the
-//     collapsed one-liner a member must open first. Absent ENTIRELY when the
-//     event resolves no works (no empty "Works" placeholder, same rule
-//     RepertoireElement itself follows for members).
-//     Management controls (work-manage-*) render for a season rights-holder —
-//     `_owner`/`_editor` on the PARENT SEASON via manageRightsFrom, the app's
-//     one owner-or-editor rule — exactly as they do on the agenda.
-//
-//   • data-testid="event-detail-attendance" — PAST events only, the same
-//     start-instant boundary `isPast` already draws (attendance is recorded
-//     after the fact; a future event has nothing to show):
-//       - event-detail-attendance-badge — the viewer's OWN status (#85's
-//         badge), from the domain-shared attendance read;
-//       - event-detail-attendance-tally, with per-status counts in
-//         event-detail-attendance-tally-{present,absent,late} — from the
-//         child-of-event listAttendance read (attendanceData). Domain-visible
-//         data, so a plain member may see it — NOT gated on rights;
-//       - take-attendance-btn — RIGHTS-HOLDERS only (#356 superseded the #83
-//         conductor-seat rule: canMarkAttendance — manageRightsFrom(
-//         detail.ownerIds, detail.editorIds, personId) === 'editor', the same
-//         owner-or-editor rule as everything else; the seat alone no longer
-//         gates marking on either surface), opening the SAME AttendanceSurface
-//         component (attendance-panel / attendance-row-{memberId} /
-//         attendance-toggle-{memberId}-{status}) fed by the real loadRoster +
-//         listAttendance + listAllRsvpsForEvent reads.
-//     The section is ABSENT on future events — no badge, no tally, no button.
-//
-// Assertions match on DATA (names, counts, pressed state) and on the
-// components' OWN internal testids — presence of works-expanded /
-// attendance-panel pins REUSE of the existing components, not lookalike markup.
-
-/** Yesterday relative to the pinned NOW — past by the same start-instant
- *  boundary the agenda partitions on (and `isPast` reuses). */
 function pastEventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({
 		start_datetime: [{ datetime: '2026-08-19T16:00:00.000Z' }],
@@ -1884,8 +1422,6 @@ function pastEventEntity(over: Partial<Record<string, unknown>> = {}) {
 	});
 }
 
-/** The viewer holds the conductor seat via the SEASON list (event.conductor
- *  empty → inherit, resolveConductors' first branch). */
 function conductorSeason(over: Partial<Record<string, unknown>> = {}) {
 	return seasonEntity({
 		conductor: [{ reference: 'p-viewer' }, { reference: 'p-mihkel' }],
@@ -1893,21 +1429,16 @@ function conductorSeason(over: Partial<Record<string, unknown>> = {}) {
 	});
 }
 
-/** The viewer holds `_editor` on the SEASON — the works-management gate. */
 function editorSeason(over: Partial<Record<string, unknown>> = {}) {
 	return seasonEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
 
-/** The viewer's own shared profile — needed so the roster read (loadRoster
- *  drops nameless members, #28) and the conductor line can name her. */
 const VIEWER_PROFILE: Record<string, unknown[]> = {
 	'p-viewer': [
 		{ _id: 'prof-v', name: [{ string: 'Viewer Vera' }], _sharing: [{ string: 'domain' }] }
 	]
 };
 
-/** Season repertoire fallback rows for season1 (the event carries no
- *  program_items by default): two works, both member-visible statuses. */
 function repertoireItemsFixture(): unknown[] {
 	return [
 		{
@@ -1925,9 +1456,6 @@ function repertoireItemsFixture(): unknown[] {
 	];
 }
 
-/** ev1's OWN programme (two program_items, ordinal-ordered) — the source
- *  hierarchy's first branch, so these REPLACE the season-repertoire fallback
- *  and the works element must switch to the programme surface. */
 function programItemsFixture(): unknown[] {
 	return [
 		{
@@ -1945,9 +1473,6 @@ function programItemsFixture(): unknown[] {
 	];
 }
 
-/** The library works the rows join against — the composer can ONLY come from
- *  here (repertoire_item carries just the name formula), so seeing it rendered
- *  proves the buildWorkRows join ran over the real listWorks read. */
 function libraryWorksFixture(): unknown[] {
 	return [
 		{ _id: 'w-1', name: [{ string: 'Bogoróditse Djévo' }], composer: [{ string: 'Arvo Pärt' }] },
@@ -1955,7 +1480,6 @@ function libraryWorksFixture(): unknown[] {
 	];
 }
 
-/** Four active members: the viewer (member-1) + the three profiled persons. */
 function activeMembersFixture(): unknown[] {
 	const org = [{ reference: 'org1', entity_type: 'organization' }];
 	return [
@@ -1972,8 +1496,6 @@ type AttendanceRaw = {
 	status?: Array<{ string: string }>;
 };
 
-/** ev1's recorded attendance: 2 present (the viewer among them), 1 absent,
- *  1 late — the tally fixture AND the badge's source. */
 function attendanceForEv1(): AttendanceRaw[] {
 	return [
 		{ _id: 'att-1', member: [{ reference: 'member-1' }], status: [{ string: 'present' }] },
@@ -1990,35 +1512,15 @@ type ComposeFixtures = Fixtures & {
 	editions?: unknown[];
 	copies?: unknown[];
 	members?: unknown[];
-	/** #321 — the server `count` the WORK list read answers with. Above the
-	 *  number of `works` served, that read is TRUNCATED, which the closed-set
-	 *  "Add work" picker must say out loud. Omitted = complete. */
 	workCount?: number;
-	/** #321 — the same for the EDITION read behind "Add to programme". */
 	editionCount?: number;
-	/** #321 — the server `count` the member list read answers with. Above the
-	 *  number of `members` served, the read is TRUNCATED (`isTruncated`
-	 *  compares count against the raw wire array), which is what the closed-set
-	 *  attendance panel has to say out loud. Omitted = no count on the wire =
-	 *  complete, the shape every pre-#321 fixture here describes. */
 	memberCount?: number;
 	attendance?: AttendanceRaw[];
-	/** #469 (was #269's fence lever) — serve the real-names wire: a resolvable
-	 *  database entity, the `roster_show_real_names` toggle and named
-	 *  `admin_member_record`s. `true` → the toggle answers true; `'off'` → the
-	 *  toggle answers FALSE while the records stay on offer (a tree that
-	 *  wrongly fetches them renders them and fails loudly). Absent → no
-	 *  real-names routes at all (the database entity does not resolve; the
-	 *  overlay degrades to profile names by itself — pre-#469 fixtures keep
-	 *  passing unchanged). */
 	realNames?: boolean | 'off';
 };
 
-/** #269 — the collective entity id the real-names wire resolves to. */
 const RN_DB_ENTITY = 'db-ent-fence';
 
-/** #269 — the record names the overlay would show if it leaked onto this page.
- *  Keyed by person id, matching `activeMembersFixture`. */
 const RN_RECORD_NAMES: Record<string, string> = {
 	'p-viewer': 'Zoe Zeta',
 	'p-mihkel': 'Aaron Aardvark',
@@ -2026,15 +1528,6 @@ const RN_RECORD_NAMES: Record<string, string> = {
 	'p-guest': 'Bruno Birch'
 };
 
-/**
- * The TE.2 wire (rsvpWireStub) extended with every route the two new surfaces
- * read: the works pipeline (program_item / repertoire_item / work / edition /
- * copy), the roster read (active members WITHOUT a person filter —
- * findMyMemberId's person-scoped query still falls through to the base), and
- * the attendance reads. BOTH attendance roads are served — child-of-event
- * scoping (listAttendance) and member-scoped (listMyAttendance), derived from
- * the SAME records — so the tests pin the contract, not one choreography.
- */
 function composeWireStub(fixtures: ComposeFixtures = {}) {
 	const profiles = { ...PROFILES, ...VIEWER_PROFILE, ...(fixtures.profiles ?? {}) };
 	const base = rsvpWireStub({
@@ -2050,15 +1543,11 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 	const copies = fixtures.copies ?? [];
 	const members = fixtures.members ?? activeMembersFixture();
 	const attendance = fixtures.attendance ?? attendanceForEv1();
-	// listMyAttendance's shape for the viewer: her rows, event id on `_parent`.
 	const myAttendance = attendance
 		.filter((r) => r.member?.[0]?.reference === 'member-1')
 		.map((r) => ({ _id: r._id, _parent: [{ reference: 'ev1' }], status: r.status }));
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
-		// #469 (was #269's fence branches) — the real-names routes, first so they
-		// outrank the generic ones below. Only served when a test opts in;
-		// `'off'` answers the toggle FALSE while keeping the records on offer.
 		if (fixtures.realNames) {
 			if (url.includes('_type.string=admin_member_record')) {
 				return json({
@@ -2098,8 +1587,6 @@ function composeWireStub(fixtures: ComposeFixtures = {}) {
 					: { count: fixtures.editionCount, entities: editions }
 			);
 		if (url.includes('_type.string=copy')) return json({ entities: copies });
-		// The ROSTER read (listActiveMembers) carries no person filter; the
-		// person-scoped findMyMemberId query keeps falling through to the base.
 		if (url.includes('_type.string=member') && !url.includes('person.reference'))
 			return json(
 				fixtures.memberCount === undefined
@@ -2119,8 +1606,6 @@ function renderComposePage(fixtures: ComposeFixtures = {}) {
 	return renderWithFetch(composeWireStub(fixtures));
 }
 
-// ── the works section ─────────────────────────────────────────────────────────
-
 describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always expanded)', () => {
 	it('renders the works section with the rows ALREADY expanded — work names + composers, no tap needed', async () => {
 		const { container, fetchStub } = renderComposePage();
@@ -2129,27 +1614,18 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 		});
 		const section = container.querySelector('[data-testid="event-detail-works"]')!;
 
-		// The EXPANDED region — RepertoireElement's OWN testid, pinning reuse of
-		// the component — is present without any interaction at all.
 		expect(section.querySelector('[data-testid="works-expanded"]')).not.toBeNull();
 		const rows = [...section.querySelectorAll('[data-testid="work-row"]')];
 		expect(rows).toHaveLength(2);
 		const text = rows.map((r) => r.textContent ?? '').join(' ');
 		expect(text).toContain('Bogoróditse Djévo');
 		expect(text).toContain('Locus iste');
-		// Composers come ONLY from the listWorks join (repertoire_item carries just
-		// the name formula) — seeing them proves the real buildWorkRows pipeline.
 		expect(text).toContain('Arvo Pärt');
 		expect(text).toContain('Anton Bruckner');
 
-		// If the collapsed one-line toggle renders at all, it must already SAY
-		// expanded — a member never has to open the works on their own page.
 		const line = section.querySelector('[data-testid="works-line"]');
 		if (line) expect(line.getAttribute('aria-expanded')).toBe('true');
 
-		// …and the rows were RESOLVED over the wire via the agenda's own source
-		// hierarchy: this event's program_items first, then the PARENT SEASON's
-		// repertoire as fallback — not some detail-page-only read.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.some((u) => u.includes('_type.string=program_item') && u.includes('ev1'))).toBe(
 			true
@@ -2167,19 +1643,11 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 			).toBeGreaterThan(0);
 		});
 		const section = container.querySelector('[data-testid="event-detail-works"]')!;
-		// Per-row repertoire controls (these are season-repertoire fallback rows,
-		// so the REPERTOIRE surface's controls are the ones that may touch them).
 		expect(section.querySelectorAll('[data-testid="work-status-active"]')).toHaveLength(2);
 		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(2);
-		// …and the Add-work picker, the same one the agenda's editor sees.
 		expect(section.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
 	});
 
-	// Review round 2 (F1/F2) — the works load used to sit at the end of a
-	// three-deep serial chain: a SECOND `entity/ev1?props=_parent` (for a parent
-	// the detail read already carried) → a SECOND `entity/season1` (for rights
-	// the season read could have carried) → the works. Both extra reads are
-	// gone, so the page reads each entity exactly once.
 	it('reads the event and the season ONCE each — no second GET for the parent id or for season rights', async () => {
 		const { container, fetchStub } = renderComposePage({ season: editorSeason() });
 		await waitFor(() => {
@@ -2190,11 +1658,6 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 		expect(urls.filter((u) => u.includes('/entity/season1'))).toHaveLength(1);
 	});
 
-	// Review round 2 (F3) — `includeInactive` used to hang off a rights read that
-	// could answer 'error', and 'error' was treated as 'not-editor': a real
-	// season editor whose rights GET blipped silently lost the retired/dropped
-	// rows (and the toggle that brings them back). Rights are computed from the
-	// season read now — no separate call, no error state to collapse.
 	it('a season editor sees the RETIRED rows too — includeInactive rides on the same read as the rights', async () => {
 		const { container } = renderComposePage({
 			season: editorSeason(),
@@ -2234,8 +1697,6 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 
 	it('NO works section at all when the event resolves no works — never an empty placeholder', async () => {
 		const { container } = renderComposePage({ programItems: [], repertoireItems: [] });
-		// Settle: the page is fully loaded (header up, rsvp seeded) before the
-		// absence is asserted — this is "resolved to nothing", not "still loading".
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
@@ -2247,11 +1708,6 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 		expect(container.querySelector('[data-testid="work-row"]')).toBeNull();
 	});
 
-	// Review F2 — `context` was hardcoded to 'repertoire' here, and
-	// RepertoireElement gates row controls on `context` matching the row's
-	// `kind`, so a PROGRAMMED event rendered no row controls at all on this page
-	// while the SAME event's agenda row rendered move/remove. The surface is
-	// derived from row provenance now, exactly as AgendaList.worksContext does.
 	it('a PROGRAMMED event shows the PROGRAMME surface — per-row move/remove for an event editor, as on the agenda', async () => {
 		const { container } = renderComposePage({
 			event: eventEntity({ _editor: [{ reference: 'p-viewer' }] }),
@@ -2262,43 +1718,16 @@ describe('/event/[id] — works section (#103 TE.3: RepertoireElement, always ex
 			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
 		});
 		const section = container.querySelector('[data-testid="event-detail-works"]')!;
-		// The programme's own row controls — the ones handleMoveItem /
-		// handleRemoveItem's program branch are wired to.
 		expect(section.querySelectorAll('[data-testid="work-manage-move-up"]')).toHaveLength(2);
 		expect(section.querySelectorAll('[data-testid="work-manage-move-down"]')).toHaveLength(2);
 		expect(section.querySelectorAll('[data-testid="work-manage-remove"]')).toHaveLength(2);
 		expect(section.querySelector('[data-testid="work-manage-add-programme"]')).not.toBeNull();
-		// …and NOT the season-repertoire picker: these rows are program_items, and
-		// the agenda's programme surface does not offer "Add work" either.
 		expect(section.querySelector('[data-testid="work-manage-add-work"]')).toBeNull();
 		expect(section.querySelector('[data-testid="work-status-active"]')).toBeNull();
 	});
 });
 
-// ── #311 — the Add Work picker on the event detail page ───────────────────────
-//
-// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
-// RepertoireElement's `pickableWorksVisible` defaults to RENDER; hiding is an
-// explicit opt-in a caller may compute ONLY from a load that COMPLETED
-// SUCCESSFULLY with nothing left to pick. The ruling left this page a choice:
-// opt in, or record plainly why it cannot. Decided FROM THE CODE: it CAN and
-// does opt in — this page's `loadManagePickers` is a single generation-guarded
-// Promise.all setting BOTH of `pickableWorksList`'s inputs (`libraryWorks` +
-// `seasonRepertoire`), with distinct success and catch settle paths — exactly
-// the one-flag shape the main agenda flow gates on, so the same scalar opt-in
-// applies. It lacks a loading flag today (reset/refill/catch and nothing
-// else); GREEN adds one, raised before the Promise.all and cleared in BOTH
-// settle paths.
-//
-// NOTE the default fixtures are ALREADY the confirmed-empty case: every
-// libraryWorksFixture() work (w-1, w-2) is in repertoireItemsFixture() — which
-// is why the existing "management controls render" spec above pins the
-// `work-manage-add-work` WRAPPER, not the select: the gate lands on the inner
-// select + button (the #272 part-4 rule), the wrapper stays, and that spec
-// keeps passing untouched.
 describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing left to pick once loading COMPLETED SUCCESSFULLY"', () => {
-	/** `composeWireStub` with holdable / failable `_type.string=work` GETs —
-	 *  the read feeding BOTH the row join and the pickers' `libraryWorks`. */
 	function worksHoldStub(
 		fixtures: ComposeFixtures = {},
 		{ failWorks = false, armed = false }: { failWorks?: boolean; armed?: boolean } = {}
@@ -2327,9 +1756,6 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 	}
 
 	it('load completes with every library work already in the repertoire → select and button GONE, wrapper and rows stand', async () => {
-		// Default fixtures ARE this case: w-1 and w-2 both sit in the season
-		// repertoire, the load lands cleanly, and nothing is left to pick — the
-		// commission's empty select beside a permanently disabled Add.
 		const { container } = renderComposePage({ season: editorSeason() });
 		await waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
@@ -2339,16 +1765,11 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 			expect(section.querySelector('[data-testid="work-manage-add-work-select"]')).toBeNull();
 		});
 		expect(section.querySelector('[data-testid="work-manage-add-work-button"]')).toBeNull();
-		// The wrapper stays (#272 part-4 rule) and hiding a picker never takes
-		// the rows or the section with it.
 		expect(section.querySelector('[data-testid="work-manage-add-work"]')).not.toBeNull();
 		expect(section.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
 	});
 
 	it('while the picker load is IN FLIGHT the select stays (still loading is not empty), and settles to the real options', async () => {
-		// A THIRD work not yet in the repertoire → once loaded, genuinely
-		// pickable. Every works GET is held from the start, so the window is
-		// provably open when the presence is asserted.
 		const world = worksHoldStub(
 			{
 				season: editorSeason(),
@@ -2361,15 +1782,12 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 		);
 		const { container } = renderWithFetch(world.stub);
 
-		// The section is up for the rights-holder while the reads hang…
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-works"]')).not.toBeNull();
 		});
 		await waitFor(() => {
 			expect(world.heldCount()).toBeGreaterThan(0);
 		});
-		// …and the select with it: a transiently-empty `pickableWorksList` mid-
-		// load must not hide the control (the flicker the naive gate ships).
 		expect(
 			container.querySelector('[data-testid="work-manage-add-work-select"]'),
 			'picker load in flight → the select must not be withheld off a still-loading list'
@@ -2389,19 +1807,12 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 		const world = worksHoldStub({ season: editorSeason() }, { failWorks: true });
 		const { container } = renderWithFetch(world.stub);
 
-		// Settle the page: the rsvp seed is the same "fully loaded" signal the
-		// no-works-section spec uses; the works reads have all 500'd by then and
-		// this page's `loadManagePickers` catch has blanked its lists.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
 			).toBe('true');
 		});
 		await new Promise((r) => setTimeout(r, 30));
-		// `!loading && length === 0` is true here — and hiding would silently
-		// invert the catch's deliberate choice: no picker, no error, nothing
-		// anywhere saying the library did not load. The section renders for the
-		// rights-holder and the select stays, empty.
 		const section = container.querySelector('[data-testid="event-detail-works"]');
 		expect(section, 'the editor still gets the works section').not.toBeNull();
 		expect(
@@ -2411,22 +1822,10 @@ describe('/event/[id] — #311: the Add Work picker keys hiding off "nothing lef
 	});
 });
 
-// ── #321 review F2 — this page's repertoire pickers state a truncated feed ───────
-//
-// Same closed sets as the agenda's (the component is shared), driven here through
-// this page's OWN `loadManagePickers`: a work the "Add work" list does not offer
-// cannot be added to the season's repertoire, and an edition "Add to programme"
-// does not offer cannot go on tonight's programme. Both feeds carried the "out of
-// the RED-pinned scope" narrowing the PO's ruling rejected.
-
 describe('/event/[id] — the repertoire pickers state a truncated library read (#321 review F2)', () => {
 	const WORK_OPTION = 'work-manage-add-work-partial-option';
 	const PROGRAMME_OPTION = 'work-manage-add-programme-partial-option';
 
-	/** The default library fixture is entirely IN the season's repertoire, so
-	 *  `pickableWorksList` is empty and the select is legitimately withheld
-	 *  (#311). One extra work makes the picker real — the same move the #311
-	 *  specs above make. */
 	function worksWithSomethingPickable(): unknown[] {
 		return [
 			...libraryWorksFixture(),
@@ -2451,7 +1850,6 @@ describe('/event/[id] — the repertoire pickers state a truncated library read 
 		const last = options[options.length - 1];
 		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
 		expect(last.disabled).toBe(true);
-		// One flag per FEED — the editions read was complete, so no claim there.
 		expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).toBeNull();
 	});
 
@@ -2468,8 +1866,6 @@ describe('/event/[id] — the repertoire pickers state a truncated library read 
 	});
 });
 
-// ── the attendance section (past events only) ─────────────────────────────────
-
 describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () => {
 	it("shows the viewer's OWN attendance badge (member-1 was recorded present)", async () => {
 		const { container, fetchStub } = renderComposePage({ event: pastEventEntity() });
@@ -2478,11 +1874,8 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		});
 		const badge = container.querySelector('[data-testid="event-detail-attendance-badge"]');
 		expect(badge).not.toBeNull();
-		// Her status is 'present' and the label goes through paraglide — whether it
-		// lands in the visible text or the aria-label is presentation, not contract.
 		const rendered = `${badge!.textContent ?? ''} ${badge!.getAttribute('aria-label') ?? ''}`;
 		expect(rendered).toContain('attendance_status_present');
-		// …and it was RESOLVED from the attendance read, not hardcoded.
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.some((u) => u.includes('_type.string=attendance'))).toBe(true);
 	});
@@ -2503,9 +1896,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it("offers 'Take attendance' to a CONDUCTOR and opens the real AttendanceSurface over the real roster", async () => {
-		// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not
-		// the seat: the viewer gains `_editor` on the event so this open-flow
-		// pin stays reachable. The seat stays (conductor display data).
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason()
@@ -2516,12 +1906,9 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 
 		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
 
-		// AttendanceSurface's OWN testids — reuse of the component, not a lookalike.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-panel"]')).not.toBeNull();
 		});
-		// The roster was loaded over the wire (loadRoster: members + profiles) —
-		// one row per named member, the viewer among them.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
 		});
@@ -2530,8 +1917,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		).toContain('Viewer Vera');
 		expect(container.querySelector('[data-testid="attendance-row-member-2"]')).not.toBeNull();
 
-		// The toggles are SEEDED from the event's existing records — member-1
-		// present, member-3 absent — not blank.
 		expect(
 			container
 				.querySelector('[data-testid="attendance-toggle-member-1-present"]')
@@ -2544,24 +1929,7 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		).toBe('true');
 	});
 
-	// ── #469 — obeys roster_show_real_names (supersedes the #269 roster-only
-	//    ruling) ────────────────────────────────────────────────────────────────
-	//
-	// HISTORY, named not deleted: this block was the #269 SCOPE FENCE under
-	// Henry's 2026-09-06 roster-only ruling ("Every other place a member's name
-	// appears — pickers, chips, the agenda, event pages, the library — keeps
-	// profile names"). Mihkel's #469 word (2026-09-23, issue body: "all places
-	// we are showing member names and they all must obey the admin setting")
-	// SUPERSEDES it, so the fence flips to the conditional contract: the
-	// attendance panel (and the RSVP tally card below) obeys the toggle.
-	//
-	// `realNames: true`/`'off'` keeps the fixture non-vacuous either way: the
-	// database entity RESOLVES, the toggle is a real read answer, and named
-	// records are on the wire. Without the database stub the overlay would
-	// degrade to off by itself and the off side would pass on a broken tree.
 	it("the attendance panel shows REAL names with the toggle ON — one toggle read, one records read, profile name gone (#469, supersedes the #269 roster-only ruling)", async () => {
-		// #356 — event `_editor` added so the panel this test opens stays
-		// reachable under the rights gate (see the open-flow test above).
 		const { container, fetchStub } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
@@ -2570,21 +1938,12 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 		});
-		// #469 review F3 — the read discipline is measured as the DELTA across the
-		// panel open, not as an absolute count over the whole page: since the
-		// review the HEADER's conductor line obeys the toggle too, from its own
-		// read on page load (a conductor is a person who may not be a member at
-		// all, so she cannot be resolved off a roster read). The claim this test
-		// makes is about the PANEL's read discipline — never one read per member —
-		// and a per-surface delta says exactly that, where an absolute count would
-		// quietly turn into a count of how many surfaces this page has.
 		const before = fetchStub.mock.calls.length;
 		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
 		});
 
-		// The RECORD name, not the profile name.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
@@ -2594,18 +1953,11 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(panel.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
 		expect(panel.textContent).not.toContain('Viewer Vera');
 
-		// ONE toggle read and ONE bulk records read ride the panel's one loadRoster
-		// call — never one per member.
 		const opened = fetchStub.mock.calls.slice(before).map((c) => String(c[0]));
 		expect(opened.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
 		expect(opened.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
 	});
 
-	// #469 review F3 — the header's conductor line was the last profile-only
-	// member surface left on this page: the attendance panel and the RSVP tally
-	// card obeyed the toggle while the header two sections above them named the
-	// SAME person by her profile name, and the agenda's conductor chips (which
-	// read the overlaid roster rows) disagreed with the header too.
 	it('the header names the conductors by their REAL names with the toggle ON (#469 review F3)', async () => {
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
@@ -2668,25 +2020,14 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 
 		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		// #469 review F3 — TWO toggle reads on this page now, one per name-bearing
-		// surface that resolves independently: the header's conductor line (page
-		// load) and this panel (its own open). Neither spends a records read while
-		// the toggle is off, which is the claim that matters here.
 		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(2);
 	});
 
-	// #469 — the RSVP tally card is the event page's RSVP LIST and obeys too.
-	// A PAST event resolves its names over `loadRosterIncludingArchived`
-	// (#344 F1), so this is also the route-level pin that the ARCHIVED-aware
-	// producer applies the overlay — and that the card renders the row's
-	// DISPLAYED name (`row.name`), not the profileName bypass it carried while
-	// the #269 fence stood.
 	it('the RSVP tally card names a PAST event\'s respondents by their REAL names with the toggle ON — resolved via loadRosterIncludingArchived (#469)', async () => {
 		const { container } = renderComposePage({
 			event: pastEventEntity(),
 			realNames: true
 		});
-		// The tally line is the activator (#344); it renders for any member.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-tally-toggle"]')).not.toBeNull();
 		});
@@ -2696,8 +2037,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		});
 
 		const card = container.querySelector('[data-testid="event-detail-tally-card"]')!;
-		// member-1 (p-viewer) answered 'going' — her card entry shows the record
-		// name, and her profile name appears nowhere on the card.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="event-detail-tally-card-group-going"]')!.textContent
@@ -2706,10 +2045,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(card.textContent).not.toContain('Viewer Vera');
 	});
 
-	// #361 review F1 — the same card, now for the MARKER. The names above are
-	// real member names, so the open card is a screenshot leak unless each one
-	// renders through PersonName. The structural guard cannot see a shape it was
-	// not taught; this pins the rendered DOM.
 	it('the RSVP tally card renders each respondent name through the capture marker, exactly once (#361)', async () => {
 		const { container } = renderComposePage({
 			event: pastEventEntity(),
@@ -2722,9 +2057,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		const group = await waitFor(() => {
 			const el = container.querySelector('[data-testid="event-detail-tally-card-group-going"]');
 			expect(el).not.toBeNull();
-			// Settle on the RESOLVED name: before the roster read lands the card
-			// renders the placeholder, and a marker assertion against that would
-			// pass while saying nothing about a real name.
 			expect(el!.textContent).toContain(RN_RECORD_NAMES['p-viewer']);
 			return el!;
 		});
@@ -2732,7 +2064,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it("a NON-conductor gets the badge and tally but NO 'Take attendance'", async () => {
-		// Default season: conductors are p-mihkel + p-alice — the viewer holds no seat.
 		const { container } = renderComposePage({ event: pastEventEntity() });
 		await waitFor(() => {
 			expect(
@@ -2743,14 +2074,8 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
 	});
 
-	// Review F1 — the section used to render for ANY resolved member, because
-	// `myAttendanceStatus` falls back to 'not-recorded' and was treated as
-	// evidence of data. Most past rehearsals have no attendance taken, so this
-	// was the COMMON case: an empty section with a 0/0/0 tally.
 	it('NO attendance section on a past event with NOTHING recorded — a plain member gets no empty placeholder', async () => {
 		const { container } = renderComposePage({ event: pastEventEntity(), attendance: [] });
-		// Settle: the page is fully loaded (works resolved from the same wire)
-		// before the absence is asserted — "resolved to nothing", not "loading".
 		await waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
 		});
@@ -2761,9 +2086,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it("a CONDUCTOR still gets the section on a past event with nothing recorded — 'Take attendance' needs somewhere to live", async () => {
-		// #356 — the section-admit branch is now the rights rule too: the viewer
-		// gains `_editor` on the event (a SEAT-ONLY conductor no longer gets the
-		// section — page.attendance-rights-gate.spec.ts pins that negative).
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
@@ -2773,19 +2095,12 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="event-detail-attendance"]')).not.toBeNull();
-		// Review round 2 (F4) — …but NOT a zeroed tally. '0 present · 0 absent ·
-		// 0 late' is the empty placeholder F1 removed for members, reappearing for
-		// the one viewer the section is kept open for. She gets the entry point,
-		// not a summary of nothing.
 		expect(container.querySelector('[data-testid="event-detail-attendance-tally"]')).toBeNull();
 		expect(
 			container.querySelector('[data-testid="event-detail-attendance-tally-present"]')
 		).toBeNull();
 	});
 
-	// Review F3 — the badge is the agenda's AttendanceBadge, not inline markup
-	// copied from it: the first copy shipped without the colour dot and without
-	// `data-status`, and no test could see the divergence.
 	it("the badge is the agenda's own component — colour dot (aria-hidden) + data-status", async () => {
 		const { container } = renderComposePage({ event: pastEventEntity() });
 		await waitFor(() => {
@@ -2799,7 +2114,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 
 	it('NO attendance section on a FUTURE event — even for a conductor', async () => {
-		// Default event starts 2026-09-01, after the pinned NOW.
 		const { container } = renderComposePage({ season: conductorSeason() });
 		await waitFor(() => {
 			const going = container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement;
@@ -2814,8 +2128,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 	});
 });
 
-// ── composition: both sections, absent together, present together ─────────────
-
 describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 	it('BOTH sections absent when there is nothing to show (future event, no works) — the page stays whole', async () => {
 		const { container } = renderComposePage({ programItems: [], repertoireItems: [] });
@@ -2827,7 +2139,6 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 		await new Promise((r) => setTimeout(r, 30));
 		expect(container.querySelector('[data-testid="event-detail-works"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-attendance"]')).toBeNull();
-		// …and the existing surfaces did not go with them.
 		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 			'Tuesday Rehearsal'
 		);
@@ -2835,10 +2146,6 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 	});
 
 	it('integration: ONE page composes header + rsvp + works (expanded, managed) + attendance (badge, tally, surface) from the existing components', async () => {
-		// #356 — the attendance surface's gate reads the EVENT's own rights
-		// (canMarkAttendance over detail.ownerIds/editorIds), so the viewer
-		// gains `_editor` on the event; the season `_editor` keeps gating the
-		// works-management controls as before.
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: seasonEntity({
@@ -2847,14 +2154,11 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 			})
 		});
 
-		// Both sections mount on the SAME render of the actual route page.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-detail-works"]')).not.toBeNull();
 			expect(container.querySelector('[data-testid="event-detail-attendance"]')).not.toBeNull();
 		});
 
-		// Works: expanded rows INSIDE the works section, with the season-editor's
-		// management controls live.
 		const worksSection = container.querySelector('[data-testid="event-detail-works"]')!;
 		await waitFor(() => {
 			expect(worksSection.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
@@ -2864,7 +2168,6 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 			worksSection.querySelector('[data-testid="work-status-active"]')
 		).not.toBeNull();
 
-		// Attendance: badge + tally + the conductor's button INSIDE the section.
 		const attSection = container.querySelector('[data-testid="event-detail-attendance"]')!;
 		await waitFor(() => {
 			expect(
@@ -2874,23 +2177,18 @@ describe('/event/[id] — composing both sections (#103 TE.3)', () => {
 		expect(attSection.querySelector('[data-testid="event-detail-attendance-badge"]')).not.toBeNull();
 		expect(attSection.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 
-		// The conductor's surface opens INSIDE the attendance section — the same
-		// AttendanceSurface component, composed on this page.
 		await fireEvent.click(attSection.querySelector('[data-testid="take-attendance-btn"]')!);
 		await waitFor(() => {
 			expect(attSection.querySelector('[data-testid="attendance-panel"]')).not.toBeNull();
 			expect(attSection.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
 		});
 
-		// …and the TE.1/TE.2 surfaces are intact alongside both.
 		expect(container.querySelector('[data-testid="event-detail-name"]')?.textContent).toContain(
 			'Tuesday Rehearsal'
 		);
 		expect(container.querySelector('[data-testid="event-detail-rsvp"]')).not.toBeNull();
 	});
 });
-
-// ── #204 — the edition picker on the event DETAIL page shows the composer ────
 
 describe('/event/[id] — "Add to programme" picker shows composer (#204)', () => {
 	it('labels read "Work - Composer — Edition"; a composerless work keeps its bare name — no dangling " - "', async () => {
@@ -2901,11 +2199,9 @@ describe('/event/[id] — "Add to programme" picker shows composer (#204)', () =
 			works: [
 				{ _id: 'w-1', name: [{ string: 'Bogoróditse Djévo' }], composer: [{ string: 'Arvo Pärt' }] },
 				{ _id: 'w-2', name: [{ string: 'Locus iste' }], composer: [{ string: 'Anton Bruckner' }] },
-				// NO composer — the no-dangling-" - " case.
 				{ _id: 'w-3', name: [{ string: 'Ubi caritas' }] }
 			],
 			editions: [
-				// ed-1/ed-2 are already programmed (programItemsFixture) → filtered out.
 				{
 					_id: 'ed-1',
 					name: [{ string: 'Edition A' }],
@@ -2929,16 +2225,12 @@ describe('/event/[id] — "Add to programme" picker shows composer (#204)', () =
 			]
 		});
 
-		// Wait for the PROGRAMME rows to land too — the picker's programmed-set
-		// filter (and the DOM node itself) re-derives when they do, so the select
-		// must be (re)queried after that, never captured early.
 		await waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-row"]').length).toBe(2);
 			const sel = container.querySelector(
 				'[data-testid="work-manage-add-programme-select"]'
 			) as HTMLSelectElement | null;
 			expect(sel).not.toBeNull();
-			// ed-1/ed-2 are programmed → filtered out: placeholder + ed-3 + ed-4.
 			expect(sel!.querySelectorAll('option').length).toBe(3);
 		});
 		const select = container.querySelector(
@@ -2954,22 +2246,8 @@ describe('/event/[id] — "Add to programme" picker shows composer (#204)', () =
 	});
 });
 
-// (*MVOX:Tallis* — #101 TE.1 RED)
-// (*MVOX:Josquin* — #101 TE.1 review fixes F1/F3)
-// (*MVOX:Josquin* — #101 TE.1 review round 2, F1–F5)
-// (*MVOX:Tallis* — #102 TE.2 RED)
-// (*MVOX:Josquin* — #102 TE.2 review round 2, F1/F2)
-// (*MVOX:Tallis* — #103 TE.3 RED)
-// (*MVOX:Palestrina* — #103 TE.3 review round 2, F1–F4)
-// (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
+// (*MVOX:Tallis*, *MVOX:Josquin*, *MVOX:Palestrina*)
 
-// ─── #211 RED — the event-detail badge consumes the SAME color scheme ────────
-//
-// Gama ruling (4): one scheme, three consumers — agenda row badge, event
-// detail badge, #214 chips. At RED the scheme module is absent, so Vite's
-// import-analysis fails this WHOLE file; GREEN restores every suite above —
-// the existing translated-badge toContain assertions must come back green
-// (color never displaces the label text).
 describe('/event/[id] — type badge color scheme (#211)', () => {
 	const styles = () =>
 		import('$lib/events/eventTypeStyles') as Promise<{
@@ -2990,10 +2268,7 @@ describe('/event/[id] — type badge color scheme (#211)', () => {
 		});
 		const badge = container.querySelector('[data-testid="event-detail-type"]')!;
 		expectClasses(badge, eventTypeBadgeClass('rehearsal'));
-		// The localized label STAYS on the badge (same assertion shape as the
-		// translated-badge suite above — color is an addition, never the carrier).
 		expect(badge.textContent).toContain('[event_type_rehearsal]');
-		// Icons ruled out: the badge holds text only.
 		expect(badge.children.length).toBe(0);
 	});
 
@@ -3027,15 +2302,6 @@ describe('/event/[id] — type badge color scheme (#211)', () => {
 
 // (*MVOX:Tallis* — #211 RED: event-detail badge joins the type color scheme)
 
-// ── #220 — the AM/PM preference on the event-detail time line ────────────────
-//
-// "Am/pm preference applies globally" (Mihkel): the header's timeRange must
-// flow through the ONE shared formatter ($lib/preferences/timeFormat
-// formatTime — each END formatted separately, joined with the EXISTING en
-// dash). Team-lead default (Gama informed 2026-09-02 12:15): in AM/PM mode a
-// range renders BOTH ends explicit — '7:00 PM–8:30 PM'. Rule 7 stays as
-// shipped: the narrative date header is untouched. Store set BEFORE render,
-// reset in finally (page.series-create.spec.ts pattern).
 describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 	it("'ampm': the range renders BOTH ends explicit — '7:00 PM–8:30 PM' — and the narrative date stays untouched (rule 7)", async () => {
 		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
@@ -3045,14 +2311,10 @@ describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 			await waitFor(() => {
 				expect(container.querySelector('[data-testid="event-detail-time"]')).not.toBeNull();
 			});
-			// EVERY rendering of the time line (member <p> or editor button — both
-			// carry the same testid) must obey the preference.
 			const timeLines = [...container.querySelectorAll('[data-testid="event-detail-time"]')];
 			expect(timeLines.length).toBeGreaterThan(0);
 			for (const el of timeLines) {
 				const text = el.textContent ?? '';
-				// 2026-09-01T16:00Z = 19:00 Tallinn; +90 min → 20:30. Both ends
-				// explicit, existing en dash, no 24h remnant.
 				expect(text).toContain('7:00 PM–8:30 PM');
 				expect(text).not.toContain('19:00');
 				expect(text).not.toContain('20:30');
@@ -3100,22 +2362,10 @@ describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 	});
 });
 
-// ── #321 review F2 — the attendance panel is a closed set, so it says when the
-// roster behind it was cut short ───────────────────────────────────────────────
-//
-// The PO's reachability ruling (2026-09-11): a singer with no row in this panel
-// cannot be marked present at all, and her absence reads as "she is not a
-// member". Driven through the REAL `loadRoster` here (this suite's wire stub, not
-// a module mock), so the pin covers the whole path: the member read's `count`,
-// `listActiveMembers`' comparison, `loadRoster`'s report, the page's flag, and
-// AttendanceSurface's notice.
-
 describe('/event/[id] — the attendance panel states a truncated roster (#321 review F2)', () => {
 	const NOTICE = '[data-testid="attendance-panel-partial-notice"]';
 
 	async function openPanel(memberCount?: number) {
-		// #356 — event `_editor` added so the panel stays reachable under the
-		// rights gate (see the attendance describe above).
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
 			season: conductorSeason(),
@@ -3153,21 +2403,9 @@ describe('/event/[id] — the attendance panel states a truncated roster (#321 r
 	});
 });
 
-// (*MVOX:Tallis* — #220 RED: AM/PM preference reaches the event-detail time line via the shared formatTime)
+// (*MVOX:Tallis*)
 // (*MVOX:Tallis* — #311 RED: the event page opts the Add Work picker into honest visibility)
 // (*MVOX:Josquin* — #321 review F2: the attendance panel's closed-set roster notice)
-
-// ── #483 — a season holding the SAME conductor twice ─────────────────────────
-//
-// Two racing writers can append the same person to a season's `conductor`
-// twice. The season panel (agenda route) shows the writer BOTH entries so she
-// can remove one; THIS page's header is where everyone else meets the
-// duplicate, and it names each conductor ONCE — for editor and reader alike,
-// with no rights read added. The dedupe is by person ID (first-seen order),
-// never by display name: two different people who share a name both show.
-//
-// Contract (GREEN): loadEventDetail makes `conductorIds` distinct by id BEFORE
-// the names are resolved, so `conductorIds` and `conductorNames` stay aligned.
 
 const DOUBLED_PROFILES: Record<string, unknown[]> = {
 	...PROFILES,
@@ -3175,7 +2413,6 @@ const DOUBLED_PROFILES: Record<string, unknown[]> = {
 	'p-grace': [
 		{ _id: 'prof-grace', name: [{ string: 'Grace Hopper' }], _sharing: [{ string: 'domain' }] }
 	],
-	// A DIFFERENT person who happens to share Ada's display name.
 	'p-other-ada': [
 		{ _id: 'prof-other-ada', name: [{ string: 'Ada Lovelace' }], _sharing: [{ string: 'domain' }] }
 	]
@@ -3256,7 +2493,6 @@ describe('#483 /event/[id] header — a doubled season conductor is named ONCE, 
 			profiles: DOUBLED_PROFILES
 		});
 		const line = await conductorLine(container);
-		// Reader: no editor affordance on the header.
 		expect(container.querySelector('[data-testid="event-edit-btn-name"]')).toBeNull();
 		expect(line).toBe('[event_detail_conductor_label]: Ada Lovelace, Grace Hopper');
 		expect(line.split('Ada Lovelace').length - 1).toBe(1);
@@ -3282,11 +2518,6 @@ describe('#483 /event/[id] header — a doubled season conductor is named ONCE, 
 
 // (*MVOX:Tallis* — #483 RED: a doubled season conductor is named once on the event page)
 
-// ── #361 — the event header's conductor names carry the marker ─────────────
-//
-// Each conductor name renders through PersonName; the ', ' separators sit
-// OUTSIDE the markers, so a capture blanks each name and keeps the list
-// shape. ONE marker per name.
 describe('#361 — /event/[id] header: each conductor name is marked', () => {
 	it('each name sits in its own marker (exactly the name), the separator is outside every marker', async () => {
 		const { container } = renderEventPage();

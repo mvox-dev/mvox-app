@@ -4,6 +4,7 @@
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { formatLoanChainLabel, type Edition, type Work } from '$lib/library/libraryData';
 	// #434 — the library's own cache-backed entry points; the shared readers stay unused here.
@@ -121,12 +122,8 @@
 		workForm.error = null;
 		workForm.status = '';
 		const current = selected;
-		const token = getToken();
-		if (!current || !token) {
-			console.error('library: create work with no cfg', {
-				hasCollective: !!current,
-				hasToken: !!token
-			});
+		if (!current) {
+			console.error('library: create work with no collective');
 			workForm.error = m.library_create_work_error;
 			return;
 		}
@@ -136,7 +133,7 @@
 			return;
 		}
 		const composer = workForm.composer.trim();
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 
 		let newId: string;
 		workForm.pending = true;
@@ -263,13 +260,8 @@
 		setEditionDraftError(editionDrafts, workId, null);
 		editionDrafts.statuses = new Map(editionDrafts.statuses).set(workId, '');
 		const current = selected;
-		const token = getToken();
-		if (!current || !token) {
-			console.error('library: create edition with no cfg', {
-				hasCollective: !!current,
-				hasToken: !!token,
-				workId
-			});
+		if (!current) {
+			console.error('library: create edition with no collective', { workId });
 			setEditionDraftError(editionDrafts, workId, m.library_create_edition_error);
 			return;
 		}
@@ -279,7 +271,7 @@
 			return;
 		}
 		const publisher = (editionDrafts.publisher.get(workId) ?? '').trim();
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 
 		// A collective switch during the create must not insert into the new collective's tree.
 		const g = routeLoad.generation;
@@ -346,17 +338,12 @@
 		if (isOffline) return;
 		const files = Array.from(fileList);
 		const current = selected;
-		const token = getToken();
-		if (!current || !token) {
-			console.error('library: attach files with no cfg', {
-				hasCollective: !!current,
-				hasToken: !!token,
-				editionId
-			});
+		if (!current) {
+			console.error('library: attach files with no collective', { editionId });
 			markUploadBatchError(fileUploads, editionId);
 			return;
 		}
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 
 		// Both halves of a mixed result apply only if no collective switch happened meanwhile.
 		const g = routeLoad.generation;
@@ -496,9 +483,7 @@
 		lib.inlineCheckoutErrors = without(lib.inlineCheckoutErrors, copyId);
 		const current = selected;
 		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 		try {
 			const libraryId = await resolveWriteLibraryId(cfg);
 			if (!libraryId) throw new Error('handleInlineCheckout: no library entity under this collective');
@@ -523,9 +508,7 @@
 		returnError = '';
 		const current = selected;
 		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 		try {
 			await returnLending(cfg, lendingId);
 			const refreshed = await refreshLibraryLendings(cfg);
@@ -541,10 +524,8 @@
 		bulk.error = '';
 		const current = selected;
 		if (!current) return;
-		const token = getToken();
-		if (!token) return;
 		if (!bulk.editionId || bulk.members.size === 0) return;
-		const cfg = { db: current.db, token };
+		const cfg = cfgFor(current.db);
 		const activeLendings = lib.lendings.filter((l) => l.returnedAt === '');
 		try {
 			const libraryId = await resolveWriteLibraryId(cfg);

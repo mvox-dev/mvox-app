@@ -578,15 +578,17 @@ describe('#198 — blank name is a field error, not a transport failure', () => 
 // Fail loudly, transport failure, double-submit.
 
 describe('#198 — a missing precondition fails LOUDLY, never silently', () => {
-	it('a librarian whose token vanished (session expired under the open form) sees the error and no write is attempted', async () => {
+	it('a librarian whose token vanished gets the 401 handling: the error, the form open, the seam refused', async () => {
 		const container = await renderWithFormOpen();
+	createWorkMock.mockImplementation(async (cfg: { token: string }) => {
+		if (cfg.token) return 'work-new';
+		throw Object.assign(new Error('no token'), { name: 'AuthExpiredError' });
+	});
 
 		await fireEvent.input(
 			container.querySelector('[data-testid="create-work-name"]') as HTMLInputElement,
 			{ target: { value: 'Ave Maria' } }
 		);
-		// The JWT is gone while the librarian tools are still on screen — the
-		// page has a 'session-expired' branch, so this state is reachable.
 		clearAll({ preserveProvider: false });
 
 		await fireEvent.click(
@@ -598,8 +600,8 @@ describe('#198 — a missing precondition fails LOUDLY, never silently', () => {
 		});
 		const err = container.querySelector('[data-testid="create-work-error"]') as HTMLElement;
 		expect(err.textContent?.trim()).toBe('Could not create the work.');
-		expect(createWorkMock).not.toHaveBeenCalled();
-		// The form stays open — nothing was written, nothing typed is lost.
+		expect(createWorkMock).toHaveBeenCalledTimes(1);
+		expect(createWorkMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: '' });
 		expect(container.querySelector('[data-testid="create-work-form"]')).not.toBeNull();
 	});
 });

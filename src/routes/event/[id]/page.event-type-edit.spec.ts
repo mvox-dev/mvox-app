@@ -1,67 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #245 (RED) — `event_type` becomes the SIXTH inline-editable field on the
-// event detail page. From live pilot testing (Joosep): an event mis-filed as a
-// rehearsal must be changeable to a concert without delete-and-recreate.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventFieldEdit.ts
-//     • 'event_type' joins the EditableEventField union. NO new write
-//       machinery: the write goes through the existing updateEventField →
-//       replaceEntityProperty path, and wireProp's `default:` branch already
-//       produces the correct `{ type: 'event_type', string }` wire value.
-//
-//   src/routes/event/[id]/+page.svelte
-//     • For a rights-holder (the SAME owner-OR-editor gate the other five
-//       fields run — do not widen it) the type badge becomes an editable
-//       field in the #205/#157 idiom: the whole field area is the activator —
-//       a native <button> (Tab-reachable by default, standing rule 4/4b),
-//       data-testid="event-edit-btn-event_type", label as an sr-only CHILD
-//       (never aria-label — it would silence the value), aria-hidden ✎ glyph,
-//       the badge span riding INSIDE the button so the #211 color survives.
-//     • Activation swaps in a NATIVE <select> (standing rule 1),
-//       data-testid="event-edit-input-event_type", carrying its own
-//       aria-label (the button is unmounted the moment the select appears),
-//       seeded with the CURRENT type. Its options are THE SAME option source
-//       the create forms use (#199): CANONICAL_EVENT_TYPES rendered through
-//       eventTypeLabel — the eight canonical types, localized, in schema
-//       order. NOT a second hand-typed list.
-//     • Enter and blur save; Escape reverts without a write; a blur WITHOUT a
-//       change writes nothing (opening the editor must never rewrite the
-//       displayed value). Choosing an option does NOT save by itself —
-//       change updates the draft only, so Escape after a change still
-//       reverts cleanly.
-//     • After a successful save the badge re-renders with the NEW type's
-//       #211 color and localized label, without a reload (optimistic or
-//       re-read — same posture as the other five fields).
-//     • A failed write reverts the badge and shows the same inline error
-//       surface the other fields use: event-edit-error-event_type.
-//     • Series child: the write targets THIS event's id only — event_type is
-//       deliberately non-inherited (#194/#202) and a type change must never
-//       touch the parent series or any sibling.
-//     • Empty event_type: the existing guard stays — no bare empty pill for
-//       anyone. A rights-holder still gets the edit button (empty → set,
-//       exactly like the empty-description case the other fields pin), the
-//       fresh-open select reads as EMPTY ('' — never a silently preselected
-//       'rehearsal'), and blurring it untouched writes nothing.
-//     • A non-editor keeps today's display-only badge: no button, no select.
-//
-// Assertions match on DATA (values, wire bodies, testids), never translated
-// sentences — same posture as page.event-editing.spec.ts (full-fallback
-// paraglide proxy). Fixtures and wire stub mirror that suite's.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — same hygiene as the
-// sibling suites: only Date is faked, timers stay real for waitFor.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -83,15 +31,8 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-// The union member is the contract: this import + the literal below fail
-// `pnpm check` until GREEN adds 'event_type' to EditableEventField.
 import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
-// #199 — the ONE canonical option source the create forms already render.
-// Importing it here (instead of retyping eight strings) is deliberate: the
-// select's options are asserted against THIS list, so a second hand-typed
-// list in the page could only pass by coinciding with it exactly.
 import { CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
-// #211 — the badge color contract the re-render must satisfy.
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 import { authStore } from '$lib/auth/session';
 import {
@@ -102,18 +43,11 @@ import {
 
 const cfg = { db: 'sampledb', token: 'jwt' };
 
-// 'event_type' must be assignable to the union — a type-level pin that makes
-// `pnpm check` RED until eventFieldEdit.ts grows the member.
 const FIELD: EditableEventField = 'event_type';
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
-
-// ── Entu fixtures ────────────────────────────────────────────────────────────
-// Same event as page.event-editing.spec.ts: a SERIES CHILD (parent series1),
-// event_type 'rehearsal' with a per-value _id the replace choreography must
-// delete.
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -151,8 +85,6 @@ function seriesEntity() {
 	return {
 		_id: 'series1',
 		name: [{ string: 'Tuesday Series' }],
-		// The series carries its OWN event_type-shaped default the child must
-		// never write to (and never read — #194/#202 non-inheritance).
 		event_type: [{ _id: 'val-series-type-1', string: 'rehearsal' }],
 		duration_minutes: [{ number: 120 }],
 		default_location: [{ string: 'Church Hall' }],
@@ -167,15 +99,9 @@ const PROFILES: Record<string, unknown[]> = {
 };
 
 type EditWireOpts = {
-	/** How many edit POSTs against entity/ev1 fail with a 500 before the wire
-	 *  recovers. Default 0 (all succeed). */
 	failEditPosts?: number;
 };
 
-/** Same liberal read stub + applied-write choreography as the sibling suite:
- *  a POST against entity/ev1 REPLACES each posted field on the in-memory
- *  event, so an impl that re-reads after a write and one that keeps the
- *  optimistic value pass identically. */
 function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
 	const event: Record<string, unknown> = eventOver ?? eventEntity();
 	const season = seasonEntity();
@@ -248,14 +174,12 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-/** Every write POST the page issued against ANY entity. */
 function allPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
 		(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
 	);
 }
 
-/** Write POSTs against the event entity specifically. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return allPosts(fetchStub).filter((c) => String(c[0]).includes('/entity/ev1'));
 }
@@ -270,7 +194,6 @@ function deletedPropertyUrls(fetchStub: ReturnType<typeof vi.fn>) {
 		.map((c) => String(c[0]));
 }
 
-/** Tap the type field's activator and hand back the select it becomes. */
 async function beginTypeEdit(container: HTMLElement): Promise<HTMLSelectElement> {
 	await waitFor(() => {
 		expect(
@@ -293,10 +216,6 @@ function expectClasses(el: Element, classes: string) {
 		);
 	}
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// data layer: 'event_type' rides the EXISTING updateEventField path
-// ═════════════════════════════════════════════════════════════════════════════
 
 function fieldWireStub(existing: Array<Record<string, unknown>>) {
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -326,8 +245,6 @@ describe("updateEventField('event_type') — the existing replace choreography, 
 		expect(lookup!.url).toContain('event_type');
 		const postIdx = calls.findIndex((c) => c.method === 'POST' && c.url.includes('/entity/ev1'));
 		expect(postIdx, 'no POST of the new value').toBeGreaterThan(-1);
-		// FULL wire shape: the old id + a `string` value — the same default:
-		// branch the other string fields use, atomically replacing val-type-1.
 		expect(JSON.parse(String(calls[postIdx].body))).toEqual([
 			{ _id: 'val-type-1', type: 'event_type', string: 'concert' }
 		]);
@@ -346,11 +263,6 @@ describe("updateEventField('event_type') — the existing replace choreography, 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: the badge is an editable field for a rights-holder — display-only for
-// everyone else (integration: the real route, real data layer, stubbed wire)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — the type badge gains the #205 whole-field activator, rights-gated', () => {
 	it('an _editor gets event-edit-btn-event_type: a real Tab-reachable <button> wrapping the colored badge, sr-only label, aria-hidden glyph', async () => {
 		const { container } = renderEditPage(editorEvent());
@@ -359,11 +271,8 @@ describe('/event/[id] — the type badge gains the #205 whole-field activator, r
 			expect(el, 'event-edit-btn-event_type missing for an _editor').not.toBeNull();
 			return el as HTMLButtonElement;
 		});
-		// Standing rule 4/4b — a NATIVE button, in the keyboard tab order.
 		expect(btn.tagName).toBe('BUTTON');
 		expect(btn.getAttribute('tabindex')).not.toBe('-1');
-		// #157 idiom — label as sr-only CHILD, never aria-label (it would silence
-		// the badge value the button now wraps).
 		expect(btn.getAttribute('aria-label')).toBeNull();
 		expect(btn.querySelector('.sr-only')?.textContent).toContain(
 			'event_edit_event_type_aria_label'
@@ -373,8 +282,6 @@ describe('/event/[id] — the type badge gains the #205 whole-field activator, r
 		);
 		expect(glyph, 'pencil glyph span missing').not.toBeUndefined();
 		expect(glyph!.getAttribute('aria-hidden')).toBe('true');
-		// The badge itself rides INSIDE the activator — #211 color and localized
-		// label intact.
 		const badge = container.querySelector('[data-testid="event-detail-type"]');
 		expect(badge, 'the colored badge must survive inside the button').not.toBeNull();
 		expect(btn.contains(badge!), 'the badge is the button content (whole-field target)').toBe(
@@ -418,24 +325,14 @@ describe('/event/[id] — the type badge gains the #205 whole-field activator, r
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: activation → the create forms' native select, same option source
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — tapping the badge opens the #199 canonical native <select>', () => {
 	it('a native SELECT, self-labelled, seeded with the current type, listing EXACTLY the canonical types in canonical order via eventTypeLabel', async () => {
 		const { container } = renderEditPage(editorEvent());
 		const select = await beginTypeEdit(container);
-		// Standing rule 1 — native control, no custom widget.
 		expect(select.tagName).toBe('SELECT');
-		// The activator is unmounted, so the select names itself.
 		expect(container.querySelector('[data-testid="event-edit-btn-event_type"]')).toBeNull();
 		expect(select.getAttribute('aria-label')).toContain('event_edit_event_type_aria_label');
-		// Seeded with the CURRENT value.
 		expect(select.value).toBe('rehearsal');
-		// #199 — SAME option source as create: values are CANONICAL_EVENT_TYPES
-		// (schema order, no free text), labels route through eventTypeLabel →
-		// paraglide (the proxy renders the message keys).
 		const options = [...select.querySelectorAll('option')];
 		expect(options.map((o) => o.value).filter((v) => v !== '')).toEqual([
 			...CANONICAL_EVENT_TYPES
@@ -446,12 +343,6 @@ describe('/event/[id] — tapping the badge opens the #199 canonical native <sel
 		}
 	});
 
-	// #266 — trip and service join the vocabulary. The test above rides the
-	// IMPORTED constant, which is deliberate for the same-option-source pin but
-	// TAUTOLOGICAL for vocabulary growth (it passes whatever the constant
-	// holds). This pin is the independent, hand-typed guard: the editor offers
-	// the TEN types in the NEW order — service beside concert, trip beside
-	// retreat — with the new options' labels routed through paraglide.
 	it('#266 — the editor select offers trip and service, hand-typed ten-list, pinned order, localized labels', async () => {
 		const { container } = renderEditPage(editorEvent());
 		const select = await beginTypeEdit(container);
@@ -475,10 +366,6 @@ describe('/event/[id] — tapping the badge opens the #199 canonical native <sel
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: save / cancel gestures + the #211 re-render
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — Enter and blur save; the badge re-renders in the new color without a reload', () => {
 	it('blur after choosing concert: ONE full-shape write to THIS event, and the badge flips to concert label + concert #211 classes', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent());
@@ -489,20 +376,15 @@ describe('/event/[id] — Enter and blur save; the badge re-renders in the new c
 		await waitFor(() => {
 			const posts = editPosts(fetchStub);
 			expect(posts.length).toBeGreaterThan(0);
-			// The db path proves the page threaded the SELECTED collective's cfg
-			// through the real data layer — not a hardcoded db, not a bypass.
 			expect(String(posts[0][0])).toContain('/sampledb/');
 			expect(String(posts[0][0])).toContain('/entity/ev1');
 			expect(postedProps(posts[0])).toEqual([
 				{ _id: 'val-type-1', type: 'event_type', string: 'concert' }
 			]);
 		});
-		// FULL shape of everything written anywhere: exactly this one prop.
 		const allProps = editPosts(fetchStub).flatMap((c) => postedProps(c));
 		expect(allProps).toEqual([{ _id: 'val-type-1', type: 'event_type', string: 'concert' }]);
 
-		// The badge re-renders in place — new label, new #211 color, old color
-		// gone, editor closed. No navigation, no reload.
 		await waitFor(() => {
 			const badge = container.querySelector('[data-testid="event-detail-type"]');
 			expect(badge).not.toBeNull();
@@ -578,15 +460,8 @@ describe('/event/[id] — Enter and blur save; the badge re-renders in the new c
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// page: series child — the write targets THIS event only (#194/#202)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/event/[id] — changing a series child’s type touches that event alone', () => {
 	it('every POST targets /entity/ev1 and every DELETE targets the child’s OWN value id — the parent series is never written', async () => {
-		// The fixture event is a child of series1, which carries its own
-		// event_type value (val-series-type-1). Non-inheritance (#194/#202) means
-		// the child's type change is entirely local.
 		const { container, fetchStub } = renderEditPage(editorEvent());
 		const select = await beginTypeEdit(container);
 		await fireEvent.change(select, { target: { value: 'concert' } });
@@ -596,7 +471,6 @@ describe('/event/[id] — changing a series child’s type touches that event al
 		});
 		await new Promise((r) => setTimeout(r, 30));
 
-		// ALL entity writes, anywhere on the wire, hit the child and only the child.
 		for (const call of allPosts(fetchStub)) {
 			expect(String(call[0]), 'a write escaped to another entity').toContain('/entity/ev1');
 		}
@@ -604,9 +478,6 @@ describe('/event/[id] — changing a series child’s type touches that event al
 			allPosts(fetchStub).some((c) => String(c[0]).includes('series1')),
 			'the parent series must never be written'
 		).toBe(false);
-		// #264 — the atomic overwrite replaced the CHILD's old value id inside
-		// the POST body (no property DELETE goes out at all); the series' own
-		// event_type value is never named anywhere on the wire.
 		expect(deletedPropertyUrls(fetchStub)).toEqual([]);
 		const postBodies = editPosts(fetchStub).map((c) =>
 			JSON.parse(String((c[1] as RequestInit).body))
@@ -620,10 +491,6 @@ describe('/event/[id] — changing a series child’s type touches that event al
 		expect(JSON.stringify(postBodies)).not.toContain('val-series-type-1');
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// page: empty event_type — the guard survives, and empty → set works
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('/event/[id] — an event with no event_type', () => {
 	it('a non-editor sees NO pill at all — the existing empty-guard stands', async () => {
@@ -642,16 +509,12 @@ describe('/event/[id] — an event with no event_type', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-btn-event_type"]')).not.toBeNull();
 		});
-		// The empty-guard survives the restructure: an empty type renders NO pill
-		// for anyone, editor included.
 		expect(container.querySelector('[data-testid="event-detail-type"]')).toBeNull();
 	});
 
 	it('the fresh-open select reads as EMPTY — blurring it untouched writes nothing (no silently preselected rehearsal)', async () => {
 		const { container, fetchStub } = renderEditPage(editorEvent({ event_type: [] }));
 		const select = await beginTypeEdit(container);
-		// The canonical eight are all offered; the current (empty) selection is
-		// representable, so merely opening + blurring cannot manufacture a type.
 		expect(select.value).toBe('');
 		expect([...select.querySelectorAll('option')].map((o) => o.value).filter((v) => v !== '')).toEqual(
 			[...CANONICAL_EVENT_TYPES]
@@ -672,7 +535,6 @@ describe('/event/[id] — an event with no event_type', () => {
 			expect(posts.length).toBeGreaterThan(0);
 			expect(postedProps(posts[0])).toEqual([{ type: 'event_type', string: 'concert' }]);
 		});
-		// No pre-existing value → the replace choreography had nothing to delete.
 		expect(deletedPropertyUrls(fetchStub)).toEqual([]);
 		await waitFor(() => {
 			const badge = container.querySelector('[data-testid="event-detail-type"]');
