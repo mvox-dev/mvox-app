@@ -123,6 +123,16 @@ function classifyLines(lines: string[], isSvelte: boolean): LineKind[] {
 	return kinds;
 }
 
+export function stripComments(source: string): string {
+	const lines = source.split('\n');
+	const kinds = classifyLines(lines, false);
+	return lines
+		.map((line, i) =>
+			kinds[i].isComment ? '' : line.slice(0, line.length - kinds[i].commentText.length)
+		)
+		.join('\n');
+}
+
 // Two counting rules an author needs: CONSECUTIVE comment lines are one comment,
 // so a compliant JSDoc touching a `//` directive reads as a single over-long run
 // and a blank line between them is the fix; a block counts every line it spans.
