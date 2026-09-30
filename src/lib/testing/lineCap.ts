@@ -7,8 +7,7 @@ export const NEXT_STEP = 1000;
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [
 	'src/routes/event/[id]/+page.svelte',
 	'src/routes/roster/+page.svelte',
-	'src/routes/library/+page.svelte',
-	'src/routes/profile/+page.svelte'
+	'src/routes/library/+page.svelte'
 ];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
@@ -17,7 +16,6 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/routes/+page.svelte',
 	'src/routes/event/[id]/+page.svelte',
 	'src/routes/library/+page.svelte',
-	'src/routes/profile/+page.svelte',
 	'src/routes/roster/+page.svelte'
 ];
 

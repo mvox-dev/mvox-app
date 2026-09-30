@@ -1,4 +1,4 @@
-<!-- src/lib/components/profile/ProfileField.svelte -->
+<!-- src/lib/profile/ProfileField.svelte -->
 <script lang="ts">
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -21,10 +21,8 @@
 		/** #131 — each level's OWN value for this field, so a conflict-tier tap can preview it. */
 		conflictValues: Record<Level, string>;
 		disabled: boolean;
-		/** #434 slice 6 review F1 — no usable signal: the field's editor cannot be
-		 *  OPENED (the whole-field activator is disabled, exactly like the event
-		 *  page's pencils). An editor already open keeps its text — the draft is the
-		 *  viewer's work — and the parent refuses the autosave instead. */
+		/** #434 — offline the editor cannot be opened; one already open keeps its text and
+		 *  the parent refuses the autosave. */
 		offline?: boolean;
 		moveFailed: boolean;
 		saveFailed: boolean;
@@ -59,37 +57,24 @@
 		oncancel
 	}: Props = $props();
 
-	// #205 — whole-field display-then-edit (standing UX rule 4 + the profile
-	// addendum): DISPLAY is the default; the raw <input> only mounts after the
-	// whole-field activator is clicked/tabbed-and-activated. Local to this
-	// component instance (one per field) — no seam into the parent beyond the
-	// existing onvaluechange/onblur/oncancel callbacks.
+	// #205 — display by default; the <input> mounts only once the whole-field activator
+	// is used. Local to this field.
 	let editing = $state(false);
 	/** The draft value at the moment editing opened — Escape reverts to this. */
 	let preEditValue = '';
-	/** #205 review F3 — the activator the editor replaced, so closing can land
-	 *  focus back on it (WCAG 2.4.3). Before this branch the <input> was
-	 *  permanently mounted, so nothing could unmount the focused element; now
-	 *  Enter/Escape do, and without this the tab position dropped to <body>. */
+	/** #205 — the activator the editor replaced, so closing can put focus back (WCAG 2.4.3). */
 	let activatorRef = $state<HTMLButtonElement | undefined>(undefined);
 
-	/** The house pattern (roster `cancelRename`/`submitRename`, admin's
-	 *  `namePencilRef` behind its `restoreFocus` flag): restore only on the
-	 *  KEYBOARD dismissals. A blur means the user already moved focus somewhere
-	 *  deliberately — yanking it back to the pencil would fight them. */
+	/** Restore only on keyboard dismissals: after a blur the user already chose where
+	 *  focus went. */
 	async function restoreActivatorFocus(): Promise<void> {
 		await tick();
 		activatorRef?.focus();
 	}
 
 	function openEditor() {
-		// #205 review F4 — leaving a #131 conflict PREVIEW live across the
-		// display→edit swap made the text visibly jump: display renders
-		// `displayValue` (the previewed tier's value) while the editor binds the
-		// underlying draft, so tapping a previewed field replaced "Ada Lovelace"
-		// with "Ada" unexplained, and Escape then restored the preview rather than
-		// what the editor had shown. Activating the field EXITS preview mode, so
-		// the value the user clicked is the value they get to edit.
+		// Opening the editor exits a #131 preview, so the value the user clicked is the
+		// value they edit, not the draft underneath it.
 		previewLevel = null;
 		preEditValue = value;
 		editing = true;
@@ -120,16 +105,13 @@
 		}
 	}
 
-	/** Svelte action: focus the element the instant it mounts — same helper
-	 *  admin/+page.svelte and event/[id]/+page.svelte use for their own
-	 *  display-then-edit inputs. */
+	/** Svelte action: focus the element the instant it mounts. */
 	function focusOnMount(node: HTMLElement): void {
 		node.focus();
 	}
 
-	// #131 — browse-then-confirm: first tap on a conflicting tier previews its
-	// value; a second tap on the SAME tier resolves. Purely local UI state —
-	// never written back through onvaluechange (a preview is not an edit).
+	// #131 — first tap on a conflicting tier previews it, a second resolves. A preview
+	// is not an edit, so it never goes through onvaluechange.
 	let previewLevel = $state<Level | null>(null);
 	const displayValue = $derived(previewLevel !== null ? conflictValues[previewLevel] : value);
 
@@ -143,9 +125,7 @@
 		name: m.profile_field_name_label,
 		email: m.profile_field_email_label
 	};
-	// #205 — whole-field display-then-edit: the sr-only ACTION label carried by
-	// the activator button (the admin/season reference pattern), distinct from
-	// FIELD_LABEL above (the visible field name shown in both states).
+	// #205 — the activator's sr-only action label, apart from the visible FIELD_LABEL.
 	const EDIT_LABEL: Record<FieldKey, () => string> = {
 		name: m.profile_name_edit_label,
 		email: m.profile_email_edit_label
@@ -164,9 +144,7 @@
 	function isButtonDisabled(level: Level, state: string): boolean {
 		if (namePrivateDisabled && level === 'private') return true;
 		if (state === 'active' && saving) return true;
-		// #131 — a conflict-tier button stays clickable (browse-then-confirm)
-		// regardless of `movable` (always false during a conflict); it still
-		// respects the write-lock (`disabled`) to avoid overlapping writes.
+		// #131 — a conflict tier stays clickable despite `movable`, but not under the write lock.
 		if (state === 'conflict') return disabled;
 		if (disabled || !movable || state !== 'inactive') return true;
 		return false;
@@ -187,22 +165,15 @@
 	function handleConflictClick(level: Level) {
 		if (disabled) return;
 		if (previewLevel === level) {
-			// Second tap on the SAME tier — resolve in its favor.
 			previewLevel = null;
 			onresolve(field, level);
 		} else {
-			// First tap, or a tap on a DIFFERENT tier while previewing — (re)preview.
 			previewLevel = level;
 		}
 	}
 
-	// #156 — roving tabindex. The derived active key must fall back to the
-	// first ENABLED tier, not simply `activeLevel` — a naive "active tier gets
-	// tabindex 0" rule can park the sole tab stop on a disabled button (e.g.
-	// the name field's private tier, or any tier during a write-lock) and
-	// strand the group. Arrows must NEVER activate here: a second activation
-	// on a conflict tier RESOLVES the conflict destructively (browse-then-
-	// confirm), so keydown navigation only ever moves focus.
+	// #156 — roving tabindex falls back to the first enabled tier, so the only tab stop
+	// never sits on a disabled button. Arrows only move focus: activation can resolve.
 	let rovingLevel = $state<Level | null>(null);
 	const firstEnabledLevel = $derived.by(() => {
 		for (const level of LEVELS) {
@@ -239,20 +210,13 @@
 	}
 
 	function handleBlur() {
-		// No focus restore — see `restoreActivatorFocus`: focus already left for
-		// somewhere the user chose.
 		confirmEdit(false);
 	}
 </script>
 
 <div class="flex flex-col gap-2" data-testid="profile-field-{field}">
-	<!-- #205 whole-field display-then-edit (admin/+page.svelte:513-540 reference
-	     pattern) — DISPLAY is a native <button> wrapping the pencil AND the
-	     value, `min-h-11 w-full` so the whole field area (not just the ✎) is
-	     the click/tab activator; EDIT swaps in the real <input>, focused via
-	     the same `focusOnMount` action the admin/season editors use. The
-	     visibility tier toolbar below is a SEPARATE concept and stays mounted
-	     across both states (untouched by this retrofit). -->
+	<!-- #205 — display is one button over the whole field; edit swaps in the <input>. The
+	     tier toolbar below stays mounted in both states. -->
 	{#if editing}
 		{#snippet fieldInput()}
 			<input
@@ -269,11 +233,8 @@
 		{/snippet}
 		<label class="flex flex-col gap-1 text-sm">
 			{FIELD_LABEL[field]()}
-			<!-- #361 review round 3 — the name editor is a name render site too. The
-			     marker wraps the <input> in a span (RedactedField's idiom: the ::after
-			     overlay cannot render on a replaced element); RedactedField itself has
-			     no room for this input's focus/input/key/blur handlers. The email
-			     editor stays unmarked — #361 is names only (see redact.ts). -->
+			<!-- #361 — the name editor is marked through a wrapping span (::after cannot render
+			     on an <input>); the email editor stays unmarked (see redact.ts). -->
 			{#if field === 'name'}
 				<span {...{ [REDACT_ATTR]: '' }} class="relative flex flex-col">
 					{@render fieldInput()}
@@ -285,16 +246,8 @@
 	{:else}
 		<div class="flex flex-col gap-1 text-sm">
 			<span>{FIELD_LABEL[field]()}</span>
-			<!-- #205 review F1 — NO `aria-labelledby` on the activator. It SUPERSEDES
-			     the element's own contents in the accname algorithm, so pointing it at
-			     the field-name + value spans dropped the sr-only action verb from the
-			     computed name: AT heard "Name Ada" with nothing saying the control
-			     opens an editor, and the two new Paraglide keys rendered but were
-			     never surfaced. Content-derived naming gives "<Edit name> <value>",
-			     which is the contract this shape exists for. The visible field name
-			     stays OUTSIDE the button (it names the field, not the action).
-			     F5 — child order is sr-only, ✎, value: pencil LEADING, matching the
-			     admin/season reference so the glyph sits on the same side everywhere. -->
+			<!-- #205 — no aria-labelledby: it would replace the content-derived name "<Edit name>
+			     <value>" and drop the action verb. Pencil leads, as on admin and season. -->
 			<button
 				type="button"
 				data-testid="profile-{field}-edit"
@@ -316,14 +269,8 @@
 		</div>
 	{/if}
 
-	<!-- #156 — WAI-APG TOOLBAR, not a radiogroup: arrows MOVE focus only,
-	     they never activate (a second activation on a conflict tier resolves
-	     the conflict destructively, so browse-then-confirm is the only safe
-	     shape here). `role="toolbar"` states that in the markup — under the
-	     old bare `role="group"` nothing distinguished these buttons from the
-	     app's arrow-SELECTS radiogroups, and svelte-check flagged the keydown
-	     handler on a non-interactive role. `aria-pressed` toggle buttons
-	     inside a toolbar are the APG pattern, so the state pin is unchanged. -->
+	<!-- #156 — an APG toolbar, not a radiogroup: arrows move focus and never activate,
+	     since a second activation on a conflict tier resolves it. -->
 	<div
 		class="flex gap-2"
 		role="toolbar"

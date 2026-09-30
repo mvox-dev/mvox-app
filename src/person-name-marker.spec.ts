@@ -17,7 +17,7 @@ const FILES = [
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
-	'src/lib/components/profile/ProfileField.svelte'
+	'src/lib/profile/ProfileField.svelte'
 ] as const;
 
 const NAME_EXPRS: ReadonlyArray<[RegExp, string]> = [
@@ -199,7 +199,10 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
 	// the AgendaItem this panel belongs to
 	'src/lib/components/attendance/AttendanceSurface.svelte': ['item.name'],
 	'src/lib/components/attendance/SeasonSummary.svelte': [],
-	'src/lib/components/profile/ProfileField.svelte': [],
+	'src/lib/profile/ProfileField.svelte': [],
+	'src/lib/profile/RosterNamesToggle.svelte': [],
+	'src/lib/profile/LinkedAccountsSection.svelte': ['scopeName'],
+	'src/lib/profile/ProfileStorageSection.svelte': ['storagePartNames'],
 	'src/lib/components/admin/InviteSurface.svelte': []
 };
 

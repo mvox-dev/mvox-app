@@ -21,49 +21,27 @@
 	import { createFieldMoveQueue } from '$lib/profile/fieldMoveQueue';
 	import { createProfileEditQueue } from '$lib/profile/profileEditQueue';
 	import { createAutosave } from '$lib/profile/autosave';
-	import ProfileField from '$lib/components/profile/ProfileField.svelte';
+	import ProfileField from '$lib/profile/ProfileField.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
-	import VisibilityRepairBanner from '$lib/components/profile/VisibilityRepairBanner.svelte';
+	import VisibilityRepairBanner from '$lib/profile/VisibilityRepairBanner.svelte';
 	import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 	import { timeFormatStore, setTimeFormat, type TimeFormat } from '$lib/preferences/timeFormat';
-	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
-	// #434 slice 6 review F1 — the write gate. This page's writes are unusual in
-	// that the main one has NO button: a 2-second idle autosave fires on its own,
-	// with no user click to disable. So the gate lands in `onAutosave` itself
-	// (nothing writes) AND in `handleValueChange` (nothing is even scheduled),
-	// on top of the controls that do exist.
+	// The write gate. The main write has no button (a 2-second idle autosave), so the gate
+	// sits in `onAutosave` and `handleValueChange` as well as on the controls.
 	import { writesAvailable } from '$lib/net/online';
-	// #267 — admin-only roster-names toggle: adminStore is the roster
-	// precedent, resolved app-wide by +layout, keyed to the selected
-	// collective — zero new resolution wiring on this page.
-	import { adminStore } from '$lib/nav/adminStore';
-	import { readRosterNamesSetting, updateRosterShowRealNames } from '$lib/collective/rosterNames';
-	// #193 — linked auth providers + "Link another account".
-	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
-	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
-	import { createNonce } from '$lib/auth/state';
-	import { buildOAuthInitUrl } from '../auth/[provider]/build-oauth-init-url';
-	// #352 — "Remove downloaded parts from this device" (profile storage
-	// section). The byte-store seam only, never a direct IndexedDB touch (the
-	// library-page precedent). The fileId→filename join is the ONLINE library
-	// metadata read (listAllEditions) — OFFLINE naming (reading names without
-	// a fetch) is #353's scope, not this slice's.
-	import { getAppByteStore } from '$lib/files/appByteStore';
-	import { formatFileSize } from '$lib/files/fileSize';
+	import { providerLabel } from '$lib/auth/providers';
 	import { listAllEditions } from '$lib/library/libraryData';
-	// #408 — "Install as app": app chrome, like sign-out/language/time-format
-	// below, not gated on collective selection. $installAffordance decides
-	// everything the button does. This page is a pure SUBSCRIBER: the
-	// `beforeinstallprompt` adapter is started by the root layout (#408 review
-	// F1), because Chromium fires that event once per page load — long before
-	// this component mounts on the ordinary nav-click path.
+	import RosterNamesToggle from '$lib/profile/RosterNamesToggle.svelte';
+	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
+	import ProfileStorageSection from '$lib/profile/ProfileStorageSection.svelte';
+	// #408 — a pure subscriber: the root layout starts the `beforeinstallprompt` adapter,
+	// because Chromium fires that event once per page load, before this page mounts.
 	import { installAffordance, promptInstall } from '$lib/install/installState';
 
-	// #60 — identity display: which account + provider the user is signed in with.
-	// Informational only (no interactivity); multi-provider linking is parked.
+	// #60 — which account and provider the user is signed in with; display only.
 	const identityUser = getUser();
 	const identityAccount = identityUser?.email || identityUser?.name || '';
 	const identityProvider = providerLabel(getLastProvider());
@@ -77,19 +55,13 @@
 
 	let status = $state<RouteLoadStatus>('loading');
 
-	// #408 — the iOS Share-menu hint line: hidden until the button is pressed
-	// (the button itself is the SAME control for 'prompt' and 'ios-hint').
+	// #408 — the iOS Share-menu hint stays hidden until the button is pressed.
 	let installIosHintShown = $state(false);
 
 	function onInstallButtonClick(): void {
 		if ($installAffordance === 'prompt') {
-			// prompt() can reject (Chromium's InvalidStateError when the banner was
-			// already consumed). promptInstall has already cleared the stash and
-			// recomputed by then, so the affordance COLLAPSES — the button leaves
-			// rather than sitting there inert. Logged, not swallowed: a failed
-			// user-initiated action, so console.error like every other action
-			// handler on this page (the console.warn cases above are load-time
-			// reads that degrade to a documented default, a different class).
+			// prompt() can reject once the banner was consumed; promptInstall has already
+			// collapsed the affordance by then, so the button leaves rather than going inert.
 			promptInstall().catch((err) => {
 				console.error('profile: install prompt failed', err);
 			});
@@ -110,11 +82,10 @@
 	}
 	let confirmed = $state(emptyConfirmed());
 
-	// Per-field save-in-flight markers (replaces per-level pendingLevels for autosave feedback).
+	// Per-field save-in-flight markers for autosave feedback.
 	let savingFields = $state(new Set<FieldKey>());
 	let failedFields = $state(new Set<FieldKey>());
 
-	// Per-level pending/failed still needed for the queue internals.
 	let pendingLevels = $state(new Set<Level>());
 
 	let loadedProfiles = $state<MyProfile[]>([]);
@@ -122,181 +93,15 @@
 	let moveFailed = $state(new Set<FieldKey>());
 	let repairWorking = $state(new Set<FieldKey>());
 	let repairFailed = $state(new Set<FieldKey>());
-	// #257 — the repair confirmation announcement, house idiom (event-create-status /
-	// roster-reorder-status): a PERSISTENT sr-only role="status" region driven by plain
-	// state, set imperatively on success, cleared at the START of the next repair
-	// attempt (never a timer — the app has zero auto-dismiss patterns).
+	// #257 — set on repair success, cleared at the start of the next attempt, never a timer.
 	let repairStatus = $state('');
 	let busy = $state(false);
 	let pendingMoveTo: Record<FieldKey, Level | null> = { name: null, email: null };
 
-	// #267 — the admin-only roster-names toggle. `rosterDbEntityId` rides along
-	// from the READ (the WRITE needs it); `rosterShowRealNames` is the
-	// server-CONFIRMED value only — never assigned optimistically. The status/
-	// error pair follows the profile-repair-status idiom: a persistent sr-only
-	// role="status" region (imperative text, cleared at the START of the next
-	// attempt) plus an inline role="alert" for the truthful failure message.
-	let rosterDbEntityId = $state<string | null>(null);
-	let rosterShowRealNames = $state(false);
-	let rosterBusy = $state(false);
-	let rosterStatus = $state('');
-	let rosterError = $state<string | null>(null);
-	const admin = $derived($adminStore);
-	// #267 — bound so resetState() can force the DOM `<select>` back in sync on
-	// a collective switch even when the reset lands the SAME boolean the
-	// select already held (Svelte's `value={…}` effect only re-runs on an
-	// actual SIGNAL change; a switch away mid-write can leave the browser's
-	// own already-mutated `.value`, from the user's onchange pick, stuck —
-	// see onRosterNamesChange for the matching settle-time correction).
-	let rosterSelectEl = $state<HTMLSelectElement | null>(null);
-
-	// #193 — linked auth providers, loaded alongside the profile fields but kept
-	// on its OWN try/catch (below): a hiccup reading them must not take down the
-	// name/email editing surface, which is the page's primary purpose.
-	let linkedIdentities = $state<LinkedIdentity[]>([]);
-	let linkPickerOpen = $state(false);
-	let linkBusy = $state(false);
-	let linkError = $state<string | null>(null);
-	// #193 (review F1) — an UNKNOWN identity list is not a known-empty one. Every
-	// user has at least one bound identity, so an empty `linkedIdentities` after a
-	// failed read is a display LIE. This flag keeps the two states apart: the
-	// section says what broke, and linking stays blocked (the picker CTA disables)
-	// while the bound set is unknown.
-	let linkedLoadFailed = $state(false);
-
-	// #193 (review F3) — focus custody across the activator→picker swap. The
-	// picker REPLACES the CTA, so the focused node leaves the DOM; without an
-	// explicit hand-off a keyboard user lands on <body> and has to tab from the
-	// top of the page to reach the buttons that just appeared.
-	let linkAnotherEl = $state<HTMLButtonElement | null>(null);
-	let linkPickerEl = $state<HTMLDivElement | null>(null);
-
-	// #352 — the storage section's read state. `null` means "not answered
-	// yet" (no section rendered), never a fabricated {count: 0, size: 0} —
-	// the same "absent, not wrong" discipline `heldFileIds` uses on the
-	// library page. `storagePartNames` is the ONLINE fileId→filename join
-	// (offline naming is #353's scope); an entry only exists for a fileId the
-	// metadata read actually found, so a failed read leaves it empty and the
-	// part list simply renders nothing (count + size still stand).
-	let storageMine = $state<{ count: number; size: number } | null>(null);
-	let storageOthers = $state<{ count: number; size: number } | null>(null);
-	let storageHeldFileIds = $state<string[]>([]);
-	let storagePartNames = $state<Record<string, string>>({});
-	// Two INDEPENDENT armed slots (house pattern — roster's armRemove /
-	// season-manage's delete confirm): arming one never disturbs the other.
-	let storageArmedMine = $state(false);
-	let storageArmedAll = $state(false);
-	let storageRemoveMinePending = $state(false);
-	let storageRemoveAllPending = $state(false);
-	// #352 (review F1) — a REMOVAL that failed must not look like one that
-	// worked. The roster-names precedent below (rosterError, set in the write
-	// path's catch and rendered as role="alert") applied to the destructive
-	// half: console.error alone left the member on a shared device with the
-	// original numbers still on screen and no word that nothing was deleted,
-	// which is exactly the false answer this section exists to prevent.
-	let storageError = $state<string | null>(null);
-	// #352 (review F3) — the fileId→filename join reads a CAPPED list. When the
-	// server says there is more than came back, an unnamed held part is "we
-	// could not look it up", not "this part has no name" — and silence there is
-	// the same class of false answer as the one above.
-	let storageNamesTruncated = $state(false);
-	const storageNamesPartial = $derived(
-		storageNamesTruncated && storageHeldFileIds.some((fileId) => !storagePartNames[fileId])
-	);
-
-	/** The step name used when the identity read — not a mint — is what failed. */
-	const IDENTITY_READ_STEP = 'identity-read';
-
-	// #193 (review F1) — the RETURN leg. run-link-callback.ts lands every
-	// redemption-side failure back here as `/profile?link_error=<code>` and a
-	// success as `/profile?linked=1`. Without a consumer the user came back to a
-	// completely normal-looking profile and never learned that the link failed.
-	// Read ONCE at init (not $derived): the outcome belongs to the navigation that
-	// mounted this page, and starting a new link attempt must be able to clear it.
-	// The value arrives from a URL the user controls, and lands in a role="alert"
-	// node — so the code is a CLOSED whitelist, matching exactly what
-	// run-link-callback.ts emits. Anything else is not ours and is never echoed.
-	function returnLinkErrorMessage(code: string): string {
-		switch (code) {
-			case 'conflict':
-				return m.profile_link_error_conflict();
-			case 'dead':
-				return m.profile_link_error_dead();
-			case 'failed':
-				return m.profile_link_error_failed();
-			case 'already_linked':
-				return m.profile_link_error_already_linked();
-			// unexpected / invalid / persist_failed — no user-actionable distinction,
-			// but the step stays NAMED rather than being swallowed into a generic
-			// "linking failed" (the whole point of the fail-loudly rule).
-			case 'unexpected':
-			case 'invalid':
-			case 'persist_failed':
-				return m.profile_link_error_step({ step: code });
-			default:
-				return m.profile_link_error_failed();
-		}
-	}
-
-	const returnLinkErrorCode = page.url.searchParams.get('link_error');
-	let returnLinkError = $state<string | null>(
-		returnLinkErrorCode ? returnLinkErrorMessage(returnLinkErrorCode) : null
-	);
-	let linkSucceeded = $state(!returnLinkErrorCode && page.url.searchParams.get('linked') === '1');
-
-	// #219 — the after-the-fact same-identity case: run-link-callback.ts detected
-	// (against the pre-mint snapshot) that the round trip changed nothing, and
-	// lands back here as `/profile?link_noop=same_identity`. Gama ruling: this is
-	// NOT an error — the user did nothing wrong — so it gets its own neutral,
-	// role="status" rendering, never the alert node. Same closed-whitelist
-	// treatment as `link_error`: the code is attacker-shaped input, and an
-	// unrecognized value renders nothing and is never echoed.
-	function returnLinkNoopMessage(code: string): string | null {
-		switch (code) {
-			case 'same_identity':
-				return m.profile_link_noop_same_identity();
-			default:
-				return null;
-		}
-	}
-	const returnLinkNoopCode = page.url.searchParams.get('link_noop');
-	let linkNoop = $state<string | null>(
-		!returnLinkErrorCode && returnLinkNoopCode ? returnLinkNoopMessage(returnLinkNoopCode) : null
-	);
-
-	/** The alert node shows whichever leg spoke last: mint-side, then return-side. */
-	const shownLinkError = $derived(linkError ?? returnLinkError);
-
-	/**
-	 * #219 — the linked-identities list de-duplicates by uid+provider (first
-	 * occurrence in entity order wins). A same-identity re-link (see
-	 * run-link-callback.ts) can leave — or, before its server-side cleanup lands,
-	 * HAS left — two bound-identity entries with identical uid+provider and
-	 * different _ids; one identity must render as one row. The template still
-	 * keys by `_id`, so a genuine second account at the same provider (different
-	 * uid) stays two rows.
-	 */
-	const dedupedLinkedIdentities = $derived.by(() => {
-		const seen = new Set<string>();
-		const out: LinkedIdentity[] = [];
-		for (const identity of linkedIdentities) {
-			const key = `${identity.uid} ${identity.provider}`;
-			if (seen.has(key)) continue;
-			seen.add(key);
-			out.push(identity);
-		}
-		return out;
-	});
-
-	/**
-	 * #193 (review F1) — linking is PER-COLLECTIVE, not account-wide: the mint runs
-	 * against the selected collective's {db, personId}, so the second identity is
-	 * bound to that collective's person entity alone. The list already re-reads per
-	 * selected collective; naming the collective in the heading and the success line
-	 * keeps the words matching what actually happened. (Account-wide linking is a
-	 * separate product decision, not a copy change.)
-	 */
-	const linkScopeName = $derived(selected?.name ?? '');
+	// The sections own their state; resetState() and the load body reach them here.
+	let rosterNames = $state<RosterNamesToggle>();
+	let linkedAccounts = $state<LinkedAccountsSection>();
+	let storageSection = $state<ProfileStorageSection>();
 
 	const domainNameMissing = $derived($completionGateStore === 'incomplete');
 
@@ -306,18 +111,13 @@
 	const repairPlans = $derived(planLoadedDuplicateRepairs(loadedProfiles));
 	const planFor = (f: FieldKey) => repairPlans.find((p) => p.field === f);
 
-	// A field is movable only when EXACTLY ONE entity holds it. Zero holders means
-	// there is no value to move — `onmove` bails on `holders.length !== 1` and
-	// `ProfileField` carries no staged/pending target level, so enabling the picker
-	// for an empty field would render buttons that silently swallow the click.
-	// (Pre-typing tier selection would need real per-field staging state that
-	// `activeLevelFor`/`onAutosave` consult — a separate change, not a picker flag.)
-	// More than one holder is a conflict, handled by the conflict branch below.
+	// Movable only with exactly one holder: with none there is no value to move, and the
+	// picker would render buttons that swallow the click. More than one is a conflict.
 	const movableFor = (f: FieldKey) => resFor(f).holders.length === 1;
 	const isConflict = (f: FieldKey) => resFor(f).holders.length > 1 && planFor(f) === undefined;
 	const conflictLevelsFor = (f: FieldKey): Level[] =>
 		isConflict(f) ? resFor(f).holders.slice(1).map((h) => h.level) : [];
-	/** #131 — each level's OWN value for a field, so ProfileField can preview a conflicting tier. */
+	/** #131 — each level's own value, so ProfileField can preview a conflicting tier. */
 	const conflictValuesFor = (f: FieldKey): Record<Level, string> => ({
 		public: confirmed.public[f],
 		domain: confirmed.domain[f],
@@ -343,14 +143,8 @@
 		return next;
 	}
 
-	// #160 — `loadedProfiles` (not `confirmed`) is what drives the tier picker's
-	// enabled-state (via resolveField().holders → movableFor/resFor). It is
-	// populated by loadForSelected(), but the autosave queue's settle callbacks
-	// (reconcile/recordCreatedId) previously updated ONLY `confirmed` — so a
-	// first-save CREATE never appeared in `loadedProfiles` and the picker stayed
-	// stale until a reload re-fetched. Keep the two in sync at every settle point:
-	// one profile entity per level, so replacing any existing holder at `level`
-	// mirrors exactly what a reload's `profilesByLevel` would produce.
+	// #160 — the tier picker reads holders off `loadedProfiles`, not `confirmed`, so every
+	// settle mirrors onto it what a reload's `profilesByLevel` would produce.
 	function upsertLoadedProfile(level: Level, id: string, name: string, email: string): void {
 		loadedProfiles = [
 			...loadedProfiles.filter((p) => p._sharing !== level),
@@ -372,299 +166,13 @@
 		repairStatus = '';
 		busy = false;
 		pendingMoveTo = { name: null, email: null };
-		linkedIdentities = [];
-		linkedLoadFailed = false;
-		linkPickerOpen = false;
-		linkBusy = false;
-		linkError = null;
-		// #267 — a stale collective's roster-names state (value, in-flight lock,
-		// announcement) must never bleed into the next collective (#257/#260 class).
-		rosterDbEntityId = null;
-		rosterShowRealNames = false;
-		if (rosterSelectEl) rosterSelectEl.value = 'profile';
-		rosterBusy = false;
-		rosterStatus = '';
-		rosterError = null;
-		// #352 — a stale collective's storage numbers/armed state must never
-		// bleed into the next collective (#257/#260 class, same as roster-names
-		// above): the numbers are scoped to the OLD (db, personId).
-		storageMine = null;
-		storageOthers = null;
-		storageHeldFileIds = [];
-		storagePartNames = {};
-		storageArmedMine = false;
-		storageArmedAll = false;
-		storageRemoveMinePending = false;
-		storageRemoveAllPending = false;
-		storageError = null;
-		storageNamesTruncated = false;
+		linkedAccounts?.reset();
+		rosterNames?.reset();
+		storageSection?.reset();
 		autosaveCtrl.destroy();
 	}
 
-	/**
-	 * #193 (review F1) — the linked-identities read, isolated from the profile
-	 * fields load. It never rejects: a failure is recorded as `linkedLoadFailed`
-	 * (a NAMED, rendered state), not as an empty list. The one exception is a
-	 * session-expired rejection, which is a different failure class entirely
-	 * (#107): entuFetch already cleared the stale session and fired the sign-in
-	 * redirect, so the page says so instead of blaming the identity read.
-	 */
-	async function loadLinkedIdentities(
-		cfg: { db: string; token: string },
-		personId: string,
-		g: number
-	): Promise<void> {
-		try {
-			const linked = await listLinkedIdentities(cfg, personId);
-			if (g !== routeLoad.generation) return;
-			linkedIdentities = linked.identities;
-			linkedLoadFailed = false;
-		} catch (linkedErr) {
-			if (g !== routeLoad.generation) return;
-			if (isAuthExpiredError(linkedErr)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('profile: linked identities load failed', linkedErr);
-			linkedIdentities = [];
-			linkedLoadFailed = true;
-		}
-	}
-
-	/** Retry ONLY the linked-identities read — the profile fields are already loaded. */
-	function retryLinkedIdentities(): void {
-		const ctx = activeContext();
-		if (!ctx) return;
-		void loadLinkedIdentities(ctx.cfg, ctx.personId, routeLoad.generation);
-	}
-
-	/**
-	 * #267 — the roster-names setting read, isolated from the profile-fields
-	 * load the same way loadLinkedIdentities is: fired independently so a
-	 * profile-fields load-error can never take the admin-only control down
-	 * with it (the control is app chrome, not gated on route-load `status`).
-	 * Guarded on the captured generation, the same shape as every other
-	 * settle in this file — a stale answer must never land (#257/#260 class).
-	 * Never rejects into the caller: a failed read just leaves the default
-	 * ('profile' / false) standing, logged (console.warn — the
-	 * attendanceData.ts precedent for "non-fatal, degrades to a documented
-	 * default" — never console.error, which every OTHER profile-page spec
-	 * asserts silence on and does not mock this new dependency away).
-	 */
-	async function loadRosterNames(cfg: { db: string; token: string }, g: number): Promise<void> {
-		try {
-			const setting = await readRosterNamesSetting(cfg);
-			if (g !== routeLoad.generation) return;
-			rosterDbEntityId = setting.dbEntityId;
-			rosterShowRealNames = setting.showRealNames;
-		} catch (err) {
-			if (g !== routeLoad.generation) return;
-			console.warn('profile: roster-names setting read failed', err);
-		}
-	}
-
-	/**
-	 * #352 — the storage section's read: usage numbers for the signed-in
-	 * partition and for everything else, plus the held fileIds to name. Fired
-	 * independently of the profile-fields load (loadRosterNames precedent), so
-	 * a hiccup here never takes down the name/email editing surface.
-	 *
-	 * NEVER calls store.get(): `usageForPartition`/`usageForOthers`/
-	 * `heldFileIds` are the presence-only reads (#351's law) — a profile visit
-	 * must not stamp opens and corrupt LRU eviction order.
-	 *
-	 * The three run CONCURRENTLY, and all three read metadata only — keys,
-	 * sizes and recency stamps, no stored ArrayBuffer deserialised (#352
-	 * review). That is what makes firing them together safe: when the two
-	 * usage reads still went through `adapter.list()`, this Promise.all put two
-	 * full-cache reads in flight at once — up to ~400MB of peak heap against a
-	 * 200MB cap — on every profile load and again after every remove-confirm,
-	 * which is an OOM on a phone with a full offline score library.
-	 *
-	 * THE NAME JOIN IS OPTIONAL AND SCOPED (#352 review F3). It is the one
-	 * NETWORK read this section makes, and it is catalogue-sized
-	 * (listAllEditions: every edition in the collective, with file metadata),
-	 * so it only fires when it can actually change what the page shows:
-	 *   - `joinNames: false` — the caller already holds a valid name map and
-	 *     only needs the numbers again. A removal only SHRINKS the held-id set,
-	 *     and the markup iterates `storageHeldFileIds`, so entries for
-	 *     just-removed ids are never reachable: re-fetching the catalogue after
-	 *     a remove-confirm would buy nothing.
-	 *   - nothing held — there is no id to name. A member who has downloaded
-	 *     nothing (the common case on a settings page) pays no network read.
-	 * The durable fix is #353's: carry the filename in the stored record at
-	 * download time, so naming needs no network at all and works offline. Until
-	 * then this is the honest-but-narrow version of the same answer.
-	 */
-	async function loadStorageSection(
-		cfg: { db: string; token: string },
-		identity: { db: string; personId: string },
-		g: number,
-		opts: { joinNames?: boolean } = {}
-	): Promise<void> {
-		try {
-			// getAppByteStore() itself can throw synchronously (e.g. no
-			// IndexedDB in the environment) — it must land in THIS try, not
-			// escape it, the same defensive shape refreshPresence uses on the
-			// library page: this call is fired void, and an escaped throw here
-			// becomes an unhandled rejection instead of a caught, logged one.
-			const store = getAppByteStore();
-			const [mine, others, heldIds] = await Promise.all([
-				store.usageForPartition(identity.db, identity.personId),
-				store.usageForOthers(identity.db, identity.personId),
-				store.heldFileIds(identity.db, identity.personId)
-			]);
-			if (g !== routeLoad.generation) return;
-			storageMine = mine;
-			storageOthers = others;
-			storageHeldFileIds = heldIds;
-		} catch (err) {
-			if (g !== routeLoad.generation) return;
-			// #267 loadRosterNames precedent, verbatim reasoning: console.warn, not
-			// .error — this read is fired independently on EVERY profile load, and
-			// every OTHER profile-page spec asserts console.error silence without
-			// mocking this new dependency away. A degrade to "the section stays
-			// absent" is non-fatal, same class as the roster-names default.
-			console.warn('profile: storage usage read failed', err);
-			return;
-		}
-
-		// The fileId→filename join is the ONLINE library metadata read
-		// (listAllEditions) — OFFLINE naming (reading names without a fetch) is
-		// #353's scope, not this slice's. A FAILED read degrades to count + size
-		// with no names; the destructive controls below do not depend on it.
-		// Skipped entirely when the caller already holds the map, or when there
-		// is nothing held to name — see the header note.
-		if (opts.joinNames === false) return;
-		if (storageHeldFileIds.length === 0) {
-			storagePartNames = {};
-			storageNamesTruncated = false;
-			return;
-		}
-		try {
-			const editions = await listAllEditions(cfg);
-			if (g !== routeLoad.generation) return;
-			const names: Record<string, string> = {};
-			for (const edition of editions.items) {
-				for (const file of edition.files) {
-					names[file.id] = file.filename;
-				}
-			}
-			storagePartNames = names;
-			// #321's signal, consumed rather than dropped: past the read's cap,
-			// a held part we could not name is an unanswered lookup, and the
-			// page says so instead of rendering an indistinguishable blank.
-			storageNamesTruncated = editions.truncated;
-		} catch (err) {
-			if (g !== routeLoad.generation) return;
-			// console.warn, same reasoning as above — never .error here either.
-			console.warn('profile: storage part-name metadata read failed', err);
-			storagePartNames = {};
-			// A read that never landed is a FAILURE, not a truncation: the
-			// partial-names notice would be claiming to know something about a
-			// list that was never received.
-			storageNamesTruncated = false;
-		}
-	}
-
-	/** Arm a slot's two-step confirm, moving focus onto the confirm button
-	 *  that replaces the trigger (WCAG 2.4.3 — the roster armRemove /
-	 *  season-manage delete-confirm shape verbatim: one control, one meaning,
-	 *  never window.confirm). */
-	async function armStorageRemoveMine(): Promise<void> {
-		storageArmedMine = true;
-		await tick();
-		document
-			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine-confirm"]')
-			?.focus();
-	}
-
-	/** Disarm, handing focus back to the trigger that comes back. */
-	async function disarmStorageRemoveMine(): Promise<void> {
-		storageArmedMine = false;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine"]')?.focus();
-	}
-
-	async function armStorageRemoveAll(): Promise<void> {
-		storageArmedAll = true;
-		await tick();
-		document
-			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all-confirm"]')
-			?.focus();
-	}
-
-	async function disarmStorageRemoveAll(): Promise<void> {
-		storageArmedAll = false;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all"]')?.focus();
-	}
-
-	/** Confirm: clears EXACTLY the signed-in partition (never the device-wide
-	 *  member), then re-reads the section so the page tells the new truth.
-	 *
-	 *  #352 (review F1) — a FAILED removal is a user-visible, NAMED state
-	 *  (storageError, rendered as role="alert"), not a console line. Nothing
-	 *  was deleted, the numbers above still stand, and the member reading them
-	 *  on a shared device must be told that rather than left to read an
-	 *  unchanged screen as a completed wipe. `storageError` is cleared at the
-	 *  START of each attempt (the rosterError idiom), never at the end. */
-	async function confirmStorageRemoveMine(): Promise<void> {
-		const ctx = activeContext();
-		if (!ctx) return;
-		storageError = null;
-		storageRemoveMinePending = true;
-		try {
-			await getAppByteStore().clearPartition(ctx.cfg.db, ctx.personId);
-			// joinNames: false — the removal only shrank the held-id set, so the
-			// name map in hand is still correct for everything that survived.
-			await loadStorageSection(
-				ctx.cfg,
-				{ db: ctx.cfg.db, personId: ctx.personId },
-				routeLoad.generation,
-				{ joinNames: false }
-			);
-		} catch (err) {
-			console.error('profile: remove-downloaded-parts (this account) failed', err);
-			storageError = m.profile_storage_remove_error();
-		} finally {
-			storageRemoveMinePending = false;
-		}
-		await disarmStorageRemoveMine();
-	}
-
-	/** Confirm: the device-wide wipe (never a page-side sweep of the
-	 *  partitions this page happens to know about — that would miss the
-	 *  identities not signed in, which is exactly what this action exists to
-	 *  clear). */
-	async function confirmStorageRemoveAll(): Promise<void> {
-		const ctx = activeContext();
-		if (!ctx) return;
-		storageError = null;
-		storageRemoveAllPending = true;
-		try {
-			await getAppByteStore().clearAllPartitions();
-			// joinNames: false — same reasoning as the mine-confirm above.
-			await loadStorageSection(
-				ctx.cfg,
-				{ db: ctx.cfg.db, personId: ctx.personId },
-				routeLoad.generation,
-				{ joinNames: false }
-			);
-		} catch (err) {
-			console.error('profile: remove-everything-downloaded failed', err);
-			storageError = m.profile_storage_remove_error();
-		} finally {
-			storageRemoveAllPending = false;
-		}
-		await disarmStorageRemoveAll();
-	}
-
-	// #232 — the shared route-load machine (Status union, generation guard,
-	// loadForSelected sequencing) extracted into $lib/loading/routeLoad; this
-	// page's fetch BODY (below, `load`) and its page-specific `resetState` stay
-	// verbatim. The machine never invents 'ready' — `load` writes it itself,
-	// mid-body, before its linked-identities tail (unchanged from before).
+	// #232 — the machine never writes 'ready'; `load` does, before the linked-accounts read.
 	const routeLoad = createRouteLoadMachine({
 		name: 'profile',
 		selected: () => selected,
@@ -678,10 +186,9 @@
 		},
 		async load({ cfg, selected: current, g, isCurrent }) {
 			const personId = current.personId;
-			// #267 — fired independently of the profile-fields read below: it must
-			// land (or fail on its own) even when listMyProfiles rejects, since the
-			// roster-names control is app chrome, not gated on route-load `status`.
-			void loadRosterNames(cfg, g);
+			// Fired apart from the fields read: the roster-names control is app chrome and
+			// must load even when listMyProfiles rejects.
+			void rosterNames?.load(cfg, g);
 			const profiles = await listMyProfiles(cfg, personId);
 			if (!isCurrent()) return;
 			loadedProfiles = profiles;
@@ -714,14 +221,9 @@
 			draft = nextDraft;
 			status = 'ready';
 
-			// #352 — fired independently, same reasoning as loadRosterNames: the
-			// storage section is its own read and must not take down (or wait on)
-			// the name/email editing surface above.
-			void loadStorageSection(cfg, { db: cfg.db, personId }, g);
-
-			// #193 — linked-identities read, own failure handling: a hiccup here must
-			// not take down the name/email editing surface above (already 'ready').
-			await loadLinkedIdentities(cfg, personId, g);
+			// Both sections handle their own failures, so neither takes the fields down.
+			void storageSection?.load(cfg, { db: cfg.db, personId }, g);
+			await linkedAccounts?.load(cfg, personId, g);
 		}
 	});
 
@@ -733,9 +235,7 @@
 		const current = selected;
 		const token = getToken();
 		if (current && token) {
-			// #260 — capture the load generation the SAME way loadForSelected does, so a
-			// resolveGate settle answering a collective the user has since switched away
-			// from can never overwrite the app-wide gate SSOT with stale-context state.
+			// #260 — a settle for a collective the user has left must not overwrite the gate.
 			const g = routeLoad.generation;
 			resolveGate({ db: current.db, token }, current.personId).then(
 				(state) => {
@@ -743,10 +243,7 @@
 					completionGateStore.set(state);
 				},
 				(err) => {
-					// #260/#257 — a stale settle's rejection must not surface (the race
-					// fix); a LIVE rejection is a real failure to resolve membership
-					// standing and must not vanish, so it gets the same console.error
-					// every other failure in this file gets.
+					// A stale rejection stays silent; a live one is a real failure and is logged.
 					if (g !== routeLoad.generation) return;
 					console.error('profile: completion gate refresh failed', err);
 				}
@@ -763,20 +260,11 @@
 				pendingLevels = next;
 			},
 			reconcile(level, profileId, fields) {
-				// Which fields this settle answers for: the ones dispatched AT this level,
-				// i.e. whose active level was `level` BEFORE the mirror below rewrites it.
-				// `activeLevelFor` reads holders off `loadedProfiles`, and the mirror
-				// replaces this level's entity — so a save that CLEARS a field drops its
-				// only holder and flips `activeLevelFor` to the 'domain' fallback. Reading
-				// it after the mirror would then miss the field and leave its `savingFields`
-				// marker set forever (a tier button stuck at aria-busy="true").
+				// Read before the mirror below: a save that clears a field drops its only holder,
+				// and reading after would leave its `savingFields` marker set forever.
 				const affected = FIELDS.filter((f) => activeLevelFor(f) === level);
 				confirmed = { ...confirmed, [level]: { id: profileId, name: fields.name, email: fields.email } };
-				// #160 — mirror the confirm onto loadedProfiles too, so the tier picker
-				// (which reads holders off loadedProfiles, not confirmed) reacts without
-				// a reload.
 				upsertLoadedProfile(level, profileId, fields.name, fields.email);
-				// Clear per-field saving/failed on successful reconcile.
 				for (const f of affected) {
 					savingFields = withFieldSet(savingFields, f, false);
 					failedFields = withFieldSet(failedFields, f, false);
@@ -787,14 +275,8 @@
 			},
 			recordCreatedId(level, profileId) {
 				confirmed = { ...confirmed, [level]: { ...confirmed[level], id: profileId } };
-				// #160 — partial failure: the shell was created but fields were not
-				// confirmed, so it holds NO value and is deliberately not a holder
-				// (`resolveField` counts only non-empty values) — the tier picker stays
-				// locked, as it should. What mirroring it onto loadedProfiles buys is the
-				// `dst` lookup in `onmove`: a later move INTO this tier finds the orphan
-				// shell and reuses it, instead of creating a second entity at the same
-				// level. (The retry's no-duplicate guarantee comes from `confirmed[level].id`
-				// above, which feeds `existingId`.)
+				// #160 — an empty shell is no holder, but mirroring it lets a later move into
+				// this tier reuse it instead of creating a second entity at the same level.
 				upsertLoadedProfile(level, profileId, confirmed[level].name, confirmed[level].email);
 			},
 			markFailed(level) {
@@ -840,16 +322,8 @@
 				busy = false;
 				repairWorking = withFieldSet(repairWorking, field, false);
 				repairFailed = withFieldSet(repairFailed, field, false);
-				// #257 — set AFTER the reload, not before: loadForSelected()'s reset
-				// runs on every call (including this one) and would wipe an
-				// eagerly-set repairStatus straight back to ''.
-				// #257 review F2 — and gated on the load generation, the same way
-				// refreshCompletionGate is (#260). loadForSelected() bumps the
-				// generation synchronously at its top and RESOLVES on every branch,
-				// superseded ones included; without this guard a repair on
-				// collective A whose reload is still in flight when the user
-				// switches to B would announce A's confirmation over B's profile,
-				// after B's own load already cleared repairStatus.
+				// #257 — after the reload, whose reset would wipe it, and only if no switch
+				// happened meanwhile: the reload resolves even when superseded.
 				const reload = loadForSelected();
 				const g = routeLoad.generation;
 				void reload.then(() => {
@@ -881,109 +355,18 @@
 		return { cfg: { db: current.db, token }, personId: current.personId };
 	}
 
-	// #193 — "Link another account": open the native provider picker. No mint
-	// happens until a provider is actually picked (the token is a live 24h
-	// bearer credential — never pre-minted).
-	async function openLinkPicker(): Promise<void> {
-		linkPickerOpen = true;
-		linkError = null;
-		// A new attempt supersedes the previous round trip's verdict (which is
-		// pinned to the URL and would otherwise linger through the whole session).
-		returnLinkError = null;
-		linkSucceeded = false;
-		linkNoop = null;
-		// #193 (review F3) — the picker replaces the activator, so the focused node
-		// is about to be removed. Hand focus to the first provider button (#219:
-		// every provider stays enabled while linkedLoadFailed is false, so this is
-		// simply the first one in AUTH_PROVIDERS order).
-		await tick();
-		linkPickerEl
-			?.querySelector<HTMLButtonElement>('[data-testid^="profile-link-provider-"]:not([disabled])')
-			?.focus();
-	}
-
-	/** #193 (review F3) — a way BACK out of the picker, with focus returned to the CTA. */
-	async function closeLinkPicker(): Promise<void> {
-		linkPickerOpen = false;
-		linkError = null;
-		await tick();
-		linkAnotherEl?.focus();
-	}
-
 	function linkErrorMessage(e: unknown): string {
 		if (e instanceof SelfLinkMintError) {
-			// The rights gap is the one reason with its own user-actionable wording.
 			if (e.reason === 'missing-self-editor') return m.profile_link_error_missing_rights();
-			// #193 (review F2) — every OTHER mint failure keeps its step NAMED rather
-			// than collapsing into "linking failed, try again". `stale-invite-cleanup`
-			// in particular is not retry-fixable client-side (inviteData.ts aborts
-			// before the mint when the stale-placeholder DELETE fails), so a bare
-			// "you can try again" would be actively misleading.
+			// Every other step stays named: some, like stale-invite-cleanup, no retry can fix.
 			return m.profile_link_error_step({ step: e.phase });
 		}
 		return m.profile_link_error_failed();
 	}
 
-	// Mint a self-invite on the user's OWN person AT CLICK TIME, then hand off to
-	// the second-provider OAuth round trip with `intent: 'link'`. The token rides
-	// the localStorage OAuth-state blob only — it never enters any URL. A mint
-	// failure (e.g. the missing-self-_editor rights gap) surfaces loudly here and
-	// launches nothing.
-	async function handleLinkProvider(providerId: string): Promise<void> {
-		// #434 slice 6 review F1 — minting a self-invite is a write, and it ends in a
-		// full-page OAuth redirect; offline it must not even start.
-		if (isOffline) return;
-		// #219 — an already-linked provider is a legitimate pick now (the pre-mint
-		// refusal is gone): entu-api's same-person branch still reports a clean
-		// `redeemed`, so the guard moved to the callback (run-link-callback.ts),
-		// which detects the no-op against the `linkedSnapshot` minted below. The
-		// only remaining reason to refuse a mint here is an UNKNOWN bound set —
-		// the list never loaded, so there is nothing to snapshot (review F1).
-		if (linkedLoadFailed) {
-			linkError = m.profile_link_error_step({ step: IDENTITY_READ_STEP });
-			return;
-		}
-		const ctx = activeContext();
-		if (!ctx) return;
-		linkBusy = true;
-		linkError = null;
-		returnLinkError = null;
-		linkSucceeded = false;
-		linkNoop = null;
-		try {
-			const { inviteToken } = await mintSelfLinkInvite(ctx.cfg, ctx.personId);
-			const url = buildOAuthInitUrl({
-				provider: providerId,
-				origin: page.url.origin,
-				returnTo: '/profile?linked=1',
-				intent: 'link',
-				nonce: createNonce(),
-				invite: { db: ctx.cfg.db, token: inviteToken },
-				linkPersonId: ctx.personId,
-				// #219 — the pre-mint snapshot of the CURRENT identities, replayed by
-				// the callback's same-identity duplicate check.
-				linkedSnapshot: linkedIdentities.map(({ _id, uid, provider }) => ({
-					_id,
-					uid,
-					provider
-				}))
-			});
-			window.location.href = url;
-		} catch (e) {
-			console.error('profile: self-link mint failed', e);
-			linkBusy = false;
-			linkError = linkErrorMessage(e);
-		}
-	}
-
 	// The autosave onSave callback — dispatches through the existing queue.
 	function onAutosave(field: FieldKey): void {
-		// #434 slice 6 review F1 — no usable signal: nothing is written and nothing
-		// is queued. FIRST, before the name-private throw and before the
-		// savingFields/failedFields flips, so a refused autosave neither raises nor
-		// paints a saving state for a write that never happens. The typed draft is
-		// left exactly as it is (review F2's rule) — it is the viewer's work, and
-		// `profile-write-unavailable` says why it is not saved.
+		// Offline: first, before the throw and the saving flips. The draft is kept as typed.
 		if (isOffline) return;
 		if (!isDirty(field)) return;
 		const activeLevel = activeLevelFor(field);
@@ -995,7 +378,7 @@
 
 		const ctx = activeContext();
 		if (!ctx) return;
-		// Pin sibling value to the target entity's confirmed value — NEVER the unified draft.
+		// The sibling value comes from the target entity's confirmed value, never the draft.
 		const fields = {
 			name: field === 'name' ? draft.name : confirmed[activeLevel].name,
 			email: field === 'email' ? draft.email : confirmed[activeLevel].email
@@ -1060,19 +443,14 @@
 		if (!ctx) return;
 		repairFailed = withFieldSet(repairFailed, field, false);
 		repairWorking = withFieldSet(repairWorking, field, true);
-		// #257 — cleared at the START of the attempt, house pattern
-		// (eventCreateStatus/reorderStatus): a stale confirmation must not linger
-		// through a new attempt, and clearing here (not on settle) means a failed
-		// retry shows no confirmation at all rather than a stale one.
+		// #257 — cleared at the start, so a failed retry shows no stale confirmation.
 		repairStatus = '';
 		busy = true;
 		moveQueue.repair({ cfg: ctx.cfg, field, clear: plan.clear });
 	}
 
-	// #131 — browse-then-confirm: second tap on a previewed conflict tier
-	// converges every OTHER holder onto that tier's value, then reloads (the
-	// pre-existing repair-detection machinery picks up the now-same-value
-	// duplicate on the next load).
+	// #131 — a second tap on a previewed conflict tier converges every other holder onto
+	// its value, then reloads; repair detection picks up the same-value duplicate.
 	function handleResolve(field: FieldKey, level: Level) {
 		if (isOffline) return;
 		if (writesInFlight) return;
@@ -1088,9 +466,7 @@
 		applyConflictResolution({ cfg: ctx.cfg, field, value: chosenValue, sync })
 			.then(async () => {
 				busy = false;
-				// Deferred to the next microtask tick: lets any synchronous
-				// caller-side setup that follows a resolve (e.g. reconfiguring what
-				// the next load will see) land before the reload's read fires.
+				// Deferred a tick, so synchronous caller setup lands before the reload reads.
 				await tick();
 				loadForSelected();
 			})
@@ -1102,10 +478,7 @@
 
 	function handleValueChange(field: FieldKey, value: string) {
 		draft = { ...draft, [field]: value };
-		// Offline the keystroke is KEPT (the draft above) but no idle timer is armed:
-		// a timer that fires into a refusing `onAutosave` is just a dead callback,
-		// and any timer left over from before the drop is cancelled here so it
-		// cannot fire either.
+		// Offline the keystroke is kept but no timer is armed, and a leftover one is cancelled.
 		if (isOffline) {
 			autosaveCtrl.cancel(field);
 			return;
@@ -1117,103 +490,17 @@
 		autosaveCtrl.blur(field);
 	}
 
-	// #205 — Escape-cancels-edit: ProfileField reverts its own draft locally
-	// (bind:value), but the PENDING idle-autosave timer for the cancelled
-	// keystrokes lives here — it must die too, or a cancelled edit would still
-	// autosave a few seconds later.
-	//
-	// #205 review round 3 F1 — killing the timer only covers the edits that
-	// never reached the server. Cross the 2s idle window mid-edit and the
-	// autosave has ALREADY written the half-typed value; `cancel()` then clears
-	// a timer that no longer exists, the display snaps back to the pre-edit
-	// value, and Entu silently keeps the mid-edit one — divergent, with no
-	// dirty indicator to admit it. ProfileField has already written the
-	// pre-edit value back through `bind:value` by the time this runs, so
-	// `isDirty` is now measured against what the mid-edit autosave confirmed:
-	// true exactly when a write landed that the cancel has to undo, false (a
-	// no-op) in the ordinary case where nothing was autosaved. The flush goes
-	// through the same `onAutosave` seam as every other save — no second write
-	// path — and defers to `writesInFlight` like the other write entry points,
-	// since a save still in flight owns the level's queue slot.
+	// #205 — Escape kills the pending timer. If a mid-edit autosave already landed, the
+	// reverted draft is now dirty against it, so the pre-edit value is written back.
 	function handleCancel(field: FieldKey) {
 		autosaveCtrl.cancel(field);
 		if (!writesInFlight && isDirty(field)) onAutosave(field);
 	}
 
 	function handleVisibilityChange(field: FieldKey, toLevel: Level) {
-		// Fire autosave if dirty BEFORE the move (cross-queue lock will block the move
-		// until the save settles).
+		// Save first; the cross-queue lock holds the move until the save settles.
 		autosaveCtrl.visibilityChange(field);
 		onmove(field, toLevel);
-	}
-
-	/**
-	 * #267 — the roster-names WRITE. Server-confirmed, NEVER optimistic
-	 * (#253/#264 class): the select stays disabled and shows the OLD value
-	 * until the await resolves; only then does it flip to the new one. On
-	 * failure the message tells the truth (no success claim) and the select
-	 * returns to the value captured just before this attempt started — the
-	 * server-confirmed value from the last successful read or write, NOT a
-	 * re-read (STATED CHOICE: readRosterNamesSetting is not called again).
-	 * `rosterStatus` is cleared here, at the START of the attempt (never on
-	 * settle, never a timer) — the profile-repair-status idiom.
-	 */
-	async function onRosterNamesChange(e: Event): Promise<void> {
-		// The element reference is captured synchronously (before any await) and
-		// used to force the DOM back in sync below — the browser has already
-		// mutated `.value` to the user's pick as a normal `<select>` interaction,
-		// and Svelte's `value={…}` effect only re-runs when the SIGNAL it reads
-		// changes; a revert-to-the-same-boolean-it-already-was (e.g. two failed
-		// attempts in a row) would otherwise never re-run that effect, leaving
-		// the browser's already-mutated DOM value stuck on the user's pick.
-		const selectEl = e.currentTarget as HTMLSelectElement;
-		const value = selectEl.value === 'real';
-		// #434 slice 6 review F1 — offline: nothing is written. The select is
-		// disabled, so this is the backstop for a change that beat the re-render;
-		// like the precondition branch below it puts the DOM back to the last
-		// server-confirmed value rather than leaving a pick the server never took.
-		// The page-level `profile-write-unavailable` sentence says why.
-		if (isOffline) {
-			selectEl.value = rosterShowRealNames ? 'real' : 'profile';
-			return;
-		}
-		const ctx = activeContext();
-		const dbEntityId = rosterDbEntityId;
-		// #267 (review F1) — a failing write PRECONDITION is NOT "nothing
-		// happened": the browser has ALREADY moved the select to the admin's pick.
-		// Returning silently would leave the control displaying a value the server
-		// does not have, with no error, no status and no console line — the one
-		// thing the issue rules out. The select is disabled until
-		// `rosterDbEntityId` is confirmed (see the markup), so this is the
-		// residual guard behind that gate, and it tells the truth: the DOM goes
-		// back to the last server-confirmed value and the write path's own failure
-		// message is shown. Nothing was written, and the page says so.
-		if (!ctx || !dbEntityId) {
-			selectEl.value = rosterShowRealNames ? 'real' : 'profile';
-			rosterStatus = '';
-			rosterError = m.profile_roster_names_error();
-			return;
-		}
-		const g = routeLoad.generation;
-		const preWriteValue = rosterShowRealNames;
-		rosterStatus = '';
-		rosterError = null;
-		rosterBusy = true;
-		try {
-			await updateRosterShowRealNames(ctx.cfg, dbEntityId, value);
-			if (g !== routeLoad.generation) return;
-			rosterShowRealNames = value;
-			selectEl.value = value ? 'real' : 'profile';
-			rosterBusy = false;
-			rosterStatus = m.profile_roster_names_saved();
-		} catch (err) {
-			if (g !== routeLoad.generation) return;
-			console.error('profile: roster-names write failed', err);
-			rosterShowRealNames = preWriteValue;
-			selectEl.value = preWriteValue ? 'real' : 'profile';
-			rosterBusy = false;
-			rosterError = m.profile_roster_names_error();
-		}
 	}
 
 	$effect(() => {
@@ -1231,13 +518,8 @@
 
 		<div class="flex flex-col items-start gap-1">
 			{#if identityAccount}
-				<!-- #361 review F3 — `identityAccount` is `email || name` (see the script
-				     above), so on an Entu account with no email this line prints a real
-				     person's NAME. It is the viewer's own account rather than a
-				     roster-resolved member, but it is still a real name in element
-				     content, so it carries the marker. A sentence with the account
-				     baked in cannot be split, so the whole paragraph is wrapped (the
-				     admin_roles_remove form) — recorded in $lib/redact/redact.ts. -->
+				<!-- #361 — with no email the account is a real name, so the sentence is wrapped
+				     whole in the marker; recorded in $lib/redact/redact.ts. -->
 				<p data-testid="profile-identity" class="text-sm text-ink-2">
 					<RedactedText
 						>{#if identityProvider}{m.profile_signed_in_as({
@@ -1250,22 +532,12 @@
 			<a class="text-sm text-ink-2 underline" href="/auth/logout">{m.profile_sign_out()}</a>
 		</div>
 
-		<!--
-			#123 — app chrome, like sign-out above: not gated on `status` /
-			collective selection. Language choice must be reachable whether or
-			not a collective is selected.
-		-->
+		<!-- #123, #207, #408 — app chrome, not gated on `status` or collective selection. -->
 		<div class="flex flex-col items-start gap-1">
 			<span class="text-sm text-ink-2">{m.profile_language_label()}</span>
 			<LanguageSelector />
 		</div>
 
-		<!--
-			#207 rule 5 — the AM/PM preference control: app chrome, like the
-			language selector above, not gated on `status` / collective selection.
-			localStorage-backed, per-device (Gama ruling 2026-09-02) — the hint
-			line states that fact, not a note about the control itself.
-		-->
 		<div class="flex flex-col items-start gap-1">
 			<label for="profile-time-format" class="text-sm text-ink-2">
 				{m.profile_time_format_label()}
@@ -1286,14 +558,6 @@
 			</p>
 		</div>
 
-		<!--
-			#408 — "Install as app": app chrome, like sign-out/language/time-format
-			above, not gated on `status` / collective selection. `$installAffordance`
-			decides everything: 'none' renders nothing at all (no disabled button,
-			no explanation — issue body), 'prompt' and 'ios-hint' render the SAME
-			native button, and only 'ios-hint' can ever reveal the Share-menu line,
-			and only after a press (never before).
-		-->
 		{#if $installAffordance !== 'none'}
 			<div class="flex flex-col items-start gap-1">
 				<button
@@ -1312,80 +576,15 @@
 			</div>
 		{/if}
 
-		<!--
-			#267 — admin-only roster-names toggle: mirrors the time-format control
-			above verbatim (label above, native <select>, hint below), sibling in
-			the SAME app-chrome column, NOT gated on route-load `status` — an admin
-			sees it even when the profile-fields load errored. Fail-closed on every
-			non-admin adminStore state ('not-admin' / 'loading' / 'error'): no
-			control, no disabled placeholder, no explanatory text.
+		<RosterNamesToggle
+			bind:this={rosterNames}
+			{isOffline}
+			generation={() => routeLoad.generation}
+			{activeContext}
+		/>
 
-			#267 (review F1) — VISIBILITY (admin gate) and USABILITY (entity id
-			confirmed) are separate questions. adminStore resolves on its OWN clock
-			in +layout, independently of this page's roster-names read, so 'admin'
-			can land while `rosterDbEntityId` is still null — either because the
-			read is in flight (a window that reopens on every collective switch) or
-			because it FAILED and left the documented default standing. In both
-			states the write has no entity to write to, so the select is disabled
-			until the id is confirmed: the admin can never move a control that
-			cannot be saved. This is NOT a disabled control for a non-admin — the
-			admin gate above is unchanged, and a non-admin still gets no DOM at all.
-		-->
-		{#if admin === 'admin'}
-			<div class="flex flex-col items-start gap-1">
-				<label for="profile-roster-names" class="text-sm text-ink-2">
-					{m.profile_roster_names_label()}
-				</label>
-				<select
-					id="profile-roster-names"
-					data-testid="profile-roster-names"
-					bind:this={rosterSelectEl}
-					value={rosterShowRealNames ? 'real' : 'profile'}
-					disabled={rosterBusy || rosterDbEntityId === null || isOffline}
-					onchange={onRosterNamesChange}
-					class="border border-ink-5 bg-paper px-2 py-1 text-ink"
-				>
-					<option value="profile">{m.profile_roster_names_profile()}</option>
-					<option value="real">{m.profile_roster_names_real()}</option>
-				</select>
-				<p data-testid="profile-roster-names-hint" class="text-xs text-ink-3">
-					{m.profile_roster_names_hint()}
-				</p>
-				{#if rosterError}
-					<p data-testid="profile-roster-names-error" role="alert" class="text-xs text-red-700">
-						{rosterError}
-					</p>
-				{/if}
-				<!-- Persistent sr-only role="status" region, the profile-repair-status
-					idiom verbatim: mounted (empty) before any attempt, text set
-					imperatively, cleared at the START of the next attempt only. -->
-				<div
-					data-testid="profile-roster-names-status"
-					role="status"
-					aria-live="polite"
-					class="sr-only"
-				>
-					{rosterStatus}
-				</div>
-			</div>
-		{/if}
-
-		<!-- #257 — the repair confirmation announcement. House idiom
-			(event-create-status / roster-reorder-status): a PERSISTENT sr-only
-			role="status" live region whose text is set imperatively.
-			#257 review F1 — it sits ABOVE the `status` gate, exactly like
-			roster-reorder-status sits above roster's gate, and for the reason
-			roster's comment states: a live region announces only CHANGES to its
-			contents, so one mounted alongside its own text is announced by nothing.
-			Inside the ready branch it would be DESTROYED and remounted on every
-			repair success, because the success path calls loadForSelected(), whose
-			machine writes 'loading' synchronously — the region would only ever
-			appear with the text already in it. `sr-only` is absolutely positioned,
-			so it takes no slot in this flex column, and it renders harmlessly in
-			the no-collective / error states (resetState() clears `repairStatus`, so
-			nothing stale can sit there). VisibilityRepairBanner itself stays
-			untouched — its unmount on success is unchanged; the announcement is the
-			PAGE's job. -->
+		<!-- #257 — above the `status` gate: a live region announces only changes, and inside
+			the ready branch the reload would remount it with its text already in it. -->
 		<div data-testid="profile-repair-status" role="status" aria-live="polite" class="sr-only">
 			{repairStatus}
 		</div>
@@ -1431,17 +630,11 @@
 				/>
 			{/each}
 
-			<!-- #257 — the field list's missing title + operating instruction, a real
-				sectioning heading matching the Linked Accounts h2 below (the page's
-				only other sectioning precedent). profile_intro above stays as the
-				page's own introduction; this is the control's own explanation. -->
+			<!-- #257 — the field list's own heading, matching the Linked Accounts h2 below. -->
 			<h2 class="text-sm font-semibold">{m.profile_visibility_title()}</h2>
 			<p class="text-sm text-ink-2">{m.profile_visibility_intro()}</p>
-			<!-- #434 slice 6 review F1 — ONE visible reason for every write on this
-			     page: the fields' idle AUTOSAVE (which has no button of its own to
-			     disable — hence a sentence, not just a `disabled`), the visibility
-			     move/repair/resolve controls, the roster-names toggle and the
-			     account-link buttons. A draft already typed is kept, not saved. -->
+			<!-- #434 — the one visible reason for every write on the page, the sections' too;
+			     the autosave has no button to disable. A typed draft is kept, not saved. -->
 			{#if isOffline}
 				<p data-testid="profile-write-unavailable" class="text-sm text-ink-2">
 					{m.write_unavailable_no_signal()}
@@ -1473,247 +666,28 @@
 					/>
 				{/each}
 			</div>
-
-			<!-- #193 — linked auth providers + "Link another account". Display
-				source is the person entity's ACTUAL bound identities
-				(listLinkedIdentities), never the localStorage last-provider (which
-				only knows how THIS session logged in). -->
-			<section
-				data-testid="profile-linked-accounts"
-				class="flex flex-col gap-2 border-t border-ink/10 pt-4"
-			>
-				<h2 class="text-sm font-semibold">
-					{m.profile_linked_accounts_title({ collective: linkScopeName })}
-				</h2>
-				{#if dedupedLinkedIdentities.length > 0}
-					<ul class="flex flex-col gap-1">
-						{#each dedupedLinkedIdentities as identity (identity._id)}
-							<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
-								{providerLabel(identity.provider)}{#if identity.email}
-									&nbsp;— {identity.email}
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				{/if}
-
-				<!-- #193 (review F1) — the identity read FAILED: say so, and keep the
-					list's absence from reading as "you have no linked accounts". Linking
-					stays blocked below, because the no-duplicate rule is derived from
-					exactly this list. -->
-				{#if linkedLoadFailed}
-					<div
-						data-testid="profile-linked-load-error"
-						role="alert"
-						class="flex flex-col items-start gap-2"
-					>
-						<p class="text-sm text-red-700">
-							{m.profile_link_error_step({ step: IDENTITY_READ_STEP })}
-						</p>
-						<button
-							type="button"
-							data-testid="profile-linked-retry"
-							class="rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-							onclick={retryLinkedIdentities}
-						>
-							{m.profile_load_retry()}
-						</button>
-					</div>
-				{/if}
-
-				{#if !linkPickerOpen}
-					<button
-						type="button"
-						data-testid="profile-link-another"
-						bind:this={linkAnotherEl}
-						class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-						disabled={linkedLoadFailed || isOffline}
-						onclick={openLinkPicker}
-					>
-						{m.profile_link_another()}
-					</button>
-				{:else}
-					<p class="text-sm text-ink-2">{m.profile_link_choose_provider()}</p>
-					<div class="flex flex-col gap-2" bind:this={linkPickerEl}>
-						{#each AUTH_PROVIDERS as provider (provider.id)}
-							<button
-								type="button"
-								data-testid={`profile-link-provider-${provider.id}`}
-								class="rounded-md border border-ink px-4 py-2 text-left text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-								disabled={linkBusy || linkedLoadFailed || isOffline}
-								aria-busy={linkBusy}
-								onclick={() => handleLinkProvider(provider.id)}
-							>
-								{provider.label()}
-							</button>
-						{/each}
-						<button
-							type="button"
-							data-testid="profile-link-cancel"
-							class="self-start rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-							onclick={closeLinkPicker}
-						>
-							{m.profile_link_cancel()}
-						</button>
-					</div>
-				{/if}
-
-				{#if shownLinkError}
-					<p data-testid="profile-link-error" role="alert" class="text-sm text-red-700">
-						{shownLinkError}
-					</p>
-				{:else if linkSucceeded}
-					<p data-testid="profile-link-success" role="status" class="text-sm text-ink-2">
-						{m.profile_link_success({ collective: linkScopeName })}
-					</p>
-				{:else if linkNoop}
-					<p data-testid="profile-link-noop" role="status" class="text-sm text-ink-2">
-						{linkNoop}
-					</p>
-				{/if}
-			</section>
-
-			<!-- #352 — "Remove downloaded parts from this device". #343 ruled that
-			     logout/token expiry do NOT clear the byte store; this is the honest
-			     control for a shared device. Scoped to the signed-in (db, personId)
-			     identity, so there is nothing truthful to show before that read
-			     lands (storageMine/storageOthers stay null until then — "absent, not
-			     wrong", the heldFileIds precedent). NAMING IS ONLINE-PATH ONLY in
-			     this slice (the join comes from listAllEditions, a network read);
-			     OFFLINE naming is #353's scope. -->
-			{#if storageMine !== null && storageOthers !== null}
-				<section
-					data-testid="profile-storage"
-					class="flex flex-col gap-4 border-t border-ink/10 pt-4"
-				>
-					<h2 class="text-sm font-semibold">{m.profile_storage_title()}</h2>
-
-					<!-- #352 (review F1) — a removal that failed says so. Covers BOTH
-					     actions: whichever one rejected, nothing was deleted and the
-					     numbers below are still the pre-attempt truth. -->
-					{#if storageError}
-						<p data-testid="profile-storage-error" role="alert" class="text-xs text-red-700">
-							{storageError}
-						</p>
-					{/if}
-
-					<div data-testid="profile-storage-mine" class="flex flex-col gap-2">
-						<p class="text-sm text-ink-2">
-							{m.profile_storage_mine_summary({
-								count: storageMine.count,
-								size: formatFileSize(storageMine.size)
-							})}
-						</p>
-						{#if storageHeldFileIds.some((fileId) => storagePartNames[fileId])}
-							<ul class="flex flex-col gap-1">
-								{#each storageHeldFileIds as fileId (fileId)}
-									{#if storagePartNames[fileId]}
-										<li
-											data-testid={`profile-storage-part-${fileId}`}
-											class="text-sm text-ink-2"
-										>
-											{storagePartNames[fileId]}
-										</li>
-									{/if}
-								{/each}
-							</ul>
-						{/if}
-						<!-- #352 (review F3) — the name join reads a capped list; past
-						     the cap an unnamed held part is an unanswered lookup, not a
-						     nameless part. Rendered only when a held id actually went
-						     unnamed, so a complete-enough read stays silent. -->
-						{#if storageNamesPartial}
-							<p data-testid="profile-storage-names-partial" role="status" class="text-xs text-ink-3">
-								{m.profile_storage_names_partial()}
-							</p>
-						{/if}
-
-						{#if !storageArmedMine}
-							<button
-								type="button"
-								data-testid="profile-storage-remove-mine"
-								class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-								onclick={armStorageRemoveMine}
-							>
-								{m.profile_storage_remove_mine()}
-							</button>
-						{:else}
-							<p data-testid="profile-storage-remove-mine-note" class="text-xs text-ink-3">
-								{m.profile_storage_remove_mine_note()}
-							</p>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									data-testid="profile-storage-remove-mine-confirm"
-									disabled={storageRemoveMinePending}
-									aria-busy={storageRemoveMinePending}
-									class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-									onclick={confirmStorageRemoveMine}
-								>
-									{m.profile_storage_remove_mine_confirm()}
-								</button>
-								<button
-									type="button"
-									data-testid="profile-storage-remove-mine-cancel"
-									disabled={storageRemoveMinePending}
-									class="rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-									onclick={disarmStorageRemoveMine}
-								>
-									{m.profile_storage_cancel()}
-								</button>
-							</div>
-						{/if}
-					</div>
-
-					<!-- PO ruling (#352): count and size only — NEVER titled. Devtools
-					     already exposes everything to anyone determined; a titled list
-					     in our own UI would lower that bar for the merely curious. -->
-					<div data-testid="profile-storage-others" class="flex flex-col gap-2">
-						<p class="text-sm text-ink-2">
-							{m.profile_storage_others_summary({
-								count: storageOthers.count,
-								size: formatFileSize(storageOthers.size)
-							})}
-						</p>
-
-						{#if !storageArmedAll}
-							<button
-								type="button"
-								data-testid="profile-storage-remove-all"
-								class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-								onclick={armStorageRemoveAll}
-							>
-								{m.profile_storage_remove_all()}
-							</button>
-						{:else}
-							<p data-testid="profile-storage-remove-all-note" class="text-xs text-ink-3">
-								{m.profile_storage_remove_all_note()}
-							</p>
-							<div class="flex gap-2">
-								<button
-									type="button"
-									data-testid="profile-storage-remove-all-confirm"
-									disabled={storageRemoveAllPending}
-									aria-busy={storageRemoveAllPending}
-									class="rounded-md border border-red-700 px-4 py-2 text-sm text-red-700 hover:bg-red-700 hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-									onclick={confirmStorageRemoveAll}
-								>
-									{m.profile_storage_remove_all_confirm()}
-								</button>
-								<button
-									type="button"
-									data-testid="profile-storage-remove-all-cancel"
-									disabled={storageRemoveAllPending}
-									class="rounded-md border border-ink/40 px-4 py-2 text-sm hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-50"
-									onclick={disarmStorageRemoveAll}
-								>
-									{m.profile_storage_cancel()}
-								</button>
-							</div>
-						{/if}
-					</div>
-				</section>
-			{/if}
 		{/if}
+
+		<LinkedAccountsSection
+			bind:this={linkedAccounts}
+			ready={status === 'ready'}
+			{isOffline}
+			scopeName={selected?.name ?? ''}
+			generation={() => routeLoad.generation}
+			{activeContext}
+			onSessionExpired={() => {
+				status = 'session-expired';
+			}}
+			mintSelfLinkInvite={(...a) => mintSelfLinkInvite(...a)}
+			mintErrorMessage={linkErrorMessage}
+		/>
+
+		<ProfileStorageSection
+			bind:this={storageSection}
+			ready={status === 'ready'}
+			generation={() => routeLoad.generation}
+			{activeContext}
+			listAllEditions={(...a) => listAllEditions(...a)}
+		/>
 	</div>
 </main>
