@@ -922,13 +922,17 @@ describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () =
 	]
 		.map((path) => readFileSync(resolve(process.cwd(), path), 'utf-8'))
 		.join('\n');
+	const sectionSource = readFileSync(
+		resolve(process.cwd(), 'src/lib/profile/LinkedAccountsSection.svelte'),
+		'utf-8'
+	);
 
 	it('the profile page no longer defines its own PROVIDER_LABELS map', () => {
 		expect(profileSource).not.toContain('PROVIDER_LABELS');
 	});
 
 	it("the profile page resolves labels via providerLabel imported from '$lib/auth/providers'", () => {
-		expect(profileSource).toMatch(
+		expect(sectionSource).toMatch(
 			/import\s*(?:type\s*)?\{[^}]*\bproviderLabel\b[^}]*\}\s*from\s*'\$lib\/auth\/providers'/
 		);
 	});
