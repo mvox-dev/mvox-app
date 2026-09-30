@@ -1,0 +1,430 @@
+<script lang="ts">
+	import { tick } from 'svelte';
+	import { m } from '$lib/paraglide/messages.js';
+	import { getToken } from '$lib/auth/storage';
+	import { generateIntervalDates } from '$lib/events/recurrence';
+	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { tallinnLocalToUtcIso, tallinnWallClockParts } from '$lib/preferences/timeFormat';
+	import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
+	import type { Collective } from '$lib/collectives/types';
+	import type { EventDetail } from '$lib/events/eventDetail';
+	import type { EventActions } from '$lib/events/eventPageState';
+
+	let {
+		detail,
+		selected,
+		canConvert,
+		isOffline,
+		generation,
+		actions,
+		refreshDetail
+	}: {
+		detail: EventDetail;
+		selected: Collective | null;
+		canConvert: boolean;
+		isOffline: boolean;
+		generation: () => number;
+		actions: EventActions;
+		refreshDetail: (evId: string, g: number) => Promise<void>;
+	} = $props();
+
+	let eventConvertOpen = $state(false);
+	let eventConvertIntervalDays = $state('7');
+	let eventConvertDuration = $state('');
+	let eventConvertEndDate = $state('');
+	let eventConvertSubmitting = $state(false);
+	let eventConvertError = $state<string | null>(null);
+	type EventConvertErrorField = 'interval' | 'duration' | 'end' | null;
+	let eventConvertErrorField = $state<EventConvertErrorField>(null);
+	let eventConvertProgress = $state<{ current: number; total: number } | null>(null);
+	type EventConvertResume = {
+		seriesId: string;
+		dbEntityId: string;
+		eventType: string;
+		remaining: string[];
+		total: number;
+	};
+	let eventConvertResume = $state<EventConvertResume | null>(null);
+	let eventConvertFormEl = $state<HTMLDivElement | null>(null);
+
+	function openEventConvertForm(): void {
+		eventConvertOpen = true;
+		eventConvertIntervalDays = '7';
+		eventConvertDuration = '';
+		eventConvertEndDate = '';
+		eventConvertProgress = null;
+		clearEventConvertError();
+	}
+
+	function closeEventConvertForm(): void {
+		eventConvertOpen = false;
+		eventConvertProgress = null;
+		eventConvertResume = null;
+		clearEventConvertError();
+	}
+
+	function setEventConvertError(message: string, field: EventConvertErrorField): void {
+		eventConvertError = message;
+		eventConvertErrorField = field;
+	}
+
+	function clearEventConvertError(): void {
+		eventConvertError = null;
+		eventConvertErrorField = null;
+	}
+
+	function eventConvertDescribedBy(field: EventConvertErrorField): string | undefined {
+		return eventConvertErrorField === field ? 'event-convert-error' : undefined;
+	}
+
+	function eventConvertInvalid(field: EventConvertErrorField): true | undefined {
+		return eventConvertErrorField === field ? true : undefined;
+	}
+
+	const eventConvertLocked = $derived(eventConvertResume !== null);
+
+	function restoreEventConvertFocus(): void {
+		tick().then(() =>
+			document.querySelector<HTMLElement>('[data-testid="event-detail-convert"]')?.focus()
+		);
+	}
+
+	function dismissEventConvertForm(): void {
+		if (eventConvertSubmitting) return;
+		closeEventConvertForm();
+		restoreEventConvertFocus();
+	}
+
+	function onEventConvertFormKeydown(event: KeyboardEvent): void {
+		if (event.key !== 'Escape') return;
+		event.preventDefault();
+		dismissEventConvertForm();
+	}
+
+	$effect(() => {
+		if (eventConvertOpen && eventConvertFormEl) eventConvertFormEl.focus();
+	});
+
+	function eventConvertStepOf(e: unknown): string {
+		if (e && typeof e === 'object' && 'step' in e) {
+			const step = (e as { step?: unknown }).step;
+			if (typeof step === 'string' && step) return step;
+		}
+		return 'unknown';
+	}
+
+	const EVENT_CONVERT_RESOLVE_STEP = 'resolve-collective';
+
+	function eventConvertRefusalMessage(e: unknown): string | null {
+		if (!e || typeof e !== 'object' || !('reason' in e)) return null;
+		const reason = (e as { reason?: unknown }).reason;
+		if (reason === 'missing-name') return m.event_convert_missing_name();
+		if (reason === 'missing-event-type') return m.event_convert_missing_type();
+		return null;
+	}
+
+	async function submitEventConvert(): Promise<void> {
+		if (eventConvertSubmitting) return;
+		if (isOffline) return;
+		if (!selected || !detail || detail.seasonId === null) return;
+		clearEventConvertError();
+
+		const resume = eventConvertResume;
+
+		const { date: startDate, time: startTime } = tallinnWallClockParts(detail.startDatetime);
+		if (!startDate || !startTime) {
+			console.error('event detail: converting an event with no readable start', detail.id, detail.startDatetime);
+			setEventConvertError(m.event_convert_start_missing(), null);
+			return;
+		}
+		const intervalDays = Number(eventConvertIntervalDays);
+		if (!eventConvertIntervalDays.trim() || !Number.isFinite(intervalDays) || intervalDays < 1) {
+			setEventConvertError(m.event_convert_interval_required(), 'interval');
+			return;
+		}
+		const durationMinutes = Number(eventConvertDuration);
+		if (!eventConvertDuration.trim() || !Number.isFinite(durationMinutes) || durationMinutes < 1) {
+			setEventConvertError(m.event_convert_duration_required(), 'duration');
+			return;
+		}
+		if (!eventConvertEndDate) {
+			setEventConvertError(m.event_convert_end_required(), 'end');
+			return;
+		}
+		if (eventConvertEndDate < startDate) {
+			setEventConvertError(m.event_convert_end_before_start(), 'end');
+			return;
+		}
+
+		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const seasonId = detail.seasonId;
+		const eventId = detail.id;
+		const g = generation();
+
+		eventConvertSubmitting = true;
+		try {
+			let seriesId: string;
+			let dbEntityId: string;
+			let eventType: string;
+			let occurrences: string[];
+			let total: number;
+			let created: number;
+
+			if (resume) {
+				({ seriesId, dbEntityId, eventType, total } = resume);
+				occurrences = resume.remaining;
+				created = total - occurrences.length;
+			} else {
+				let resolvedDbEntityId: string | null;
+				try {
+					resolvedDbEntityId = await resolveDatabaseEntityId(cfg);
+				} catch (e) {
+					console.error('event detail: resolving the database entity for event conversion failed', e);
+					if (g === generation())
+						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
+					return;
+				}
+				if (!resolvedDbEntityId) {
+					console.error(
+						'event detail: event conversion with no resolvable database entity',
+						selected.personId
+					);
+					if (g === generation())
+						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
+					return;
+				}
+				if (g !== generation()) return;
+				dbEntityId = resolvedDbEntityId;
+				const input: ConvertEventToSeriesInput = {
+					eventId,
+					dbEntityId,
+					seasonId,
+					intervalDays,
+					startTime,
+					startDate,
+					endDate: eventConvertEndDate,
+					durationMinutes
+				};
+				try {
+					const result = await actions.convertEventToSeries(cfg, input);
+					seriesId = result.seriesId;
+					eventType = result.eventType;
+				} catch (e) {
+					console.error('event detail: event conversion failed', eventId, e);
+					if (g === generation())
+						setEventConvertError(
+							eventConvertRefusalMessage(e) ?? m.event_convert_failed({ step: eventConvertStepOf(e) }),
+							null
+						);
+					return;
+				}
+				if (g !== generation()) return;
+				occurrences = generateIntervalDates({
+					startDate,
+					intervalDays,
+					timeOfDay: startTime,
+					until: eventConvertEndDate
+				}).slice(1);
+				total = occurrences.length;
+				created = 0;
+			}
+
+			for (let i = 0; i < occurrences.length; i += 1) {
+				if (g !== generation()) {
+					console.warn(
+						'event detail: collective/route switched mid-conversion — the series keeps the occurrences already written',
+						seriesId
+					);
+					return;
+				}
+				eventConvertProgress = { current: created + 1, total };
+				try {
+					await actions.createEvent(cfg, {
+						dbEntityId,
+						seriesId,
+						extraParentIds: [seasonId],
+						eventType,
+						startDatetime: tallinnLocalToUtcIso(occurrences[i])
+					});
+					created += 1;
+				} catch (e) {
+					console.error('event detail: generating a converted series occurrence failed', seriesId, e);
+					eventConvertProgress = null;
+					if (g !== generation()) return;
+					eventConvertResume = {
+						seriesId,
+						dbEntityId,
+						eventType,
+						remaining: occurrences.slice(i),
+						total
+					};
+					setEventConvertError(m.event_convert_generate_failed({ created, total }), null);
+					return;
+				}
+			}
+			if (g !== generation()) return;
+			eventConvertProgress = null;
+			closeEventConvertForm();
+			await refreshDetail(eventId, g);
+		} finally {
+			eventConvertSubmitting = false;
+		}
+	}
+</script>
+
+{#if canConvert}
+	{#if !eventConvertOpen}
+		<button
+			type="button"
+			data-testid="event-detail-convert"
+			class="flex min-h-11 w-fit items-center text-xs text-ink underline"
+			onclick={openEventConvertForm}
+		>
+			{m.event_detail_convert()}
+		</button>
+	{:else}
+		<div
+			data-testid="event-convert-form"
+			role="dialog"
+			aria-label={m.event_convert_form_label()}
+			tabindex="-1"
+			bind:this={eventConvertFormEl}
+			class="flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
+			onkeydown={onEventConvertFormKeydown}
+		>
+			{#if isOffline}
+				<p data-testid="event-convert-write-unavailable" class="text-xs text-ink-2">
+					{m.write_unavailable_no_signal()}
+				</p>
+			{/if}
+			<label class="flex w-full flex-col gap-0.5">
+				<span class="text-xs text-ink-2">
+					{m.event_convert_interval_label()}
+				</span>
+				<input
+					type="number"
+					min="1"
+					data-testid="event-convert-interval"
+					aria-label={m.event_convert_interval_label()}
+					aria-invalid={eventConvertInvalid('interval')}
+					aria-describedby={eventConvertDescribedBy('interval')}
+					disabled={eventConvertLocked}
+					value={eventConvertIntervalDays}
+					oninput={(e) => {
+						eventConvertIntervalDays = (
+							e.currentTarget as HTMLInputElement
+						).value;
+						clearEventConvertError();
+					}}
+					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+				/>
+			</label>
+			<label class="flex w-full flex-col gap-0.5">
+				<span class="text-xs text-ink-2">
+					{m.event_convert_duration_label()}
+				</span>
+				<input
+					type="number"
+					min="1"
+					data-testid="event-convert-duration"
+					aria-label={m.event_convert_duration_label()}
+					aria-invalid={eventConvertInvalid('duration')}
+					aria-describedby={eventConvertDescribedBy('duration')}
+					disabled={eventConvertLocked}
+					value={eventConvertDuration}
+					oninput={(e) => {
+						eventConvertDuration = (
+							e.currentTarget as HTMLInputElement
+						).value;
+						clearEventConvertError();
+					}}
+					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+				/>
+			</label>
+			<p
+				data-testid="event-convert-start-date"
+				class="flex w-full flex-col gap-0.5"
+			>
+				<span class="text-xs text-ink-2">
+					{m.event_convert_start_date_label()}
+				</span>
+				<span class="text-ink">
+					{tallinnWallClockParts(detail.startDatetime).date}
+				</span>
+			</p>
+			<label class="flex w-full flex-col gap-0.5">
+				<span class="text-xs text-ink-2">
+					{m.event_convert_end_date_label()}
+				</span>
+				<input
+					type="date"
+					data-testid="event-convert-end-date"
+					aria-label={m.event_convert_end_date_label()}
+					aria-invalid={eventConvertInvalid('end')}
+					aria-describedby={eventConvertDescribedBy('end')}
+					disabled={eventConvertLocked}
+					value={eventConvertEndDate}
+					oninput={(e) => {
+						eventConvertEndDate = (
+							e.currentTarget as HTMLInputElement
+						).value;
+						clearEventConvertError();
+					}}
+					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
+				/>
+			</label>
+			{#if eventConvertProgress}
+				<p
+					data-testid="event-convert-progress"
+					role="status"
+					aria-live="polite"
+					class="text-xs text-ink-2"
+				>
+					{m.event_convert_progress({
+						current: eventConvertProgress.current,
+						total: eventConvertProgress.total
+					})}
+				</p>
+			{/if}
+			{#if eventConvertResume}
+				<p data-testid="event-convert-resume-notice" class="text-xs text-ink-2">
+					{m.event_convert_resume_notice({
+						remaining: eventConvertResume.remaining.length,
+						total: eventConvertResume.total
+					})}
+				</p>
+			{/if}
+			{#if eventConvertError}
+				<p
+					id="event-convert-error"
+					data-testid="event-convert-error"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{eventConvertError}
+				</p>
+			{/if}
+			<div class="flex gap-2">
+				<button
+					type="button"
+					data-testid="event-convert-submit"
+					disabled={eventConvertSubmitting || isOffline}
+					aria-busy={eventConvertSubmitting}
+					class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
+					onclick={() => void submitEventConvert()}
+				>
+					{m.event_convert_submit()}
+				</button>
+				<button
+					type="button"
+					data-testid="event-convert-cancel"
+					disabled={eventConvertSubmitting}
+					class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
+					onclick={dismissEventConvertForm}
+				>
+					{m.event_convert_cancel()}
+				</button>
+			</div>
+		</div>
+	{/if}
+{/if}

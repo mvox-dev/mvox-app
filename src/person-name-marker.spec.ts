@@ -10,7 +10,8 @@ import { resolve } from 'node:path';
 
 const FILES = [
 	'src/routes/admin/+page.svelte',
-	'src/routes/event/[id]/+page.svelte',
+	'src/lib/events/EventFieldEdit.svelte',
+	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
 	'src/lib/components/agenda/SeasonCreateForm.svelte',
@@ -188,8 +189,15 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
 		'series.name'
 	],
 	'src/lib/components/agenda/EventCreateForm.svelte': ['eventCreateSeriesDefaults.name'],
+	'src/routes/event/[id]/+page.svelte': [],
 	// the event's own name, and a schedule (agenda) row
-	'src/routes/event/[id]/+page.svelte': ['detail.name', 'row.name'],
+	'src/lib/events/EventFieldEdit.svelte': ['detail.name'],
+	'src/lib/events/EventScheduleSection.svelte': ['row.name'],
+	'src/lib/events/EventRsvpSection.svelte': [],
+	'src/lib/events/EventConvertForm.svelte': [],
+	'src/lib/events/EventWorksSection.svelte': [],
+	'src/lib/events/EventAttendanceSection.svelte': [],
+	'src/lib/events/EventDangerZone.svelte': [],
 	'src/routes/library/+page.svelte': [],
 	// catalogue name fields, and uploaded score filenames
 	'src/lib/library/WorkRow.svelte': ['work.name'],

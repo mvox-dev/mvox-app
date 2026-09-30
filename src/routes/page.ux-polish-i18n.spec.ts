@@ -8,6 +8,7 @@ import {
 	isMessageEmpty,
 	type MessageFile
 } from '$lib/testing/messageFile.js';
+import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
 
 const CHANGED_SURFACES = [
 	'src/routes/roster/+page.svelte',
@@ -21,7 +22,7 @@ const CHANGED_SURFACES = [
 	// #508 splits +page.svelte into the agenda/ components listed below.
 	'src/routes/+page.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
-	'src/routes/event/[id]/+page.svelte',
+	...EVENT_SURFACES,
 	'src/lib/components/agenda/SeriesCreateForm.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
 	'src/lib/components/agenda/SeasonCreateForm.svelte',

@@ -1,62 +1,17 @@
 // @vitest-environment happy-dom
-//
-// #105 TE.5 (RED) — i18n + a11y pass over the event detail page. Parent: #81
-// (Event detail 1.0). Follows the #86/#93 precedent (page.attendance-a11y /
-// page.repertoire-a11y): source-scan tests for i18n hygiene + rendered-DOM
-// tests for landmark/heading/keyboard semantics, ALL run against the real
-// route (+page.svelte with the real data layer; only the wire is stubbed) —
-// never against a lookalike.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   messages/*.json (all four locales — en, et, lv, uk):
-//     • event_edit_name_aria_label becomes "Edit event name" in en (and a
-//       matching disambiguation in et/lv/uk): out of page context "Edit name"
-//       could name the PROFILE name — the label must name the object edited.
-//       (#105: edit buttons labelled 'Edit event name', 'Edit location', …)
-//     • NEW key event_detail_rsvp_heading (en: e.g. "Your answer" / "RSVP")
-//       in all four locales — the RSVP region gets a real heading (below).
-//
-//   src/routes/event/[id]/+page.svelte:
-//     • the three content regions — event-detail-rsvp, event-detail-works,
-//       event-detail-attendance — become <section> elements (today: bare
-//       <div>s), each with an <h2> heading rendered from its paraglide key
-//       (works/attendance already have the h2; rsvp gains one from the new
-//       event_detail_rsvp_heading key). A screen-reader user navigating by
-//       region/heading currently finds ONE h1 and floats free between it and
-//       the works heading — the RSVP control is anonymous.
-//     • heading hierarchy stays h1 → h2 (no skips) — pinned so the new
-//       heading cannot land as an h3/h4.
-//     • FOCUS MANAGEMENT on inline editing (WAI-ARIA edit-in-place):
-//         – activating a pencil moves focus INTO the edit input it becomes
-//           (today focus stays on the unmounted button → drops to <body>,
-//           and a keyboard user must Tab back from the top of the page);
-//         – Escape (cancel) returns focus to the pencil button that opened
-//           the editor, for the same reason in reverse.
-//     • everything else asserted here is a GUARD pinning what TE.1–TE.4
-//       already built (back link, aria-labels from m.*, aria-live tally,
-//       keyboard confirm/cancel, decorative glyphs aria-hidden) so this
-//       pass cannot regress it.
-//
-// Assertions match on DATA and message KEYS (full-fallback paraglide proxy
-// renders `[key]`), never on translated sentences — same posture as
-// page.spec.ts. Locale copy is asserted only via messages/*.json directly.
+// #105: i18n and a11y on the real event route; source scans for copy, rendered DOM for semantics.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
 
-// Pin "now" between the past fixture (2026-08-01) and the future one
-// (2026-09-01) — same hygiene as page.spec.ts. Only Date is faked; timers
-// stay real so waitFor polls normally.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key]` / `[key {params}]`,
-// so assertions can pin WHICH key a surface renders without knowing its copy.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -85,9 +40,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── source + locale helpers ───────────────────────────────────────────────────
-
-const PAGE_SOURCE_PATH = 'src/routes/event/[id]/+page.svelte';
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function readSource(relPath: string): string {
@@ -98,9 +50,6 @@ function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
 }
 
-/** Same scan as page.attendance-a11y.spec.ts: strip Svelte expressions + HTML
- *  comments from the template; any remaining bare text node with letters in it
- *  is a hardcoded user-facing string. */
 function bareTextNodes(source: string): string[] {
 	const templateMatch = source.match(/<\/script>\s*([\s\S]*)$/);
 	let template = templateMatch ? templateMatch[1] : source;
@@ -122,10 +71,6 @@ function bareTextNodes(source: string): string[] {
 	}
 	return nodes;
 }
-
-// ── Entu fixtures — same event as page.spec.ts / page.event-editing.spec.ts ──
-// 2026-09-01T16:00Z = 19:00 Europe/Tallinn (EEST, UTC+3); value `_id`s present
-// so the edit choreography's DELETE leg has ids to target.
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
@@ -150,14 +95,10 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-/** The rights-holder's view: the viewer IS in the event's `_editor` list —
- *  pencils, tally and the works section all render. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
 
-/** A PAST event where the viewer holds the conductor seat — the attendance
- *  section's admit condition (isPast && conductor). */
 function pastConductorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return editorEvent({
 		start_datetime: [{ _id: 'val-start-1', datetime: '2026-08-01T16:00:00.000Z' }],
@@ -191,9 +132,6 @@ const PROFILES: Record<string, unknown[]> = {
 	]
 };
 
-/** The liberal wire stub page.spec.ts uses (serves the fixtures whether the
- *  impl reads by id or by query) plus a permissive write path, so the
- *  keyboard-confirm test's POST/DELETE choreography succeeds. */
 function entuStub(event: Record<string, unknown>) {
 	const season = seasonEntity();
 	const series = seriesEntity();
@@ -268,15 +206,6 @@ const EDITABLE_FIELDS = [
 	'description'
 ] as const;
 
-/**
- * Enough of the accessible-name computation to pin what a screen reader
- * ANNOUNCES, which `textContent` cannot: `aria-labelledby` wins outright,
- * then `aria-label`, then name-from-contents — and name-from-contents skips
- * `aria-hidden` subtrees while recursing into each descendant element's OWN
- * name. That recursion is the whole point here: it is how the edit button's
- * sr-only label climbs into the <h1> that wraps it (#157 review round 2, F1),
- * a leak every containment/`textContent` assertion below sails straight past.
- */
 function accessibleName(el: Element): string {
 	const labelledby = el.getAttribute('aria-labelledby');
 	if (labelledby) {
@@ -306,10 +235,8 @@ function accessibleName(el: Element): string {
 	return out.replace(/\s+/g, ' ').trim();
 }
 
-/** The one heading string an editor and a member must BOTH hear. */
 const EVENT_HEADING = 'Tuesday Rehearsal';
 
-/** Every write POST the page issued against the event entity. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
 		(c) =>
@@ -318,23 +245,18 @@ function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — i18n: source hygiene (guards — TE.1–TE.4 already route all copy
-//     through paraglide; this pass must not regress it)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#105 — i18n: the event detail page renders via Paraglide keys only', () => {
-	it('contains no bare text nodes outside m.* calls', () => {
-		expect(bareTextNodes(readSource(PAGE_SOURCE_PATH))).toEqual([]);
+	it.each(EVENT_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
+		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});
 
-	it('has no hardcoded aria-label string literals (labels must come from m.*)', () => {
-		const hardcoded = readSource(PAGE_SOURCE_PATH).match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
+	it.each(EVENT_SURFACES)('%s has no hardcoded aria-label string literals (labels must come from m.*)', (file) => {
+		const hardcoded = readSource(file).match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
 		expect(hardcoded).toEqual([]);
 	});
 
-	it('every m.* key the page references exists in en.json (a key that renders its own name is a missing translation)', () => {
-		const source = readSource(PAGE_SOURCE_PATH);
+	it.each(EVENT_SURFACES)('every m.* key %s references exists in en.json (a key that renders its own name is a missing translation)', (file) => {
+		const source = readSource(file);
 		const en = readMessages('en');
 		const referenced = new Set<string>();
 		const pattern = /\bm\.([a-z][a-zA-Z0-9_]*)/g;
@@ -359,11 +281,6 @@ describe('#105 — i18n: the event detail page renders via Paraglide keys only',
 		}
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — i18n: the TE.5 copy contract (RED — labels disambiguated, the RSVP
-//     region named)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#105 — i18n: edit-button labels name the OBJECT edited', () => {
 	it("en: the name pencil is 'Edit event name' — 'Edit name' out of context could as well mean the profile name", () => {
@@ -394,10 +311,6 @@ describe('#105 — i18n: edit-button labels name the OBJECT edited', () => {
 		}
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — a11y: landmarks + heading structure (rendered on the real route)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#105 — a11y: landmarks and headings', () => {
 	it('exactly one <main> landmark, containing both the back link and the h1', async () => {
@@ -446,12 +359,6 @@ describe('#105 — a11y: landmarks and headings', () => {
 		expect(heading!.textContent).toContain('[event_detail_attendance_heading]');
 	});
 
-	// #113 review F2 — the attendance entry point unmounts while its panel is
-	// open and the panel's Close button unmounts itself, so BOTH transitions
-	// have to place focus (WCAG 2.4.3). The agenda route got the pair; this
-	// route renders the SAME AttendanceSurface behind the SAME gate and had only
-	// the open half (the component's own onMount), stranding focus on <body> on
-	// the way back out.
 	it('opening the attendance panel moves focus INTO it, and closing returns focus to the restored entry point', async () => {
 		const { container } = renderEventPage(pastConductorEvent());
 		const attendance = await waitForTestid(container, 'event-detail-attendance');
@@ -512,10 +419,6 @@ describe('#105 — a11y: landmarks and headings', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — a11y: the back link (guard)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#105 — a11y: back link', () => {
 	it('is a real <a href="/"> whose accessible text comes from event_detail_back, with the arrow glyph aria-hidden', async () => {
 		const { container } = renderEventPage();
@@ -529,17 +432,8 @@ describe('#105 — a11y: back link', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — a11y: inline editing — labels, keyboard, focus management
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#105 — a11y: edit pencils and inputs are labelled per field', () => {
 	it('every pencil is a <button type="button"> whose label rides as an sr-only CHILD (never aria-label — #157), with an aria-hidden glyph', async () => {
-		// #157 review F1 — the button now WRAPS the field value, so its accessible
-		// name must compose "Edit location, Rehearsal Hall". `aria-label` overrides
-		// name-from-contents outright, which would announce the label alone and
-		// leave the value unspoken; the label therefore lives in an sr-only span
-		// inside the button, the same shape the roster's sr-only regions use.
 		const { container } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-description');
 		for (const field of EDITABLE_FIELDS) {
@@ -571,11 +465,6 @@ describe('#105 — a11y: edit pencils and inputs are labelled per field', () => 
 			await fireEvent.click(container.querySelector(`[data-testid="event-edit-btn-${field}"]`)!);
 			const input = await waitForTestid(container, `event-edit-input-${field}`);
 			expect(input.getAttribute('aria-label')).toBe(`[event_edit_${field}_aria_label]`);
-			// Escape out so the next field's pencil is back on screen. #207 review
-			// F3 — start_datetime is a composite whose surface testid sits on a
-			// role="group" wrapper; a non-interactive role must not own key
-			// listeners, so the Escape gesture lives on the real controls inside
-			// and the key event originates there, exactly as it does in a browser.
 			const keyTarget =
 				container.querySelector(`[data-testid="event-edit-input-${field}-date"]`) ?? input;
 			await fireEvent.keyDown(keyTarget, { key: 'Escape' });
@@ -586,20 +475,7 @@ describe('#105 — a11y: edit pencils and inputs are labelled per field', () => 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5b — #157: the whole field is the tap target
-//
-// The regression these pin: before #157 the tap target was the bare pencil
-// glyph — a ~12px box next to the value. The fix makes the value part of the
-// button, which is invisible to every existing assertion here (they all query
-// the value by data-testid and do not care what wraps it), so without these a
-// refactor could silently put the pencil back on its own.
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#157 — the edit tap target is the whole field, not the pencil glyph', () => {
-	// name is excluded: its value node is the <h1>, which WRAPS the button
-	// rather than sitting inside it (a heading is not phrasing content and
-	// role=button would strip its heading role) — asserted separately below.
 	const VALUE_TESTID: Record<string, string> = {
 		start_datetime: 'event-detail-time',
 		duration_minutes: 'event-detail-duration',
@@ -629,15 +505,9 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 		const h1 = container.querySelector('[data-testid="event-detail-name"]')!;
 		expect(h1.tagName, 'the event name must stay an <h1> for an editor too').toBe('H1');
 		expect(h1.contains(btn), 'the name button must live inside the <h1>').toBe(true);
-		// …and it is still the ONLY h1 — an editor and a member get the same
-		// heading tree (a <button>-swallowed heading would leave the editor none).
 		expect(container.querySelectorAll('h1')).toHaveLength(1);
 	});
 
-	// The pair below closes the gap the two assertions above leave open: they
-	// pin the heading's SHAPE (tag, containment, count) but never what it SAYS,
-	// so the sr-only edit label could — and did — ride up into the h1 through
-	// name-from-contents while every one of them stayed green.
 	it('an EDITOR hears the event name alone as the heading — the sr-only edit label stays on the button', async () => {
 		const { container } = renderEventPage(editorEvent());
 		const btn = await waitForTestid(container, 'event-edit-btn-name');
@@ -646,8 +516,6 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 			accessibleName(h1),
 			'the edit label leaked into the h1 — an editor and a member now hear different headings'
 		).toBe(EVENT_HEADING);
-		// …while the button it wraps still composes label + value, which is the
-		// #157 shape and must NOT be sacrificed to clean the heading up.
 		expect(accessibleName(btn)).toBe(`[event_edit_name_aria_label] ${EVENT_HEADING}`);
 	});
 
@@ -659,11 +527,6 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 	});
 
 	it('every whole-field button keeps a pointer hover cue on its glyph', async () => {
-		// The pre-#157 pencil buttons each carried `hover:text-ink`. Growing the
-		// target to the whole field is a mobile win, but dropping that rule would
-		// make the field LESS discoverable with a mouse than the glyph it replaced
-		// — Tailwind's preflight sets no `cursor: pointer` on <button>, so the
-		// glyph darkening is the only cue left that the region is clickable.
 		const { container } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-description');
 		for (const field of EDITABLE_FIELDS) {
@@ -683,17 +546,11 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 	});
 
 	it('every edit button spans the field width and clears the 44px minimum touch size', async () => {
-		// `min-h-11` = 44px, the same floor the agenda/season controls already use
-		// (#101). Empty optional fields (no location/description, duration 0) render
-		// nothing but the glyph, so without an explicit minimum they would keep the
-		// pre-#157 target size exactly where it hurt most.
 		const { container } = renderEventPage(
 			editorEvent({
 				location: [],
 				description: [],
 				duration_minutes: [],
-				// No series parent either — otherwise the series defaults fill all
-				// three back in and this stops being the empty case.
 				_parent: [
 					{ reference: 'org1', entity_type: 'organization' },
 					{ reference: 'season1', entity_type: 'season' }
@@ -723,9 +580,6 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 		expect(btn.classList.contains('w-full')).toBe(true);
 		expect(btn.classList.contains('min-h-11')).toBe(true);
 		expect(btn.querySelector('.sr-only')?.textContent).toBe('[event_edit_start_datetime_aria_label]');
-		// …and the same hover cue as the four populated fields: this branch used
-		// to carry a button-level `hover:text-ink` while they had none, so the
-		// header's hover treatment disagreed with itself inside one file.
 		expect(btn.classList.contains('group'), 'the empty-start target is not a hover group').toBe(
 			true
 		);
@@ -777,10 +631,6 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		});
 	});
 
-	// #105 review F1 — the write path (Enter, or blur WITH a real change) used
-	// to clear `editingField` and stop there: the input unmounts, and with no
-	// restore, `activeElement` falls all the way to `<body>` — a keyboard user
-	// who just committed a change loses her place on the page.
 	it('Enter commit (a real change) returns focus to the pencil — activeElement is never <body> — #105 review F1', async () => {
 		const { container } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-location');
@@ -799,19 +649,11 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		});
 	});
 
-	// #105 review F2 — confirmFieldEdit's NO-CHANGE path degrades to
-	// cancelFieldEdit, which (post-F1) restores focus to the pencil. That is
-	// right for a KEYBOARD dismissal, but a BLUR means the viewer already moved
-	// focus somewhere else ON PURPOSE (tabbed to the next field, clicked
-	// another control) — yanking it back to the pencil fights that choice.
 	it('blur without change leaves focus wherever the user moved it — it is NOT dragged back to the pencil — #105 review F2', async () => {
 		const { container } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-location');
 		await fireEvent.click(container.querySelector('[data-testid="event-edit-btn-location"]')!);
 		const input = await waitForTestid(container, 'event-edit-input-location');
-		// No `fireEvent.input` — the draft is left exactly as seeded, so this is
-		// a genuine no-change confirm, the one path blur can reach without an
-		// intervening write.
 		const elsewhere = document.createElement('button');
 		elsewhere.type = 'button';
 		elsewhere.textContent = 'elsewhere';
@@ -821,8 +663,6 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-input-location"]')).toBeNull();
 		});
-		// Give any (wrongly) scheduled restore-focus microtask a chance to land
-		// before asserting it did not.
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(
@@ -831,19 +671,11 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		).toBe(elsewhere);
 	});
 
-	// #105 review R2-F1 — the same rule on the OTHER branch. A blur that carries a
-	// real change takes the WRITE path, which used to restore focus from the
-	// queue's settle callbacks unconditionally: the viewer clicks another
-	// control on the page (an RSVP button, the back link), the write lands a
-	// round-trip later, and focus jumps to the pencil out from under her. The
-	// `editingField === null` guard does not catch this — the control she moved
-	// to is not an edit field, so no editor is open.
 	it('blur WITH a change leaves focus where the user moved it, even after the write settles — #105 review R2-F1', async () => {
 		const { container, fetchStub } = renderEventPage(editorEvent());
 		await waitForTestid(container, 'event-edit-btn-location');
 		await fireEvent.click(container.querySelector('[data-testid="event-edit-btn-location"]')!);
 		const input = await waitForTestid(container, 'event-edit-input-location');
-		// A REAL change — this confirm takes the write branch, unlike the F2 case.
 		await fireEvent.input(input, { target: { value: 'New Hall' } });
 		const elsewhere = document.createElement('button');
 		elsewhere.type = 'button';
@@ -854,8 +686,6 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-input-location"]')).toBeNull();
 		});
-		// Wait for the write to actually SETTLE — the restore, if any, is issued
-		// from the queue's reconcile, which only runs once the POST resolves.
 		await waitFor(() => {
 			expect(editPosts(fetchStub)).toHaveLength(1);
 		});
@@ -863,8 +693,6 @@ describe('#105 — a11y: focus management on inline editing (WAI-ARIA edit-in-pl
 		await waitFor(() => {
 			expect(pencil.hasAttribute('disabled'), 'write still in flight').toBe(false);
 		});
-		// Let any (wrongly) scheduled restore-focus microtask land before
-		// asserting it did not.
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(
@@ -905,10 +733,6 @@ describe('#105 — a11y: inline edits stay keyboard-operable (guard on the TE.4 
 		expect(editPosts(fetchStub)).toHaveLength(0);
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 6 — a11y: the RSVP tally announces itself (guard)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#105 — a11y: RSVP tally', () => {
 	it("the editor's tally is aria-live=polite — counts that change under an open page must be announced, not silently repainted", async () => {

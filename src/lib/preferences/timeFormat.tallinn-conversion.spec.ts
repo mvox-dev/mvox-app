@@ -12,6 +12,8 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
+import { tallinnWallClockParts, toTallinnLocalInputValue } from './timeFormat';
 
 // A static named import of not-yet-exported members would fail at LINK time
 // with an opaque error, so the tests reach for the exports dynamically.
@@ -127,10 +129,35 @@ describe('#230 — tallinnLocalToUtcIso (shared two-pass wall-clock → UTC inst
 	});
 });
 
+describe('toTallinnLocalInputValue and tallinnWallClockParts (Tallinn wall clock of a UTC instant)', () => {
+	it('summer and winter instants seed the Tallinn wall clock as YYYY-MM-DDTHH:mm', () => {
+		expect(toTallinnLocalInputValue('2026-09-01T16:00:00.000Z')).toBe('2026-09-01T19:00');
+		expect(toTallinnLocalInputValue('2026-01-15T23:30:00.000Z')).toBe('2026-01-16T01:30');
+	});
+
+	it('an empty or unparseable instant seeds nothing', () => {
+		expect(toTallinnLocalInputValue('')).toBe('');
+		expect(toTallinnLocalInputValue('not a date')).toBe('');
+	});
+
+	it('splits the same wall clock into date and time parts', () => {
+		expect(tallinnWallClockParts('2026-09-01T16:00:00.000Z')).toEqual({ date: '2026-09-01', time: '19:00' });
+		expect(tallinnWallClockParts('2026-01-15T23:30:00.000Z')).toEqual({ date: '2026-01-16', time: '01:30' });
+		expect(tallinnWallClockParts('')).toEqual({ date: '', time: '' });
+	});
+});
+
 describe('#230 — extraction wiring (integration: both event routes consume the SHARED helpers, duplicates deleted)', () => {
 	const SRC_ROOT = resolve(__dirname, '../..'); // …/src
 	const rootPage = () => readFileSync(resolve(SRC_ROOT, 'routes/+page.svelte'), 'utf8');
-	const eventPage = () => readFileSync(resolve(SRC_ROOT, 'routes/event/[id]/+page.svelte'), 'utf8');
+	const eventSurfaces = () =>
+		EVENT_SURFACES.map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
+	const timeFormatSource = () => readFileSync(resolve(SRC_ROOT, 'lib/preferences/timeFormat.ts'), 'utf8');
+	const TALLINN_TO_UTC_CALLERS = [
+		'src/lib/events/EventConvertForm.svelte',
+		'src/lib/events/EventScheduleSection.svelte',
+		'src/lib/events/EventFieldEdit.svelte'
+	];
 
 	it('src/routes/+page.svelte no longer declares its own copies (eventCreateTallinnOffsetMinutes / tallinnLocalToUtcIso)', () => {
 		const content = rootPage();
@@ -154,16 +181,16 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 		expect(/[^.\w]tallinnLocalToUtcIso\(/.test(content.replace(/import[^;]*;/g, ''))).toBe(true);
 	});
 
-	it('src/routes/event/[id]/+page.svelte no longer declares its own copies (tallinnOffsetMinutes / tallinnLocalToUtcIso); toTallinnLocalInputValue STAYS local (out of slice)', () => {
-		const content = eventPage();
+	it('no event surface declares its own copies (tallinnOffsetMinutes / tallinnLocalToUtcIso); toTallinnLocalInputValue is declared in timeFormat.ts', () => {
+		const content = eventSurfaces();
 		expect(/function\s+tallinnOffsetMinutes\s*\(/.test(content)).toBe(false);
 		expect(/function\s+tallinnLocalToUtcIso\s*\(/.test(content)).toBe(false);
 		// The ISO→input seeder is NOT part of the shared offset/local→UTC pair.
-		expect(/function\s+toTallinnLocalInputValue\s*\(/.test(content)).toBe(true);
+		expect(/function\s+toTallinnLocalInputValue\s*\(/.test(timeFormatSource())).toBe(true);
 	});
 
-	it('src/routes/event/[id]/+page.svelte imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', () => {
-		const content = eventPage();
+	it.each(TALLINN_TO_UTC_CALLERS)('%s imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', (file) => {
+		const content = readFileSync(resolve(SRC_ROOT, '..', file), 'utf8');
 		expect(
 			/import\s*\{[^}]*\btallinnLocalToUtcIso\b[^}]*\}\s*from\s*'\$lib\/preferences\/timeFormat'/.test(
 				content

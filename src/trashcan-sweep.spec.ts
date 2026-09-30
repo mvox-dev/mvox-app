@@ -52,7 +52,8 @@ describe('#237 — the destructive trigger treatment is defined ONCE', () => {
 describe('#237 — every Table-A route imports the shared unit (integration floor)', () => {
 	const routes = [
 		'lib/components/agenda/SeasonManagePanel.svelte',
-		'routes/event/[id]/+page.svelte',
+		'lib/events/EventScheduleSection.svelte',
+		'lib/events/EventDangerZone.svelte',
 		'routes/roster/+page.svelte'
 	];
 	for (const route of routes) {

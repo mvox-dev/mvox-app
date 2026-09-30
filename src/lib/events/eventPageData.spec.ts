@@ -24,6 +24,10 @@ import {
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { EVENT_SURFACES } from './eventSurfaces';
+
+const eventSurfacesSource = () =>
+	EVENT_SURFACES.map((file) => readFileSync(resolve(process.cwd(), file), 'utf-8')).join('\n');
 
 const AGENDA_SOURCE = () =>
 	['src/routes/+page.svelte', 'src/lib/agenda/agendaLoad.ts']
@@ -311,7 +315,7 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 			'utf-8'
 		);
 		expect(source).toContain('refreshEventPageDetail');
-		expect(source).not.toMatch(/await loadEventDetail\(/);
+		expect(eventSurfacesSource()).not.toMatch(/await loadEventDetail\(/);
 	});
 
 	it('the agenda wires its next-event prefetch through this function, not the serving one', () => {
@@ -446,11 +450,15 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 			resolve(process.cwd(), 'src/routes/event/[id]/+page.svelte'),
 			'utf-8'
 		);
+		const works = readFileSync(
+			resolve(process.cwd(), 'src/lib/events/EventWorksSection.svelte'),
+			'utf-8'
+		);
 		expect(source).toContain('loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {');
-		expect(source).toContain('refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {');
+		expect(works).toContain('refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {');
 		// Not imported at all any more, so neither read can drift off the store.
-		expect(source).not.toMatch(/loadWorksByEventId\s*\}/);
-		expect(source).not.toMatch(/loadWorksByEventId\(/);
+		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\s*\}/);
+		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\(/);
 	});
 });
 
