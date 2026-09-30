@@ -9,9 +9,10 @@ import {
 	type MessageFile
 } from '$lib/testing/messageFile.js';
 import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
+import { ROSTER_SURFACES } from '$lib/roster/rosterSurfaces';
 
 const CHANGED_SURFACES = [
-	'src/routes/roster/+page.svelte',
+	...ROSTER_SURFACES,
 	'src/lib/sections/SectionPicker.svelte',
 	'src/lib/components/agenda/RepertoireElement.svelte',
 	'src/routes/library/+page.svelte',
@@ -158,7 +159,7 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 // No surface may strip the UA focus ring (WCAG 2.4.7) without a listed
 // FOCUS_STRIP_EXCEPTIONS replacement (#205 gave the arrange row one).
 const FOCUS_STRIP_EXCEPTIONS: Record<string, { allowed: string[]; replacement: RegExp }> = {
-	'src/routes/roster/+page.svelte': {
+	'src/lib/sections/SectionArrangeRow.svelte': {
 		allowed: ['focus:outline-none'],
 		replacement: /focus-within:ring-2/
 	}

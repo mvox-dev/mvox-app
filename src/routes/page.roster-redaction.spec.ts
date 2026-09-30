@@ -1,36 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #357 RED — capture redaction ON THE REAL ROUTE: the admin roster record
-// editor's five PII fields (real name, phone, email, birth date, id_code)
-// render through the shared RedactedField component, so every one of them
-// carries the capture-redaction marker — pinned at the ROUTE level so GREEN
-// cannot satisfy the unit layer (RedactedField.spec.ts) without wiring the
-// component into the actual page.
-//
-//   (1) DEFAULT-INERT — the load-bearing constraint. Without the
-//       html[data-redacting] root toggle, marked fields render their values
-//       exactly as before: every existing PII-value spec
-//       (page.roster-record-editor, page.roster-real-names, the invite
-//       suites) stays green BYTE-UNMODIFIED, and the explicit pin here
-//       asserts values visible + zero overlay attr/selector effect.
-//   (2) MARKER COVERAGE — each of the five editor fields sits inside a
-//       [data-redact] wrapper on the real route, and the page SOURCE renders
-//       them through <RedactedField> (component-level marker, #357's rule) —
-//       not through five hand-marked inline <input>s, the seed-188
-//       per-call-site anti-pattern.
-//   (3) TOGGLE WIRING — with data-redacting set on <html>, every marked
-//       wrapper matches the CSS rule's exact selector (pinned by literal
-//       string in redact.spec.ts), and the DOM values are UNTOUCHED: the
-//       mechanism is a CSS overlay, never a value mutation. jsdom/happy-dom
-//       cannot screenshot — the PIXEL claim (hatch actually covers the value
-//       in a capture, redacted-not-blank) rides the manual capture checklist
-//       in the landing comment.
-//
-//   The invite-link row (#357's other listed surface) has NO rendered value
-//   to mark since #360 made invite links copy-only — the composed URL never
-//   enters the DOM (pinned in page.roster-invite-copy.spec.ts /
-//   page.admin-invite.spec.ts, byte-unmodified). The reason is documented
-//   beside the marker's definition and pinned in redact.spec.ts.
+// #357 — the record editor's five PII fields render through RedactedField on the real route:
+// default-inert without the toggle, marked on every field, and a CSS overlay, never a mutation.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -226,12 +196,8 @@ async function openEditor(container: HTMLElement, memberId: string) {
 	});
 }
 
-// INSTRUMENT NOTE (probed 2026-09-15): happy-dom caches selector evaluations
-// per element+selector — a matches()/querySelector() result computed under
-// one toggle state is returned STALE after the state flips. So each test
-// evaluates each selector against each element AT MOST ONCE, in a single
-// toggle state, on a fresh render; off-state and on-state live in SEPARATE
-// tests, never as a toggle round-trip on one element.
+// happy-dom caches a selector result per element and returns it stale after the toggle flips,
+// so each test evaluates each selector once, in one toggle state, on a fresh render.
 describe('(1) DEFAULT-INERT — without the root toggle, marked fields render values NORMALLY (the constraint that keeps every existing PII-value spec green byte-unmodified)', () => {
 	it('all five PII values render verbatim; <html> carries no toggle; no field matches the redaction selector', async () => {
 		const { container } = await renderRosterAsAdmin();
@@ -264,7 +230,10 @@ describe('(2) marker coverage — every mapped PII surface carries the marker on
 	});
 
 	it('the page SOURCE renders the five fields through <RedactedField> — component-level marker, never five hand-marked inline inputs (the seed-188 anti-pattern #357 names)', () => {
-		const source = readFileSync(resolve(process.cwd(), 'src/routes/roster/+page.svelte'), 'utf-8');
+		const source = readFileSync(
+			resolve(process.cwd(), 'src/lib/roster/MemberRecordEditor.svelte'),
+			'utf-8'
+		);
 		expect(source, 'imports the shared component').toContain(
 			"$lib/components/RedactedField.svelte"
 		);

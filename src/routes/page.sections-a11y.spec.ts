@@ -1,41 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #99 TS.5 RED — i18n + a11y coverage for all Sections 1.0 surfaces (TS.1–TS.4):
-//   - the /roster page's section-grouped view (collapse toggles, drag handles,
-//     move buttons, error banners)
-//   - SectionPicker (trigger, option menu, inline create form)
-//
-// Follows the #93/TR.5 precedent (page.repertoire-a11y.spec.ts): source-scan
-// tests for i18n hygiene + rendered-DOM tests for aria semantics — ALL DOM
-// tests render the ACTUAL page route component (./roster/+page.svelte), never
-// the picker in isolation, so GREEN cannot pass by patching a component the
-// page doesn't mount ("partial assertions hide bugs").
-//
-// These are RED — they assert a11y the TS.1–TS.4 surfaces do not yet carry:
-//   - the collapse toggles report aria-expanded but DANGLE no aria-controls at
-//     all — a screen reader hears "collapsed/expanded" with no relationship to
-//     WHAT gets disclosed (the #86 SeasonSummary ruling, third slice running);
-//   - the picker menu is a bare <div> of buttons: no role="listbox", no
-//     role="option", state via aria-pressed instead of aria-selected, and the
-//     trigger doesn't announce that it pops anything up;
-//     ⚠ SUPERSEDES the TS.2 aria-pressed pin in SectionPicker.spec.ts /
-//     page.roster-picker.spec.ts — aria-pressed on role="option" is an invalid
-//     ARIA mix, so GREEN must move those pins to aria-selected, not stack both;
-//   - the drag handle is aria-hidden with NO aria-grabbed, and no element ever
-//     exposes aria-dropeffect — a drag in progress is completely silent to AT;
-//   - the open listbox has no keyboard navigation beyond Tab — ArrowDown/
-//     ArrowUp must move focus through the options (the listbox pattern).
-// A set of guard tests pins what already exists (aria-expanded, role="alert"
-// on all three error surfaces, aria-invalid + aria-describedby on the create
-// form, Escape dismissal, native buttons, locale key parity) so GREEN can't
-// regress it.
-//
-// #470 AMENDMENT: the custom picker popup is RETIRED (native per-membership
-// <select>s + a [+]; creation left the assignment flow for the arrange-mode
-// `roster-new-section` entry). Section 3 pins the native controls; the
-// create-form a11y guards re-drive through the page-level form; every pin on
-// the popup's own plumbing (listbox roles, arrow nav, dismissal, focus
-// restore) is retired — the browser owns a native control's semantics.
+// #99 i18n + a11y cover for the sections surfaces: source scans for i18n hygiene, and DOM
+// tests that always render the real /roster page, never a component alone.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -46,11 +11,8 @@ import {
 	type MessageFile
 } from '$lib/testing/messageFile.js';
 
-// Paraglide mock: real English strings for the keys that exist today, plus a
-// Proxy fallback so keys ADDED by the GREEN pass resolve without this file
-// needing to know their names — the fallback renders "<key> <param values...>",
-// so "the label contains the section name" holds for any key shape as long as
-// the name rides along as a param.
+// Paraglide mock: real English for the known keys; a Proxy fallback renders "<key> <params>",
+// so a label naming the section holds for any key shape.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const known: Record<string, (p?: Record<string, unknown>) => string> = {
 		roster_title: () => 'Roster',
@@ -86,10 +48,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 	return { m };
 });
 
-// ───────────────────────────────────────────────────────────────────────────
-// Page seams — same mock set as page.roster-reorder.spec.ts: groupBySection
-// runs REAL, only the fetch seams and the write seam are mocked.
-// ───────────────────────────────────────────────────────────────────────────
+// Page seams: groupBySection runs real; only the fetch and write seams are mocked.
 const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, reorderMock } =
 	vi.hoisted(() => ({
 		loadRosterMock: vi.fn(),
@@ -99,9 +58,7 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, 
 		createMock: vi.fn(),
 		reorderMock: vi.fn()
 	}));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
+// /roster reads the opt-in real-names producer; `loadRoster` stays profile-names-only.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -129,11 +86,9 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { ROSTER_SURFACES } from '$lib/roster/rosterSurfaces';
 
-// ── fixtures ────────────────────────────────────────────────────────────────
-// Soprano (with one sub-section), Alto, Tenor — plus one UNASSIGNED member so
-// the Unassigned pseudo-group and the picker's empty-selection state both
-// render.
+// Fixtures: Soprano (one sub-section), Alto, Tenor, and one unassigned member.
 
 function fixtureTree(): SectionNode[] {
 	return [
@@ -152,10 +107,8 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-// #468 — every fixture row carries the READER's person id ('person-p', per
-// setAuthedWithOneCollective's personIdByDb below) in `ownerIds`, so the picker
-// gate (the reader's own grant on the row) stays open for this file's a11y
-// coverage of the picker itself, unaffected by the ownership question.
+// Every row lists the reader ('person-p') in `ownerIds`, so the picker gate stays open
+// for this file's picker cover.
 function fixtureRows(): RosterRow[] {
 	return [
 		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'], ownerIds: ['person-p'] },
@@ -215,14 +168,8 @@ async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
-	// TU.2/#110 finding #9 — sections default COLLAPSED now (member rows, and
-	// this file's picker triggers, don't render until expanded); this file's
-	// concern is a11y semantics on the ALREADY-OPEN surfaces, not the collapse
-	// default itself (that's page.roster-sections-ux.spec.ts's job), so expand
-	// everything up front via the same toggle-all control #9 shipped. Individual
-	// tests that need a COLLAPSED starting point (the drag/reorder and
-	// disclosure-contract tests) call `collapse()`/`expand()` explicitly, which
-	// stay state-agnostic either way.
+	// Sections start collapsed, so expand all up front. Tests that need a collapsed start
+	// call `collapse()`/`expand()`, which work from either state.
 	const toggleAll = q(container, 'roster-view-chip-expanded') as HTMLElement | null;
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
@@ -233,9 +180,7 @@ async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
 	return container;
 }
 
-// TU.2/#110 finding #9 — sections now default COLLAPSED, so this helper is
-// STATE-AGNOSTIC (only clicks when currently expanded) rather than assuming an
-// expanded start.
+// State-agnostic: clicks only when the section is expanded.
 async function collapse(container: HTMLElement, id: string): Promise<void> {
 	const toggle = q(container, `section-toggle-${id}`) as HTMLElement;
 	if (toggle.getAttribute('aria-expanded') === 'true') await fireEvent.click(toggle);
@@ -252,10 +197,6 @@ async function expand(container: HTMLElement, id: string): Promise<void> {
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 	});
 }
-
-// #470 — the custom picker popup (trigger/menu/listbox) is RETIRED: the member
-// row carries NATIVE per-membership <select>s plus a [+]. The old
-// `openPicker`/`listboxOf` helpers went with it.
 
 /** #470 — open member `memberId`'s BLANK picker via the [+]. */
 async function openBlankPicker(container: HTMLElement, memberId: string): Promise<HTMLSelectElement> {
@@ -292,8 +233,7 @@ function accessibleName(el: HTMLElement): string {
 	return (el.closest('label')?.textContent ?? '').trim();
 }
 
-// #470 — the page-level create form lives in Arrange mode (#155/S4); the
-// create-form a11y guards below re-drive through it.
+// The page-level create form lives in Arrange mode.
 async function renderArrangeReady(): Promise<HTMLElement> {
 	const container = await renderReady();
 	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
@@ -303,12 +243,8 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	return container;
 }
 
-// ---------------------------------------------------------------------------
-// Source-scan helpers (i18n hygiene) — same strategy as the #86/#93 passes:
-// strip script blocks, HTML comments and Svelte expressions from the template;
-// any remaining bare text node with letters in it is a hardcoded user-facing
-// string.
-// ---------------------------------------------------------------------------
+// Source-scan helpers: strip script, HTML comments and Svelte expressions; any bare text
+// node left with letters in it is a hardcoded user-facing string.
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
@@ -338,20 +274,18 @@ function bareTextNodes(source: string): string[] {
 	return nodes;
 }
 
-// ---------------------------------------------------------------------------
 // 1 — i18n: every sections surface renders via Paraglide keys only
-// ---------------------------------------------------------------------------
 describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', () => {
-	it('roster/+page.svelte contains no bare text nodes outside m.* calls', () => {
-		expect(bareTextNodes(readSource('src/routes/roster/+page.svelte'))).toEqual([]);
+	it.each(ROSTER_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
+		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});
 
 	it('SectionPicker.svelte contains no bare text nodes outside m.* calls', () => {
 		expect(bareTextNodes(readSource('src/lib/sections/SectionPicker.svelte'))).toEqual([]);
 	});
 
-	it('roster/+page.svelte has no hardcoded aria-label/title string literals (labels must come from m.*)', () => {
-		const source = readSource('src/routes/roster/+page.svelte');
+	it.each(ROSTER_SURFACES)('%s has no hardcoded aria-label/title string literals (labels must come from m.*)', (file) => {
+		const source = readSource(file);
 		const hardcoded = source.match(/(?:aria-label|title)="[^"]*[a-zA-Z][^"]*"/g) ?? [];
 		expect(hardcoded).toEqual([]);
 	});
@@ -376,13 +310,8 @@ describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', 
 	});
 
 	it('guard: parameterised reorder/rename announcement labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
-		// #155/S4 — `roster_section_drag_handle` (the original member of this list)
-		// was retired along with the standalone drag-handle element it labelled:
-		// the arrange row is now named by its own contents (row text), not a
-		// separate aria-label/title pair — see roster/+page.svelte's `arrange-row-*`
-		// comment. The live-region ANNOUNCEMENTS this guard actually cares about
-		// (reorder + the S4 rename addition) still carry `{name}` and still need
-		// the guard.
+		// The drag-handle label key went with its element; the live-region announcements
+		// (reorder, rename) still carry `{name}`.
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
 			for (const key of [
@@ -406,16 +335,13 @@ describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', 
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 2 — collapse toggles: aria-expanded + non-dangling aria-controls
-// ---------------------------------------------------------------------------
 describe('#99 — a11y: section collapse toggles are proper disclosures', () => {
 	it('guard: every section toggle is a <button> reporting aria-expanded="true" expanded, "false" collapsed', async () => {
 		const container = await renderReady();
 		const toggle = q(container, 'section-toggle-sec-sop') as HTMLElement;
 		expect(toggle.tagName).toBe('BUTTON');
-		// TU.2/#110 finding #9 — sections default COLLAPSED now; expand explicitly
-		// before asserting the "expanded" half of the contract.
+		// Sections start collapsed; expand before asserting the expanded half.
 		await expand(container, 'sec-sop');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		await collapse(container, 'sec-sop');
@@ -454,7 +380,7 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 		const container = await renderReady();
 		const toggle = q(container, 'section-toggle-unassigned') as HTMLElement;
 		expect(toggle, 'unassigned toggle must render (fixture has an unassigned member)').not.toBeNull();
-		// TU.2/#110 finding #9 — collapsed by default now.
+		// Collapsed by default.
 		await expand(container, 'unassigned');
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		const controls = toggle.getAttribute('aria-controls');
@@ -473,13 +399,8 @@ describe('#99 — a11y: section collapse toggles are proper disclosures', () => 
 	});
 });
 
-// ---------------------------------------------------------------------------
-// 3 — #470: the section controls are NATIVE, labelled form controls
-// ---------------------------------------------------------------------------
-// Supersedes the #99 popup-listbox suite wholesale: the custom listbox is
-// retired, and with it every role/aria-selected/haspopup pin — the browser
-// owns a native <select>'s semantics entirely. What remains OURS to pin is
-// that the controls really are native, and really are named.
+// 3 — #470: the section controls are native, labelled form controls. The browser owns a
+// native <select>'s semantics; what we pin is that the controls are native and named.
 describe('#470 — a11y: native per-membership selects + a labelled [+], no custom widget left', () => {
 	it("a member's held section renders a NATIVE <select> with an accessible name that names her", async () => {
 		const container = await renderReady();
@@ -507,12 +428,8 @@ describe('#470 — a11y: native per-membership selects + a labelled [+], no cust
 	});
 
 	it('a member in TWO sections renders one row per membership — and EVERY select in the document is named, not just the first (F2 review fix)', async () => {
-		// groupBySection puts a member into every section she holds, so the grouped
-		// view (the default) mounts her row — and her whole SectionPicker — once per
-		// membership. An `id` + `<label for>` pairing cannot survive that: the id is
-		// duplicated and label resolution takes the first match, leaving every later
-		// row's controls unnamed to a screen reader — in exactly the multi-section
-		// case #470 is about.
+		// The grouped view mounts a member's picker once per membership, so an id + <label for>
+		// pairing would duplicate ids and leave the later rows' controls unnamed.
 		loadRosterMock.mockResolvedValue(
 			toListRead([
 				...fixtureRows(),
@@ -532,11 +449,8 @@ describe('#470 — a11y: native per-membership selects + a labelled [+], no cust
 			container.querySelectorAll('[data-testid="roster-row-m-multi"]').length,
 			'one row per membership'
 		).toBe(2);
-		// F2 review fix — each of her cards shows ITS OWN membership only (the
-		// Soprano card her Soprano select, the Alto card her Alto select), so the
-		// select testids are document-unique again. The [+] is not section-scoped,
-		// so it still renders on both cards under one memberId-keyed testid — which
-		// is why the names may not rest on ids.
+		// Each card shows its own membership, so the select testids are unique; the [+] is not
+		// section-scoped and repeats per card, so the names may not rest on ids.
 		expect(
 			container.querySelectorAll('[data-testid="section-picker-select-m-multi-sec-sop"]').length,
 			'her Soprano select renders once, on her Soprano card'
@@ -579,14 +493,7 @@ describe('#470 — a11y: native per-membership selects + a labelled [+], no cust
 	});
 });
 
-// #155/S4 — the collapsed-view drag handle (aria-grabbed/aria-dropeffect,
-// focusability) that used to be pinned here is GONE: drag-reorder now lives
-// exclusively in Arrange mode. See page.roster-arrange-reorder.spec.ts for
-// the equivalent (and superseding) coverage on `arrange-row-*`.
-
-// ---------------------------------------------------------------------------
 // 5 — form errors: role='alert' + field association
-// ---------------------------------------------------------------------------
 describe("#99 — a11y: every sections error surface is a live region (role='alert')", () => {
 	it("guard (#470: re-driven through the page-level roster-new-section form): the validation error has role='alert', and the name input carries aria-invalid + aria-describedby resolving to it", async () => {
 		const container = await renderArrangeReady();
@@ -650,9 +557,7 @@ describe("#99 — a11y: every sections error surface is a live region (role='ale
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 6 — keyboard navigation on all interactive elements
-// ---------------------------------------------------------------------------
 describe('#99 — a11y: keyboard operability across the sections surfaces', () => {
 	it('guard (#470): the section controls are NATIVE elements — the [+] a <button type="button">, every picker a <select> — keyboard-operable for free, no arrow-key plumbing of ours left to break', async () => {
 		const container = await renderReady();
@@ -686,24 +591,6 @@ describe('#99 — a11y: keyboard operability across the sections surfaces', () =
 	});
 });
 
-// ---------------------------------------------------------------------------
-// 7 — #99 code-review-fix regression cover (F1–F3) and round 2 (R2/F1, R2/F4)
-//     RETIRED by #470: focus-restore-on-dismiss, arrow-nav-from-the-trigger,
-//     listbox-owns-only-options, the named listbox / honest aria-haspopup and
-//     the "'+ New section…' is a button" pins all guarded OUR custom popup's
-//     plumbing. The popup is gone — a native <select> has no dismissal, no
-//     focus hand-off and no popup semantics of ours to regress. What replaced
-//     them is pinned in section 3 above (#470 native controls) and in
-//     SectionPicker.spec.ts.
-// ---------------------------------------------------------------------------
-
-// #155/S4 — "a failed reorder is SAID" and "a successful move announces
-// itself" used to be pinned here via the collapsed-view drag handle; both are
-// GONE with it. The live region and the failure alert are still genuine
-// (shared `reorderStatus`/`reorderError` machinery, unconditional on
-// viewMode) — see page.roster-arrange-reorder.spec.ts for the arrange-mode
-// exercise of the SAME state, plus the guard below that the region exists
-// from first render regardless of mode.
 describe('#99 review R2/F3 — the reorder live region is present from first render', () => {
 	it('guard: role="status"/aria-live="polite", mounted before any reorder — a region mounted together with its own text is announced by nothing', async () => {
 		const container = await renderReady();
@@ -715,18 +602,4 @@ describe('#99 review R2/F3 — the reorder live region is present from first ren
 	});
 });
 
-// #155/S4 — "keyboard reorder respects sibling boundaries and the Unassigned
-// pseudo-group" used to be pinned here via the collapsed-view drag handle.
-// Sibling-boundary clamping is re-pinned on `arrange-row-*` in
-// page.roster-arrange-reorder.spec.ts; "Unassigned is not a landing slot" no
-// longer applies at all — Arrange mode's row list is built from
-// `visibleSections` alone and never includes the Unassigned pseudo-group.
-
-// (*MVOX:Tallis*)
-// (*MVOX:Palestrina* — section 7, #99 code-review fix regression cover)
-// (*MVOX:Palestrina* — section 8, #99 code-review fix regression cover, round 2)
-// (*MVOX:Palestrina* — #155/S4: collapsed-view drag/remove coverage retired, superseded by arrange-mode specs)
-// (*MVOX:Tallis* — #470: popup-listbox a11y retired for native controls; create-form
-//  a11y re-driven through the page-level roster-new-section form)
-// (*MVOX:Palestrina* — #470 review F2: the grouped view mounts a picker per
-//  membership, so every control names itself; a duplicated id cannot)
+// (*MVOX:Tallis*) (*MVOX:Palestrina*)
