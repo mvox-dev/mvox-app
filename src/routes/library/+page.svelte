@@ -1,45 +1,12 @@
 <script lang="ts">
-	// T6.3/#54 — the library browse page: works -> editions -> copies, availability
-	// derived from lending. Read-only throughout. Same state-machine shape as
-	// roster/+page.svelte (loading/no-collective/load-error/ready + generation guard).
-	// T6.4/#73 — my-loans section + librarian checkout/return UI.
-	import { get } from 'svelte/store';
+	// #54/#73 — the library: works, editions and copies with availability from lending, the
+	// member's own loans, and the librarian's tools. The page owns every load and every write.
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
-	import PersonName from '$lib/components/PersonName.svelte';
-	import RedactedText from '$lib/components/RedactedText.svelte';
-	import { rovingNextIndex } from '$lib/a11y/roving';
-	import {
-		formatLoanChainLabel,
-		deriveCopyAvailability,
-		deriveEditionAvailability,
-		deriveWorkAvailability,
-		activeLendingForMemberInEdition,
-		type Work,
-		type Edition,
-		type Copy,
-		type Lending,
-		type LoanChain,
-		type EditionFile
-	} from '$lib/library/libraryData';
-	// #434 slice 4/6 — the library's OWN entry points (libraryPageData.ts):
-	// the mounted screen's cache-backed load/node-expansions, and the
-	// store-only post-write lending re-read. `listWorks`/`listEditions`/
-	// `listCopies`/`listLendings` stay SHARED readers, never called directly
-	// from this page (readCache.optin-fence.spec.ts pins the allowlist).
-	// #434 slice 4 review round, findings 1 and 2 — the librarian state and the
-	// my-loans chain load through the same entry points: offline they restore
-	// the last-seen answer instead of (1) painting a red librarian-load-error
-	// beside a perfectly restored listing and (2) silently dropping the
-	// my-loans section altogether.
-	// #434 slice 4 review round 2 — and so do the librarian panel's own three
-	// feeds (finding 1: uncached, they rejected offline BEHIND a cache-served
-	// `state: 'librarian'` and the catch painted the very alert round 1 set out
-	// to remove). `resolveWriteLibraryId` is the other half (finding 2): the
-	// `_parent` of a lending/work CREATE is resolved LIVE, never read back off
-	// the cache-served panel state.
+	import { formatLoanChainLabel, type Edition, type Work } from '$lib/library/libraryData';
+	// #434 — the library's own cache-backed entry points; the shared readers stay unused here.
 	import {
 		loadLibraryListing,
 		loadLibraryEditions,
@@ -55,101 +22,58 @@
 	} from '$lib/library/libraryPageData';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
-	import { workLabel } from '$lib/repertoire/workLabel';
 	import { librarianStore, resetLibrarian } from '$lib/library/librarianStore';
-	import type { ActiveMember } from '$lib/roster/rosterData';
 	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
 	import { createWork, createEdition } from '$lib/entity/entityCreate';
-	// #275 — the app's first upload path: attach files to an edition.
 	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
 	import { getAppByteStore } from '$lib/files/appByteStore';
-	// #92 TR.4 — repertoire status badges on the browse tree. Season resolution
-	// reuses the agenda's pure currentSeason picker (never re-derived); the
-	// repertoire read reuses TR.2's listRepertoireItems as-is (no new query).
 	import { listSeasons } from '$lib/seasons/entuSeasons';
 	import { currentSeason } from '$lib/attendance/conductorLogic';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
-	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
-	// #434 slice 6 — the ONE online/offline signal; lending writes (checkout,
-	// return, bulk checkout) are gated on it directly.
 	import { writesAvailable } from '$lib/net/online';
+	import { createLendingView } from '$lib/library/lendingView';
+	import {
+		applyUploadFailures,
+		closeEditionDraft,
+		closeWorkForm,
+		createBulkCheckout,
+		createEditionDrafts,
+		createEditionFilesState,
+		createLibraryState,
+		createWorkForm,
+		endUpload,
+		markUploadBatchError,
+		resetBulkCheckout,
+		resetTree,
+		setEditionDraftError,
+		setEditionDraftPending,
+		startUpload,
+		updateEditionFiles,
+		type TreeActions
+	} from '$lib/library/libraryState';
+	import MyLoansSection from '$lib/library/MyLoansSection.svelte';
+	import BulkCheckoutPanel from '$lib/library/BulkCheckoutPanel.svelte';
+	import CreateWorkForm from '$lib/library/CreateWorkForm.svelte';
+	import WorkRow from '$lib/library/WorkRow.svelte';
 
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
-
-	// #76 correction 9, superseded by #207 rule 7 (PO standing rule, Gama's
-	// 2026-09-02 rulings) — lending dates are NUMERIC/TABULAR text, so they
-	// render as the ISO calendar date itself, `YYYY-MM-DD` (en-CA gives ISO
-	// date format), rather than a locale-dependent rendering. Entu delivers
-	// full ISO timestamps (e.g. "2026-07-01T00:00:00.000Z"); this still keeps
-	// the raw timestamp's TIME component out of the UI. Forces UTC timezone so
-	// date-only values never shift to the previous day in negative offsets.
-	const _dateFmt = isoDateFormatter('UTC');
-	function formatDate(isoDate: string): string {
-		if (!isoDate) return '';
-		return _dateFmt.format(new Date(isoDate));
-	}
-
-	type NodeStatus = 'idle' | 'loading' | 'error';
+	const isLibrarian = $derived($librarianStore === 'librarian');
 
 	let status = $state<RouteLoadStatus>('loading');
-	let works = $state<Work[]>([]);
-	let lendings = $state<Lending[]>([]);
-	let borrowerNames = $state<Map<string, string>>(new Map());
+	const lib = $state(createLibraryState());
+	const view = createLendingView(lib);
+	let bulk = $state(createBulkCheckout());
+	let workForm = $state(createWorkForm());
+	let editionDrafts = $state(createEditionDrafts());
+	const fileUploads = $state(createEditionFilesState());
+	let myMemberId = $state<string | null>(null);
+	let returnError = $state('');
 
-	// #351 — the on-device/needs-network file badge. `null` means the store
-	// has not answered yet: an absent badge, not a wrong one (see byteStore.ts
-	// heldFileIds doc). ONE heldFileIds(db, personId) call per load, never a
-	// per-row get() — see the RED comment at the top of
-	// page.library-presence-badges.spec.ts.
-	let heldFileIds = $state<Set<string> | null>(null);
-
-	// #351 review — THE ONLY path by which `heldFileIds` is ever populated:
-	// the load-time query and the post-open refresh both come through here.
-	//
-	// WHY A RE-QUERY AND NOT A LOCAL PATCH. A put is a STORE-WIDE mutation,
-	// not a single-key fact: storing a newly-fetched part runs the cap's
-	// `evictUntilFits` (byteStore.ts), which deletes the globally
-	// least-recently-opened rows — including rows on this very screen. Adding
-	// the newcomer to the Set and stopping there leaves every evicted row
-	// badged "on this device" for the rest of the page's life, which is the
-	// wrong-badge direction #351 exists to prevent. One more keys-only query
-	// (no bytes read, no recency moved) reflects the addition AND the
-	// evictions.
-	//
-	// `presenceSeq`: the last query ISSUED wins. The store only moves
-	// forward, so an earlier query resolving late describes an older store
-	// and must not overwrite a newer answer.
-	let presenceSeq = 0;
-	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
-		const seq = ++presenceSeq;
-		// Badges are supplementary (the repertoire-badge precedent): even a
-		// synchronous store-construction failure must not take down the
-		// (already-successful) library browse tree with it.
-		try {
-			getAppByteStore()
-				.heldFileIds(db, personId)
-				.then((ids) => {
-					if (seq !== presenceSeq || !isCurrent()) return;
-					heldFileIds = new Set(ids);
-				})
-				.catch((e) => {
-					console.error('library: file presence read failed', e);
-				});
-		} catch (e) {
-			console.error('library: file presence read failed', e);
-		}
-	}
-
-	// #321 — true when any of this page's list reads came back truncated
-	// (server count > raw entities.length on that read's own request). `works`
-	// and `lendings` fire on every load; `editionsPartialWorkIds`/
-	// `copiesPartialEditionIds` accrue per-node as an expand's read comes back
-	// partial. The notice is ONE page-level fact (library-partial-notice) —
-	// which read tripped it does not change what the reader needs to know.
+	// #321 — one page-level notice whichever list read came back truncated.
 	let worksPartial = $state(false);
 	let lendingsPartial = $state(false);
 	let editionsPartialWorkIds = $state<Set<string>>(new Set());
@@ -161,286 +85,76 @@
 			copiesPartialEditionIds.size > 0
 	);
 
-	let expandedWorks = $state<Set<string>>(new Set());
-	let expandedEditions = $state<Set<string>>(new Set());
-	let editionsByWork = $state<Map<string, Edition[]>>(new Map());
-	let copiesByEdition = $state<Map<string, Copy[]>>(new Map());
-	let editionNodeStatus = $state<Map<string, NodeStatus>>(new Map());
-	let copyNodeStatus = $state<Map<string, NodeStatus>>(new Map());
-
-	// #112/#88 — copy-list sort key, ONE control shared across every unfolded
-	// edition (a view concern, not per-edition state — re-sorting never
-	// refetches). Default 'nr' ascending.
-	type CopySortKey = 'nr' | 'member' | 'since';
-	let copySortKey = $state<CopySortKey>('nr');
-
-	// #156 — copy-sort chip roving tabindex. Radiogroup semantics, same as the
-	// roster view-mode chips: `copySortKey` already models single selection
-	// (shared across every open edition), so arrow-select needs no separate
-	// $state — the pressed chip IS the tab stop. The delegated keydown handler
-	// scopes its walk to `e.currentTarget` (one `copy-sort-{edition.id}` group
-	// per edition), so arrowing inside one edition's chips never touches
-	// another edition's — no per-edition keying needed beyond that scoping.
-	function handleCopySortKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
-		const idx = chips.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, chips.length);
-		if (next < 0) return;
-		e.preventDefault();
-		const key = chips[next].dataset.sortKey as CopySortKey | undefined;
-		if (!key) return;
-		copySortKey = key;
-		chips[next].focus();
-	}
-
-	/**
-	 * Sort value for a single copy under the given key, or null when the copy
-	 * has nothing to sort on there. Null ALWAYS sorts last, regardless of key:
-	 *   - 'nr': the copy's number (a falsy/zero copyNumber counts as "no nr",
-	 *     matching the same falsy check the row's own label already uses).
-	 *   - 'member' / 'since': drawn from the copy's ACTIVE lending, if any —
-	 *     an available (unassigned) copy has no lending, so both keys fall
-	 *     back to null together.
-	 */
-	function copySortValue(copy: Copy, key: CopySortKey): string | number | null {
-		if (key === 'nr') return copy.copyNumber ? copy.copyNumber : null;
-		const lending = activeLendingForCopy(copy.id);
-		if (!lending) return null;
-		if (key === 'member') return borrowerNames.get(lending.memberId) || null;
-		return lending.assignedAt || null;
-	}
-
-	/** Stable comparator for a single key: nulls last, numbers compare
-	 *  numerically, everything else (names, ISO date strings) compares
-	 *  lexically — ISO dates sort correctly as strings. */
-	function compareByKey(a: Copy, b: Copy, key: CopySortKey): number {
-		const av = copySortValue(a, key);
-		const bv = copySortValue(b, key);
-		if (av === null && bv === null) return 0;
-		if (av === null) return 1;
-		if (bv === null) return -1;
-		if (typeof av === 'number' && typeof bv === 'number') return av - bv;
-		return String(av).localeCompare(String(bv));
-	}
-
-	/** Partition-then-sort: lent-out copies first (sorted by the active key),
-	 *  available copies below, always sorted by nr regardless of the active
-	 *  key. #114 F6 — the two groups never intermix. */
-	function sortCopies(copies: Copy[], key: CopySortKey): Copy[] {
-		const lent = copies.filter((c) => activeLendingForCopy(c.id));
-		const available = copies.filter((c) => !activeLendingForCopy(c.id));
-		lent.sort((a, b) => compareByKey(a, b, key));
-		available.sort((a, b) => compareByKey(a, b, 'nr'));
-		return [...lent, ...available];
-	}
-
-	// #92 TR.4 — current season's active/learning repertoire, keyed by work id.
-	// Retired/dropped items never enter this map — filtered at resolution time
-	// (AC-8: members never see those statuses, same discipline as TR.2/TR.3).
-	let repertoireByWorkId = $state<Map<string, RepertoireItem>>(new Map());
-	const REPERTOIRE_BADGE_DOT_CLASS: Record<string, string> = {
-		active: 'bg-green',
-		learning: 'bg-amber'
-	};
-	const REPERTOIRE_BADGE_LABEL: Record<string, () => string> = {
-		active: m.repertoire_status_active,
-		learning: m.repertoire_status_learning
-	};
-
-	// #73 — my loans state
-	let myMemberId = $state<string | null>(null);
-	let myLoansExpanded = $state(false);
-	let myCopyNames = $state<Map<string, string>>(new Map());
-	let myCopyChains = $state<Map<string, LoanChain>>(new Map());
-
-	// Derived: active loans for the current member
-	let myActiveLoans = $derived(
-		myMemberId ? lendings.filter((l) => l.memberId === myMemberId && l.returnedAt === '') : []
-	);
-
-	// #76 — inline checkout state (per-copy error on the browse-tree row; the
-	// standalone checkout-copy/checkout-member/checkout-due-date/checkout-error
-	// state is gone — selecting a member in the inline picker checks out
-	// immediately, no separate form/submit step)
-	let inlineCheckoutErrors = $state<Map<string, string>>(new Map());
-	let returnError = $state('');
-
-	// #74 — bulk checkout state (edition-first flow)
-	let bulkCheckoutWorkId = $state('');
-	let bulkCheckoutEditionId = $state('');
-	let bulkCheckoutCheckedMembers = $state<Set<string>>(new Set());
-	let bulkCheckoutDueDate = $state('');
-	let bulkCheckoutError = $state('');
-
-	// #73/#74 — checkout form data (loaded when librarian confirmed)
-	let allEditions = $state<Edition[]>([]);
-	let allCopies = $state<Copy[]>([]);
-	let allMembers = $state<ActiveMember[]>([]);
-	let memberNames = $state<Map<string, string>>(new Map());
-
-	/**
-	 * #321 — PO ruling (Gama, 2026-09-11): a closed-set PICKER whose feed was
-	 * truncated must say so, because a missing option does not read as a short
-	 * list — it reads as an ABSENCE ("that copy isn't in the library"), and the
-	 * librarian then acts on that. These three reads are the librarian panel's
-	 * whole reachable world, so their truncation is a different claim from the
-	 * browsing tree's `libraryPartial` and cannot borrow that notice: the ruling
-	 * puts the statement inside the open picker, where the eyes are, not on the
-	 * page behind it.
-	 *
-	 *   `librarianOptionsPartial` — `listAllEditions` OR `listAllCopies`. Both
-	 *     feed the edition step: the editions ARE its options, and a truncated
-	 *     copy read makes an edition's copies invisible, so availability reads
-	 *     "none available" for an edition that has copies — the same false
-	 *     absence one level down.
-	 *   `librarianMembersPartial` — `listActiveMembers`, the borrower set behind
-	 *     BOTH the bulk-checkout member list and every per-copy inline-checkout
-	 *     select. /roster's notice does not cover it: that is another page.
-	 *
-	 * Assigned from each librarian resolve (the effect below and the retry
-	 * handler, the two places that read them) and cleared where that effect
-	 * restarts — a truncation found under collective A must never stand over B's
-	 * panel, the #287/#296/#299 stale-state class.
-	 */
-	let librarianOptionsPartial = $state(false);
-	let librarianMembersPartial = $state(false);
-
-	/** Drop both picker claims — used wherever the panel's feeds are about to be
-	 *  re-read or are gone, so a stale truncation cannot outlive the options it
-	 *  described (a failed load says nothing about completeness either). */
-	function resetLibrarianPickerPartial(): void {
-		librarianOptionsPartial = false;
-		librarianMembersPartial = false;
-	}
-
-	// #198 — librarian-only inline "create work" affordance. Same
-	// open/close/local-insert shape as roster's page-level section create
-	// (pageCreateOpen/submitPageCreate): closed by default, no form in the DOM
-	// until opened, and a successful create is inserted LOCALLY into `works`
-	// (no listWorks refetch) — the parent is the LIBRARY entity id, never the
-	// database entity. #434 slice 4 review round 2, finding 2: that id is
-	// resolved LIVE inside `submitCreateWork` (`resolveWriteLibraryId`), not
-	// carried over from the panel's own cache-backed librarian resolution.
-	let createWorkOpen = $state(false);
-	let createWorkName = $state('');
-	let createWorkComposer = $state('');
-	let createWorkError = $state<(() => string) | null>(null);
-	let createWorkStatus = $state('');
-	let createWorkNameInput = $state<HTMLInputElement | null>(null);
-	// #198 review — in-flight latch. Without it a double-click (or Enter pressed
-	// twice, which routes to the same submitCreateWork) issues two POSTs and
-	// leaves two duplicate `work` entities in Entu, which has no bulk delete.
-	let createWorkPending = $state(false);
-
-	function openCreateWorkForm(): void {
-		createWorkName = '';
-		createWorkComposer = '';
-		createWorkError = null;
-		// A new attempt owns the live region too — the previous "X created."
-		// announcement must not sit there while a fresh form is open.
-		createWorkStatus = '';
-		createWorkOpen = true;
-	}
-
-	function closeCreateWorkForm(): void {
-		createWorkOpen = false;
-		createWorkName = '';
-		createWorkComposer = '';
-		createWorkError = null;
-	}
-
-	// Escape closes from ANY control in the form, not just the inputs — it is
-	// wired to the two buttons as well, so Escape still works with focus on
-	// Submit/Cancel. (Wiring it once on the wrapper <div> would be an a11y
-	// violation: a non-interactive element carrying keyboard listeners.)
-	function onCreateWorkEscapeKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		closeCreateWorkForm();
-	}
-
-	function onCreateWorkNameKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') {
-			onCreateWorkEscapeKeydown(event);
-			return;
+	// #351 — one keys-only query per load, never a per-row get(), which counts as an open.
+	// The last query issued wins: an earlier one resolving late describes an older store.
+	let presenceSeq = 0;
+	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
+		const seq = ++presenceSeq;
+		// Badges are supplementary: even a synchronous store failure must not take the tree down.
+		try {
+			getAppByteStore()
+				.heldFileIds(db, personId)
+				.then((ids) => {
+					if (seq !== presenceSeq || !isCurrent()) return;
+					lib.heldFileIds = new Set(ids);
+				})
+				.catch((e) => {
+					console.error('library: file presence read failed', e);
+				});
+		} catch (e) {
+			console.error('library: file presence read failed', e);
 		}
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		void submitCreateWork();
+	}
+
+	// #321 — a picker claim must never outlive the options it described.
+	function resetLibrarianPickerPartial(): void {
+		lib.optionsPartial = false;
+		lib.membersPartial = false;
 	}
 
 	async function submitCreateWork(): Promise<void> {
-		if (createWorkPending) return;
-		// #434 slice 6 — no write reaches the wire while the signal is down; the
-		// page's own `library-write-unavailable` sentence says why.
+		if (workForm.pending) return;
 		if (isOffline) return;
-		createWorkError = null;
-		createWorkStatus = '';
+		workForm.error = null;
+		workForm.status = '';
 		const current = selected;
 		const token = getToken();
-		// Fail LOUDLY (house rule) — a librarian whose JWT expired while the
-		// librarian tools are still on screen must see why the write did not
-		// happen, not get a silent no-op. Same shape as roster's submitPageCreate.
 		if (!current || !token) {
 			console.error('library: create work with no cfg', {
 				hasCollective: !!current,
 				hasToken: !!token
 			});
-			createWorkError = m.library_create_work_error;
+			workForm.error = m.library_create_work_error;
 			return;
 		}
-		const name = createWorkName.trim();
-		// Field-level validation BEFORE the write seam — the data layer's
-		// requireText would throw and land in the transport catch below, telling
-		// the librarian "could not create" for what is a missing required field.
-		// Same shape as roster's submitPageCreate.
+		const name = workForm.name.trim();
 		if (!name) {
-			createWorkError = m.library_create_work_name_required;
+			workForm.error = m.library_create_work_name_required;
 			return;
 		}
-		const composer = createWorkComposer.trim();
+		const composer = workForm.composer.trim();
 		const cfg = { db: current.db, token };
 
 		let newId: string;
-		createWorkPending = true;
+		workForm.pending = true;
 		try {
-			// #434 slice 4 review round 2, finding 2 — the new work's `_parent` is
-			// resolved LIVE here, not carried over from the panel's librarian
-			// resolution (which is cache-backed, so it can answer from a stored
-			// copy): a GET that is a step inside a write is the one shape
-			// readCache.ts forbids the flag on. Offline this rejects — which is what
-			// a write does offline — and the loud `library_create_work_error` below
-			// says so.
+			// The parent is resolved live: a GET inside a write never answers from the cache.
 			const libraryId = await resolveWriteLibraryId(cfg);
 			if (!libraryId) throw new Error('submitCreateWork: no library entity under this collective');
 			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
 		} catch (e) {
 			console.error('library: create work failed', name, e);
-			createWorkError = m.library_create_work_error;
+			workForm.error = m.library_create_work_error;
 			return;
 		} finally {
-			createWorkPending = false;
+			workForm.pending = false;
 		}
 
-		// LOCAL insertion — same "never refetch" contract as roster's
-		// page-level section create.
-		works = [...works, { id: newId, name, composer }];
-		createWorkStatus = m.library_create_work_created({ name });
-		closeCreateWorkForm();
+		lib.works = [...lib.works, { id: newId, name, composer }];
+		workForm.status = m.library_create_work_created({ name });
+		closeWorkForm(workForm);
 	}
 
-	// Auto-focus the name input the instant the inline form appears, same
-	// contract as roster's page-level create form.
-	$effect(() => {
-		if (createWorkOpen && createWorkNameInput) createWorkNameInput.focus();
-	});
-
-	// #232 — the shared route-load machine owns the Status union, the
-	// generation guard and the loadForSelected sequencing. The per-load node
-	// caches (`reset`) always cleared unconditionally here, same as before —
-	// they are never rendered except behind `status === 'ready'`.
 	const routeLoad = createRouteLoadMachine({
 		name: 'library',
 		selected: () => selected,
@@ -448,73 +162,30 @@
 			status = s;
 		},
 		reset: ({ isSwitch }) => {
-			expandedWorks = new Set();
-			expandedEditions = new Set();
-			editionsByWork = new Map();
-			copiesByEdition = new Map();
-			repertoireByWorkId = new Map();
-			// #351 — cleared on every load: a not-yet-answered presence renders
-			// no badge at all, never the PREVIOUS collective's or a stale answer.
-			heldFileIds = null;
-			// #321 — cleared on EVERY load, same as the maps above: the truncation
-			// fact belongs to the collective that produced it, never carried across
-			// a switch (the #287/#296/#299 stale-state bug class) or stale across a
-			// same-collective refresh.
+			resetTree(lib);
 			worksPartial = false;
 			lendingsPartial = false;
 			editionsPartialWorkIds = new Set();
 			copiesPartialEditionIds = new Set();
-
-			// #300 — bulk-checkout selection is per-collective state. Options
-			// come from THIS collective's works/editions/copies/members, so a
-			// retained id/Set from the collective just left names nothing here
-			// (or, worse, coincidentally names something else in the new one).
-			// The two #74 $effects below only fire when the WORK id *changes
-			// value* — a switch does not change the value, so neither one runs,
-			// and this reset is the one place a switch is actually observed.
-			// Scoped to isSwitch (not every same-collective refresh) for the
-			// same reason roster's #299 fix is: a refresh must not slam an
-			// in-progress selection shut out from under the librarian making it.
-			if (isSwitch) {
-				bulkCheckoutWorkId = '';
-				bulkCheckoutEditionId = '';
-				bulkCheckoutCheckedMembers = new Set();
-				// bulkCheckoutDueDate: cleared too, explicitly — it is
-				// per-transaction state (handleBulkCheckout already resets it
-				// after a successful submit, treating it the same way), and an
-				// abandoned switch is an abandoned transaction. Left in place it
-				// would silently ride into the next collective's POST as
-				// assignedUntil the moment a work+edition get re-picked there.
-				bulkCheckoutDueDate = '';
-			}
+			// #300 — only a switch clears the bulk selection; a refresh keeps one in progress.
+			if (isSwitch) resetBulkCheckout(bulk);
 		},
 		onNoCollective: () => {
-			works = [];
+			lib.works = [];
 			worksPartial = false;
 		},
 		async load({ cfg, selected: current, isCurrent }) {
-			// #434 slice 4/6 — every load starts with no claim of staleness; a
-			// read this load falls back to the cache for notes its own readAt
-			// (readCache.ts), and the "as of" line below reads it back. Same
-			// placement rule as the agenda's loadForSelected (slice 2) and the
-			// event page's (slice 3) — FIRST, before any cached read starts.
 			resetServedFromCache();
 			const listing = await loadLibraryListing(cfg);
 			if (!isCurrent()) return;
-			works = listing.works.items;
+			lib.works = listing.works.items;
 			worksPartial = listing.works.truncated;
-			lendings = listing.lendings.items;
+			lib.lendings = listing.lendings.items;
 			lendingsPartial = listing.lendings.truncated;
-			borrowerNames = listing.borrowerNames;
+			lib.borrowerNames = listing.borrowerNames;
 			status = 'ready';
 
-			// #73 — resolve current member for my-loans. #434 slice 4 review
-			// round, finding 2 — cache-backed (loadMyMemberId): uncached this
-			// rejected offline, myMemberId stayed null and the whole my-loans
-			// section vanished from a screen that says it is showing last-seen
-			// data. Still caught: with nothing stored either, it rejects, and the
-			// rejection may neither escape unhandled nor take the (already
-			// rendered) listing down.
+			// Cache-backed, so my-loans survives offline; a rejection must not take the listing down.
 			loadMyMemberId(cfg, current.personId)
 				.then((id) => {
 					if (isCurrent()) myMemberId = id;
@@ -523,15 +194,9 @@
 					console.error('library: my-loans member resolution failed', e);
 				});
 
-			// #351 — ONE presence query for the whole file list, never a
-			// per-row get() (byteStore.ts heldFileIds doc — get() counts as an
-			// open). Fire-and-forget like the sibling reads above: the badges
-			// paint from the answer alone once it lands.
 			refreshPresence(cfg.db, current.personId, isCurrent);
 
-			// #92 TR.4 — season-scoped repertoire read, once: resolve the CURRENT
-			// season (same pure picker the agenda uses) then TR.2's
-			// listRepertoireItems. No current season -> no badges, no second fetch.
+			// #92 — repertoire badges for the current season only; supplementary, so a failure logs.
 			listSeasons(cfg)
 				.then((seasons) => {
 					if (!isCurrent()) return;
@@ -545,12 +210,10 @@
 								byWorkId.set(item.workId, item);
 							}
 						}
-						repertoireByWorkId = byWorkId;
+						lib.repertoireByWorkId = byWorkId;
 					});
 				})
 				.catch((e) => {
-					// Badges are supplementary — a failed repertoire read must not take
-					// down the (already-successful) library browse tree with it.
 					console.error('library: repertoire badge load failed', e);
 				});
 		}
@@ -560,350 +223,171 @@
 		return routeLoad.loadForSelected();
 	}
 
-	// Fetch-only (does not touch expandedWorks) — called both when a work is first
-	// expanded (not yet cached) and from the error state's retry button (the node
-	// stays expanded across a retry; only toggleWork collapses it).
+	// Fetch only; the node stays expanded across a retry.
 	async function loadEditionsFor(workId: string): Promise<void> {
 		const current = selected;
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		editionNodeStatus = new Map(editionNodeStatus).set(workId, 'loading');
+		lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'loading');
 		try {
 			const result = await loadLibraryEditions({ db: current.db, token }, workId);
-			editionsByWork = new Map(editionsByWork).set(workId, result.items);
-			// #321 — a per-work notice contribution (accrued in a Set, cleared on
-			// every load — see routeLoad.reset above); a truncated edition read
-			// joins the SAME page-level library-partial-notice as works/lendings.
+			lib.editionsByWork = new Map(lib.editionsByWork).set(workId, result.items);
 			const nextPartial = new Set(editionsPartialWorkIds);
 			if (result.truncated) nextPartial.add(workId);
 			else nextPartial.delete(workId);
 			editionsPartialWorkIds = nextPartial;
-			editionNodeStatus = new Map(editionNodeStatus).set(workId, 'idle');
+			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'idle');
 		} catch (e) {
-			// #107 (review R2/F3) — a node expand is a READ, so it gets the same
-			// treatment as the page-level load above: collapse to the shared
-			// session-expired notice instead of leaving a dead "couldn't load" badge
-			// inside a tree that is about to unmount behind the sign-in redirect.
+			// #107 — an expired session on a node read shows the page's session notice.
 			if (isAuthExpiredError(e)) {
 				status = 'session-expired';
 				return;
 			}
 			console.error('library: editions load failed', workId, e);
-			editionNodeStatus = new Map(editionNodeStatus).set(workId, 'error');
+			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'error');
 		}
 	}
 
 	function toggleWork(workId: string): void {
-		const next = new Set(expandedWorks);
+		const next = new Set(lib.expandedWorks);
 		if (next.has(workId)) {
 			next.delete(workId);
-			expandedWorks = next;
+			lib.expandedWorks = next;
 			return;
 		}
 		next.add(workId);
-		expandedWorks = next;
-		if (editionsByWork.has(workId)) return; // cached
+		lib.expandedWorks = next;
+		if (lib.editionsByWork.has(workId)) return;
 		void loadEditionsFor(workId);
 	}
 
-	// #271 — librarian-only inline "create edition" affordance, one level down
-	// from #198's create-work. STATE IS KEYED PER WORK (Map/Set idiom, not
-	// #198's flat shape): expandedWorks is itself a Set, so several works can be
-	// open at once, and a flat createEditionOpen boolean would share one form
-	// (and one half-typed name) across every expanded work. Placement, gating
-	// and the generation guard are decided in the template / submit handler
-	// below — see entityCreate.ts createEdition contract for the write shape.
-	let createEditionOpen = $state<Set<string>>(new Set());
-	let createEditionName = $state<Map<string, string>>(new Map());
-	let createEditionPublisher = $state<Map<string, string>>(new Map());
-	let createEditionErrors = $state<Map<string, () => string>>(new Map());
-	let createEditionStatuses = $state<Map<string, string>>(new Map());
-	// #198 review's double-submit latch, keyed per work here.
-	let createEditionPending = $state<Set<string>>(new Set());
-
-	// Autofocus the name input the instant its form appears — same intent as
-	// #198's $effect(createWorkOpen && createWorkNameInput), reshaped as a
-	// mount action because several of these forms can exist at once (one per
-	// open work): the {#if} block that renders the form creates a FRESH input
-	// node each time it opens, so focusing on mount is exactly "the instant it
-	// opens", with no per-work ref map to keep in sync.
-	function focusOnMount(node: HTMLInputElement): void {
-		node.focus();
-	}
-
-	function openCreateEditionForm(workId: string): void {
-		createEditionName = new Map(createEditionName).set(workId, '');
-		createEditionPublisher = new Map(createEditionPublisher).set(workId, '');
-		const errs = new Map(createEditionErrors);
-		errs.delete(workId);
-		createEditionErrors = errs;
-		// A new attempt owns the live region too — the previous "X created."
-		// announcement must not sit there while a fresh form is open (#198 parity).
-		createEditionStatuses = new Map(createEditionStatuses).set(workId, '');
-		createEditionOpen = new Set(createEditionOpen).add(workId);
-	}
-
-	function closeCreateEditionForm(workId: string): void {
-		const next = new Set(createEditionOpen);
-		next.delete(workId);
-		createEditionOpen = next;
-		const nameMap = new Map(createEditionName);
-		nameMap.delete(workId);
-		createEditionName = nameMap;
-		const pubMap = new Map(createEditionPublisher);
-		pubMap.delete(workId);
-		createEditionPublisher = pubMap;
-		const errs = new Map(createEditionErrors);
-		errs.delete(workId);
-		createEditionErrors = errs;
-	}
-
-	// Escape closes from ANY control in the form, not just the inputs — same
-	// per-button wiring as #198 (a keydown listener on the non-interactive
-	// wrapper div would be an a11y violation).
-	function onCreateEditionEscapeKeydown(workId: string, event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		closeCreateEditionForm(workId);
-	}
-
-	function onCreateEditionNameKeydown(workId: string, event: KeyboardEvent): void {
-		if (event.key === 'Escape') {
-			onCreateEditionEscapeKeydown(workId, event);
-			return;
-		}
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		void submitCreateEdition(workId);
-	}
-
 	async function submitCreateEdition(workId: string): Promise<void> {
-		if (createEditionPending.has(workId)) return;
-		// #434 slice 6 — no write reaches the wire while the signal is down; the
-		// page's own `library-write-unavailable` sentence says why.
+		if (editionDrafts.pending.has(workId)) return;
 		if (isOffline) return;
-		const errs0 = new Map(createEditionErrors);
-		errs0.delete(workId);
-		createEditionErrors = errs0;
-		createEditionStatuses = new Map(createEditionStatuses).set(workId, '');
+		setEditionDraftError(editionDrafts, workId, null);
+		editionDrafts.statuses = new Map(editionDrafts.statuses).set(workId, '');
 		const current = selected;
 		const token = getToken();
-		// Fail LOUDLY (house rule) — a librarian whose JWT expired while the tree
-		// is still on screen must see why the write did not happen, not get a
-		// silent no-op. Same three-way precondition guard as submitCreateWork;
-		// no explicit 401 branch — entuFetch's handleAuthExpired401 already owns
-		// that path for the write itself (request.ts).
 		if (!current || !token) {
 			console.error('library: create edition with no cfg', {
 				hasCollective: !!current,
 				hasToken: !!token,
 				workId
 			});
-			createEditionErrors = new Map(createEditionErrors).set(workId, m.library_create_edition_error);
+			setEditionDraftError(editionDrafts, workId, m.library_create_edition_error);
 			return;
 		}
-		const name = (createEditionName.get(workId) ?? '').trim();
-		// Field-level validation BEFORE the write seam — the data layer's
-		// requireText would throw and land in the generic catch below, telling
-		// the librarian "could not create" for what is a missing required field.
+		const name = (editionDrafts.name.get(workId) ?? '').trim();
 		if (!name) {
-			createEditionErrors = new Map(createEditionErrors).set(
-				workId,
-				m.library_create_edition_name_required
-			);
+			setEditionDraftError(editionDrafts, workId, m.library_create_edition_name_required);
 			return;
 		}
-		const publisher = (createEditionPublisher.get(workId) ?? '').trim();
+		const publisher = (editionDrafts.publisher.get(workId) ?? '').trim();
 		const cfg = { db: current.db, token };
 
-		// #271 GENERATION GUARD (new discipline here — createWork's own local
-		// insert LACKS this guard; the gap is flagged, not fixed, in this slice).
-		// Captured BEFORE the await via the shared route-load machine's external
-		// co-guard seam (routeLoad.generation / isCurrent — see routeLoad.ts):
-		// a mid-flight collective switch bumps the generation and resets
-		// editionsByWork, and re-checking after the await stops a stale create
-		// from phantom-inserting into (or re-poisoning the cache of) a work that
-		// now belongs to a DIFFERENT collective.
+		// A collective switch during the create must not insert into the new collective's tree.
 		const g = routeLoad.generation;
 
 		let newId: string;
-		createEditionPending = new Set(createEditionPending).add(workId);
+		setEditionDraftPending(editionDrafts, workId, true);
 		try {
 			newId = await createEdition(cfg, { name, publisher, workId });
 		} catch (e) {
 			console.error('library: create edition failed', workId, name, e);
-			createEditionErrors = new Map(createEditionErrors).set(workId, m.library_create_edition_error);
+			setEditionDraftError(editionDrafts, workId, m.library_create_edition_error);
 			return;
 		} finally {
-			const next = new Set(createEditionPending);
-			next.delete(workId);
-			createEditionPending = next;
+			setEditionDraftPending(editionDrafts, workId, false);
 		}
 
-		if (!routeLoad.isCurrent(g)) return; // superseded — the new collective owns this work id now
+		if (!routeLoad.isCurrent(g)) return;
 
-		// LOCAL insertion — no listEditions refetch, same "never refetch"
-		// contract as #198's create-work.
-		const list = editionsByWork.get(workId) ?? [];
-		editionsByWork = new Map(editionsByWork).set(workId, [
+		const list = lib.editionsByWork.get(workId) ?? [];
+		lib.editionsByWork = new Map(lib.editionsByWork).set(workId, [
 			...list,
 			{ id: newId, name, publisher, externalLinks: [], files: [] }
 		]);
-		createEditionStatuses = new Map(createEditionStatuses).set(
+		editionDrafts.statuses = new Map(editionDrafts.statuses).set(
 			workId,
 			m.library_create_edition_created({ name })
 		);
-		closeCreateEditionForm(workId);
+		closeEditionDraft(editionDrafts, workId);
 	}
 
-	// Same fetch-only / toggle split as editions, one level down.
 	async function loadCopiesFor(editionId: string): Promise<void> {
 		const current = selected;
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'loading');
+		lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'loading');
 		try {
 			const result = await loadLibraryCopies({ db: current.db, token }, editionId);
-			copiesByEdition = new Map(copiesByEdition).set(editionId, result.items);
-			// #321 — same per-node accrual as loadEditionsFor above.
+			lib.copiesByEdition = new Map(lib.copiesByEdition).set(editionId, result.items);
 			const nextPartial = new Set(copiesPartialEditionIds);
 			if (result.truncated) nextPartial.add(editionId);
 			else nextPartial.delete(editionId);
 			copiesPartialEditionIds = nextPartial;
-			copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'idle');
+			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'idle');
 		} catch (e) {
-			// #107 (review R2/F3) — same READ-path rule as loadEditionsFor.
 			if (isAuthExpiredError(e)) {
 				status = 'session-expired';
 				return;
 			}
 			console.error('library: copies load failed', editionId, e);
-			copyNodeStatus = new Map(copyNodeStatus).set(editionId, 'error');
+			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'error');
 		}
 	}
 
 	function toggleEdition(editionId: string): void {
-		const next = new Set(expandedEditions);
+		const next = new Set(lib.expandedEditions);
 		if (next.has(editionId)) {
 			next.delete(editionId);
-			expandedEditions = next;
+			lib.expandedEditions = next;
 			return;
 		}
 		next.add(editionId);
-		expandedEditions = next;
-		if (copiesByEdition.has(editionId)) return; // cached
+		lib.expandedEditions = next;
+		if (lib.copiesByEdition.has(editionId)) return;
 		void loadCopiesFor(editionId);
-	}
-
-	// #275 — files on an edition: the app's FIRST upload path. STATE IS KEYED
-	// PER EDITION (createEditionPending Map/Set precedent — #271), so several
-	// editions can be mid-upload independently. STATED CHOICE: per-BATCH
-	// pending, not per-file — one "Uploading…" for the whole selection,
-	// matching the wire contract's single POST (editionFiles.ts: several
-	// files ride ONE POST, never N) and keeping the per-edition Map/Set shape
-	// flat instead of a second nested per-file map.
-	let editionFilesPending = $state<Set<string>>(new Set());
-	// Per-file failures whose phantom property WAS cleaned up ('deleted') —
-	// rendered as a visible per-file alert naming each filename (#253
-	// says-exactly-what-landed).
-	let editionFilesErrors = $state<Map<string, string[]>>(new Map());
-	// The whole batch's step-1 POST rejected outright (transport failure,
-	// nothing was created) — one message covers the attempt; there is
-	// nothing per-file to name.
-	let editionFilesBatchError = $state<Set<string>>(new Set());
-	// Failures whose cleanup DELETE itself failed ('delete-failed') — a
-	// broken attachment may remain server-side. Rendered as its own BROKEN
-	// row, never as a normal attachment; accumulates rather than clearing on
-	// the next attempt, since the phantom this names is still out there
-	// until someone fixes it server-side.
-	let editionFilesBroken = $state<Map<string, Array<{ propertyId: string; filename: string }>>>(
-		new Map()
-	);
-	// Selected files step 1 returned NO property for ('not-created') — nothing
-	// exists server-side and nothing landed, so this is neither a cleaned-up
-	// failure nor a broken phantom; it gets its own message rather than
-	// borrowing one that would misdescribe what happened.
-	let editionFilesNotCreated = $state<Map<string, string[]>>(new Map());
-	let editionFilesStatuses = $state<Map<string, string>>(new Map());
-
-	/** Locate which work owns `editionId` and replace that one edition's
-	 *  `files` array — same "never refetch, local insert" contract as #271's
-	 *  createEdition, applied to an in-place update instead of an append. */
-	function updateEditionFiles(
-		editionId: string,
-		update: (files: EditionFile[]) => EditionFile[]
-	): void {
-		for (const [workId, editions] of editionsByWork) {
-			if (!editions.some((e) => e.id === editionId)) continue;
-			editionsByWork = new Map(editionsByWork).set(
-				workId,
-				editions.map((e) => (e.id === editionId ? { ...e, files: update(e.files ?? []) } : e))
-			);
-			return;
-		}
 	}
 
 	async function handleAttachFiles(editionId: string, fileList: FileList | null): Promise<void> {
 		if (!fileList || fileList.length === 0) return;
-		// #434 slice 6 — no write reaches the wire while the signal is down; the
-		// page's own `library-write-unavailable` sentence says why.
 		if (isOffline) return;
 		const files = Array.from(fileList);
 		const current = selected;
 		const token = getToken();
-		// Fail LOUDLY (house rule) — same three-way precondition guard as
-		// submitCreateEdition; no explicit 401 branch (entuFetch's own
-		// handleAuthExpired401 owns that path for the write itself).
 		if (!current || !token) {
 			console.error('library: attach files with no cfg', {
 				hasCollective: !!current,
 				hasToken: !!token,
 				editionId
 			});
-			editionFilesBatchError = new Set(editionFilesBatchError).add(editionId);
+			markUploadBatchError(fileUploads, editionId);
 			return;
 		}
 		const cfg = { db: current.db, token };
 
-		// #275 GENERATION GUARD (#271 precedent, same seam) — captured BEFORE
-		// the upload chain. Success-apply AND failure-apply are BOTH gated on
-		// isCurrent below: a mid-flight collective switch must not leak either
-		// half of a settling mixed result into a different collective's tree.
+		// Both halves of a mixed result apply only if no collective switch happened meanwhile.
 		const g = routeLoad.generation;
-
-		editionFilesPending = new Set(editionFilesPending).add(editionId);
-		const errs = new Map(editionFilesErrors);
-		errs.delete(editionId);
-		editionFilesErrors = errs;
-		const batchErrs = new Set(editionFilesBatchError);
-		batchErrs.delete(editionId);
-		editionFilesBatchError = batchErrs;
-		const notCreated = new Map(editionFilesNotCreated);
-		notCreated.delete(editionId);
-		editionFilesNotCreated = notCreated;
-		editionFilesStatuses = new Map(editionFilesStatuses).set(editionId, '');
+		startUpload(fileUploads, editionId);
 
 		let result: Awaited<ReturnType<typeof uploadEditionFiles>>;
 		try {
 			result = await uploadEditionFiles(cfg, editionId, files);
 		} catch (e) {
 			console.error('library: attach files failed', editionId, e);
-			if (routeLoad.isCurrent(g)) {
-				editionFilesBatchError = new Set(editionFilesBatchError).add(editionId);
-			}
+			if (routeLoad.isCurrent(g)) markUploadBatchError(fileUploads, editionId);
 			return;
 		} finally {
-			const next = new Set(editionFilesPending);
-			next.delete(editionId);
-			editionFilesPending = next;
+			endUpload(fileUploads, editionId);
 		}
 
-		if (!routeLoad.isCurrent(g)) return; // superseded — a different collective owns this edition id now
+		if (!routeLoad.isCurrent(g)) return;
 
 		if (result.uploaded.length > 0) {
-			updateEditionFiles(editionId, (existing) => [
+			updateEditionFiles(lib, editionId, (existing) => [
 				...existing,
 				...result.uploaded.map((u) => ({
 					id: u.propertyId,
@@ -912,54 +396,18 @@
 					filetype: u.filetype
 				}))
 			]);
-			editionFilesStatuses = new Map(editionFilesStatuses).set(
+			fileUploads.statuses = new Map(fileUploads.statuses).set(
 				editionId,
 				m.library_edition_file_uploaded({
 					filenames: result.uploaded.map((u) => u.filename).join(', ')
 				})
 			);
 		}
-
-		const cleaned = result.failed.filter((f) => f.cleanup === 'deleted');
-		if (cleaned.length > 0) {
-			editionFilesErrors = new Map(editionFilesErrors).set(
-				editionId,
-				cleaned.map((f) => f.filename)
-			);
-		}
-		const missing = result.failed.filter((f) => f.cleanup === 'not-created');
-		if (missing.length > 0) {
-			editionFilesNotCreated = new Map(editionFilesNotCreated).set(
-				editionId,
-				missing.map((f) => f.filename)
-			);
-		}
-		// flatMap, not filter+map: narrowing on the cleanup state inside the
-		// callback is what proves propertyId is a real id here and not the
-		// 'not-created' member's null.
-		const broken = result.failed.flatMap((f) =>
-			f.cleanup === 'delete-failed' ? [{ propertyId: f.propertyId, filename: f.filename }] : []
-		);
-		if (broken.length > 0) {
-			const existing = editionFilesBroken.get(editionId) ?? [];
-			editionFilesBroken = new Map(editionFilesBroken).set(editionId, [...existing, ...broken]);
-		}
+		applyUploadFailures(fileUploads, editionId, result.failed);
 	}
 
-	/** #427 — Open is a plain in-app NAVIGATION to the fullscreen part
-	 *  viewer, whether or not the file is already on this device — that
-	 *  distinction is the viewer's business now
-	 *  (src/routes/part/page.part-viewer.spec.ts), not this page's. The
-	 *  byte read (signing, fetch, store) that used to run here at click
-	 *  time runs INSIDE `/part/[fileId]` instead, so the old
-	 *  popup-blocker-safe blank-tab dance is gone with it.
-	 *
-	 *  #353's LABEL rides along in the navigation's page state (#427 review
-	 *  finding 3): work/composer/edition/filename are in hand exactly here
-	 *  (resolved by the surrounding {#each} blocks) and nowhere in the
-	 *  viewer, which is where the bytes land and so where the write belongs.
-	 *  Without the handoff a part first opened here lands on the device
-	 *  unnamed and renders as "Unnamed part" on /downloads. */
+	// #427 — Open navigates to the part viewer. The label rides in the navigation state:
+	// work, composer and edition are known here and nowhere in the viewer.
 	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
 		goto(`/part/${fileId}?db=${selected.db}`, {
@@ -974,133 +422,21 @@
 		});
 	}
 
-	// #74 — auto-select work when there is exactly one
+	// #74 — one work: preselect it. A new work clears the edition; a new edition, the borrowers.
 	$effect(() => {
-		if (works.length === 1) {
-			bulkCheckoutWorkId = works[0].id;
+		if (lib.works.length === 1) {
+			bulk.workId = lib.works[0].id;
 		}
 	});
 
-	// #74 — reset edition when work selection changes
 	$effect(() => {
-		void bulkCheckoutWorkId;
-		bulkCheckoutEditionId = '';
+		void bulk.workId;
+		bulk.editionId = '';
 	});
 
-	// #74 — reset checked state when edition selection changes
 	$effect(() => {
-		void bulkCheckoutEditionId;
-		bulkCheckoutCheckedMembers = new Set();
-	});
-
-	// #74 — derive editions filtered by selected work
-	let filteredBulkCheckoutEditions = $derived(
-		bulkCheckoutWorkId
-			? allEditions.filter((e) => e.workId === bulkCheckoutWorkId)
-			: []
-	);
-
-	// #74 — derive copy IDs belonging to the selected checkout edition
-	let bulkCheckoutEditionCopyIds = $derived(
-		bulkCheckoutEditionId
-			? new Set(allCopies.filter((c) => c.editionId === bulkCheckoutEditionId).map((c) => c.id))
-			: new Set<string>()
-	);
-
-	// #74 — derive availability counter for selected checkout edition
-	let bulkCheckoutEditionAvailability = $derived(
-		bulkCheckoutEditionId
-			? deriveEditionAvailability(bulkCheckoutEditionId, allCopies, lendings)
-			: { available: 0, total: 0 }
-	);
-
-	// #76-fix — resolve copy names for my-loans (avoids rendering raw entity IDs)
-	let copyNameGen = 0;
-	$effect(() => {
-		const loans = myActiveLoans;
-		const g = ++copyNameGen;
-		if (loans.length === 0) {
-			myCopyNames = new Map();
-			return;
-		}
-		const current = selected;
-		if (!current) { myCopyNames = new Map(); return; }
-		const token = getToken();
-		if (!token) return;
-		const copyIds = loans.map(l => l.copyId);
-		// Librarian path: allCopies already has name + copyNumber — resolve
-		// locally without a network round-trip per copy.
-		const localNames = new Map<string, string>();
-		const unresolved: string[] = [];
-		for (const id of copyIds) {
-			const cached = allCopies.find(c => c.id === id);
-			if (cached) {
-				const label = cached.name || (cached.copyNumber ? `#${cached.copyNumber}` : '');
-				localNames.set(id, label);
-			} else {
-				unresolved.push(id);
-			}
-		}
-		if (unresolved.length === 0) {
-			if (g !== copyNameGen) return;
-			myCopyNames = localNames;
-			return;
-		}
-		const cfg = { db: current.db, token };
-		loadMyLoanCopyNames(cfg, unresolved).then(names => {
-			if (g !== copyNameGen) return;
-			// Merge locally-resolved names with network-fetched ones
-			for (const [id, name] of localNames) names.set(id, name);
-			myCopyNames = names;
-		}).catch(e => {
-			console.error('library: copy name resolution failed', e);
-		});
-	});
-
-	// #129 — resolve copy → edition → work chain for my-loans labels
-	let chainGen = 0;
-	$effect(() => {
-		const loans = myActiveLoans;
-		const g = ++chainGen;
-		if (loans.length === 0) {
-			myCopyChains = new Map();
-			return;
-		}
-		const current = selected;
-		if (!current) { myCopyChains = new Map(); return; }
-		const token = getToken();
-		if (!token) return;
-		const copyIds = loans.map(l => l.copyId);
-		// Librarian path: resolve locally from allCopies → allEditions → works
-		const localChains = new Map<string, LoanChain>();
-		const unresolved: string[] = [];
-		for (const id of copyIds) {
-			const cached = allCopies.find(c => c.id === id);
-			if (cached) {
-				const edition = allEditions.find(e => e.id === cached.editionId);
-				const work = edition ? works.find(w => w.id === edition.workId) : undefined;
-				localChains.set(id, {
-					copyNumber: cached.copyNumber,
-					workName: work?.name ?? '',
-					editionName: edition?.name ?? ''
-				});
-			} else {
-				unresolved.push(id);
-			}
-		}
-		if (unresolved.length === 0) {
-			if (g !== chainGen) return;
-			myCopyChains = localChains;
-			return;
-		}
-		const cfg = { db: current.db, token };
-		loadMyLoanCopyChains(cfg, unresolved, works).then(chains => {
-			if (g !== chainGen) return;
-			for (const [id, chain] of localChains) chains.set(id, chain);
-			myCopyChains = chains;
-		}).catch(e => {
-			console.error('library: copy chain resolution failed', e);
-		});
+		void bulk.editionId;
+		bulk.members = new Set();
 	});
 
 	$effect(() => {
@@ -1111,11 +447,8 @@
 		});
 	});
 
-	// TL.1/#72 — librarian-only tools composition (placeholder; TL.2/TL.3 fill in
-	// real content). Same generation-guard discipline as +layout.svelte's
-	// adminStore wiring: keyed on `selected`, resetLibrarian() to 'loading' on
-	// every (re)selection so a stale collective's late resolve can't clobber a
-	// newer one. Hidden-if-undeterminable: 'loading' renders nothing.
+	// #72 — keyed on `selected`: back to 'loading' on every selection, so a stale
+	// collective's late answer never lands. The pickers load before the tools show.
 	let librarianGen = 0;
 	$effect(() => {
 		const current = selected;
@@ -1126,46 +459,30 @@
 			return;
 		}
 		resetLibrarian();
-		// #321 — the claim goes down with the panel it described: this effect IS
-		// the (re)selection seam (see `resetLibrarian` on the line above), so a
-		// truncation found under the collective being left never survives into the
-		// next one's pickers.
 		resetLibrarianPickerPartial();
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
 		loadLibrarianState(cfg, current.personId).then(async (result) => {
 			if (g !== librarianGen) return;
-			// Load checkout form data BEFORE revealing librarian tools so the
-			// bulk-checkout/return edition pickers are populated on first render.
 			if (result.state === 'librarian') {
 				try {
-					// #434 slice 4 review round 2, finding 1 — through the page's own
-					// entry point, so these three are cache-backed exactly like the
-					// listing they sit beside. Uncached they rejected offline BEHIND a
-					// cache-served `state: 'librarian'`, and the catch below set
-					// 'error' — the red `librarian-load-error` review round 1 set out
-					// to remove, one step later.
 					const {
 						editions: editionsRead,
 						copies: copiesRead,
 						members: membersRead
 					} = await loadLibrarianPickers(cfg);
 					if (g !== librarianGen) return;
-					// #321 — the librarian-only bulk-checkout PICKER data: a distinct
-					// surface from the browsing tree `library-partial-notice` covers, and
-					// (PO ruling 2026-09-11) one that states its own truncation inside
-					// the pickers it feeds rather than borrowing that page-level notice
-					// or /roster's. See the two flags' declaration for why each read
-					// lands where it does.
-					allEditions = editionsRead.items;
-					allCopies = copiesRead.items;
-					allMembers = membersRead.items;
-					librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
-					librarianMembersPartial = membersRead.truncated;
+					lib.allEditions = editionsRead.items;
+					lib.allCopies = copiesRead.items;
+					lib.allMembers = membersRead.items;
+					lib.optionsPartial = editionsRead.truncated || copiesRead.truncated;
+					lib.membersPartial = membersRead.truncated;
 					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-					loadLibrarianMemberNames(cfg, memberIdList).then((names) => {
-						if (g === librarianGen) memberNames = names;
-					}).catch((e) => console.error('library: member name resolution failed', e));
+					loadLibrarianMemberNames(cfg, memberIdList)
+						.then((names) => {
+							if (g === librarianGen) lib.memberNames = names;
+						})
+						.catch((e) => console.error('library: member name resolution failed', e));
 				} catch (e) {
 					console.error('library: checkout data load failed', e);
 					if (g !== librarianGen) return;
@@ -1178,29 +495,53 @@
 		});
 	});
 
-	// #76 — inline checkout: selecting a member on an available copy row checks
-	// it out immediately (no separate submit step). Server-confirmed — lendings
-	// are re-fetched after createLending resolves, so the row's availability
-	// reflects the refreshed list, not an optimistic local flip.
+	function retryLibrarianLoad(): void {
+		if (!selected) return;
+		const token = getToken();
+		const cfg = { db: selected.db, token: token ?? '' };
+		resetLibrarianPickerPartial();
+		loadLibrarianState(cfg, selected.personId).then(async (result) => {
+			if (result.state === 'librarian') {
+				try {
+					const {
+						editions: editionsRead,
+						copies: copiesRead,
+						members: membersRead
+					} = await loadLibrarianPickers(cfg);
+					lib.allEditions = editionsRead.items;
+					lib.allCopies = copiesRead.items;
+					lib.allMembers = membersRead.items;
+					lib.optionsPartial = editionsRead.truncated || copiesRead.truncated;
+					lib.membersPartial = membersRead.truncated;
+					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
+					loadLibrarianMemberNames(cfg, memberIdList)
+						.then((names) => {
+							lib.memberNames = names;
+						})
+						.catch((e) => console.error('library: member name resolution failed', e));
+				} catch (e) {
+					console.error('library: checkout data load failed', e);
+					librarianStore.set('error');
+					return;
+				}
+			}
+			librarianStore.set(result.state);
+		});
+	}
+
+	// #76 — picking a member checks out at once. Lendings are re-read after the write, so
+	// availability is server-confirmed, never an optimistic flip.
 	async function handleInlineCheckout(copyId: string, memberId: string): Promise<void> {
-		// #434 slice 6 — offline: no write, nothing queued. Checked before any
-		// state clear or `resolveWriteLibraryId` call, so this is a true no-op.
 		if (isOffline) return;
-		const nextErrors = new Map(inlineCheckoutErrors);
+		const nextErrors = new Map(lib.inlineCheckoutErrors);
 		nextErrors.delete(copyId);
-		inlineCheckoutErrors = nextErrors;
+		lib.inlineCheckoutErrors = nextErrors;
 		const current = selected;
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
 		const cfg = { db: current.db, token };
 		try {
-			// #434 slice 4 review round 2, finding 2 — the lending's `_parent` is
-			// resolved LIVE at write time, not carried over from the panel's
-			// librarian resolution: that one is cache-backed, and a GET that is a
-			// step inside a write is the one shape readCache.ts forbids the flag on.
-			// Offline this rejects into the catch below, which is where an offline
-			// write belongs.
 			const libraryId = await resolveWriteLibraryId(cfg);
 			if (!libraryId) throw new Error('handleInlineCheckout: no library entity under this collective');
 			await createLending(cfg, libraryId, {
@@ -1208,31 +549,20 @@
 				memberId,
 				assignedAt: new Date().toISOString().slice(0, 10)
 			});
-			// Refresh lending data after successful checkout. #434 slice 4/6 —
-			// refreshLibraryLendings stores without serving: the live answer or
-			// a rejection, never a stored (pre-write) availability.
+			// Stores without serving: the live answer or a rejection, never pre-write availability.
 			const refreshed = await refreshLibraryLendings(cfg);
-			lendings = refreshed.lendings.items;
+			lib.lendings = refreshed.lendings.items;
 			lendingsPartial = refreshed.lendings.truncated;
-			borrowerNames = refreshed.borrowerNames;
+			lib.borrowerNames = refreshed.borrowerNames;
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
-			const errNext = new Map(inlineCheckoutErrors);
+			const errNext = new Map(lib.inlineCheckoutErrors);
 			errNext.set(copyId, e instanceof Error ? e.message : m.library_inline_checkout_error());
-			inlineCheckoutErrors = errNext;
+			lib.inlineCheckoutErrors = errNext;
 		}
 	}
 
-	// #76 — copy IDs belonging to an edition, for the inline picker's
-	// double-lending guard. Same logic as the bulk-checkout edition scoping
-	// (bulkCheckoutEditionCopyIds), derived from allCopies (librarian-only data).
-	function editionCopyIdsFor(editionId: string): Set<string> {
-		return new Set(allCopies.filter((c) => c.editionId === editionId).map((c) => c.id));
-	}
-
-	// #73 — return a lending
 	async function handleReturn(lendingId: string): Promise<void> {
-		// #434 slice 6 — offline: no write, nothing queued.
 		if (isOffline) return;
 		returnError = '';
 		const current = selected;
@@ -1242,86 +572,73 @@
 		const cfg = { db: current.db, token };
 		try {
 			await returnLending(cfg, lendingId);
-			// Refresh lending data after successful return. #434 slice 4/6 —
-			// refreshLibraryLendings stores without serving.
 			const refreshed = await refreshLibraryLendings(cfg);
-			lendings = refreshed.lendings.items;
+			lib.lendings = refreshed.lendings.items;
 			lendingsPartial = refreshed.lendings.truncated;
-			borrowerNames = refreshed.borrowerNames;
+			lib.borrowerNames = refreshed.borrowerNames;
 		} catch (e) {
 			console.error('library: return failed', e);
 			returnError = e instanceof Error ? e.message : 'Return failed';
 		}
 	}
 
-	function isOverdue(assignedUntil: string): boolean {
-		if (!assignedUntil) return false;
-		const today = new Date().toISOString().slice(0, 10);
-		return assignedUntil < today;
-	}
-
-	// Find the active lending for a given copy (for return button)
-	function activeLendingForCopy(copyId: string): Lending | undefined {
-		return lendings.find((l) => l.copyId === copyId && l.returnedAt === '');
-	}
-
-	// #76 — work availability for browse tree counter (librarian only)
-	// Delegates to the pure, unit-tested deriveWorkAvailability in libraryData.ts.
-	function workAvailability(workId: string): { available: number; total: number } {
-		return deriveWorkAvailability(workId, allEditions, allCopies, lendings);
-	}
-
-	// #74 — bulk checkout handler
 	async function handleBulkCheckout(): Promise<void> {
-		// #434 slice 6 — offline: no write, nothing queued.
 		if (isOffline) return;
-		bulkCheckoutError = '';
+		bulk.error = '';
 		const current = selected;
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		if (!bulkCheckoutEditionId || bulkCheckoutCheckedMembers.size === 0) return;
+		if (!bulk.editionId || bulk.members.size === 0) return;
 		const cfg = { db: current.db, token };
-		const activeLendings = lendings.filter((l) => l.returnedAt === '');
+		const activeLendings = lib.lendings.filter((l) => l.returnedAt === '');
 		try {
-			// #434 slice 4 review round 2, finding 2 — same as handleInlineCheckout:
-			// the lendings' `_parent` is resolved LIVE, not carried over from the
-			// panel's cache-backed librarian resolution.
 			const libraryId = await resolveWriteLibraryId(cfg);
 			if (!libraryId) throw new Error('handleBulkCheckout: no library entity under this collective');
 			const result = await bulkCheckout(cfg, libraryId, {
-				editionId: bulkCheckoutEditionId,
-				memberIds: [...bulkCheckoutCheckedMembers],
+				editionId: bulk.editionId,
+				memberIds: [...bulk.members],
 				assignedAt: new Date().toISOString().slice(0, 10),
-				...(bulkCheckoutDueDate ? { assignedUntil: bulkCheckoutDueDate } : {})
+				...(bulk.dueDate ? { assignedUntil: bulk.dueDate } : {})
 			}, activeLendings);
 			if (result.failed.length > 0) {
-				bulkCheckoutError = `${result.failed.length} checkout(s) failed`;
+				bulk.error = `${result.failed.length} checkout(s) failed`;
 			}
-			// Refresh lending data. #434 slice 4/6 — refreshLibraryLendings
-			// stores without serving.
 			const refreshed = await refreshLibraryLendings(cfg);
-			lendings = refreshed.lendings.items;
+			lib.lendings = refreshed.lendings.items;
 			lendingsPartial = refreshed.lendings.truncated;
-			borrowerNames = refreshed.borrowerNames;
-			bulkCheckoutCheckedMembers = new Set();
-			bulkCheckoutDueDate = '';
+			lib.borrowerNames = refreshed.borrowerNames;
+			bulk.members = new Set();
+			bulk.dueDate = '';
 		} catch (e) {
 			console.error('library: bulk checkout failed', e);
-			bulkCheckoutError = e instanceof Error ? e.message : 'Bulk checkout failed';
+			bulk.error = e instanceof Error ? e.message : 'Bulk checkout failed';
 		}
 	}
+
+	const treeActions: TreeActions = {
+		toggleWork,
+		loadEditions: loadEditionsFor,
+		toggleEdition,
+		loadCopies: loadCopiesFor,
+		setCopySortKey: (key) => {
+			lib.copySortKey = key;
+		},
+		checkout: handleInlineCheckout,
+		returnLending: handleReturn,
+		attachFiles: handleAttachFiles,
+		openFile: handleOpenEditionFile,
+		submitEdition: submitCreateEdition,
+		fileSize: (bytes) => formatFileSize(bytes)
+	};
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.library_title()}</h1>
 
-		<!-- #321 — persistent, visible: a truncated list is a standing fact, not
-		     a transient toast, so this is never sr-only. Absent from the DOM
-		     (not hidden) once every read is complete — see `libraryPartial`
-		     above and routeLoad.reset, which is what keeps this from leaking a
-		     stale truncation across a collective switch. -->
+		<!-- #321 — a truncated list is a standing fact: visible, never sr-only, and gone
+		     once every read is complete. -->
 		{#if libraryPartial}
 			<p
 				data-testid="library-partial-notice"
@@ -1332,203 +649,32 @@
 			</p>
 		{/if}
 
-		{#if $librarianStore === 'librarian'}
+		{#if isLibrarian}
 			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
 				{m.library_librarian_tools()}
 
-				<!-- #434 slice 6 — ONE visible reason for every write control on this
-				     page (bulk checkout, inline checkout, return, and the tree's own
-				     create-work / create-edition / attach-files further down): each is
-				     disabled while offline; this says why once, in the librarian tools
-				     block that only ever renders for the viewer who has those controls
-				     at all. -->
+				<!-- #434 — the one reason for every write control on the page that is disabled
+				     offline, said once, where only the viewer holding those controls sees it. -->
 				{#if isOffline}
 					<p data-testid="library-write-unavailable" class="mt-2 text-xs text-ink-2">
 						{m.write_unavailable_no_signal()}
 					</p>
 				{/if}
 
-				<!-- #74 — bulk checkout section (work→edition two-level picker) -->
-				<div data-testid="bulk-checkout" class="mt-3">
-					<!-- #151 — section-heading role: `font-display text-lg`, as every other
-					     section heading in the app. h2 rather than h3: the page's only
-					     other heading is the h1 above, so h3 skipped a level. -->
-					<h2 class="font-display text-lg">{m.library_bulk_checkout_title()}</h2>
-					<select data-testid="bulk-checkout-work-select" aria-label={m.library_bulk_checkout_work_placeholder()} value={bulkCheckoutWorkId} onchange={(e) => (bulkCheckoutWorkId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
-						<option value="">{m.library_bulk_checkout_work_placeholder()}</option>
-						{#each works as work (work.id)}
-							<option value={work.id}>{workLabel(work)}</option>
-						{/each}
-					</select>
-					{#if bulkCheckoutWorkId}
-						<select data-testid="bulk-checkout-edition-select" aria-label={m.library_bulk_checkout_edition_placeholder()} value={bulkCheckoutEditionId} onchange={(e) => (bulkCheckoutEditionId = e.currentTarget.value)} class="mt-1 w-full rounded border border-ink-5 px-2 py-1">
-							<option value="">{m.library_bulk_checkout_edition_placeholder()}</option>
-							{#each filteredBulkCheckoutEditions as edition (edition.id)}
-								<option value={edition.id}>{edition.name}</option>
-							{/each}
-							<!-- #321 (PO ruling) — the notice belongs INSIDE the open picker, so
-							     in a native select it is a trailing DISABLED option: an option
-							     list cannot host a paragraph or live region, and this is the one
-							     place the librarian scanning the dropdown for a missing edition
-							     will read it. Unselectable and last, so it never competes with a
-							     real option; absent from the list entirely once the read is
-							     complete. The list-shaped pickers below (member checkboxes) carry
-							     the shared visible role="status" notice instead — same copy, same
-							     meaning, the shape each control can actually hold. -->
-							{#if librarianOptionsPartial}
-								<option data-testid="bulk-checkout-edition-partial-option" value="" disabled>
-									{m.picker_partial_options_notice()}
-								</option>
-							{/if}
-						</select>
-					{/if}
-					{#if bulkCheckoutEditionId}
-						<p data-testid="bulk-checkout-availability" class="mt-1 text-xs" aria-live="polite">
-							{m.library_bulk_checkout_availability({ available: bulkCheckoutEditionAvailability.available, total: bulkCheckoutEditionAvailability.total })}
-						</p>
-						<div data-testid="bulk-checkout-member-list" class="mt-2 flex flex-col gap-1">
-							<!-- #321 (PO ruling) — a truncated borrower set reads as "that singer
-							     is not a member", so the checkbox list says it is a prefix. The
-							     shared notice shape (visible paragraph, role="status", own testid,
-							     copy through i18n), here INSIDE the picker it is about rather than
-							     on the page behind it; absent from the DOM once the read is
-							     complete. -->
-							{#if librarianMembersPartial}
-								<p
-									data-testid="bulk-checkout-members-partial-notice"
-									role="status"
-									class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
-								>
-									{m.picker_partial_members_notice()}
-								</p>
-							{/if}
-							{#each allMembers as member (member.memberId)}
-								{@const existingLending = activeLendingForMemberInEdition(member.memberId, bulkCheckoutEditionCopyIds, lendings)}
-								{#if existingLending}
-									<div class="flex items-center gap-1 text-xs">
-										<span><PersonName name={memberNames.get(member.memberId) || m.library_borrower_unknown()} /></span>
-										<span data-testid="bulk-checkout-already-lent-{member.memberId}">{m.library_bulk_checkout_already_lent({ date: formatDate(existingLending.assignedAt) })}</span>
-									</div>
-								{:else}
-									<label class="flex items-center gap-1 text-xs">
-										<input type="checkbox"
-											checked={bulkCheckoutCheckedMembers.has(member.memberId)}
-											onchange={() => {
-												const next = new Set(bulkCheckoutCheckedMembers);
-												if (next.has(member.memberId)) next.delete(member.memberId);
-												else next.add(member.memberId);
-												bulkCheckoutCheckedMembers = next;
-											}}
-										/>
-										<span><PersonName name={memberNames.get(member.memberId) || m.library_borrower_unknown()} /></span>
-									</label>
-								{/if}
-							{/each}
-						</div>
-						<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulkCheckoutDueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1" />
-						{#if bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available}
-							<p data-testid="bulk-checkout-too-many" class="mt-1 text-xs text-red-700" role="alert">{m.library_bulk_checkout_too_many()}</p>
-						{/if}
-						<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" disabled={bulkCheckoutCheckedMembers.size === 0 || bulkCheckoutCheckedMembers.size > bulkCheckoutEditionAvailability.available || isOffline} onclick={handleBulkCheckout}>
-							{m.library_checkout_submit()}
-						</button>
-						{#if bulkCheckoutError}
-							<p data-testid="bulk-checkout-error" class="text-xs text-red-700" role="alert">{bulkCheckoutError}</p>
-						{/if}
-					{/if}
-				</div>
+				<BulkCheckoutPanel
+					bind:bulk
+					works={lib.works}
+					allEditions={lib.allEditions}
+					allMembers={lib.allMembers}
+					memberNames={lib.memberNames}
+					optionsPartial={lib.optionsPartial}
+					membersPartial={lib.membersPartial}
+					{view}
+					{isOffline}
+					submit={handleBulkCheckout}
+				/>
 
-				<!-- #198 — librarian-only inline "create work" affordance, same
-				     open/close/local-insert shape as roster's page-level section
-				     create. -->
-				<div class="mt-3 flex flex-col gap-1.5 border-t border-dashed border-ink-5 pt-3">
-					{#if !createWorkOpen}
-						<button
-							type="button"
-							data-testid="create-work-button"
-							class="flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
-							onclick={openCreateWorkForm}
-						>
-							{m.library_create_work_button()}
-						</button>
-					{:else}
-						<!-- `role="group"`, NOT `role="dialog"` — this is a non-modal
-						     inline form: no focus trap, no focus return, no backdrop. A
-						     dialog role would announce a boundary the form does not
-						     honour. The group keeps the accessible name. (Roster's
-						     page-level create form still carries the stale
-						     `role="dialog"` — same fix wanted there, separate commit.) -->
-						<div
-							data-testid="create-work-form"
-							role="group"
-							aria-label={m.library_create_work_button()}
-							class="flex flex-col gap-1.5"
-						>
-							<input
-								type="text"
-								data-testid="create-work-name"
-								bind:this={createWorkNameInput}
-								aria-label={m.library_create_work_name_label()}
-								placeholder={m.library_create_work_name_label()}
-								aria-invalid={createWorkError ? true : undefined}
-								aria-describedby={createWorkError ? 'create-work-error' : undefined}
-								value={createWorkName}
-								oninput={(e) => (createWorkName = (e.currentTarget as HTMLInputElement).value)}
-								onkeydown={onCreateWorkNameKeydown}
-								class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-							/>
-							<input
-								type="text"
-								data-testid="create-work-composer"
-								aria-label={m.library_create_work_composer_label()}
-								placeholder={m.library_create_work_composer_label()}
-								value={createWorkComposer}
-								oninput={(e) => (createWorkComposer = (e.currentTarget as HTMLInputElement).value)}
-								onkeydown={onCreateWorkNameKeydown}
-								class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-							/>
-							{#if createWorkError}
-								<p
-									id="create-work-error"
-									role="alert"
-									data-testid="create-work-error"
-									class="text-xs text-red-700"
-								>
-									{createWorkError()}
-								</p>
-							{/if}
-							<div class="flex gap-2">
-								<button
-									type="button"
-									data-testid="create-work-submit"
-									class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-									disabled={createWorkPending || isOffline}
-									onclick={() => void submitCreateWork()}
-									onkeydown={onCreateWorkEscapeKeydown}
-								>
-									{m.library_create_work_submit()}
-								</button>
-								<button
-									type="button"
-									data-testid="create-work-cancel"
-									class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink"
-									onclick={closeCreateWorkForm}
-									onkeydown={onCreateWorkEscapeKeydown}
-								>
-									{m.library_create_work_cancel()}
-								</button>
-							</div>
-						</div>
-					{/if}
-					<div
-						data-testid="create-work-status"
-						role="status"
-						aria-live="polite"
-						class="sr-only"
-					>
-						{createWorkStatus}
-					</div>
-				</div>
+				<CreateWorkForm bind:form={workForm} {isOffline} submit={submitCreateWork} />
 			</section>
 		{:else if $librarianStore === 'error'}
 			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
@@ -1537,45 +683,7 @@
 					type="button"
 					data-testid="librarian-retry-load"
 					class="text-xs underline"
-					onclick={() => {
-						if (!selected) return;
-						const token = getToken();
-						const cfg = { db: selected.db, token: token ?? '' };
-						// #321 — same as the effect above: the claims come down while the
-						// feeds behind them are being re-read.
-						resetLibrarianPickerPartial();
-						loadLibrarianState(cfg, selected.personId).then(async (result) => {
-							if (result.state === 'librarian') {
-								try {
-									// #434 slice 4 review round 2, finding 1 — the same entry point the
-									// effect above uses; the retry must not be the one path that still
-									// reaches the shared readers directly.
-									const {
-										editions: editionsRead,
-										copies: copiesRead,
-										members: membersRead
-									} = await loadLibrarianPickers(cfg);
-									allEditions = editionsRead.items;
-									allCopies = copiesRead.items;
-									allMembers = membersRead.items;
-									// #321 — the retry re-reads the same three feeds, so it re-derives
-									// both picker claims: a retry that comes back complete is what
-									// takes the previous attempt's notices down.
-									librarianOptionsPartial = editionsRead.truncated || copiesRead.truncated;
-									librarianMembersPartial = membersRead.truncated;
-									const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-									loadLibrarianMemberNames(cfg, memberIdList).then((names) => {
-										memberNames = names;
-									}).catch((e) => console.error('library: member name resolution failed', e));
-								} catch (e) {
-									console.error('library: checkout data load failed', e);
-									librarianStore.set('error');
-									return;
-								}
-							}
-							librarianStore.set(result.state);
-						});
-					}}
+					onclick={retryLibrarianLoad}
 				>
 					{m.library_librarian_retry()}
 				</button>
@@ -1586,46 +694,19 @@
 			<p data-testid="return-error" class="text-xs text-red-700" role="alert">{returnError}</p>
 		{/if}
 
-		<!-- #73 — my loans section -->
-		{#if myActiveLoans.length > 0}
-			<section data-testid="my-loans" class="rounded-md border border-ink-5 px-4 py-3">
-				<button
-					type="button"
-					data-testid="my-loans-toggle"
-					class="flex w-full items-center justify-between text-left text-sm font-medium"
-					aria-expanded={myLoansExpanded}
-					aria-controls={myLoansExpanded ? 'my-loans-list' : undefined}
-					onclick={() => { myLoansExpanded = !myLoansExpanded; }}
-				>
-					<span>{m.library_my_loans_title({ count: myActiveLoans.length })}</span>
-					<span aria-hidden="true">{myLoansExpanded ? '▾' : '▸'}</span>
-				</button>
-				{#if myLoansExpanded}
-					<ul id="my-loans-list" class="mt-2 flex flex-col gap-1">
-						{#each myActiveLoans as loan (loan.id)}
-							<li data-testid="my-loans-item-{loan.id}" class="flex items-center justify-between text-xs">
-								<span>{m.library_my_loans_copy_label({ copyName: myCopyChains.has(loan.copyId) ? formatLoanChainLabel(myCopyChains.get(loan.copyId)!) : myCopyNames.get(loan.copyId) || m.library_copy_name_unknown() })}</span>
-								<span class="text-ink-2">
-									{formatDate(loan.assignedAt)}{#if loan.assignedUntil} – {formatDate(loan.assignedUntil)}{/if}
-								</span>
-								{#if isOverdue(loan.assignedUntil)}
-									<span data-testid="my-loans-overdue-{loan.id}" class="text-red-700">{m.library_my_loans_overdue()}</span>
-								{/if}
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</section>
-		{/if}
+		<MyLoansSection
+			{selected}
+			lendings={lib.lendings}
+			{myMemberId}
+			works={lib.works}
+			allCopies={lib.allCopies}
+			allEditions={lib.allEditions}
+			loadCopyNames={(...a) => loadMyLoanCopyNames(...a)}
+			loadCopyChains={(...a) => loadMyLoanCopyChains(...a)}
+			chainLabel={(chain) => formatLoanChainLabel(chain)}
+		/>
 
-		<!-- #434 slice 4/6 — the "as of, time" line: null once this load's own
-		     reads all came from the network (reset in loadForSelected, above);
-		     set to the OLDEST readAt among any that fell back to the read
-		     cache. The line itself is AsOfLine, shared with the agenda
-		     (slice 2) and the event page (slice 3). Gated on
-		     status === 'ready' (the ONLY status this page reaches once
-		     loadLibraryListing resolves) so it never renders alongside the
-		     loading/error/no-collective states. -->
+		<!-- #434 — set to the oldest readAt of any read this load served from the cache. -->
 		{#if status === 'ready' && $servedFromCache}
 			<AsOfLine readAt={$servedFromCache} testid="library-as-of" class="mb-3" />
 		{/if}
@@ -1655,487 +736,23 @@
 					{m.library_retry()}
 				</button>
 			</div>
-		{:else if works.length === 0}
+		{:else if lib.works.length === 0}
 			<div data-testid="library-empty" class="flex min-h-[30vh] items-center justify-center">
 				<p class="font-display text-xl text-ink-2">{m.library_empty()}</p>
 			</div>
 		{:else}
 			<ul data-testid="library-work-list" class="flex flex-col gap-1">
-				{#each works as work (work.id)}
-					{@const isOpen = expandedWorks.has(work.id)}
-					<li data-testid="library-work-{work.id}" class="flex flex-col border-b border-dashed border-ink-5 py-2 last:border-b-0">
-						<button
-							type="button"
-							data-testid="library-work-toggle-{work.id}"
-							class="flex items-center justify-between text-left"
-							aria-expanded={isOpen}
-							aria-controls={isOpen ? `library-editions-${work.id}` : undefined}
-							onclick={() => toggleWork(work.id)}
-						>
-							<span class="flex flex-col">
-								<span class="text-sm text-ink">{work.name}{#if $librarianStore === 'librarian'}{@const avail = workAvailability(work.id)}{#if avail.total > 0} ({m.library_work_availability(avail)}){/if}{/if}</span>
-								<span class="text-xs text-ink-2">{work.composer || m.library_work_composer_unknown()}</span>
-							</span>
-							<span aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
-						</button>
-
-						<!-- #92 TR.4 — repertoire status badge. Only works whose id resolved
-						     into repertoireByWorkId (active/learning in the CURRENT season)
-						     carry one; retired/dropped and non-repertoire works render none —
-						     same pattern as AgendaList's attendance badge. -->
-						{#if repertoireByWorkId.has(work.id)}
-							{@const repStatus = repertoireByWorkId.get(work.id)!.status}
-							<span
-								data-testid="repertoire-badge-{work.id}"
-								data-status={repStatus}
-								role="img"
-								aria-label={m.repertoire_badge_aria_label({
-									status: REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus
-								})}
-								class="mt-1 inline-flex w-fit items-center gap-1 font-mono text-[9px] tracking-wide text-ink-2"
-							>
-								<span
-									class="h-1.5 w-1.5 rounded-full {REPERTOIRE_BADGE_DOT_CLASS[repStatus] ?? 'bg-ink-4'}"
-									aria-hidden="true"
-								></span>
-								{REPERTOIRE_BADGE_LABEL[repStatus]?.() ?? repStatus}
-							</span>
-						{/if}
-
-						{#if isOpen}
-							<div id="library-editions-{work.id}" class="ml-4 mt-2 flex flex-col gap-1">
-								{#if editionNodeStatus.get(work.id) === 'loading'}
-									<div class="h-2.5 w-1/3 animate-pulse rounded bg-ink-5"></div>
-								{:else if editionNodeStatus.get(work.id) === 'error'}
-									<div class="flex items-center gap-2" role="alert">
-										<p class="text-xs text-red-700">{m.library_node_load_error()}</p>
-										<button
-											type="button"
-											class="text-xs underline"
-											onclick={() => loadEditionsFor(work.id)}
-										>
-											{m.library_node_retry()}
-										</button>
-									</div>
-								{:else if (editionsByWork.get(work.id) ?? []).length === 0}
-									<p class="text-xs text-ink-2">{m.library_editions_empty()}</p>
-								{:else}
-									{#each editionsByWork.get(work.id) ?? [] as edition (edition.id)}
-										{@const editionOpen = expandedEditions.has(edition.id)}
-										<div data-testid="library-edition-{edition.id}" class="flex flex-col border-b border-dashed border-ink-5 py-1.5 last:border-b-0">
-											<button
-												type="button"
-												data-testid="library-edition-toggle-{edition.id}"
-												class="flex items-center justify-between text-left"
-												aria-expanded={editionOpen}
-												aria-controls={editionOpen ? `library-copies-${edition.id}` : undefined}
-												onclick={() => toggleEdition(edition.id)}
-											>
-												<span class="flex flex-col">
-													<span class="text-sm text-ink">{edition.name}</span>
-													<span class="text-xs text-ink-2">{edition.publisher || m.library_edition_publisher_unknown()}</span>
-												</span>
-												<span aria-hidden="true">{editionOpen ? '▾' : '▸'}</span>
-											</button>
-
-											{#if editionOpen}
-												<div id="library-copies-{edition.id}" class="ml-4 mt-1.5 flex flex-col gap-1">
-													{#if copyNodeStatus.get(edition.id) === 'loading'}
-														<div class="h-2.5 w-1/3 animate-pulse rounded bg-ink-5"></div>
-													{:else if copyNodeStatus.get(edition.id) === 'error'}
-														<div class="flex items-center gap-2" role="alert">
-															<p class="text-xs text-red-700">{m.library_node_load_error()}</p>
-															<button type="button" class="text-xs underline" onclick={() => loadCopiesFor(edition.id)}>
-																{m.library_node_retry()}
-															</button>
-														</div>
-													{:else if (copiesByEdition.get(edition.id) ?? []).length === 0}
-														<p class="text-xs text-ink-2">{m.library_copies_empty()}</p>
-													{:else}
-														<!-- #112/#88 — compact sort control group: nr / member / since.
-														     #156 — the group now says what it is: `role="radiogroup"` +
-														     `role="radio"` + `aria-checked` (which REPLACES the old
-														     `aria-pressed` — pressed-state on `role="radio"` is an invalid
-														     ARIA mix, the same trap page.sections-a11y.spec.ts caught on
-														     `role="option"`). The role is load-bearing: arrows here both
-														     MOVE and SELECT (`handleCopySortKeydown`), unlike the app's
-														     `role="toolbar"` groups where arrows only move. -->
-														<div
-															data-testid="copy-sort-{edition.id}"
-															role="radiogroup"
-															tabindex="-1"
-															aria-label={m.library_copy_sort_label()}
-															class="mb-1 flex items-center gap-1"
-															onkeydown={handleCopySortKeydown}
-														>
-															<button
-																type="button"
-																data-testid="copy-sort-nr-{edition.id}"
-																data-sort-key="nr"
-																role="radio"
-																aria-checked={copySortKey === 'nr' ? 'true' : 'false'}
-																tabindex={copySortKey === 'nr' ? 0 : -1}
-																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'nr'
-																	? 'border-ink bg-ink text-paper'
-																	: 'border-ink-5 text-ink-2'}"
-																onclick={() => (copySortKey = 'nr')}
-															>
-																{m.library_copy_sort_nr()}
-															</button>
-															<button
-																type="button"
-																data-testid="copy-sort-member-{edition.id}"
-																data-sort-key="member"
-																role="radio"
-																aria-checked={copySortKey === 'member' ? 'true' : 'false'}
-																tabindex={copySortKey === 'member' ? 0 : -1}
-																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'member'
-																	? 'border-ink bg-ink text-paper'
-																	: 'border-ink-5 text-ink-2'}"
-																onclick={() => (copySortKey = 'member')}
-															>
-																{m.library_copy_sort_member()}
-															</button>
-															<button
-																type="button"
-																data-testid="copy-sort-since-{edition.id}"
-																data-sort-key="since"
-																role="radio"
-																aria-checked={copySortKey === 'since' ? 'true' : 'false'}
-																tabindex={copySortKey === 'since' ? 0 : -1}
-																class="rounded border px-1.5 py-0.5 text-[10px] {copySortKey === 'since'
-																	? 'border-ink bg-ink text-paper'
-																	: 'border-ink-5 text-ink-2'}"
-																onclick={() => (copySortKey = 'since')}
-															>
-																{m.library_copy_sort_since()}
-															</button>
-														</div>
-														{#each sortCopies(copiesByEdition.get(edition.id) ?? [], copySortKey) as copy (copy.id)}
-															{@const availability = deriveCopyAvailability(copy.id, lendings)}
-															{@const activeLending = activeLendingForCopy(copy.id)}
-															{#if $librarianStore === 'librarian' || activeLending}
-															<div data-testid="library-copy-{copy.id}" class="flex items-center justify-between text-xs">
-																<span class="text-ink">{copy.name || (copy.copyNumber ? `#${copy.copyNumber}` : m.library_copy_name_unknown())}</span>
-																<span class="flex items-center gap-1">
-																	{#if availability.status === 'available'}
-																	{#if $librarianStore === 'librarian'}
-																		{@const editionCopyIds = editionCopyIdsFor(edition.id)}
-																		<span class="flex flex-col items-end gap-0.5">
-																			<select
-																				data-testid="inline-checkout-{copy.id}"
-																				aria-label={m.library_inline_checkout_placeholder()}
-																				value=""
-																				disabled={isOffline}
-																				onchange={(e) => {
-																					const memberId = e.currentTarget.value;
-																					if (memberId) void handleInlineCheckout(copy.id, memberId);
-																				}}
-																				class="rounded border border-ink-5 px-2 py-0.5"
-																			>
-																				<option value="" disabled>{m.library_inline_checkout_placeholder()}</option>
-																				{#each allMembers as member (member.memberId)}
-																					{@const existingLending = activeLendingForMemberInEdition(member.memberId, editionCopyIds, lendings)}
-																					{#if existingLending}
-																						<option value={member.memberId} disabled>
-																							{memberNames.get(member.memberId) || m.library_borrower_unknown()} — {m.library_inline_checkout_already_lent({ date: formatDate(existingLending.assignedAt) })}
-																						</option>
-																					{:else}
-																						<option value={member.memberId}>{memberNames.get(member.memberId) || m.library_borrower_unknown()}</option>
-																					{/if}
-																				{/each}
-																				<!-- #321 (PO ruling) — the same borrower set, the same false
-																				     absence, inside this per-copy picker: a trailing disabled
-																				     option, for the reason the edition select's carries one
-																				     (a select cannot host a live region). One per open
-																				     dropdown, so it costs nothing on the closed rows. -->
-																				{#if librarianMembersPartial}
-																					<option data-testid="inline-checkout-partial-option-{copy.id}" value="" disabled>
-																						{m.picker_partial_members_notice()}
-																					</option>
-																				{/if}
-																			</select>
-																			{#if inlineCheckoutErrors.get(copy.id)}
-																				<span data-testid="inline-checkout-error-{copy.id}" class="text-xs text-red-700" role="alert">{inlineCheckoutErrors.get(copy.id)}</span>
-																			{/if}
-																		</span>
-																	{:else}
-																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">{m.library_copy_available()}</span>
-																	{/if}
-																	{:else}
-																		<span class="rounded-full bg-ink-5 px-2 py-0.5 text-ink-2">
-																			<RedactedText
-																				>{m.library_copy_lent_to({
-																					name: borrowerNames.get(availability.memberId) || m.library_borrower_unknown()
-																				})}
-																				{#if availability.assignedAt}
-																					· {m.library_lent_since({ date: formatDate(availability.assignedAt) })}
-																				{/if}</RedactedText
-																			>
-																		</span>
-																		{#if $librarianStore === 'librarian' && activeLending}
-																			<button
-																				type="button"
-																				data-testid="library-return-{copy.id}"
-																				class="rounded-md border border-ink px-2 py-0.5 text-xs hover:bg-ink hover:text-paper"
-																				disabled={isOffline}
-																				onclick={() => handleReturn(activeLending.id)}
-																			>
-																				{m.library_return()}
-																			</button>
-																		{/if}
-																	{/if}
-																</span>
-															</div>
-																{/if}
-														{/each}
-															{#if $librarianStore !== 'librarian'}
-																{@const availableCount = (copiesByEdition.get(edition.id) ?? []).filter(
-																	(c) => !activeLendingForCopy(c.id)
-																).length}
-																{#if availableCount > 0}
-																	<div
-																		data-testid="library-available-summary-{edition.id}"
-																		class="text-xs text-ink-2"
-																	>
-																		{m.library_available_summary({ count: availableCount })}
-																	</div>
-																{/if}
-															{/if}
-													{/if}
-												</div>
-
-												<!-- #275 — files on an edition: the app's FIRST upload path.
-												     STATED LAYOUT CHOICE: inline-in-edition-block — a SIBLING
-												     of the copies div above (`library-copies-{edition.id}`),
-												     not nested inside it and not a THIRD ml-4 indent level.
-												     Phone-width rationale (max-w-md): two ml-4 levels already
-												     exist here (work→editions, edition→copies); a third
-												     would leave too thin a remaining strip for a filename to
-												     wrap into, so this rides the edition's EXISTING indent
-												     instead. Filenames wrap (break-words), never truncate —
-												     an attachment is read by name, not fitted to one line. -->
-												{#if (edition.files ?? []).length > 0 || (editionFilesBroken.get(edition.id)?.length ?? 0) > 0}
-													<div
-														data-testid="library-edition-files-{edition.id}"
-														class="mt-1.5 flex flex-col gap-1"
-													>
-														{#each edition.files ?? [] as file (file.id)}
-															<div class="flex flex-col gap-0.5">
-																<div
-																	data-testid="library-edition-file-{file.id}"
-																	class="flex items-center justify-between gap-2 text-xs"
-																>
-																	<span class="break-words text-ink">
-																		{file.filename} · {formatFileSize(file.filesize)}
-																	</span>
-																	<span class="flex shrink-0 items-center gap-2">
-																		<!-- #351 — presence indicator: NOT a control (no
-																		     role/tabindex, unwrapped by any button/link).
-																		     Absent entirely while heldFileIds has not
-																		     answered — see the load() comment above. -->
-																		{#if heldFileIds !== null}
-																			<span
-																				data-testid="file-presence-{file.id}"
-																				class="text-ink-2"
-																			>
-																				{heldFileIds.has(file.id)
-																					? m.file_presence_on_device()
-																					: m.file_presence_needs_network()}
-																			</span>
-																		{/if}
-																		<button
-																			type="button"
-																			data-testid="library-edition-file-open-{file.id}"
-																			class="shrink-0 text-xs underline"
-																			onclick={() =>
-												handleOpenEditionFile(file.id, work, edition, file.filename)}
-																		>
-																			{m.library_edition_file_open()}
-																		</button>
-																	</span>
-																</div>
-															</div>
-														{/each}
-														{#each editionFilesBroken.get(edition.id) ?? [] as broken (broken.propertyId)}
-															<div
-																data-testid="library-edition-file-broken-{broken.propertyId}"
-																class="break-words text-xs text-red-700"
-															>
-																{m.library_edition_file_broken({ filename: broken.filename })}
-															</div>
-														{/each}
-													</div>
-												{/if}
-
-												<!-- ATTACH — librarian-only (absent-not-disabled), a native
-												     file input, multiple [TRIGGER-NATIVE-CONTROLS]. State
-												     keyed PER EDITION (createEditionPending precedent). -->
-												{#if $librarianStore === 'librarian'}
-													<div class="mt-1.5 flex flex-col gap-1">
-														<label class="flex flex-col gap-0.5 text-xs text-ink-2">
-															{m.library_edition_file_attach()}
-															<input
-																type="file"
-																multiple
-																data-testid="library-attach-file-{edition.id}"
-																aria-label={m.library_edition_file_attach()}
-																disabled={editionFilesPending.has(edition.id) || isOffline}
-																onchange={(e) => {
-																	const input = e.currentTarget as HTMLInputElement;
-																	void handleAttachFiles(edition.id, input.files);
-																	input.value = '';
-																}}
-															/>
-														</label>
-														{#if editionFilesPending.has(edition.id)}
-															<span
-																data-testid="library-edition-files-uploading-{edition.id}"
-																class="text-xs text-ink-2"
-															>
-																{m.library_edition_file_uploading()}
-															</span>
-														{/if}
-														{#if editionFilesBatchError.has(edition.id) || (editionFilesErrors.get(edition.id)?.length ?? 0) > 0 || (editionFilesNotCreated.get(edition.id)?.length ?? 0) > 0}
-															<div
-																data-testid="library-edition-files-error-{edition.id}"
-																role="alert"
-																class="flex flex-col gap-0.5 break-words text-xs text-red-700"
-															>
-																{#if editionFilesBatchError.has(edition.id)}
-																	<span>{m.library_edition_file_error()}</span>
-																{:else}
-																	{#each editionFilesErrors.get(edition.id) ?? [] as filename}
-																		<span>{m.library_edition_file_failed({ filename })}</span>
-																	{/each}
-																	{#each editionFilesNotCreated.get(edition.id) ?? [] as filename}
-																		<span>{m.library_edition_file_not_created({ filename })}</span>
-																	{/each}
-																{/if}
-															</div>
-														{/if}
-														<div
-															data-testid="library-edition-files-status-{edition.id}"
-															role="status"
-															aria-live="polite"
-															class="sr-only"
-														>
-															{editionFilesStatuses.get(edition.id) ?? ''}
-														</div>
-													</div>
-												{/if}
-											{/if}
-										</div>
-									{/each}
-								{/if}
-
-								<!-- #271 — librarian-only inline "create edition" affordance, a
-								     SIBLING after the loading/error/empty/list chain above — the
-								     ZERO-EDITIONS branch is mutually exclusive with the list
-								     branch, and a work with no editions yet is exactly the case
-								     that makes a newly created work usable at all, so the control
-								     must not live inside either branch. Gated on 'idle' (never
-								     'loading'/'error' — a local insert into a list that was never
-								     fetched would leave the work half-populated) AND librarian. -->
-								{#if $librarianStore === 'librarian' && editionNodeStatus.get(work.id) === 'idle'}
-									<div class="mt-1.5 flex flex-col gap-1.5">
-										{#if !createEditionOpen.has(work.id)}
-											<button
-												type="button"
-												data-testid="create-edition-button-{work.id}"
-												class="flex min-h-11 items-center self-start rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper"
-												onclick={() => openCreateEditionForm(work.id)}
-											>
-												{m.library_create_edition_button()}
-											</button>
-										{:else}
-											<!-- `role="group"`, not `role="dialog"` — same non-modal
-											     inline-form contract as #198's create-work form. -->
-											<div
-												data-testid="create-edition-form-{work.id}"
-												role="group"
-												aria-label={m.library_create_edition_button()}
-												class="flex flex-col gap-1.5"
-											>
-												<input
-													type="text"
-													data-testid="create-edition-name-{work.id}"
-													use:focusOnMount
-													aria-label={m.library_create_edition_name_label()}
-													placeholder={m.library_create_edition_name_label()}
-													aria-invalid={createEditionErrors.has(work.id) ? true : undefined}
-													aria-describedby={createEditionErrors.has(work.id)
-														? `create-edition-error-${work.id}`
-														: undefined}
-													value={createEditionName.get(work.id) ?? ''}
-													oninput={(e) =>
-														(createEditionName = new Map(createEditionName).set(
-															work.id,
-															(e.currentTarget as HTMLInputElement).value
-														))}
-													onkeydown={(e) => onCreateEditionNameKeydown(work.id, e)}
-													class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-												/>
-												<input
-													type="text"
-													data-testid="create-edition-publisher-{work.id}"
-													aria-label={m.library_create_edition_publisher_label()}
-													placeholder={m.library_create_edition_publisher_label()}
-													value={createEditionPublisher.get(work.id) ?? ''}
-													oninput={(e) =>
-														(createEditionPublisher = new Map(createEditionPublisher).set(
-															work.id,
-															(e.currentTarget as HTMLInputElement).value
-														))}
-													onkeydown={(e) => onCreateEditionNameKeydown(work.id, e)}
-													class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-												/>
-												{#if createEditionErrors.get(work.id)}
-													<p
-														id="create-edition-error-{work.id}"
-														role="alert"
-														data-testid="create-edition-error-{work.id}"
-														class="text-xs text-red-700"
-													>
-														{createEditionErrors.get(work.id)!()}
-													</p>
-												{/if}
-												<div class="flex gap-2">
-													<button
-														type="button"
-														data-testid="create-edition-submit-{work.id}"
-														class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50"
-														disabled={createEditionPending.has(work.id) || isOffline}
-														onclick={() => void submitCreateEdition(work.id)}
-														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
-													>
-														{m.library_create_edition_submit()}
-													</button>
-													<button
-														type="button"
-														data-testid="create-edition-cancel-{work.id}"
-														class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink"
-														onclick={() => closeCreateEditionForm(work.id)}
-														onkeydown={(e) => onCreateEditionEscapeKeydown(work.id, e)}
-													>
-														{m.library_create_edition_cancel()}
-													</button>
-												</div>
-											</div>
-										{/if}
-										<div
-											data-testid="create-edition-status-{work.id}"
-											role="status"
-											aria-live="polite"
-											class="sr-only"
-										>
-											{createEditionStatuses.get(work.id) ?? ''}
-										</div>
-									</div>
-								{/if}
-							</div>
-						{/if}
-					</li>
+				{#each lib.works as work (work.id)}
+					<WorkRow
+						{work}
+						{lib}
+						bind:drafts={editionDrafts}
+						files={fileUploads}
+						{view}
+						actions={treeActions}
+						{isLibrarian}
+						{isOffline}
+					/>
 				{/each}
 			</ul>
 		{/if}

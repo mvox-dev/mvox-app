@@ -1,10 +1,7 @@
 // @vitest-environment happy-dom
-//
-// T6.3/#63 — the /library page. Renders the expandable works -> editions ->
-// copies accordion, lazily fetching each level and deriving per-copy
-// availability from pre-loaded lendings. Read-only throughout — no write
-// path anywhere in the library surfaces (structural guard at the bottom of
-// this file).
+
+// T6.3/#63 — the /library page: the works -> editions -> copies accordion, each level
+// fetched lazily, per-copy availability derived from the pre-loaded lendings.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -35,10 +32,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',
 		library_create_work_error: () => 'Could not create the work.',
-		// #271 — the create-edition button renders unconditionally in the
-		// librarian tree once a work's editions are idle, same as create-work's
-		// button above; this spec never opens the form, so only this one key
-		// is needed (same minimal footprint as the create-work set here).
+		// #271 — the create-edition button shows once a work's editions are idle; this spec
+		// never opens the form, so this one key is enough.
 		library_create_edition_button: () => 'Add edition',
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
@@ -100,18 +95,15 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// vi.importActual for $lib/library/libraryData (kept above, to preserve the real
-// deriveCopyAvailability) pulls entuFetch -> $lib/entu-config, which reads
-// $env/dynamic/public — unavailable outside a SvelteKit request context under
-// happy-dom. Same fix as page.profile.spec.ts.
+// importActual of libraryData pulls in $lib/entu-config, which reads $env/dynamic/public:
+// unavailable under happy-dom. Same fix as page.profile.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-// #434 slice 4 review round 2, finding 2 — the write paths no longer read the
-// library id off a store the (cache-backed) librarian resolution filled: they
-// resolve it LIVE through `resolveMyLibraryId`, so it is mocked here too.
+// #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
+// never off the cache-backed librarian resolution, so it is mocked here too.
 const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
 	resolveLibrarianMock: vi.fn(),
 	resolveMyLibraryIdMock: vi.fn()
@@ -148,6 +140,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { LIBRARY_SURFACES } from '$lib/testing/librarySurfaces';
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
 
 function setAuthedWithOneCollective() {
@@ -162,8 +155,7 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	// #434 slice 4 review round 2, finding 2 — the LIVE write-path resolution
-	// every checkout/create now makes for its own `_parent`.
+	// #434 — the live resolution every checkout and create makes for its own `_parent`.
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -365,10 +357,8 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		expect(listEditionsMock).not.toHaveBeenCalled();
 
 		await fireEvent.click(container.querySelector('[data-testid="library-work-toggle-work-1"]') as Element);
-		// #434 slice 4/6 — the page now calls listEditions/listCopies through
-		// libraryPageData's loadLibraryEditions/loadLibraryCopies, which thread
-		// a fetchImpl and CACHED_READ opts alongside the (cfg, id) pair this
-		// test already asserted.
+		// #434 — through libraryPageData, which threads a fetchImpl and the CACHED_READ
+		// opts alongside the (cfg, id) pair.
 		await waitFor(() =>
 			expect(listEditionsMock).toHaveBeenCalledWith(
 				expect.anything(),
@@ -745,13 +735,9 @@ describe('#73 — librarian return', () => {
 });
 
 describe('#76 — inline checkout on browse tree', () => {
-	// PO ruling: the standalone checkout form (copy picker + member picker +
-	// date + submit) is replaced by an inline "Select member" dropdown
-	// [data-testid="inline-checkout-{copyId}"] on each AVAILABLE copy row in
-	// the librarian view. Picking a member checks the copy out immediately
-	// (server-confirmed: createLending resolves, then lendings are re-fetched).
-	// Members who already hold an active lending for that EDITION are disabled
-	// in the picker and show the lending date (double-lending guard).
+	// PO ruling: an inline member picker on each available copy row checks the copy out
+	// at once, confirmed by a lendings re-read. A member already holding a copy of that
+	// edition is disabled in the picker, with the lending date.
 
 	// One work -> one edition -> two copies; copy-2 is out to member-a since
 	// 2026-07-01, copy-1 is available. Two active members: Ada (member-a,
@@ -884,10 +870,8 @@ describe('#76 — inline checkout on browse tree', () => {
 			expect(container.querySelector('[data-testid="inline-checkout-copy-1"]')).not.toBeNull();
 		});
 		const select = container.querySelector('[data-testid="inline-checkout-copy-1"]') as HTMLSelectElement;
-		// member-a already holds copy-2 of edition-1 → disabled, with the
-		// lending date visible in the option text. #207 rule 7 (supersedes #76
-		// correction 9): lending dates are tabular date text and render as the
-		// ISO calendar date itself — assert the exact string the mock echoes.
+		// member-a holds copy-2 of edition-1: disabled, with the lending date as the ISO
+		// calendar date (#207 rule 7).
 		await waitFor(() => {
 			const optA = select.querySelector('option[value="member-a"]') as HTMLOptionElement | null;
 			expect(optA).not.toBeNull();
@@ -973,13 +957,8 @@ describe('#76 — inline checkout on browse tree', () => {
 	});
 
 	// ── #361 — member names on the library surfaces carry the marker ────────
-	//
-	// library_copy_lent_to bakes the borrower's name INTO a sentence ("Out —
-	// {name}"); a marker cannot blank part of a sentence, so the WHOLE badge
-	// content sits in one RedactedText. The bulk-checkout member list renders
-	// memberNames.get(...) in two branches (already-lent row, checkbox label),
-	// both through PersonName. The inline-checkout <option>s cannot hold a
-	// marker and are recorded in redact.ts's uncovered channels.
+	// The lent-to sentence sits whole in one RedactedText; the bulk-checkout names go
+	// through PersonName; the inline-checkout <option>s are recorded in redact.ts.
 	it('#361 — the lent-to badge: the whole "Out — {name}" text sits in exactly one marker', async () => {
 		mockTreeWithOneLending();
 		setAuthedWithOneCollective();
@@ -1255,10 +1234,8 @@ describe('#74 — bulk checkout + return', () => {
 	// UI path, no longer exists.)
 });
 
-// ---------------------------------------------------------------------------
 // #74 — bulk checkout refinements: work→edition two-level picker, available/total
 // counter, already-lending guard, and checked≤available validation.
-// ---------------------------------------------------------------------------
 describe('#74 — bulk checkout refinements', () => {
 	// ── Refinement 1: work → edition two-level picker ────────────────────────
 	it('renders a work-select dropdown; edition-select only appears after picking a work; editions are filtered to the selected work', async () => {
@@ -1449,10 +1426,8 @@ describe('#74 — bulk checkout refinements', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // #76 — consolidated corrections: return filter, count, tree counters,
 // nameless guard.
-// ---------------------------------------------------------------------------
 describe('#76 — consolidated corrections', () => {
 	// (Corrections 2, 3, and 7 — bulk return edition filter, per-edition lending
 	// count, and stale-selection clearing — are REMOVED along with the bulk
@@ -1518,12 +1493,8 @@ describe('#76 — consolidated corrections', () => {
 		expect(workRow?.textContent).not.toMatch(/\d+\/\d+/);
 	});
 
-	// ── Correction 5: Raw entity ID in member list ─────────────────────────
-	// If a member's name resolves to '' (empty), the UI must show a
-	// human-readable placeholder — never a raw hex entity ID like
-	// "6a785fd523dc1d97bb8f1687".
-	// #76 migration: the standalone checkout member-select is gone — the same
-	// guard now applies to the inline checkout picker on the browse tree.
+	// ── Correction 5: an empty resolved name shows a placeholder, never a raw
+	// hex entity id; the guard now applies to the inline checkout picker.
 	it('member with empty resolved name shows a placeholder in the inline picker, never a raw 24-char hex entity ID', async () => {
 		const hexId = '6a785fd523dc1d97bb8f1687';
 		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]));
@@ -1564,11 +1535,8 @@ describe('#76 — consolidated corrections', () => {
 		expect(memberSelect?.textContent).not.toMatch(/[0-9a-f]{24}/);
 	});
 
-	// ── Correction 8 / #129: My-loans copy chain resolution (no raw entity IDs) ─
-	// #129 — superseded: a bare resolved copy name ("Score #7") is no longer
-	// enough context; the loan row must show the full copy -> edition -> work
-	// chain. resolveCopyNames stays as its own tested unit (libraryData.spec.ts)
-	// but is no longer what the my-loans row renders from.
+	// ── Correction 8 / #129: a loan row shows the copy -> edition -> work chain, not a
+	// bare copy name; resolveCopyNames keeps its own unit tests in libraryData.spec.ts.
 	it('my-loans section shows the resolved copy -> edition -> work chain, not raw entity IDs', async () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([
@@ -1627,12 +1595,8 @@ describe('#76 — consolidated corrections', () => {
 		});
 	});
 
-	// ── #129 AC3: chain resolves from already-loaded data, no new fetch ──────
-	// A librarian who is ALSO the current member already has the full chain
-	// available locally: allCopies carries editionId, allEditions carries
-	// workId + name, and works (loaded for every viewer) carries the work
-	// name. In that case the page must resolve the chain from those caches —
-	// resolveCopyChains (the network fallback) must not be invoked at all.
+	// ── #129 AC3: a librarian who is also the member holds the whole chain locally
+	// (allCopies, allEditions, works), so the network resolver is never called.
 	it('resolves the loan chain from already-loaded librarian data (allCopies/allEditions/works) without calling the network resolver', async () => {
 		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]));
 		listLendingsMock.mockResolvedValue(toListRead([
@@ -1666,15 +1630,8 @@ describe('#76 — consolidated corrections', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #76 — correction 9: lending dates are rendered localized (Intl.DateTimeFormat
-// with the current locale), never as raw ISO timestamps. Live Entu date
-// properties arrive as full ISO strings like "2026-07-01T00:00:00.000Z"; the
-// UI must format them for humans. #207 rule 7 (supersedes correction 9's
-// locale-dependent rendering): lending dates are tabular date text, so the
-// human form is the ISO calendar DATE itself — `YYYY-MM-DD`, exact — while the
-// raw timestamp's TIME component must still never leak.
-// ---------------------------------------------------------------------------
+// #76 correction 9 → #207 rule 7: Entu sends full ISO timestamps; a lending date renders
+// as the ISO calendar date, `YYYY-MM-DD`, and the time component never leaks.
 describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO calendar date, never a raw timestamp', () => {
 	// Matches the time component of a raw ISO timestamp, e.g. "T00:00:00".
 	const RAW_ISO_TIME = /T\d{2}:\d{2}/;
@@ -1825,13 +1782,11 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #75 — i18n key existence: every m.* call used in the component must exist in
-// en.json. Guards against typos or stale keys that compile but render empty.
-// ---------------------------------------------------------------------------
+// #75 — every m.* key a library surface calls exists in en.json: a typo or stale key
+// compiles but renders empty.
 describe('#75 — i18n key existence', () => {
-	it('every m.* key referenced in the library page component exists in en.json', () => {
-		const componentSrc = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
+	it.each(LIBRARY_SURFACES)('every m.* key referenced in %s exists in en.json', (file) => {
+		const componentSrc = readFileSync(resolve(process.cwd(), file), 'utf-8');
 		const messagesSrc = readFileSync(resolve(process.cwd(), 'messages/en.json'), 'utf-8');
 		const messages = JSON.parse(messagesSrc) as Record<string, unknown>;
 
@@ -1856,11 +1811,8 @@ describe('#75 — i18n key existence', () => {
 	});
 });
 
-// Strips `//` line comments before scanning — the data layer's own doc header
-// deliberately documents the constraint using the literal phrase
-// `{ method: 'POST' | 'DELETE' }`, which is exactly what a naive full-text grep
-// (design spec §5.3's guard) would false-positive on. Real code, not commentary
-// about the rule, is what must be absent.
+// Strips `//` line comments first: the data layer's header quotes
+// `{ method: 'POST' | 'DELETE' }` to state the rule, and only code must lack it.
 function stripLineComments(src: string): string {
 	return src
 		.split('\n')
@@ -1874,8 +1826,8 @@ describe('/library — read-only structural guard', () => {
 		expect(stripLineComments(src)).not.toMatch(/method:\s*['"](POST|PUT|DELETE)['"]/);
 	});
 
-	it('the library page component never contains a write-method call (no POST/PUT/DELETE)', () => {
-		const src = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
+	it.each(LIBRARY_SURFACES)('%s never contains a write-method call (no POST/PUT/DELETE)', (file) => {
+		const src = readFileSync(resolve(process.cwd(), file), 'utf-8');
 		expect(stripLineComments(src)).not.toMatch(/method:\s*['"](POST|PUT|DELETE)['"]/);
 	});
 });
