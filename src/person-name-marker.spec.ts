@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 const FILES = [
 	'src/routes/admin/+page.svelte',
 	'src/routes/event/[id]/+page.svelte',
-	'src/routes/library/+page.svelte',
+	'src/lib/library/BulkCheckoutPanel.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
 	'src/lib/components/agenda/SeasonCreateForm.svelte',
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
@@ -40,7 +40,11 @@ const SENTENCE_EXPRS: ReadonlyArray<[RegExp, string]> = [
 	[/m\.admin_invite_mint_error\(/g, 'admin_invite_mint_error']
 ];
 
-const SENTENCE_FILES = [...FILES, 'src/lib/components/admin/InviteSurface.svelte'] as const;
+const SENTENCE_FILES = [
+	...FILES,
+	'src/lib/components/admin/InviteSurface.svelte',
+	'src/lib/library/CopyRow.svelte'
+] as const;
 
 /** Markup only: scripts, styles and comments blanked (same length, so indices hold). */
 function markup(src: string): string {
@@ -101,7 +105,7 @@ describe('#361 — the guard itself: a wrapped closing tag still closes the mark
 	});
 
 	it('the branch’s own wrapped closes are seen in the real files', () => {
-		for (const file of ['src/routes/library/+page.svelte', ...SENTENCE_FILES]) {
+		for (const file of ['src/lib/library/CopyRow.svelte', ...SENTENCE_FILES]) {
 			const src = markup(readFileSync(resolve(process.cwd(), file), 'utf-8'));
 			const opens = src.split('<RedactedText').length - 1;
 			const closes = src.split('</RedactedText>').length - 1;
@@ -186,16 +190,14 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, readonly string[]>> = {
 	'src/lib/components/agenda/EventCreateForm.svelte': ['eventCreateSeriesDefaults.name'],
 	// the event's own name, and a schedule (agenda) row
 	'src/routes/event/[id]/+page.svelte': ['detail.name', 'row.name'],
+	'src/routes/library/+page.svelte': [],
 	// catalogue name fields, and uploaded score filenames
-	'src/routes/library/+page.svelte': [
-		'work.name',
-		'edition.name',
-		'copy.name',
-		'copyName',
-		'file.filename',
-		'broken.filename',
-		'filename'
-	],
+	'src/lib/library/WorkRow.svelte': ['work.name'],
+	'src/lib/library/EditionRow.svelte': ['edition.name'],
+	'src/lib/library/CopyRow.svelte': ['copy.name'],
+	'src/lib/library/MyLoansSection.svelte': ['copyName'],
+	'src/lib/library/EditionFiles.svelte': ['file.filename', 'broken.filename', 'filename'],
+	'src/lib/library/BulkCheckoutPanel.svelte': [],
 	// the AgendaItem this panel belongs to
 	'src/lib/components/attendance/AttendanceSurface.svelte': ['item.name'],
 	'src/lib/components/attendance/SeasonSummary.svelte': [],

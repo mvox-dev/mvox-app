@@ -1,39 +1,16 @@
 // @vitest-environment happy-dom
-//
-// #93 TR.5 RED — i18n + a11y coverage for all Repertoire 1.0 surfaces:
-//   - RepertoireElement (agenda Works element: collapse/expand, functional
-//     links, status badge, management controls for both surfaces)
-//   - the library browse tree's repertoire status badges (TR.4)
-//
-// Follows the #86/TA.5 precedent (page.attendance-a11y.spec.ts): source-scan
-// tests for i18n hygiene + rendered-DOM tests for aria semantics. These are
-// RED — they assert a11y the TR.2–TR.4 components do not yet carry:
-//   - the collapsed Works toggle dangles its aria-controls IDREF (the expanded
-//     region only renders when expanded — the exact defect the #86 pass ruled
-//     against on SeasonSummary);
-//   - per-row functional controls (PDF, Borrow) and management buttons
-//     (remove, move, pin) have no aria-label naming their work — five rows of
-//     "Remove" are indistinguishable to a screen reader;
-//   - the management selects (status, pin edition, add work, add to
-//     programme) have no accessible name at all (a placeholder <option> is
-//     not a select's name);
-//   - the two "Add" buttons share one accessible name;
-//   - the library repertoire badge announces a bare "Active" with nothing
-//     saying repertoire (adjacent to availability counts and lending copy).
-// A set of guard tests pins down what already exists (aria-expanded,
-// ol/li programme semantics, real <a> tags, the aria-hidden badge dot,
-// locale key parity) so GREEN can't regress it.
+
+// #93 TR.5 — i18n + a11y for the Repertoire 1.0 surfaces: RepertoireElement (the agenda
+// Works element) and the library tree's repertoire badges. Source scans for i18n,
+// rendered-DOM tests for aria semantics (the #86/TA.5 precedent).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
-// Paraglide mock: real English strings for the keys that exist today, plus a
-// Proxy fallback so aria-label keys ADDED by the GREEN pass resolve without
-// this file needing to know their names — the fallback renders
-// "<key> <param values...>", so assertions like "the label contains the work
-// name" hold for any key shape as long as the name is passed as a param.
+// Paraglide mock: real English for existing keys, and a Proxy fallback that renders
+// "<key> <param values...>", so a label holds the work name whatever its key.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const known: Record<string, (p?: Record<string, unknown>) => string> = {
 		repertoire_no_edition: () => 'No pinned edition',
@@ -69,11 +46,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 	return { m };
 });
 
-// ───────────────────────────────────────────────────────────────────────────
-// Library page seams (for the TR.4 badge tests) — same mock set as
-// page.library-repertoire-badges.spec.ts. Harmless for the RepertoireElement
-// unit renders (it imports none of these modules).
-// ───────────────────────────────────────────────────────────────────────────
+// ── Library page seams for the TR.4 badge tests (page.library-repertoire-badges.spec.ts
+// set); RepertoireElement imports none of them.
 const {
 	listWorksMock,
 	listEditionsMock,
@@ -179,9 +153,7 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ---------------------------------------------------------------------------
 // Fixtures
-// ---------------------------------------------------------------------------
 function workRow(id: string, overrides: Partial<WorkRow> = {}): WorkRow {
 	return {
 		id,
@@ -235,19 +207,15 @@ async function renderElementExpanded(props: ComponentProps<typeof RepertoireElem
 	return container;
 }
 
-// ---------------------------------------------------------------------------
-// Source-scan helpers (i18n hygiene) — same strategy as the #75/#86 passes:
-// strip Svelte expressions + HTML comments from the template, then any
-// remaining bare text node with letters in it is a hardcoded user-facing string.
-// ---------------------------------------------------------------------------
+// Source-scan helpers (the #75/#86 strategy): strip Svelte expressions and HTML comments;
+// a bare text node with letters left in it is a hardcoded user-facing string.
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
 function bareTextNodes(source: string): string[] {
-	// Strip ALL script blocks (RepertoireElement carries BOTH a <script module>
-	// and an instance <script> — the #86 helper's "everything after the first
-	// </script>" would scan the instance script as template).
+	// Strip ALL script blocks: RepertoireElement has a <script module> and an instance
+	// <script>, so "everything after the first </script>" would scan script as template.
 	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
 	template = template.replace(/<!--[\s\S]*?-->/g, '');
 	let prev = '';
@@ -269,9 +237,7 @@ function bareTextNodes(source: string): string[] {
 	return nodes;
 }
 
-// ---------------------------------------------------------------------------
 // 1 — i18n: every repertoire surface renders via Paraglide keys only
-// ---------------------------------------------------------------------------
 describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces', () => {
 	it('RepertoireElement.svelte contains no bare text nodes outside m.* calls', () => {
 		expect(bareTextNodes(readSource('src/lib/components/agenda/RepertoireElement.svelte'))).toEqual([]);
@@ -283,11 +249,13 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		expect(hardcoded).toEqual([]);
 	});
 
-	it('the library page has no hardcoded aria-label string literals on its repertoire badge', () => {
-		const source = readSource('src/routes/library/+page.svelte');
-		const hardcoded = source.match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
-		expect(hardcoded).toEqual([]);
-	});
+	it.each(['src/lib/library/WorkRow.svelte', 'src/routes/library/+page.svelte'])(
+		'%s has no hardcoded aria-label string literals (the library repertoire badge)',
+		(file) => {
+			const hardcoded = readSource(file).match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
+			expect(hardcoded).toEqual([]);
+		}
+	);
 
 	it('every repertoire_* key in en.json exists in et, lv and uk', () => {
 		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
@@ -300,17 +268,11 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		}
 	});
 
-	// WCAG 2.5.3 Label in Name (Level A): where a control carries visible text,
-	// its accessible name must CONTAIN that text as a contiguous string —
-	// otherwise a speech-input user saying "click Move up" gets no match. This
-	// is a translation-shape rule, not a markup one, so it is checked against
-	// the message files in every locale: an aria-label key must be the visible
-	// key's string plus context, never a reworded or reordered variant.
-	// ── #288 — the guard's scope, stated where it binds ──────────────────────
-	// The rule rides in the failure messages below (not only in a comment): the
-	// previous boundary lived solely in a comment beside the check, so "selects
-	// are excluded" was re-derived from behaviour and hardened into a rule
-	// rather than the case it actually was.
+	// WCAG 2.5.3 Label in Name: a control's accessible name CONTAINS its visible text, so
+	// a speech-input user's "click Move up" matches. Checked against every locale's
+	// messages: an aria-label key is the visible key's string plus context.
+
+	// #288 — the guard's scope rides in the failure messages below, not only here.
 	const LABEL_IN_NAME_SCOPE =
 		'Scope (#288, PO ruling): a control is IN scope when its default visible text ' +
 		'INSTRUCTS the user to choose (e.g. a select showing "Select edition" — that prompt ' +
@@ -319,21 +281,9 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		'section-parent selects\' "Top level" — an answer, not a prompt), or when the control ' +
 		'has no visible text of its own (nothing to contain).';
 
-	/**
-	 * The pairing convention: an aria-label key names its visible sibling.
-	 * Strip `_aria_label`; the base (or base + `_button`) is the visible key.
-	 * A `_select`-suffixed base is a prompt-default SELECT: its visible default
-	 * text is its placeholder <option>, keyed `<base minus _select>_label`
-	 * (e.g. `repertoire_add_programme_select_aria_label` ↔
-	 * `repertoire_add_programme_label`, whose "Select edition" instructs the
-	 * user to choose — the scope test applied: prompt, not answer, so IN scope
-	 * per LABEL_IN_NAME_SCOPE). #288: the old base/base_button-only lookup
-	 * dropped these three before the content check ever ran — the guard never
-	 * evaluated them; they were not passing, they were invisible.
-	 * Keys with no such sibling (the badge, the domain-texted external links,
-	 * blank-default selects) label controls with no visible text of their own —
-	 * nothing to contain, so they yield no pair.
-	 */
+	// An aria-label key minus `_aria_label` is its visible key (or that + `_button`). A
+	// `_select` base is a prompt-default select, paired with `<base minus _select>_label`.
+	// Keys with no visible sibling label controls with no text of their own: no pair.
 	function labelInNamePairs(en: MessageFile): Array<{ ariaKey: string; visibleKey: string }> {
 		return Object.keys(en)
 			.filter((k) => k.startsWith('repertoire_') && k.endsWith('_aria_label'))
@@ -348,25 +298,12 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 			.filter((p): p is { ariaKey: string; visibleKey: string } => p !== null);
 	}
 
-	// #288 — proves the pairing actually reaches the three prompt-default
-	// selects. Against the old base/base_button-only lookup this FAILS with an
-	// empty array: the keys strip to `repertoire_*_select` bases that exist
-	// under no visible key, so they were dropped before the content check ever
-	// ran. A guard that skips its subject reports success indistinguishable
-	// from real success — this pin is what keeps that from regressing.
-	//
-	// #288 review F2 — two of the three keys named below are DELIBERATELY kept
-	// as guard subjects rather than as rendered names. The add-work and
-	// add-programme selects render their PLACEHOLDER key as the aria-label
-	// (RepertoireElement.svelte — the cheapest compliant shape the #288 GREEN
-	// brief sanctioned: an identical string contains itself), so
-	// `repertoire_add_work_select_aria_label` and
-	// `repertoire_add_programme_select_aria_label` are referenced by no
-	// production code today. They stay because the pairing rule is what this pin
-	// asserts, and dropping them would shrink the guard to a single subject
-	// (`repertoire_pin_edition_select_aria_label`, the one still rendered — it
-	// carries `{work}`, so it cannot collapse to its placeholder key). Do not
-	// delete them as "orphans": this pin names all three by hand and will fail.
+	// #288 — proves the pairing reaches the three prompt-default selects; the old lookup
+	// dropped them before the content check ran, and reported success anyway.
+
+	// Two of the three keys are rendered by no code (those selects use their placeholder
+	// key as the aria-label). They stay as guard subjects: dropping them would shrink
+	// the guard to one. Not orphans; this pin names all three and fails without them.
 	it('#288 — the three prompt-default select aria-labels are PAIRED with their placeholder keys (the guard really evaluates them)', () => {
 		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const selectPairs = labelInNamePairs(en)
@@ -419,9 +356,7 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 2 — Works element collapse/expand: aria-expanded + non-dangling aria-controls
-// ---------------------------------------------------------------------------
 describe('#93 — a11y: Works element disclosure semantics', () => {
 	it('guard: the collapsed toggle reports aria-expanded="false", the expanded one "true" with aria-controls resolving to the region', async () => {
 		const { container } = render(RepertoireElement, { props: { rows: twoLinkedRows } });
@@ -460,9 +395,7 @@ describe('#93 — a11y: Works element disclosure semantics', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 3 — functional links: real <a> tags, descriptive accessible names
-// ---------------------------------------------------------------------------
 describe('#93 — a11y: functional links are proper anchors with descriptive names', () => {
 	it('guard: Borrow is a real <a href="/library"> with visible text; external links are <a href> with domain text and rel="noopener noreferrer"', async () => {
 		const container = await renderElementExpanded({ rows: twoLinkedRows });
@@ -537,11 +470,8 @@ describe('#93 — a11y: functional links are proper anchors with descriptive nam
 	});
 });
 
-// ---------------------------------------------------------------------------
-// 4 — status control: accessible name naming the work (the "or equivalent"
-//     for a toggle-button group, whose aria-pressed state already announces
-//     which one is current)
-// ---------------------------------------------------------------------------
+// 4 — status control: an accessible name naming the work (aria-pressed already
+// announces which one is current)
 describe('#93 — a11y: the status control has an accessible name per work', () => {
 	const editorProps = {
 		rows: twoLinkedRows,
@@ -574,9 +504,7 @@ describe('#93 — a11y: the status control has an accessible name per work', () 
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 5 — concert programme: ol/li semantics in ordinal order
-// ---------------------------------------------------------------------------
 describe('#93 — a11y: concert programme is a numbered list', () => {
 	it('guard: all-ordinal rows render as <ol> with one <li> per work, ordered by ordinal', async () => {
 		const container = await renderElementExpanded({ rows: programmeRows });
@@ -623,9 +551,7 @@ describe('#93 — a11y: concert programme is a numbered list', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 6 — management buttons: descriptive aria-labels naming the work
-// ---------------------------------------------------------------------------
 describe('#93 — a11y: management controls identify their work', () => {
 	it("every Remove button's aria-label names its work — a column of 'Remove' buttons is indistinguishable to a screen reader", async () => {
 		const container = await renderElementExpanded({
@@ -757,9 +683,7 @@ describe('#93 — a11y: management controls identify their work', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
 // 7 — library browse tree badges: screen-reader text with repertoire context
-// ---------------------------------------------------------------------------
 describe('#93 — a11y: library repertoire badges are readable without color', () => {
 	const SEASONS = [
 		{
@@ -842,10 +766,8 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 		expect(learningLabel).toContain('Learning');
 	});
 
-	// Same rule as the RepertoireElement toggle above (the #86 SeasonSummary
-	// ruling), enforced on the OTHER surface this slice touches: the badge
-	// renders inside these very list items, so the browse tree's disclosure
-	// toggles are in scope for #93 too.
+	// The #86 SeasonSummary rule again, on the browse tree's disclosure toggles: the badge
+	// renders inside these list items, so they are in scope for #93 too.
 	it('the library browse-tree toggles must not dangle their aria-controls IDREFs while collapsed — the regions they reference only render when expanded', async () => {
 		const container = await renderLibraryWithBadges();
 		listEditionsMock.mockResolvedValue(toListRead([]));

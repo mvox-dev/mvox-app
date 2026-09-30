@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
-//
+
 // #75/TL.4 — i18n + a11y coverage for all Lending 1.0 surfaces.
-// RED tests: these assert a11y attributes and i18n practices that are not yet
-// fully implemented. Existing functional tests in page.library.spec.ts remain
-// unchanged and should still pass.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -101,6 +98,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { LIBRARY_SURFACES } from '$lib/testing/librarySurfaces';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -145,20 +143,16 @@ afterEach(() => {
 // Test 1: All user-facing strings come from Paraglide (no hardcoded strings)
 // ---------------------------------------------------------------------------
 describe('#75 — i18n: no hardcoded user-facing strings', () => {
-	it('the library page component contains no hardcoded user-facing text outside m.* calls', () => {
-		const src = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
+	it.each(LIBRARY_SURFACES)('%s contains no hardcoded user-facing text outside m.* calls', (file) => {
+		const src = readFileSync(resolve(process.cwd(), file), 'utf-8');
 
 		// Extract the template section (everything after </script>)
 		const templateMatch = src.match(/<\/script>\s*([\s\S]*)$/);
 		expect(templateMatch).not.toBeNull();
 		const template = templateMatch![1];
 
-		// Strategy: find text content between closing > and opening < that looks
-		// like real user-facing prose (contains at least one alphabetic character
-		// and isn't just Svelte expression residue).
-		//
-		// We first strip all Svelte expressions {…} (handling nested braces) so
-		// the remaining text between tags is what actually renders as literal text.
+		// Strip every Svelte expression {…} (nested too), then read the text left between
+		// tags: anything with a letter in it renders as literal prose.
 		let stripped = template;
 		// Repeatedly remove innermost { … } blocks until none remain
 		let prev = '';
@@ -209,10 +203,8 @@ describe('#75 — a11y: my-loans section', () => {
 		expect(toggle).not.toBeNull();
 		// aria-expanded should be present (false when collapsed)
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
-		// While COLLAPSED the loans list is not in the DOM, so aria-controls must
-		// either be absent or resolve — never dangle. (#86 SeasonSummary ruling,
-		// re-applied to this page in #93; this test used to demand the attribute
-		// unconditionally, which is exactly the dangling IDREF that ruling bans.)
+		// Collapsed, the loans list is not in the DOM: aria-controls is absent or
+		// resolves, never a dangling IDREF (#86 ruling, applied here in #93).
 		const collapsedControls = toggle.getAttribute('aria-controls');
 		if (collapsedControls !== null) {
 			expect(container.querySelector(`#${collapsedControls}`)).not.toBeNull();
@@ -364,10 +356,8 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 		});
 	});
 
-	// The bulk-return section (edition picker + loan checkboxes) is REMOVED by
-	// the #76 PO ruling — inline Return buttons on lent copy rows are the only
-	// return surface now. See page.library.spec.ts's '#76 correction 8' tests
-	// for the removal coverage; there is nothing left here to a11y-check.
+	// #76 removed the bulk-return section; inline Return buttons are the only return
+	// surface, covered in page.library.spec.ts ('#76 correction 8').
 });
 
 // ---------------------------------------------------------------------------

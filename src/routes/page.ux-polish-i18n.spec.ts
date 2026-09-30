@@ -28,7 +28,16 @@ const CHANGED_SURFACES = [
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	// #529 splits the profile page into these.
 	'src/lib/profile/RosterNamesToggle.svelte',
-	'src/lib/profile/ProfileStorageSection.svelte'
+	'src/lib/profile/ProfileStorageSection.svelte',
+	// #528 splits the library page into these.
+	'src/lib/library/MyLoansSection.svelte',
+	'src/lib/library/BulkCheckoutPanel.svelte',
+	'src/lib/library/CreateWorkForm.svelte',
+	'src/lib/library/WorkRow.svelte',
+	'src/lib/library/CreateEditionForm.svelte',
+	'src/lib/library/EditionRow.svelte',
+	'src/lib/library/CopyRow.svelte',
+	'src/lib/library/EditionFiles.svelte'
 ] as const;
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
