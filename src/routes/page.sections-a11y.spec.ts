@@ -87,7 +87,9 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { ROSTER_SURFACES } from '$lib/roster/rosterSurfaces';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+
+const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
 // Fixtures: Soprano (one sub-section), Alto, Tenor, and one unassigned member.
 

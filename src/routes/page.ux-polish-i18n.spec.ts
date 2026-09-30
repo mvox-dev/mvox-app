@@ -1,5 +1,4 @@
-// #113 TU.5 RED — i18n pass over the CHANGED_SURFACES list below: hardcoded
-// strings, locale parity, and focus-indicator hygiene (source scans only).
+// Source scans over every .svelte file: hardcoded strings, locale parity, focus indicators.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -9,39 +8,9 @@ import {
 	isMessageEmpty,
 	type MessageFile
 } from '$lib/testing/messageFile.js';
-import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
-import { ROSTER_SURFACES } from '$lib/roster/rosterSurfaces';
+import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
 
-const CHANGED_SURFACES = [
-	...ROSTER_SURFACES,
-	'src/lib/sections/SectionPicker.svelte',
-	'src/lib/components/agenda/RepertoireElement.svelte',
-	'src/routes/library/+page.svelte',
-	'src/lib/components/agenda/AgendaList.svelte',
-	'src/lib/components/attendance/TakeAttendanceButton.svelte',
-	// The landing surface and the components its own i18n pass edited — the scan
-	// is only as wide as this list.
-	// #508 splits +page.svelte into the agenda/ components listed below.
-	'src/routes/+page.svelte',
-	'src/lib/components/attendance/AttendanceSurface.svelte',
-	...EVENT_SURFACES,
-	'src/lib/components/agenda/SeriesCreateForm.svelte',
-	'src/lib/components/agenda/EventCreateForm.svelte',
-	'src/lib/components/agenda/SeasonCreateForm.svelte',
-	'src/lib/components/agenda/SeasonManagePanel.svelte',
-	// #529 splits the profile page into these.
-	'src/lib/profile/RosterNamesToggle.svelte',
-	'src/lib/profile/ProfileStorageSection.svelte',
-	// #528 splits the library page into these.
-	'src/lib/library/MyLoansSection.svelte',
-	'src/lib/library/BulkCheckoutPanel.svelte',
-	'src/lib/library/CreateWorkForm.svelte',
-	'src/lib/library/WorkRow.svelte',
-	'src/lib/library/CreateEditionForm.svelte',
-	'src/lib/library/EditionRow.svelte',
-	'src/lib/library/CopyRow.svelte',
-	'src/lib/library/EditionFiles.svelte'
-] as const;
+const SURFACES = svelteSurfaces();
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
@@ -67,8 +36,8 @@ function localeMessages(locale: string): MessageFile {
 }
 
 // 1 — no hardcoded user-visible strings on any changed surface
-describe('#113 — i18n: no hardcoded user-facing strings on TU.1–TU.4 surfaces', () => {
-	for (const file of CHANGED_SURFACES) {
+describe('#113 — i18n: no hardcoded user-facing strings on any surface', () => {
+	for (const file of SURFACES) {
 		it(`${file} renders no bare text nodes outside m.* calls`, () => {
 			expect(bareTextNodes(readSource(file))).toEqual([]);
 		});
@@ -83,11 +52,10 @@ describe('#113 — i18n: no hardcoded user-facing strings on TU.1–TU.4 surface
 });
 
 // 2 — locale parity: every used key exists in ALL FOUR locale files
-describe('#113 — i18n: every message key used by a changed surface exists in all four locales', () => {
-	for (const file of CHANGED_SURFACES) {
+describe('#113 — i18n: every message key used by a surface exists in all four locales', () => {
+	for (const file of SURFACES) {
 		it(`every m.* key in ${file} is present and non-empty in en, et, lv and uk`, () => {
 			const keys = usedMessageKeys(readSource(file));
-			expect(keys.length, `${file} should reference at least one m.* key`).toBeGreaterThan(0);
 			for (const locale of LOCALES) {
 				const messages = localeMessages(locale);
 				const missing = keys.filter((k) => !(k in messages));
@@ -131,7 +99,7 @@ describe('#113 — i18n: every message key used by a changed surface exists in a
 	});
 });
 
-// 3 — focus-indicator hygiene on the changed surfaces
+// 3 — focus-indicator hygiene on every surface
 
 // No surface may strip the UA focus ring (WCAG 2.4.7) without a listed
 // FOCUS_STRIP_EXCEPTIONS replacement (#205 gave the arrange row one).
@@ -142,8 +110,8 @@ const FOCUS_STRIP_EXCEPTIONS: Record<string, { allowed: string[]; replacement: R
 	}
 };
 
-describe('#113 — a11y: changed surfaces never strip the default focus indicator', () => {
-	for (const file of CHANGED_SURFACES) {
+describe('#113 — a11y: no surface strips the default focus indicator', () => {
+	for (const file of SURFACES) {
 		it(`${file} strips no focus indicator without a replacement`, () => {
 			const source = readSource(file);
 			const offenders = source.match(/[\w:-]*outline-none/g) ?? [];

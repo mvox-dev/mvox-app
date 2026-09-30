@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
 // Unknown keys fall back to "<key> <param values...>", so a label assertion like "contains the
 // member name" holds for any key that takes the name as a param.
@@ -89,11 +90,10 @@ const memberRatesTwo = [
 	{ memberId: 'm2', name: 'Berta Bass', attended: 0, total: 4 }
 ];
 
-const ATTENDANCE_SURFACE_FILES = [
-	'src/lib/components/attendance/AttendanceSurface.svelte',
-	'src/lib/components/attendance/SeasonSummary.svelte',
-	'src/lib/components/agenda/AgendaList.svelte'
-];
+const ATTENDANCE_SURFACE_FILES = surfacesUnder(
+	'src/lib/components/attendance/',
+	'src/lib/components/agenda/'
+);
 
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');

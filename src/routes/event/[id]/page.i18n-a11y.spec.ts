@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
-import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -40,6 +40,8 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+
+const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 

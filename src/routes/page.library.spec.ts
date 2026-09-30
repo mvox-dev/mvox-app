@@ -140,8 +140,10 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { LIBRARY_SURFACES } from '$lib/testing/librarySurfaces';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
+
+const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');

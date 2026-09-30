@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
+import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { tallinnWallClockParts, toTallinnLocalInputValue } from './timeFormat';
 
 // A static named import of not-yet-exported members would fail at LINK time
@@ -151,7 +151,7 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	const SRC_ROOT = resolve(__dirname, '../..'); // …/src
 	const rootPage = () => readFileSync(resolve(SRC_ROOT, 'routes/+page.svelte'), 'utf8');
 	const eventSurfaces = () =>
-		EVENT_SURFACES.map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
+		surfacesUnder('src/routes/event/', 'src/lib/events/').map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
 	const timeFormatSource = () => readFileSync(resolve(SRC_ROOT, 'lib/preferences/timeFormat.ts'), 'utf8');
 	const TALLINN_TO_UTC_CALLERS = [
 		'src/lib/events/EventConvertForm.svelte',
