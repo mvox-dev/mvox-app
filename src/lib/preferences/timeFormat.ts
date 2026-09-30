@@ -22,10 +22,12 @@ export function setTimeFormat(value: TimeFormat): void {
 	if (typeof localStorage !== 'undefined') localStorage.setItem(TIME_FORMAT_KEY, value);
 }
 
+export const TALLINN_TZ = 'Europe/Tallinn';
+
 // Every clock-time display routes through tallinnHHMM + formatTime so the AM/PM preference
 // reaches it.
 const tallinnHHMMFmt = new Intl.DateTimeFormat('en-GB', {
-	timeZone: 'Europe/Tallinn',
+	timeZone: TALLINN_TZ,
 	hour: '2-digit',
 	minute: '2-digit',
 	hour12: false
@@ -47,8 +49,6 @@ export function formatTime(hhmm: string, mode: TimeFormat): string {
 	const meridiem = h < 12 ? 'AM' : 'PM';
 	return `${hour12}:${minute} ${meridiem}`;
 }
-
-const TALLINN_TZ = 'Europe/Tallinn';
 
 // Tallinn's digits read back as UTC, minus the real instant, is the offset in effect then.
 export function tallinnOffsetMinutes(date: Date): number {
@@ -116,19 +116,8 @@ export function tallinnWallClockParts(isoUtc: string): { date: string; time: str
 }
 
 export function toTallinnLocalInputValue(iso: string): string {
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) return '';
-	const parts = new Intl.DateTimeFormat('en-CA', {
-		timeZone: TALLINN_TZ,
-		hourCycle: 'h23',
-		year: 'numeric',
-		month: '2-digit',
-		day: '2-digit',
-		hour: '2-digit',
-		minute: '2-digit'
-	}).formatToParts(date);
-	const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
-	return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}`;
+	const { date, time } = tallinnWallClockParts(iso);
+	return date ? `${date}T${time}` : '';
 }
 
 // (*MVOX:Palestrina*)

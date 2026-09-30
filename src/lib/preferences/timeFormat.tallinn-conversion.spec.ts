@@ -10,9 +10,10 @@
 // formatters are a different, PRESERVED-VERBATIM shape). timeFormat.ts stays
 // on the no-hardcoded-render allowlist and keeps the isConverter fingerprint.
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 import { tallinnWallClockParts, toTallinnLocalInputValue } from './timeFormat';
 
 // A static named import of not-yet-exported members would fail at LINK time
@@ -145,6 +146,33 @@ describe('toTallinnLocalInputValue and tallinnWallClockParts (Tallinn wall clock
 		expect(tallinnWallClockParts('2026-01-15T23:30:00.000Z')).toEqual({ date: '2026-01-16', time: '01:30' });
 		expect(tallinnWallClockParts('')).toEqual({ date: '', time: '' });
 	});
+
+	it('the input value is the parts joined by T, at Tallinn midnight and on both DST nights', () => {
+		const instants = [
+			'2026-06-14T21:00:00.000Z',
+			'2026-01-14T22:00:00.000Z',
+			'2026-03-29T00:30:00.000Z',
+			'2026-03-29T01:30:00.000Z',
+			'2026-10-25T00:30:00.000Z',
+			'2026-10-25T01:30:00.000Z',
+			'2026-12-31T22:00:00.000Z'
+		];
+		expect(instants.map(toTallinnLocalInputValue)).toEqual([
+			'2026-06-15T00:00',
+			'2026-01-15T00:00',
+			'2026-03-29T02:30',
+			'2026-03-29T04:30',
+			'2026-10-25T03:30',
+			'2026-10-25T03:30',
+			'2027-01-01T00:00'
+		]);
+		expect(instants.map(toTallinnLocalInputValue)).toEqual(
+			instants.map((iso) => {
+				const p = tallinnWallClockParts(iso);
+				return `${p.date}T${p.time}`;
+			})
+		);
+	});
 });
 
 describe('#230 — extraction wiring (integration: both event routes consume the SHARED helpers, duplicates deleted)', () => {
@@ -203,13 +231,15 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 		expect(/[^.\w]tallinnLocalToUtcIso\(/.test(content.replace(/import[^;]*;/g, ''))).toBe(true);
 	});
 
-	it('AgendaList.svelte is untouched by this slice: its PRESERVED-VERBATIM calendar-day formatters and local TZ constant stay', () => {
-		const content = readFileSync(
-			resolve(SRC_ROOT, 'lib/components/agenda/AgendaList.svelte'),
-			'utf8'
-		);
-		expect(/const\s+TZ\s*=\s*'Europe\/Tallinn'/.test(content)).toBe(true);
-		expect(content.includes('PRESERVED VERBATIM')).toBe(true);
+	// A loose-text pin on purpose: it is the executable form of "one zone constant" (#548).
+	it("'Europe/Tallinn' is spelled only in timeFormat.ts (TALLINN_TZ)", () => {
+		const spellers = findSourceFiles(SRC_ROOT, ['.ts', '.svelte'], {
+			excludeSpecs: true,
+			skipDirs: ['paraglide']
+		})
+			.filter((file) => readFileSync(file, 'utf8').includes("'Europe/Tallinn'"))
+			.map((file) => relative(SRC_ROOT, file));
+		expect(spellers).toEqual(['lib/preferences/timeFormat.ts']);
 	});
 
 	it("no-hardcoded-render coherence: the shared module's moved offset converter keeps the isConverter fingerprint (second: '2-digit' + immediate .formatToParts)", () => {

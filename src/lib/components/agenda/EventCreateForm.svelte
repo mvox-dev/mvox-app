@@ -16,7 +16,8 @@
 		formatTime,
 		timeFormatStore,
 		tallinnLocalToUtcIso,
-		isoDateFormatter
+		isoDateFormatter,
+		TALLINN_TZ
 	} from '$lib/preferences/timeFormat';
 	import {
 		listEventSeriesForSeason,
@@ -77,8 +78,6 @@
 
 	const isOffline = $derived(!$writesAvailable);
 
-	const EVENT_CREATE_TZ = 'Europe/Tallinn';
-
 	function eventCreateDerivedDuration(
 		startIso: string,
 		endLocal: string
@@ -95,7 +94,7 @@
 
 	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | 'end' | null;
 
-	const eventCreateStatusDateFmt = isoDateFormatter(EVENT_CREATE_TZ);
+	const eventCreateStatusDateFmt = isoDateFormatter(TALLINN_TZ);
 	function eventCreateStatusFmt(at: Date): string {
 		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
 	}
