@@ -1,0 +1,84 @@
+import { COMMENT_FIXTURES_DIR, changedFiles, type GitRunner } from './commentRules';
+
+export const STEP = 1500;
+export const NEXT_STEP = 1000;
+
+// Shrink-only: each file leaves when its split lands.
+export const LINE_CAP_EXCEPTIONS: readonly string[] = [
+	'src/routes/event/[id]/+page.svelte',
+	'src/routes/roster/+page.svelte',
+	'src/routes/library/+page.svelte',
+	'src/routes/profile/+page.svelte'
+];
+
+export const LINE_CAP_REGISTER: readonly string[] = [
+	'src/lib/agenda/agendaLoad.ts',
+	'src/lib/components/agenda/SeasonManagePanel.svelte',
+	'src/routes/+page.svelte',
+	'src/routes/event/[id]/+page.svelte',
+	'src/routes/library/+page.svelte',
+	'src/routes/profile/+page.svelte',
+	'src/routes/roster/+page.svelte'
+];
+
+const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];
+const SOURCE_FILE = /\.(ts|svelte)$/;
+
+export type LineCounts = Readonly<Record<string, number>>;
+
+export interface CapViolation {
+	file: string;
+	lines: number;
+	reason: 'over-cap' | 'exception-within-cap';
+}
+
+export function countLines(source: string): number {
+	const lines = source.split('\n');
+	if (lines[lines.length - 1] === '') lines.pop();
+	return lines.length;
+}
+
+export function selectSourceFiles(paths: string[]): string[] {
+	return paths.filter(
+		(path) =>
+			path.startsWith('src/') &&
+			SOURCE_FILE.test(path) &&
+			!path.endsWith('.spec.ts') &&
+			!FIXTURE_DIRS.some((dir) => path.startsWith(dir))
+	);
+}
+
+export function capViolations(counts: LineCounts, exceptions: readonly string[]): CapViolation[] {
+	const over: CapViolation[] = Object.entries(counts)
+		.filter(([file, lines]) => lines > STEP && !exceptions.includes(file))
+		.map(([file, lines]) => ({ file, lines, reason: 'over-cap' }));
+	const within: CapViolation[] = exceptions
+		.filter((file) => (counts[file] ?? 0) <= STEP)
+		.map((file) => ({ file, lines: counts[file] ?? 0, reason: 'exception-within-cap' }));
+	return [...over, ...within].sort((a, b) => a.file.localeCompare(b.file));
+}
+
+export function registerMismatch(
+	counts: LineCounts,
+	register: readonly string[]
+): { missing: string[]; stale: string[] } {
+	const missing = Object.entries(counts)
+		.filter(([file, lines]) => lines > NEXT_STEP && !register.includes(file))
+		.map(([file]) => file)
+		.sort();
+	const stale = register.filter((file) => (counts[file] ?? 0) <= NEXT_STEP).sort();
+	return { missing, stale };
+}
+
+export function addedOverNextStep(
+	added: string[],
+	counts: LineCounts
+): Array<{ file: string; lines: number }> {
+	return added
+		.map((file) => ({ file, lines: counts[file] ?? 0 }))
+		.filter(({ lines }) => lines > NEXT_STEP);
+}
+
+export function addedFiles(options: { git?: GitRunner } = {}): string[] {
+	return changedFiles({ ...options, diffFilter: 'A' });
+}

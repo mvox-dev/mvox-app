@@ -291,7 +291,7 @@ describe('the related-spec run reaches the comment check', () => {
 			scripts: Record<string, string>;
 		};
 		expect(pkg.scripts['test:changed']).toBe(
-			'vitest run --changed origin/main && vitest run src/comment-rules.spec.ts'
+			'vitest run --changed origin/main && vitest run src/comment-rules.spec.ts src/routes/page.line-cap.spec.ts'
 		);
 	});
 });
