@@ -5,6 +5,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -144,38 +145,7 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 describe('#75 — i18n: no hardcoded user-facing strings', () => {
 	it.each(LIBRARY_SURFACES)('%s contains no hardcoded user-facing text outside m.* calls', (file) => {
-		const src = readFileSync(resolve(process.cwd(), file), 'utf-8');
-
-		// Extract the template section (everything after </script>)
-		const templateMatch = src.match(/<\/script>\s*([\s\S]*)$/);
-		expect(templateMatch).not.toBeNull();
-		const template = templateMatch![1];
-
-		// Strip every Svelte expression {…} (nested too), then read the text left between
-		// tags: anything with a letter in it renders as literal prose.
-		let stripped = template;
-		// Repeatedly remove innermost { … } blocks until none remain
-		let prev = '';
-		while (prev !== stripped) {
-			prev = stripped;
-			stripped = stripped.replace(/\{[^{}]*\}/g, '');
-		}
-
-		const textNodePattern = />([^<]+)</g;
-		const bareTextNodes: string[] = [];
-		let match: RegExpExecArray | null;
-		while ((match = textNodePattern.exec(stripped)) !== null) {
-			const text = match[1].trim();
-			if (!text) continue;
-			// Skip pure whitespace / punctuation / decorative unicode
-			if (/^[▸▾·\s\-|]+$/.test(text)) continue;
-			// Must contain at least one letter to be "user-facing prose"
-			if (!/[a-zA-Z]/.test(text)) continue;
-			bareTextNodes.push(text);
-		}
-
-		// There should be NO bare text nodes — all visible text must come from m.*
-		expect(bareTextNodes).toEqual([]);
+		expect(bareTextNodes(readFileSync(resolve(process.cwd(), file), 'utf-8'))).toEqual([]);
 	});
 });
 

@@ -4,6 +4,7 @@ import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 import { EVENT_SURFACES } from '$lib/events/eventSurfaces';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
@@ -48,28 +49,6 @@ function readSource(relPath: string): string {
 
 function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
-}
-
-function bareTextNodes(source: string): string[] {
-	const templateMatch = source.match(/<\/script>\s*([\s\S]*)$/);
-	let template = templateMatch ? templateMatch[1] : source;
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
 }
 
 function json(body: unknown, status = 200) {

@@ -7,6 +7,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 // Paraglide mock: real English for existing keys, and a Proxy fallback that renders
@@ -207,34 +208,8 @@ async function renderElementExpanded(props: ComponentProps<typeof RepertoireElem
 	return container;
 }
 
-// Source-scan helpers (the #75/#86 strategy): strip Svelte expressions and HTML comments;
-// a bare text node with letters left in it is a hardcoded user-facing string.
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
-
-function bareTextNodes(source: string): string[] {
-	// Strip ALL script blocks: RepertoireElement has a <script module> and an instance
-	// <script>, so "everything after the first </script>" would scan script as template.
-	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		if (/^[▸▾·×♫\s\-–—|()]+$/.test(text)) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
 }
 
 // 1 — i18n: every repertoire surface renders via Paraglide keys only

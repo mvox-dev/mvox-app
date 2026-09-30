@@ -5,6 +5,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
 	isMessageEmpty,
@@ -243,35 +244,8 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	return container;
 }
 
-// Source-scan helpers: strip script, HTML comments and Svelte expressions; any bare text
-// node left with letters in it is a hardcoded user-facing string.
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
-
-function bareTextNodes(source: string): string[] {
-	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		// Decorative glyph-only nodes (disclosure carets, drag handle, move
-		// arrows, separators) are fine — they must be aria-hidden or labelled,
-		// which the DOM tests below check; they are not TRANSLATABLE strings.
-		if (/^[▸▾▲▼≡·×♫\s\-–—|(),]+$/.test(text)) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
 }
 
 // 1 — i18n: every sections surface renders via Paraglide keys only

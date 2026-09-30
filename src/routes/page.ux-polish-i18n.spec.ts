@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
 	isMessageEmpty,
@@ -46,30 +47,6 @@ const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
-
-/** Bare template text nodes outside m.* calls — glyph-only nodes (✕, arrows,
- *  …) pass if aria-hidden or labelled; they aren't translatable text. */
-function bareTextNodes(source: string): string[] {
-	let template = source.replace(/<script[^>]*>[\s\S]*?<\/script>/g, '');
-	template = template.replace(/<!--[\s\S]*?-->/g, '');
-	let prev = '';
-	while (prev !== template) {
-		prev = template;
-		template = template.replace(/\{[^{}]*\}/g, '');
-	}
-	const nodes: string[] = [];
-	const textNodePattern = />([^<]+)</g;
-	let match: RegExpExecArray | null;
-	while ((match = textNodePattern.exec(template)) !== null) {
-		const text = match[1].trim();
-		if (!text) continue;
-		if (/^[▸▾▲▼≡·×✕♫№\s\-–—|(),/]+$/.test(text)) continue;
-		if (/^(&[a-zA-Z]+;|&#\d+;)+$/.test(text)) continue;
-		if (!/[a-zA-Z]/.test(text)) continue;
-		nodes.push(text);
-	}
-	return nodes;
 }
 
 /** Every m.* key the file's CODE references (comments stripped first). */
