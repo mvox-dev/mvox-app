@@ -98,9 +98,16 @@ function closedAtRank(issue: RoadmapIssue): number {
 	return Number.isNaN(parsed) ? -Infinity : parsed;
 }
 
-const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'in research'] as const;
+const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'researched', 'in research'] as const;
 
-export const MOTION_LABELS = ['ready', 'in process', 'prepped', 'in research', 'blocked'] as const;
+export const MOTION_LABELS = [
+	'ready',
+	'in process',
+	'prepped',
+	'researched',
+	'in research',
+	'blocked'
+] as const;
 
 export function isMotionLabel(name: string): boolean {
 	return (MOTION_LABELS as readonly string[]).includes(name);
@@ -134,7 +141,7 @@ function flattenOpenIssues(
 
 const STALENESS_SUPPRESSOR_LABELS = ['in research', 'blocks research'] as const;
 
-const STALENESS_SATISFIER_LABELS = ['in process', 'prepped', 'blocked'] as const;
+const STALENESS_SATISFIER_LABELS = ['in process', 'prepped', 'researched', 'blocked'] as const;
 
 function hasLabel(issue: RoadmapIssue, name: string): boolean {
 	return (issue?.labels ?? []).some((label) => label?.name === name);

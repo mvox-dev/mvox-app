@@ -7,6 +7,7 @@ export type MotionLabel =
 	| 'blocked'
 	| 'in process'
 	| 'in research'
+	| 'researched'
 	| 'prepped'
 	| 'needs-po';
 
@@ -15,6 +16,7 @@ export const MOTION_LABELS: readonly MotionLabel[] = [
 	'blocked',
 	'in process',
 	'in research',
+	'researched',
 	'prepped',
 	'needs-po'
 ];
