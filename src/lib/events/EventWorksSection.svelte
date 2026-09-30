@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import { workLabel } from '$lib/repertoire/workLabel';
@@ -15,6 +15,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { withItem } from '$lib/collections/immutable';
 
 	let {
 		detail,
@@ -48,7 +49,7 @@
 	let manageStatus = $state('');
 
 	function manageCfg(): { db: string; token: string } | null {
-		return selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		return selected ? cfgFor(selected.db) : null;
 	}
 
 	function handlePdfClick(fileId: string): void {
@@ -97,10 +98,7 @@
 	const repertoireQueue = untrack(() =>
 		actions.createRepertoireWriteQueue({
 			setPending(key, pending) {
-				const next = new Set(managePendingKeys);
-				if (pending) next.add(key);
-				else next.delete(key);
-				managePendingKeys = next;
+				managePendingKeys = withItem(managePendingKeys, key, pending);
 				if (pending) {
 					manageError = false;
 					manageStatus = '';

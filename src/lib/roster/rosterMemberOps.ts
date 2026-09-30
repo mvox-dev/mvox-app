@@ -1,4 +1,3 @@
-import { tick } from 'svelte';
 import { m } from '$lib/paraglide/messages.js';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -21,7 +20,7 @@ import type { assignMemberSection, unassignMemberSection } from '$lib/sections/s
 import { isValidIdCode } from '$lib/roster/idCode';
 import { isSectionMembershipMissing } from '$lib/sections/sectionErrors';
 import { isAuthExpiredError } from '$lib/entu/request';
-import { focusableByTestId } from '$lib/a11y/focusable';
+import { focusAfterRender, focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
 // The invite token is a bearer secret: the row hands out a full URL, never a bare JWT.
 // The URL composer and the copy-click share their code with InviteSurface.
 import { buildInviteUrl } from '$lib/invite/invite-links';
@@ -189,16 +188,14 @@ export function createMemberOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		mo.deactivateRefusal = null;
 		mo.deactivateActionError = null;
 		mo.pendingDeactivateId = memberId;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-confirm-${memberId}"]`)?.focus();
+		await focusTestIdAfterRender(`member-deactivate-confirm-${memberId}`);
 	}
 
 	async function disarmDeactivate(memberId: string): Promise<void> {
 		mo.pendingDeactivateId = null;
 		mo.deactivateRefusal = null;
 		mo.deactivateActionError = null;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="member-deactivate-${memberId}"]`)?.focus();
+		await focusTestIdAfterRender(`member-deactivate-${memberId}`);
 	}
 
 	async function handleDeactivateConfirm(row: RosterRow): Promise<void> {
@@ -239,8 +236,7 @@ export function createMemberOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		} finally {
 			if (gEntry === generation()) mo.deactivatePending = false;
 			if (ownsFocus && mo.pendingDeactivateId === row.memberId) {
-				await tick();
-				focusableByTestId(`member-deactivate-confirm-${row.memberId}`)?.focus();
+				await focusAfterRender(() => focusableByTestId(`member-deactivate-confirm-${row.memberId}`));
 			}
 		}
 	}

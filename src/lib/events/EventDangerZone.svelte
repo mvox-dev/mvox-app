@@ -1,13 +1,13 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { isDeleteForbidden, isEventCascadePartial } from '$lib/seasons/deleteErrors';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
+	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -35,15 +35,13 @@
 		if (isOffline) return;
 		deleteError = null;
 		deleteArmed = true;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="event-detail-delete-confirm"]')?.focus();
+		await focusTestIdAfterRender('event-detail-delete-confirm');
 	}
 
 	async function cancelDelete(): Promise<void> {
 		deleteArmed = false;
 		deleteError = null;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="event-detail-delete"]')?.focus();
+		await focusTestIdAfterRender('event-detail-delete');
 	}
 
 	async function confirmDelete(): Promise<void> {
@@ -51,7 +49,7 @@
 		if (isOffline) return;
 		deletePending = true;
 		deleteError = null;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		try {
 			await actions.deleteEvent(cfg, evId);

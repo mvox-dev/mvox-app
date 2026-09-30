@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { tick, untrack } from 'svelte';
+	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
@@ -12,6 +12,8 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { withItem, without } from '$lib/collections/immutable';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -86,7 +88,7 @@
 		attendancePanelLoading = true;
 		attendancePanelError = false;
 		attendanceSavedMemberIds = new Set();
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		const g = generation();
 		Promise.all([loadRoster(cfg), actions.listAttendance(cfg, evId), actions.listAllRsvpsForEvent(cfg, evId)])
@@ -111,13 +113,11 @@
 
 	function closeAttendancePanel(): void {
 		attendancePanelOpen = false;
-		tick().then(() => {
-			document
-				.querySelector<HTMLElement>(
-					'[data-testid="event-detail-attendance"] [data-testid="take-attendance-btn"]'
-				)
-				?.focus();
-		});
+		void focusAfterRender(() =>
+			document.querySelector<HTMLElement>(
+				'[data-testid="event-detail-attendance"] [data-testid="take-attendance-btn"]'
+			)
+		);
 	}
 
 	const attendanceWriteGenerations = new Map<string, number>();
@@ -141,17 +141,10 @@
 			setPending(evId, targetMemberId, pending) {
 				if (pending) attendanceWriteGenerations.set(targetMemberId, generation());
 				if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
-				const next = new Set(attendancePendingMemberIds);
-				if (pending) next.add(targetMemberId);
-				else next.delete(targetMemberId);
-				attendancePendingMemberIds = next;
+				attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
 				if (pending) {
-					const failed = new Set(attendanceFailedMemberIds);
-					failed.delete(targetMemberId);
-					attendanceFailedMemberIds = failed;
-					const saved = new Set(attendanceSavedMemberIds);
-					saved.delete(targetMemberId);
-					attendanceSavedMemberIds = saved;
+					attendanceFailedMemberIds = without(attendanceFailedMemberIds, targetMemberId);
+					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
 				}
 			},
 			reconcile(evId, targetMemberId, entry) {
@@ -178,9 +171,7 @@
 				failed.add(targetMemberId);
 				attendanceFailedMemberIds = failed;
 				if (attendanceSavedMemberIds.has(targetMemberId)) {
-					const cleared = new Set(attendanceSavedMemberIds);
-					cleared.delete(targetMemberId);
-					attendanceSavedMemberIds = cleared;
+					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
 				}
 			}
 		})
@@ -189,7 +180,7 @@
 	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
 		if (!selected || !detail) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const current = ev.attendanceMap[targetMemberId];
 		const existing: EventAttendance | null = current
 			? { attendanceId: current.attendanceId, memberId: targetMemberId, status: current.status }

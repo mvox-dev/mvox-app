@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { tallinnLocalToUtcIso, timeFormatStore, toTallinnLocalInputValue } from '$lib/preferences/timeFormat';
 	import { compareScheduleItems } from '$lib/schedule/scheduleSort';
 	import { scheduleRowTime } from '$lib/events/eventTime';
@@ -11,6 +11,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	let {
 		detail,
@@ -35,12 +36,8 @@
 		mounted = false;
 	});
 
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
-	}
-
 	function manageCfg(): { db: string; token: string } | null {
-		return selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		return selected ? cfgFor(selected.db) : null;
 	}
 
 	let scheduleAddOpen = $state(false);

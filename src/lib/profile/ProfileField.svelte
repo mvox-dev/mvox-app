@@ -4,9 +4,10 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { REDACT_ATTR } from '$lib/redact/redact';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	interface Props {
 		field: FieldKey;
@@ -105,11 +106,6 @@
 		}
 	}
 
-	/** Svelte action: focus the element the instant it mounts. */
-	function focusOnMount(node: HTMLElement): void {
-		node.focus();
-	}
-
 	// #131 — first tap on a conflicting tier previews it, a second resolves. A preview
 	// is not an edit, so it never goes through onvaluechange.
 	let previewLevel = $state<Level | null>(null);
@@ -192,14 +188,7 @@
 			previewLevel = null;
 			return;
 		}
-		const group = e.currentTarget as HTMLElement;
-		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button:not([disabled])'));
-		const idx = buttons.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, buttons.length);
-		if (next < 0) return;
-		e.preventDefault();
-		buttons[next].focus();
+		rovingKeydown(e, { selector: 'button:not([disabled])' });
 	}
 
 	function handleInput(e: Event) {

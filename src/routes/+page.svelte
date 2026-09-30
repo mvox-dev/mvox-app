@@ -18,7 +18,7 @@
 	import { prefetchNextEventParts } from '$lib/files/prefetch';
 	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
 	import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import {
 		findMyMemberId,
 		listMyRsvps,
@@ -99,7 +99,7 @@
 	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
 	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { AttendancePanel } from '$lib/attendance/types';
@@ -120,6 +120,9 @@
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
+	import { withItem, without } from '$lib/collections/immutable';
+	import { focusAfterRender } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	const auth = $derived($authStore);
 	const collectives = $derived($collectiveState);
@@ -236,17 +239,13 @@
 	}
 
 	function handleAgendaViewKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const segments = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
-		const idx = segments.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, segments.length);
-		if (next < 0) return;
-		e.preventDefault();
-		const view = segments[next].dataset.agendaView as 'list' | 'month' | undefined;
-		if (!view) return;
-		setAgendaView(view);
-		segments[next].focus();
+		rovingKeydown(e, {
+			beforeFocus: (member) => {
+				const view = member.dataset.agendaView as 'list' | 'month' | undefined;
+				if (!view) return false;
+				setAgendaView(view);
+			}
+		});
 	}
 
 	$effect(() => {
@@ -326,19 +325,12 @@
 			ag.rsvpByEventId = next;
 		},
 		setPending(eventId, isPending) {
-			const next = new Set(pendingEventIds);
-			if (isPending) next.add(eventId);
-			else next.delete(eventId);
-			pendingEventIds = next;
+			pendingEventIds = withItem(pendingEventIds, eventId, isPending);
 			if (isPending && ag.failedEventIds.has(eventId)) {
-				const cleared = new Set(ag.failedEventIds);
-				cleared.delete(eventId);
-				ag.failedEventIds = cleared;
+				ag.failedEventIds = without(ag.failedEventIds, eventId);
 			}
 			if (isPending && ag.savedEventIds.has(eventId)) {
-				const cleared = new Set(ag.savedEventIds);
-				cleared.delete(eventId);
-				ag.savedEventIds = cleared;
+				ag.savedEventIds = without(ag.savedEventIds, eventId);
 			}
 		},
 		reconcile(eventId, entry) {
@@ -359,9 +351,7 @@
 			failed.add(eventId);
 			ag.failedEventIds = failed;
 			if (ag.savedEventIds.has(eventId)) {
-				const cleared = new Set(ag.savedEventIds);
-				cleared.delete(eventId);
-				ag.savedEventIds = cleared;
+				ag.savedEventIds = without(ag.savedEventIds, eventId);
 			}
 		}
 	});
@@ -369,7 +359,7 @@
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const personId = selected.personId;
 		const identity = { db: selected.db, personId };
 
@@ -406,7 +396,7 @@
 
 	function handlePdfClick(fileId: string) {
 		if (!selected) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const identity = get(selectedCollectiveIdentityStore);
 		if (!identity) return;
 		ag.pdfError = false;
@@ -445,8 +435,6 @@
 			});
 	}
 
-	type ManageCfg = { db: string; token: string };
-
 	const managePendingMarks = new Map<string, string[]>();
 
 	const repertoireQueue = createRepertoireWriteQueue({
@@ -472,9 +460,9 @@
 		}
 	});
 
-	function manageCfg(): ManageCfg | null {
+	function manageCfg(): EntuCfg | null {
 		if (!selected) return null;
-		return { db: selected.db, token: getToken() ?? '' };
+		return cfgFor(selected.db);
 	}
 
 	function handleAddWork(workId: string) {
@@ -573,10 +561,7 @@
 
 	const panelQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
-			const next = new Set(panelPendingKeys);
-			if (pending) next.add(key);
-			else next.delete(key);
-			panelPendingKeys = next;
+			panelPendingKeys = withItem(panelPendingKeys, key, pending);
 			if (pending) {
 				panelManageError = false;
 				panelManageStatus = '';
@@ -824,7 +809,7 @@
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
 		if (!selected || !ag.attendanceItem) return;
 		if (isOffline) return;
-		const cfg = { db: selected.db, token: getToken() ?? '' };
+		const cfg = cfgFor(selected.db);
 		const current = ag.attendanceMap[memberId];
 		const existing: EventAttendance | null = current
 			? { attendanceId: current.attendanceId, memberId, status: current.status }
@@ -918,7 +903,7 @@
 		seasonManagePanel?.closeSeasonManagePanel();
 	}
 
-	function refreshSeasonManageLists(cfg: ManageCfg, seasonId: string): void {
+	function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
 		seasonManagePanel?.refreshSeasonManageLists(cfg, seasonId);
 	}
 
@@ -935,9 +920,7 @@
 	}
 
 	function restoreEventCreateFocus(): void {
-		tick().then(() => {
-			seasonManagePanelEl?.focus();
-		});
+		void focusAfterRender(() => seasonManagePanelEl);
 	}
 
 	let pendingSurfaceEventId = $state<string | null>(null);

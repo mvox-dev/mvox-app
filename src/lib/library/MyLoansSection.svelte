@@ -5,8 +5,7 @@
 	import { getToken } from '$lib/auth/storage';
 	import type { Copy, Edition, Lending, LoanChain, Work } from '$lib/library/libraryData';
 	import { formatDate, isOverdue } from '$lib/library/lendingView';
-
-	type Cfg = { db: string; token: string };
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		selected: { db: string } | null;
@@ -15,9 +14,9 @@
 		works: Work[];
 		allCopies: Copy[];
 		allEditions: Edition[];
-		loadCopyNames: (cfg: Cfg, copyIds: string[]) => Promise<Map<string, string>>;
+		loadCopyNames: (cfg: EntuCfg, copyIds: string[]) => Promise<Map<string, string>>;
 		loadCopyChains: (
-			cfg: Cfg,
+			cfg: EntuCfg,
 			copyIds: string[],
 			works: Work[]
 		) => Promise<Map<string, LoanChain>>;

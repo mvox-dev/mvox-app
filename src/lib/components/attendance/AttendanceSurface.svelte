@@ -1,27 +1,12 @@
-<!-- src/lib/components/attendance/AttendanceSurface.svelte -->
-<!--
-	#84 TA.3 — the conductor's inline "Take attendance" panel. Expands under the
-	recent-event row (no navigation) with one row per roster member: name (left)
-	+ RSVP comparison label (middle, going/not_going/maybe/late/no-answer) + a
-	P/A/L segmented toggle (right). Every toggle tap saves immediately — this
-	component only renders + forwards; the page owns the write queue exactly like
-	AgendaList/RsvpControl own none of the RSVP write mechanics themselves
-	(rsvpChangeQueue.ts lives at the page level, see +page.svelte).
-
-	The collapse control aria-label and the live tally line use i18n message
-	keys (attendance_close, attendance_tally) added in the #84 review pass.
--->
+<!-- The conductor's inline attendance panel: one row per member with a P/A/L toggle. -->
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 	import type { RosterRow } from '$lib/roster/rosterData';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import PersonName from '$lib/components/PersonName.svelte';
-	// #434 slice 6 — the ONE online/offline signal, read directly here (same
-	// shape as RsvpControl) so both host pages (agenda, event page) get the
-	// gate with no wiring of their own.
 	import { writesAvailable } from '$lib/net/online';
 
 	interface AttendanceEntryLite {
@@ -40,22 +25,10 @@
 		rsvpByMemberId?: Record<string, RsvpEntryLite>;
 		loading?: boolean;
 		error?: boolean;
-		// While a member's write is in flight, that member's whole toggle (all 3
-		// buttons) is unclickable — same #15 shape as RsvpControl/pendingEventIds,
-		// keyed by member id instead of event id (attendanceChangeQueue.ts).
 		pendingMemberIds?: ReadonlySet<string>;
-		// Members whose last write REJECTED — surfaces an inline save-failed line.
 		failedMemberIds?: ReadonlySet<string>;
-		// #327 — members whose last write RECONCILED successfully, same per-key
-		// Set shape as pendingMemberIds/failedMemberIds (mirrors #326's
-		// savedEventIds on the RSVP sibling): only the row whose member id
-		// reconciled shows the saved cue, never more than the key that settled.
 		savedMemberIds?: ReadonlySet<string>;
-		// #321 (PO ruling 2026-09-11) — the member read behind `members` came back
-		// PARTIAL. This panel is a CLOSED SET: a singer with no row here cannot be
-		// marked present at all, and her missing row reads as "she is not a member"
-		// rather than as a list cut short. Both pages that mount this surface pass
-		// their own flag; the `false` default leaves every other caller unchanged.
+		// A cut-short read must say so: a missing row reads as "she is not a member".
 		membersPartial?: boolean;
 		ontoggle?: (memberId: string, status: AttendanceStatus | null) => void;
 		onclose?: () => void;
@@ -75,35 +48,14 @@
 		onclose
 	}: Props = $props();
 
-	// #113 RED — the 'Take attendance' button that opened this panel unmounts
-	// the instant it does (the #112/#1 hide-while-open behaviour), so without
-	// explicit placement focus drops to <body> (WCAG 2.4.3). The close button
-	// is the natural landing: first focusable element in the panel, and the
-	// symmetric undo (`closeAttendancePanel` in +page.svelte returns focus to
-	// the restored 'Take attendance' button on the way back out).
+	// The button that opened the panel unmounts, so focus lands on Close instead of <body>.
 	let closeButtonEl = $state<HTMLButtonElement | undefined>(undefined);
 	onMount(() => {
 		closeButtonEl?.focus();
 	});
 
-	// #158 — auto-scroll to the panel once its DATA has loaded, not merely once
-	// it has opened: the panel mounts immediately with a short loading skeleton
-	// (see `loading` below), and scrolling against THAT height lands short of
-	// the roster once the real rows expand it. So the scroll hangs off the
-	// `loading` edge (the flip from the initial `true` to `false` on load
-	// settling — either the roster arriving or `error`), and `tick()` waits for
-	// THAT render's DOM (the now-populated content, not the skeleton) to land
-	// before measuring where to scroll.
-	//
-	// `hasScrolled` is a PLAIN let, not `$state` — deliberately untracked, so
-	// reading and setting it inside the effect neither registers a dependency
-	// nor schedules a re-run. It makes once-per-open structural rather than a
-	// side effect of Svelte's dependency granularity: the effect body reads
-	// `loading` alone, but an effect re-running for any other reason (a parent
-	// re-render, a props-object swap — AttendanceSurface.scroll.spec.ts shows a
-	// wholesale props update doing exactly that) would otherwise yank the page
-	// back to the panel top mid-interaction, every time a conductor tapped a
-	// status. The panel unmounts on close, so a fresh open gets a fresh flag.
+	// Scroll once, after the data loads, so the rows' real height is measured. `hasScrolled`
+	// is a plain let so the effect tracks only `loading` and never scrolls again mid-use.
 	let panelEl = $state<HTMLDivElement | undefined>(undefined);
 	let hasScrolled = false;
 	$effect(() => {
@@ -133,7 +85,6 @@
 		return RSVP_LABELS[entry.status]?.() ?? entry.status;
 	}
 
-	// #434 slice 6 — the signal down is a second reason no toggle may write.
 	const isOffline = $derived(!$writesAvailable);
 
 	function handleToggle(memberId: string, status: AttendanceStatus) {
@@ -143,11 +94,7 @@
 		ontoggle(memberId, current === status ? null : status);
 	}
 
-	// #156 — roving tabindex, PER MEMBER. `status` is undefined for most
-	// members on a fresh panel (no record yet), so the fallback-to-first-status
-	// rule is the common case, not the edge case. Keyed by memberId — all rows
-	// live in ONE component instance, so a scalar would move every row's tab
-	// stop together.
+	// Keyed by member: all rows live in one instance, so a scalar would move every tab stop.
 	let rovingByMember = $state<Record<string, AttendanceStatus>>({});
 	function activeStatusFor(memberId: string): AttendanceStatus {
 		const roving = rovingByMember[memberId];
@@ -155,35 +102,13 @@
 		return attendanceByMemberId[memberId]?.status ?? STATUSES[0].value;
 	}
 
-	// The walk filters [disabled] (there is none here) but NOT [aria-disabled]
-	// — members with a pending write stay deliberately focusable (they read
-	// `aria-disabled`, not `disabled`, precisely so Tab still reaches them).
+	// Members include aria-disabled buttons: a member with a pending write stays reachable.
 	function handleAttendanceKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const buttons = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
-		const idx = buttons.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, buttons.length);
-		if (next < 0) return;
-		e.preventDefault();
-		buttons[next].focus();
+		rovingKeydown(e);
 	}
 
-	/** Text of the panel's always-mounted sr-only live region.
-	 *
-	 *  #113 review F1 — a live region announces CHANGES to its contents, so it
-	 *  must already be in the DOM before the text it should announce arrives.
-	 *  The first cut mounted the region together with its loading text inside
-	 *  the `{#if loading}` branch, which is the one shape that never announces:
-	 *  the panel mounts with `loading` already true, so there is no empty→text
-	 *  transition on the way in, and on the way out the region unmounted
-	 *  entirely (aria-busy falling off a non-live container is not spoken), so
-	 *  there was no completion cue either. Mounted once for the panel's whole
-	 *  life and driven by state, both edges become real content changes. Same
-	 *  rule the roster regions already follow (roster/+page.svelte).
-	 *
-	 *  The error branch deliberately yields '' — the visible error line already
-	 *  carries role="alert", and two regions saying the same thing double-speak. */
+	/** Mounted for the panel's whole life, so the loading and loaded text are both announced.
+	 *  The error branch is '' because the error line already has role="alert". */
 	const statusText = $derived(
 		loading ? m.attendance_loading() : error ? '' : m.attendance_ready({ count: members.length })
 	);
@@ -202,29 +127,11 @@
 		return { present, absent, late };
 	});
 
-	// #327 issue Done-when bullet 3 (RED's stated choice of the two permitted
-	// behaviours) — the tally above derives from the OPTIMISTIC map, so while
-	// any member's write is in flight its counts include a value the server
-	// hasn't confirmed yet. Rather than thread a second, server-confirmed map
-	// through both host pages (a much wider diff), the tally says so INLINE:
-	// visibly marked exactly while `pendingMemberIds` is non-empty, gone the
-	// moment every write settles (then every counted value IS server-settled).
-	// A failed write is NOT marked — revert restores the pre-tap server truth,
-	// so the tally is accurate again; the per-row alert carries the failure.
+	// The tally counts optimistic values, so it says so while any write is in flight.
 	const tallyUnconfirmed = $derived(pendingMemberIds.size > 0);
 </script>
 
-<!-- #113 review F4 — `aria-busy` belongs on the CONTAINER the focused control
-     lives in, not on the skeleton: the open-focus above parks the user on the
-     Close button while `loading` is true, so without it a screen-reader user
-     hears "Close, button" and then silence until the roster resolves, with
-     nothing saying a wait is in progress. The skeleton itself stays
-     aria-hidden (decoration); the sr-only role="status" below is what carries
-     the words — the same role="status" + aria-live + m.* text + aria-hidden
-     glyph split as the roster's reorder spinner. It sits OUTSIDE the
-     loading/error/loaded branches on purpose (review F1, see `statusText`):
-     mounted for the panel's whole life, so both the arrival of the loading
-     text and its replacement by the loaded text are announced. -->
+<!-- aria-busy on the container: focus sits on Close while the roster loads. -->
 <div
 	bind:this={panelEl}
 	data-testid="attendance-panel"
@@ -232,9 +139,6 @@
 	class="mt-3 flex flex-col gap-2 rounded-lg border border-ink-4 bg-paper p-3"
 >
 	<div class="flex items-center justify-between">
-		<!-- #290 — no font-display here: this is the app's smallest and only truncated
-		     rendering of user-supplied text in the display face, and the display face
-		     is for identity, not information. -->
 		<span class="truncate text-sm text-ink">{item.name}</span>
 		<button
 			bind:this={closeButtonEl}
@@ -252,8 +156,6 @@
 		>{statusText}</span
 	>
 
-	<!-- #434 slice 6 — ONE visible reason for the whole panel, not per toggle:
-	     every toggle below is disabled while offline; this says why once. -->
 	{#if isOffline}
 		<p data-testid="attendance-write-unavailable" class="text-xs text-ink-2">
 			{m.write_unavailable_no_signal()}
@@ -267,20 +169,9 @@
 			{/each}
 		</div>
 	{:else if error}
-		<!-- #151 — surface-level error role: text-sm text-red-700, the treatment every
-		     other whole-surface load failure uses (library, admin, invite, auth). This
-		     was text-ink-2, which rendered a failure in the same colour as ordinary
-		     body copy, and its sibling SeasonSummary rendered the same role at text-xs. -->
 		<p data-testid="attendance-panel-error" class="text-sm text-red-700" role="alert">{m.attendance_load_error()}</p>
 	{:else}
 		<div class="flex flex-col gap-2">
-			<!-- #321 (PO ruling) — the roster behind these rows was cut short, so the
-			     panel says it where the conductor is looking for the missing singer,
-			     not on the page behind it. A list-shaped picker CAN hold a live
-			     region, so this is the shared notice shape (visible paragraph,
-			     role="status", own testid, copy through i18n) rather than the
-			     trailing disabled option the native selects use. Absent from the DOM
-			     once the read is complete. -->
 			{#if membersPartial}
 				<p
 					data-testid="attendance-panel-partial-notice"
@@ -303,14 +194,7 @@
 						>
 							{rsvpLabel(member.memberId)}
 						</span>
-						<!-- #156 — WAI-APG TOOLBAR: arrows MOVE focus only, never activate
-						     (tapping the ACTIVE status CLEARS the record, so arrowing across the
-						     strip must not commit anything). `role="toolbar"` says so in the
-						     markup — the old bare `role="group"` did not distinguish this from
-						     the app's arrow-SELECTS radiogroups (roster view chips, library
-						     copy-sort), and svelte-check flagged the keydown handler on a
-						     non-interactive role. `aria-pressed` toggle buttons inside a toolbar
-						     are the APG pattern, so the state pin is unchanged. -->
+						<!-- Toolbar: arrows move focus only; tapping the active status clears the record. -->
 						<div
 							data-testid="attendance-status-group-{member.memberId}"
 							role="toolbar"
@@ -346,9 +230,6 @@
 						</div>
 					</div>
 					{#if failedMemberIds.has(member.memberId)}
-						<!-- #151 — row-level error role: text-xs text-red-700, as everywhere else.
-						     text-[9px] is the stamp/badge tier (font-mono uppercase chips); an
-						     error sentence is body copy, not a stamp. -->
 						<p
 							data-testid="attendance-save-failed-{member.memberId}"
 							class="text-xs text-red-700"
@@ -357,14 +238,7 @@
 							{m.attendance_save_failed()}
 						</p>
 					{/if}
-					<!--
-						#327 — the SAVED cue, per member, in its own persistent node (never
-						folded into the failure line above): a live region must be mounted
-						BEFORE its first text change to be announced, so this renders
-						unconditionally, blank when the member is not in `savedMemberIds`.
-						VISIBLE (not sr-only) — the exact #326 shape (RsvpControl's
-						rsvp-saved-status): one combined visible+aria-live node.
-					-->
+					<!-- Always mounted: a live region must exist before its first change is announced. -->
 					<p
 						data-testid="attendance-saved-status-{member.memberId}"
 						role="status"
@@ -378,11 +252,6 @@
 		</div>
 		<p data-testid="attendance-tally" class="pt-1 text-[10px] text-ink-2" aria-live="polite">
 			{m.attendance_tally({ present: tally.present, absent: tally.absent, late: tally.late })}
-			<!--
-				#327 issue Done-when bullet 3 — the tally's own optimistic marking,
-				visible whenever any member's write is in flight (see
-				`tallyUnconfirmed` doc above).
-			-->
 			{#if tallyUnconfirmed}
 				<span data-testid="attendance-tally-unconfirmed" class="text-ink-2"
 					>{m.attendance_tally_unconfirmed()}</span

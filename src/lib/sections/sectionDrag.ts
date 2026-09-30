@@ -1,4 +1,3 @@
-import { tick } from 'svelte';
 import { m } from '$lib/paraglide/messages.js';
 import type { SectionNode } from '$lib/sections/sectionData';
 import {
@@ -12,6 +11,7 @@ import {
 	type ArrangeState
 } from '$lib/sections/sectionArrangeOps';
 import type { RosterState } from '$lib/roster/rosterPageState';
+import { focusAfterRender } from '$lib/a11y/focusable';
 
 const LONG_PRESS_MS = 400;
 const LONG_PRESS_SLOP_PX = 10;
@@ -212,7 +212,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 		if (idx === -1 || nextIdx < 0 || nextIdx >= ids.length) return;
 		const nextId = ids[nextIdx];
 		a.rovingHandleId = nextId;
-		tick().then(() => handleElementFor(nextId)?.focus());
+		void focusAfterRender(() => handleElementFor(nextId));
 	}
 
 	async function toggleGrab(node: SectionNode): Promise<void> {
@@ -291,8 +291,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 				total: reordered.length
 			});
 			try {
-				await tick();
-				handleElementFor(node.id)?.focus();
+				await focusAfterRender(() => handleElementFor(node.id));
 			} finally {
 				grabRefocusPending = false;
 			}
@@ -333,8 +332,7 @@ export function createArrangeDrag(deps: ArrangeDragDeps) {
 		if (key === 'Escape') {
 			event.preventDefault();
 			cancelGrab(node);
-			await tick();
-			handleElementFor(node.id)?.focus();
+			await focusAfterRender(() => handleElementFor(node.id));
 		}
 	}
 

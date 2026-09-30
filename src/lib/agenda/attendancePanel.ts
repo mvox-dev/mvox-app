@@ -1,5 +1,6 @@
 import type { AttendanceChangeCallbacks } from '$lib/attendance/attendanceChangeQueue';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
+import { withItem, without } from '$lib/collections/immutable';
 
 export function attendanceQueueHandlers(ag: AgendaLoadState): AttendanceChangeCallbacks {
 	return {
@@ -14,28 +15,20 @@ export function attendanceQueueHandlers(ag: AgendaLoadState): AttendanceChangeCa
 		if (isPending) {
 			const eventFailed = ag.attendanceFailedByEvent.get(eventId);
 			if (eventFailed?.has(memberId)) {
-				const cleared = new Set(eventFailed);
-				cleared.delete(memberId);
-				const nextMap = new Map(ag.attendanceFailedByEvent);
-				if (cleared.size === 0) nextMap.delete(eventId);
-				else nextMap.set(eventId, cleared);
-				ag.attendanceFailedByEvent = nextMap;
+				const cleared = without(eventFailed, memberId);
+				ag.attendanceFailedByEvent =
+					cleared.size === 0
+						? without(ag.attendanceFailedByEvent, eventId)
+						: new Map(ag.attendanceFailedByEvent).set(eventId, cleared);
 			}
 		}
 		if (eventId !== ag.attendanceItem?.id) return;
-		const next = new Set(ag.attendancePendingMemberIds);
-		if (isPending) next.add(memberId);
-		else next.delete(memberId);
-		ag.attendancePendingMemberIds = next;
+		ag.attendancePendingMemberIds = withItem(ag.attendancePendingMemberIds, memberId, isPending);
 		if (isPending && ag.attendanceFailedMemberIds.has(memberId)) {
-			const cleared = new Set(ag.attendanceFailedMemberIds);
-			cleared.delete(memberId);
-			ag.attendanceFailedMemberIds = cleared;
+			ag.attendanceFailedMemberIds = without(ag.attendanceFailedMemberIds, memberId);
 		}
 		if (isPending && ag.attendanceSavedMemberIds.has(memberId)) {
-			const cleared = new Set(ag.attendanceSavedMemberIds);
-			cleared.delete(memberId);
-			ag.attendanceSavedMemberIds = cleared;
+			ag.attendanceSavedMemberIds = without(ag.attendanceSavedMemberIds, memberId);
 		}
 	},
 	reconcile(eventId, targetMemberId, entry) {
@@ -99,9 +92,7 @@ export function attendanceQueueHandlers(ag: AgendaLoadState): AttendanceChangeCa
 		failed.add(targetMemberId);
 		ag.attendanceFailedMemberIds = failed;
 		if (ag.attendanceSavedMemberIds.has(targetMemberId)) {
-			const cleared = new Set(ag.attendanceSavedMemberIds);
-			cleared.delete(targetMemberId);
-			ag.attendanceSavedMemberIds = cleared;
+			ag.attendanceSavedMemberIds = without(ag.attendanceSavedMemberIds, targetMemberId);
 		}
 	}
 	};

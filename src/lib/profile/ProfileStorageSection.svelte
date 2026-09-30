@@ -1,18 +1,17 @@
 <!-- #352 — "Remove downloaded parts from this device", scoped to the signed-in (db,
 	personId). The page calls load() and reset() through bind:this. -->
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { formatFileSize } from '$lib/files/fileSize';
 	import type * as LibraryData from '$lib/library/libraryData';
-
-	type Cfg = { db: string; token: string };
+	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		ready: boolean;
 		generation: () => number;
-		activeContext: () => { cfg: Cfg; personId: string } | null;
+		activeContext: () => { cfg: EntuCfg; personId: string } | null;
 		listAllEditions: typeof LibraryData.listAllEditions;
 	}
 
@@ -50,7 +49,7 @@
 	// Presence-only reads, never store.get(): a profile visit must not stamp opens and
 	// reorder LRU eviction. All three read metadata only, so running them together is safe.
 	export async function load(
-		cfg: Cfg,
+		cfg: EntuCfg,
 		identity: { db: string; personId: string },
 		g: number,
 		opts: { joinNames?: boolean } = {}
@@ -105,30 +104,22 @@
 	// Two-step confirm; focus moves to the button that replaces the trigger (WCAG 2.4.3).
 	async function armStorageRemoveMine(): Promise<void> {
 		storageArmedMine = true;
-		await tick();
-		document
-			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine-confirm"]')
-			?.focus();
+		await focusTestIdAfterRender('profile-storage-remove-mine-confirm');
 	}
 
 	async function disarmStorageRemoveMine(): Promise<void> {
 		storageArmedMine = false;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-mine"]')?.focus();
+		await focusTestIdAfterRender('profile-storage-remove-mine');
 	}
 
 	async function armStorageRemoveAll(): Promise<void> {
 		storageArmedAll = true;
-		await tick();
-		document
-			.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all-confirm"]')
-			?.focus();
+		await focusTestIdAfterRender('profile-storage-remove-all-confirm');
 	}
 
 	async function disarmStorageRemoveAll(): Promise<void> {
 		storageArmedAll = false;
-		await tick();
-		document.querySelector<HTMLElement>('[data-testid="profile-storage-remove-all"]')?.focus();
+		await focusTestIdAfterRender('profile-storage-remove-all');
 	}
 
 	// Clears exactly the signed-in partition. A failed removal is shown, since nothing

@@ -5,7 +5,7 @@
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { getToken } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
@@ -160,7 +160,7 @@
 	}
 
 	untrack(() => {
-		const initialCfg = selected ? { db: selected.db, token: getToken() ?? '' } : null;
+		const initialCfg = selected ? cfgFor(selected.db) : null;
 		if (!initialCfg) return;
 		getRoster(initialCfg).catch((e) => {
 			console.error('agenda: loading the roster for the event conductor picker failed', e);
@@ -184,7 +184,7 @@
 		if (!newSeasonId) return;
 		const current = selected;
 		if (!current) return;
-		loadEventCreateSeriesOptions({ db: current.db, token: getToken() ?? '' }, newSeasonId);
+		loadEventCreateSeriesOptions(cfgFor(current.db), newSeasonId);
 	}
 
 	function handleEventCreateSeriesChange(newSeriesId: string): void {
@@ -196,7 +196,7 @@
 		}
 		const current = selected;
 		if (!current) return;
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 		const thisLoad = eventCreateLoadId;
 		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeriesId !== newSeriesId;
 		getSeriesDefaults(cfg, newSeriesId)
@@ -278,7 +278,7 @@
 			setEventCreateError(m.event_create_failed, null);
 			return;
 		}
-		const cfg = { db: current.db, token: getToken() ?? '' };
+		const cfg = cfgFor(current.db);
 
 		submitting = true;
 		try {

@@ -10,7 +10,7 @@ import type {
 	reparentSection
 } from '$lib/sections/sectionActions';
 import { isSectionNotEmpty, isSectionParentDamaged } from '$lib/sections/sectionErrors';
-import { focusableByTestId } from '$lib/a11y/focusable';
+import { focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
 import {
 	applyReparent,
 	applySiblingOrder,
@@ -23,6 +23,7 @@ import {
 	type ReparentTarget
 } from '$lib/sections/sectionTree';
 import type { RosterState } from '$lib/roster/rosterPageState';
+import { without } from '$lib/collections/immutable';
 
 export interface ArrangeActions {
 	listSections: typeof listSections;
@@ -147,8 +148,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 	async function armRemove(id: string): Promise<void> {
 		a.removeError = null;
 		a.pendingRemoveId = id;
-		await tick();
-		document.querySelector<HTMLElement>(`[data-testid="section-remove-confirm-${id}"]`)?.focus();
+		await focusTestIdAfterRender(`section-remove-confirm-${id}`);
 	}
 
 	async function disarmRemove(id: string): Promise<void> {
@@ -224,9 +224,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 			roster.sections = removeSectionNode(roster.sections, id);
 			a.pendingRemoveId = null;
 			if (roster.expandedIds.has(id)) {
-				const next = new Set(roster.expandedIds);
-				next.delete(id);
-				roster.expandedIds = next;
+				roster.expandedIds = without(roster.expandedIds, id);
 			}
 			a.removeStatus = m.roster_section_removed({ name });
 			if (ownsFocus) await placeFocusAfterRemove(fallbackId);
@@ -550,8 +548,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		} finally {
 			if (g === generation()) a.renamePending = false;
 			if (refocus) {
-				await tick();
-				document.querySelector<HTMLElement>(`[data-testid="arrange-rename-${id}"]`)?.focus();
+				await focusTestIdAfterRender(`arrange-rename-${id}`);
 			}
 		}
 	}

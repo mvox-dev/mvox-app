@@ -8,6 +8,7 @@
 	import type { ActiveMember } from '$lib/roster/rosterData';
 	import type { BulkCheckout } from '$lib/library/libraryState';
 	import { formatDate, type LendingView } from '$lib/library/lendingView';
+	import { toggled } from '$lib/collections/immutable';
 
 	interface Props {
 		bulk: BulkCheckout;
@@ -46,10 +47,7 @@
 	);
 
 	function toggleMember(memberId: string): void {
-		const next = new Set(bulk.members);
-		if (next.has(memberId)) next.delete(memberId);
-		else next.add(memberId);
-		bulk.members = next;
+		bulk.members = toggled(bulk.members, memberId);
 	}
 </script>
 

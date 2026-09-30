@@ -2,7 +2,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import type { NavEntry, NavContext } from '$lib/nav/entries';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import { m } from '$lib/paraglide/messages.js';
 
 	let {
@@ -80,22 +80,9 @@
 	});
 
 	function handleKeydown(e: KeyboardEvent): void {
-		const nav = (e.currentTarget as HTMLElement);
 		// Members are every enabled link, not the tab stop: with roving tabindex only one link
 		// has tabindex="0", so filtering on it would leave arrow-nav a group of one.
-		const links = Array.from(
-			nav.querySelectorAll<HTMLAnchorElement>('a:not([aria-disabled="true"])')
-		);
-		const idx = links.indexOf(e.target as HTMLAnchorElement);
-		if (idx < 0) return;
-
-		const next = rovingNextIndex(e.key, idx, links.length);
-		if (next >= 0) {
-			e.preventDefault();
-			// `onfocus` on the target link below writes `rovingKey` back, so the
-			// tab stop travels with focus — no separate bookkeeping needed here.
-			links[next].focus();
-		}
+		rovingKeydown(e, { selector: 'a:not([aria-disabled="true"])' });
 	}
 </script>
 

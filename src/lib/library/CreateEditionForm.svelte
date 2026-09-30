@@ -7,6 +7,7 @@
 		openEditionDraft,
 		type EditionDrafts
 	} from '$lib/library/libraryState';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	interface Props {
 		workId: string;
@@ -16,12 +17,6 @@
 	}
 
 	let { workId, drafts = $bindable(), isOffline, submit }: Props = $props();
-
-	// The form's {#if} makes a fresh input each time it opens, so focus on mount is
-	// "focus on open".
-	function focusOnMount(node: HTMLInputElement): void {
-		node.focus();
-	}
 
 	// On every control, not the wrapper div (a11y: no listeners on non-interactive elements).
 	function onEscapeKeydown(event: KeyboardEvent): void {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { rovingNextIndex } from '$lib/a11y/roving';
+	import { rovingKeydown } from '$lib/a11y/roving';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import type { ListRead } from '$lib/entu/listRead';
@@ -63,6 +63,7 @@
 	import MemberRow from '$lib/roster/MemberRow.svelte';
 	import InactiveList from '$lib/roster/InactiveList.svelte';
 	import SectionArrange from '$lib/sections/SectionArrange.svelte';
+	import { toggled } from '$lib/collections/immutable';
 
 	const selected = $derived($selectedCollectiveStore);
 	const admin = $derived($adminStore);
@@ -257,10 +258,7 @@
 	}
 
 	function toggleSection(id: string): void {
-		const next = new Set(roster.expandedIds);
-		if (next.has(id)) next.delete(id);
-		else next.add(id);
-		roster.expandedIds = next;
+		roster.expandedIds = toggled(roster.expandedIds, id);
 	}
 
 	const allSectionIdsList = $derived.by(() => {
@@ -283,17 +281,13 @@
 	}
 
 	function handleViewModeKeydown(e: KeyboardEvent): void {
-		const group = e.currentTarget as HTMLElement;
-		const chips = Array.from(group.querySelectorAll<HTMLButtonElement>('button'));
-		const idx = chips.indexOf(e.target as HTMLButtonElement);
-		if (idx < 0) return;
-		const next = rovingNextIndex(e.key, idx, chips.length);
-		if (next < 0) return;
-		e.preventDefault();
-		const mode = chips[next].dataset.viewMode as RosterViewMode | undefined;
-		if (!mode) return;
-		setViewMode(mode);
-		chips[next].focus();
+		rovingKeydown(e, {
+			beforeFocus: (member) => {
+				const mode = member.dataset.viewMode as RosterViewMode | undefined;
+				if (!mode) return false;
+				setViewMode(mode);
+			}
+		});
 	}
 
 	const arrangeRows = $derived(

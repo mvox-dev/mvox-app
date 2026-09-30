@@ -2,7 +2,6 @@
 	return-link verdict read once from the URL outlives reloads; the page calls load() and
 	reset() through bind:this. -->
 <script lang="ts">
-	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { isAuthExpiredError } from '$lib/entu/request';
@@ -11,15 +10,15 @@
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
-
-	type Cfg = { db: string; token: string };
+	import { focusAfterRender } from '$lib/a11y/focusable';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		ready: boolean;
 		isOffline: boolean;
 		scopeName: string;
 		generation: () => number;
-		activeContext: () => { cfg: Cfg; personId: string } | null;
+		activeContext: () => { cfg: EntuCfg; personId: string } | null;
 		onSessionExpired: () => void;
 		mintSelfLinkInvite: typeof InviteData.mintSelfLinkInvite;
 		mintErrorMessage: (e: unknown) => string;
@@ -116,7 +115,7 @@
 
 	// Never rejects: a failure is the rendered `linkedLoadFailed` state, except an
 	// expired session, which is a different failure class (#107).
-	export async function load(cfg: Cfg, personId: string, g: number): Promise<void> {
+	export async function load(cfg: EntuCfg, personId: string, g: number): Promise<void> {
 		try {
 			const linked = await listLinkedIdentities(cfg, personId);
 			if (g !== generation()) return;
@@ -147,17 +146,17 @@
 		returnLinkError = null;
 		linkSucceeded = false;
 		linkNoop = null;
-		await tick();
-		linkPickerEl
-			?.querySelector<HTMLButtonElement>('[data-testid^="profile-link-provider-"]:not([disabled])')
-			?.focus();
+		await focusAfterRender(() =>
+			linkPickerEl?.querySelector<HTMLButtonElement>(
+				'[data-testid^="profile-link-provider-"]:not([disabled])'
+			)
+		);
 	}
 
 	async function closeLinkPicker(): Promise<void> {
 		linkPickerOpen = false;
 		linkError = null;
-		await tick();
-		linkAnotherEl?.focus();
+		await focusAfterRender(() => linkAnotherEl);
 	}
 
 	// Mint a self-invite at click time, then start the OAuth round trip with intent 'link'.

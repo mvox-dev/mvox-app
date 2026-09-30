@@ -40,6 +40,7 @@
 	// #408 — a pure subscriber: the root layout starts the `beforeinstallprompt` adapter,
 	// because Chromium fires that event once per page load, before this page mounts.
 	import { installAffordance, promptInstall } from '$lib/install/installState';
+	import { withItem } from '$lib/collections/immutable';
 
 	// #60 — which account and provider the user is signed in with; display only.
 	const identityUser = getUser();
@@ -137,10 +138,7 @@
 	}
 
 	function withFieldSet(s: Set<FieldKey>, field: FieldKey, add: boolean): Set<FieldKey> {
-		const next = new Set(s);
-		if (add) next.add(field);
-		else next.delete(field);
-		return next;
+		return withItem(s, field, add);
 	}
 
 	// #160 — the tier picker reads holders off `loadedProfiles`, not `confirmed`, so every
@@ -254,10 +252,7 @@
 	const queue = createProfileEditQueue(
 		{
 			setPending(level, isPending) {
-				const next = new Set(pendingLevels);
-				if (isPending) next.add(level);
-				else next.delete(level);
-				pendingLevels = next;
+				pendingLevels = withItem(pendingLevels, level, isPending);
 			},
 			reconcile(level, profileId, fields) {
 				// Read before the mirror below: a save that clears a field drops its only holder,
