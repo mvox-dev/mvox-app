@@ -1,59 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 4/6 RED — the LIBRARY offline ("Offline, last seen data").
-//
-// CONTRACT (team-lead shared design, fixed for all six slices; slice-4 shape
-// defined HERE, implemented in GREEN):
-//
-//   src/lib/library/libraryData.ts — SHARED readers (the librarian's pickers,
-//     the post-write re-reads, the my-loans chain), so none hard-wires a flag
-//     (slice 2 review round, finding 2). Each of listWorks, listLendings,
-//     listEditions, listCopies and resolveBorrowerNames gains a trailing
-//     `opts: EntuFetchOptions = {}` and threads it into EVERY read it makes:
-//     resolveBorrowerNames -> each member's `entity/{id}?props=person` read ->
-//     listMyProfiles(cfg, personId, fetchImpl, opts), and the real-names overlay
-//     resolveRealNameByPerson(cfg, fetchImpl, opts). A lending row that comes
-//     back offline naming its borrower by her profile name while the online
-//     visit showed her record name is a stored copy rendered WRONG.
-//
-//   src/lib/library/libraryPageData.ts (NEW — the screen's own entry points,
-//     the role agendaData.loadFullAgenda / eventPageData play for slices 2-3;
-//     the ONE new file allowed to name the flags, readCache.optin-fence.spec.ts)
-//     composing libraryData's OWN exported readers (so existing page specs that
-//     mock `$lib/library/libraryData` keep working):
-//       loadLibraryListing(cfg, fetchImpl = fetch)
-//         -> { works: ListRead<Work>, lendings: ListRead<Lending>,
-//              borrowerNames: Map<string, string> }   — CACHED_READ
-//         (borrowerNames = resolveBorrowerNames over the ACTIVE lendings'
-//          member ids, exactly what the page's load computes today)
-//       loadLibraryEditions(cfg, workId, fetchImpl = fetch)    — CACHED_READ
-//       loadLibraryCopies(cfg, editionId, fetchImpl = fetch)   — CACHED_READ
-//       refreshLibraryLendings(cfg, fetchImpl = fetch)
-//         -> { lendings, borrowerNames } — CACHED_READ_STORE_ONLY, for the
-//         page's three post-write re-reads (inline checkout, return, bulk
-//         checkout): the live answer or a rejection, never a stored copy, but
-//         the stored copy moves past the write (slice 3 review round, finding 2).
-//
-//   src/routes/library/+page.svelte
-//     - the routeLoad `load` body calls resetServedFromCache() FIRST, before
-//       any cached read starts (readCache's load-epoch guard drops a stamp
-//       from a read that began before the reset), then loads through
-//       loadLibraryListing; work/edition expansion loads through
-//       loadLibraryEditions / loadLibraryCopies.
-//     - when $servedFromCache is non-null it renders the ONE shared line:
-//       <AsOfLine readAt={$servedFromCache} testid="library-as-of" ... />
-//       — never a copy of its markup. No new message key (last_read_as_of).
-//     - offline its fire-and-forget side reads (findMyMemberId for my-loans,
-//       resolveLibrarian, repertoire badges) reject; none may escape as an
-//       unhandled rejection or take the listing down.
-//     - with NOTHING cached, offline stays what it is today: library-load-error
-//       (routeLoad's classification), no as-of line.
-//
-// INTEGRATION, NOT ISOLATION: nothing between the page and `fetch` is mocked —
-// the REAL hydrateCollectives -> discoverCollectives (cached since slice 2),
-// the REAL libraryData readers -> entuFetch -> readCache over fake-indexeddb.
-// Only `globalThis.fetch` is stubbed: an online router, then a stub rejecting
-// every call.
+// #434: the library offline shows the last seen data; only `globalThis.fetch` is stubbed, the
+// real readers run through readCache over fake-indexeddb.
 import { IDBFactory } from 'fake-indexeddb';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -100,9 +47,8 @@ const PERSON = 'person-1';
 const DB_ENTITY = 'db-entity-1';
 const LIBRARY = 'lib-1';
 
-// The borrower: member m-2 -> person p-2. Her PROFILE name and her RECORD name
-// differ, and roster_show_real_names is ON — so the lent-copy row names her by
-// the record name only if the real-names overlay's reads were cached too.
+// Profile and record names differ with real names on, so the row names her by the record name
+// only if the real-names reads were cached too.
 const BORROWER_MEMBER = 'm-2';
 const BORROWER_PERSON = 'p-2';
 const PROFILE_NAME = 'Liisa Laulja';
@@ -115,8 +61,7 @@ const WORKS = [
 const EDITION = { id: 'e-1', name: 'Carus 2019', publisher: 'Carus' };
 const COPY = { id: 'c-1', copyNumber: 3 };
 
-// A fixed "today" (only Date is faked — IndexedDB and waitFor keep real timers).
-// 07:05Z is 10:05 in Tallinn (EEST), so the as-of time is unmistakable.
+// Only Date is faked. 07:05Z is 10:05 in Tallinn (EEST), so the as-of time is unmistakable.
 const READ_AT = new Date('2026-09-28T07:05:00.000Z');
 const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
@@ -132,15 +77,8 @@ function urlOf(input: RequestInfo | URL): string {
 	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 }
 
-/** The online Entu: discovery (slice 2's fixture) plus the library's reads.
- *  Everything else answers empty.
- *
- *  #434 slice 4 review round 2, finding 1 — `librarianPerson` is the person the
- *  collective's library names as `_owner`. WITHOUT it the library list answers
- *  `{ count: 0 }`, which is what the fixture did for the whole of round 1: every
- *  viewer resolved to `not-librarian`, so the `state === 'librarian'` branch —
- *  and the three collective-wide feeds behind it — was never exercised offline,
- *  and the red `librarian-load-error` that branch raised went unseen. */
+/** The online Entu: discovery plus the library's reads; everything else answers empty. Without
+  * `librarianPerson` as the library's `_owner`, every viewer resolves to not-librarian. */
 function onlineEntu(opts: { librarianPerson?: string } = {}) {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = urlOf(input);
@@ -154,9 +92,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 				entity: { _id: LIBRARY, _owner: [{ reference: opts.librarianPerson ?? '' }] }
 			});
 		}
-		// The librarian panel's three feeds: every edition, every copy, every
-		// active member (flat, collective-wide — distinct from the per-node
-		// expansion reads matched further down by their `_parent.reference`).
+		// The librarian panel's three collective-wide feeds, distinct from the per-node reads below.
 		if (url.includes('_type.string=edition&props=')) {
 			return json({
 				count: 1,
@@ -232,9 +168,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 				]
 			});
 		}
-		// #434 slice 4 review round, finding 2 — the my-loans chain, for the
-		// describe block below whose SIGNED-IN person IS the borrower: her own
-		// active member row, then copy -> edition -> work for the row's label.
+		// The my-loans chain, for the describe block whose signed-in person is the borrower.
 		if (
 			url.includes('_type.string=member&') &&
 			url.includes(`person.reference=${BORROWER_PERSON}`)
@@ -320,19 +254,14 @@ async function expectListing(container: HTMLElement) {
 		}
 	});
 	expect(container.querySelector('[data-testid="library-load-error"]')).toBeNull();
-	// #434 slice 4 review round, finding 1 — a restored screen claims NO
-	// failure. The first cut passed this helper offline while rendering a red
-	// `librarian-load-error` alert beside the restored work list, because
-	// `resolveLibrarian`'s three reads were uncached and it maps any throw to
-	// `state: 'error'`. `library-load-error` alone missed it; every alert on a
-	// restored screen is the assertion that catches the next one too.
+	// A restored screen claims no failure: every alert on it is the assertion, not just
+	// `library-load-error`.
 	const alert = container.querySelector('[role="alert"]');
 	expect(alert, `unexpected alert: ${alert?.getAttribute('data-testid') ?? alert?.textContent}`).toBeNull();
 }
 
-/** Expand work w-1 -> edition e-1 and wait for the LENT copy row, which names
- *  its borrower through the whole lendings -> member -> profile -> real-names
- *  chain. Returns the copy row. */
+/** Expand work w-1 -> edition e-1 and wait for the lent copy row, named through the whole
+  * lendings -> member -> profile -> real-names chain. */
 async function expandToLentCopy(container: HTMLElement): Promise<Element> {
 	const workToggle = await waitFor(() => {
 		const el = container.querySelector(`[data-testid="library-work-toggle-${WORKS[0].id}"]`);
@@ -365,11 +294,8 @@ async function asOfLine(container: HTMLElement): Promise<Element> {
 	});
 }
 
-/** Resolves once the online stub has been asked for a path matching `needle` —
- *  how a FIRE-AND-FORGET side read (the librarian resolution, the my-loans
- *  chain) is waited for before the cache is drained. Without it `onlineVisit`
- *  can flush before those puts are even started, and the offline half then
- *  tests an empty cache rather than the page. */
+/** Resolves once the online stub was asked for `needle`, so a fire-and-forget side read is
+  * stored before the cache is drained. */
 async function awaitRead(stub: ReturnType<typeof onlineEntu>, needle: string) {
 	await waitFor(() => {
 		expect(
@@ -379,17 +305,15 @@ async function awaitRead(stub: ReturnType<typeof onlineEntu>, needle: string) {
 	});
 }
 
-/** One full online visit: listing + the lent copy opened, then the cache
- *  writes drained and the page unmounted. */
+/** One full online visit: listing + the lent copy opened, cache drained, page unmounted. */
 async function onlineVisit() {
 	const stub = onlineEntu();
 	vi.stubGlobal('fetch', stub);
 	const first = await openLibrary();
 	await expectListing(first.container);
 	await expandToLentCopy(first.container);
-	// The librarian resolution is fire-and-forget (#434 slice 4 review round,
-	// finding 1): its three reads have to be STORED for the offline visit to
-	// restore the state instead of alerting.
+	// The librarian resolution is fire-and-forget; its reads must be stored for the offline
+	// visit to restore the state instead of alerting.
 	await awaitRead(stub, '_type.string=library&');
 	await flushReadCache();
 	cleanup();
@@ -455,9 +379,8 @@ describe('#434 slice 4 — the library renders offline from the read cache', () 
 		vi.stubGlobal('fetch', offlineEntu());
 		const { container } = await openLibrary();
 		await expectListing(container);
-		// Editions + copies (expansion reads), lendings (availability), member ->
-		// profile (borrower name) and the real-names overlay (record name, not
-		// the profile name) — every read behind this row was cached.
+		// Every read behind this row was cached: expansions, lendings, member -> profile and the
+		// real-names overlay (record name, not profile name).
 		const copy = await expandToLentCopy(container);
 		expect(copy.textContent).toContain(RECORD_NAME);
 		expect(copy.textContent).not.toContain(PROFILE_NAME);
@@ -510,11 +433,8 @@ describe('#434 slice 4 — the library renders offline from the read cache', () 
 });
 
 describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loans offline', () => {
-	// The signed-in person IS the borrower of copy c-1 here. The default fixture
-	// person is not, so my-loans is absent online AND offline there — which is
-	// exactly why the section silently vanishing offline went unnoticed: the
-	// member-id read, the copy-name read and the copy -> edition -> work chain
-	// read were all uncached.
+	// The signed-in person is the borrower of copy c-1 here, so the my-loans reads are exercised;
+	// with the default person the section is absent online too.
 	beforeEach(() => {
 		authStore.set({
 			status: 'authenticated',
@@ -571,22 +491,14 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 });
 
 describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel offline, not an alert', () => {
-	// The signed-in person OWNS the collective's library here. Round 1's fixture
-	// answered the library list with `{ count: 0 }`, so every viewer was
-	// `not-librarian` and this whole branch went unexercised: `loadLibrarianState`
-	// was cache-backed, resolved 'librarian' offline, and the three feeds gated
-	// BEHIND that answer (every edition, every copy, every active member) were
-	// not — so the page's catch set `librarianStore` to 'error' and painted the
-	// red `librarian-load-error` beside the restored listing. `expectListing`'s
-	// no-alert assertion is what catches it.
+	// The signed-in person owns the collective's library, so the feeds gated behind 'librarian'
+	// are exercised; `expectListing`'s no-alert assertion catches an uncached one.
 	function librarianEntu() {
 		return onlineEntu({ librarianPerson: PERSON });
 	}
 
-	/** Wait for the librarian panel itself, and for the browse tree's
-	 *  availability counter — which is DERIVED from the picker feeds
-	 *  (deriveWorkAvailability over allEditions + allCopies), so it is on screen
-	 *  only if those feeds landed. */
+	/** Wait for the librarian panel and the availability counter, which is derived from the
+	 *  picker feeds and so only shows if they landed. */
 	async function expectLibrarianPanel(container: HTMLElement) {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="librarian-tools"]'), 'librarian-tools').not.toBeNull();
@@ -604,8 +516,7 @@ describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel 
 		expect(container.querySelector('[data-testid="librarian-load-error"]')).toBeNull();
 	}
 
-	/** One full online visit as the librarian, with every read the panel makes
-	 *  drained into the cache. */
+	/** One full online visit as the librarian, every panel read drained into the cache. */
 	async function librarianOnlineVisit() {
 		const stub = librarianEntu();
 		vi.stubGlobal('fetch', stub);
@@ -661,9 +572,7 @@ describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel 
 			expect(el, 'bulk-checkout-member-list').not.toBeNull();
 			return el!;
 		});
-		// The real-names overlay's answer, not `library_borrower_unknown`. The name
-		// map is resolved fire-and-forget behind the picker feeds, so it is waited
-		// for rather than read on the same tick the list appears.
+		// The real-names overlay's answer; the name map resolves fire-and-forget, so wait for it.
 		await waitFor(() => {
 			expect(list.textContent, 'bulk-checkout member name').toContain(RECORD_NAME);
 		});
@@ -707,10 +616,8 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 	});
 
 	it('the librarian state and the my-loans chain load through libraryPageData too', () => {
-		// #434 slice 4 review round, findings 1 and 2 — a red
-		// `librarian-load-error` beside a restored listing, and a my-loans
-		// section that silently vanishes, are both a reader the page reached
-		// past its own entry points.
+		// A red `librarian-load-error` beside a restored listing, or a vanishing my-loans section,
+		// is a reader the page reached past its own entry points.
 		expect(page).toContain('loadLibrarianState(');
 		expect(page).toContain('loadMyMemberId(');
 		expect(page).toContain('loadMyLoanCopyNames(');
@@ -730,32 +637,25 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 		expect(page).not.toMatch(/\blistAllCopies\(/);
 		expect(page).not.toMatch(/\blistActiveMembers\(/);
 		expect(page).not.toMatch(/\bresolveBorrowerNames\(/);
-		// BOTH paths — the mount effect and the retry button, which duplicates it.
-		expect(page.match(/loadLibrarianPickers\(/g)?.length ?? 0).toBe(2);
+		// One path serves the mount effect and the retry.
+		expect(page.match(/loadLibrarianPickers\(/g)?.length ?? 0).toBe(1);
 	});
 
 	it('every write resolves its own `_parent` LIVE (review round 2, finding 2)', () => {
-		// `loadLibrarianState` is cache-backed, so the library id it answers can
-		// come from a stored copy. readCache.ts forbids the flag on "a GET that is
-		// a STEP INSIDE a write", so the three write paths (inline checkout, bulk
-		// checkout, create work) resolve the parent themselves through the
-		// flag-free `resolveWriteLibraryId` — and `libraryEntityIdStore`, whose
-		// only readers those three were, is gone.
+		// `loadLibrarianState` is cache-backed and a GET inside a write may not be, so the three
+		// write paths resolve the parent through the flag-free `resolveWriteLibraryId`.
 		expect(page).toContain("resolveWriteLibraryId");
 		expect(page.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(3);
 		expect(page).not.toMatch(/\$libraryEntityIdStore/);
 	});
 
 	it('the three post-write lending re-reads store without serving (refreshLibraryLendings)', () => {
-		// Inline checkout, return and bulk checkout each re-read the lendings
-		// after the write lands. A cache-SERVED re-read could show the
-		// pre-write availability; an uncached one leaves the stored copy behind
-		// the write. Store-only is the one that does neither.
+		// Post-write lending re-reads: a served copy could show pre-write availability, an uncached
+		// one leaves the stored copy behind. Store-only does neither.
 		expect(page.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
 		expect(page).not.toMatch(/\blistLendings\(/);
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 4/6 RED)
-// (*MVOX:Josquin* — #434 slice 4 review round, findings 1 and 2)
-// (*MVOX:Josquin* — #434 slice 4 review round 2, findings 1 and 2)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

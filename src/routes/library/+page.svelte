@@ -441,14 +441,25 @@
 	let librarianGen = 0;
 	$effect(() => {
 		const current = selected;
-		const g = ++librarianGen;
 		if (!current) {
+			++librarianGen;
 			resetLibrarian();
 			resetLibrarianPickerPartial();
 			return;
 		}
 		resetLibrarian();
 		resetLibrarianPickerPartial();
+		loadLibrarian(current);
+	});
+
+	function retryLibrarianLoad(): void {
+		if (!selected) return;
+		resetLibrarianPickerPartial();
+		loadLibrarian(selected);
+	}
+
+	function loadLibrarian(current: { db: string; personId: string }): void {
+		const g = ++librarianGen;
 		const token = getToken();
 		const cfg = { db: current.db, token: token ?? '' };
 		loadLibrarianState(cfg, current.personId).then(async (result) => {
@@ -480,40 +491,6 @@
 				}
 			}
 			if (g !== librarianGen) return;
-			librarianStore.set(result.state);
-		});
-	});
-
-	function retryLibrarianLoad(): void {
-		if (!selected) return;
-		const token = getToken();
-		const cfg = { db: selected.db, token: token ?? '' };
-		resetLibrarianPickerPartial();
-		loadLibrarianState(cfg, selected.personId).then(async (result) => {
-			if (result.state === 'librarian') {
-				try {
-					const {
-						editions: editionsRead,
-						copies: copiesRead,
-						members: membersRead
-					} = await loadLibrarianPickers(cfg);
-					lib.allEditions = editionsRead.items;
-					lib.allCopies = copiesRead.items;
-					lib.allMembers = membersRead.items;
-					lib.optionsPartial = editionsRead.truncated || copiesRead.truncated;
-					lib.membersPartial = membersRead.truncated;
-					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-					loadLibrarianMemberNames(cfg, memberIdList)
-						.then((names) => {
-							lib.memberNames = names;
-						})
-						.catch((e) => console.error('library: member name resolution failed', e));
-				} catch (e) {
-					console.error('library: checkout data load failed', e);
-					librarianStore.set('error');
-					return;
-				}
-			}
 			librarianStore.set(result.state);
 		});
 	}
