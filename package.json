@@ -16,7 +16,7 @@
 		"check:workers": "tsc -p workers/entu-rights-mcp/tsconfig.json --noEmit",
 		"check:sw": "tsc -p tsconfig.sw.json --noEmit",
 		"test": "vitest run",
-		"test:changed": "vitest run --changed origin/main && vitest run src/comment-rules.spec.ts",
+		"test:changed": "vitest run --changed origin/main && vitest run src/comment-rules.spec.ts src/routes/page.line-cap.spec.ts",
 		"test:roadmap": "vitest run scripts/roadmap",
 		"test:watch": "vitest",
 		"roadmap:fetch": "node --import tsx ./scripts/roadmap/fetch-issues.ts",

@@ -215,9 +215,9 @@ function runGit(args: string[]): string {
 
 // Merge-base (not HEAD) as the diff root: a bare `diff base HEAD` would miss
 // uncommitted work, and this check needs to see it while it is still local.
-export function changedFiles(options: { git?: GitRunner } = {}): string[] {
+export function changedFiles(options: { git?: GitRunner; diffFilter?: string } = {}): string[] {
 	const git = options.git ?? runGit;
 	const base = git(['merge-base', 'origin/main', 'HEAD']).trim();
-	const diff = git(['diff', '--name-only', '--diff-filter=d', base]);
+	const diff = git(['diff', '--name-only', `--diff-filter=${options.diffFilter ?? 'd'}`, base]);
 	return diff.split('\n').filter((line) => line.length > 0);
 }

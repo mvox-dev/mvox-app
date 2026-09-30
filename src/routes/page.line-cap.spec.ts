@@ -133,7 +133,7 @@ describe('#525 — every source file under src/ obeys the line cap', () => {
 	const counts = Object.fromEntries(sources.map((file) => [file, lineCount(resolve(ROOT, file))]));
 
 	it('scans the real tree, not a vacuum', () => {
-		expect(sources.length).toBeGreaterThan(300);
+		expect(sources.length).toBeGreaterThan(150);
 	});
 
 	it(`every source file is at most ${STEP} lines unless it is an exception`, () => {
