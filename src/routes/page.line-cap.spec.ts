@@ -1,7 +1,7 @@
 // Source files stay small enough to read whole: one cap, a shrink-only exception list, and a
 // register of every file over the next step.
-import { describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import {
 	LINE_CAP_EXCEPTIONS,
@@ -110,16 +110,18 @@ describe('#525 — the line-cap rules, each shown by a planted example', () => {
 		]);
 	});
 
-	it('added files are read against the merge-base with main, renames excluded', () => {
+	it('added files are read against the merge-base with main, renames excluded, untracked included', () => {
 		const calls: string[][] = [];
 		const git = (args: string[]) => {
 			calls.push(args);
-			return args[0] === 'merge-base' ? 'base123\n' : 'src/lib/new.ts\n';
+			if (args[0] === 'merge-base') return 'base123\n';
+			return args[0] === 'ls-files' ? 'src/lib/untracked.ts\n' : 'src/lib/new.ts\n';
 		};
-		expect(addedFiles({ git })).toEqual(['src/lib/new.ts']);
+		expect(addedFiles({ git })).toEqual(['src/lib/new.ts', 'src/lib/untracked.ts']);
 		expect(calls).toEqual([
 			['merge-base', 'origin/main', 'HEAD'],
-			['diff', '--name-only', '--diff-filter=A', 'base123']
+			['diff', '--name-only', '--diff-filter=A', 'base123'],
+			['ls-files', '--others', '--exclude-standard']
 		]);
 	});
 });
@@ -149,6 +151,19 @@ describe('#525 — every source file under src/ obeys the line cap', () => {
 
 	it(`every source file this change adds is at most ${NEXT_STEP} lines`, () => {
 		expect(addedOverNextStep(selectSourceFiles(addedFiles()), counts)).toEqual([]);
+	});
+});
+
+describe('#568 — an untracked new file counts as added', () => {
+	const plantedFile = 'src/lib/testing/comment-rules-fixtures/planted-over-next-step.ts';
+
+	afterEach(() => rmSync(resolve(ROOT, plantedFile), { force: true }));
+
+	it('an untracked new file over the next step fails the added-file check', () => {
+		writeFileSync(resolve(ROOT, plantedFile), planted(NEXT_STEP + 1));
+		const added = addedFiles().filter((file) => file === plantedFile);
+		const counts = { [plantedFile]: lineCount(resolve(ROOT, plantedFile)) };
+		expect(addedOverNextStep(added, counts)).toEqual([{ file: plantedFile, lines: NEXT_STEP + 1 }]);
 	});
 });
 

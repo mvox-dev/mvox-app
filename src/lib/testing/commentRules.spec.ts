@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { afterEach, describe, expect, it } from 'vitest';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	COMMENT_FIXTURES_DIR,
@@ -313,12 +313,14 @@ describe('changedFiles — the changed set against main', () => {
 		const git = (args: string[]): string => {
 			calls.push(args);
 			if (args[0] === 'merge-base') return 'abc123\n';
+			if (args[0] === 'ls-files') return 'src/new.ts\n';
 			return 'src/a.ts\nREADME.md\n\n';
 		};
-		expect(changedFiles({ git })).toEqual(['src/a.ts', 'README.md']);
+		expect(changedFiles({ git })).toEqual(['src/a.ts', 'README.md', 'src/new.ts']);
 		expect(calls).toEqual([
 			['merge-base', 'origin/main', 'HEAD'],
-			['diff', '--name-only', '--diff-filter=d', 'abc123']
+			['diff', '--name-only', '--diff-filter=d', 'abc123'],
+			['ls-files', '--others', '--exclude-standard']
 		]);
 	});
 
@@ -326,6 +328,30 @@ describe('changedFiles — the changed set against main', () => {
 		const files = changedFiles();
 		expect(Array.isArray(files)).toBe(true);
 		for (const f of files) expect(typeof f).toBe('string');
+	});
+});
+
+describe('#568 — untracked new files are in the changed set', () => {
+	const planted = FIXTURES + 'planted-untracked.ts';
+	const ignored = FIXTURES + 'planted-ignored.log';
+
+	afterEach(() => {
+		for (const path of [planted, ignored]) rmSync(resolve(process.cwd(), path), { force: true });
+	});
+
+	it('an untracked new file that breaks a comment rule fails the check', () => {
+		writeFileSync(resolve(process.cwd(), planted), fixture('comment-too-long.ts'));
+		const found = changedFiles()
+			.filter((file) => file === planted)
+			.flatMap((file) => checkCommentRules(file, readFileSync(resolve(process.cwd(), file), 'utf8')));
+		expect(found.map(({ file, rule, line }) => ({ file, rule, line }))).toEqual([
+			{ file: planted, rule: 'comment-too-long', line: 3 }
+		]);
+	});
+
+	it('an ignored file is still skipped', () => {
+		writeFileSync(resolve(process.cwd(), ignored), fixture('comment-too-long.ts'));
+		expect(changedFiles()).not.toContain(ignored);
 	});
 });
 

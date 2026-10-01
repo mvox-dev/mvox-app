@@ -226,11 +226,12 @@ function runGit(args: string[]): string {
 	return execFileSync('git', args, { encoding: 'utf8', cwd: process.cwd() });
 }
 
-// Merge-base (not HEAD) as the diff root: a bare `diff base HEAD` would miss
-// uncommitted work, and this check needs to see it while it is still local.
+// Merge-base (not HEAD) as the diff root, plus untracked files: this check needs to see
+// uncommitted work while it is still local.
 export function changedFiles(options: { git?: GitRunner; diffFilter?: string } = {}): string[] {
 	const git = options.git ?? runGit;
 	const base = git(['merge-base', 'origin/main', 'HEAD']).trim();
 	const diff = git(['diff', '--name-only', `--diff-filter=${options.diffFilter ?? 'd'}`, base]);
-	return diff.split('\n').filter((line) => line.length > 0);
+	const untracked = git(['ls-files', '--others', '--exclude-standard']);
+	return `${diff}\n${untracked}`.split('\n').filter((line) => line.length > 0);
 }
