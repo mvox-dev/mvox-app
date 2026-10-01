@@ -1,61 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #324 RED — the season-manage panel's repertoire section: failure reaches
-// the user (and success is distinguishable from silence).
-//
-// The defect (issue #324, delta-verified in research-323-328-delta.json): the
-// panel's `panelQueue` (createRepertoireWriteQueue consumer,
-// src/routes/+page.svelte) applies add-work / status / remove optimistically,
-// and on rejection its `revert()` does ONLY a silent refetch
-// (refreshPanelRepertoire + refreshWorksAfterWrite) — no message anywhere. The
-// ADJACENT agenda-side `repertoireQueue` on this same page has surfaced
-// `manageError` + role="alert" since #91: that wiring is the PRECEDENT this
-// section must match, and it stays BYTE-UNTOUCHED (page.repertoire-manage-
-// wiring.spec.ts keeps pinning it as-is — a diff touching it is scope creep).
-//
-// INTEGRATION posture: the REAL +page.svelte, real repertoire data layer,
-// real write actions; the network stubbed at `fetch` — the same harness
-// family as page.season-repertoire.spec.ts (whose panel-shape pins stay
-// green as-is).
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   FAILURE — inside [data-testid="season-manage-repertoire"]:
-//     • [data-testid="repertoire-manage-error"], role="alert", rendering
-//       m.repertoire_manage_error() (the existing four-locale key — the
-//       agenda precedent's own text family). Absent until a panel write
-//       fails; appears for every rejected write kind this section offers
-//       (add work / status change / remove).
-//     • DISTINCT from the section's READ-failure banner
-//       (season-manage-repertoire-error, season_manage_list_load_error) —
-//       a rejected WRITE must not masquerade as a failed list load.
-//     • The on-screen value after the failure is what the server holds
-//       (existing rollback+refetch semantics pinned by VALUE, not mechanism).
-//     • A fresh attempt clears the previous failure (agenda precedent).
-//
-//   SAVED — [data-testid="repertoire-manage-status"], role="status",
-//   aria-live="polite", mounted WITH the section (blank until a settle — a
-//   live region announces only CHANGES, the #197/#298 rule); on a successful
-//   settle it carries m.repertoire_manage_saved() (NEW key; its four-locale
-//   pin lives in the sibling suite, page.works-write-failure.spec.ts).
-//
-//   BOUNDARY + PRIMITIVE (per the task pins, stated once here as in the
-//   sibling): #324 owns the two REPERTOIRE queues' signals (this panelQueue +
-//   the event page's repertoireQueue); scheduleQueue/editWriteQueue saved
-//   cues are #328's. Wiring is PER CALL SITE — RepertoireWriteQueueCallbacks
-//   (repertoireActions.ts) is NOT widened; repertoireActions.spec.ts stays
-//   green byte-for-byte. RepertoireElement.svelte gains no `failed` prop —
-//   the alert is page-authored, exactly like the agenda's own.
-//
-//   TESTIDS — `repertoire-manage-error` also exists page-wide as the AGENDA
-//   surface's alert node (routes/+page.svelte:8197). Accepted duplication,
-//   #234's documented strategy: every assertion here scopes WITHIN
-//   [data-testid="season-manage-repertoire"].
+// The season panel's repertoire writes: a failure is said out loud, a settled write says saved.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get: (_target, key) => () => `[${String(key)}]`
@@ -92,9 +40,6 @@ vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock })
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// The panel's NON-repertoire reads — not under test; mocked the way
-// page.season-manage.spec.ts mocks them. The repertoire path (repertoireData,
-// workRows, libraryData, repertoireActions) stays REAL down to `fetch`.
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -150,14 +95,10 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-
-/** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** One running season — the panel manages it, the viewer is its editor. */
 function runningSeason(): Season {
 	return {
 		id: 'season-1',
@@ -170,9 +111,6 @@ function runningSeason(): Season {
 	};
 }
 
-/** #324 review F1 — a SECOND manageable season, the switch target. Its own
- *  collapsed entry is what `openSeasonManagePanelFor` (and so
- *  `resetSeasonManage`) is reached through. */
 function upcomingSeason(): Season {
 	return {
 		id: 'season-2',
@@ -213,8 +151,6 @@ const RI_RETIRED: EntityRaw = {
 	work: [{ reference: 'work-2' }],
 	status: [{ string: 'retired' }]
 };
-/** The SECOND season's one row — what makes "the panel is showing the other
- *  season now" readable off the section itself. */
 const RI_OTHER_SEASON: EntityRaw = {
 	_id: 'ri-9',
 	name: [{ string: 'Nunc dimittis' }],
@@ -227,18 +163,10 @@ function json(body: unknown, status = 200) {
 }
 
 interface WorldOptions {
-	/** Mutable per-season repertoire_item state, keyed by season id. Successful
-	 *  writes mutate it, so any refetch serves the post-write truth; FAILED
-	 *  writes mutate nothing, so the revert-path refetch serves the pre-tap
-	 *  truth — the value pins ride on that, not on one mechanism. */
 	repertoireBySeason: Record<string, EntityRaw[]>;
-	/** Consulted per WRITE (create POST / property-replace POST / entity
-	 *  DELETE): while true every write answers 500. Reads stay healthy. */
 	failWrites?: () => boolean;
 }
 
-/** The Entu stand-in, stateful — trimmed from page.season-repertoire.spec.ts
- *  to exactly the roads these write pins travel, plus `failWrites`. */
 function installWorld(options: WorldOptions) {
 	const { repertoireBySeason, failWrites = () => false } = options;
 	let createSeq = 0;
@@ -261,7 +189,6 @@ function installWorld(options: WorldOptions) {
 			return json({ deleted: true });
 		}
 		if (method === 'POST') {
-			// Entity CREATE (POST .../entity with no id).
 			if (/\/entity(\?|$)/.test(url)) {
 				if (failWrites()) return json({ error: 'nope' }, 500);
 				const props = JSON.parse(String(init?.body ?? '[]')) as Array<{
@@ -283,7 +210,6 @@ function installWorld(options: WorldOptions) {
 				}
 				return json({ _id: id });
 			}
-			// Property write on an existing entity (status replace).
 			if (failWrites()) return json({ error: 'nope' }, 500);
 			const id = url.match(/\/entity\/([^/?]+)/)?.[1] ?? '';
 			const props = JSON.parse(String(init?.body ?? '[]')) as Array<Record<string, unknown>>;
@@ -297,7 +223,6 @@ function installWorld(options: WorldOptions) {
 			return json({ _id: id });
 		}
 
-		// Pre-write value-id lookups (replaceEntityProperty's GET).
 		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
 		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-ri' }] });
@@ -364,8 +289,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── scoped query helpers (the #234 accepted-duplication strategy) ────────────────
-
 function q(scope: ParentNode, testid: string): HTMLElement | null {
 	return scope.querySelector(`[data-testid="${testid}"]`);
 }
@@ -373,17 +296,12 @@ function qa(scope: ParentNode, testid: string): HTMLElement[] {
 	return Array.from(scope.querySelectorAll(`[data-testid="${testid}"]`));
 }
 
-/** The collapsed entry whose visible text names `seasonName` (#277's shape:
- *  one `season-card-expand` per manageable season, told apart by name). */
 function expandFor(container: HTMLElement, seasonName: string): HTMLElement | null {
 	return (
 		qa(container, 'season-card-expand').find((b) => b.textContent?.includes(seasonName)) ?? null
 	);
 }
 
-/** Open — or SWITCH — the panel to the named season via its own entry, then
- *  wait until the panel's label names it. The switch runs
- *  `openSeasonManagePanelFor`'s one teardown backbone, `resetSeasonManage`. */
 async function openPanelForSeason(container: HTMLElement, seasonName: string): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(expandFor(container, seasonName), `an entry for ${seasonName}`).not.toBeNull();
@@ -395,7 +313,6 @@ async function openPanelForSeason(container: HTMLElement, seasonName: string): P
 	return q(container, 'season-manage-panel')!;
 }
 
-/** Two manageable seasons, no panel open yet — the switch pins' starting point. */
 async function renderTwoSeasonAgenda(): Promise<HTMLElement> {
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({ seasons: [runningSeason(), upcomingSeason()] })
@@ -437,16 +354,12 @@ function rowByName(scope: ParentNode, workName: string): HTMLElement {
 	return row;
 }
 
-/** The #324 write-failure alert, scoped INSIDE the panel section — never the
- *  page-wide agenda node of the same name. */
 function manageAlert(section: HTMLElement): HTMLElement | null {
 	return q(section, 'repertoire-manage-error');
 }
 function manageStatus(section: HTMLElement): HTMLElement | null {
 	return q(section, 'repertoire-manage-status');
 }
-/** Safe text of the saved region — '' while GREEN has not mounted it yet, so
- *  a RED failure reads as an assertion, never a null-deref. */
 function savedText(section: HTMLElement): string {
 	return manageStatus(section)?.textContent ?? '';
 }
@@ -464,8 +377,6 @@ function createAttempts(fetchMock: FetchMock) {
 			/\/entity(\?|$)/.test(String(url)) && (init as RequestInit | undefined)?.method === 'POST'
 	);
 }
-/** The tap really reached the wire — pins that a RED here is "the failure was
- *  swallowed", never "the control was inert in this harness". */
 async function expectWriteAttempted(probe: () => number): Promise<void> {
 	await waitFor(() => {
 		expect(probe(), 'the tap must actually fire the write').toBeGreaterThan(0);
@@ -479,14 +390,9 @@ async function expectFailureSurfaced(section: HTMLElement): Promise<HTMLElement>
 	const alert = manageAlert(section)!;
 	expect(alert.getAttribute('role')).toBe('alert');
 	expect(alert.textContent).toContain('[repertoire_manage_error]');
-	// A rejected WRITE is not a failed list load — the read banner stays away.
 	expect(q(section, 'season-manage-repertoire-error')).toBeNull();
 	return alert;
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — every rejected panel write speaks, and the section shows server truth
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#324 — season panel: a rejected repertoire write reaches the user', () => {
 	it('status change: no alert before, role=alert naming the failure after — and the row shows the status the server still holds', async () => {
@@ -550,10 +456,6 @@ describe('#324 — season panel: a rejected repertoire write reaches the user', 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — saved is distinguishable; a fresh attempt retires the old alert
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#324 — season panel: a settled write is distinguishable from silence', () => {
 	it('the status live region is MOUNTED with the section (role=status, aria-live=polite, blank) and carries the saved message once a status change settles — with no alert', async () => {
 		installWorld({ repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] } });
@@ -567,11 +469,9 @@ describe('#324 — season panel: a settled write is distinguishable from silence
 
 		await fireEvent.click(q(rowByName(section, 'Spem in alium'), 'work-status-retired')!);
 
-		// The write itself lands (harness evidence, passes today)…
 		await waitFor(() => {
 			expect(rowByName(section, 'Spem in alium').getAttribute('data-status')).toBe('retired');
 		});
-		// …and the settle must SAY so (the #324 cue).
 		await waitFor(() => {
 			expect(savedText(section)).toContain('[repertoire_manage_saved]');
 		});
@@ -605,17 +505,6 @@ describe('#324 — season panel: a settled write is distinguishable from silence
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — the cues belong to the season they were raised over
-// ═════════════════════════════════════════════════════════════════════════════
-//
-// #324 review F1 — both signals are per-SUBJECT claims about the panel's rows,
-// so they go down with those rows in `resetSeasonManage`, right beside the
-// READ-failure flag (`panelRepertoireError`) and for the same reason #321
-// review F1 already legislates for `seasonManagePartial`. A SEASON switch is
-// the tightest reach (`openSeasonManagePanelFor`); a collective switch runs the
-// identical teardown.
 
 describe('#324 — the panel’s failure/saved cues do not outlive their season', () => {
 	it('a rejected write does not stand over the NEXT season’s rows', async () => {
@@ -680,7 +569,4 @@ describe('#324 — the panel’s failure/saved cues do not outlive their season'
 	});
 });
 
-// (*MVOX:Tallis* — #324 RED: panelQueue write failure + saved cue in the
-// season-manage panel; sibling suite: event/[id]/page.works-write-failure.spec.ts.
-// The agenda-side repertoireQueue — the #91 precedent — stays byte-untouched;
-// its pins live in page.repertoire-manage-wiring.spec.ts.)
+// (*MVOX:Tallis*)

@@ -45,7 +45,8 @@ const AGENDA_SOURCE = () =>
 		'src/lib/agenda/agendaSelectedLoad.ts',
 		'src/lib/agenda/agendaWorksLoad.ts',
 		'src/lib/agenda/agendaRowStore.ts',
-		'src/lib/agenda/agendaPanels.ts'
+		'src/lib/agenda/agendaPanels.ts',
+		'src/lib/repertoire/refetchWorkRows.ts'
 	]
 		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
 		.join('\n');
@@ -471,7 +472,12 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 			'utf-8'
 		);
 		expect(source).toContain('loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {');
-		expect(works).toContain('refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {');
+		const refetch = readFileSync(
+			resolve(process.cwd(), 'src/lib/repertoire/refetchWorkRows.ts'),
+			'utf-8'
+		);
+		expect(works).toContain('refetchWorkRows(cfg, [evId], seasonId, {');
+		expect(refetch).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
 		// Not imported at all any more, so neither read can drift off the store.
 		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\s*\}/);
 		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\(/);

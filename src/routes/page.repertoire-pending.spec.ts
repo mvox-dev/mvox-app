@@ -294,3 +294,28 @@ describe('#551 — agenda: a move or remove keeps pending until it settles', () 
 		expect(qa(container, 'repertoire-manage-error')).toEqual([]);
 	});
 });
+
+describe('#605 — agenda: a settled repertoire change says saved', () => {
+	it('the card carries a polite status region that reads saved once a status change settles', async () => {
+		installWorld({
+			dbs: {
+				sampledb: { repertoireItems: [repertoireItem('ri-1', 'Spem in alium', 'work-1')], programItems: [] }
+			}
+		});
+		setAuthed();
+		const { container } = render(Page);
+		await expandWorks(container, 1);
+
+		const status = () => qa(container, 'repertoire-manage-status');
+		expect(status().map((el) => [el.getAttribute('role'), el.getAttribute('aria-live')])).toEqual([
+			['status', 'polite']
+		]);
+		expect(status()[0].textContent?.trim()).toBe('');
+
+		await fireEvent.click(qa(container, 'work-status-retired')[0]);
+		await waitFor(() => {
+			expect(status()[0].textContent?.trim()).toBe('[repertoire_manage_saved]');
+		});
+		expect(qa(container, 'repertoire-manage-error')).toEqual([]);
+	});
+});

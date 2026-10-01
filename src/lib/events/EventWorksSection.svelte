@@ -3,7 +3,7 @@
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { refreshEventPageWorkRows } from '$lib/events/eventPageData';
+	import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import {
 		editionsByWorkId as editionsByWorkIdOf,
@@ -82,24 +82,23 @@
 		const evId = detail.id;
 		const seasonId = ev.seasonId;
 		const g = generation();
-		refreshEventPageWorkRows(cfg, [evId], seasonId, fetch, {
-			includeInactive: ev.seasonManageRights === 'editor'
-		})
-			.then((byEvent) => {
-				if (g !== generation()) return;
+		const isCurrent = () => g === generation();
+		refetchWorkRows(cfg, [evId], seasonId, {
+			includeInactive: ev.seasonManageRights === 'editor',
+			isCurrent,
+			onRows: (byEvent) => {
 				const isPending = (key: string) => repertoireQueue.isPending(key);
 				ev.workRows = mergePendingRows(byEvent[evId] ?? [], ev.workRows, isPending, evId);
-			})
-			.catch(() => {
-			});
+			}
+		});
 		if (seasonId !== null && ev.seasonManageRights === 'editor') {
-			actions.listRepertoireItems(cfg, seasonId)
-				.then((items) => {
-					if (g !== generation()) return;
-					ev.seasonRepertoire = items;
-				})
-				.catch(() => {
-				});
+			refetchSeasonRepertoire(
+				cfg,
+				seasonId,
+				(c, s) => actions.listRepertoireItems(c, s),
+				isCurrent,
+				(items) => (ev.seasonRepertoire = items)
+			);
 		}
 	}
 
