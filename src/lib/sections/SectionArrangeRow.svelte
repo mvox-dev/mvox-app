@@ -239,7 +239,7 @@
 			aria-label={m.roster_section_remove_confirm({ name: row.name })}
 			disabled={structuralWritePending || isOffline}
 			aria-busy={arrange.removePending}
-			class="rounded px-1 text-xs text-red-700 underline disabled:opacity-50"
+			class="flex min-h-11 items-center rounded px-1 text-xs text-red-700 underline disabled:opacity-50"
 			onclick={() => void ops.handleRemoveSection(row.id)}
 		>
 			{m.roster_section_remove_confirm_short()}
@@ -249,7 +249,7 @@
 			data-testid="section-remove-cancel-{row.id}"
 			aria-label={m.roster_section_remove_cancel({ name: row.name })}
 			disabled={structuralWritePending}
-			class="rounded px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
+			class="flex min-h-11 items-center rounded px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
 			onclick={() => void ops.disarmRemove(row.id)}
 		>
 			{m.roster_section_remove_cancel_short()}

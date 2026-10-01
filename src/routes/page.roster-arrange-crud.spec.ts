@@ -1,54 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #155/S4 RED — section CRUD relocated EXCLUSIVELY into Arrange mode
-// (integration, on the ACTUAL /roster page route). S1-S3 shipped the arrange
-// shell, whole-row reorder, and indent/unindent; this file pins the LAST
-// piece GH#155 describes:
-//
-//   "Tap section name to rename (inline edit)"
-//   "Add section available" (already relocated — see
-//     page.roster-create-section-entry.spec.ts)
-//   "Delete section available"
-//   "Other views (collapsed/expanded): Display only — all section management
-//    controls removed. No drag handles, no add/rename/delete."
-//
-// Same integration discipline as page.roster-indent.spec.ts: the REAL page
-// renders, only the fetch seams and the sectionActions WRITE seam are mocked.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS
-//     arrange-rename-<id>         rename trigger, per row, ALWAYS rendered
-//     arrange-rename-input-<id>   the inline text input rename mode swaps to;
-//                                 AUTO-FOCUSED + pre-filled with the current name
-//     arrange-rename-error-<id>   role="alert" on a failed rename
-//     roster-section-rename-status  role="status" live region, announces success
-//     section-remove-<id>         delete trigger, per row, ALWAYS rendered,
-//                                 `disabled` when the section has members or
-//                                 sub-sections (never simply absent — #155/S4:
-//                                 "Disable for sections with children/members")
-//     section-remove-confirm-<id> / section-remove-cancel-<id>
-//                                 the SAME two-step confirm TU.2/#110 shipped
-//
-//   RENAME — tap `arrange-rename-<id>` → the row's name becomes a text input
-//     pre-filled with the CURRENT name, focused. Enter calls
-//     renameSection(cfg, id, <trimmed value>); the local tree updates
-//     immediately (optimistic); a rejection REVERTS the name and shows
-//     `arrange-rename-error-<id>` (role="alert"). Escape cancels — no write,
-//     reverts to display, nothing changed.
-//
-//   DELETE — reuses deleteSection/the two-step confirm VERBATIM. `disabled`
-//     for a section with members or sub-sections; a confirmed delete on an
-//     eligible section calls deleteSection(cfg, id) and removes the row.
-//
-//   STRIP — Collapsed and Expanded views carry NO section-remove-*,
-//     arrange-rename-*, or section-drag-handle-* controls anywhere.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -74,9 +29,6 @@ const {
 	reparentMock: vi.fn(),
 	renameMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -108,11 +60,6 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-// Soprano (roll-up 2: Eva in Soprano 1 + Selma in Soprano 2, has children →
-// never deletable); Alto (1 member, leaf → not deletable); Bass (0 members,
-// leaf → DELETABLE, #155/S4's target).
-
 function fixtureTree(): SectionNode[] {
 	return [
 		{
@@ -131,9 +78,6 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-// #468 — every fixture row carries the READER's person id ('person-p') in
-// `ownerIds` so the picker gate stays open for this file's own concern (Arrange
-// mode strips the picker, unrelated to ownership).
 function fixtureRows(): RosterRow[] {
 	return [
 		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'], ownerIds: ['person-p'] },
@@ -208,8 +152,6 @@ async function renderArrangeReady(admin: AdminState = 'admin') {
 	return container;
 }
 
-// ── 1. RENAME ────────────────────────────────────────────────────────────────
-
 describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 	it('arrange-rename-<id> renders on every row; tapping it swaps the name for a text input, pre-filled with the CURRENT name and auto-focused', async () => {
 		const container = await renderArrangeReady();
@@ -223,12 +165,7 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 		await waitFor(() => {
 			expect(document.activeElement).toBe(input);
 		});
-		// The draggable row itself is gone while renaming (no nested-interactive
-		// input inside a role="button" row).
 		expect(q(container, 'arrange-row-sec-alto')).toBeNull();
-		// #205 — the activator stays MOUNTED and disabled (the "ALWAYS rendered"
-		// contract above), but it must not print the name beside the input the
-		// user is typing into.
 		const activator = q(container, 'arrange-rename-sec-alto') as HTMLButtonElement;
 		expect(activator).not.toBeNull();
 		expect(activator.disabled).toBe(true);
@@ -263,7 +200,6 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 		await waitFor(() => {
 			expect(status?.textContent?.trim()).not.toBe('');
 		});
-		// LOCAL update — no refetch.
 		expect(listSectionsMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -298,7 +234,6 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 			expect(error).not.toBeNull();
 			expect(error!.getAttribute('role')).toBe('alert');
 		});
-		// The name is back to what the server actually holds.
 		expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto');
 		expect(q(container, 'arrange-rename-sec-alto')?.textContent).not.toContain('Alto Voices');
 		consoleSpy.mockRestore();
@@ -316,8 +251,6 @@ describe('/roster — inline RENAME in Arrange mode (#155/S4)', () => {
 		expect(q(container, 'arrange-rename-input-sec-alto')).not.toBeNull();
 	});
 });
-
-// ── 2. DELETE ────────────────────────────────────────────────────────────────
 
 describe('/roster — DELETE in Arrange mode is ALWAYS rendered, DISABLED when ineligible (#155/S4)', () => {
 	it('Bass (0 members, leaf) — the ✕ is present and ENABLED', async () => {
@@ -379,9 +312,22 @@ describe('/roster — DELETE in Arrange mode is ALWAYS rendered, DISABLED when i
 		});
 		expect(deleteMock).not.toHaveBeenCalled();
 	});
-});
 
-// ── 3. STRIP: Collapsed/Expanded are display-only ────────────────────────────
+	it('the armed confirm and cancel are 44px touch targets (#597)', async () => {
+		const container = await renderArrangeReady();
+		await fireEvent.click(q(container, 'section-remove-sec-bass') as HTMLElement);
+		await waitFor(() => {
+			expect(q(container, 'section-remove-confirm-sec-bass')).not.toBeNull();
+		});
+
+		for (const id of ['section-remove-confirm-sec-bass', 'section-remove-cancel-sec-bass']) {
+			const btn = q(container, id) as HTMLButtonElement;
+			for (const cls of ['flex', 'min-h-11', 'items-center']) {
+				expect(btn.classList.contains(cls), `${cls} missing on ${id}`).toBe(true);
+			}
+		}
+	});
+});
 
 describe('/roster — Collapsed and Expanded views carry NO section-management controls (#155/S4)', () => {
 	it('Collapsed (the default): no rename/delete/drag-handle control anywhere on the page', async () => {
@@ -397,13 +343,8 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 				`no "${prefix}*" control anywhere in Collapsed view`
 			).toHaveLength(0);
 		}
-		// #155/S4 review F4 — the SECOND create path, asserted rather than left
-		// invisible to this gate. Collapsed renders no member rows, so the
-		// member→section picker (and with it its inline create entry) is absent
-		// here for free — nothing on this page can create a section in Collapsed.
 		expect(container.querySelectorAll('[data-testid^="section-picker"]')).toHaveLength(0);
 		expect(q(container, 'section-create-form')).toBeNull();
-		// The section header + member count still show (display-only, not gone).
 		expect(q(container, 'section-header-sec-bass')?.textContent).toContain('Bass');
 	});
 
@@ -422,12 +363,6 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 		}
 		expect(q(container, 'roster-row-m-bea')).not.toBeNull();
 
-		// #155/S4 review F4 scope, AMENDED by #470: the member→section CONTROLS
-		// (assignment) still live on the member row in Expanded view — but the
-		// picker's inline create entry is RETIRED (Mihkel: "drop the new section
-		// creation"). Creating a section is reachable ONLY through the page-level
-		// `roster-new-section` entry in Arrange mode (#124/#155, untouched):
-		// NOTHING in Expanded can create a section anymore.
 		expect(
 			q(container, 'section-picker-add-m-bea'),
 			'the member→section controls stay on the member row in Expanded view'
@@ -437,7 +372,6 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 			"the picker's create entry does not survive #470"
 		).toBeNull();
 		expect(q(container, 'section-create-form')).toBeNull();
-		// The PAGE-LEVEL add entry, by contrast, is arrange-only.
 		expect(q(container, 'roster-new-section')).toBeNull();
 	});
 
@@ -450,16 +384,6 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 		}
 	});
 });
-
-// ── 4. SINGLE-FLIGHT: rename/delete join reorder/reparent's one-at-a-time set ──
-//
-// #155/S4 review F1 — before S4, delete rendered only in collapsed/expanded and
-// indent/unindent only in arrange, so no two structural controls could be on
-// screen together and each write's private in-flight flag was enough. S4 puts
-// rename, delete, indent and unindent on the SAME row: every one of them must
-// now refuse while ANY of the others is outstanding, and every failure path must
-// reconcile against the SERVER rather than restore a pre-write snapshot that
-// cannot know what landed in the meantime.
 
 function deferred(): { promise: Promise<void>; settle: () => void; reject: (e: unknown) => void } {
 	let settle!: () => void;
@@ -541,9 +465,6 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 		renameMock.mockRejectedValue(new Error('403'));
 		const container = await renderArrangeReady();
 
-		// The server tree moved on while the rename was in flight — a section the
-		// PRE-WRITE snapshot cannot possibly know about. A blind `sections = before`
-		// would discard it; the reconcile keeps it.
 		listSectionsMock.mockResolvedValue([
 			...fixtureTree(),
 			{ id: 'sec-ten', name: 'Tenor', displayOrder: 4, parentId: null, depth: 0, children: [] }
@@ -560,7 +481,6 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-ten')).not.toBeNull();
 		});
-		// …and the optimistic name is still gone, the server's is what shows.
 		expect(q(container, 'arrange-rename-sec-alto')?.textContent).toContain('Alto');
 		expect(q(container, 'arrange-rename-sec-alto')?.textContent).not.toContain('Voices');
 		consoleSpy.mockRestore();
@@ -588,21 +508,10 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-ten')).not.toBeNull();
 		});
-		// The optimistically-removed row is back, because the server still holds it.
 		expect(q(container, 'arrange-row-sec-bass')).not.toBeNull();
 		consoleSpy.mockRestore();
 	});
 });
-
-// ── 5. DELETE's live regions — re-homed from the retired collapsed-view specs ──
-//
-// #155/S4 review F5 — `roster-section-remove-status` (the role="status" success
-// announcement, #113 review F1) and `section-remove-error` (the role="alert"
-// failure banner, including the DISTINCT "section is not empty" refusal, #110
-// review F1/F3) lost every test in the suite when page.roster-sections-ux and
-// page.roster-ux-a11y were retired. Both still render — and both now fire from a
-// DIFFERENT view than the one they were built in, which is exactly why they need
-// pinning here rather than being assumed.
 
 describe('/roster — the delete outcome is ANNOUNCED from arrange mode (#155/S4 review F5)', () => {
 	it('a SUCCESSFUL delete announces into roster-section-remove-status (role="status", empty until then)', async () => {
@@ -621,7 +530,6 @@ describe('/roster — the delete outcome is ANNOUNCED from arrange mode (#155/S4
 		await waitFor(() => {
 			expect(status!.textContent?.trim()).toContain('roster_section_removed');
 		});
-		// A success is a status, never an alert.
 		expect(q(container, 'section-remove-error')).toBeNull();
 	});
 
@@ -643,16 +551,12 @@ describe('/roster — the delete outcome is ANNOUNCED from arrange mode (#155/S4
 			expect(error!.textContent).toContain('roster_section_remove_failed');
 		});
 		expect(q(container, 'arrange-row-sec-bass')).not.toBeNull();
-		// A failure is an alert, never a status.
 		expect(q(container, 'roster-section-remove-status')?.textContent?.trim()).toBe('');
 		consoleSpy.mockRestore();
 	});
 
 	it('a REFUSED delete ("that section is not empty") gets its OWN message, distinct from the generic write failure', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		// The server-side emptiness refusal — NOTHING was written (see
-		// sectionErrors.ts): a different instruction to the user than "the delete
-		// failed". Duck-typed on `code`, same as the real SectionNotEmptyError.
 		deleteMock.mockRejectedValue({ code: 'section-not-empty' });
 		const container = await renderArrangeReady();
 
@@ -675,13 +579,7 @@ describe('/roster — the delete outcome is ANNOUNCED from arrange mode (#155/S4
 	});
 });
 
-// ── 6. Keyboard/focus invariants the relocation put at risk ──────────────────
-
 describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 review F2/F3)', () => {
-	// #273 REWORK — this test used to confirm-and-settle in one breath, which
-	// let the pair's synchronous unmount pass for a lifecycle. The write is now
-	// HELD open: the pair must stay MOUNTED (disabled) through the flight, and
-	// only the SUCCESS clears the armed state and places focus.
 	it('a SUCCESSFUL delete lands focus on the PREVIOUS SIBLING arrange row — never on the Collapsed view-mode chip, never <body>', async () => {
 		const gate = deferred();
 		deleteMock.mockImplementation(() => gate.promise);
@@ -693,8 +591,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		});
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 
-		// In flight: the pair is still on screen, disabled — the UI never shows a
-		// disarmed/rest state while the write is running (#273, agenda lifecycle).
 		await waitFor(() => {
 			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
 			expect(confirm).not.toBeNull();
@@ -708,23 +604,12 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		await waitFor(() => {
 			expect(document.activeElement).toBe(q(container, 'arrange-row-sec-alto'));
 		});
-		// The regression this pins: the chip fallback firing every time, so the
-		// next Enter/Space silently left arrange mode.
 		expect(document.activeElement).not.toBe(q(container, 'roster-view-chip-collapsed'));
 		expect(document.activeElement).not.toBe(document.body);
 		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-		// The roving tab stop travelled with the focus.
 		expect(q(container, 'arrange-row-sec-alto')?.getAttribute('tabindex')).toBe('0');
 	});
 
-	// #273 REWORK (was #155/S4 review F1 follow-up, re-homed from the retired
-	// page.roster-ux-a11y.spec.ts) — the old expectation ("focus returns to the
-	// RESTORED ✕") assumed the pair unmounts on confirm. Under the agenda's
-	// arm-state lifecycle a failure leaves the pair ARMED beside the error for
-	// direct retry, so the ✕ is never restored here: the honest landing is the
-	// re-enabled CONFIRM itself. The WCAG 2.4.3 core survives — the landing is
-	// placed AFTER `removePending` clears (a disabled <button> cannot take
-	// focus), and it must never be <body>.
 	it('a FAILED delete leaves the pair ARMED beside the error, focus on the re-enabled confirm — never <body>', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		deleteMock.mockRejectedValue(new Error('500'));
@@ -739,7 +624,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		await waitFor(() => {
 			expect(q(container, 'section-remove-error')).not.toBeNull();
 		});
-		// The pair is still armed — the rest-state ✕ was never restored.
 		const confirm = await waitFor(() => {
 			const el = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
 			expect(el).not.toBeNull();
@@ -754,21 +638,11 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		consoleSpy.mockRestore();
 	});
 
-	// #273 REWORK — the pair no longer unmounts on a refusal (agenda lifecycle:
-	// armed until success), so the old "the ✕ comes back DISABLED and focus
-	// steps to the row" sequencing moves to CANCEL time: the failure lands focus
-	// on the still-armed confirm; cancelling out of the refusal then restores an
-	// ✕ that the refetched tree has made INELIGIBLE (disabled — cannot take
-	// focus), and the row is the honest landing for THAT step. Never <body>,
-	// at either step (WCAG 2.4.3).
 	it('a REFUSED delete keeps the pair armed (focus on confirm); cancelling restores an INELIGIBLE ✕ and lands focus on the row, not <body>', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		deleteMock.mockRejectedValue({ code: 'section-not-empty' });
 		const container = await renderArrangeReady();
 
-		// The refusal's whole point: the server holds a child this tree never knew
-		// about. The reconcile reveals it, so `canDelete` goes false and the ✕ —
-		// once the user disarms — comes back DISABLED.
 		listSectionsMock.mockResolvedValue([
 			{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] },
@@ -793,8 +667,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass1')).not.toBeNull();
 		});
-		// Step 1 — the refusal leaves the pair ARMED beside the error (armed id
-		// cleared only on success); focus lands on the re-enabled confirm.
 		await waitFor(() => {
 			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
 			expect(confirm).not.toBeNull();
@@ -806,9 +678,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		});
 		expect(document.activeElement).not.toBe(document.body);
 
-		// Step 2 — CANCEL out of the refusal: the restored ✕ is now ineligible
-		// (disabled, cannot take focus), so the focus landing must step over it
-		// to the row rather than dropping to <body>.
 		await fireEvent.click(q(container, 'section-remove-cancel-sec-bass') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'section-remove-sec-bass')).not.toBeNull();
@@ -818,8 +687,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 			expect(document.activeElement).toBe(q(container, 'arrange-row-sec-bass'));
 		});
 		expect(document.activeElement).not.toBe(document.body);
-		// The roving tab stop travelled with the focus — a focused row at
-		// tabindex="-1" would leave the widget's Tab entry point somewhere else.
 		expect(q(container, 'arrange-row-sec-bass')?.getAttribute('tabindex')).toBe('0');
 		consoleSpy.mockRestore();
 	});
@@ -831,8 +698,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		];
 		expect(renderedRows().filter((r) => r.getAttribute('tabindex') === '0')).toHaveLength(1);
 
-		// The FIRST row — the one that holds the tab stop — goes into rename mode,
-		// and therefore stops rendering an `arrange-row-*` element at all.
 		await fireEvent.click(q(container, 'arrange-rename-sec-sop') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'arrange-rename-input-sec-sop')).not.toBeNull();
@@ -846,7 +711,6 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 		).toHaveLength(1);
 		expect(zeroTab[0]).toBe(q(container, 'arrange-row-sec-sop1'));
 
-		// …and Escape hands it straight back.
 		await fireEvent.keyDown(q(container, 'arrange-rename-input-sec-sop') as HTMLElement, {
 			key: 'Escape'
 		});
@@ -857,26 +721,7 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 	});
 });
 
-// (*MVOX:Palestrina* — #155/S4)
-
-// ── #237: the section delete joins the shared red-trashcan unit ────────────────
-//
-// The glyph here is the LITERAL ✕ character (U+2715), not the &times; entity —
-// the sweep must not be a blind find/replace. Beyond the glyph, this site was
-// BELOW the app's touch standard: the trigger shipped at `p-1` (~20px) in the
-// muted tone — the same defect shape #252 fixed on the arrange controls beside
-// it. The shared unit brings `min-h-11 min-w-11` BY CONSTRUCTION (PO ruling,
-// relayed via Henry 2026-09-07), and the tone follows #252's precedent: the
-// destructive red, not the page's muted-icon convention (#252 established the
-// muted convention is what read as invisible).
-//
-// Byte-preserved (glyph + face only): the canDelete gating, the disabled
-// conditions (structuralWritePending / renaming / !canDelete), the two-step
-// confirm testids, and the #110 F1 creator-only-_owner behavior — the suites
-// above locate by testid and must stay green through the swap.
-//
-// (The confirm/cancel halves' own in-flight disabled/aria-busy wiring — #237
-// found it absent and correctly left it out of a glyph sweep — is #273, below.)
+// (*MVOX:Palestrina*)
 
 describe('/roster — #237 the section-remove trigger renders the shared red trashcan at 44px', () => {
 	it('the idle ✕ becomes the shared unit: aria-hidden TrashIcon, red tone, min-h-11 min-w-11 by construction — the p-1 sub-20px face is gone', async () => {
@@ -884,23 +729,17 @@ describe('/roster — #237 the section-remove trigger renders the shared red tra
 		const btn = q(container, 'section-remove-sec-bass') as HTMLButtonElement;
 		expect(btn).not.toBeNull();
 
-		// The shared unit's face.
 		const svg = btn.querySelector('svg[data-icon="trash"]');
 		expect(svg, 'TrashIcon must render inside the trigger').not.toBeNull();
 		expect(svg?.getAttribute('aria-hidden')).toBe('true');
 
-		// The literal ✕ (U+2715) is gone — and so is the × entity, in case the
-		// swap went through a glyph-blind path.
 		expect(btn.textContent ?? '').not.toMatch(/[×✕]/);
 
-		// 44px BY CONSTRUCTION + the destructive tone (#252 precedent: the muted
-		// convention is what read as invisible; do not re-inherit it).
 		for (const cls of ['min-h-11', 'min-w-11', 'text-red-700', 'hover:text-red-800']) {
 			expect(btn.classList.contains(cls), `${cls} missing on the trigger`).toBe(true);
 		}
 		expect(btn.classList.contains('text-ink-2'), 'muted tone must go').toBe(false);
 
-		// Accessible name + title: the SAME glyph-independent key, unchanged.
 		expect(btn.getAttribute('aria-label')).toBe('roster_section_remove');
 		expect(btn.getAttribute('title')).toBe('roster_section_remove');
 	});
@@ -909,9 +748,7 @@ describe('/roster — #237 the section-remove trigger renders the shared red tra
 		const container = await renderArrangeReady();
 		const btn = q(container, 'section-remove-sec-alto') as HTMLButtonElement;
 		expect(btn).not.toBeNull();
-		// Same face…
 		expect(btn.querySelector('svg[data-icon="trash"]')).not.toBeNull();
-		// …same gate (has members → disabled, never absent).
 		expect(btn.disabled).toBe(true);
 		await fireEvent.click(btn);
 		expect(q(container, 'section-remove-confirm-sec-alto')).toBeNull();
@@ -937,28 +774,7 @@ describe('/roster — #237 the section-remove trigger renders the shared red tra
 	});
 });
 
-// (*MVOX:Palestrina* — #237 RED: section-remove joins the shared unit; ✕ U+2715
-// out, 44px by construction in, gating and two-step byte-preserved)
-
-// ── #273: the armed confirm/cancel pair adopts the agenda's ARM-STATE LIFECYCLE ──
-//
-// Premise on record (research + PO comment on #273): today the pair unmounts
-// SYNCHRONOUSLY on confirm (`pendingRemoveId = null` at the top of the handler,
-// before any await), so double-submit/cancel-mid-flight do not reproduce — by
-// render-timing accident, not by construction. "Matching the agenda's
-// treatment" (done-when 1) therefore means adopting its arm-state lifecycle,
-// verified at the agenda's three delete sites (src/routes/+page.svelte, e.g.
-// the event-delete handler):
-//
-//   - the armed id STAYS SET through the write — the pair stays MOUNTED;
-//   - both halves render DISABLED while the delete is pending; the confirm
-//     additionally carries aria-busy;
-//   - the armed id is cleared ONLY on success;
-//   - on failure the pair STAYS ARMED next to the error, re-enabled once the
-//     pending flag clears, for direct retry.
-//
-// Labels are UNCHANGED during pending (no new i18n keys) — the agenda model
-// disables in place, it does not swap copy.
+// (*MVOX:Palestrina*)
 
 describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, through the in-flight delete', () => {
 	it('confirm starts the write WITHOUT unmounting the pair: both halves disabled, confirm aria-busy, labels unchanged — and a double-tap cannot fire two deletes', async () => {
@@ -972,8 +788,6 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 		});
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 
-		// The write is in flight — the pair is STILL MOUNTED, both halves
-		// disabled, confirm aria-busy (the agenda's in-flight face).
 		await waitFor(() => {
 			const confirm = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
 			expect(confirm, 'confirm must stay mounted through the write').not.toBeNull();
@@ -984,13 +798,9 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 		const cancel = q(container, 'section-remove-cancel-sec-bass') as HTMLButtonElement;
 		expect(cancel, 'cancel must stay mounted through the write').not.toBeNull();
 		expect(cancel.disabled).toBe(true);
-		// No new i18n keys — the pending face keeps the SAME labels (the lenient
-		// message mock renders key names, so these pin the keys themselves).
 		expect(confirm.getAttribute('aria-label')).toBe('roster_section_remove_confirm');
 		expect(cancel.getAttribute('aria-label')).toBe('roster_section_remove_cancel');
 
-		// Double-tap (the season-manage precedent's shape): a second tap on the
-		// still-mounted confirm writes nothing more.
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 		expect(deleteMock).toHaveBeenCalledTimes(1);
 
@@ -1017,9 +827,6 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			);
 		});
 
-		// The "cancel that does not cancel" (#253/#264 shape): mid-flight, cancel
-		// must do NOTHING — the pair stays armed on screen, the rest-state ✕ is
-		// never shown while the write is running.
 		await fireEvent.click(q(container, 'section-remove-cancel-sec-bass') as HTMLElement);
 		expect(
 			q(container, 'section-remove-confirm-sec-bass'),
@@ -1031,8 +838,6 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			'the rest-state ✕ must never render while the write is running'
 		).toBeNull();
 
-		// Release: the delete LANDS, and the UI says so — row gone, success
-		// announced. Nothing about the mid-flight cancel tap changed the outcome.
 		gate.settle();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
@@ -1095,9 +900,6 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 		await waitFor(() => {
 			expect(q(container, 'section-remove-error')).not.toBeNull();
 		});
-		// The agenda's retry convention: armed id cleared ONLY on success — the
-		// pair sits re-enabled next to the error, aria-busy gone; the rest-state
-		// ✕ was never restored.
 		const confirm = await waitFor(() => {
 			const el = q(container, 'section-remove-confirm-sec-bass') as HTMLButtonElement;
 			expect(el).not.toBeNull();
@@ -1109,10 +911,8 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			false
 		);
 		expect(q(container, 'section-remove-sec-bass')).toBeNull();
-		// The failed delete's reconcile restored the row (server still holds it).
 		expect(q(container, 'arrange-row-sec-bass')).not.toBeNull();
 
-		// Direct retry — the SAME still-armed confirm, no re-arming dance.
 		deleteMock.mockResolvedValue(undefined);
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 		await waitFor(() => {
@@ -1127,15 +927,8 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 		consoleSpy.mockRestore();
 	});
 
-	// Done-when 4 + the issue's honest-comments rationale: a comment describing
-	// a CLOSED gap must not survive the fix — neither the source original
-	// (drifted to ~roster/+page.svelte:4123) nor this file's own #237-era
-	// near-duplicate. Grep-style, needle assembled so this test's own source
-	// never matches itself.
 	it('the KNOWN-GAP comments (source + this spec file) are removed with the fix', () => {
 		const needle = ['carry no disabled/', 'aria-busy wiring'].join('');
-		// vitest's cwd is the project root; import.meta.url is not a file: URL
-		// under the transform, so resolve from the root instead.
 		const page = readFileSync(resolve(process.cwd(), 'src/routes/roster/+page.svelte'), 'utf-8');
 		expect(
 			page.includes(needle),
@@ -1152,6 +945,4 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 	});
 });
 
-// (*MVOX:Palestrina* — #273 RED: the armed pair through the in-flight write —
-// agenda arm-state lifecycle: mounted + disabled + aria-busy in flight, cleared
-// only on success, armed-for-retry on failure; cancel-mid-flight inert)
+// (*MVOX:Palestrina*)
