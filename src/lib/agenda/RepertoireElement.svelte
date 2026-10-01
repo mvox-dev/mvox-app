@@ -570,45 +570,30 @@
 	{/if}
 	{#if isExpanded}
 		<div id={expandedRegionId} data-testid="works-expanded" class="flex flex-col gap-2 pt-1 pl-2">
-			{#if hasOrdinals}
-				<ol class="list-decimal divide-y divide-dashed divide-ink-5 pl-4">
-					<!-- Keyed on id, never ordinal: two program_items can share the default 0. -->
-					{#each orderedRows as row, index (row.id)}
-						<!-- No display utility on the <li>: display: flex drops list-item and the numbering. -->
-						<li
-							data-testid="work-row"
-							data-inactive={isInactive(row) ? 'true' : undefined}
-							data-status={row.status ?? undefined}
-							class="py-2 first:pt-0 last:pb-0"
-							class:opacity-60={isInactive(row)}
-						>
-							<div class="flex flex-col gap-0.5">
-								{@render workRowContent(row)}
-								{@render manageRowControls(row, index)}
-							</div>
-						</li>
-					{/each}
-				</ol>
-			{:else}
-				<!-- Season repertoire has no concert position, so <ul>. data-status mirrors the row's
-				     status so specs can check the optimistic patch. -->
-				<ul class="divide-y divide-dashed divide-ink-5">
-					{#each orderedRows as row, index (row.id)}
-						<li
-							data-testid="work-row"
-							data-inactive={isInactive(row) ? 'true' : undefined}
-							data-status={row.status ?? undefined}
-							class="py-2 first:pt-0 last:pb-0"
-							class:opacity-60={isInactive(row)}
-						>
-							<div class="flex flex-col gap-0.5">
-								{@render workRowContent(row)}
-								{@render manageRowControls(row, index)}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			{/if}
+			<!-- Season repertoire has no concert position, so <ul>. Rows key on id, never ordinal:
+			     two program_items can share the default 0. -->
+			<svelte:element
+				this={hasOrdinals ? 'ol' : 'ul'}
+				class={hasOrdinals
+					? 'list-decimal divide-y divide-dashed divide-ink-5 pl-4'
+					: 'divide-y divide-dashed divide-ink-5'}
+			>
+				{#each orderedRows as row, index (row.id)}
+					<!-- No display utility on the <li>: display: flex drops list-item and the numbering. -->
+					<li
+						data-testid="work-row"
+						data-inactive={isInactive(row) ? 'true' : undefined}
+						data-status={row.status ?? undefined}
+						class="py-2 first:pt-0 last:pb-0"
+						class:opacity-60={isInactive(row)}
+					>
+						<div class="flex flex-col gap-0.5">
+							{@render workRowContent(row)}
+							{@render manageRowControls(row, index)}
+						</div>
+					</li>
+				{/each}
+			</svelte:element>
 			{@render manageAddControls()}
 		</div>
 	{/if}

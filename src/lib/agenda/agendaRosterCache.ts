@@ -4,35 +4,35 @@ import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 
 const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 
+type Cfg = { db: string; token: string };
+
+interface CacheSlot<C extends { db: string; fetchedAt: number }> {
+	read(): C | null;
+	write(entry: C): void;
+	setFailed(failed: boolean): void;
+}
+
 export function createAgendaRosterCache(ag: AgendaLoadState) {
-	function getRoster(cfg: { db: string; token: string }): Promise<RosterRow[]> {
-		const cacheValid =
-			ag.rosterCache &&
-			ag.rosterCache.db === cfg.db &&
-			Date.now() - ag.rosterCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		if (cacheValid) {
-			ag.rosterRows = ag.rosterCache!.roster;
-			ag.rosterReadFailed = false;
-			ag.rosterPartial = ag.rosterCache!.truncated;
-			return Promise.resolve(ag.rosterCache!.roster);
+	function cached<C extends { db: string; fetchedAt: number }, T>(
+		cfg: Cfg,
+		slot: CacheSlot<C>,
+		load: () => Promise<C>,
+		apply: (entry: C) => T
+	): Promise<T> {
+		const hit = slot.read();
+		if (hit && hit.db === cfg.db && Date.now() - hit.fetchedAt < ROSTER_CACHE_TTL_MS) {
+			slot.setFailed(false);
+			return Promise.resolve(apply(hit));
 		}
 		ag.rosterReadsInFlight += 1;
-		ag.rosterReadFailed = false;
-		return loadRoster(cfg)
-			.then((read) => {
-				ag.rosterCache = {
-					db: cfg.db,
-					roster: read.items,
-					truncated: read.truncated,
-					fetchedAt: Date.now()
-				};
-				ag.rosterRows = read.items;
-				ag.rosterPartial = read.truncated;
-				return read.items;
+		slot.setFailed(false);
+		return load()
+			.then((entry) => {
+				slot.write(entry);
+				return apply(entry);
 			})
 			.catch((e: unknown) => {
-				ag.rosterReadFailed = true;
-				ag.rosterPartial = false;
+				slot.setFailed(true);
 				throw e;
 			})
 			.finally(() => {
@@ -40,31 +40,46 @@ export function createAgendaRosterCache(ag: AgendaLoadState) {
 			});
 	}
 
-	function getSections(cfg: { db: string; token: string }): Promise<SectionNode[]> {
-		const cacheValid =
-			ag.sectionsCache &&
-			ag.sectionsCache.db === cfg.db &&
-			Date.now() - ag.sectionsCache.fetchedAt < ROSTER_CACHE_TTL_MS;
-		if (cacheValid) {
-			ag.rosterSections = ag.sectionsCache!.sections;
-			ag.sectionsReadFailed = false;
-			return Promise.resolve(ag.sectionsCache!.sections);
-		}
-		ag.rosterReadsInFlight += 1;
-		ag.sectionsReadFailed = false;
-		return listSections(cfg)
-			.then((sections) => {
-				ag.sectionsCache = { db: cfg.db, sections, fetchedAt: Date.now() };
-				ag.rosterSections = sections;
-				return sections;
-			})
-			.catch((e: unknown) => {
-				ag.sectionsReadFailed = true;
-				throw e;
-			})
-			.finally(() => {
-				ag.rosterReadsInFlight -= 1;
-			});
+	function getRoster(cfg: Cfg): Promise<RosterRow[]> {
+		return cached(
+			cfg,
+			{
+				read: () => ag.rosterCache,
+				write: (entry) => (ag.rosterCache = entry),
+				setFailed: (failed) => {
+					ag.rosterReadFailed = failed;
+					if (failed) ag.rosterPartial = false;
+				}
+			},
+			() =>
+				loadRoster(cfg).then((read) => ({
+					db: cfg.db,
+					roster: read.items,
+					truncated: read.truncated,
+					fetchedAt: Date.now()
+				})),
+			(entry) => {
+				ag.rosterRows = entry.roster;
+				ag.rosterPartial = entry.truncated;
+				return entry.roster;
+			}
+		);
+	}
+
+	function getSections(cfg: Cfg): Promise<SectionNode[]> {
+		return cached(
+			cfg,
+			{
+				read: () => ag.sectionsCache,
+				write: (entry) => (ag.sectionsCache = entry),
+				setFailed: (failed) => (ag.sectionsReadFailed = failed)
+			},
+			() => listSections(cfg).then((sections) => ({ db: cfg.db, sections, fetchedAt: Date.now() })),
+			(entry) => {
+				ag.rosterSections = entry.sections;
+				return entry.sections;
+			}
+		);
 	}
 
 	return { getRoster, getSections };

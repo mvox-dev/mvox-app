@@ -16,6 +16,11 @@
 		onselect: (value: AgendaTypeFilter) => void;
 	} = $props();
 
+	const views = [
+		{ view: 'list', label: m.agenda_view_list },
+		{ view: 'month', label: m.agenda_view_month }
+	] as const;
+
 	const CHIP_PRESSED_CLASS = 'font-semibold ring-1 ring-ink';
 	function agendaTypeChipClass(type: AgendaFilterBucket): string {
 		return filter === type
@@ -74,35 +79,22 @@
 		class="inline-flex overflow-hidden rounded-md border border-ink-4"
 		onkeydown={handleAgendaViewKeydown}
 	>
-		<button
-			type="button"
-			data-testid="agenda-view-list"
-			data-agenda-view="list"
-			role="radio"
-			aria-checked={$agendaViewStore === 'list' ? 'true' : 'false'}
-			tabindex={$agendaViewStore === 'list' ? 0 : -1}
-			class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
-			'list'
-				? 'bg-ink text-paper'
-				: 'text-ink-2'}"
-			onclick={() => setAgendaView('list')}
-		>
-			{m.agenda_view_list()}
-		</button>
-		<button
-			type="button"
-			data-testid="agenda-view-month"
-			data-agenda-view="month"
-			role="radio"
-			aria-checked={$agendaViewStore === 'month' ? 'true' : 'false'}
-			tabindex={$agendaViewStore === 'month' ? 0 : -1}
-			class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
-			'month'
-				? 'bg-ink text-paper'
-				: 'text-ink-2'}"
-			onclick={() => setAgendaView('month')}
-		>
-			{m.agenda_view_month()}
-		</button>
+		{#each views as { view, label } (view)}
+			<button
+				type="button"
+				data-testid="agenda-view-{view}"
+				data-agenda-view={view}
+				role="radio"
+				aria-checked={$agendaViewStore === view ? 'true' : 'false'}
+				tabindex={$agendaViewStore === view ? 0 : -1}
+				class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
+				view
+					? 'bg-ink text-paper'
+					: 'text-ink-2'}"
+				onclick={() => setAgendaView(view)}
+			>
+				{label()}
+			</button>
+		{/each}
 	</div>
 </div>
