@@ -1,11 +1,12 @@
 // Season field and conductor writes: replace a field's value, add or remove a conductor.
 import { entuFetch } from '$lib/entu/request';
+import { replaceEntityProperty, type EntuWireValue } from '$lib/entu/replaceProperty';
 import type { EntuCfg } from './entuSeasons';
 
 export type SeasonEditableField = 'name' | 'start_date' | 'end_date';
 
 /** Seasons carry calendar dates, never datetime (unlike events). */
-function seasonWireProp(field: SeasonEditableField, value: string): Record<string, unknown> {
+function seasonWireProp(field: SeasonEditableField, value: string): EntuWireValue {
 	switch (field) {
 		case 'start_date':
 		case 'end_date':
@@ -15,7 +16,6 @@ function seasonWireProp(field: SeasonEditableField, value: string): Record<strin
 	}
 }
 
-/** POST before DELETE: a failed POST leaves the old value in place. */
 export async function updateSeasonField(
 	cfg: EntuCfg,
 	seasonId: string,
@@ -23,28 +23,13 @@ export async function updateSeasonField(
 	value: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(cfg.db, `entity/${seasonId}?props=${field}`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`updateSeasonField lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: Record<string, Array<{ _id: string }>> };
-	const existing = body.entity?.[field] ?? [];
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${seasonId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([seasonWireProp(field, value)])
-		},
-		fetchImpl
+	await replaceEntityProperty(
+		cfg,
+		seasonId,
+		seasonWireProp(field, value),
+		fetchImpl,
+		'updateSeasonField'
 	);
-	if (!postRes.ok) throw new Error(`updateSeasonField POST failed: ${postRes.status}`);
-
-	for (const v of existing) {
-		const delRes = await entuFetch(cfg.db, `property/${v._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`updateSeasonField delete failed: ${delRes.status}`);
-	}
 }
 
 export async function addSeasonConductor(

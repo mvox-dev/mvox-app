@@ -130,7 +130,7 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 
 // ── updateSeasonField — the replace choreography ────────────────────────────────
 
-describe('updateSeasonField — GET old → POST new → DELETE old, in that order', () => {
+describe('updateSeasonField — GET old → POST over the first old value → DELETE only extras', () => {
 	function editRoute(existing: Array<{ _id: string }>) {
 		return (url: string, method: string): Response => {
 			if (method === 'GET') return json({ entity: { _id: 'season1', name: existing } });
@@ -138,19 +138,18 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		};
 	}
 
-	it('name: GETs the pre-existing value ids FIRST, POSTs exactly ONE {type:"name", string} value, then DELETEs EVERY old id (not just the first)', async () => {
+	it('name: GETs the pre-existing value ids FIRST, POSTs exactly ONE {type:"name", string} value carrying the first old _id, then DELETEs only the extra', async () => {
 		const { impl, calls } = recordingFetch(
 			editRoute([{ _id: 'old-1' }, { _id: 'old-2' }])
 		);
 		await updateSeasonField(cfg, 'season1', 'name', 'Autumn splendour', impl);
 
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'DELETE', 'DELETE']);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'DELETE']);
 		expect(calls[0].url).toContain('/entity/season1');
 		expect(calls[0].url).toContain('props=name');
 		expect(calls[1].url).toContain('/entity/season1');
-		expect(calls[1].body).toEqual([{ type: 'name', string: 'Autumn splendour' }]);
-		expect(calls[2].url).toContain('/property/old-1');
-		expect(calls[3].url).toContain('/property/old-2');
+		expect(calls[1].body).toEqual([{ _id: 'old-1', type: 'name', string: 'Autumn splendour' }]);
+		expect(calls[2].url).toContain('/property/old-2');
 	});
 
 	it('start_date goes over the wire as {type:"start_date", date} — a season carries calendar DATES, never datetime', async () => {
@@ -161,7 +160,7 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 
 		const post = calls.find((c) => c.method === 'POST');
 		expect(post).toBeDefined();
-		expect(post!.body).toEqual([{ type: 'start_date', date: '2026-10-01' }]);
+		expect(post!.body).toEqual([{ _id: 'sd-1', type: 'start_date', date: '2026-10-01' }]);
 	});
 
 	it('end_date likewise: {type:"end_date", date}', async () => {
@@ -171,7 +170,7 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		await updateSeasonField(cfg, 'season1', 'end_date', '2027-06-30', impl);
 
 		const post = calls.find((c) => c.method === 'POST');
-		expect(post!.body).toEqual([{ type: 'end_date', date: '2027-06-30' }]);
+		expect(post!.body).toEqual([{ _id: 'ed-1', type: 'end_date', date: '2027-06-30' }]);
 	});
 
 	it('a FAILED POST throws and issues NO delete — the old value survives server-side (the whole point of POST-before-DELETE)', async () => {
@@ -197,6 +196,23 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		);
 		await updateSeasonField(cfg, 'season1', 'name', 'First name ever', impl);
 		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+	});
+
+	it('a failure after the POST leaves the field holding exactly one value, the new one', async () => {
+		let stored: Array<{ _id: string; string: string }> = [{ _id: 'old-1', string: 'Old name' }];
+		const { impl, calls } = recordingFetch((_url, method) => {
+			if (method === 'GET') return json({ entity: { name: stored } });
+			if (method === 'DELETE') return json({}, 500);
+			const [entry] = calls[calls.length - 1].body as Array<{ _id?: string; string: string }>;
+			stored = entry._id
+				? stored.map((v) => (v._id === entry._id ? { _id: v._id, string: entry.string } : v))
+				: [...stored, { _id: 'new-1', string: entry.string }];
+			return json({});
+		});
+
+		await updateSeasonField(cfg, 'season1', 'name', 'New name', impl).catch(() => {});
+
+		expect(stored).toEqual([{ _id: 'old-1', string: 'New name' }]);
 	});
 });
 
