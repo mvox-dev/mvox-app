@@ -5,7 +5,6 @@ export const NEXT_STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/agenda/EventCreateForm.svelte',
 	'src/lib/agenda/RepertoireElement.svelte',
 	'src/lib/entity/entityCreate.ts',
 	'src/lib/entu/readCache.ts',
@@ -25,7 +24,6 @@ export const LINE_CAP_EXCEPTIONS: readonly string[] = [
 ];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
-	'src/lib/agenda/EventCreateForm.svelte',
 	'src/lib/agenda/RepertoireElement.svelte',
 	'src/lib/agenda/SeriesCreateForm.svelte',
 	'src/lib/components/StrokeSurface.svelte',

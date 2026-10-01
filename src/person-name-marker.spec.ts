@@ -196,7 +196,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/SeasonManageSeries.svelte': {
 		'series.name': 'an event series'
 	},
-	'src/lib/agenda/EventCreateForm.svelte': {
+	'src/lib/agenda/EventCreateFormFields.svelte': {
 		'eventCreateSeriesDefaults.name': 'the series the event is created in'
 	},
 	'src/lib/events/EventFieldEditTitle.svelte': {
