@@ -5,6 +5,7 @@ import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
+import { referenceIds } from '$lib/entu/references';
 import type { EventWire, SeasonWire, SeriesWire } from '$lib/entu/wireTypes';
 
 export type EventInheritedField = 'name' | 'durationMinutes' | 'location' | 'description';
@@ -139,8 +140,8 @@ export async function loadEventDetail(
 		inheritedFields.push('description');
 	}
 
-	const seasonConductors = (season?.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const eventConductors = (event.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const seasonConductors = referenceIds(season?.conductor);
+	const eventConductors = referenceIds(event.conductor);
 	// Racing writers can store one person twice; dedupe by id so ids and names stay aligned.
 	const conductorIds = [...new Set(resolveConductors(seasonConductors, eventConductors))];
 
@@ -163,10 +164,10 @@ export async function loadEventDetail(
 		.filter((resolvedName) => resolvedName !== '');
 
 	const capacity = event.capacity?.[0]?.number ?? null;
-	const ownerIds = (event._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const editorIds = (event._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const seasonOwnerIds = (season?._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const seasonEditorIds = (season?._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const ownerIds = referenceIds(event._owner);
+	const editorIds = referenceIds(event._editor);
+	const seasonOwnerIds = referenceIds(season?._owner);
+	const seasonEditorIds = referenceIds(season?._editor);
 
 	return {
 		id: event._id,

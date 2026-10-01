@@ -1,8 +1,9 @@
 // The season's event series: the manage panel's list and the event page's picker options.
 import { entuFetch } from '$lib/entu/request';
 import { isTruncated } from '$lib/entu/listRead';
+import { referenceIds } from '$lib/entu/references';
 import type { EntuCfg } from './entuSeasons';
-import { ownerIdsOf, seriesRefOf, type EventEntity, type SeriesEntity } from './seasonShared';
+import { seriesRefOf, type EventEntity, type SeriesEntity } from './seasonShared';
 
 export interface SeriesListItem {
 	id: string;
@@ -61,7 +62,7 @@ export async function listEventSeriesForSeason(
 			id: series._id,
 			name: series.name?.[0]?.string ?? '',
 			eventCount: counts.get(series._id) ?? 0,
-			ownerIds: ownerIdsOf(series)
+			ownerIds: referenceIds(series._owner)
 		})),
 		truncated: seriesTruncated || eventsTruncated
 	};

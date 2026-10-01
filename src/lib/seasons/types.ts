@@ -1,8 +1,6 @@
 // Season, series and event shapes for the agenda read path.
 import type { EventWire, SeasonWire, SeriesWire } from '$lib/entu/wireTypes';
 
-export type { RightsRefs } from '$lib/entu/wireTypes';
-
 export type SeasonRaw = SeasonWire;
 
 export interface Season {
