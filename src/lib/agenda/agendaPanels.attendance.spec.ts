@@ -96,6 +96,30 @@ describe('agenda attendance panel load', () => {
 		expect(ag.attendancePendingMemberIds).toEqual(new Set(['m1']));
 	});
 
+	it('keeps a clear still saving from before a reopen when the server has the mark', async () => {
+		const marked = { attendanceId: 'att-1', memberId: 'm1', status: 'present' as const };
+		const listAttendance = vi.fn().mockResolvedValueOnce([]).mockResolvedValue([marked]);
+		const { ag, queue, loader } = setup(listAttendance);
+		loadRosterMock.mockResolvedValue({ items: [ALICE], total: 1, truncated: false });
+		applyAttendanceChangeMock
+			.mockResolvedValueOnce({ attendanceId: 'att-1' })
+			.mockReturnValue(new Promise(() => {}));
+		loader.openAttendancePanel(ITEM);
+		await settle();
+
+		const cfg = { db: 'sampledb', token: 'jwt-abc' };
+		queue.request({ cfg, eventId: ITEM.id, memberId: 'm1', existing: null, newStatus: 'present' });
+		await settle();
+		expect(ag.attendanceMap).toEqual({ m1: { attendanceId: 'att-1', status: 'present' } });
+		queue.request({ cfg, eventId: ITEM.id, memberId: 'm1', existing: marked, newStatus: null });
+		loader.closeAttendancePanel();
+		loader.openAttendancePanel(ITEM);
+		await settle();
+
+		expect(ag.attendanceMap).toEqual({});
+		expect(ag.attendancePendingMemberIds).toEqual(new Set(['m1']));
+	});
+
 	it('logs a failed load', async () => {
 		const failure = new Error('read failed');
 		const { ag, loader } = setup(vi.fn().mockRejectedValue(failure));
