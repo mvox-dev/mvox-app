@@ -1,6 +1,7 @@
 <script lang="ts">
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import Field from '$lib/components/Field.svelte';
 	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -288,48 +289,44 @@
 					{m.write_unavailable_no_signal()}
 				</p>
 			{/if}
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_interval_label()}
-				</span>
-				<input
-					type="number"
-					min="1"
-					data-testid="event-convert-interval"
-					aria-label={m.event_convert_interval_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertIntervalDays}
-					oninput={(e) => {
-						eventConvertIntervalDays = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_duration_label()}
-				</span>
-				<input
-					type="number"
-					min="1"
-					data-testid="event-convert-duration"
-					aria-label={m.event_convert_duration_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'duration', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertDuration}
-					oninput={(e) => {
-						eventConvertDuration = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
+			<Field label={m.event_convert_interval_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="number"
+						min="1"
+						data-testid="event-convert-interval"
+						aria-label={m.event_convert_interval_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
+						value={eventConvertIntervalDays}
+						oninput={(e) => {
+							eventConvertIntervalDays = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						{...control}
+					/>
+				{/snippet}
+			</Field>
+			<Field label={m.event_convert_duration_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="number"
+						min="1"
+						data-testid="event-convert-duration"
+						aria-label={m.event_convert_duration_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'duration', 'event-convert-error')}
+						value={eventConvertDuration}
+						oninput={(e) => {
+							eventConvertDuration = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						{...control}
+					/>
+				{/snippet}
+			</Field>
 			<p
 				data-testid="event-convert-start-date"
 				class="flex w-full flex-col gap-0.5"
@@ -341,26 +338,24 @@
 					{tallinnWallClockParts(detail.startDatetime).date}
 				</span>
 			</p>
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_end_date_label()}
-				</span>
-				<input
-					type="date"
-					data-testid="event-convert-end-date"
-					aria-label={m.event_convert_end_date_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'end', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertEndDate}
-					oninput={(e) => {
-						eventConvertEndDate = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
+			<Field label={m.event_convert_end_date_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="date"
+						data-testid="event-convert-end-date"
+						aria-label={m.event_convert_end_date_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'end', 'event-convert-error')}
+						value={eventConvertEndDate}
+						oninput={(e) => {
+							eventConvertEndDate = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						{...control}
+					/>
+				{/snippet}
+			</Field>
 			{#if eventConvertProgress}
 				<p
 					data-testid="event-convert-progress"

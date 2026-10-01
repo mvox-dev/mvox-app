@@ -5,6 +5,7 @@
 	import FormError from '$lib/components/FormError.svelte';
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import Field from '$lib/components/Field.svelte';
 	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
@@ -349,60 +350,60 @@
 			{m.write_unavailable_no_signal()}
 		</p>
 	{/if}
-	<label class="flex w-full flex-col gap-0.5">
-		<span data-testid="event-create-type-label" class="text-xs text-ink-2">
-			{m.event_create_type_label()}
-		</span>
-		<select
-			data-testid="event-create-type"
-			{...fieldErrorAttrs(eventCreateErrorField, 'type', 'event-create-error')}
-			value={eventCreateType}
-			onchange={(e) => {
-				eventCreateType = (e.currentTarget as HTMLSelectElement).value;
-				clearEventCreateError();
-			}}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		>
-			<option value="">{m.event_create_type_placeholder()}</option>
-			{#each CANONICAL_EVENT_TYPES as type (type)}
-				<option value={type}>{eventTypeLabel(type)}</option>
-			{/each}
-		</select>
-	</label>
+	<Field label={m.event_create_type_label()} labelTestid="event-create-type-label">
+		{#snippet children(control)}
+			<select
+				data-testid="event-create-type"
+				{...fieldErrorAttrs(eventCreateErrorField, 'type', 'event-create-error')}
+				value={eventCreateType}
+				onchange={(e) => {
+					eventCreateType = (e.currentTarget as HTMLSelectElement).value;
+					clearEventCreateError();
+				}}
+				{...control}
+			>
+				<option value="">{m.event_create_type_placeholder()}</option>
+				{#each CANONICAL_EVENT_TYPES as type (type)}
+					<option value={type}>{eventTypeLabel(type)}</option>
+				{/each}
+			</select>
+		{/snippet}
+	</Field>
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_season_label()}</span>
-		<select
-			data-testid="event-create-season"
-			{...fieldErrorAttrs(eventCreateErrorField, 'season', 'event-create-error')}
-			value={eventCreateSeasonId}
-			onchange={(e) =>
-				handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		>
-			<option value="">{m.event_create_season_placeholder()}</option>
-			{#each seasons as season (season.id)}
-				<option value={season.id}>{season.name}</option>
-			{/each}
-		</select>
-	</label>
+	<Field label={m.event_create_season_label()}>
+		{#snippet children(control)}
+			<select
+				data-testid="event-create-season"
+				{...fieldErrorAttrs(eventCreateErrorField, 'season', 'event-create-error')}
+				value={eventCreateSeasonId}
+				onchange={(e) =>
+					handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
+				{...control}
+			>
+				<option value="">{m.event_create_season_placeholder()}</option>
+				{#each seasons as season (season.id)}
+					<option value={season.id}>{season.name}</option>
+				{/each}
+			</select>
+		{/snippet}
+	</Field>
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_series_label()}</span>
-		<select
-			data-testid="event-create-series"
-			value={eventCreateSeriesId}
-			disabled={eventCreateSeasonId === ''}
-			onchange={(e) =>
-				handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-		>
-			<option value="">{m.event_create_series_none()}</option>
-			{#each eventCreateSeriesOptions as series (series.id)}
-				<option value={series.id}>{series.name}</option>
-			{/each}
-		</select>
-	</label>
+	<Field label={m.event_create_series_label()} disabled={eventCreateSeasonId === ''}>
+		{#snippet children(control)}
+			<select
+				data-testid="event-create-series"
+				value={eventCreateSeriesId}
+				onchange={(e) =>
+					handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
+				{...control}
+			>
+				<option value="">{m.event_create_series_none()}</option>
+				{#each eventCreateSeriesOptions as series (series.id)}
+					<option value={series.id}>{series.name}</option>
+				{/each}
+			</select>
+		{/snippet}
+	</Field>
 
 	{#if eventCreateSeriesId === ''}
 		<p data-testid="event-create-series-hint" class="text-xs text-ink-2">
@@ -410,22 +411,23 @@
 		</p>
 	{/if}
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_name_label()}</span>
-		<input
-			type="text"
-			data-testid="event-create-name"
-			use:focusOnMount
-			{...fieldErrorAttrs(eventCreateErrorField, 'name', 'event-create-error')}
-			placeholder={m.event_create_name_placeholder()}
-			value={eventCreateName}
-			oninput={(e) => {
-				eventCreateName = (e.currentTarget as HTMLInputElement).value;
-				clearEventCreateError();
-			}}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		/>
-	</label>
+	<Field label={m.event_create_name_label()}>
+		{#snippet children(control)}
+			<input
+				type="text"
+				data-testid="event-create-name"
+				use:focusOnMount
+				{...fieldErrorAttrs(eventCreateErrorField, 'name', 'event-create-error')}
+				placeholder={m.event_create_name_placeholder()}
+				value={eventCreateName}
+				oninput={(e) => {
+					eventCreateName = (e.currentTarget as HTMLInputElement).value;
+					clearEventCreateError();
+				}}
+				{...control}
+			/>
+		{/snippet}
+	</Field>
 	{#if eventCreateSeriesDefaults?.name}
 		<p data-testid="event-create-name-inherited" class="text-xs text-ink-2">
 			{m.event_create_inherited_from_series({ value: eventCreateSeriesDefaults.name })}
@@ -513,32 +515,34 @@
 		</p>
 	{/if}
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_capacity_label()}</span>
-		<input
-			type="number"
-			data-testid="event-create-capacity"
-			placeholder={m.event_create_capacity_placeholder()}
-			value={eventCreateCapacity}
-			oninput={(e) =>
-				(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		/>
-	</label>
+	<Field label={m.event_create_capacity_label()}>
+		{#snippet children(control)}
+			<input
+				type="number"
+				data-testid="event-create-capacity"
+				placeholder={m.event_create_capacity_placeholder()}
+				value={eventCreateCapacity}
+				oninput={(e) =>
+					(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
+				{...control}
+			/>
+		{/snippet}
+	</Field>
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_location_label()}</span>
-		<input
-			type="text"
-			data-testid="event-create-location"
-			list={locationSuggestionsId}
-			placeholder={m.event_create_location_placeholder()}
-			value={eventCreateLocation}
-			oninput={(e) =>
-				(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		/>
-	</label>
+	<Field label={m.event_create_location_label()}>
+		{#snippet children(control)}
+			<input
+				type="text"
+				data-testid="event-create-location"
+				list={locationSuggestionsId}
+				placeholder={m.event_create_location_placeholder()}
+				value={eventCreateLocation}
+				oninput={(e) =>
+					(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
+				{...control}
+			/>
+		{/snippet}
+	</Field>
 	{#if eventCreateSeriesDefaults?.defaultLocation}
 		<p data-testid="event-create-location-inherited" class="text-xs text-ink-2">
 			{m.event_create_inherited_from_series({
@@ -547,17 +551,18 @@
 		</p>
 	{/if}
 
-	<label class="flex w-full flex-col gap-0.5">
-		<span class="text-xs text-ink-2">{m.event_create_description_label()}</span>
-		<textarea
-			data-testid="event-create-description"
-			placeholder={m.event_create_description_placeholder()}
-			value={eventCreateDescription}
-			oninput={(e) =>
-				(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-		></textarea>
-	</label>
+	<Field label={m.event_create_description_label()}>
+		{#snippet children(control)}
+			<textarea
+				data-testid="event-create-description"
+				placeholder={m.event_create_description_placeholder()}
+				value={eventCreateDescription}
+				oninput={(e) =>
+					(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
+				{...control}
+			></textarea>
+		{/snippet}
+	</Field>
 	{#if eventCreateSeriesDefaults?.defaultDescription}
 		<p data-testid="event-create-description-inherited" class="text-xs text-ink-2">
 			{m.event_create_inherited_from_series({
