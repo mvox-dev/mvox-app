@@ -199,7 +199,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/events/EventFieldEditTitle.svelte': {
 		'detail.name': 'the event\'s own name'
 	},
-	'src/lib/events/EventScheduleSection.svelte': {
+	'src/lib/events/EventScheduleRow.svelte': {
 		'row.name': 'a schedule (agenda) row'
 	},
 	'src/lib/library/WorkRow.svelte': {

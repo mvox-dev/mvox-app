@@ -41,6 +41,8 @@ describe('svelteSurfaces', () => {
 			'src/lib/events/EventFieldEditTime.svelte',
 			'src/lib/events/EventFieldEditTitle.svelte',
 			'src/lib/events/EventRsvpSection.svelte',
+			'src/lib/events/EventScheduleAddForm.svelte',
+			'src/lib/events/EventScheduleRow.svelte',
 			'src/lib/events/EventScheduleSection.svelte',
 			'src/lib/events/EventSeriesPicker.svelte',
 			'src/lib/events/EventWorksSection.svelte',

@@ -1,20 +1,15 @@
 <script lang="ts">
-	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { tallinnLocalToUtcIso, timeFormatStore, toTallinnLocalInputValue } from '$lib/preferences/timeFormat';
+	import { tallinnLocalToUtcIso, toTallinnLocalInputValue } from '$lib/preferences/timeFormat';
 	import { compareScheduleItems } from '$lib/schedule/scheduleSort';
-	import { scheduleRowTime } from '$lib/events/eventTime';
-	import TimeSelect from '$lib/components/TimeSelect.svelte';
-	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
-	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { ScheduleItem } from '$lib/schedule/scheduleData';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
-	import { focusOnMount } from '$lib/a11y/focusable';
-	import EditActivator from '$lib/components/EditActivator.svelte';
+	import EventScheduleRow from '$lib/events/EventScheduleRow.svelte';
+	import EventScheduleAddForm from '$lib/events/EventScheduleAddForm.svelte';
 
 	let {
 		detail,
@@ -328,229 +323,45 @@
 		{#if ev.scheduleRows.length > 0}
 			<ul class="flex flex-col gap-1">
 				{#each ev.scheduleRows as row (row.id)}
-					<li class="flex flex-col gap-0.5">
-						<div class="flex items-center gap-2 text-sm text-ink">
-							{#if isEditor && scheduleEditingId === row.id}
-								<div
-									data-schedule-edit-row={row.id}
-									class="flex flex-1 flex-wrap items-end gap-2"
-								>
-									<div class="flex flex-col gap-0.5">
-										<label
-											for={`event-schedule-edit-name-input-${row.id}`}
-											class="text-xs text-ink-2"
-										>
-											{m.event_schedule_name_label()}
-										</label>
-										<input
-											type="text"
-											id={`event-schedule-edit-name-input-${row.id}`}
-											data-testid={`event-schedule-edit-name-${row.id}`}
-											class="border-b border-ink bg-transparent text-ink"
-											value={scheduleEditName}
-											use:focusOnMount
-											oninput={(e) => {
-												scheduleEditName = (
-													e.currentTarget as HTMLInputElement
-												).value;
-												clearScheduleError(`schedule-edit-name-${row.id}`);
-											}}
-											onblur={(e) => handleScheduleNameBlur(e, row.id)}
-											onkeydown={(e) => handleScheduleNameKeydown(e, row.id)}
-										/>
-									</div>
-									<div class="flex flex-col gap-0.5">
-										<span
-											id={`event-schedule-edit-datetime-${row.id}-label`}
-											class="text-xs text-ink-2">{m.event_schedule_datetime_label()}</span
-										>
-										<div
-											data-testid={`event-schedule-edit-datetime-${row.id}`}
-											role="group"
-											aria-labelledby={`event-schedule-edit-datetime-${row.id}-label`}
-											class="flex flex-wrap items-center gap-2 text-ink-2"
-											onfocusout={(e) =>
-												handleScheduleEditDatetimeFocusOut(e, row.id)}
-										>
-											<input
-												type="date"
-												data-testid={`event-schedule-edit-datetime-${row.id}-date`}
-												aria-label={m.time_select_date_label()}
-												class="min-w-0 border-b border-ink bg-transparent text-ink"
-												value={scheduleEditDate}
-												oninput={(e) =>
-													(scheduleEditDate = (
-														e.currentTarget as HTMLInputElement
-													).value)}
-											/>
-											<TimeSelect
-												prefix={`event-schedule-edit-datetime-${row.id}`}
-												value={scheduleEditTime}
-												onchange={(v) => (scheduleEditTime = v)}
-											/>
-										</div>
-									</div>
-								</div>
-							{:else if isEditor}
-								<EditActivator
-									label={m.event_schedule_edit_aria_label()}
-									data-testid={`event-schedule-edit-${row.id}`}
-									disabled={scheduleWritePending[`schedule-edit-name-${row.id}`] ===
-										true ||
-										scheduleWritePending[`schedule-edit-datetime-${row.id}`] ===
-											true ||
-										isOffline}
-									class="flex-1 items-center gap-2 text-sm text-ink"
-									onclick={() => beginScheduleEdit(row)}
-								>
-									<span data-testid="event-schedule-row-name">{row.name}</span>
-									<span data-testid="event-schedule-row-time" class="text-ink-2"
-										>{scheduleRowTime(row.datetime, $timeFormatStore)}</span
-									>
-								</EditActivator>
-							{:else}
-								<span data-testid="event-schedule-row-name">{row.name}</span>
-								<span data-testid="event-schedule-row-time" class="text-ink-2"
-									>{scheduleRowTime(row.datetime, $timeFormatStore)}</span
-								>
-							{/if}
-
-							{#if isEditor && scheduleEditingId !== row.id}
-								{#if scheduleRemoveArmedId === row.id}
-									<div class="flex items-center gap-1">
-										<DeleteConfirmPair
-											confirmTestid={`event-schedule-remove-confirm-${row.id}`}
-											cancelTestid={`event-schedule-remove-cancel-${row.id}`}
-											confirmLabel={m.event_schedule_remove_confirm_aria_label({
-												name: row.name
-											})}
-											cancelLabel={m.event_schedule_remove_cancel_aria_label({
-												name: row.name
-											})}
-											confirmText={m.event_schedule_remove_confirm_short()}
-											cancelText={m.event_schedule_remove_cancel_short()}
-											pending={scheduleWritePending[`schedule-remove-${row.id}`] === true}
-											busy={scheduleWritePending[`schedule-remove-${row.id}`] === true}
-											{isOffline}
-											onconfirm={() => confirmScheduleRemove(row.id)}
-											oncancel={() => cancelScheduleRemove()}
-										/>
-									</div>
-								{:else}
-									<DeleteTrigger
-										data-testid={`event-schedule-remove-${row.id}`}
-										aria-label={m.event_schedule_remove_aria_label({ name: row.name })}
-										iconClass="h-4 w-4"
-										disabled={isOffline}
-										onclick={() => armScheduleRemove(row.id)}
-									/>
-								{/if}
-							{/if}
-						</div>
-						{#if scheduleRowError(row.id)}
-							{@const rowError = scheduleRowError(row.id)!}
-							<FormError data-testid={`event-schedule-error-${row.id}`}>
-								{rowError()}
-							</FormError>
-						{/if}
-					</li>
+					<EventScheduleRow
+						{row}
+						{isEditor}
+						{isOffline}
+						editingId={scheduleEditingId}
+						removeArmedId={scheduleRemoveArmedId}
+						writePending={scheduleWritePending}
+						rowError={scheduleRowError(row.id)}
+						bind:editName={scheduleEditName}
+						bind:editDate={scheduleEditDate}
+						bind:editTime={scheduleEditTime}
+						{clearScheduleError}
+						{handleScheduleNameBlur}
+						{handleScheduleNameKeydown}
+						{handleScheduleEditDatetimeFocusOut}
+						{beginScheduleEdit}
+						{armScheduleRemove}
+						{cancelScheduleRemove}
+						{confirmScheduleRemove}
+					/>
 				{/each}
 			</ul>
 		{/if}
 
 		{#if isEditor}
-			{#if scheduleErrors[SCHEDULE_ADD_KEY]}
-				{@const addError = scheduleErrors[SCHEDULE_ADD_KEY]!}
-				<FormError id="event-schedule-add-error" data-testid="event-schedule-add-error">
-					{addError()}
-				</FormError>
-			{/if}
-			{#if scheduleAddOpen}
-				<div class="flex flex-wrap items-end gap-2">
-					<div class="flex flex-col gap-0.5">
-						<label for="event-schedule-add-name-input" class="text-xs text-ink-2">
-							{m.event_schedule_name_label()}
-						</label>
-						<input
-							type="text"
-							id="event-schedule-add-name-input"
-							data-testid="event-schedule-add-name"
-							class="border-b border-ink bg-transparent text-ink"
-							aria-invalid={scheduleAddErrorField === 'name' ? true : undefined}
-							aria-describedby={scheduleAddErrorField === 'name'
-								? 'event-schedule-add-error'
-								: undefined}
-							value={scheduleAddName}
-							use:focusOnMount
-							oninput={(e) => {
-								scheduleAddName = (e.currentTarget as HTMLInputElement).value;
-								clearScheduleAddError();
-							}}
-						/>
-					</div>
-					<div class="flex flex-col gap-0.5">
-						<span id="event-schedule-add-datetime-label" class="text-xs text-ink-2"
-							>{m.event_schedule_datetime_label()}</span
-						>
-						<div
-							data-testid="event-schedule-add-datetime"
-							role="group"
-							aria-labelledby="event-schedule-add-datetime-label"
-							aria-describedby={scheduleAddErrorField === 'datetime'
-								? 'event-schedule-add-error'
-								: undefined}
-							class="flex flex-wrap items-center gap-2 text-ink-2"
-						>
-							<input
-								type="date"
-								data-testid="event-schedule-add-datetime-date"
-								aria-label={m.time_select_date_label()}
-								aria-invalid={scheduleAddErrorField === 'datetime' ? true : undefined}
-								class="min-w-0 border-b border-ink bg-transparent text-ink"
-								value={scheduleAddDate}
-								oninput={(e) => {
-									scheduleAddDate = (e.currentTarget as HTMLInputElement).value;
-									clearScheduleAddError();
-								}}
-							/>
-							<TimeSelect
-								prefix="event-schedule-add-datetime"
-								value={scheduleAddTime}
-								onchange={(v) => {
-									scheduleAddTime = v;
-									clearScheduleAddError();
-								}}
-							/>
-						</div>
-					</div>
-					<button
-						type="button"
-						data-testid="event-schedule-add-submit"
-						disabled={scheduleWritePending[SCHEDULE_ADD_KEY] === true || isOffline}
-						class="flex min-h-11 items-center rounded-md border border-ink px-3 py-1.5 text-xs tracking-wide text-ink uppercase hover:bg-ink hover:text-paper disabled:opacity-50"
-						onclick={submitScheduleAdd}
-					>
-						{m.event_schedule_add_submit()}
-					</button>
-					<button
-						type="button"
-						data-testid="event-schedule-add-cancel"
-						class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink"
-						onclick={cancelScheduleAdd}
-					>
-						{m.event_schedule_add_cancel()}
-					</button>
-				</div>
-			{:else}
-				<button
-					type="button"
-					data-testid="event-schedule-add"
-					class="flex min-h-11 items-center gap-1 self-start text-xs text-ink-2 underline hover:text-ink"
-					onclick={beginScheduleAdd}
-				>
-					{m.event_schedule_add_label()}
-				</button>
-			{/if}
+			<EventScheduleAddForm
+				{isOffline}
+				addOpen={scheduleAddOpen}
+				addError={scheduleErrors[SCHEDULE_ADD_KEY] ?? null}
+				addErrorField={scheduleAddErrorField}
+				addPending={scheduleWritePending[SCHEDULE_ADD_KEY] === true}
+				bind:addName={scheduleAddName}
+				bind:addDate={scheduleAddDate}
+				bind:addTime={scheduleAddTime}
+				{clearScheduleAddError}
+				{beginScheduleAdd}
+				{submitScheduleAdd}
+				{cancelScheduleAdd}
+			/>
 		{/if}
 		<div
 			data-testid="event-schedule-status"
