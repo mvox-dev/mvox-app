@@ -44,6 +44,7 @@
 		"yaml": "^2.9.0"
 	},
 	"dependencies": {
+		"modern-screenshot": "^4.7.0",
 		"pdfjs-dist": "^6.3.289"
 	}
 }

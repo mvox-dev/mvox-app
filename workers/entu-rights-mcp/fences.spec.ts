@@ -1,13 +1,5 @@
-// #318 RED — slice fences: what this slice must NOT change, pinned where
-// cheap (guard-spec precedent: byte pins with repin instructions).
-//
-// The slice is green-field under workers/entu-rights-mcp/ only. The doc stays
-// the single home of every rule; the guard spec stays the doc's one mechanical
-// guard; the static app (src/, svelte.config.js, vite.config.ts) is untouched;
-// package.json gains AT MOST a scripts entry for the generator — no runtime
-// dependencies, no @modelcontextprotocol/sdk, no wrangler devDep, no
-// @cloudflare/* (tests are pure node; activation is PO-gated and happens
-// outside this pipeline).
+// #318 fences: what the MCP slice must not change. Byte pins move only behind a
+// sanctioned change elsewhere, named next to the pin.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -18,37 +10,8 @@ const sha256 = (path: string): string =>
 	createHash('sha256').update(readFileSync(resolve(ROOT, path))).digest('hex');
 
 describe('the doc and its guard spec are byte-identical to HEAD — this slice reads them, never edits them', () => {
-	// #369 repin (PO-approved 2026-09-15, Gama; recorded on #369) — BOTH pins move
-	// once, together, and this is the commissioned doc-edit slice the original
-	// repin instruction points at. The edit: ER-26 and its §7.5 home (a reference
-	// carries the referenced person's name and email in its own `.string`, whatever
-	// `props` asked for), plus the guard spec's own maintenance for it — the
-	// numbering sweep learns the third id-state (RESERVED: ER-24/ER-25 held by
-	// #364) and the doc-remainder pin re-derives. Precedent for moving a byte pin
-	// this way rather than loosening it: #322 and #330, both recorded inside the
-	// guard spec's own pin comments. These pins prove no drift SINCE this edit,
-	// never that the edit was right.
-	//
-	// #372 repin (PO-approved 2026-09-15, Gama; ruling recorded on #372) — both
-	// move together again for ER-27 and its §7.6 home (creating a child under a
-	// parent is governed by `_editor` on that parent). Same caveat.
-	//
-	// #411 repin (PO ruling, Gama 2026-09-18; Mihkel released the issue and
-	// widened the docs carve-out) — both move together again, and this one edits
-	// NO rule: the "What this changes" SUPERSEDED marker claimed ~15 person
-	// prop-defs still sat at `domain`, true when written 2026-08-06 and false
-	// since #181 flipped them on 2026-08-27. The guard spec moves with it only
-	// because its doc-remainder pin re-derives. A fence that preserves a stale
-	// privacy claim about a live-pilot database is holding the wrong thing still;
-	// the claim reached a reader as a real exposure before the dates were checked.
-	// Same caveat: these pins prove no drift SINCE this edit, never that the edit
-	// was right.
-	//
-	// #422 repin (PO ruling, Gama 2026-09-27, on #422) — both move together
-	// again: citations of the deleted dated probe scripts become commit
-	// permalinks (ER-3/5/6/8/9/14 and the §7.1–§7.3 prose), and the guard spec
-	// repins those blocks and its doc-remainder pin. No rule text changes. Same
-	// caveat.
+	// Repinned for #369, #372, #411 and #422 (PO-ruled doc edits). A pin proves no
+	// drift since that edit, never that the edit was right.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
@@ -56,15 +19,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		).toBe('3af6e98a064f3b1bcc17ce9bf2a8d96344fc19d828cadd8504d0f15807024dd7');
 	});
 
-	// #422 repin: the guard spec repins ER-5/6/8/14 and its doc-remainder pin
-	// for the permalink conversion above (PO ruling, Gama 2026-09-27). Same
-	// caveat.
-	//
-	// #397 repin (Mihkel-ruled 2026-09-18, closing #364) — the guard spec's
-	// RESERVED table stops citing #364: ER-24/25 retired, never minting, their
-	// numbers permanently empty so no citation ever repoints. Same caveat as
-	// #369/#372 above: this pin proves no drift SINCE that edit, never that the
-	// edit was right.
+	// Repinned for #422 and #397, with the doc above.
 	it('src/rights-model-identifiers.spec.ts (the guard spec) is unchanged', () => {
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
@@ -75,27 +30,15 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 
 describe('the static app is untouched', () => {
 	it('svelte.config.js is unchanged', () => {
-		// Repinned for #368 (kit.serviceWorker.files — excluding the CF Pages
-		// config files from the service worker's install-time precache, which
-		// otherwise takes the whole install down when CF declines to serve a path
-		// it only consumes as deploy config). Same reasoning as the vite.config.ts
-		// repin below and the #322 ER-pin precedent: this pin's job is catching
-		// ACCIDENTAL drift from workers/entu-rights-mcp/, and refreshing it on a
-		// sanctioned change outside that scope is the pin working as designed. The
-		// change itself is pinned on its own terms in src/lib/sw/swUpdate.spec.ts.
+		// Repinned for #368 (the service worker's precache list); pinned on its own terms
+		// in src/lib/sw/swUpdate.spec.ts.
 		expect(sha256('svelte.config.js')).toBe(
 			'f9224c961ef6d940b1ab5524e2aa78871019fa7a60fa9594f0fe25cf9699eece'
 		);
 	});
 
 	it('vite.config.ts is unchanged (vitest.config.ts is NOT pinned — its include glob legitimately grows workers/**)', () => {
-		// Repinned for #347 (dev port 3000 + strictPort) and again for #442
-		// (dropping 'localStorage' from the paraglide strategy, so locale
-		// resolution stops throwing in a browser that refuses to store site
-		// data) — both sanctioned changes to vite.config.ts, neither this
-		// slice's work. The pin's job is catching ACCIDENTAL drift from
-		// workers/entu-rights-mcp/, and refreshing it on a sanctioned change
-		// outside that scope is the pin working as designed (#322 precedent).
+		// Repinned for #347 and #442, both sanctioned changes outside this slice.
 		expect(sha256('vite.config.ts')).toBe(
 			'63d38d3c144303ef0b00ba32aef6993fb225cf7ba0a06c3c0c859560206e96f5'
 		);
@@ -118,19 +61,13 @@ describe('package.json: at most a generator scripts entry', () => {
 		'check',
 		'test',
 		'test:watch',
-		// #422 — the eight migrate:* entries went with the four dated scripts
-		// they ran (Mihkel 2026-09-27: delete the old scripts, don't gate them).
 		'roadmap:fetch',
 		'roadmap:render'
 	];
 
 	const BASELINE_DEV_DEPS = [
 		'@inlang/paraglide-js',
-		// #408 repin — @resvg/resvg-js (the "Install as app" icon set's
-		// build-time SVG-to-PNG rasteriser, a sanctioned, commissioned change
-		// to the STATIC APP, not this slice's work): same #427 precedent
-		// immediately below — refreshing this pin on a legitimate addition
-		// elsewhere is the pin working as designed, not a loosening of it.
+		// #408: @resvg/resvg-js rasterises the install icons.
 		'@resvg/resvg-js',
 		'@sveltejs/adapter-static',
 		'@sveltejs/kit',
@@ -138,10 +75,7 @@ describe('package.json: at most a generator scripts entry', () => {
 		'@tailwindcss/vite',
 		'@testing-library/svelte',
 		'@types/node',
-		// #343 repin — fake-indexeddb PO-approved on the issue (comment
-		// IC_kwDOTubdKM8AAAABUHJaew): a test-environment shim for a browser
-		// API node lacks, the exact happy-dom precedent. `dependencies`
-		// staying ABSENT is the line this fence actually guards (above).
+		// #343: fake-indexeddb, a test shim like happy-dom.
 		'fake-indexeddb',
 		'happy-dom',
 		'svelte',
@@ -154,17 +88,13 @@ describe('package.json: at most a generator scripts entry', () => {
 		'yaml'
 	];
 
-	// Repinned for #427 (pdfjs-dist — the fullscreen part viewer's PDF
-	// renderer, a sanctioned, commissioned change to the STATIC APP, not this
-	// slice's work): this pin's job is catching this slice's OWN scripts
-	// entry from growing MCP-SDK/wrangler/cloudflare runtime deps alongside
-	// it (guarded explicitly, by name, in the very next test), not
-	// forbidding the app from ever gaining a legitimate dependency —
-	// refreshing it on a sanctioned change outside this slice's scope is the
-	// pin working as designed (#322 ER-pin / svelte.config.js precedent
-	// above).
-	it('runtime dependencies are exactly the pre-slice-plus-#427 set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*', () => {
-		expect(pkg().dependencies).toEqual({ 'pdfjs-dist': '^6.3.289' });
+	// Repinned for #427 (pdfjs-dist, the part viewer) and #612 (modern-screenshot, the
+	// feedback capture). The by-name ban on MCP tooling is the next test.
+	it('runtime dependencies are exactly the pre-slice-plus-#427-plus-#612 set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*', () => {
+		expect(pkg().dependencies).toEqual({
+			'modern-screenshot': '^4.7.0',
+			'pdfjs-dist': '^6.3.289'
+		});
 	});
 
 	it('devDependencies are exactly the pre-slice-plus-#408 set — no @modelcontextprotocol/sdk, no wrangler, no @cloudflare/*, nothing new', () => {
@@ -178,30 +108,8 @@ describe('package.json: at most a generator scripts entry', () => {
 		}
 	});
 
-	// REVIEW fix round (findings comment 5642106513) widens this fence: the
-	// gate finding (#3) needs a second script, `check:workers`, chained into
-	// `check` — still zero runtime/dev dependencies (asserted above).
-	// #353 widens this fence again: `check:sw` type-checks src/service-worker.ts
-	// on its own tsconfig (svelte-check's generated tsconfig excludes that file
-	// by name — see tsconfig.sw.json's own comment), chained into `check` the
-	// same way `check:workers` is. Unrelated to this slice's own mandate, but
-	// this fence's job is catching ACCIDENTAL script drift FROM
-	// workers/entu-rights-mcp/ — a sanctioned, commissioned addition elsewhere
-	// is the pin working as designed (#322 ER-pin precedent, same as the
-	// vite.config.ts repin above for #347).
-	// #413 widens it once more: `test:roadmap` runs the roadmap's own tests,
-	// which is what .github/workflows/roadmap.yml gates the board deploy on
-	// now — it ran the whole suite before, so a prompt-template fence held the
-	// public page stale for ten hours (2026-09-19). Commissioned by Mihkel;
-	// still zero runtime/dev dependencies, still nothing from this slice.
-	// #504 widens it once more: `test:changed` is `vitest run --changed origin/main`,
-	// the related-spec run the slice pipeline's GREEN/GREEN-FIX/FIX prompts call
-	// while iterating. It exists as a SCRIPT rather than as a flag on `test`
-	// because `pnpm test -- --changed origin/main` expands to
-	// `vitest run -- --changed origin/main` and vitest discards the options after
-	// `--`, which silently ran all 467 specs while reporting a selective run
-	// (measured 2026-09-29). Commissioned by #504; still zero runtime/dev
-	// dependencies, still nothing from this slice.
+	// Additions beyond the generator: check:workers, check:sw (#353), test:roadmap (#413)
+	// and test:changed (#504), each commissioned outside this slice.
 	it('every baseline script survives unchanged in name, and additions are exactly the bundle generator + the workers typecheck gate + the service-worker typecheck gate + the roadmap deploy gate + the related-spec iteration run', () => {
 		const keys = Object.keys(pkg().scripts);
 		for (const k of BASELINE_SCRIPTS) {

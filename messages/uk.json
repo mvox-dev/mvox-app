@@ -727,5 +727,15 @@
 	"strokes_undo_aria_label": "Скасувати",
 	"write_unavailable_no_signal": "Немає сигналу — зараз нічого не можна зберегти.",
 	"write_held_no_signal": "Немає сигналу — ваша зміна на місці, не збережена.",
-	"feedback_screenshot_alt": "Знімок екрана сторінки, якої стосується цей відгук"
+	"feedback_screenshot_alt": "Знімок екрана сторінки, якої стосується цей відгук",
+	"feedback_editor_label": "Відгук",
+	"feedback_copy": "Копіювати",
+	"feedback_send": "Надіслати",
+	"feedback_close": "Закрити",
+	"feedback_description_label": "Опис",
+	"feedback_copied": "Скопійовано разом із малюнком.",
+	"feedback_capture_failed": "Не вдалося зробити знімок екрана.",
+	"feedback_copy_unsupported": "Цей браузер не може копіювати зображення.",
+	"feedback_copy_failed": "Не вдалося скопіювати знімок екрана.",
+	"feedback_send_failed": "Не вдалося надіслати відгук."
 }

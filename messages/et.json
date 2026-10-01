@@ -725,5 +725,15 @@
 	"strokes_undo_aria_label": "Võta tagasi",
 	"write_unavailable_no_signal": "Signaali pole — praegu ei saa midagi salvestada.",
 	"write_held_no_signal": "Signaali pole — sinu muudatus on alles, salvestamata.",
-	"feedback_screenshot_alt": "Kuvatõmmis lehest, mille kohta see tagasiside on"
+	"feedback_screenshot_alt": "Kuvatõmmis lehest, mille kohta see tagasiside on",
+	"feedback_editor_label": "Tagasiside",
+	"feedback_copy": "Kopeeri",
+	"feedback_send": "Saada",
+	"feedback_close": "Sulge",
+	"feedback_description_label": "Kirjeldus",
+	"feedback_copied": "Kopeeritud koos joonistusega.",
+	"feedback_capture_failed": "Kuvatõmmist ei õnnestunud teha.",
+	"feedback_copy_unsupported": "See brauser ei saa pilte kopeerida.",
+	"feedback_copy_failed": "Kuvatõmmist ei õnnestunud kopeerida.",
+	"feedback_send_failed": "Tagasisidet ei õnnestunud saata."
 }

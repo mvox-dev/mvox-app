@@ -119,11 +119,18 @@ body::-webkit-scrollbar,
 	textarea {
 		font-size: 1rem;
 	}
+
+	/* #612 — a double tap opens the feedback editor, so the browser's double-tap zoom
+	 * goes; pinch zoom stays. touch-action is not inherited, hence every element. The
+	 * part viewer keeps native zoom: while it is on screen the rule is off. */
+	:root:not(:has([data-testid='part-viewer-root'])) * {
+		touch-action: manipulation;
+	}
 }
 
 /* #357 — capture-redaction overlay. DEFAULT-INERT BY CONSTRUCTION: every rule
- * below requires the html[data-redacting] root toggle, set by a human in
- * devtools before a screenshot (src/lib/redact/redact.ts). Without the
+ * below requires the html[data-redacting] root toggle, set around the feedback
+ * capture by withRedaction (src/lib/redact/redact.ts), or by hand. Without the
  * toggle, the marker attribute has zero rendering effect — no rule guarding
  * the marker may ever drop the html[data-redacting] prefix, or every
  * existing PII-value spec would break.

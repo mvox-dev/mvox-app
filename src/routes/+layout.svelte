@@ -37,6 +37,10 @@
 	// Here, not on the profile page: Chromium fires beforeinstallprompt once per load.
 	import { startInstallAffordance } from '$lib/install/installState';
 	import { m } from '$lib/paraglide/messages.js';
+	import { listenForDoubleTap } from '$lib/feedback/captureGesture';
+	import { createFeedbackEditor } from '$lib/feedback/feedbackEditor.svelte';
+	import FeedbackEditor from '$lib/components/feedback/FeedbackEditor.svelte';
+	import FeedbackEditorBar from '$lib/components/feedback/FeedbackEditorBar.svelte';
 
 	let { children } = $props();
 
@@ -54,9 +58,18 @@
 		urlCollectiveDbStore.set(page.url.searchParams.get(COLLECTIVE_URL_PARAM));
 	});
 
+	const feedbackEditor = createFeedbackEditor();
+
 	onMount(() => {
 		hydrateAuth();
-		return startInstallAffordance();
+		const stopInstall = startInstallAffordance();
+		const stopDoubleTap = listenForDoubleTap(document, () => {
+			if ($authStore.status === 'authenticated') void feedbackEditor.capture(page.url.pathname);
+		});
+		return () => {
+			stopInstall();
+			stopDoubleTap();
+		};
 	});
 
 	// Re-hydrate collectives on the first auth resolve and on every flip in or out, so a
@@ -157,12 +170,23 @@
 	});
 </script>
 
+{#snippet feedbackBar()}
+	<FeedbackEditorBar editor={feedbackEditor} />
+{/snippet}
+
+{#snippet feedbackOverlay()}
+	<FeedbackEditor editor={feedbackEditor} />
+{/snippet}
+
 <NavShell
 	entries={NAV_ENTRIES}
 	activeRoute={page.url.pathname}
 	completionLocked={$completionGateStore === 'incomplete'}
 	anonymous={$authStore.status !== 'authenticated'}
 	isAdmin={$adminStore === 'admin'}
+	toolbar={feedbackEditor.open ? feedbackBar : undefined}
+	toolbarLabel={m.feedback_editor_label()}
+	overlay={feedbackEditor.open ? feedbackOverlay : undefined}
 >
 	{#if $membershipStore === 'inactive' && $selectedCollectiveStore}
 		<!-- Presentation only: no redirect and no nav lock (PO-accepted). -->
