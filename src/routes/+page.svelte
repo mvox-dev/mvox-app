@@ -683,6 +683,9 @@
 								{m.repertoire_manage_error()}
 							</p>
 						{/if}
+						<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
+							{ag.manageStatus}
+						</div>
 					{/if}
 				</div>
 			</div>

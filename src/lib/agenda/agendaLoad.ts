@@ -69,6 +69,7 @@ export function createAgendaLoadState() {
 		worksRowsLoading: false,
 		managePendingKeys: new Set() as Set<string>,
 		manageError: false,
+		manageStatus: '',
 		panelRepertoire: [] as RepertoireItem[],
 		panelWorks: [] as Work[],
 		panelEditions: [] as Edition[],

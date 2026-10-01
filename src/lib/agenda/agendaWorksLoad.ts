@@ -44,6 +44,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		ag.worksRowsLoading = true;
 		ag.managePendingKeys = new Set();
 		ag.manageError = false;
+		ag.manageStatus = '';
 	}
 
 	function deriveSeasonCreateRights(
