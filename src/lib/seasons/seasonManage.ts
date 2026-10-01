@@ -6,7 +6,6 @@ export {
 	type SeriesListRead,
 	type SeriesOption
 } from './seasonSeriesList';
-export { listEventsForSeason, type StandaloneEvent } from './seasonEventsList';
 export {
 	updateSeasonField,
 	addSeasonConductor,

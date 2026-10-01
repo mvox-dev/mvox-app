@@ -70,7 +70,7 @@ function entityIdOf(href: string): string {
 
 /** A row a scoped GET returns — a bare id, or an id with `_parent` refs (the
  *  season-wide event read carries `_parent` so a cascade can tell a series
- *  occurrence from a standalone event, exactly as `listEventsForSeason` does). */
+ *  occurrence from a standalone event, exactly as `seriesRefOf` does). */
 type StubRow = string | { _id: string; _parent?: Array<{ reference: string; entity_type?: string }> };
 
 interface StubOpts {

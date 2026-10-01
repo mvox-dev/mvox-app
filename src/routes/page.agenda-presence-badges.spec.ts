@@ -24,8 +24,7 @@ const {
 	listWorksMock,
 	listAllEditionsMock,
 	listAllCopiesMock,
-	listEventSeriesForSeasonMock,
-	listEventsForSeasonMock
+	listEventSeriesForSeasonMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	discoverMock: vi.fn(),
@@ -38,8 +37,7 @@ const {
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
 	listAllCopiesMock: vi.fn(),
-	listEventSeriesForSeasonMock: vi.fn(),
-	listEventsForSeasonMock: vi.fn()
+	listEventSeriesForSeasonMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
@@ -87,7 +85,6 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 }));
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
-	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: vi.fn(),
 	addSeasonConductor: vi.fn(),
 	removeSeasonConductor: vi.fn(),
@@ -319,7 +316,6 @@ beforeEach(() => {
 	listAllEditionsMock.mockResolvedValue({ items: [], total: 0, truncated: false });
 	listAllCopiesMock.mockResolvedValue({ items: [], total: 0, truncated: false });
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
-	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	stubByteFetch();
 });
 
@@ -336,7 +332,6 @@ afterEach(() => {
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
-	listEventsForSeasonMock.mockReset();
 	vi.unstubAllGlobals();
 	clearAll({ preserveProvider: false });
 	authStore.set({ status: 'loading' });

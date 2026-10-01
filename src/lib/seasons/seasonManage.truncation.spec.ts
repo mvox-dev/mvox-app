@@ -1,34 +1,8 @@
-// #321 RED — the seasonManage panel reads, plus the pins that keep the
-// already-correct machinery UNCHANGED.
-//
-// The issue's own exhibit is this module's admission (above
-// `countSeriesOccurrences`): the panel list "derives its counts from ONE
-// season-wide `limit=500` event read, so it under-reports a big season". After
-// this slice the panel's list reads carry the server `count` themselves, so
-// the admission narrows — GREEN updates that comment to what is still true
-// (the staleness half survives; the silent under-reporting half does not).
-//
-// PINNED NEW (fails today):
-//   - `listEventSeriesForSeason` → { items: SeriesListItem[], truncated } —
-//     truncated when EITHER of its two reads (series limit=200, season-wide
-//     events limit=500) reports count > RAW entities.length. No `total`: two
-//     collections ride one call, and summing them would be a made-up number.
-//   - `listEventsForSeason` → { items, total, truncated } — `items` stays the
-//     STANDALONE-filtered list; `truncated` compares count against the RAW
-//     wire array (the series-occurrence filter must never read as truncation).
-//
-// PINNED UNCHANGED (passes today; guards GREEN against touching them):
-//   - `countSeriesOccurrences`' one-row count read stays byte-identical —
-//     the confirm's number keeps its own dedicated read (#197 F2).
-//   - the cascade refuse-guards (`listChildIds` + the season-level twin via
-//     `countSeasonScope`): count > length → throw "nothing was deleted". They
-//     already never act on a partial list — the issue's third shape, neither
-//     (1) nor (2), out of scope for change by the issue's own fence.
+// The season panel's list reads report truncation; the cascade refusals stay as they were.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from './entuSeasons';
 import {
 	listEventSeriesForSeason,
-	listEventsForSeason,
 	countSeriesOccurrences,
 	countSeasonScope
 } from './seasonManage';
@@ -106,62 +80,6 @@ describe('listEventSeriesForSeason — truncation detection (#321)', () => {
 			truncated: boolean;
 		};
 		expect(res.truncated).toBe(true);
-	});
-});
-
-// ── listEventsForSeason — standalone filter never reads as truncation ───────
-
-describe('listEventsForSeason — truncation detection (#321)', () => {
-	const route = '_type.string=event&_parent.reference=season-1';
-
-	it('complete read: occurrences filtered OUT of items, but count vs RAW length says complete', async () => {
-		const fetchImpl = router([
-			[
-				route,
-				{
-					count: 3,
-					entities: [
-						{
-							_id: 'ev-1',
-							event_name: [{ string: 'Concert' }],
-							start_datetime: [{ datetime: '2026-10-01T19:00' }],
-							_parent: [{ reference: 'season-1', entity_type: 'season' }]
-						},
-						{ _id: 'ev-2', _parent: [{ reference: 'series-1', entity_type: 'event_series' }] },
-						{ _id: 'ev-3', _parent: [{ reference: 'series-1', entity_type: 'event_series' }] }
-					]
-				}
-			]
-		]);
-		expect(await listEventsForSeason(cfg, 'season-1', fetchImpl)).toEqual({
-			items: [{ id: 'ev-1', name: 'Concert', startDatetime: '2026-10-01T19:00' }],
-			total: 3,
-			truncated: false
-		});
-	});
-
-	it('count > RAW length → truncated: true', async () => {
-		const fetchImpl = router([
-			[
-				route,
-				{
-					count: 612,
-					entities: [
-						{
-							_id: 'ev-1',
-							event_name: [{ string: 'Concert' }],
-							start_datetime: [{ datetime: '2026-10-01T19:00' }],
-							_parent: [{ reference: 'season-1', entity_type: 'season' }]
-						}
-					]
-				}
-			]
-		]);
-		expect(await listEventsForSeason(cfg, 'season-1', fetchImpl)).toEqual({
-			items: [{ id: 'ev-1', name: 'Concert', startDatetime: '2026-10-01T19:00' }],
-			total: 612,
-			truncated: true
-		});
 	});
 });
 
