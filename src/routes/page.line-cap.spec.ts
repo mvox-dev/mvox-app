@@ -44,10 +44,9 @@ describe('#508 — no agenda file over the line cap', () => {
 });
 
 const ORIGINAL_EXCEPTIONS = [
-	'src/routes/event/[id]/+page.svelte',
-	'src/routes/roster/+page.svelte',
-	'src/routes/library/+page.svelte',
-	'src/routes/profile/+page.svelte'
+	'src/lib/agenda/agendaLoad.ts',
+	'src/lib/components/agenda/SeasonManagePanel.svelte',
+	'src/routes/+page.svelte'
 ];
 
 const planted = (n: number) => 'x\n'.repeat(n);
@@ -140,7 +139,7 @@ describe('#525 — every source file under src/ obeys the line cap', () => {
 		expect(capViolations(counts, LINE_CAP_EXCEPTIONS)).toEqual([]);
 	});
 
-	it('the exception list only shrinks: every entry is one of the original four', () => {
+	it('the exception list only shrinks: every entry is one of the original three', () => {
 		expect(LINE_CAP_EXCEPTIONS.filter((file) => !ORIGINAL_EXCEPTIONS.includes(file))).toEqual([]);
 		expect(new Set(LINE_CAP_EXCEPTIONS).size).toBe(LINE_CAP_EXCEPTIONS.length);
 	});
