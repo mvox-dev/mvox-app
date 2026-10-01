@@ -22,10 +22,10 @@
 		TALLINN_TZ
 	} from '$lib/preferences/timeFormat';
 	import {
-		listEventSeriesForSeason,
+		listSeriesOptionsForSeason,
 		getSeriesDefaults,
 		type SeriesDefaults,
-		type SeriesListItem
+		type SeriesOption
 	} from '$lib/seasons/seasonManage';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionNode } from '$lib/sections/sectionData';
@@ -103,7 +103,7 @@
 
 	let eventCreateSeasonId = $state(untrack(() => manageableSeasonId) ?? '');
 	let eventCreateSeriesId = $state('');
-	let eventCreateSeriesOptions = $state<SeriesListItem[]>([]);
+	let eventCreateSeriesOptions = $state<SeriesOption[]>([]);
 	let eventCreateSeriesDefaults = $state<SeriesDefaults | null>(null);
 	let eventCreateType = $state('');
 	let eventCreateName = $state('');
@@ -147,10 +147,10 @@
 	function loadEventCreateSeriesOptions(cfg: { db: string; token: string }, seasonId: string): void {
 		const thisLoad = eventCreateLoadId;
 		const stale = () => thisLoad !== eventCreateLoadId || eventCreateSeasonId !== seasonId;
-		listEventSeriesForSeason(cfg, seasonId)
-			.then((result) => {
+		listSeriesOptionsForSeason(cfg, seasonId)
+			.then((options) => {
 				if (stale()) return;
-				eventCreateSeriesOptions = result.items;
+				eventCreateSeriesOptions = options;
 			})
 			.catch((e) => {
 				if (stale()) return;

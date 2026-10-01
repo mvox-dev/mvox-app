@@ -1,45 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #196 — the standalone hint in the event-creation form, plus the locale
-// parity guards for the event-convert key set (integration: real +page.svelte;
-// only the data seams are mocked — same harness family as
-// page.event-create.spec.ts / page.season-manage.spec.ts).
-//
-// WHY (#196, Joosep / Crede pilot 2026-08-31): "I started intuitively, created
-// a standalone 'proov' expecting to make it recurring. The app doesn't offer a
-// path from standalone to series — the standalone event was wasted effort."
-//
-//   PHASE 1 — THE HINT: the event-creation form says, while NO series is
-//   selected, that recurring events want the series flow (localized key,
-//   never hardcoded copy). The hint leaves the moment a series is chosen.
-//   Still HERE: the event-create form lives in the season panel.
-//
-//   PHASE 2 — THE CONVERSION: RELOCATED by #313. The season panel's
-//   standalone-event list (and its per-row convert control) is REMOVED; the
-//   conversion flow now lives on the EVENT PAGE. The full behaviour contract
-//   — form, validation, occurrence loop, resume, dialog — moved with it to
-//   src/routes/event/[id]/page.event-convert.spec.ts. The event_convert_*
-//   keys are REUSED by the relocated form, so their locale parity stays
-//   pinned here unchanged.
-//
-//   TESTIDS
-//     event-create-series-hint            the phase-1 hint INSIDE the event
-//                                         creation form — rendered while the
-//                                         series select holds '' (standalone),
-//                                         gone while a series is chosen
-//
-//   I18N — all user-visible copy through Paraglide keys, present and
-//   non-empty in ALL FOUR locales (en/et/lv/uk); `event_convert_failed`
-//   carries the {step} placeholder in every locale (the loud-failure pin).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
-// Unlike the plain key-echo proxy elsewhere, this one appends the params as
-// JSON so a spec can pin that a message RECEIVED its parameter without
-// pinning translated copy.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -66,6 +30,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
@@ -83,6 +48,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
+	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
@@ -96,14 +62,13 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: createEventMock
 }));
-// #196 — the conversion seam (its page wiring lives on the event page since
-// #313). The real module's error class rides along.
 vi.mock('$lib/events/eventConvert', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/events/eventConvert')>();
 	return { ...actual, convertEventToSeries: convertEventToSeriesMock };
 });
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeason: listSeriesOptionsForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: updateSeasonFieldMock,
 	addSeasonConductor: addSeasonConductorMock,
@@ -139,9 +104,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -169,8 +131,6 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
-
-// ── fixtures ────────────────────────────────────────────────────────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
@@ -232,8 +192,9 @@ beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead(seriesFixture()));
-	// #313 — the panel no longer lists standalone events; the mock stays only
-	// because the module mock above must export the function.
+	listSeriesOptionsForSeasonMock.mockResolvedValue(
+		seriesFixture().map(({ id, name }) => ({ id, name }))
+	);
 	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
@@ -259,6 +220,7 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
+	listSeriesOptionsForSeasonMock.mockReset();
 	listEventsForSeasonMock.mockReset();
 	updateSeasonFieldMock.mockReset();
 	addSeasonConductorMock.mockReset();
@@ -268,8 +230,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 });
-
-// ── helpers ─────────────────────────────────────────────────────────────────────
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
@@ -284,9 +244,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** #213 — the page-level [+ Event] is gone; the panel's [+ Event] is the way
- *  in. (#313: the panel has no standalone-event rows any more, so the panel
- *  itself is what we wait for.) */
 async function openEventCreateFromPanel(container: HTMLElement): Promise<void> {
 	await openSeasonCardPanel(container);
 	await waitFor(() => {
@@ -302,8 +259,6 @@ async function selectValue(container: HTMLElement, testid: string, value: string
 	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-// ── phase 1 — the standalone hint on the event-creation form (#196 test 5) ─────
-
 describe('event-creation form — the "recurring wants a series" hint', () => {
 	it('renders INSIDE the form through its localized key while NO series is selected', async () => {
 		const container = await renderReady();
@@ -312,7 +267,6 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 		const form = q(container, 'event-create-form') as HTMLElement;
 		const hint = form.querySelector('[data-testid="event-create-series-hint"]');
 		expect(hint).not.toBeNull();
-		// localized key, never hardcoded copy — the paraglide mock echoes keys
 		expect(hint?.textContent).toContain('event_create_series_hint');
 	});
 
@@ -325,7 +279,6 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 		await waitFor(() => {
 			expect(series.disabled).toBe(false);
 		});
-		// still standalone → hint stands
 		expect(q(container, 'event-create-series-hint')).not.toBeNull();
 
 		await selectValue(container, 'event-create-series', 'series-1');
@@ -340,14 +293,6 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 	});
 });
 
-// ── i18n — the #196 keys exist, non-empty, in ALL FOUR locales ──────────────────
-//
-// #313 relocated the conversion FLOW to the event page, but the key set is
-// REUSED by the relocated form — parity stays pinned here unchanged. (The new
-// event-page key `event_detail_convert` and the REWRITTEN
-// `event_create_series_hint` copy are pinned in
-// src/routes/event/[id]/page.event-convert.spec.ts.)
-
 describe('locale parity — every #196 key present and non-empty in en/et/lv/uk', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	const KEYS = [
@@ -360,13 +305,11 @@ describe('locale parity — every #196 key present and non-empty in en/et/lv/uk'
 		'event_convert_submit',
 		'event_convert_cancel',
 		'event_convert_failed',
-		// #196 review F1/F2 — the occurrence run and the per-field refusals.
 		'event_convert_interval_required',
 		'event_convert_duration_required',
 		'event_convert_end_required',
 		'event_convert_end_before_start',
 		'event_convert_start_missing',
-		// #196 review F1 — the two pre-write refusals say WHY, not "(read-event)".
 		'event_convert_missing_name',
 		'event_convert_missing_type',
 		'event_convert_progress',
@@ -392,8 +335,6 @@ describe('locale parity — every #196 key present and non-empty in en/et/lv/uk'
 	});
 });
 
-// ── i18n — the #212 start-date label, present in ALL FOUR locales ───────────────
-
 describe('#212 locale parity — event_convert_start_date_label present and non-empty in en/et/lv/uk', () => {
 	function messages(locale: string): MessageFile {
 		return JSON.parse(
@@ -408,15 +349,11 @@ describe('#212 locale parity — event_convert_start_date_label present and non-
 		).toBe(false);
 	});
 
-	// Gama named the en/et copy in the #212 ruling; lv/uk stay Comenius's call.
 	it('en reads "Starts", et reads "Algus" — the copy the #212 ruling pinned', () => {
 		expect(messages('en')['event_convert_start_date_label']).toBe('Starts');
 		expect(messages('et')['event_convert_start_date_label']).toBe('Algus');
 	});
 });
 
-// (*MVOX:Tallis* — #196 RED: standalone hint + i18n keys)
-// (*MVOX:Tallis* — #313: the panel-side conversion wiring, the #212 start-date
-//  display and the single-action-context tests moved with the flow to
-//  src/routes/event/[id]/page.event-convert.spec.ts; the panel's standalone-
-//  event rows they drove through are removed)
+// (*MVOX:Tallis*)
+// (*MVOX:Tallis*)

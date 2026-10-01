@@ -1,56 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #167 RED — event/series creation controls after season create, on the ACTUAL
-// agenda route (integration: real +page.svelte, real AgendaList, real
-// manageRightsFrom; only the data seams are mocked — same harness family as
-// page.event-create.spec.ts / page.season-create.spec.ts).
-//
-// THE BUG (Mihkel, 2026-08-21): create a season via "Loo hooaeg" with a future
-// start date → the page reloads to "Eelseisvaid proove ei ole" and NOTHING
-// else. No [+ Event], no gear, no way to put a rehearsal into the season just
-// created. Two causes: (1) `showEventCreate` gates on `currentSeasonId`, and
-// `currentSeason()` refuses future-dated seasons; (2) the admin's rights may
-// ride on the DATABASE entity (`_owner`), not visibly on the season read.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   DATA
-//     - `loadFullAgenda` now also returns `manageableSeasonId` /
-//       `manageableSeasonOwners` / `manageableSeasonEditors` (see
-//       agendaData.spec.ts #167 block): the current season when one runs,
-//       else the SOONEST-starting future season. These fixtures return the
-//       new shape; the page must GATE ON IT.
-//     - `showEventCreate` and the season card derive from the
-//       MANAGEABLE season: manageableSeasonId !== null AND the viewer holds
-//       manage rights on it (manageRightsFrom over its owners/editors —
-//       ownership subsumes editing). The season-manage panel's season-scoped
-//       reads (listEventSeriesForSeason / listEventsForSeason) target the
-//       manageable season's id.
-//     - RIGHTS FALLBACK (#167 cause 2): when the manageable season's VISIBLE
-//       owners+editors are BOTH empty, the page resolves rights from the
-//       DATABASE entity instead — `resolveDatabaseEntityId(cfg)` then
-//       `resolveManageRights(cfg, dbEntityId, personId)` (the exact seams the
-//       season-create org fallback already uses). 'editor' → controls show;
-//       anything else (incl. 'error') → fail-closed, controls hidden.
-//     - VIEWER semantics unchanged: `seasonId`/recent keep meaning the CURRENT
-//       season; a future-only collective still shows the empty agenda list.
-//
-//   TESTIDS (all pre-existing)
-//     event-create             REMOVED by #213 — the season card (same gate) is the
-//                              page-level proxy for the manageable-season
-//                              rights answer now; event creation lives inside
-//                              the panel (season-manage-add-event)
-//     event-create-form        the inline creation form; its season <select>
-//                              (event-create-season) must OFFER the future season
-//     season-card-expand       #261 — the collapsed season card's expand button
-//                              opens the season-manage panel for the MANAGEABLE season
-//     season-manage-panel      the panel; carries season-manage-add-event and
-//                              season-manage-add-series (the series entry point)
-//     season-create[-*]        the #132/T2 season-create flow (used by the repro test)
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -67,6 +18,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
@@ -88,6 +40,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
+	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
@@ -100,15 +53,14 @@ const {
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-// T1's write layer — the ONE create seam this page may use.
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: createSeasonMock,
 	createEventSeries: vi.fn(),
 	createEvent: createEventMock
 }));
-// T3's data layer — the season/series read seams.
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeason: listSeriesOptionsForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: updateSeasonFieldMock,
 	addSeasonConductor: addSeasonConductorMock,
@@ -119,19 +71,14 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
 });
-// `manageRightsFrom` stays REAL — the rights derivation is exactly what #167
-// exercises; only the network-touching single-entity probe is mocked.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// $env/dynamic/public is unavailable outside a SvelteKit request context under
-// happy-dom; stubbing the base url keeps every real module in play.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -149,11 +96,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-// Named (not anonymous) so the review-F2 tests can assert that the repertoire
-// management reads actually re-run once the database-entity answer lands.
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: loadWorksByEventIdMock
@@ -181,17 +123,13 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const FUTURE_SEASON_ID = 'season-future-1';
 
-/** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** A season that starts strictly in the FUTURE — the just-created #167 shape. */
 function futureSeason(rights: { owners?: string[]; editors?: string[] } = {}): Season {
 	return {
 		id: FUTURE_SEASON_ID,
@@ -204,9 +142,6 @@ function futureSeason(rights: { owners?: string[]; editors?: string[] } = {}): S
 	};
 }
 
-/** The #167 agenda shape: NOTHING is current (viewer fields empty/null — those
- *  semantics are pinned in agendaData.spec.ts and stay), but the future season
- *  is MANAGEABLE. */
 function futureOnlyAgenda(season: Season) {
 	return fullAgendaResult({
 		seasons: [season],
@@ -216,16 +151,12 @@ function futureOnlyAgenda(season: Season) {
 	});
 }
 
-/** A collective with no seasons at all — the repro test's starting point. */
 function emptyAgenda() {
 	return fullAgendaResult();
 }
 
 const CURRENT_SEASON_ID = 'season-current-1';
 
-/** A season that is RUNNING right now, with NO rights visible on it — the
- *  reporter's own read (#91: a viewer with no grant ON THE SEASON sees no
- *  `_owner`/`_editor` at all, whatever they hold on the database entity). */
 function currentSeasonNoVisibleRights(): Season {
 	return {
 		id: CURRENT_SEASON_ID,
@@ -238,8 +169,6 @@ function currentSeasonNoVisibleRights(): Season {
 	};
 }
 
-/** A current season and one agenda event under it. Viewer + manageable fields
- *  agree (that is what the producer emits when a season is running). */
 function currentSeasonAgenda(season: Season) {
 	return fullAgendaResult({
 		upcoming: [
@@ -261,8 +190,6 @@ function currentSeasonAgenda(season: Season) {
 	});
 }
 
-/** Lets anything already queued — a late reply that WOULD have landed — run
- *  before asserting that it did not. */
 function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -293,6 +220,7 @@ beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
+	listSeriesOptionsForSeasonMock.mockResolvedValue([]);
 	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
@@ -322,6 +250,7 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
+	listSeriesOptionsForSeasonMock.mockReset();
 	listEventsForSeasonMock.mockReset();
 	updateSeasonFieldMock.mockReset();
 	addSeasonConductorMock.mockReset();
@@ -336,14 +265,10 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── helpers ─────────────────────────────────────────────────────────────────────
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-/** Ready for the fixtures that DO have an agenda row (the current-season
- *  shapes) — `renderReady` waits for the empty state, which never arrives. */
 async function renderReadyWithRow(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
 	const { container } = render(Page);
@@ -366,8 +291,6 @@ async function fill(container: HTMLElement, testid: string, value: string): Prom
 	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-// ── the gate: a FUTURE-only season is manageable ────────────────────────────────
-
 describe('#167 — event creation controls with a FUTURE-only season', () => {
 	it('viewer is the future season’s EDITOR → the season card renders, the panel’s [+ Event] opens the form, and the future season is offerable in its season select', async () => {
 		loadFullAgendaMock.mockResolvedValue(
@@ -378,7 +301,6 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		// #213 — the page-level [+ Event] is gone; the panel's [+ Event] is the way in.
 		expect(q(container, 'event-create')).toBeNull();
 		await fireEvent.click(q(container, 'season-card-expand') as HTMLElement);
 		await waitFor(() => {
@@ -409,7 +331,6 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		// the fallback probes the DATABASE entity, for THIS person:
 		expect(resolveManageRightsMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'sampledb' }),
 			ORG_EFK,
@@ -451,23 +372,14 @@ describe('#167 — event creation controls with a FUTURE-only season', () => {
 	});
 });
 
-// ── the reported repro, end to end on the route ─────────────────────────────────
-
 describe('#167 — the reported repro: create a season, controls appear', () => {
 	it('empty collective → create a FUTURE-dated season via the form → the season card appears after the refresh', async () => {
-		// First load: no seasons at all. After createSeason, the page's refresh
-		// (loadFullAgenda re-invoked — pinned in page.season-create.spec.ts)
-		// returns the new future-only season with the creator's rights on it.
 		loadFullAgendaMock.mockResolvedValueOnce(emptyAgenda());
 		loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason({ owners: ['person-p'] })));
-		// The Mihkel case: `_owner` on the database entity (also what lets the
-		// no-season collective offer [+ Season] via the org fallback).
 		resolveManageRightsMock.mockResolvedValue('editor');
 
 		const container = await renderReady();
 
-		// No season exists yet → season-create offered, no season card (there
-		// is nothing to manage or put an event into).
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
@@ -486,23 +398,14 @@ describe('#167 — the reported repro: create a season, controls appear', () => 
 			expect(createSeasonMock).toHaveBeenCalledTimes(1);
 		});
 
-		// THE BUG: after the refresh the page showed only "no upcoming
-		// rehearsals". The event/series creation entry point MUST be there now
-		// (#261: the season card IS that entry point).
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 	});
 });
 
-// ── #167 review F1 — a LAPSED season must not capture the admin surface ─────────
-
 describe('#167 review F1 — a lapsed season alongside a just-created one', () => {
 	it('the panel and [+ Series] target the NEW season, not the lapsed one whose dates have passed', async () => {
-		// What the real producer emits for this collective: `currentSeason`
-		// ignores end_date (viewer scoping), so the LAPSED season is still the
-		// viewer's `seasonId`; `manageableSeason` prefers the season that has
-		// not started yet, which is the one the admin just created.
 		const lapsed: Season = {
 			id: 'season-lapsed',
 			name: 'Season 2025',
@@ -533,8 +436,6 @@ describe('#167 review F1 — a lapsed season alongside a just-created one', () =
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).not.toBeNull();
 		});
-		// The panel — and with it the [+ Series] form, which has no season
-		// picker of its own — is scoped to the NEW season.
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(
 				expect.anything(),
@@ -545,27 +446,18 @@ describe('#167 review F1 — a lapsed season alongside a just-created one', () =
 	});
 });
 
-// ── #167 review F2/F3 — ONE database-entity answer, feeding every gate ──────────
-
 describe('#167 review F2 — the database-entity answer is not applied to one gate only', () => {
 	it('a CURRENT season with no visible rights + `_owner` on the database entity → event creation AND season creation AND repertoire management, not a contradictory mix', async () => {
 		loadFullAgendaMock.mockResolvedValue(currentSeasonAgenda(currentSeasonNoVisibleRights()));
 		resolveManageRightsMock.mockResolvedValue('editor');
 		const container = await renderReadyWithRow();
 
-		// the manageable-season gate (event/series creation — #261: the season card)…
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
-		// …the season-CREATE gate (nothing upcoming exists to suppress it)…
 		await waitFor(() => {
 			expect(q(container, 'season-create')).not.toBeNull();
 		});
-		// …and the season-MANAGE gate, whose reads were skipped on the first
-		// pass because the answer had not arrived yet: the pickers and the
-		// season repertoire load, and the works read re-runs UNFILTERED (a
-		// rights-holder must see retired rows — the only place their status
-		// toggle lives).
 		await waitFor(() => {
 			expect(listWorksMock).toHaveBeenCalled();
 		});
@@ -576,7 +468,6 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 				['ev-1'],
 				CURRENT_SEASON_ID,
 				expect.anything(),
-				// #434 slice 5 review round 3 — the agenda's own works reads store.
 				{ includeInactive: true, cache: 'store' }
 			);
 		});
@@ -623,8 +514,6 @@ describe('#167 review F3 — the database-entity probe is not paid per agenda lo
 	}
 
 	it('switching A → B → A costs ONE probe pair per collective, not one per load (the trigger is every ordinary member’s normal read)', async () => {
-		// No rights visible anywhere: the trigger condition every plain singer
-		// meets on every single load.
 		loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason()));
 		resolveManageRightsMock.mockResolvedValue('not-editor');
 		setAuthedWithTwoCollectives();
@@ -643,12 +532,7 @@ describe('#167 review F3 — the database-entity probe is not paid per agenda lo
 			expect(q(container, 'agenda-empty')).not.toBeNull();
 		});
 		await flush();
-		// A's answer was already known — no third pair.
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(2);
-		// #372 — resolveManageRightsMock is now ALSO called once per load for the
-		// rsvp enablement read (entityId === personId, "person-p"); the
-		// database-entity probe pair this test is about is every OTHER call
-		// (entityId is the resolved database entity id, never personId itself).
 		const databaseEntityProbes = resolveManageRightsMock.mock.calls.filter(
 			(c) => c[1] !== 'person-p'
 		);
@@ -656,11 +540,7 @@ describe('#167 review F3 — the database-entity probe is not paid per agenda lo
 	});
 });
 
-// ── review round 2, F1 — the two works reads of ONE agenda load are ordered ─────
-
 describe('#167 review round 2, F1 — the upgraded works read is not clobbered by the filtered one it raced', () => {
-	/** A RETIRED repertoire row: present only in the UNFILTERED read, and the
-	 *  only place its status toggle lives. */
 	const retiredRow: WorkRow = {
 		id: 'ri-retired',
 		kind: 'repertoire',
@@ -682,10 +562,6 @@ describe('#167 review round 2, F1 — the upgraded works read is not clobbered b
 		loadFullAgendaMock.mockResolvedValue(currentSeasonAgenda(currentSeasonNoVisibleRights()));
 		resolveManageRightsMock.mockResolvedValue('editor');
 
-		// The realistic timing the F2 spec cannot reach: the filtered read is a
-		// 4-collection JOIN plus one program_item read per event, the probe it
-		// races is two GETs. Held open here so the filtered answer lands AFTER
-		// the unfiltered one — the ordering a large season actually produces.
 		let releaseFiltered: (value: Record<string, WorkRow[]>) => void = () => {};
 		const filtered = new Promise<Record<string, WorkRow[]>>((resolve) => {
 			releaseFiltered = resolve;
@@ -702,31 +578,20 @@ describe('#167 review round 2, F1 — the upgraded works read is not clobbered b
 
 		const container = await renderReadyWithRow();
 
-		// The upgrade's unfiltered rows are on screen…
 		await waitFor(() => {
 			expect(q(container, 'works-line')).not.toBeNull();
 		});
 
-		// …and now the read they superseded finally answers, with the
-		// member-facing view: retired rows filtered out.
 		releaseFiltered({});
 		await flush();
 
-		// The stale answer must not win. Before the generation counter it did:
-		// the row vanished and with it the toggle that brings it back.
 		expect(q(container, 'works-line')).not.toBeNull();
 		expect(q(container, 'works-manage-empty')).toBeNull();
 	});
 });
 
-// ── review round 2, F2 — the probe triggers on the CURRENT season too ───────────
-
 describe('#167 review round 2, F2 — a visible grant on the manageable season does not suppress the probe', () => {
 	it('lapsed current season with NO visible rights + a future season that HAS them: the database entity is still asked, so repertoire management is not left dead under live controls', async () => {
-		// The two entities were created at different moments, so only the newer
-		// one inherited the org grant. `manageableSeason` picks the future one
-		// (review F1), which makes `manageableRightsInvisible` false — the old
-		// trigger. `currentRightsInvisible` is the one that is true here.
 		const lapsed: Season = {
 			id: 'season-lapsed',
 			name: 'Season 2025',
@@ -757,13 +622,10 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 		resolveManageRightsMock.mockResolvedValue('editor');
 		const container = await renderReadyWithRow();
 
-		// The manageable (future) season's own grant already opened these…
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
 		});
 
-		// …and the database entity is asked ANYWAY, on account of the current
-		// season showing nothing…
 		await waitFor(() => {
 			expect(resolveManageRightsMock).toHaveBeenCalledWith(
 				expect.objectContaining({ db: 'sampledb' }),
@@ -771,8 +633,6 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 				'person-p'
 			);
 		});
-		// …so the current season's repertoire surface comes alive too, instead of
-		// sitting dead underneath live creation controls.
 		await waitFor(() => {
 			expect(listWorksMock).toHaveBeenCalled();
 		});
@@ -783,7 +643,6 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 				['ev-1'],
 				lapsed.id,
 				expect.anything(),
-				// #434 slice 5 review round 3 — the agenda's own works reads store.
 				{ includeInactive: true, cache: 'store' }
 			);
 		});
@@ -824,9 +683,7 @@ describe('#167 review round 2, F2 — a visible grant on the manageable season d
 			expect(resolveManageRightsMock).toHaveBeenCalled();
 		});
 		await flush();
-		// The future season's own grant still opens creation — that is its right.
 		expect(q(container, 'season-card-expand')).not.toBeNull();
-		// The current season's repertoire stays filtered: no unfiltered re-read.
 		expect(loadWorksByEventIdMock).not.toHaveBeenCalledWith(
 			expect.anything(),
 			expect.anything(),
