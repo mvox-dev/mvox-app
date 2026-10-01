@@ -1,0 +1,197 @@
+// @vitest-environment happy-dom
+import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { createRawSnippet } from 'svelte';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
+
+const { discoverMock, resolveGateMock, resolveMembershipMock, domToBlobMock, sendMock } =
+	vi.hoisted(() => ({
+		discoverMock: vi.fn(),
+		resolveGateMock: vi.fn(),
+		resolveMembershipMock: vi.fn(),
+		domToBlobMock: vi.fn(),
+		sendMock: vi.fn()
+	}));
+vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
+vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/roster'), params: {} }));
+vi.mock('$app/state', () => ({ page: pageStub }));
+vi.mock('$lib/profile/completionGate', async (importActual) => {
+	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
+	return { ...actual, resolveGate: resolveGateMock };
+});
+vi.mock('$lib/collective/membershipStore', async (importActual) => {
+	const actual = await importActual<typeof import('$lib/collective/membershipStore')>();
+	return { ...actual, resolveMembership: resolveMembershipMock };
+});
+vi.mock('modern-screenshot', () => ({ domToBlob: domToBlobMock }));
+vi.mock('$lib/feedback/sendFeedback', () => ({ sendFeedback: sendMock }));
+
+import Layout from './+layout.svelte';
+import { authStore } from '$lib/auth/session';
+import { setToken, clearAll } from '$lib/auth/storage';
+import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetGate } from '$lib/profile/completionGate';
+import { resetMembership } from '$lib/collective/membershipStore';
+
+const PNG = new Blob(['png'], { type: 'image/png' });
+
+const children = createRawSnippet(() => ({
+	render: () => `<section data-testid="page">
+		<p data-testid="plain">Roster of <span ${REDACT_ATTR}>Mari Maasikas</span></p>
+		<span ${REDACT_ATTR}>mari@example.ee</span>
+		<button type="button" data-testid="page-button">Save</button>
+	</section>`
+}));
+
+function signIn() {
+	setToken('jwt-abc');
+	authStore.set({
+		status: 'authenticated',
+		personIdByDb: { sampledb: 'person-p' },
+		expMs: Date.now() + 100_000
+	});
+	const collectives = [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }];
+	discoverMock.mockResolvedValue({ collectives, erroredDbs: [] });
+	collectiveState.set({ status: 'ready', collectives, erroredDbs: [] });
+	selectedCollectiveDbStore.set('sampledb');
+}
+
+function doubleTap(target: Element) {
+	const init = { bubbles: true, isPrimary: true, button: 0, clientX: 5, clientY: 5 };
+	for (let i = 0; i < 2; i++) {
+		target.dispatchEvent(new PointerEvent('pointerdown', init));
+		target.dispatchEvent(new PointerEvent('pointerup', init));
+	}
+}
+
+async function openEditor() {
+	render(Layout, { props: { children } });
+	signIn();
+	await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
+	doubleTap(screen.getByTestId('plain'));
+	await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
+}
+
+let urls = 0;
+beforeEach(() => {
+	resolveGateMock.mockResolvedValue('complete');
+	resolveMembershipMock.mockResolvedValue('active');
+	domToBlobMock.mockResolvedValue(PNG);
+	URL.createObjectURL = () => `blob:shot-${++urls}`;
+	URL.revokeObjectURL = vi.fn();
+});
+
+afterEach(() => {
+	cleanup();
+	vi.clearAllMocks();
+	vi.unstubAllGlobals();
+	clearAll({ preserveProvider: false });
+	authStore.set({ status: 'loading' });
+	collectiveState.set({ status: 'loading' });
+	selectedCollectiveDbStore.set(null);
+	resetGate();
+	resetMembership();
+	document.documentElement.removeAttribute(REDACT_TOGGLE_ATTR);
+});
+
+describe('+layout — a double tap captures the screen and opens the feedback editor (#612)', () => {
+	it('opens the editor with a fresh capture each time', async () => {
+		await openEditor();
+		const first = screen.getByRole('img').getAttribute('src');
+		expect(first).toMatch(/^blob:shot-/);
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+		doubleTap(screen.getByTestId('plain'));
+		await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
+		expect(domToBlobMock).toHaveBeenCalledTimes(2);
+		expect(screen.getByRole('img').getAttribute('src')).not.toBe(first);
+	});
+
+	it('engages the marker on every marked element at the moment of capture', async () => {
+		let seen: boolean[] = [];
+		domToBlobMock.mockImplementation(async () => {
+			seen = Array.from(document.querySelectorAll(`[${REDACT_ATTR}]`)).map((el) =>
+				el.matches(`html[${REDACT_TOGGLE_ATTR}] [${REDACT_ATTR}]`)
+			);
+			return PNG;
+		});
+		await openEditor();
+		expect(seen).toEqual([true, true]);
+		expect(document.documentElement.hasAttribute(REDACT_TOGGLE_ATTR)).toBe(false);
+	});
+
+	it('replaces the nav with copy, send and close; close discards and returns the page as it was', async () => {
+		render(Layout, { props: { children } });
+		signIn();
+		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
+		const page = screen.getByTestId('page');
+		doubleTap(screen.getByTestId('plain'));
+		await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
+
+		expect(screen.queryByRole('navigation')).toBeNull();
+		const names = Array.from(screen.getByRole('toolbar').querySelectorAll('button')).map(
+			(b) => b.textContent?.trim()
+		);
+		expect(names).toEqual(['Copy', 'Send', 'Close']);
+		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'typed' } });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+		expect(screen.queryByRole('toolbar')).toBeNull();
+		expect(screen.queryByRole('textbox')).toBeNull();
+		expect(screen.getByRole('navigation')).toBeTruthy();
+		expect(screen.getByTestId('page')).toBe(page);
+		expect(page.closest('[inert]')).toBeNull();
+		expect(sendMock).not.toHaveBeenCalled();
+	});
+
+	it('copy puts the screenshot with its ink on the clipboard as image/png', async () => {
+		const write = vi.fn().mockResolvedValue(undefined);
+		class FakeClipboardItem {
+			constructor(readonly items: Record<string, Promise<Blob>>) {}
+		}
+		vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+		Object.defineProperty(navigator, 'clipboard', { value: { write }, configurable: true });
+		await openEditor();
+		domToBlobMock.mockClear();
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+
+		await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+		const [items] = write.mock.calls[0] as [FakeClipboardItem[]];
+		await expect(items[0].items['image/png']).resolves.toBe(PNG);
+		const stage = domToBlobMock.mock.calls[0][0] as HTMLElement;
+		expect(stage.querySelector('img')).toBeTruthy();
+		expect(stage.querySelector('[data-testid="stroke-surface"]')).toBeTruthy();
+	});
+
+	it('send hands the draft to the send stub', async () => {
+		sendMock.mockResolvedValue(undefined);
+		await openEditor();
+		await fireEvent.input(screen.getByRole('textbox'), { target: { value: 'typed' } });
+
+		await fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+
+		expect(sendMock).toHaveBeenCalledWith({
+			screenshot: PNG,
+			strokes: { v: 1, strokes: [] },
+			description: 'typed',
+			pagePath: '/roster'
+		});
+	});
+
+	it('a double tap on a button does not capture; one on plain text then does', async () => {
+		render(Layout, { props: { children } });
+		signIn();
+		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
+
+		doubleTap(screen.getByTestId('page-button'));
+
+		doubleTap(screen.getByTestId('plain'));
+
+		await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
+		expect(domToBlobMock).toHaveBeenCalledTimes(1);
+	});
+});
