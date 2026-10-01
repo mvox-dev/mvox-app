@@ -5,6 +5,7 @@
 	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
+	import AgendaCreatedMark from '$lib/agenda/AgendaCreatedMark.svelte';
 	import { groupByMonth, monthLabel, tallinnDayKey } from '$lib/preferences/timeFormat';
 
 	interface Props {
@@ -73,9 +74,7 @@
 						class="border-b border-dashed border-ink-5 py-1.5 last:border-b-0"
 						class:bg-highlight={item.id === justCreatedEventId}
 					>
-						{#if item.id === justCreatedEventId}
-							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
-						{/if}
+						<AgendaCreatedMark show={item.id === justCreatedEventId} />
 						<a
 							href="/event/{item.id}"
 							aria-label={rowLinkLabel(item.name)}

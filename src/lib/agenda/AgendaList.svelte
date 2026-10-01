@@ -13,6 +13,7 @@
 	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
+	import AgendaCreatedMark from '$lib/agenda/AgendaCreatedMark.svelte';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
@@ -250,9 +251,7 @@
 				class:bg-highlight={item.id === justCreatedEventId}
 				onclick={(event) => openEventOnCardTap(event, item.id)}
 			>
-				{#if item.id === justCreatedEventId}
-					<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
-				{/if}
+				<AgendaCreatedMark show={item.id === justCreatedEventId} />
 				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{tallinnDayKey(new Date(item.startDatetime))}</span>
 					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
@@ -361,9 +360,7 @@
 						class:bg-highlight={item.id === justCreatedEventId}
 						onclick={(event) => openEventOnCardTap(event, item.id)}
 					>
-						{#if item.id === justCreatedEventId}
-							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
-						{/if}
+						<AgendaCreatedMark show={item.id === justCreatedEventId} />
 						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 							<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
