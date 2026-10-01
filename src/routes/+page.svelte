@@ -90,6 +90,7 @@
 		withoutProgrammed
 	} from '$lib/repertoire/editionOptions';
 	import { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowHandlers';
+	import { createPendingMarks } from '$lib/repertoire/repertoirePending';
 	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
 	import EventCreateForm from '$lib/components/agenda/EventCreateForm.svelte';
 	import SeasonCreateForm from '$lib/components/agenda/SeasonCreateForm.svelte';
@@ -434,25 +435,23 @@
 			});
 	}
 
-	const managePendingMarks = new Map<string, string[]>();
+	const repertoirePending = createPendingMarks(
+		() => get(selectedCollectiveIdentityStore),
+		sameCollectiveIdentity
+	);
 
 	const repertoireQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
-			const next = new Set(ag.managePendingKeys);
-			for (const mark of [key, ...(managePendingMarks.get(key) ?? [])]) {
-				if (pending) next.add(mark);
-				else next.delete(mark);
-			}
-			ag.managePendingKeys = next;
+			ag.managePendingKeys = repertoirePending.setPending(ag.managePendingKeys, key, pending);
 			if (pending) ag.manageError = false;
 		},
 		reconcile(key) {
-			managePendingMarks.delete(key);
+			if (!repertoirePending.settle(key)) return;
 			syncPanelRepertoireAfterAgendaWrite();
 			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorksAfterWrite();
 		},
 		revert(key) {
-			managePendingMarks.delete(key);
+			if (!repertoirePending.settle(key)) return;
 			ag.manageError = true;
 			syncPanelRepertoireAfterAgendaWrite();
 			refreshWorksAfterWrite();
@@ -485,7 +484,7 @@
 			get: () => ag.seasonRepertoire,
 			set: (items) => (ag.seasonRepertoire = items)
 		},
-		beforeMove: (key, rowIds) => managePendingMarks.set(key, rowIds)
+		pending: repertoirePending
 	});
 
 	const PANEL_ADD_WORK_KEY = '__panel_add_work__';

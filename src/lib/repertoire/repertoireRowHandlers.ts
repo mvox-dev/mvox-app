@@ -4,6 +4,7 @@ import type { Edition } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RepertoireStatus, WorkRow } from '$lib/repertoire/types';
 import { reorderKey } from '$lib/repertoire/workRowOps';
+import type { PendingMarks } from '$lib/repertoire/repertoirePending';
 import {
 	ADD_PROGRAMME_KEY,
 	ADD_WORK_KEY
@@ -50,11 +51,25 @@ export interface RepertoireRowDeps {
 	seasonId(): string | null;
 	editions(): readonly Edition[];
 	seasonRepertoire: { get(): RepertoireItem[]; set(items: RepertoireItem[]): void };
-	beforeMove?(key: string, rowIds: string[]): void;
+	pending: PendingMarks;
 }
 
 export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 	const { queue, rows } = deps;
+
+	function request(
+		key: string,
+		write: () => Promise<void>,
+		apply: () => void,
+		rollback: () => void
+	): void {
+		queue.request(key, write, {
+			apply,
+			rollback: () => {
+				if (deps.pending.isCurrent(key)) rollback();
+			}
+		});
+	}
 
 	function addWork(workId: string): void {
 		if (deps.isOffline()) return;
@@ -72,10 +87,12 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 		const row = rows.find(itemId);
 		if (!cfg || !row || row.kind !== 'repertoire') return;
 		const before = row.status;
-		queue.request(itemId, () => deps.actions.updateRepertoireStatus(cfg, itemId, status), {
-			apply: () => rows.patch(itemId, { status }),
-			rollback: () => rows.patch(itemId, { status: before })
-		});
+		request(
+			itemId,
+			() => deps.actions.updateRepertoireStatus(cfg, itemId, status),
+			() => rows.patch(itemId, { status }),
+			() => rows.patch(itemId, { status: before })
+		);
 	}
 
 	function pinEdition(itemId: string, editionId: string): void {
@@ -85,10 +102,12 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 		if (!cfg || !row || row.kind !== 'repertoire') return;
 		const before = { editionId: row.editionId, editionName: row.editionName };
 		const editionName = deps.editions().find((e) => e.id === editionId)?.name ?? '';
-		queue.request(itemId, () => deps.actions.pinEdition(cfg, itemId, editionId), {
-			apply: () => rows.patch(itemId, { editionId, editionName }),
-			rollback: () => rows.patch(itemId, before)
-		});
+		request(
+			itemId,
+			() => deps.actions.pinEdition(cfg, itemId, editionId),
+			() => rows.patch(itemId, { editionId, editionName }),
+			() => rows.patch(itemId, before)
+		);
 	}
 
 	function removeItem(eventId: string, itemId: string): void {
@@ -98,24 +117,28 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 		if (!cfg || !row) return;
 		if (row.kind === 'program') {
 			const restore = rows.snapshot(itemId, eventId);
-			queue.request(itemId, () => deps.actions.deleteProgramItem(cfg, itemId), {
-				apply: () => rows.drop(itemId, eventId),
-				rollback: restore
-			});
+			request(
+				itemId,
+				() => deps.actions.deleteProgramItem(cfg, itemId),
+				() => rows.drop(itemId, eventId),
+				restore
+			);
 			return;
 		}
 		const restore = rows.snapshot(itemId);
 		const repertoireBefore = deps.seasonRepertoire.get();
-		queue.request(itemId, () => deps.actions.deleteRepertoireItem(cfg, itemId), {
-			apply: () => {
+		request(
+			itemId,
+			() => deps.actions.deleteRepertoireItem(cfg, itemId),
+			() => {
 				rows.drop(itemId);
 				deps.seasonRepertoire.set(deps.seasonRepertoire.get().filter((item) => item.id !== itemId));
 			},
-			rollback: () => {
+			() => {
 				restore();
 				deps.seasonRepertoire.set(repertoireBefore);
 			}
-		});
+		);
 	}
 
 	function move(eventId: string, itemId: string, direction: 'up' | 'down'): void {
@@ -129,7 +152,7 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 		const plan = deps.actions.planProgramMove(items, itemId, direction);
 		if (plan.length === 0) return;
 		const key = reorderKey(eventId);
-		deps.beforeMove?.(
+		deps.pending.mark(
 			key,
 			items.map((item) => item.id)
 		);
@@ -137,10 +160,12 @@ export function createRepertoireRowHandlers(deps: RepertoireRowDeps) {
 			plan.map((entry) => [entry.id, items.find((i) => i.id === entry.id)?.ordinal ?? 0])
 		);
 		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
-		queue.request(key, () => deps.actions.reorderProgramItems(cfg, plan), {
-			apply: () => rows.setOrdinals(eventId, after),
-			rollback: () => rows.setOrdinals(eventId, before)
-		});
+		request(
+			key,
+			() => deps.actions.reorderProgramItems(cfg, plan),
+			() => rows.setOrdinals(eventId, after),
+			() => rows.setOrdinals(eventId, before)
+		);
 	}
 
 	function addProgramItem(eventId: string, editionId: string, ordinal: number): void {

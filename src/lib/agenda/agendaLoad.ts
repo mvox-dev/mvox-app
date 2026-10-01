@@ -36,7 +36,8 @@ import type * as ScheduleData from '$lib/schedule/scheduleData';
 import type { CollectiveState } from '$lib/collectives/types';
 import { focusAfterRender } from '$lib/a11y/focusable';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import { dropRows, patchRows, reorderKey, restoreRow, setOrdinals } from '$lib/repertoire/workRowOps';
+import { dropRows, patchRows, restoreRow, setOrdinals } from '$lib/repertoire/workRowOps';
+import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
 import type { RepertoireRowStore } from '$lib/repertoire/repertoireRowHandlers';
 
 type AgendaTypeFilter = 'all' | (typeof CANONICAL_EVENT_TYPES)[number];
@@ -733,20 +734,8 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {
 			const merged: Record<string, WorkRow[]> = {};
 			for (const [eventId, rows] of Object.entries(byEvent)) {
-				const reorderPending = deps.isRepertoirePending(reorderKey(eventId));
 				const live = ag.worksByEventId[eventId] ?? [];
-				const out: WorkRow[] = [];
-				for (const row of rows) {
-					const pending =
-						deps.isRepertoirePending(row.id) || (reorderPending && row.kind === 'program');
-					if (!pending) {
-						out.push(row);
-						continue;
-					}
-					const liveRow = live.find((r) => r.id === row.id);
-					if (liveRow) out.push(liveRow);
-				}
-				merged[eventId] = out;
+				merged[eventId] = mergeRows(rows, live, deps.isRepertoirePending, eventId);
 			}
 			return merged;
 		}

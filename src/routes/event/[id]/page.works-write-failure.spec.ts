@@ -134,6 +134,7 @@ interface WorldOptions {
 	repertoireItems?: EntityRaw[];
 	programItems?: EntityRaw[];
 	failWrites?: () => boolean;
+	gate?: (url: string, method: string) => Promise<void> | undefined;
 }
 
 function installWorld(options: WorldOptions = {}) {
@@ -154,6 +155,7 @@ function installWorld(options: WorldOptions = {}) {
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
+		if (method !== 'GET') await options.gate?.(url, method);
 
 		if (url.includes('/property/') && method === 'DELETE') return json({ deleted: true });
 
@@ -591,6 +593,99 @@ describe('#324 — the failure/saved cues do not outlive their event', () => {
 			savedText(next).trim(),
 			'the live region must not still read “saved” for an older event'
 		).toBe('');
+		expect(manageAlert(next)).toBeNull();
+	});
+});
+
+function held() {
+	let release!: () => void;
+	const promise = new Promise<void>((resolve) => (release = resolve));
+	return { promise, release };
+}
+
+function gateOn(method: string, fragment: string, promise: Promise<void>) {
+	return (url: string, m: string) => (m === method && url.includes(fragment) ? promise : undefined);
+}
+
+function names(section: HTMLElement): Array<string | undefined> {
+	return qa(section, 'work-name').map((el) => el.textContent?.trim());
+}
+
+function buttons(section: HTMLElement, testid: string): HTMLButtonElement[] {
+	return qa(section, testid) as HTMLButtonElement[];
+}
+
+describe('#551 — event page: a move or remove keeps pending until it settles', () => {
+	it('a move locks every programme row until the reorder settles', async () => {
+		const gate = held();
+		installWorld({
+			programItems: programItemsFixture(),
+			gate: gateOn('POST', '/entity/pi-', gate.promise)
+		});
+		const { container } = renderPage();
+		const section = await worksSection(container, 2);
+
+		await fireEvent.click(q(rowByName(section, 'Locus iste'), 'work-manage-move-up')!);
+
+		await waitFor(() => {
+			for (const testid of ['work-manage-move-up', 'work-manage-move-down', 'work-manage-remove']) {
+				expect(buttons(section, testid).map((b) => b.disabled)).toEqual([true, true]);
+			}
+		});
+
+		gate.release();
+		await waitFor(() => {
+			expect(buttons(section, 'work-manage-remove').map((b) => b.disabled)).toEqual([false, false]);
+		});
+	});
+
+	it('a works read landing mid-move keeps the moved order and still shows the added row', async () => {
+		const gate = held();
+		installWorld({
+			programItems: programItemsFixture(),
+			gate: gateOn('POST', '/entity/pi-', gate.promise)
+		});
+		const { container } = renderPage();
+		const section = await worksSection(container, 2);
+
+		await fireEvent.click(q(rowByName(section, 'Locus iste'), 'work-manage-move-up')!);
+		expect(names(section)).toEqual(['Locus iste', 'Bogoróditse Djévo']);
+
+		await fireEvent.change(q(section, 'work-manage-add-programme-select')!, {
+			target: { value: 'ed-2' }
+		});
+		await fireEvent.click(q(section, 'work-manage-add-programme-button')!);
+
+		await waitFor(() => {
+			expect(qa(section, 'work-row').length).toBe(3);
+		});
+		expect(names(section)).toEqual(['Locus iste', 'Bogoróditse Djévo', 'Bogoróditse Djévo']);
+		gate.release();
+	});
+
+	it('a remove rejected after a collective switch leaves the new event’s works alone', async () => {
+		const gate = held();
+		installWorld({
+			failWrites: () => true,
+			gate: gateOn('DELETE', '/entity/ri-1', gate.promise)
+		});
+		const { container } = renderPage(['sampledb', 'crede']);
+		const section = await worksSection(container, 2);
+
+		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-manage-remove')!);
+		await waitFor(() => {
+			expect(qa(section, 'work-row').length).toBe(1);
+		});
+
+		selectedCollectiveDbStore.set('crede');
+		await waitFor(() => {
+			expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Rehearsal');
+		});
+		const next = await worksSection(container, 1);
+
+		gate.release();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(names(next)).toEqual(['Nunc dimittis']);
 		expect(manageAlert(next)).toBeNull();
 	});
 });

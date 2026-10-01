@@ -13,6 +13,7 @@
 		withoutProgrammed
 	} from '$lib/repertoire/editionOptions';
 	import { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowHandlers';
+	import { createPendingMarks, mergePendingRows } from '$lib/repertoire/repertoirePending';
 	import { dropRows, patchRows, restoreRow, setOrdinals } from '$lib/repertoire/workRowOps';
 	import RepertoireElement, {
 		ADD_PROGRAMME_KEY,
@@ -22,7 +23,6 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
-	import { withItem } from '$lib/collections/immutable';
 
 	let {
 		detail,
@@ -87,7 +87,8 @@
 		})
 			.then((byEvent) => {
 				if (g !== generation()) return;
-				ev.workRows = byEvent[evId] ?? [];
+				const isPending = (key: string) => repertoireQueue.isPending(key);
+				ev.workRows = mergePendingRows(byEvent[evId] ?? [], ev.workRows, isPending, evId);
 			})
 			.catch(() => {
 			});
@@ -102,21 +103,25 @@
 		}
 	}
 
+	const pendingMarks = createPendingMarks(() => (mounted ? generation() : -1));
+
 	const repertoireQueue = untrack(() =>
 		actions.createRepertoireWriteQueue({
-			setPending(key, pending) {
-				managePendingKeys = withItem(managePendingKeys, key, pending);
-				if (pending) {
+			setPending(key, isPending) {
+				managePendingKeys = pendingMarks.setPending(managePendingKeys, key, isPending);
+				if (isPending) {
 					manageError = false;
 					manageStatus = '';
 				}
 			},
 			reconcile(key) {
+				if (!pendingMarks.settle(key)) return;
 				if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorks();
 				manageStatus = m.repertoire_manage_saved();
 			},
 			revert(key) {
 				console.error('event detail: repertoire write failed', key);
+				if (!pendingMarks.settle(key)) return;
 				refreshWorks();
 				manageError = true;
 			}
@@ -147,7 +152,8 @@
 		seasonRepertoire: {
 			get: () => ev.seasonRepertoire,
 			set: (items) => (ev.seasonRepertoire = items)
-		}
+		},
+		pending: pendingMarks
 	});
 
 	const editionsByWorkId = $derived(editionsByWorkIdOf(ev.libraryEditions));
