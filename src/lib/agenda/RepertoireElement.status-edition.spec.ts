@@ -1,47 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #125 RED — repertoire work separators + status/edition UX, from Mihkel's
-// 2026-08-12 live walk (SPIKE findings F4/F5a/F5b). Unit half; the same
-// contracts are pinned on the real agenda route in
-// page.repertoire-status-edition.spec.ts so GREEN cannot fix the component
-// without the page rendering the fixed surface.
-//
-//   F4 — work title unindent. The `works-expanded` wrapper carries `pl-4`,
-//   which pushes work titles right and WEAKENS the visual separation from the
-//   event row. Contract: no left-padding utility of pl-3 or larger on the
-//   wrapper (pl-0…pl-2 or none all satisfy "reduced/removed"). Class-list
-//   encoding as ever — happy-dom applies no real CSS.
-//
-//   F5a — status is a row of four inline BUTTONS (one per status), not a
-//   native <select>. Test-ids `work-status-learning|active|retired|dropped`;
-//   the CURRENT status is distinguished via `aria-pressed="true"` (the
-//   toggle-button semantic — a class alone would be invisible to AT, and
-//   visual styling can key off the attribute). Buttons live INSIDE
-//   `work-manage-row`, same row as [Remove]. Labels still route through the
-//   STATUS_OPTIONS i18n lookup — no raw 'retired' leaking into locales.
-//
-//   F5b — ONE unified edition field replaces the pick-select + [Pin] button
-//   pair AND the separate read-only edition line on the editor surface.
-//   Test-id `work-edition-picker`: a native <select> (keeping the #111
-//   finding-4 mobile treatment, w-full + sm:w-auto) whose VALUE is the
-//   currently pinned edition id ('' when none). Selecting another edition
-//   fires `onpinedition` immediately — no confirm step, no button. A work
-//   with no editions to offer renders no picker; the read-only edition line
-//   stays as that row's display (and stays for plain members everywhere).
-//
-// GREEN migration note — these contracts intentionally break existing green
-// specs that pin the OLD controls; migrate them, do not resurrect the old
-// test-ids:
-//   - RepertoireElement.ux.spec.ts — finding-3 specs assert
-//     work-manage-status-select exists + its options; second-pass finding-4
-//     specs assert work-manage-pin-edition-select w-full/sm:w-auto (treatment
-//     moves onto work-edition-picker).
-//   - RepertoireElement.spec.ts / page.repertoire-manage-wiring.spec.ts /
-//     page.repertoire-ux.spec.ts / page.repertoire-a11y.spec.ts /
-//     event/[id]/page.spec.ts — status-select change events become clicks on
-//     the status buttons; pin select+button flows become a single change on
-//     work-edition-picker. Optimistic-status assertions stay on `data-status`
-//     (the render-owned surface), NEVER on a control's value.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement from './RepertoireElement.svelte';
@@ -83,7 +40,6 @@ const EDITION_OPTIONS = [
 	{ id: 'ed-2', label: 'Bärenreiter urtext' }
 ];
 
-/** pl-3 and up (incl. pl-3.5, pl-10, …) — the paddings F4 rules out. */
 const HEAVY_LEFT_PADDING = /(^|\s)pl-(?:[3-9]|[1-9]\d)(?:\.\d+)?(\s|$)/;
 
 interface EditorProps {
@@ -121,8 +77,6 @@ function firstWorkRow(container: HTMLElement): HTMLElement {
 	return li as HTMLElement;
 }
 
-// ── F4 — work title unindent ────────────────────────────────────────────────
-
 describe('RepertoireElement — works-expanded unindent (#125 F4)', () => {
 	it('the expanded wrapper carries no pl-4 (nor any pl-3+) left padding', () => {
 		const { container } = renderAsSeasonEditor();
@@ -131,8 +85,6 @@ describe('RepertoireElement — works-expanded unindent (#125 F4)', () => {
 		expect((wrapper as HTMLElement).className).not.toMatch(HEAVY_LEFT_PADDING);
 	});
 });
-
-// ── F5a — inline status buttons replace the select ──────────────────────────
 
 describe('RepertoireElement — inline status buttons (#125 F5a)', () => {
 	it('renders NO status <select> on the editor surface', () => {
@@ -211,8 +163,6 @@ describe('RepertoireElement — inline status buttons (#125 F5a)', () => {
 		expect(container.querySelector('[data-testid="work-status-badge"]')).not.toBeNull();
 	});
 });
-
-// ── F5b — unified edition picker replaces select + [Pin] ────────────────────
 
 describe('RepertoireElement — unified edition picker (#125 F5b)', () => {
 	it('renders NO [Pin] button and NO old pin-edition select', () => {

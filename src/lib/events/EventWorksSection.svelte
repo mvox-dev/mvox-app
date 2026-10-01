@@ -18,7 +18,7 @@
 	import RepertoireElement, {
 		ADD_PROGRAMME_KEY,
 		ADD_WORK_KEY
-	} from '$lib/components/agenda/RepertoireElement.svelte';
+	} from '$lib/agenda/RepertoireElement.svelte';
 	import type { ManageRightsState, PickerOption } from '$lib/repertoire/types';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';

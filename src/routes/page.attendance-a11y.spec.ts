@@ -92,7 +92,8 @@ const memberRatesTwo = [
 
 const ATTENDANCE_SURFACE_FILES = surfacesUnder(
 	'src/lib/components/attendance/',
-	'src/lib/components/agenda/'
+	'src/lib/components/agenda/',
+	'src/lib/agenda/'
 );
 
 function readSource(relPath: string): string {

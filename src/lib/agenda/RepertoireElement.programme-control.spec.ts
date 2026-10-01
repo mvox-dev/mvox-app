@@ -1,46 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #272 RED — programme control: "select edition" dropdown + "add to programme"
-// link, both conditionally shown. Mihkel's four-part ruling (2026-09-07,
-// verbatim on the issue):
-//
-//   1. Dropdown placeholder becomes "select edition"
-//      (`repertoire_add_programme_label` — key unchanged, VALUE changes).
-//   2. Companion link becomes "add to programme"
-//      (`repertoire_add_programme_button` — key unchanged, VALUE changes).
-//   3. The link is visible ONLY when an edition is selected — ABSENT from the
-//      DOM, not disabled. Today it renders disabled with nothing selected.
-//   4. The dropdown is displayed ONLY when it has content — the emptiness gate
-//      lands on the INNER <select>, NOT on the outer
-//      `work-manage-add-programme` wrapper: event/[id]/page.spec.ts pins the
-//      wrapper present with a genuinely-empty pickable list, and the ruling's
-//      wording names the dropdown specifically.
-//
-// Plus Gama's aria-scope addition: both aria-labels
-// (`repertoire_add_programme_select_aria_label`,
-// `repertoire_add_programme_aria_label`) must name the EDITION and THIS
-// EVENT's programme — no "tonight"/date claim (the surface renders for any
-// event) — and, per the standing WCAG 2.5.3 Label-in-Name guard
-// (page.repertoire-a11y.spec.ts), the button's aria-label must CONTAIN the new
-// visible button text verbatim in all four locales.
-//
-// SUPERSEDED IN PART by #288's PO ruling (item 2): for the SELECT, "names this
-// event's programme" gave way to prompt-CONTAINMENT — a prompt-default select's
-// accessible name must contain its placeholder text verbatim, because that
-// prompt is what a speech-input user says. `repertoire_add_programme_label`
-// ("Select edition") is now BOTH the placeholder and the select's rendered
-// aria-label, so the select deliberately no longer names the event's programme.
-// The BUTTON half of Gama's addition stands unchanged, and the date-claim ban
-// still binds both keys. `repertoire_add_programme_select_aria_label` survives
-// as the a11y guard's pairing SUBJECT rather than as a rendered name — see the
-// #288 review F2 note in page.repertoire-a11y.spec.ts before deleting it.
-//
-// Regression fence carried here as a sibling of the manage-wiring
-// first-program_item spec: the `work-manage-add-programme` block is
-// deliberately NOT gated on `context === 'programme'` (see the scar comment in
-// RepertoireElement.svelte) — an event whose programme is empty must still be
-// able to receive its first edition, and with an EMPTY pickable list the
-// wrapper must render harmlessly (select absent, button absent, no crash).
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -50,9 +8,6 @@ import type { WorkRow } from '$lib/repertoire/types';
 import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
-	// Proxy mock: any message key resolves to a `[key]` stub — assertions on
-	// rendered copy pin KEYS, never translated strings; the exact-text wording
-	// pins below read messages/*.json directly instead.
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get: (_target, key) => () => `[${String(key)}]`
 	})
@@ -106,8 +61,6 @@ const WRAPPER = '[data-testid="work-manage-add-programme"]';
 const SELECT = '[data-testid="work-manage-add-programme-select"]';
 const BUTTON = '[data-testid="work-manage-add-programme-button"]';
 
-// ── Part 3 — the link is hidden, not disabled, until an edition is selected ──
-
 describe('#272 — "Add to programme" link visibility follows the selection', () => {
 	it('with NOTHING selected the button is ABSENT from the DOM — hidden, not disabled', () => {
 		const { container } = renderProgrammeEditor(EDITIONS);
@@ -142,16 +95,11 @@ describe('#272 — "Add to programme" link visibility follows the selection', ()
 		const { container } = renderProgrammeEditor(EDITIONS, { onaddprogramitem });
 		await fireEvent.change(container.querySelector(SELECT)!, { target: { value: 'ed-9' } });
 		await fireEvent.click(container.querySelector(BUTTON)!);
-		// The wire contract is untouched: same callback, same append-to-end ordinal.
 		expect(onaddprogramitem).toHaveBeenCalledWith('ed-9', 1);
-		// The existing post-add reset of selectedEditionForAdd now also hides the
-		// button — the control returns to its idle shape.
 		expect(container.querySelector(BUTTON), 'post-add: selection reset → button hidden').toBeNull();
 		expect((container.querySelector(SELECT) as HTMLSelectElement).value).toBe('');
 	});
 });
-
-// ── Part 4 — the dropdown renders only when it has content ───────────────────
 
 describe('#272 — the edition dropdown renders only when it has content', () => {
 	it('pickableEditions EMPTY → NO select and NO button; the wrapper itself stays (the gate is on the dropdown, not the block)', () => {
@@ -176,10 +124,6 @@ describe('#272 — the edition dropdown renders only when it has content', () =>
 	});
 
 	it('FIRST-program_item fence: an EVENT editor on the season-repertoire fallback with an EMPTY pickable list still gets the wrapper — select absent, nothing crashes', () => {
-		// Sibling of page.repertoire-manage-wiring.spec.ts "an EVENT editor on an
-		// event with NO programme yet can still start one": same rights/context
-		// shape (the scar — this block must not be gated on context), but with
-		// genuinely nothing to pick.
 		const { container } = render(RepertoireElement, {
 			props: {
 				rows: [row({ id: 'ri-fallback', kind: 'repertoire', status: 'active', ordinal: null })],
@@ -196,17 +140,6 @@ describe('#272 — the edition dropdown renders only when it has content', () =>
 	});
 });
 
-// ── Parts 1 + 2 + the aria scope — the four locales' wording, exact text ─────
-//
-// Keys unchanged, VALUES change. Pinned exact-text per locale: en/et are
-// contract (Mihkel's ruling + Gama's et rows); lv/uk are engineering drafts
-// flagged refinable in the delivery round (#266 treatment) — refining them
-// means updating these pins in the same commit. The two *aria_label* values
-// are engineering's construction: the standing WCAG 2.5.3 guard
-// (page.repertoire-a11y.spec.ts "Label in Name") requires the button's
-// aria-label to CONTAIN the visible button text verbatim in every locale, so
-// the issue's draft aria strings (which contain it in none) are reshaped to
-// "<visible button text>: <edition qualifier>".
 describe('#272 — programme-control wording (messages/*.json, all four locales)', () => {
 	const read = (locale: string): MessageFile =>
 		JSON.parse(readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')) as MessageFile;
@@ -248,8 +181,6 @@ describe('#272 — programme-control wording (messages/*.json, all four locales)
 	}
 
 	it('neither aria-label claims a date in any locale — the surface renders for ANY event, not tonight\'s', () => {
-		// The old copy said "tonight" / "tänase" / "šā vakara" / "сьогоднішньої";
-		// program_item's parent is an event, which may be months away.
 		const DATE_CLAIMS = ['tonight', 'tänase', 'Tänase', 'vakara', 'сьогодні'];
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = read(locale);

@@ -1,16 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #204 RED — work pickers show the composer alongside the work name.
-//
-// CONTRACT under test (defined HERE, implemented in GREEN):
-//   The "Add work" picker's option label is `${name} - ${composer}` when the
-//   work carries a composer, and EXACTLY `${name}` when composer is empty —
-//   never a dangling trailing " - ". (Issue #204: "Silmavalgus - P. Uusberg".)
-//
-// This file covers the COMPONENT seam (RepertoireElement's add-work select).
-// The page-route integrations live in page.repertoire-manage-wiring.spec.ts
-// (agenda), event/[id]/page.spec.ts (event detail) and
-// page.library-work-picker-composer.spec.ts (library bulk checkout).
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement from './RepertoireElement.svelte';
@@ -45,8 +33,6 @@ function row(overrides: Partial<WorkRow> = {}): WorkRow {
 }
 
 async function renderAddWorkSelect(pickableWorksList: Array<{ id: string; name: string; composer: string }>) {
-	// `props` wrapper: the component has a prop literally named `context`, which
-	// collides with testing-library's mount option of the same name.
 	const rendered = render(RepertoireElement, {
 		props: { rows: [row()], manageRights: 'editor', context: 'repertoire', pickableWorksList }
 	});
@@ -82,8 +68,6 @@ describe('RepertoireElement — add-work picker shows composer (#204)', () => {
 		]);
 		const labels = optionLabels(select);
 		expect(labels).toContain('Anonymous chant');
-		// The exact-name option must be present AND nothing may end in a bare
-		// separator (the `' - ' + ''` failure mode).
 		expect(labels.some((l) => /\s-\s*$/.test(l))).toBe(false);
 	});
 
