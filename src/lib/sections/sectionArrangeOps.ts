@@ -11,6 +11,7 @@ import type {
 } from '$lib/sections/sectionActions';
 import { isSectionNotEmpty, isSectionParentDamaged } from '$lib/sections/sectionErrors';
 import { focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
+import { formKeydown } from '$lib/a11y/formKeys';
 import {
 	applyReparent,
 	applySiblingOrder,
@@ -272,10 +273,8 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		a.pageCreateError = null;
 	}
 
-	function onPageCreateNameKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		void submitPageCreate();
+	function onPageCreateFormKeydown(event: KeyboardEvent): void {
+		formKeydown(event, { close: closePageCreateForm, submit: () => void submitPageCreate() });
 	}
 
 	async function submitPageCreate(): Promise<void> {
@@ -563,7 +562,7 @@ export function createArrangeOps(deps: ArrangeOpsDeps) {
 		handleRemoveSection,
 		openPageCreateForm,
 		closePageCreateForm,
-		onPageCreateNameKeydown,
+		onPageCreateFormKeydown,
 		submitPageCreate,
 		performReorder,
 		prevSiblingId,

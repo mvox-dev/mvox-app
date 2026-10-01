@@ -7,6 +7,7 @@
 	import type { RosterState } from '$lib/roster/rosterPageState';
 	import type { AdminState } from '$lib/nav/adminStore';
 	import SectionArrangeRow from '$lib/sections/SectionArrangeRow.svelte';
+	import { focusOnMount } from '$lib/a11y/focusable';
 
 	let {
 		roster,
@@ -35,12 +36,6 @@
 	function pageCreateParentLabel(node: SectionNode): string {
 		return '  '.repeat(node.depth) + node.name;
 	}
-
-	let pageCreateNameInput = $state<HTMLInputElement | null>(null);
-
-	$effect(() => {
-		if (arrange.pageCreateOpen && pageCreateNameInput) pageCreateNameInput.focus();
-	});
 
 	const activeArrangeRowId = $derived(
 		rovingStop(arrange.rovingHandleId, drag.arrangeReorderableIds())
@@ -130,19 +125,20 @@
 				data-testid="roster-new-section-form"
 				role="dialog"
 				aria-label={m.roster_new_section_form_label()}
+				tabindex="-1"
 				class="flex flex-col gap-1.5"
+				onkeydown={ops.onPageCreateFormKeydown}
 			>
 				<input
 					type="text"
 					data-testid="roster-new-section-name"
-					bind:this={pageCreateNameInput}
+					use:focusOnMount
 					aria-label={m.roster_section_name_label()}
 					placeholder={m.roster_section_name_label()}
 					aria-invalid={arrange.pageCreateError ? true : undefined}
 					aria-describedby={arrange.pageCreateError ? 'roster-new-section-error' : undefined}
 					value={arrange.pageCreateName}
 					oninput={(e) => (arrange.pageCreateName = (e.currentTarget as HTMLInputElement).value)}
-					onkeydown={ops.onPageCreateNameKeydown}
 					class="border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 				/>
 				<select

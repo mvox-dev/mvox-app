@@ -22,7 +22,8 @@
 		type SeriesCreateFormSnapshot,
 		type SeriesCreateResumeByDb
 	} from '$lib/agenda/seriesCreateResume';
-	import { focusAfterRender } from '$lib/a11y/focusable';
+	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import { formKeydown } from '$lib/a11y/formKeys';
 
 	interface Props {
 		selected: Collective | null;
@@ -78,8 +79,6 @@
 	let seriesCreateError = $state<(() => string) | null>(null);
 	let seriesCreateErrorField = $state<SeriesCreateErrorField>(null);
 	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
-
-	let seriesCreateNameInput = $state<HTMLInputElement | null>(null);
 
 	const seriesCreateResume = $derived(selected ? (resumeByDb[selected.db] ?? null) : null);
 
@@ -219,10 +218,13 @@
 	}
 
 	function onSeriesCreateFormKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		event.stopPropagation();
-		dismissSeriesCreateForm();
+		if (event.key === 'Escape') event.stopPropagation();
+		formKeydown(event, {
+			close: dismissSeriesCreateForm,
+			submit: () => {
+				if (!seriesCreateNothingToSubmit) void submitSeriesCreate();
+			}
+		});
 	}
 
 	function toggleSeriesCreateSkipDate(iso: string): void {
@@ -433,10 +435,6 @@
 			seriesRunDb = null;
 		}
 	}
-
-	$effect(() => {
-		if (seriesCreateNameInput) seriesCreateNameInput.focus();
-	});
 </script>
 
 <div
@@ -461,7 +459,7 @@
 			<input
 				type="text"
 				data-testid="series-create-name"
-				bind:this={seriesCreateNameInput}
+				use:focusOnMount
 				aria-invalid={seriesCreateInvalid('name')}
 				aria-describedby={seriesCreateDescribedBy('name')}
 				placeholder={m.series_create_name_placeholder()}
