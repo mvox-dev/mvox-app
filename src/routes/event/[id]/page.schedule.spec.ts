@@ -1,78 +1,18 @@
 // @vitest-environment happy-dom
-//
-// #262 RED — the event detail page's schedule section (surface A of the PO
-// contract: issue #262, Gama 05:30 v1 shape + 11:11 agenda amendment).
-//
-// INTEGRATION posture: the REAL page (+page.svelte) with the REAL data layer
-// running — only the global fetch is stubbed at the wire (same harness family
-// as page.spec.ts / page.event-editing.spec.ts). This is what forces GREEN to
-// actually wire the schedule data layer into the route.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/routes/event/[id]/+page.svelte grows a schedule section:
-//     • event-detail-schedule — its OWN container, NEVER inside
-//       [data-testid="event-detail-time"]: page.spec.ts pins exact-count
-//       regexes on that element's textContent (match(/19:00/g).toHaveLength(1)
-//       at :637 and the AM/PM twin at :2414), and the natural 'kontsert' item
-//       shares the event's start time. Placement within the page hierarchy is
-//       engineering's call (near the event's own date/time block, PO
-//       directional) — these specs assert presence + content, not position.
-//     • rows chronological (datetime asc, name tie-break — NO ordinal, #246),
-//       each showing name + time; time rendered via the ONE legal combo
-//       formatTime(tallinnHHMM(new Date(iso)), $timeFormatStore)
-//       (timeFormat.no-hardcoded-render.spec.ts allowlist fence).
-//     • visibility follows the Works precedent (showWorksSection,
-//       +page.svelte:1086): rows.length > 0 || isEditor. Member + zero items
-//       → NO section; editor + zero items → section with the add affordance.
-//     • members get ZERO edit affordances; parent-event editors (the page's
-//       existing isEditor derivation — manageRightsFrom over
-//       detail.ownerIds/editorIds) get add/edit/remove:
-//         event-schedule-add            → opens the in-place add form:
-//           event-schedule-add-name     — native <input type="text">, named by
-//                                         a visible <label for> (#239/#249
-//                                         single-name rule: NO redundant
-//                                         same-key aria-label on the input)
-//           event-schedule-add-datetime — the rule-5 composite: -date native
-//                                         input + TimeSelect -hour/-minute
-//                                         (the app's ONE time-entry composite)
-//           event-schedule-add-submit   — POSTs the create
-//         event-schedule-edit-{id}      → pencil pattern: a TAB-reachable
-//                                         whole-field activator <button>
-//                                         (standing rule 4/4b); opens
-//           event-schedule-edit-name-{id} (seeded) +
-//           event-schedule-edit-datetime-{id} (seeded Tallinn wall clock)
-//         event-schedule-remove-{id}    → #238 shape: TrashIcon.svelte inside
-//                                         the trigger (aria-hidden svg,
-//                                         accessible name on the BUTTON, red
-//                                         tint, NOT the older × glyph), armed
-//                                         into -confirm-{id} / -cancel-{id}
-//   Wire (the real producer, driven end-to-end):
-//     fetch  = entity?_type.string=schedule_item&_parent.reference=<eventId>
-//              &props=name,datetime&limit=500      (never a raw type id)
-//     create = POST entity, five props incl. the MANDATORY explicit
-//              `_sharing: domain`; datetime = UTC ISO via tallinnLocalToUtcIso
-//     edit   = replaceEntityProperty choreography (GET → POST-new → DELETE-old)
-//     remove = DELETE entity/{itemId}
-//     NO ordinal reads or writes anywhere.
-//   The schedule fetch attaches inside loadForSelected's flow under the page's
-//   hand-rolled generation guard (+page.svelte:141/287/304) — pinned by a
-//   deterministically ordered race spec below.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — same hygiene as
-// page.spec.ts: only Date is faked, timers stay real for waitFor.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -107,9 +47,6 @@ function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-// ── Entu fixtures ─────────────────────────────────────────────────────────────
-// Event 2026-09-01T16:00Z = 19:00 Europe/Tallinn (EEST, UTC+3); +90 → 20:30.
-
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
@@ -129,7 +66,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-/** The rights-holder's view: the viewer IS in the event's `_editor` list. */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
@@ -165,10 +101,6 @@ function scheduleEntity(id: string, name: string, iso: string) {
 	};
 }
 
-/** The concert-day commission itself: kogunemine / proov / kontsert — and the
- *  'kontsert' item deliberately SHARES the event's own 19:00 start, the exact
- *  shape that would break page.spec.ts's exact-count pins if the schedule
- *  rendered inside event-detail-time. */
 function defaultScheduleEntities() {
 	return [
 		scheduleEntity('si2', 'proov', '2026-09-01T15:00:00.000Z'), // 18:00 Tallinn
@@ -180,20 +112,10 @@ function defaultScheduleEntities() {
 type WireOpts = {
 	event?: Record<string, unknown>;
 	schedule?: Array<Record<string, unknown>>;
-	/** Hold the FIRST schedule list GET open until release(entities) — the
-	 *  deterministic race probe. Later schedule GETs answer immediately. */
 	holdFirstScheduleGet?: boolean;
-	/** #262 review F1 — refuse the ITEM-scoped writes (the replace-choreography
-	 *  POST and the entity DELETE) with a 500, leaving the create POST alone.
-	 *  This is the shape that used to roll the row back in silence. */
 	failItemWrites?: boolean;
 };
 
-/**
- * The liberal read stub of the page.spec family, plus the schedule wire:
- * list GET, type-def resolution, create POST, replace choreography, entity
- * DELETE. Everything is recorded on the returned vi.fn for wire assertions.
- */
 function scheduleWireStub(opts: WireOpts = {}) {
 	const event = opts.event ?? eventEntity();
 	const season = seasonEntity();
@@ -226,7 +148,6 @@ function scheduleWireStub(opts: WireOpts = {}) {
 			return json({ entities: schedule });
 		}
 		if (method === 'POST' && /\/entity(\?|$)/.test(url)) {
-			// A create — apply it so a GREEN that refetches sees the new item.
 			const props = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
 			const name = props.find((p) => p.type === 'name');
 			const datetime = props.find((p) => p.type === 'datetime');
@@ -238,7 +159,6 @@ function scheduleWireStub(opts: WireOpts = {}) {
 		}
 		if (method === 'POST' && url.includes('/entity/')) {
 			if (opts.failItemWrites) return json({ error: 'nope' }, 500);
-			// A replace-choreography POST against one item — apply wholesale.
 			const id = url.match(/\/entity\/([^/?]+)/)?.[1] ?? '';
 			const props = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
 			schedule = schedule.map((s) => {
@@ -322,10 +242,6 @@ afterEach(async () => {
 	timeFormatStore.set('24h');
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — the section: own container, never inside event-detail-time
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — schedule section on the event detail page (member view)', () => {
 	it('renders the schedule in its OWN container, chronological, name + time per row', async () => {
 		const { container } = renderSchedulePage();
@@ -337,11 +253,9 @@ describe('#262 — schedule section on the event detail page (member view)', () 
 		expect(text).toContain('kogunemine');
 		expect(text).toContain('proov');
 		expect(text).toContain('kontsert');
-		// 24h default rendering via the shared formatTime combo — Tallinn wall clock.
 		expect(text).toContain('17:30');
 		expect(text).toContain('18:00');
 		expect(text).toContain('19:00');
-		// Chronological: datetime ascending, regardless of wire order.
 		expect(text.indexOf('kogunemine')).toBeLessThan(text.indexOf('proov'));
 		expect(text.indexOf('proov')).toBeLessThan(text.indexOf('kontsert'));
 	});
@@ -354,10 +268,7 @@ describe('#262 — schedule section on the event detail page (member view)', () 
 		});
 		const timeEl = container.querySelector('[data-testid="event-detail-time"]');
 		expect(timeEl).not.toBeNull();
-		// The schedule is no descendant of the time line…
 		expect(timeEl!.contains(scheduleSection(container))).toBe(false);
-		// …so the event's own time line still says 19:00 exactly ONCE, even with
-		// a 19:00 'kontsert' schedule item on screen.
 		expect((timeEl!.textContent ?? '').match(/19:00/g)).toHaveLength(1);
 	});
 
@@ -376,10 +287,6 @@ describe('#262 — schedule section on the event detail page (member view)', () 
 		expect(text.indexOf('a-kogunemine')).toBeLessThan(text.indexOf('b-proov'));
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — time rendering follows the #207/#220 preference (the ONE legal renderer)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — schedule times follow the AM/PM preference', () => {
 	it("'ampm': 17:30 renders as '5:30 PM', 19:00 as '7:00 PM' — no 24h leftovers in the section", async () => {
@@ -409,10 +316,6 @@ describe('#262 — schedule times follow the AM/PM preference', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — visibility + rights (the Works precedent; members read, editors write)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — visibility and edit affordances', () => {
 	it('a member SEES the list and gets ZERO edit affordances', async () => {
 		const { container } = renderSchedulePage();
@@ -428,7 +331,6 @@ describe('#262 — visibility and edit affordances', () => {
 	});
 
 	it('member + zero items → the section is ABSENT (never an empty placeholder)', async () => {
-		// Positive control first (RED trips here): with items, the section exists…
 		const withItems = renderSchedulePage();
 		await waitReady(withItems.container);
 		await waitFor(() => {
@@ -436,7 +338,6 @@ describe('#262 — visibility and edit affordances', () => {
 		});
 		cleanup();
 		vi.unstubAllGlobals();
-		// …with zero items and no rights, it is gone entirely.
 		const { container } = renderSchedulePage({ schedule: [] });
 		await waitReady(container);
 		await waitFor(() => {
@@ -469,10 +370,6 @@ describe('#262 — visibility and edit affordances', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — the wire read (real producer, pinned URL shape)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — schedule read wire', () => {
 	it('fetches by TYPE NAME + parent ref + name,datetime props + limit 500 — never a raw type id, never ordinal', async () => {
 		const { container, fetchStub } = renderSchedulePage();
@@ -495,10 +392,6 @@ describe('#262 — schedule read wire', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — editor CRUD: add (in-place form, visible labels, TimeSelect, full wire)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () => {
 	async function openAddForm(container: HTMLElement) {
 		await waitFor(() => {
@@ -519,7 +412,6 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 		) as HTMLInputElement;
 		expect(input.tagName).toBe('INPUT');
 		expect(input.getAttribute('type')).toBe('text');
-		// #239/#249 — ONE name source: the visible label, associated via for/id.
 		expect(input.id).not.toBe('');
 		const label = [...container.querySelectorAll('label')].find(
 			(l) => l.getAttribute('for') === input.id
@@ -548,10 +440,6 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 		expect(container.textContent).toContain('[event_schedule_datetime_label]');
 	});
 
-	// #262 review F2 — the visible label and the group's accessible name were the
-	// SAME key emitted twice ("Date & time" from the group, then "Date & time"
-	// again from the span beside it). The house single-name rule (#205 F1 / #249):
-	// ONE name source per control group.
 	it('the datetime group is named ONCE — by the visible label via aria-labelledby, never a same-key aria-label beside it', async () => {
 		const { container } = renderSchedulePage({ event: editorEvent() });
 		await waitReady(container);
@@ -577,7 +465,6 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 		await fireEvent.input(container.querySelector('[data-testid="event-schedule-add-name"]')!, {
 			target: { value: 'kogunemine' }
 		});
-		// Tallinn wall clock 2026-09-01 17:30 (EEST, +3) → 14:30Z on the wire.
 		await fillDateTime(container as HTMLElement, 'event-schedule-add-datetime', '2026-09-01', '17:30');
 		await fireEvent.click(container.querySelector('[data-testid="event-schedule-add-submit"]')!);
 
@@ -591,8 +478,6 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 			const props = JSON.parse(String((creates[0][1] as RequestInit).body)) as Array<
 				Record<string, unknown>
 			>;
-			// Full shape — sorted by prop name so the pin is order-independent
-			// at the page seam (the data layer's own spec pins exact order).
 			const sorted = [...props].sort((a, b) => String(a.type).localeCompare(String(b.type)));
 			expect(sorted).toEqual(
 				[
@@ -603,16 +488,11 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 					{ type: 'name', string: 'kogunemine' }
 				].sort((a, b) => a.type.localeCompare(b.type))
 			);
-			// NEGATIVE twin, stated on its own: a payload without _sharing fails.
 			expect(props).toContainEqual({ type: '_sharing', string: 'domain' });
 			expect(props.map((p) => p.type)).not.toContain('ordinal');
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 6 — editor CRUD: edit (pencil pattern + replaceEntityProperty choreography)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — edit flow (whole-field activator, replace choreography)', () => {
 	it('the activator is a TAB-reachable <button> named for the item (standing rule 4/4b)', async () => {
@@ -627,10 +507,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 		expect(activator.tagName).toBe('BUTTON');
 		expect(activator.getAttribute('tabindex')).not.toBe('-1');
 		expect(activator.getAttribute('aria-hidden')).toBeNull();
-		// #262 review F3 — the label rides as an sr-only CHILD, the #157 idiom
-		// (`event-edit-btn-start_datetime`). `aria-label` would OVERRIDE the
-		// button's own descendants and silence the row's TIME, the one datum the
-		// schedule exists to convey.
 		expect(
 			activator.getAttribute('aria-label'),
 			'aria-label would silence the name and time this button wraps'
@@ -638,8 +514,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 		const srLabel = activator.querySelector('.sr-only');
 		expect(srLabel, 'the edit label must ride as an sr-only child').not.toBeNull();
 		expect(srLabel!.textContent).toContain('[event_schedule_edit_aria_label]');
-		// The computed name is name-from-contents: label + the VISIBLE name AND
-		// time still spoken.
 		const spoken = activator.textContent ?? '';
 		expect(spoken).toContain('[event_schedule_edit_aria_label]');
 		expect(spoken).toContain('kogunemine');
@@ -662,7 +536,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			'[data-testid="event-schedule-edit-name-si1"]'
 		) as HTMLInputElement;
 		expect(nameInput.value).toBe('kogunemine');
-		// 14:30Z = 17:30 Tallinn — the user edits the time she sees.
 		expect(readDateTime(container as HTMLElement, 'event-schedule-edit-datetime-si1')).toBe(
 			'2026-09-01T17:30'
 		);
@@ -698,9 +571,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			const del = calls.find((c) => c.method === 'DELETE');
 			expect(lookup, 'the pre-write value-id lookup must run').not.toBeUndefined();
 			expect(post, 'the new value must be POSTed').not.toBeUndefined();
-			// #264 — the atomic overwrite replaces the old value IN the POST (its
-			// `_id` rides the entry); a separate DELETE would reopen the
-			// half-landing window the atomic overwrite closed.
 			expect(del, 'no DELETE round-trip remains on the atomic path').toBeUndefined();
 			expect(JSON.parse(String(post!.body))).toEqual([
 				{ _id: 'val-si1-name', type: 'name', string: 'kutse' }
@@ -721,7 +591,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 				container.querySelector('[data-testid="event-schedule-edit-datetime-si1-hour"]')
 			).not.toBeNull();
 		});
-		// 17:30 → 18:00 Tallinn (still 2026-09-01, EEST +3) = 15:00Z.
 		await fillDateTime(
 			container as HTMLElement,
 			'event-schedule-edit-datetime-si1',
@@ -743,11 +612,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 		});
 	});
 
-	// ── #262 T3 F1: the activator opens a TWO-field editor ────────────────────
-	// One half committing must never unmount the other half under the pointer.
-	// The bug: `commitScheduleName` used `scheduleEditingId = null` as its "done"
-	// signal, so "fix the name AND the time" lost the time — the composite
-	// vanished as the click travelled and the datetime edit was silently dropped.
 	it('committing the name while focus travels to the datetime half leaves that half mounted and writable', async () => {
 		const { container, fetchStub } = renderSchedulePage({ event: editorEvent() });
 		await waitReady(container);
@@ -765,8 +629,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			'[data-testid="event-schedule-edit-datetime-si1-date"]'
 		)!;
 		await fireEvent.input(nameInput, { target: { value: 'kutse' } });
-		// She clicks straight onto the date box: blur's relatedTarget is the
-		// element about to take focus — still inside THIS row's editor.
 		await fireEvent.blur(nameInput, { relatedTarget: dateInput });
 
 		expect(
@@ -774,7 +636,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			'the datetime half must survive the name commit'
 		).not.toBeNull();
 
-		// …and the time edit that follows actually reaches the wire.
 		await fillDateTime(
 			container as HTMLElement,
 			'event-schedule-edit-datetime-si1',
@@ -841,10 +702,6 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 7 — editor CRUD: remove (two-step arm → confirm/cancel, #238 red trashcan)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — remove flow (two-step confirm, TrashIcon trigger)', () => {
 	it('the trigger carries the #238 shape: aria-hidden TrashIcon svg INSIDE the button, accessible name ON the button, red tint — never the × glyph', async () => {
 		const { container } = renderSchedulePage({ event: editorEvent() });
@@ -893,7 +750,6 @@ describe('#262 — remove flow (two-step confirm, TrashIcon trigger)', () => {
 			).toBeNull();
 		});
 		expect(deletes()).toHaveLength(0);
-		// The row survived its own near-death.
 		expect(scheduleSection(container)!.textContent).toContain('kogunemine');
 	});
 
@@ -922,15 +778,6 @@ describe('#262 — remove flow (two-step confirm, TrashIcon trigger)', () => {
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 7b — #262 review F1: a failed row write must SAY so
-//
-// The write queue's `rollback` hook fires first, so the optimistic patch is
-// already undone by the time `revert` runs: without a rendered error the row
-// simply snaps back to its old value and the editor watches her own edit
-// un-do itself in silence. 'Fail loudly over fallbacks' — the standing rule.
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — a failed schedule write surfaces a row-local alert', () => {
 	beforeEach(() => {
@@ -964,7 +811,6 @@ describe('#262 — a failed schedule write surfaces a row-local alert', () => {
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('[event_schedule_save_error]');
-		// The rollback still happened — the row shows its ORIGINAL name.
 		expect(scheduleSection(container)!.textContent).toContain('kogunemine');
 		expect(scheduleSection(container)!.textContent).not.toContain('kutse');
 	});
@@ -987,7 +833,6 @@ describe('#262 — a failed schedule write surfaces a row-local alert', () => {
 			expect(el!.getAttribute('role')).toBe('alert');
 			expect(el!.textContent).toContain('[event_schedule_save_error]');
 		});
-		// Rolled back to 17:30 — and the reason is on screen next to it.
 		expect(scheduleSection(container)!.textContent).toContain('17:30');
 	});
 
@@ -1033,14 +878,6 @@ describe('#262 — a failed schedule write surfaces a row-local alert', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 7c — #262 review F4: an incomplete add is a NAMED refusal, never a no-op
-//
-// #132/T4 review F1's discipline: validation BEFORE any fetch, and each
-// refusal names its own box. A bare `return` left the editor clicking "Add"
-// with nothing happening and nothing said.
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — incomplete add refuses out loud (validation before any fetch)', () => {
 	async function openAdd(container: HTMLElement) {
 		await waitFor(() => {
@@ -1078,17 +915,13 @@ describe('#262 — incomplete add refuses out loud (validation before any fetch)
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('[event_schedule_datetime_required]');
 		expect(creates(fetchStub)).toHaveLength(0);
-		// The refusal is wired to the box it blames.
 		const group = container.querySelector('[data-testid="event-schedule-add-datetime"]')!;
 		expect(group.getAttribute('aria-describedby')).toBe(alert.id);
-		// `aria-invalid` is not supported on role="group" — it rides the native
-		// control inside it.
 		expect(
 			container
 				.querySelector('[data-testid="event-schedule-add-datetime-date"]')!
 				.getAttribute('aria-invalid')
 		).toBe('true');
-		// …and the form stays open on the value already typed.
 		expect(
 			(container.querySelector('[data-testid="event-schedule-add-name"]') as HTMLInputElement)
 				.value
@@ -1156,7 +989,6 @@ describe('#262 — incomplete add refuses out loud (validation before any fetch)
 			expect(el, 'an emptied name must be refused, not swallowed').not.toBeNull();
 			expect(el!.textContent).toContain('[event_schedule_name_required]');
 		});
-		// Nothing was written, and the editor is still open on the box to fix.
 		expect(
 			fetchStub.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST')
 		).toHaveLength(0);
@@ -1166,10 +998,6 @@ describe('#262 — incomplete add refuses out loud (validation before any fetch)
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 8 — stale-response race (the house method: deterministic ordering, real guard)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — stale schedule response never lands (generation guard)', () => {
 	it('a schedule read started under collective A, settling AFTER a switch to collective B, must not reach the schedule state', async () => {
 		const { container, releaseStale, fetchStub } = renderSchedulePage(
@@ -1177,23 +1005,17 @@ describe('#262 — stale schedule response never lands (generation guard)', () =
 			['sampledb', 'crede']
 		);
 		await waitReady(container);
-		// The stale read is in flight (held by the test) — deterministic setup.
 		await waitFor(() => {
 			expect(
 				fetchStub.mock.calls.some((c) => String(c[0]).includes('_type.string=schedule_item'))
 			).toBe(true);
 		});
 
-		// Switch collectives — the page reloads everything for crede; crede's
-		// schedule GET answers immediately with the fresh fixture set.
 		selectedCollectiveDbStore.set('crede');
 		await waitFor(() => {
 			expect(scheduleSection(container)?.textContent).toContain('kogunemine');
 		});
 
-		// NOW settle the stale response with a poison item. If the schedule
-		// assignment is not under the load's generation guard, this overwrites
-		// the fresh state and the real assertions below trip — never a timeout.
 		releaseStale([scheduleEntity('si-stale', 'stale-item', '2026-09-01T10:00:00.000Z')]);
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
@@ -1202,10 +1024,6 @@ describe('#262 — stale schedule response never lands (generation guard)', () =
 		expect(scheduleSection(container)!.textContent).toContain('kogunemine');
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 9 — page invariants + i18n keys
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — page invariants with the schedule on screen', () => {
 	it('still exactly one <main> and one <h1>; the schedule heading is a LOWER heading carrying event_schedule_heading', async () => {
@@ -1225,10 +1043,6 @@ describe('#262 — page invariants with the schedule on screen', () => {
 });
 
 describe('#262 — i18n keys exist in all four locales (en/et/lv/uk), none empty', () => {
-	// The proposed key set, following the event_detail_delete_* /
-	// event_create_* conventions. Comenius authors the actual copy in GREEN;
-	// this guard pins presence + non-emptiness, the house idiom
-	// (page.spec.ts's event_type guard).
 	const KEYS = [
 		'event_schedule_heading',
 		'event_schedule_add_label',
@@ -1243,8 +1057,6 @@ describe('#262 — i18n keys exist in all four locales (en/et/lv/uk), none empty
 		'event_schedule_remove_cancel_aria_label',
 		'event_schedule_remove_cancel_short',
 		'event_schedule_save_error',
-		// #262 review F4 — the two field-naming refusals the add form speaks
-		// BEFORE any fetch (the `event_create_*_required` family's shape).
 		'event_schedule_name_required',
 		'event_schedule_datetime_required'
 	];

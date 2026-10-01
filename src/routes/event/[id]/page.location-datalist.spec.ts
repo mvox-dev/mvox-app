@@ -1,58 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #248 RED — event-edit-input-location on the DETAIL route suggests previously
-// used venues via a native <datalist>, fed by a LAZY fetch (PO ruling, option
-// c): this route holds no location corpus in memory (loadEventDetail reads ONE
-// event + its parents — confirmed by research-248 and Gama's on-issue
-// correction), so the suggestion corpus is fetched — but ONLY on the FIRST
-// focus of the location edit input, NEVER on page load.
-//
-// Integration: the real event/[id]/+page.svelte against a stubbed global fetch
-// — the same liberal wire harness page.event-editing.spec.ts uses, extended
-// with a corpus route.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   THE LAZY PIN (all three legs asserted)
-//     - NO location-corpus request during page load/render — none at all
-//       before the field is focused.
-//     - the FIRST focus of event-edit-input-location fires EXACTLY ONE corpus
-//       request (single-flight: the mount-autofocus plus an explicit focus
-//       still total one request).
-//     - a SECOND focus (cancel the edit, reopen it) does NOT re-fetch.
-//
-//   THE CORPUS REQUEST
-//     - collective-scoped event location values through the existing entu list
-//       shape: a GET against `entity?` with `_type.string=event` (the shape
-//       every existing event list helper emits — Path C: entuFetch/wrapper
-//       helpers only, no bespoke endpoint). Its projection includes
-//       `location` (smallest projection available — the corpus needs nothing
-//       else from each row).
-//     - values de-duplicated client-side, blanks dropped; ORDERING IS NOT
-//       PINNED (engineering's call, stated in the report) — assertions
-//       compare SORTED copies.
-//
-//   FAILURE = SILENCE
-//     - a failed corpus fetch yields NO suggestions and NO error surface: the
-//       input stays a plain free-text control and the edit/save path works
-//       exactly as before. Suggestions never block editing.
-//
-//   FREE TEXT OUTRANKS EVERYTHING
-//     - a brand-new venue types straight through and saves byte-identical:
-//       the write POST carries [{ type: 'location', string: <exactly as
-//       typed> }] — the pre-#248 wire shape, unchanged.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — same hygiene as
-// page.event-editing.spec.ts. Only Date is faked; timers stay real.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -81,15 +38,11 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-/** Suggestion-mismatching free-text venue — unicode-bearing on purpose: the
- *  wire pin is BYTE-IDENTICAL. Never appears in any corpus fixture. */
 const NEW_VENUE = 'Ürgoru laululava — sissepääs B!';
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
-
-// ── Entu fixtures (same event family as page.event-editing.spec.ts) ──────────
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -130,11 +83,6 @@ function seriesEntity() {
 	};
 }
 
-/** The collective's other events — the corpus the lazy fetch returns. Own
- *  locations only (no series parents: no per-row inheritance side reads),
- *  with a duplicate, a blank and an absent location so dedup + blank-drop are
- *  observable. 'Rehearsal Hall' (the current event's own value) is IN the
- *  corpus, as it would be on the real wire. */
 function corpusEntities() {
 	const mk = (id: string, location: string | null, dt: string) => ({
 		_id: id,
@@ -156,26 +104,16 @@ function corpusEntities() {
 	];
 }
 
-/** Deduped, blank-dropped, SORTED for comparison only — datalist ordering is
- *  engineering's call, not pinned. */
 const EXPECTED_SET = ['Estonia Hall', 'Hopneri Maja', 'Rehearsal Hall'];
 
-/** A location-corpus request: a LIST query (`entity?`) for events. The
- *  boundary in the regex keeps `_type.string=event_series` (and the
- *  `name.string=event_series` type-resolve read) from matching. */
 function isCorpusUrl(url: string): boolean {
 	return url.includes('entity?') && /[?&]_type\.string=event(?:&|$)/.test(url);
 }
 
 type WireOpts = {
-	/** Corpus requests answer 500 — the silent-degrade probe. */
 	failCorpus?: boolean;
 };
 
-/** The event-editing liberal wire, extended with the corpus route (checked
- *  FIRST — everything else is byte-for-byte the sibling suite's shape). Edit
- *  POSTs are applied to the in-memory event so optimistic and re-read GREENs
- *  pass identically. */
 function wireStub(opts: WireOpts = {}) {
 	const event: Record<string, unknown> = eventEntity();
 	const season = seasonEntity();
@@ -241,20 +179,16 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-/** Lets anything already queued — a request that WOULD have fired — land
- *  before asserting that it did not. */
 function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-/** Wait until the detail header is up (the location line rendered). */
 async function detailReady(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="event-detail-location"]')).not.toBeNull();
 	});
 }
 
-/** Tap the location pencil and hand back the edit input (mount-autofocused). */
 async function beginLocationEdit(container: HTMLElement): Promise<HTMLInputElement> {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="event-edit-btn-location"]')).not.toBeNull();
@@ -267,7 +201,6 @@ async function beginLocationEdit(container: HTMLElement): Promise<HTMLInputEleme
 	});
 }
 
-/** Resolve the input's `list=` target inside the rendered document. */
 function resolveDatalist(input: HTMLInputElement): HTMLElement {
 	const listId = input.getAttribute('list');
 	expect(listId, 'event-edit-input-location must carry list=').toBeTruthy();
@@ -280,7 +213,6 @@ function optionSet(dl: HTMLElement): string[] {
 	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
 }
 
-/** Every write POST the page issued against the event entity. */
 function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
 	return fetchStub.mock.calls.filter(
 		(c) =>
@@ -293,32 +225,23 @@ function postedProps(call: unknown[]): Array<Record<string, unknown>> {
 	return JSON.parse(String((call[1] as RequestInit).body)) as Array<Record<string, unknown>>;
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-// the lazy pin — never on load, once on first focus, never again
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)', () => {
 	it('page load/render fires NO corpus request; the FIRST focus fires exactly ONE, whose projection includes location; the datalist then offers the deduped set', async () => {
 		const { container, corpusUrls } = renderDetail();
 		await detailReady(container);
 		await flush();
-		// The lazy pin's first leg: nothing during load/render.
 		expect(corpusUrls).toEqual([]);
 
 		const input = await beginLocationEdit(container);
-		// Mount-autofocus + an explicit focus: still ONE request (single-flight).
 		await fireEvent.focus(input);
 		await waitFor(() => {
 			expect(corpusUrls.length).toBeGreaterThan(0);
 		});
 		await flush();
 		expect(corpusUrls).toHaveLength(1);
-		// Smallest projection available — the corpus read asks for location.
 		expect(corpusUrls[0]).toContain('props=');
 		expect(corpusUrls[0]).toContain('location');
 
-		// list= wired to a real datalist carrying the deduped, blank-dropped
-		// set — SORTED comparison only; ordering is engineering's call.
 		await waitFor(() => {
 			expect(optionSet(resolveDatalist(input))).toEqual(EXPECTED_SET);
 		});
@@ -333,7 +256,6 @@ describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)',
 			expect(corpusUrls).toHaveLength(1);
 		});
 
-		// Escape cancels the edit (writes nothing) and unmounts the input.
 		await fireEvent.keyDown(first, { key: 'Escape' });
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="event-edit-input-location"]')).toBeNull();
@@ -349,10 +271,6 @@ describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)',
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// failure = silence — suggestions never block editing
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#248 — corpus fetch failure degrades silently', () => {
 	it('a 500 corpus answer surfaces NO error and NO suggestions; the input stays plain free text and the save path is untouched (byte-identical write)', async () => {
 		const { container, fetchStub, corpusUrls } = renderDetail({ failCorpus: true });
@@ -364,17 +282,13 @@ describe('#248 — corpus fetch failure degrades silently', () => {
 		});
 		await flush();
 
-		// Silence: no error surface of any kind for the failed corpus read.
 		expect(container.querySelector('[data-testid="event-edit-error-location"]')).toBeNull();
-		// No suggestions: whatever datalist the input points at (if any) offers
-		// no options — and a missing list= is equally acceptable here.
 		const listId = input.getAttribute('list');
 		if (listId) {
 			const dl = document.querySelector(`datalist[id="${listId}"]`);
 			if (dl) expect(optionSet(dl as HTMLElement)).toEqual([]);
 		}
 
-		// Editing works exactly as before: the new venue saves byte-identical.
 		await fireEvent.input(input, { target: { value: NEW_VENUE } });
 		await fireEvent.blur(input);
 		await waitFor(() => {
@@ -392,10 +306,6 @@ describe('#248 — corpus fetch failure degrades silently', () => {
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// FREE TEXT outranks everything — with suggestions PRESENT
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#248 — a brand-new venue saves exactly as typed even with suggestions loaded', () => {
 	it('suggestion-mismatching input → ONE write POST, [{type: location, string: <byte-identical>}] — the pre-#248 wire shape, no extra writes, no warning', async () => {
 		const { container, fetchStub } = renderDetail();
@@ -406,13 +316,11 @@ describe('#248 — a brand-new venue saves exactly as typed even with suggestion
 			expect(optionSet(resolveDatalist(input))).toEqual(EXPECTED_SET);
 		});
 
-		// The input imposes no constraint: free text, no pattern, not required.
 		expect(input.required).toBe(false);
 		expect(input.getAttribute('pattern')).toBeNull();
 		expect(input.getAttribute('maxlength')).toBeNull();
 
 		await fireEvent.input(input, { target: { value: NEW_VENUE } });
-		// Typing a never-seen venue raises nothing.
 		expect(container.querySelector('[data-testid="event-edit-error-location"]')).toBeNull();
 		await fireEvent.blur(input);
 

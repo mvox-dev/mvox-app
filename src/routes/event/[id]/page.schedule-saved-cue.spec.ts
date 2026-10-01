@@ -1,57 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #328 RED — the SCHEDULE ITEMS leg of the partials trio: the event detail
-// page's schedule section (scheduleQueue) surfaces failure per row
-// (event-schedule-error-{id} role="alert", its own #262 review fix) and says
-// NOTHING when a write lands. The saved state gets its own cue.
-//
-// INTEGRATION posture: the REAL page (+page.svelte) with the REAL data layer
-// running — only the global fetch is stubbed at the wire (the
-// page.schedule.spec.ts harness family).
-//
-// CONTRACT (issue #328 + Gama's one-shape/one-node-per-surface ruling,
-// #328 comment 5637755878):
-//   - CUE SHAPE — the family shape (#324/#325/#326/#327): a PERSISTENT
-//     role="status" aria-live="polite" region, mounted (empty) with the
-//     editor's schedule section, text set only when a row/key's write
-//     RECONCILES (scheduleQueue.reconcile — add, per-row edit, remove all
-//     announce), cleared by the time the next attempt is in flight — never on
-//     a timer. Visible vs sr-only is GREEN's stated choice (the family holds
-//     both); these specs pin the live-region mechanics, not the class.
-//   - OWN NODE — data-testid="event-schedule-status", ONE region for the
-//     schedule surface, and NOT the event-field leg's event-edit-status nor
-//     #324's repertoire-manage-status: three queues on one page, three
-//     regions — a shared node would announce another queue's settle.
-//   - TEXT — event_schedule_saved (mirrors this surface's own failure key
-//     event_schedule_save_error; four-locale copy pinned by
-//     src/lib/i18n/trioSavedKeys.spec.ts).
-//   - LATE-SETTLE GUARD (stated choice per the PO build note, #328 review
-//     R2-F1: this surface FOLLOWS the page's own generation capture-compare —
-//     `writeGenerations`/`attendanceWriteGenerations`, the same answer #325
-//     threads on the season leg and the event-field leg now threads too, not a
-//     fourth invention). Each write records the load `generation` it STARTED
-//     under in `scheduleWriteGenerations` (in `setPending`) and the reconcile
-//     announces only when that still matches: `resetComposeState` blanks the
-//     region AT a collective/event switch, but cannot stop a write already in
-//     flight.
-//   - REFUSAL CLEARS (#328 review R2-F2) — a pre-write refusal (an emptied row
-//     name, the add form's missing name/datetime) is an attempt too: it clears
-//     the region rather than letting an earlier write's "saved" stand beside it.
-//   - FAILURE BYTE-PRESERVED — the per-row rollback + event-schedule-error-{id}
-//     role="alert" (event_schedule_save_error) semantics are the #262 review
-//     fix and stay byte-identical; a revert earns NO saved announcement, and
-//     another row's reconcile never clears a standing row alert.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { setToken } from '$lib/auth/storage';
 
-// Pin "now" before the fixture event (2026-09-01) — only Date is faked.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -85,8 +43,6 @@ import { fillDateTime } from '$lib/testing/timeControls';
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
-
-// ── Entu fixtures (the page.schedule family's editor view) ────────────────────
 
 function eventEntity() {
 	return {
@@ -145,13 +101,8 @@ function defaultScheduleEntities() {
 	];
 }
 
-/** Per-test mutable wire controls, read AT CALL TIME — one rendered page can
- *  carry a failing write, then a clean one, then a held one. */
 type WireControls = {
-	/** While true, the ITEM-scoped writes (replace-choreography POST and the
-	 *  entity DELETE) answer 500 — the #262 failItemWrites shape. */
 	failItemWrites: boolean;
-	/** While set, every item-scoped POST awaits this gate. */
 	holdItemPost: Promise<void> | null;
 };
 
@@ -177,7 +128,6 @@ function scheduleWireStub(controls: WireControls) {
 			return json({ entities: schedule });
 		}
 		if (method === 'POST' && /\/entity(\?|$)/.test(url)) {
-			// A create — apply it so the reconcile's refetch sees the new item.
 			const props = JSON.parse(String(init?.body)) as Array<Record<string, unknown>>;
 			const name = props.find((p) => p.type === 'name');
 			const datetime = props.find((p) => p.type === 'datetime');
@@ -225,10 +175,6 @@ function scheduleWireStub(controls: WireControls) {
 	return stub;
 }
 
-/** `dbs` — the page.schedule.spec.ts shape: a SECOND collective makes a
- *  subject switch reachable (the reactive half of the page's one load effect).
- *  The wire answers both dbs from the same fixture set; what the switch changes
- *  is the load `generation`, which is the thing under test. */
 function setAuthed(dbs: string[] = ['sampledb']) {
 	authStore.set({
 		status: 'authenticated',
@@ -295,7 +241,6 @@ async function commitRowNameEdit(container: HTMLElement, id: string, value: stri
 	await fireEvent.blur(nameInput);
 }
 
-/** A gate the test opens by hand — the in-flight window under test. */
 function gate(): { promise: Promise<void>; release: () => void } {
 	let release!: () => void;
 	const promise = new Promise<void>((r) => {
@@ -303,8 +248,6 @@ function gate(): { promise: Promise<void>; release: () => void } {
 	});
 	return { promise, release };
 }
-
-// ── the region: persistent, own node, empty at rest — and THREE distinct nodes ─
 
 describe('#328 schedule items — the saved-cue region exists from first render', () => {
 	it('editor view: a PERSISTENT empty role="status" aria-live="polite" region (event-schedule-status) is mounted BEFORE any write, exactly one', async () => {
@@ -339,8 +282,6 @@ describe('#328 schedule items — the saved-cue region exists from first render'
 	});
 });
 
-// ── the cue: every write kind's reconcile announces ────────────────────────────
-
 describe('#328 schedule items — a write that reconciles announces saved', () => {
 	it('row name edit: NOTHING announced while the POST is held open; the settle sets event_schedule_saved into event-schedule-status; no row alert', async () => {
 		const { container, controls } = renderSchedulePage();
@@ -350,7 +291,6 @@ describe('#328 schedule items — a write that reconciles announces saved', () =
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si1', 'kutse');
 
-		// The write is in flight — the cue must NOT have fired yet.
 		await new Promise((r) => setTimeout(r, 10));
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
@@ -385,8 +325,6 @@ describe('#328 schedule items — a write that reconciles announces saved', () =
 				'[event_schedule_saved]'
 			);
 		});
-		// The reconcile's own choreography stands byte-identical: refetched row
-		// on screen, form closed.
 		await waitFor(() => {
 			expect(scheduleSection(container)!.textContent).toContain('kontsert');
 		});
@@ -416,8 +354,6 @@ describe('#328 schedule items — a write that reconciles announces saved', () =
 	});
 });
 
-// ── failure: the #262 per-row alerts byte-preserved, and NO cue ────────────────
-
 describe('#328 schedule items — failure handling stays byte-identical', () => {
 	it('a rejected name edit still rolls the row back and renders event-schedule-error-si1 role="alert" (event_schedule_save_error) — and event-schedule-status announces NOTHING', async () => {
 		const { container, controls } = renderSchedulePage();
@@ -431,10 +367,8 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 			expect(alert!.getAttribute('role')).toBe('alert');
 			expect(alert!.textContent).toContain('[event_schedule_save_error]');
 		});
-		// The rollback still happened — the row shows its ORIGINAL name.
 		expect(scheduleSection(container)!.textContent).toContain('kogunemine');
 		expect(scheduleSection(container)!.textContent).not.toContain('kutse');
-		// Failure and saved are mutually exclusive.
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 	});
 
@@ -442,14 +376,12 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 		const { container, controls } = renderSchedulePage();
 		await waitReady(container);
 
-		// 1 — si1 fails: its row alert stands.
 		controls.failItemWrites = true;
 		await commitRowNameEdit(container, 'si1', 'kutse');
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-error-si1')).not.toBeNull();
 		});
 
-		// 2 — si2 succeeds: ITS reconcile announces, si1's alert stays.
 		controls.failItemWrites = false;
 		await commitRowNameEdit(container, 'si2', 'peaproov');
 		await waitFor(() => {
@@ -462,8 +394,6 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 			'another row’s reconcile must not clear this row’s alert'
 		).not.toBeNull();
 
-		// 3 — a fresh attempt clears the stale cue at its start: hold si2's next
-		// write open and check the region is blank while it is in flight.
 		const g = gate();
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si2', 'kindralproov');
@@ -479,15 +409,6 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 	});
 });
 
-// ── the cue belongs to the event it was announced over ────────────────────────
-//
-// #328 review R2-F1 — `resetComposeState` blanks `scheduleStatus` AT a subject
-// switch, but it cannot stop a write already in flight. The reconcile therefore
-// carries the page's own generation capture-compare
-// (`scheduleWriteGenerations`, the twin of `writeGenerations`/
-// `attendanceWriteGenerations`/`editWriteGenerations`) so a settle belonging to
-// the event being LEFT announces nothing on the one now on screen.
-
 describe('#328 schedule items — a late settle never announces onto the NEXT event', () => {
 	it('a row name edit still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the region stays blank', async () => {
 		const { container, controls } = renderSchedulePage(['sampledb', 'crede']);
@@ -499,7 +420,6 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 		const g = gate();
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si1', 'sissejuhatus');
-		// The write is open — nothing announced yet, by construction.
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
 		selectedCollectiveDbStore.set('crede');
@@ -508,7 +428,6 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 		});
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
-		// …and only NOW does the sampledb write land.
 		controls.holdItemPost = null;
 		g.release();
 		await new Promise((r) => setTimeout(r, 0));
@@ -523,14 +442,11 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 	});
 });
 
-// ── a refusal is an attempt too ───────────────────────────────────────────────
-
 describe('#328 schedule items — a pre-write refusal clears the region', () => {
 	it('#328 review R2-F2 — an emptied row name is REFUSED before any write, and the region no longer reads “saved” from the earlier write beside it', async () => {
 		const { container, fetchStub } = renderSchedulePage();
 		await waitReady(container);
 
-		// A real write first, so the region genuinely reads "saved".
 		await commitRowNameEdit(container, 'si1', 'sissejuhatus');
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-status')?.textContent).toContain(
@@ -541,7 +457,6 @@ describe('#328 schedule items — a pre-write refusal clears the region', () => 
 			(c) => (c[1] as RequestInit | undefined)?.method === 'POST'
 		).length;
 
-		// Now empty si2's name — a refusal, no wire call (#262 review F4).
 		await commitRowNameEdit(container, 'si2', '   ');
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-error-si2')?.textContent).toContain(
@@ -569,7 +484,6 @@ describe('#328 schedule items — a pre-write refusal clears the region', () => 
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-add-name')).not.toBeNull();
 		});
-		// Name left blank — refused, naming its own box.
 		await fireEvent.click(q(container, 'event-schedule-add-submit')!);
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-add-error')?.textContent).toContain(

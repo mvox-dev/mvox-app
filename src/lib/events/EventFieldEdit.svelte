@@ -7,7 +7,8 @@
 	import {
 		tallinnLocalToUtcIso,
 		timeFormatStore,
-		toTallinnLocalInputValue
+		toTallinnLocalInputValue,
+		TALLINN_TZ
 	} from '$lib/preferences/timeFormat';
 	import { parseStartAt, timeRange } from '$lib/events/eventTime';
 	import { eventTypeLabel, CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
@@ -41,7 +42,7 @@
 
 	const dateFmt = $derived(
 		new Intl.DateTimeFormat(getLocale(), {
-			timeZone: 'Europe/Tallinn',
+			timeZone: TALLINN_TZ,
 			weekday: 'long',
 			day: 'numeric',
 			month: 'long'

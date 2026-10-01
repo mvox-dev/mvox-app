@@ -3,6 +3,7 @@
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser, getLastProvider } from '$lib/auth/storage';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
 		listMyProfiles,
@@ -341,13 +342,7 @@
 			status = 'no-collective';
 			return null;
 		}
-		const token = getToken();
-		if (!token) {
-			console.error('profile: no auth token in storage on a protected route');
-			status = 'load-error';
-			return null;
-		}
-		return { cfg: { db: current.db, token }, personId: current.personId };
+		return { cfg: cfgFor(current.db), personId: current.personId };
 	}
 
 	function linkErrorMessage(e: unknown): string {

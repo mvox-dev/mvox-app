@@ -1,39 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #271 — the librarian adds an edition to a work (#198 one level down). The
-// /library page's edition tree grows a librarian-only, PER-WORK "create
-// edition" affordance:
-//
-//   - [data-testid="create-edition-button-{workId}"] renders inside that
-//     work's expanded editions wrapper (#library-editions-{workId}) as a
-//     SIBLING after the loading/error/empty/list chain — gated on
-//     editionNodeStatus === 'idle' AND $librarianStore === 'librarian'. The
-//     ZERO-EDITIONS case must offer it (that is the case that makes a newly
-//     created work usable at all; the empty branch and the list branch are
-//     mutually exclusive, so a naive in-branch insert hides the control
-//     exactly when it is most needed). Absent at 'loading' and 'error';
-//     absent — not disabled — for non-librarians (the tree's inline-gate
-//     pattern, not the page-level librarian-tools block).
-//   - STATE IS KEYED PER WORK, not #198's flat shape: expandedWorks is a Set,
-//     multiple works can be open at once, and a flat createEditionOpen would
-//     share ONE form (and one half-typed name) across every expanded work.
-//     Same keyed-Map idiom the file already uses (editionNodeStatus /
-//     copyNodeStatus / inlineCheckoutErrors).
-//   - Submitting calls createEdition ($lib/entity/entityCreate — the shared
-//     entity CREATE write layer) with THE WORK's id from the #each loop
-//     context (never libraryEntityId, never a store lookup), then appends the
-//     created edition LOCALLY into editionsByWork for that work — no
-//     listEditions refetch. Append-at-end is safe: no ordering spec exists
-//     and listEditions applies no sort.
-//   - The local insert is GENERATION-GUARDED against a mid-flight collective
-//     switch (the file's librarianGen/copyNameGen idiom — capture before the
-//     await, re-check before mutating). createWork LACKS this guard; the gap
-//     is NOT inherited here (and not retrofitted in this slice — flagged in
-//     the delivery report instead).
-//
-// INTEGRATION (house rule): these tests render the ACTUAL /library route
-// component (./library/+page.svelte), so the feature cannot go green as an
-// isolated component that no page ever mounts.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -80,7 +45,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_sort_member: () => 'Member',
 		library_copy_sort_since: () => 'Since',
 		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`,
-		// #198 — create-work affordance (still on the page)
 		library_create_work_button: () => 'Add work',
 		library_create_work_name_label: () => 'Title',
 		library_create_work_composer_label: () => 'Composer',
@@ -89,7 +53,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_name_required: () => 'Work title is required.',
 		library_create_work_created: (p: { name: string }) => `${p.name} created.`,
 		library_create_work_error: () => 'Could not create the work.',
-		// #271 — create-edition affordance
 		library_create_edition_button: () => 'Add edition',
 		library_create_edition_name_label: () => 'Name',
 		library_create_edition_publisher_label: () => 'Publisher',
@@ -142,7 +105,6 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// Same $env/dynamic/public fix as page.library.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -168,7 +130,6 @@ vi.mock('$lib/library/lendingActions', () => ({
 	bulkCheckout: vi.fn()
 }));
 
-// Quiet seams for the #92 repertoire-badge side reads (not under test here).
 const { listSeasonsMock } = vi.hoisted(() => ({ listSeasonsMock: vi.fn() }));
 vi.mock('$lib/seasons/entuSeasons', async () => {
 	const actual = await vi.importActual<typeof import('$lib/seasons/entuSeasons')>(
@@ -190,9 +151,6 @@ vi.mock('$lib/repertoire/repertoireData', async () => {
 	};
 });
 
-// #271 — the write seam under test: the shared entity CREATE layer. The page
-// must call THIS module's createEdition (same layer as createWork), never roll
-// its own POST.
 const { createEditionMock, createWorkMock } = vi.hoisted(() => ({
 	createEditionMock: vi.fn(),
 	createWorkMock: vi.fn()
@@ -232,7 +190,6 @@ function setAuthedWithOneCollective() {
 	});
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('sampledb');
-	// Defaults; tests override resolveLibrarianMock per case.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -244,11 +201,6 @@ function setAuthedWithOneCollective() {
 	listRepertoireItemsMock.mockResolvedValue([]);
 }
 
-/**
- * Baseline data: TWO works — work-1 has one edition, work-2 has NONE. Two
- * works because the per-work-keyed-state contract needs two expanded works,
- * and work-2's zero-editions case is the one that makes a new work usable.
- */
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' },
@@ -300,7 +252,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-/** Renders the route and waits for the work rows. */
 async function renderReady(): Promise<HTMLElement> {
 	const { container } = render(Page);
 	await waitFor(() => {
@@ -310,7 +261,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Expands a work node and waits for its editions wrapper. */
 async function expandWork(container: HTMLElement, workId: string): Promise<void> {
 	await fireEvent.click(
 		container.querySelector(`[data-testid="library-work-toggle-${workId}"]`) as Element
@@ -319,10 +269,6 @@ async function expandWork(container: HTMLElement, workId: string): Promise<void>
 		expect(container.querySelector(`#library-editions-${workId}`)).not.toBeNull();
 	});
 }
-
-// ---------------------------------------------------------------------------
-// Integration: control placement inside the expanded work, librarian-gated
-// ---------------------------------------------------------------------------
 
 describe('#271 — create-edition control placement on /library (integration)', () => {
 	it('a POPULATED work offers it: the button renders INSIDE #library-editions-{workId}, alongside the edition list (sibling after the list, not a replacement of it)', async () => {
@@ -339,8 +285,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 				container.querySelector('[data-testid="create-edition-button-work-1"]')
 			).not.toBeNull();
 		});
-		// Scoped to THIS work's wrapper — the parent relationship is fixed by the
-		// model, so the control lives with the work it attaches to.
 		const wrapper = container.querySelector('#library-editions-work-1') as HTMLElement;
 		expect(wrapper.querySelector('[data-testid="create-edition-button-work-1"]')).not.toBeNull();
 		const button = container.querySelector(
@@ -364,7 +308,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 			).not.toBeNull();
 		});
 		const wrapper = container.querySelector('#library-editions-work-2') as HTMLElement;
-		// BOTH at once: the empty-state message AND the create control.
 		expect(wrapper.textContent).toContain('No editions yet.');
 		expect(wrapper.querySelector('[data-testid="create-edition-button-work-2"]')).not.toBeNull();
 	});
@@ -373,7 +316,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
 		mockLibrarian();
-		// work-2's edition read never settles.
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2'
 				? new Promise(() => {})
@@ -393,8 +335,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		const container = await renderReady();
 		await expandWork(container, 'work-2');
 
-		// The loading skeleton is up; no create control while the list that a
-		// local insert would target was never fetched.
 		expect(container.querySelector('[data-testid="create-edition-button-work-2"]')).toBeNull();
 	});
 
@@ -428,7 +368,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull();
 		});
-		// Absent, not disabled: NO create-edition control exists anywhere.
 		expect(container.querySelectorAll('[data-testid^="create-edition-"]')).toHaveLength(0);
 	});
 
@@ -446,10 +385,6 @@ describe('#271 — create-edition control placement on /library (integration)', 
 		expect(container.querySelectorAll('[data-testid^="create-edition-"]')).toHaveLength(0);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// State is keyed PER WORK — not #198's flat shape
-// ---------------------------------------------------------------------------
 
 describe('#271 — form state is keyed per work (expandedWorks is a Set: several works open at once)', () => {
 	it('opening the form under work-2 leaves work-1 formless, and what was typed under work-2 never appears under work-1', async () => {
@@ -469,24 +404,19 @@ describe('#271 — form state is keyed per work (expandedWorks is a Set: several
 			).not.toBeNull();
 		});
 
-		// Open under work-2 (A) …
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-button-work-2"]') as Element
 		);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).not.toBeNull();
 		});
-		// … and work-1 (B) shows NO form — a flat createEditionOpen would render
-		// one under every expanded work.
 		expect(container.querySelector('[data-testid="create-edition-form-work-1"]')).toBeNull();
 
-		// Type under A …
 		await fireEvent.input(
 			container.querySelector('[data-testid="create-edition-name-work-2"]') as HTMLInputElement,
 			{ target: { value: 'Chorbuch a cappella' } }
 		);
 
-		// … then open B: B starts EMPTY. A's typed state never leaks across works.
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-button-work-1"]') as Element
 		);
@@ -500,11 +430,6 @@ describe('#271 — form state is keyed per work (expandedWorks is a Set: several
 	});
 });
 
-// ---------------------------------------------------------------------------
-// The inline form: open/clear/escape/focus — #198's create-work parity
-// ---------------------------------------------------------------------------
-
-/** Librarian-ready route with work-2 (zero editions) expanded and its form open. */
 async function renderWithFormOpen(workId = 'work-2'): Promise<HTMLElement> {
 	mockBaselineLibrary();
 	setAuthedWithOneCollective();
@@ -538,7 +463,6 @@ describe('#271 — inline create-edition form', () => {
 				container.querySelector('[data-testid="create-edition-button-work-2"]')
 			).not.toBeNull();
 		});
-		// Closed by default — inline, not always-on.
 		expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).toBeNull();
 		expect(container.querySelector('[data-testid="create-edition-name-work-2"]')).toBeNull();
 
@@ -641,14 +565,12 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 	it('reopening after a validation error starts clean — the error does not survive the close', async () => {
 		const container = await renderWithFormOpen();
 
-		// Provoke the required-name error…
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-submit-work-2"]') as Element
 		);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="create-edition-error-work-2"]')).not.toBeNull();
 		});
-		// …close, reopen: no error rendered.
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-cancel-work-2"]') as Element
 		);
@@ -682,8 +604,6 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 			expect(status?.textContent?.trim()).toBe('Chorbuch created.');
 		});
 
-		// Reopen: the stale "Chorbuch created." must not sit in the live region
-		// while a fresh form is open.
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-button-work-2"]') as Element
 		);
@@ -755,14 +675,6 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// A11y: the tree control needs its OWN coverage — the librarian-tools
-// keyboard-reachability scan does not reach inside the tree
-// ---------------------------------------------------------------------------
-
-// happy-dom computes no layout, so the testable truth is the CLASS contract —
-// Tailwind spacing 11 = 2.75rem = 44px (WCAG 2.5.5). Same helper shape as
-// page.library-create-work.spec.ts's expectTouchTarget.
 function expectTouchTarget(container: HTMLElement, testid: string): void {
 	const el = container.querySelector(`[data-testid="${testid}"]`) as HTMLElement | null;
 	expect(el, `${testid} must be in the DOM`).not.toBeNull();
@@ -805,8 +717,6 @@ describe('#271 — create-edition controls are focusable, labelled 44px touch ta
 	it('the long lv/uk strings must WRAP inside the ml-4-indented tree under max-w-md — no whitespace-nowrap / truncate on the button labels (class contract; happy-dom computes no layout)', async () => {
 		const container = await renderWithFormOpen();
 
-		// The entry button is closed while the form is open — check the open-form
-		// controls here and the entry button on a sibling work.
 		await expandWork(container, 'work-1');
 		await waitFor(() => {
 			expect(
@@ -829,10 +739,6 @@ describe('#271 — create-edition controls are focusable, labelled 44px touch ta
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Blank name is a field error, not a transport failure
-// ---------------------------------------------------------------------------
-
 describe('#271 — blank name is a field error naming the field, never a write', () => {
 	it('submitting an empty name shows the required-field message and never calls createEdition', async () => {
 		const container = await renderWithFormOpen();
@@ -846,10 +752,8 @@ describe('#271 — blank name is a field error naming the field, never a write',
 		});
 		const err = container.querySelector('[data-testid="create-edition-error-work-2"]') as HTMLElement;
 		expect(err.textContent?.trim()).toBe('Edition name is required.');
-		// NOT the generic "Could not create the edition." transport message.
 		expect(err.textContent).not.toContain('Could not create the edition.');
 		expect(createEditionMock).not.toHaveBeenCalled();
-		// The form stays open so the librarian can fix the name in place.
 		expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).not.toBeNull();
 	});
 
@@ -870,10 +774,6 @@ describe('#271 — blank name is a field error naming the field, never a write',
 		expect(createEditionMock).not.toHaveBeenCalled();
 	});
 });
-
-// ---------------------------------------------------------------------------
-// Success: the wire call and the LOCAL append
-// ---------------------------------------------------------------------------
 
 describe('#271 — submitting calls createEdition with THE WORK id and appends locally', () => {
 	it('calls createEdition with the loop-context work id (NEVER libraryEntityId), appends the new edition under the ZERO-EDITIONS work, announces, closes — no listEditions refetch', async () => {
@@ -898,18 +798,12 @@ describe('#271 — submitting calls createEdition with THE WORK id and appends l
 		await waitFor(() => expect(createEditionMock).toHaveBeenCalledTimes(1));
 		const [cfgArg, payload] = createEditionMock.mock.calls[0];
 		expect(cfgArg).toEqual({ db: 'sampledb', token: 'jwt-abc' });
-		// Full-shape (no objectContaining): the parent is the WORK the form sits
-		// under — 'work-2', straight from the #each loop context. The library
-		// entity id ('lib-1') must appear NOWHERE in this payload.
 		expect(payload).toEqual({
 			name: 'Missa brevis',
 			publisher: 'Carus-Verlag',
 			workId: 'work-2'
 		});
 
-		// The new edition joins that work's tree LOCALLY: its row renders inside
-		// #library-editions-work-2, the empty message is gone, and the page did
-		// not re-issue the listEditions read.
 		await waitFor(() => {
 			const row = container.querySelector('[data-testid="library-edition-edition-new"]');
 			expect(row).not.toBeNull();
@@ -921,14 +815,12 @@ describe('#271 — submitting calls createEdition with THE WORK id and appends l
 		expect(wrapper.textContent).not.toContain('No editions yet.');
 		expect(listEditionsMock.mock.calls.length).toBe(editionReadsBefore);
 
-		// The live region announces a LOCALIZED sentence, not the bare name.
 		const status = container.querySelector(
 			'[data-testid="create-edition-status-work-2"]'
 		) as HTMLElement;
 		expect(status.getAttribute('role')).toBe('status');
 		expect(status.textContent?.trim()).toBe('Missa brevis created.');
 
-		// The form closed; the entry button is back.
 		expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).toBeNull();
 		expect(container.querySelector('[data-testid="create-edition-button-work-2"]')).not.toBeNull();
 	});
@@ -949,10 +841,6 @@ describe('#271 — submitting calls createEdition with THE WORK id and appends l
 			expect(container.querySelector('[data-testid="library-edition-edition-new"]')).not.toBeNull();
 		});
 		const wrapper = container.querySelector('#library-editions-work-1') as HTMLElement;
-		// `:scope >` (direct children only) — an unscoped prefix match also picks
-		// up each row's OWN `library-edition-toggle-{id}` button (same prefix,
-		// pre-#271, pinned by 5 other specs), which would make this assertion
-		// unsatisfiable once a second row exists regardless of ordering.
 		const rows = Array.from(
 			wrapper.querySelectorAll(':scope > [data-testid^="library-edition-"]')
 		).map((r) => r.getAttribute('data-testid'));
@@ -986,20 +874,18 @@ describe('#271 — submitting calls createEdition with THE WORK id and appends l
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Fail loudly: missing preconditions, transport failure, double submit
-// ---------------------------------------------------------------------------
-
 describe('#271 — a missing precondition fails LOUDLY, never silently', () => {
-	it('a librarian whose token vanished (session expired under the open form) sees the error and no write is attempted — form stays open with the typed values', async () => {
+	it('a librarian whose token vanished gets the 401 handling: the error, the form open with the typed values', async () => {
 		const container = await renderWithFormOpen('work-2');
+	createEditionMock.mockImplementation(async (cfg: { token: string }) => {
+		if (cfg.token) return 'edition-new';
+		throw Object.assign(new Error('no token'), { name: 'AuthExpiredError' });
+	});
 
 		await fireEvent.input(
 			container.querySelector('[data-testid="create-edition-name-work-2"]') as HTMLInputElement,
 			{ target: { value: 'Missa brevis' } }
 		);
-		// The JWT is gone while the tree is still on screen — the page has a
-		// 'session-expired' branch, so this state is reachable.
 		clearAll({ preserveProvider: false });
 
 		await fireEvent.click(
@@ -1011,8 +897,8 @@ describe('#271 — a missing precondition fails LOUDLY, never silently', () => {
 		});
 		const err = container.querySelector('[data-testid="create-edition-error-work-2"]') as HTMLElement;
 		expect(err.textContent?.trim()).toBe('Could not create the edition.');
-		expect(createEditionMock).not.toHaveBeenCalled();
-		// The form stays open — nothing was written, nothing typed is lost.
+		expect(createEditionMock).toHaveBeenCalledTimes(1);
+		expect(createEditionMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: '' });
 		expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).not.toBeNull();
 		expect(
 			(container.querySelector('[data-testid="create-edition-name-work-2"]') as HTMLInputElement)
@@ -1046,8 +932,6 @@ describe('#271 — the create write can fail in transport', () => {
 		const err = container.querySelector('[data-testid="create-edition-error-work-2"]') as HTMLElement;
 		expect(err.textContent?.trim()).toBe('Could not create the edition.');
 
-		// The form survives the failure, holding the typed values — a retry must
-		// not start from an empty name.
 		expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).not.toBeNull();
 		expect(
 			(container.querySelector('[data-testid="create-edition-name-work-2"]') as HTMLInputElement)
@@ -1061,8 +945,6 @@ describe('#271 — the create write can fail in transport', () => {
 			).value
 		).toBe('Carus-Verlag');
 
-		// The local insert must NOT run on a rejected create: the work still shows
-		// its empty state, and the live region announced nothing.
 		expect(container.querySelector('[data-testid="library-edition-edition-new"]')).toBeNull();
 		expect(container.querySelector('#library-editions-work-2')?.textContent).toContain(
 			'No editions yet.'
@@ -1100,7 +982,6 @@ describe('#271 — the create is not double-submittable', () => {
 			expect(submit.disabled).toBe(true);
 		});
 
-		// Both re-entry routes: a second click, and Enter in the name input.
 		await fireEvent.click(
 			container.querySelector('[data-testid="create-edition-submit-work-2"]') as Element
 		);
@@ -1114,22 +995,12 @@ describe('#271 — the create is not double-submittable', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-edition-edition-new"]')).not.toBeNull();
 		});
-		// Exactly one edition was created, not two.
 		expect(createEditionMock).toHaveBeenCalledTimes(1);
 	});
 });
 
-// ---------------------------------------------------------------------------
-// GENERATION GUARD — a mid-flight collective switch must not phantom-insert
-// (research: createWork LACKS this guard; the gap is not inherited here)
-// ---------------------------------------------------------------------------
-
 describe('#271 — the local insert is generation-guarded against a mid-flight collective switch', () => {
 	it('a create that resolves AFTER the collective switched inserts NOTHING into the new tree and announces nothing — the switched-to work re-fetches its editions instead of serving a phantom cache', async () => {
-		// Two collectives that BOTH contain a work with id 'work-1' — the exact
-		// shape under which an unguarded post-await mutation of editionsByWork
-		// poisons the NEW collective's cache: toggleWork would see the entry as
-		// cached and render the phantom edition without ever fetching.
 		setToken('jwt-abc');
 		authStore.set({
 			status: 'authenticated',
@@ -1191,7 +1062,6 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 			{ target: { value: 'Chorpartitur' } }
 		);
 
-		// Hold the create in flight…
 		let resolveCreate: (id: string) => void = () => {};
 		createEditionMock.mockReturnValue(
 			new Promise<string>((resolve) => {
@@ -1202,10 +1072,8 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 			container.querySelector('[data-testid="create-edition-submit-work-1"]') as Element
 		);
 		await waitFor(() => expect(createEditionMock).toHaveBeenCalledTimes(1));
-		// The write was captured BEFORE the switch — against sampledb.
 		expect(createEditionMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 
-		// …switch the collective while it is still pending…
 		selectedCollectiveDbStore.set('secondchoir');
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-work-work-1"]')?.textContent).toContain(
@@ -1214,14 +1082,9 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 		});
 		const editionReadsBeforeResolve = listEditionsMock.mock.calls.length;
 
-		// …then let the stale create resolve.
 		resolveCreate('edition-new');
 		await new Promise((r) => setTimeout(r, 0));
 
-		// NO phantom insert: expanding work-1 in the NEW collective must FETCH its
-		// editions (an unguarded stale insert would have poisoned editionsByWork,
-		// making toggleWork treat the node as cached) and render the empty state,
-		// never the stale 'Chorpartitur' edition.
 		await expandWork(container, 'work-1');
 		await waitFor(() => {
 			expect(container.querySelector('#library-editions-work-1')?.textContent).toContain(
@@ -1232,7 +1095,6 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 		expect(container.textContent).not.toContain('Chorpartitur');
 		expect(listEditionsMock.mock.calls.length).toBeGreaterThan(editionReadsBeforeResolve);
 
-		// And NO status announcement for the dead-generation create.
 		const statuses = Array.from(
 			container.querySelectorAll('[data-testid^="create-edition-status-"]')
 		);

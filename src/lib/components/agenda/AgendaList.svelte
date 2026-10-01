@@ -1,205 +1,52 @@
-<!-- src/lib/components/agenda/AgendaList.svelte -->
 <script lang="ts">
-	// #471 review F2 — `tick` because the show-more press removes its own button
-	// from the DOM, so focus has to be re-landed AFTER that render lands.
 	import { tick, type Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
-	// #466 — the whole card opens the event; goto() is the row's own tap
-	// handler (the row is deliberately NOT wrapped in an <a>, see below).
 	import { goto } from '$app/navigation';
-	// #220 — the AM/PM preference reaches every displayed clock time through
-	// this ONE shared formatter (timeFormat.no-hardcoded-render.spec.ts pins
-	// that no other file may keep its own 24h-rendering Intl formatter).
 	import {
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
-		isoDateFormatter
+		isoDateFormatter,
+		TALLINN_TZ
 	} from '$lib/preferences/timeFormat';
-	// #194/#202 — the SHARED type-label map (same one the event detail page
-	// uses, #101 F3 taught us what an unlocalized type string costs).
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
-	// #211 — the SAME color scheme the event detail badge consumes.
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
-	// #251 — the narrative header's locale source is the APP language, not the
-	// device's. Same specifier LanguageSelector.svelte / routes/+page.svelte
-	// already import from.
 	import { getLocale } from '$lib/paraglide/runtime.js';
 	import RsvpControl from './RsvpControl.svelte';
 	import RsvpNonMemberHint from './RsvpNonMemberHint.svelte';
 	import RepertoireElement from './RepertoireElement.svelte';
-	// #90 TR.2 — ONE definition of the works view model, shared with
-	// RepertoireElement and its producer (repertoire/workRows.ts). Previously
-	// duplicated inline here, which let the two copies drift silently.
 	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
-	// #87 fix — the attendance panel now renders INLINE, as a child of the
-	// recent row that opened it (same inline-expansion pattern as the library
-	// browse tree's editions-under-work), not below the whole agenda.
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import type { AttendancePanel } from '$lib/attendance/types';
-	// #103 review F3 — the badge and the conductor's button are SHARED with the
-	// event detail page (they were inline here and copied there, and the copies
-	// had already lost the dot + data-status). BadgeStatus is that component's
-	// own type now — #85 TA.4's four states, 'not-recorded' among them.
 	import AttendanceBadge, { type BadgeStatus } from '$lib/components/attendance/AttendanceBadge.svelte';
 	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
-	// #262 — the schedule_item type + its sort rule. Imported from the
-	// dependency-free scheduleSort.ts (NOT scheduleData.ts, which pulls in
-	// entuFetch's `$env/dynamic/public` chain — dead weight for a pure
-	// component with no fetch of its own, and fatal in this component's
-	// import-time-only test harness — see scheduleSort.ts's header).
 	import { compareScheduleItems, type ScheduleItem } from '$lib/schedule/scheduleSort';
 
 	interface Props {
 		items: AgendaItem[];
 		loading?: boolean;
-		// #12 — one RsvpControl per row, seeded from rsvpByEventId (absent entry =
-		// unanswered, never defaulted — #11's display AC). onrsvpchange forwards
-		// (item, status) up so the page can own the optimistic write (keeps this
-		// component's test unit-level).
 		rsvpByEventId?: RsvpByEventId;
-		// The singer's membership, as an explicit 3-state — NOT a memberId-or-null
-		// (which conflated "still resolving" with "confirmed non-member"). #372
-		// (issue #362 paradigm): membership is DISPLAY ONLY — it drives the
-		// attendance badge / season summary visibility below and the non-member
-		// hint beside an absent RsvpControl. It no longer has any say in the
-		// control's enabled/pending state — that's `canRsvp` (below), the Entu
-		// grant on the singer's own person.
-		//   'member'     → attendance badge / season summary render.
-		//   'non-member' → the "Only members can RSVP" hint renders, standing in
-		//                  for the control (CONFIRMED only — this branch is asked
-		//                  BEFORE `canRsvp`, because no grant can make a
-		//                  memberless rsvp writable; see the row markup).
-		//   'loading'    → unresolved (still looking up, or lookup failed) → no
-		//                  hint (fail-safe: never a false non-member claim), no
-		//                  attendance badge / season summary.
 		membership?: 'loading' | 'member' | 'non-member';
-		// #372 (issue #362 paradigm, Gama ruling) — THE gate for the upcoming
-		// row's RsvpControl: the Entu grant (`_owner`/`_editor`) on the singer's
-		// own PERSON entity, the entity her rsvp write actually targets (ER-27)
-		// — read via resolveManageRights(cfg, personId, personId), the app's one
-		// rights predicate (repertoireActions.ts). NOT membership: a member
-		// lookup answers "am I on the roster", a different question from "may I
-		// write" — #369 was 19 of 24 active members shown a fully enabled
-		// control for a write Entu always refused.
-		//   'editor'     → the control renders, enabled (subject to
-		//                  pendingEventIds for the in-flight-write disable).
-		//   'loading'    → the read is still in flight → the control renders
-		//                  disabled (never an enabled invitation ahead of the
-		//                  grant being confirmed).
-		//   'not-editor' → NO control renders at all — not disabled, not a
-		//                  hint-bearing invitation. An active member with no
-		//                  grant (#369's shape) gets nothing.
-		// Asked only AFTER `membership === 'non-member'` has been ruled out: a
-		// confirmed non-member gets the hint instead, whatever her grant (the
-		// rsvp entity needs a `member` reference she hasn't got).
 		canRsvp?: 'loading' | 'editor' | 'not-editor';
 		onrsvpchange?: (item: AgendaItem, status: RsvpStatus | null) => void;
-		// #15 — while an event's write is in flight, its whole RsvpControl (all 4
-		// buttons) is unclickable (Mihkel's ruling), not just the tapped button.
-		// This is the primary #15 fix: a second tap on the same event is
-		// structurally impossible at the UI layer, so it can never fire a write
-		// against the '__optimistic__' placeholder (rsvpChangeQueue.ts covers the
-		// write-orchestration half).
 		pendingEventIds?: ReadonlySet<string>;
-		// Events whose last write REJECTED — that row surfaces an inline save-failed
-		// error (the optimistic value having been reverted upstream).
 		failedEventIds?: ReadonlySet<string>;
-		// #326 — events whose last write RECONCILED successfully, same per-event
-		// Set shape as pendingEventIds/failedEventIds: only the row whose id
-		// reconciled shows the saved cue, never more than the key that settled.
 		savedEventIds?: ReadonlySet<string>;
-		// #83 — the 'Recent' section: ALL past events of the current season
-		// (already reverse-chronological — see conductorLogic.ts's recentEvents;
-		// this component renders in the order given, it does not re-sort). Empty/
-		// omitted → no Recent section at all (no heading, no empty-state row).
 		recentItems?: AgendaItem[];
-		// #83 — events the signed-in person may take attendance on (per-event,
-		// because rights can differ row by row — same per-event-Set shape as
-		// pendingEventIds/failedEventIds). A recent row whose id is in the set
-		// shows the 'Take attendance' button; upcoming rows never show it
-		// regardless of membership — attendance is taken after the fact only.
-		//
-		// #356 — the caller (+page.svelte) now fills this with canMarkAttendance
-		// ids (owner-OR-editor on the event), NOT the conductor seat; the prop
-		// name/shape is unchanged (kept for the existing unit-level callers of
-		// this component), only what the real page feeds it changed.
 		conductorEventIds?: ReadonlySet<string>;
 		ontakeattendance?: (item: AgendaItem) => void;
-		// #87 fix — the currently-open attendance panel (undefined = none open
-		// anywhere). Rendered directly beneath the 'Take attendance' button of
-		// the ONE recent row whose id matches `attendancePanel.item.id` — the
-		// page owns all the panel's data/IO (exactly as it always did), this
-		// component only decides WHERE the resulting markup lands.
 		attendancePanel?: AttendancePanel;
-		// #85 — my own attendance badge state per RECENT event id. An event id
-		// absent from the map (never marked for me) renders as 'not-recorded' —
-		// the same explicit 4th state, not a blank.
 		myAttendanceByEventId?: Record<string, BadgeStatus>;
-		// #85 — the season summary, rendered ONCE at the top of the Recent
-		// section (above the first row), whenever the section itself renders.
-		// Presentation lives in SeasonSummary.svelte; the page supplies it here
-		// as a snippet so it sits inside this component's 'agenda-recent' markup
-		// without AgendaList taking on any attendance IO itself.
 		seasonSummary?: Snippet;
-		// #90 TR.2 — the page resolves the works view model per event (via
-		// repertoire/workRows.ts's loadWorksByEventId) and hands it in keyed by
-		// event id, same seam as rsvpByEventId. An event id absent from the map
-		// (or mapped to an empty array) renders NO Works line at all — the
-		// element is per-event, not a fixed slot.
 		worksByEventId?: Record<string, WorkRow[]>;
-		// #90 TR.2 — forwarded to every RepertoireElement: a tapped PDF is signed
-		// AT CLICK TIME by the page (the signed url lives 60s), never pre-resolved
-		// into an href.
 		onpdfclick?: (fileId: string) => void;
-		// #367 — the on-device/needs-network file badge, from the page's ONE
-		// heldFileIds(db, personId) query per agenda load (never a per-row
-		// get()). Forwarded verbatim to every RepertoireElement this component
-		// renders — the shared worksElement snippet feeds BOTH the Upcoming and
-		// the Recent row templates from the same answer. `null` = not yet
-		// answered: RepertoireElement's own default (no badge) applies.
 		heldFileIds?: ReadonlySet<string> | null;
-		// #91 TR.3 — the management surface, forwarded per event row. Omitted =
-		// the read-only agenda, unchanged (RepertoireElement's own rights default
-		// is 'not-editor', so nothing extra renders).
-		//
-		// THIS PROP IS THE WHOLE POINT of the TR.3 wiring: without it the write
-		// layer had zero runtime importers and `manageRights` could never be
-		// anything but the default — every control was unreachable in the product
-		// while its unit tests stayed green.
 		worksManage?: WorksManage;
-		// #214 — an optional override for the "no upcoming rows" state. This
-		// component stays filter-agnostic: it has no idea a type filter exists,
-		// it just renders whatever the caller hands it here INSTEAD OF its own
-		// default agenda_empty_no_events message, whenever items is empty and
-		// loading is false. Omitted = the original default paragraph.
 		emptyState?: Snippet;
-		// #214 review F3 — the same override, for the RECENT list. This component
-		// still knows nothing about filters: handing it this snippet is the
-		// caller's way of saying "the Recent list is empty for a reason of MINE,
-		// keep the section (and the season summary in it) on screen and render
-		// this instead of the rows". Omitted = the original behaviour, where an
-		// empty recentItems means no Recent section at all — so an early-season
-		// agenda with no past events still renders nothing here.
 		recentEmptyState?: Snippet;
-		// #262 (Mihkel 2026-09-06 11:12 + Gama's row-family ruling 5558026158) —
-		// the agenda's compact schedule-times line, per event id, mirroring
-		// `worksByEventId`'s seam exactly: the page resolves the schedule_item
-		// read (scheduleData.listScheduleItemsByEventId) and hands it in keyed
-		// by event id. An id absent from the map (or mapped to an EMPTY array)
-		// renders NO line at all — most events have none, and the fence stays
-		// byte-unchanged for them. Deliberately a SEPARATE prop, not a field
-		// added to `AgendaItem`: folding schedule rows into the shared item type
-		// would put the #247 month view one naive edit away from rendering them
-		// too, which Mihkel's own grooming ruling keeps four-elements-per-row.
 		scheduleItemsByEventId?: Record<string, ScheduleItem[]>;
-		// #244 — the id of a just-created event to mark transiently (a
-		// decorative `agenda-row-created-mark` + the existing `bg-highlight`
-		// token, same shade as the day-group "today" header) on whichever row
-		// family it lives in. This component stays filter/timing-agnostic: the
-		// page owns when it is set and when it clears.
 		justCreatedEventId?: string | null;
 	}
 	const {
@@ -228,38 +75,14 @@
 		justCreatedEventId = null
 	}: Props = $props();
 
-	// #471 — the Recent section starts collapsed to the single most recent
-	// past card; pressing the show-more button reveals the rest for THIS
-	// mount only (no persistence — a fresh render, incl. the page's own
-	// {#key current?.db} remount on a collective switch, starts collapsed
-	// again).
 	let showAllRecent = $state(false);
 
-	// #471 review F1 — a viewer can create a PAST-dated event (there is no date
-	// floor on the create form; a conductor adding last month's rehearsal so
-	// attendance can be taken is the case the page's own comment contemplates).
-	// If that event is not the most recent past one it lands BEHIND the button,
-	// and the page's confirmation — a scroll + highlight addressed by
-	// `[data-testid="agenda-recent-row-<id>"]` (+page.svelte) — finds no element
-	// and silently no-ops: the create gets no visible confirmation at all. So
-	// open the list whenever the just-created row is one of the hidden ones.
-	//
-	// ONE-WAY on purpose: it never assigns false, so the page clearing
-	// `justCreatedEventId` on its own JUST_CREATED_MARK_MS timer cannot snap the
-	// list shut under a reader mid-scroll.
 	$effect(() => {
 		const id = justCreatedEventId;
 		if (!id) return;
 		if (recentItems.findIndex((it) => it.id === id) > 0) showAllRecent = true;
 	});
 
-	/** The compact times line's full text — computed as ONE string (never a
-	 *  nested per-pair span: AgendaList.spec.ts's row-span containment checks
-	 *  run over EVERY span in a row, and a bare clock-only span would be one
-	 *  fixture away from tripping them). Sorted datetime asc, name tie-break
-	 *  (#246: no ordinal) via the ONE shared comparator; time via the ONE
-	 *  legal formatTime(tallinnHHMM(...), $timeFormatStore) combo. '' when the
-	 *  event has no schedule items — the caller renders nothing at all then. */
 	function scheduleLineText(eventId: string): string {
 		const rows = scheduleItemsByEventId[eventId];
 		if (!rows || rows.length === 0) return '';
@@ -269,18 +92,9 @@
 			.join(' · ');
 	}
 
-	/**
-	 * Which management surface an event row shows, from the PROVENANCE of its
-	 * rows: an event with its own program_items shows the programme; one without
-	 * falls back to the season repertoire (TR.2's hierarchy) and therefore shows
-	 * the repertoire surface. Never guessed from ordinals — a program_item whose
-	 * ordinal failed to read defaults to 0.
-	 */
 	function worksContext(eventId: string): 'repertoire' | 'programme' {
 		return worksByEventId[eventId]?.some((r) => r.kind === 'program') ? 'programme' : 'repertoire';
 	}
-	// Stable empty defaults — a fresh `new Set()` / `[]` per render would make
-	// every RepertoireElement see a changed prop identity on every agenda tick.
 	const NO_KEYS: ReadonlySet<string> = new Set<string>();
 	const NO_OPTIONS: never[] = [];
 	const NO_OPTIONS_BY_ID: Record<string, never[]> = {};
@@ -288,9 +102,6 @@
 	function eventRightsFor(eventId: string) {
 		return worksManage?.eventRightsByEventId[eventId] ?? 'not-editor';
 	}
-	/** An event row renders the Works element when it HAS works, or when the
-	 *  viewer may add some (otherwise a rights-holder on an empty agenda row has
-	 *  no entry point at all). */
 	function showWorks(eventId: string): boolean {
 		if (worksByEventId[eventId]?.length) return true;
 		if (!worksManage) return false;
@@ -301,54 +112,25 @@
 		return myAttendanceByEventId[eventId] ?? 'not-recorded';
 	}
 
-	// Tallinn IANA timezone — Europe/Tallinn (UTC+3 in summer, UTC+2 in winter)
-	// PRESERVED VERBATIM from the harvested AgendaList (old mvox_v4e_web repo) — see
-	// T5 build spec §3. Do not touch the TZ constant, the three formatters below, or
-	// the `groups` derivation without re-checking the DST edge cases they guard.
-	// #251 — the ONE thing that now varies is `headerFmt`'s locale argument
-	// (below): it follows the app language via getLocale(), rebuilt reactively
-	// so a language switch updates the header without relying on setLocale's
-	// page reload. TZ, options and the noon-anchored date math are unchanged.
-	const TZ = 'Europe/Tallinn';
+	const groupKeyFmt = isoDateFormatter(TALLINN_TZ);
 
-	// Grouping key: YYYY-MM-DD in Tallinn calendar day (en-CA gives ISO date
-	// format) — #231: the shared factory (timeFormat.iso-date.spec.ts pins
-	// this stays byte-identical to today's construction).
-	const groupKeyFmt = isoDateFormatter(TZ);
-
-	// Locale-aware long header text: "Monday, 15 June" (APP language, #251 —
-	// was the browser/device locale; rebuilt whenever getLocale() changes).
 	const headerFmt = $derived(
 		new Intl.DateTimeFormat(getLocale(), {
-			timeZone: TZ,
+			timeZone: TALLINN_TZ,
 			weekday: 'long',
 			day: 'numeric',
 			month: 'long'
 		})
 	);
 
-	// ISO date for recent rows (e.g. "2026-06-15") — #207 rule 7 (PO standing
-	// rule, Gama's 2026-09-02 rulings): row-level dates are tabular/numeric, so
-	// they render as the Tallinn ISO calendar day (en-CA gives ISO date format).
-	// Recent rows lack day-group headers, so each row still needs its own date
-	// label to be distinguishable.
-	const shortDateFmt = isoDateFormatter(TZ);
+	const shortDateFmt = isoDateFormatter(TALLINN_TZ);
 
-	/**
-	 * Accessible name for a row's event-detail link. #101 review fix (F2): the
-	 * primary fix is upstream — `listEvents` now inherits a missing name from
-	 * the parent series, same as `loadEventDetail` — but an event with no name
-	 * ANYWHERE (Entu's `mandatory` is a UI hint, not enforced) would still yield
-	 * the bare "View details for ", i.e. a link a screen reader announces
-	 * unnamed. The generic label is the floor, never a silent blank.
-	 */
 	function rowLinkLabel(name: string): string {
 		return name.trim() === ''
 			? m.agenda_row_link_label_unnamed()
 			: m.agenda_row_link_label({ event: name });
 	}
 
-	/** Group items by Tallinn calendar date, preserving chronological order. */
 	const groups = $derived.by(() => {
 		const seen = new Map<string, AgendaItem[]>();
 		const order: string[] = [];
@@ -368,24 +150,12 @@
 		}));
 	});
 
-	// --- T5 additions below: relative-day labels + multi-week gap markers. Layered
-	// on top of `groups` rather than folded in, so the verbatim block above stays
-	// untouched. `now` is read once at component init — fine for a page-load list;
-	// revisit if the agenda is ever kept open across a real midnight.
 	const now = new Date();
 	const todayKey = groupKeyFmt.format(now);
-	// Same noon-anchor trick as `header` above: reformat today's noon instant +24h
-	// through the Tallinn-zoned formatter, so a DST transition can't shift the day.
 	const tomorrowKey = groupKeyFmt.format(
 		new Date(new Date(todayKey + 'T12:00:00').getTime() + 24 * 60 * 60 * 1000)
 	);
 
-	/**
-	 * Whole weeks between two group keys, or null when the gap doesn't clear a
-	 * genuine multi-week break. M4 fix: the old `days < 6` threshold fired at a
-	 * normal weekly rehearsal cadence (≥6 days apart) — "In 1 weeks" showed up on
-	 * every ordinary week. Require ~2 weeks (13+ days) before the marker appears.
-	 */
 	function gapWeeks(fromKey: string, toKey: string): number | null {
 		const fromMs = new Date(fromKey + 'T12:00:00').getTime();
 		const toMs = new Date(toKey + 'T12:00:00').getTime();
@@ -405,13 +175,6 @@
 		});
 	});
 
-	// #466 — every element a tap on the row must NOT hand to goto(): the two
-	// #101 TE.1 <a>s navigate on their own; every other in-card control (RSVP
-	// toolbar, take-attendance button, the attendance panel via its
-	// data-card-controls wrapper, RepertoireElement's buttons/anchors/selects)
-	// keeps its own behaviour. `closest()` is read off `event.target` itself,
-	// so it matches immediately when the target IS a control, before any
-	// Svelte event-flush timing could detach it.
 	const CARD_CONTROLS =
 		'a, button, input, select, textarea, label, [role="button"], [role="toolbar"], [data-card-controls]';
 
@@ -422,10 +185,6 @@
 	}
 </script>
 
-<!-- #90 TR.2 / #91 TR.3 — ONE definition of the per-event Works element, shared
-     by the Recent and Upcoming row templates. It was duplicated inline, and the
-     duplicate is exactly how the management wiring went missing from one of
-     them and unnoticed from both. -->
 {#snippet worksElement(item: AgendaItem)}
 	{#if showWorks(item.id)}
 		<RepertoireElement
@@ -455,11 +214,6 @@
 	{/if}
 {/snippet}
 
-<!-- #262 — the compact schedule-times line, shared by BOTH row families (PO
-     ruling 5558026158: upcoming AND Recent both carry it, the Recent line
-     inheriting that family's dimmer tone via the row-duration `text-[10px]
-     text-ink-2` treatment — no special styling of its own). Absent entirely
-     when the event has no schedule items. -->
 {#snippet scheduleLine(item: AgendaItem)}
 	{#if scheduleItemsByEventId[item.id]?.length}
 		<span data-testid="agenda-schedule-line-{item.id}" class="text-[10px] text-ink-2"
@@ -469,10 +223,6 @@
 {/snippet}
 
 {#if recentItems.length > 0 || recentEmptyState}
-	<!-- #83 — 'Recent': ALL past events of the current season, reverse-chron (order
-	     as given, no re-sort here). Sits ABOVE the upcoming list (Byrd's brief).
-	     Each row: the existing (read-only, past) RsvpControl + a conductor-only
-	     'Take attendance' button, gated per-event via conductorEventIds. -->
 	<section data-testid="agenda-recent" class="flex flex-col">
 		<h2
 			data-testid="agenda-recent-header"
@@ -480,25 +230,13 @@
 		>
 			{m.agenda_recent()}
 		</h2>
-		<!-- #85 — visible for confirmed MEMBERS whenever the Recent section itself
-		     renders, above the first row (never conditional on data: zero attendance
-		     renders "Attended 0 of N"). Non-members and loading state see nothing —
-		     "Attended 0 of 4" reads as "you skipped everything" to someone who was
-		     never expected to attend (F4 fix). -->
 		{#if seasonSummary && membership === 'member'}
 			{@render seasonSummary()}
 		{/if}
 		{#if recentItems.length === 0 && recentEmptyState}
-			<!-- #214 review F3 — the caller emptied this list (a type filter), so the
-			     section, its header and the season summary above stay put: the
-			     summary is a WHOLE-season figure, never type-scoped, and losing it
-			     to a filter tap was an unreviewed side effect. -->
 			{@render recentEmptyState()}
 		{/if}
 		{#each showAllRecent ? recentItems : recentItems.slice(0, 1) as item (item.id)}
-			<!-- #466 — tapping anywhere on the card opens the event; keyboard and
-			     screen-reader users already reach it through the accessible name
-			     link below (#101 TE.1), so the row itself gains no tabindex/role. -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<div
@@ -508,26 +246,14 @@
 				onclick={(event) => openEventOnCardTap(event, item.id)}
 			>
 				{#if item.id === justCreatedEventId}
-					<!-- #244 — purely decorative: `event-create-status` (sr-only)
-					     already announces a successful create to assistive tech
-					     (#132/T4 review F3). This only lets the page address "the
-					     just-created row" without re-deriving the highlight
-					     condition, and it clears with `justCreatedEventId` on the
-					     page's own timer. -->
 					<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
 				{/if}
-				<!-- #101 TE.1 -- a decorative, non-focusable twin of the named link below
-				     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
-				     second tab stop announcing the same destination. -->
 				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{shortDateFmt.format(new Date(item.startDatetime))}</span>
 					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>
 				<div class="flex min-w-0 flex-col gap-1">
-					<!-- #101 TE.1 -- the row's ACCESSIBLE tap target: name + tap indicator only
-					     (never location/works/RSVP/attendance controls), so no interactive
-					     control ever ends up NESTED inside an <a>. -->
 					<a
 						href="/event/{item.id}"
 						aria-label={rowLinkLabel(item.name)}
@@ -536,8 +262,6 @@
 						<span class="truncate text-sm text-ink">{item.name}</span>
 						<span aria-hidden="true" class="text-ink-3">▸</span>
 					</a>
-					<!-- #194/#202 — the type badge: '' (or absent) renders NOTHING, never
-					     an invented label. -->
 					{#if item.eventType}
 						<span
 							data-testid="event-type-badge-{item.id}"
@@ -551,31 +275,14 @@
 					{/if}
 					{@render worksElement(item)}
 					{@render scheduleLine(item)}
-					<!-- Past event → the singer's own RsvpControl is read-only (always the
-					     'pending'/disabled reason — there is nothing left to answer, and no
-					     write is in flight either; reusing 'pending' keeps this a silent
-					     disable, no misleading non-member hint). -->
 					<RsvpControl status={rsvpByEventId[item.id]?.status ?? null} pending={true} />
-					<!-- #85 — every RECENT row carries my own attendance badge, gated on
-					     confirmed membership (F4 fix: non-members and loading state see
-					     no badge — 'Not recorded' reads as 'you skipped' to someone who
-					     was never expected to attend). -->
 					{#if membership === 'member'}
 						<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
 					{/if}
 					{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
 						<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 					{/if}
-					<!-- #87 fix — the panel is a CHILD of the row that opened it, directly
-					     below the button, same inline-expansion pattern as the library
-					     browse tree. Only the one row whose id matches the open panel's
-					     event renders it — exactly one panel at a time, structurally (the
-					     page never hands two rows a match, since `attendanceItem` is a
-					     single value). -->
 					{#if attendancePanel && attendancePanel.item.id === item.id}
-						<!-- #466 — the whole panel, including the gaps between its
-						     buttons, is a control surface: it must never hand a tap to
-						     the row's own goto() handler above. -->
 						<div data-card-controls>
 							<AttendanceSurface
 								item={attendancePanel.item}
@@ -593,27 +300,12 @@
 							/>
 						</div>
 					{/if}
-					<!-- #471 — bottom-right of the one collapsed card; a plain <button>,
-					     so #466's CARD_CONTROLS already keeps the row's own goto() tap
-					     handler off it (see CARD_CONTROLS above — do not touch). Only
-					     renders while collapsed AND there is something more to show. -->
 					{#if !showAllRecent && recentItems.length > 1}
 						<button
 							type="button"
 							data-testid="agenda-recent-show-more"
 							class="self-end rounded-md border border-ink px-2 py-1 font-mono text-[9px] tracking-wide text-ink hover:bg-ink hover:text-paper"
 							onclick={async (event) => {
-								// #471 review F2 — the press unmounts the button it came
-								// from ({#if !showAllRecent} above), which drops focus to
-								// <body>: the next Tab restarts at the top of the document,
-								// far above the Recent section the viewer was reading. Land
-								// focus on the first newly revealed row's accessible link
-								// instead — it keeps the reading position AND makes a screen
-								// reader announce the content that just appeared. The section
-								// is captured BEFORE the await (currentTarget is nulled once
-								// the handler yields, and the button is gone by then anyway),
-								// and the query is scoped to it so a second AgendaList mount
-								// on the same document can never be focused instead.
 								const section = (event.currentTarget as HTMLElement).closest(
 									'[data-testid="agenda-recent"]'
 								);
@@ -651,17 +343,8 @@
 		</div>
 	{:else if items.length === 0}
 		{#if emptyState}
-			<!-- #214 — the page substitutes its own filtered-empty message here
-			     (agenda-filter-empty) when a type filter, not a genuinely empty
-			     agenda, is what emptied `items`. This component never decides
-			     which — it just renders what it's given. -->
 			{@render emptyState()}
 		{:else}
-			<!-- #194/#202 review F2 — was `agenda_empty_no_rehearsals` ("No upcoming
-			     rehearsals."). With the type filter gone the query covers EVERY event
-			     type, so the empty state must not claim a narrower search than the one
-			     that actually ran — and that exact sentence is what #194's bug report
-			     quoted. -->
 			<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
 				<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
 			</div>
@@ -679,25 +362,6 @@
 					class="flex items-baseline gap-2 pt-6 pb-2 text-base font-semibold tracking-wide text-ink uppercase"
 					class:bg-highlight={group.relative === 'today'}
 				>
-					<!-- #250 done-when 4 — TÄNA/HOMME must stay tellable apart from the date
-					     beside them. MECHANISM: an outlined pill (`rounded-full border
-					     border-ink px-2`), deliberately NOT a size or weight step.
-					     Why chrome and not type: before this issue the differentiator was
-					     `font-semibold text-ink` on the span against a lighter, non-semibold
-					     date. The header line itself is now semibold full ink, so those two
-					     tokens on the span became inherited no-ops — they differentiate
-					     nothing. A size step (text-lg) is the other obvious reach and is
-					     wrong here: the DATE is the section title this issue is making
-					     bigger, and the relative marker only qualifies WHICH section it is,
-					     so out-sizing the date re-inverts the very hierarchy #250 came to
-					     fix. An enclosed pill differentiates by SHAPE instead of by rank: it
-					     survives at the line's own size, weight and ink, and reads as the
-					     app's established marker idiom (the rounded-full small-caps chips on
-					     type badges and repertoire) rather than as a louder heading.
-					     Outline and not fill: on today's header this pill sits inside the
-					     bg-highlight band, where a bg-ink-5 fill would have carried only
-					     ~1.4:1 against that yellow; an ink border reads at any backdrop the
-					     header takes. -->
 					{#if group.relative === 'today'}
 						<span data-testid="agenda-relative-today" class="rounded-full border border-ink px-2">{m.agenda_today()}</span>
 					{:else if group.relative === 'tomorrow'}
@@ -706,10 +370,6 @@
 					<span>{group.header}</span>
 				</div>
 				{#each group.rows as item (item.id)}
-					<!-- #466 — tapping anywhere on the card opens the event; keyboard
-					     and screen-reader users already reach it through the accessible
-					     name link below (#101 TE.1), so the row itself gains no
-					     tabindex/role. -->
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<!-- svelte-ignore a11y_click_events_have_key_events -->
 					<div
@@ -719,22 +379,13 @@
 						onclick={(event) => openEventOnCardTap(event, item.id)}
 					>
 						{#if item.id === justCreatedEventId}
-							<!-- #244 — see the Recent row's identical marker above for the
-							     rationale: decorative only, clears on the page's timer. -->
 							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
 						{/if}
-						<!-- #101 TE.1 — a decorative, non-focusable twin of the named link below
-						     (aria-hidden + tabindex="-1"): a bigger tap target on mobile without a
-						     second tab stop announcing the same destination. -->
 						<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
 							<span data-testid="row-time" class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 						</a>
 						<div class="flex min-w-0 flex-col gap-1">
-							<!-- #101 TE.1 — the row's ACCESSIBLE tap target: name + ▸ indicator only
-							     (never location/works/RSVP), so no interactive control (RsvpControl's
-							     buttons, RepertoireElement's) ever ends up NESTED inside an <a> — a
-							     tap on 'Going' must record an RSVP, never navigate. -->
 							<a
 								href="/event/{item.id}"
 								aria-label={rowLinkLabel(item.name)}
@@ -743,8 +394,6 @@
 								<span class="truncate text-sm text-ink">{item.name}</span>
 								<span aria-hidden="true" class="text-ink-3">▸</span>
 							</a>
-							<!-- #194/#202 — the type badge: '' (or absent) renders NOTHING, never
-							     an invented label. -->
 							{#if item.eventType}
 								<span
 									data-testid="event-type-badge-{item.id}"
@@ -758,23 +407,6 @@
 							{/if}
 							{@render worksElement(item)}
 							{@render scheduleLine(item)}
-							<!-- #372 (+ its review, F1) — TWO facts gate this control, and the
-							     order they are asked in matters. A CONFIRMED non-member is
-							     answered FIRST: an rsvp entity requires a `member` reference
-							     (rsvpData.ts createRsvp), so she cannot write one whatever her
-							     Entu grant says — and a self-`_editor` grant that survives
-							     deactivation (memberLifecycle flips only the member `status`)
-							     is true on crede via #369's backfill (2026-09-15), for every
-							     future bulk-created person via #371's grantSelfEditor (e27beb2),
-							     and for invite-created persons via inviteData.ts. Reading the
-							     grant first therefore handed
-							     archived/not-yet-accepted people an ENABLED control whose every
-							     tap throws 'cannot create without a memberId', and made this
-							     hint unreachable in production. Membership still has NO say in
-							     the ENABLED state (Gama's ruling) — it only SUBSTITUTES a
-							     display for the control. Only then does the grant decide: the
-							     control renders iff `canRsvp` isn't 'not-editor'. An active
-							     member with no grant (#369's shape) gets neither. -->
 							{#if membership === 'non-member'}
 								<RsvpNonMemberHint />
 							{:else if canRsvp !== 'not-editor'}
