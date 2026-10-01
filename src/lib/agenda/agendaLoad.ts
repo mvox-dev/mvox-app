@@ -36,6 +36,8 @@ import type * as ScheduleData from '$lib/schedule/scheduleData';
 import type { CollectiveState } from '$lib/collectives/types';
 import { focusAfterRender } from '$lib/a11y/focusable';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { dropRows, patchRows, reorderKey, restoreRow, setOrdinals } from '$lib/repertoire/workRowOps';
+import type { RepertoireRowStore } from '$lib/repertoire/repertoireRowHandlers';
 
 type AgendaTypeFilter = 'all' | (typeof CANONICAL_EVENT_TYPES)[number];
 
@@ -728,8 +730,6 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 				});
 		}
 
-		const reorderKey = (eventId: string) => `move:${eventId}`;
-
 		function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {
 			const merged: Record<string, WorkRow[]> = {};
 			for (const [eventId, rows] of Object.entries(byEvent)) {
@@ -790,10 +790,6 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 			ag.worksByEventId = next;
 		}
 
-		function patchRow(itemId: string, patch: Partial<WorkRow>) {
-			mapRows((rows) => rows.map((row) => (row.id === itemId ? { ...row, ...patch } : row)));
-		}
-
 		function findRow(itemId: string): WorkRow | undefined {
 			for (const rows of Object.values(ag.worksByEventId)) {
 				const hit = rows.find((row) => row.id === itemId);
@@ -802,44 +798,34 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 			return undefined;
 		}
 
-		function snapshotRow(itemId: string, onlyEventId?: string) {
+		function snapshotRow(itemId: string, onlyEventId?: string): () => void {
 			const snapshot: Array<{ eventId: string; index: number; row: WorkRow }> = [];
 			for (const [eventId, rows] of Object.entries(ag.worksByEventId)) {
 				if (onlyEventId !== undefined && eventId !== onlyEventId) continue;
 				const index = rows.findIndex((row) => row.id === itemId);
 				if (index >= 0) snapshot.push({ eventId, index, row: rows[index] });
 			}
-			return snapshot;
+			return () => {
+				const next = { ...ag.worksByEventId };
+				for (const { eventId, index, row } of snapshot) {
+					next[eventId] = restoreRow(next[eventId] ?? [], index, row);
+				}
+				ag.worksByEventId = next;
+			};
 		}
 
-		function restoreRow(snapshot: Array<{ eventId: string; index: number; row: WorkRow }>) {
-			const next = { ...ag.worksByEventId };
-			for (const { eventId, index, row } of snapshot) {
-				const rows = [...(next[eventId] ?? [])];
-				if (rows.some((r) => r.id === row.id)) continue;
-				rows.splice(Math.min(index, rows.length), 0, row);
-				next[eventId] = rows;
-			}
-			ag.worksByEventId = next;
-		}
-
-		function dropRow(itemId: string, onlyEventId?: string) {
-			mapRows((rows, eventId) =>
-				onlyEventId !== undefined && eventId !== onlyEventId
-					? rows
-					: rows.filter((row) => row.id !== itemId)
-			);
-		}
-
-		function setOrdinals(eventId: string, ordinalById: Map<string, number>) {
-			mapRows((rows, id) =>
-				id === eventId
-					? rows.map((row) =>
-							ordinalById.has(row.id) ? { ...row, ordinal: ordinalById.get(row.id)! } : row
-						)
-					: rows
-			);
-		}
+		const rowStore: RepertoireRowStore = {
+			list: (eventId) => ag.worksByEventId[eventId] ?? [],
+			find: findRow,
+			patch: (itemId, patch) => mapRows((rows) => patchRows(rows, itemId, patch)),
+			drop: (itemId, onlyEventId) =>
+				mapRows((rows, eventId) =>
+					onlyEventId !== undefined && eventId !== onlyEventId ? rows : dropRows(rows, itemId)
+				),
+			snapshot: snapshotRow,
+			setOrdinals: (eventId, ordinalById) =>
+				mapRows((rows, id) => (id === eventId ? setOrdinals(rows, ordinalById) : rows))
+		};
 
 		function openAttendancePanel(item: AgendaItem) {
 			const selected = deps.selected();
@@ -1017,16 +1003,9 @@ export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps:
 		prefetchNextEventPartsAfterSettle,
 		loadScheduleItems,
 		loadManagePickers,
-		reorderKey,
 		mergePendingRows,
 		refreshWorksAfterWrite,
-		mapRows,
-		patchRow,
-		findRow,
-		snapshotRow,
-		restoreRow,
-		dropRow,
-		setOrdinals,
+		rowStore,
 		openAttendancePanel,
 		closeAttendancePanel,
 		handleExpandSeasonSummary,
