@@ -4,15 +4,12 @@ export const STEP = 700;
 export const NEXT_STEP = 500;
 
 // Shrink-only: each file leaves when its split lands.
-export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/agenda/SeriesCreateForm.svelte'
-];
+export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/agenda/EventCreateForm.svelte',
 	'src/lib/agenda/RepertoireElement.svelte',
 	'src/lib/agenda/SeasonManagePanel.svelte',
-	'src/lib/agenda/SeriesCreateForm.svelte',
 	'src/lib/entity/entityCreate.ts',
 	'src/lib/entu/readCache.ts',
 	'src/lib/events/EventFieldEdit.svelte',
