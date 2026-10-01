@@ -8,7 +8,7 @@ import type { PendingMarks } from '$lib/repertoire/repertoirePending';
 import {
 	ADD_PROGRAMME_KEY,
 	ADD_WORK_KEY
-} from '$lib/components/agenda/RepertoireElement.svelte';
+} from '$lib/agenda/RepertoireElement.svelte';
 import type {
 	createProgramItem,
 	createRepertoireItem,

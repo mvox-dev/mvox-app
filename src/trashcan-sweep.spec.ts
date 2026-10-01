@@ -51,7 +51,8 @@ describe('#237 — the destructive trigger treatment is defined ONCE', () => {
 
 describe('#237 — every Table-A route imports the shared unit (integration floor)', () => {
 	const routes = [
-		'lib/components/agenda/SeasonManagePanel.svelte',
+		'lib/agenda/SeasonManagePanel.svelte',
+		'lib/agenda/SeasonManageSeries.svelte',
 		'lib/events/EventScheduleSection.svelte',
 		'lib/events/EventDangerZone.svelte',
 		'lib/sections/SectionArrangeRow.svelte'
@@ -82,7 +83,7 @@ function buttonBlock(path: string, testidLiteral: string): string {
 describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink empties the idiom)', () => {
 	const chips: Array<[string, string]> = [
 		[
-			'lib/components/agenda/SeasonManagePanel.svelte',
+			'lib/agenda/SeasonManageConductors.svelte',
 			'data-testid="season-manage-conductor-remove-{personId}"'
 		],
 		[
@@ -110,7 +111,7 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 	// point is that the HTML comment survives in the source).
 	it('the season-manage chip carries the WHY in markup, above the button a future sweeper would convert', () => {
 		const source = readFileSync(
-			join(SRC_ROOT, 'lib/components/agenda/SeasonManagePanel.svelte'),
+			join(SRC_ROOT, 'lib/agenda/SeasonManageConductors.svelte'),
 			'utf-8'
 		);
 		const at = source.indexOf('data-testid="season-manage-conductor-remove-{personId}"');

@@ -4,26 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import RepertoireElement, { ADD_WORK_KEY } from './RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 
-// #90 TR.2 RED — the collapsed/expanded "Works" element on an agenda event row.
-// Prop-driven and fetch-free (same unit-level seam as AgendaList/RsvpControl:
-// the page resolves data, the component renders it). The row shape is the
-// page-resolved view model — ONE definition, imported from
-// $lib/repertoire/types (it is shared with AgendaList and its producer
-// workRows.ts; a local copy here would let the contract drift silently).
-//
-// The PDF is NOT an href: Entu's signed S3 url is valid for 60 seconds
-// (entu-www src/api/files/index.md), so it cannot be resolved at agenda load
-// and parked in an anchor. The row carries the file PROPERTY id and the
-// component calls `onpdfclick(fileId)` so the page can sign it at click time.
-//
-// Pinned testids: works-line (collapsed, tappable), works-expanded,
-// work-row, work-status-badge, work-edition, work-no-edition, work-notes,
-// work-link-pdf, work-link-borrow, work-link-external.
-
 vi.mock('$lib/paraglide/messages.js', () => ({
-	// Proxy mock: any message key resolves to a `[key]` stub, so GREEN may pick
-	// whatever i18n keys it needs without editing this spec. Assertions below
-	// pin structure (testids, hrefs, domains), never translated copy.
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get: (_target, key) => () => `[${String(key)}]`
 	})
@@ -35,8 +16,6 @@ let rowSeq = 0;
 function row(overrides: Partial<WorkRow> = {}): WorkRow {
 	return {
 		id: `ri-${++rowSeq}`,
-		// #91 — provenance defaults to the season repertoire (the read-only specs
-		// above all describe repertoire rows); programme fixtures override it.
 		kind: 'repertoire',
 		workId: 'work-1',
 		editionId: 'ed-1',
@@ -63,8 +42,6 @@ function text(el: Element | null): string {
 	return (el?.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
 
-// ── Collapsed line (#90 AC-1) ───────────────────────────────────────────────
-
 describe('RepertoireElement — collapsed Works line', () => {
 	it("shows work names joined by ' · ', preceded by ♫", () => {
 		const { container } = render(RepertoireElement, { rows: twoRows });
@@ -74,9 +51,6 @@ describe('RepertoireElement — collapsed Works line', () => {
 		expect(text(line)).toContain('Spem in alium · Mass in B minor');
 	});
 
-	// #91 review F6 — a season editor reads the repertoire unfiltered so the
-	// status toggle stays two-way, but the at-a-glance line must still name the
-	// music actually being sung. Inactive rows are counted, not listed.
 	it('names only ACTIVE works, counting the inactive ones instead', () => {
 		const { container } = render(RepertoireElement, {
 			rows: [
@@ -120,13 +94,7 @@ describe('RepertoireElement — collapsed Works line', () => {
 	});
 });
 
-// ── Expanded view (#90 AC-1, badge + edition) ───────────────────────────────
-
 async function renderExpanded(rows: WorkRow[], extra: Record<string, unknown> = {}) {
-	// Wrapped under `props` explicitly: one management prop is named `context`,
-	// which COLLIDES with @testing-library/svelte's own mount-option name — an
-	// unwrapped options object containing a `context` key is (mis)parsed as a
-	// mount option, not a component prop (see UnknownSvelteOptionsError).
 	const rendered = render(RepertoireElement, { props: { rows, ...extra } });
 	await fireEvent.click(rendered.container.querySelector('[data-testid="works-line"]')!);
 	return rendered;
@@ -143,9 +111,6 @@ describe('RepertoireElement — expanded view', () => {
 		expect(text(rows[1])).toContain('J. S. Bach');
 	});
 
-	// #91 review F6 — the badge is TRANSLATED, through the same message lookup the
-	// management select uses. It used to print `row.status` verbatim, which put
-	// raw 'retired'/'dropped' on screen in all four locales.
 	it("shows the status badge with the TRANSLATED repertoire status ('active' / 'learning')", async () => {
 		const { container } = await renderExpanded(twoRows);
 		const badges = container.querySelectorAll('[data-testid="work-status-badge"]');
@@ -180,17 +145,11 @@ describe('RepertoireElement — expanded view', () => {
 	});
 
 	it('marks a work with no pinned edition via work-no-edition instead of an empty edition line', async () => {
-		// #331 — `editionId: ''` too: the default row PINS ed-1, and a pinned-but
-		// -unnameable row is the unknown state (a dangling reference is still a
-		// pin, #331 item 4), not this known absence. This test is about
-		// nothing-pinned, so the fixture must actually pin nothing.
 		const { container } = await renderExpanded([row({ editionId: '', editionName: '' })]);
 		expect(container.querySelector('[data-testid="work-no-edition"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="work-edition"]')).toBeNull();
 	});
 });
-
-// ── Functional links (#90 AC-3/AC-4/AC-5) ───────────────────────────────────
 
 describe('RepertoireElement — functional links', () => {
 	it('renders a PDF control when the row carries a fileId — and NEVER a pre-signed href (the url lives 60s)', async () => {
@@ -244,12 +203,9 @@ describe('RepertoireElement — functional links', () => {
 	});
 });
 
-// ── Concert ordering (#90 AC-6) ─────────────────────────────────────────────
-
 describe('RepertoireElement — concert ordering', () => {
 	it('renders a NUMBERED programme (ol > li, ordinal order) when ordinals are present', async () => {
 		const { container } = await renderExpanded([
-			// deliberately out of ordinal order in props — display follows ordinal
 			row({ workName: 'Mass in B minor', composer: 'J. S. Bach', status: null, ordinal: 2 }),
 			row({ workName: 'Spem in alium', status: null, ordinal: 1 })
 		]);
@@ -271,8 +227,6 @@ describe('RepertoireElement — concert ordering', () => {
 	});
 });
 
-// ── Programme notes (#90 — soloists / dedications on a program_item) ────────
-
 describe('RepertoireElement — programme notes', () => {
 	it('renders program notes on the expanded row when present', async () => {
 		const { container } = await renderExpanded([row({ status: null, ordinal: 1, notes: 'soloist: N. N.' })]);
@@ -285,8 +239,6 @@ describe('RepertoireElement — programme notes', () => {
 		expect(container.querySelector('[data-testid="work-notes"]')).toBeNull();
 	});
 });
-
-// ── Disclosure a11y (repo convention: every disclosure sets aria-expanded) ──
 
 describe('RepertoireElement — disclosure a11y', () => {
 	it('the collapsed line exposes aria-expanded, flipping on tap', async () => {
@@ -311,11 +263,6 @@ describe('RepertoireElement — disclosure a11y', () => {
 	});
 });
 
-// ── Duplicate ordinals must not crash the render (Entu mandatory is soft) ───
-// `mandatory: true` is a UI hint in Entu, not enforcement — two program_items
-// with no ordinal both default to 0. Keying the numbered branch on the ordinal
-// threw `each_key_duplicate`, which takes down the whole agenda page.
-
 describe('RepertoireElement — duplicate ordinals', () => {
 	it('renders both rows (no each_key_duplicate) when two program items share an ordinal', async () => {
 		const { container } = await renderExpanded([
@@ -324,17 +271,10 @@ describe('RepertoireElement — duplicate ordinals', () => {
 		]);
 		const rendered = container.querySelectorAll('[data-testid="work-row"]');
 		expect(rendered.length).toBe(2);
-		// Equal ordinals keep source order (stable sort).
 		expect(text(rendered[0])).toContain('First');
 		expect(text(rendered[1])).toContain('Second');
 	});
 });
-
-// ── Duplicate external links must not crash the render either ──────────────
-// Same failure mode, one list down: `external_link` is an implicitly
-// multi-valued Entu string prop and POST appends rather than replaces, so an
-// edition can legitimately hold the SAME url twice. Keying that {#each} on the
-// url string threw `each_key_duplicate` on expand.
 
 describe('RepertoireElement — duplicate external links', () => {
 	it('renders both anchors (no each_key_duplicate) when an edition holds the same url twice', async () => {
@@ -346,11 +286,6 @@ describe('RepertoireElement — duplicate external links', () => {
 		expect(links[1].getAttribute('href')).toBe(dup);
 	});
 });
-
-// ── #91 TR.3 — management controls (rights-gated writes) ────────────────────
-// Still prop-driven and fetch-free: this component only renders controls and
-// forwards taps via callback props. Rights, picker candidates and pending
-// state are all caller-supplied.
 
 describe('RepertoireElement — management: rights gating', () => {
 	it("manageRights omitted (defaults 'not-editor') → no management controls, even with rows", async () => {
@@ -399,10 +334,6 @@ describe('RepertoireElement — management: repertoire status + remove', () => {
 		expect(onstatuschange).toHaveBeenCalledWith('ri-1', 'retired');
 	});
 
-	// ── #156 roving tabindex — TOOLBAR semantics, keyed PER ROW ──────────────
-	// Arrows MOVE focus only. All rows live in ONE component instance, so the
-	// roving stop is keyed by row.id; a scalar would drag every row's stop along
-	// with the first arrow press.
 	it('the status chips sit in a role="toolbar" with an accessible name, and exactly ONE carries tabindex="0"', async () => {
 		const { container } = await renderExpandedManaged([row({ id: 'ri-1', status: 'learning' })]);
 		const group = container.querySelector('[data-testid="work-status-group-ri-1"]');
@@ -450,9 +381,6 @@ describe('RepertoireElement — management: repertoire status + remove', () => {
 	});
 
 	it('each ROW keeps its own Tab stop — arrowing in row A leaves row B alone (keyed roving state)', async () => {
-		// DIFFERENT statuses on purpose: the two rows start with their stops on
-		// different chips, so a scalar (un-keyed) roving state would visibly drag
-		// row B's stop onto row A's chip. Same-status rows would hide that bug.
 		const { container } = await renderExpandedManaged([
 			row({ id: 'ri-a', status: 'active' }),
 			row({ id: 'ri-b', status: 'learning' })
@@ -476,9 +404,7 @@ describe('RepertoireElement — management: repertoire status + remove', () => {
 		aChips[0].focus();
 		await fireEvent.keyDown(aChips[0], { key: 'ArrowRight' });
 
-		// Row A's stop moved…
 		expect(stops(aChips)).toEqual([aChips[1]]);
-		// …and row B's did not follow it.
 		expect(stops(bChips)).toEqual(bStopBefore);
 	});
 
@@ -639,15 +565,7 @@ describe('RepertoireElement — management: programme reorder + remove + add', (
 	});
 });
 
-// ── #91 review — provenance gating, status round-trip, programme entry point ─
-// The three ways the management surface could hand the page the wrong id, or
-// strand a work, all live in this component's gating.
-
 describe('RepertoireElement — management: row provenance (kind) gates the controls', () => {
-	// An event with NO program_items renders the SEASON repertoire as fallback
-	// (TR.2's hierarchy), so a programme surface can be showing repertoire_item
-	// ids. "Remove from tonight" on one of those deletes the whole collective's
-	// season entry.
 	const fallbackRows: WorkRow[] = [
 		row({ id: 'ri-fallback', kind: 'repertoire', status: 'active', ordinal: null })
 	];
@@ -735,7 +653,6 @@ describe('RepertoireElement — management: per-surface rights', () => {
 		await fireEvent.click(
 			container.querySelector('[data-testid="work-manage-add-programme-button"]')!
 		);
-		// No ordinals on a fallback row set → the new programme opens at 0.
 		expect(onaddprogramitem).toHaveBeenCalledWith('ed-9', 0);
 	});
 
@@ -770,11 +687,5 @@ describe('RepertoireElement — management: per-surface rights', () => {
 	});
 });
 
-// (*MVOX:Tallis* — RED spec)
-// (*MVOX:Josquin* — review fix-forward: shared WorkRow, click-time PDF signing,
-// duplicate-ordinal keying, disclosure a11y, programme notes, unkeyed external
-// links)
-// (*MVOX:Josquin* — #91 TR.3 GREEN: management-controls coverage, mirroring
-// the repertoireActions.ts RED contract)
-// (*MVOX:Josquin* — #91 review fix-forward: row-provenance gating, status
-// round-trip, per-surface rights)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin* — #91)

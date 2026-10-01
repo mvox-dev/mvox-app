@@ -126,7 +126,7 @@ vi.mock('$lib/repertoire/repertoireData', async () => {
 });
 
 import type { ComponentProps } from 'svelte';
-import RepertoireElement from '$lib/components/agenda/RepertoireElement.svelte';
+import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 import LibraryPage from './library/+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -215,11 +215,11 @@ function readSource(relPath: string): string {
 // 1 — i18n: every repertoire surface renders via Paraglide keys only
 describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces', () => {
 	it('RepertoireElement.svelte contains no bare text nodes outside m.* calls', () => {
-		expect(bareTextNodes(readSource('src/lib/components/agenda/RepertoireElement.svelte'))).toEqual([]);
+		expect(bareTextNodes(readSource('src/lib/agenda/RepertoireElement.svelte'))).toEqual([]);
 	});
 
 	it('RepertoireElement.svelte has no hardcoded aria-label string literals (labels must come from m.*)', () => {
-		const source = readSource('src/lib/components/agenda/RepertoireElement.svelte');
+		const source = readSource('src/lib/agenda/RepertoireElement.svelte');
 		const hardcoded = source.match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
 		expect(hardcoded).toEqual([]);
 	});

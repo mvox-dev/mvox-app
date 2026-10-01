@@ -93,10 +93,10 @@
 	} from '$lib/repertoire/editionOptions';
 	import { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowHandlers';
 	import { createPendingMarks } from '$lib/repertoire/repertoirePending';
-	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
+	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/agenda/RepertoireElement.svelte';
 	import EventCreateForm from '$lib/components/agenda/EventCreateForm.svelte';
 	import SeasonCreateForm from '$lib/components/agenda/SeasonCreateForm.svelte';
-	import SeasonManagePanel from '$lib/components/agenda/SeasonManagePanel.svelte';
+	import SeasonManagePanel from '$lib/agenda/SeasonManagePanel.svelte';
 	import { clearSeriesCreateResume, type SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	// `servedFromCache` is the OLDEST readAt among entries served since

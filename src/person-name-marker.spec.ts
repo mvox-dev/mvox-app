@@ -16,7 +16,7 @@ const FILES = [
 	'src/lib/library/BulkCheckoutPanel.svelte',
 	'src/lib/components/agenda/EventCreateForm.svelte',
 	'src/lib/components/agenda/SeasonCreateForm.svelte',
-	'src/lib/components/agenda/SeasonManagePanel.svelte',
+	'src/lib/agenda/SeasonManageConductors.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
 	'src/lib/profile/ProfileField.svelte'
@@ -185,10 +185,14 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/+page.svelte': {
 		'selected.name': 'the selected collective'
 	},
-	'src/lib/components/agenda/SeasonManagePanel.svelte': {
+	'src/lib/agenda/SeasonManagePanel.svelte': {
 		'ms.name': 'a season',
-		seasonManageDeleteName: 'the season being deleted',
-		seasonManageName: 'the season name being edited',
+		seasonManageDeleteName: 'the season being deleted'
+	},
+	'src/lib/agenda/SeasonManageFields.svelte': {
+		seasonManageName: 'the season name being edited'
+	},
+	'src/lib/agenda/SeasonManageSeries.svelte': {
 		'series.name': 'an event series'
 	},
 	'src/lib/components/agenda/EventCreateForm.svelte': {
@@ -232,7 +236,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/components/agenda/AgendaMonthView.svelte': {
 		'item.name': 'the event name'
 	},
-	'src/lib/components/agenda/RepertoireElement.svelte': {
+	'src/lib/agenda/RepertoireElement.svelte': {
 		'row.workName': 'a repertoire work'
 	},
 	'src/lib/roster/MemberDeactivate.svelte': {
