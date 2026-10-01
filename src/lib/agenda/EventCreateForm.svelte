@@ -2,6 +2,7 @@
 	prefetch runs once at construction. `surfaceCreatedEvent` and the row-watcher
 	stay in the page — they must outlive this form's own close. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import FormActions from '$lib/components/FormActions.svelte';
@@ -577,14 +578,9 @@
 	/>
 
 	{#if eventCreateError}
-		<p
-			id="event-create-error"
-			data-testid="event-create-error"
-			role="alert"
-			class="text-xs text-red-700"
-		>
+		<FormError id="event-create-error" data-testid="event-create-error">
 			{eventCreateError()}
-		</p>
+		</FormError>
 	{/if}
 
 	<FormActions

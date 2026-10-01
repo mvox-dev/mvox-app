@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import { findSectionNode, flattenSections, type ArrangeRow } from '$lib/sections/sectionTree';
@@ -155,14 +156,9 @@
 					{/each}
 				</select>
 				{#if arrange.pageCreateError}
-					<p
-						id="roster-new-section-error"
-						role="alert"
-						data-testid="roster-new-section-error"
-						class="text-xs text-red-700"
-					>
+					<FormError id="roster-new-section-error" data-testid="roster-new-section-error">
 						{arrange.pageCreateError()}
-					</p>
+					</FormError>
 				{/if}
 				<div class="flex gap-2">
 					<button

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import EntuRef from '$lib/components/EntuRef.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
@@ -56,25 +57,17 @@
 	{/if}
 </div>
 {#if memberOps.pendingDeactivateId === row.memberId && memberOps.deactivateRefusal?.memberId === row.memberId}
-	<p
-		data-testid="member-deactivate-refused-{row.memberId}"
-		role="alert"
-		class="relative text-xs text-red-700"
-	>
+	<FormError data-testid="member-deactivate-refused-{row.memberId}" class="relative">
 		{#each memberOps.deactivateRefusal.blockers as blocker (blocker.role)}
 			{blocker.role === 'admin'
 				? m.roster_deactivate_refused_admin({ collective: selected?.name ?? '' })
 				: m.roster_deactivate_refused_librarian({ collective: selected?.name ?? '' })}
 		{/each}
-	</p>
+	</FormError>
 {/if}
 {#if memberOps.pendingDeactivateId === row.memberId && memberOps.deactivateActionError?.memberId === row.memberId && memberOps.deactivateActionError.kind === 'deactivate'}
-	<p
-		data-testid="member-deactivate-failed-{row.memberId}"
-		role="alert"
-		class="relative text-xs text-red-700"
-	>
+	<FormError data-testid="member-deactivate-failed-{row.memberId}" class="relative">
 		{m.roster_member_deactivate_failed()}
 		<EntuRef id={row.memberId} />
-	</p>
+	</FormError>
 {/if}

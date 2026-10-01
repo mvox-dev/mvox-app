@@ -1,6 +1,7 @@
 <!-- #508 — season card + season-manage panel. The page keeps what it shares (open flag,
 	panel element, switch generation, panel repertoire) and passes it in. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { type ComponentProps } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -504,13 +505,9 @@
 			</p>
 		{/if}
 		{#if seasonManageDeleteError?.list === 'season'}
-			<p
-				data-testid="season-manage-delete-error"
-				role="alert"
-				class="mt-1 text-xs text-red-700"
-			>
+			<FormError data-testid="season-manage-delete-error" class="mt-1">
 				{seasonManageDeleteErrorText(seasonManageDeleteError)}
-			</p>
+			</FormError>
 		{/if}
 		{#if seasonManageOpen}
 			<div
@@ -616,13 +613,9 @@
 					{m.season_manage_repertoire_label()}
 				</p>
 				{#if panelRepertoireError}
-					<p
-						data-testid="season-manage-repertoire-error"
-						role="alert"
-						class="mt-1 text-xs text-red-700"
-					>
+					<FormError data-testid="season-manage-repertoire-error" class="mt-1">
 						{m.season_manage_list_load_error()}
-					</p>
+					</FormError>
 				{/if}
 				<RepertoireElement
 					rows={panelWorkRows}
@@ -642,13 +635,9 @@
 					onremoveitem={handlePanelRemoveItem}
 				/>
 				{#if panelManageError}
-					<p
-						data-testid="repertoire-manage-error"
-						role="alert"
-						class="mt-1 text-xs text-red-700"
-					>
+					<FormError data-testid="repertoire-manage-error" class="mt-1">
 						{m.repertoire_manage_error()}
-					</p>
+					</FormError>
 				{/if}
 				<div
 					data-testid="repertoire-manage-status"

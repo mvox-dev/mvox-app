@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
@@ -382,14 +383,9 @@
 				</p>
 			{/if}
 			{#if eventConvertError}
-				<p
-					id="event-convert-error"
-					data-testid="event-convert-error"
-					role="alert"
-					class="text-xs text-red-700"
-				>
+				<FormError id="event-convert-error" data-testid="event-convert-error">
 					{eventConvertError()}
-				</p>
+				</FormError>
 			{/if}
 			<FormActions
 				testid="event-convert"

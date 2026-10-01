@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -164,13 +165,9 @@
 		/>
 	</div>
 	{#if seasonManageConductorError}
-		<p
-			data-testid="season-manage-conductor-error"
-			role="alert"
-			class="text-xs text-red-700"
-		>
+		<FormError data-testid="season-manage-conductor-error">
 			{m.season_manage_save_error()}
-		</p>
+		</FormError>
 	{/if}
 	{#if seasonManageConductorPending}
 		<p

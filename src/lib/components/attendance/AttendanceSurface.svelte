@@ -1,5 +1,6 @@
 <!-- The conductor's inline attendance panel: one row per member with a P/A/L toggle. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { onMount, tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -229,13 +230,9 @@
 						</div>
 					</div>
 					{#if failedMemberIds.has(member.memberId)}
-						<p
-							data-testid="attendance-save-failed-{member.memberId}"
-							class="text-xs text-red-700"
-							role="alert"
-						>
+						<FormError data-testid="attendance-save-failed-{member.memberId}">
 							{m.attendance_save_failed()}
-						</p>
+						</FormError>
 					{/if}
 					<!-- Always mounted: a live region must exist before its first change is announced. -->
 					<p

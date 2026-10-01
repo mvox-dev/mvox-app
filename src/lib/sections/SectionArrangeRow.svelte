@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
@@ -261,11 +262,7 @@
 	{/if}
 </div>
 {#if arrange.renameError?.id === row.id}
-	<p
-		data-testid="arrange-rename-error-{row.id}"
-		role="alert"
-		class="text-xs text-red-700 {arrangeIndentClass(row.depth)}"
-	>
+	<FormError data-testid="arrange-rename-error-{row.id}" class={arrangeIndentClass(row.depth)}>
 		{m.roster_section_rename_failed({ name: arrange.renameError.name })}
-	</p>
+	</FormError>
 {/if}

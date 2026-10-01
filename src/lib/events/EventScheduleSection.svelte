@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -448,13 +449,9 @@
 						</div>
 						{#if scheduleRowError(row.id)}
 							{@const rowError = scheduleRowError(row.id)!}
-							<p
-								data-testid={`event-schedule-error-${row.id}`}
-								role="alert"
-								class="text-xs text-red-700"
-							>
+							<FormError data-testid={`event-schedule-error-${row.id}`}>
 								{rowError()}
-							</p>
+							</FormError>
 						{/if}
 					</li>
 				{/each}
@@ -464,14 +461,9 @@
 		{#if isEditor}
 			{#if scheduleErrors[SCHEDULE_ADD_KEY]}
 				{@const addError = scheduleErrors[SCHEDULE_ADD_KEY]!}
-				<p
-					id="event-schedule-add-error"
-					data-testid="event-schedule-add-error"
-					role="alert"
-					class="text-xs text-red-700"
-				>
+				<FormError id="event-schedule-add-error" data-testid="event-schedule-add-error">
 					{addError()}
-				</p>
+				</FormError>
 			{/if}
 			{#if scheduleAddOpen}
 				<div class="flex flex-wrap items-end gap-2">

@@ -1,6 +1,7 @@
 <!-- #508 — season-create dialog, mounted only while open, so its roster/section
 	prefetch runs once at construction. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import FormActions from '$lib/components/FormActions.svelte';
@@ -208,14 +209,9 @@
 		prompt={(n) => pickerPromptText(n, m.season_conductor_placeholder())}
 	/>
 	{#if seasonCreateError}
-		<p
-			id="season-create-error"
-			role="alert"
-			data-testid="season-create-error"
-			class="text-xs text-red-700"
-		>
+		<FormError id="season-create-error" data-testid="season-create-error">
 			{seasonCreateError()}
-		</p>
+		</FormError>
 	{/if}
 	<FormActions
 		testid="season-create"
