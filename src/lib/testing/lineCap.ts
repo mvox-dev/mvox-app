@@ -1,12 +1,10 @@
 import { COMMENT_FIXTURES_DIR, changedFiles, splitLines, type GitRunner } from './commentRules';
 
-export const STEP = 700;
-export const NEXT_STEP = 500;
+export const STEP = 500;
+export const NEXT_STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
-export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
-
-export const LINE_CAP_REGISTER: readonly string[] = [
+export const LINE_CAP_EXCEPTIONS: readonly string[] = [
 	'src/lib/agenda/EventCreateForm.svelte',
 	'src/lib/agenda/RepertoireElement.svelte',
 	'src/lib/agenda/SeasonManagePanel.svelte',
@@ -26,6 +24,36 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/routes/event/[id]/+page.svelte',
 	'src/routes/library/+page.svelte',
 	'src/routes/links/+page.svelte',
+	'src/routes/profile/+page.svelte',
+	'src/routes/roster/+page.svelte'
+];
+
+export const LINE_CAP_REGISTER: readonly string[] = [
+	'src/lib/agenda/EventCreateForm.svelte',
+	'src/lib/agenda/RepertoireElement.svelte',
+	'src/lib/agenda/SeasonManagePanel.svelte',
+	'src/lib/agenda/SeriesCreateForm.svelte',
+	'src/lib/components/StrokeSurface.svelte',
+	'src/lib/components/admin/InviteSurface.svelte',
+	'src/lib/entity/entityCreate.ts',
+	'src/lib/entu/readCache.ts',
+	'src/lib/events/EventFieldEdit.svelte',
+	'src/lib/events/EventRsvpSection.svelte',
+	'src/lib/events/EventScheduleSection.svelte',
+	'src/lib/files/byteStore.ts',
+	'src/lib/invite/inviteData.ts',
+	'src/lib/library/libraryData.ts',
+	'src/lib/roster/memberLifecycle.ts',
+	'src/lib/roster/rosterData.ts',
+	'src/lib/roster/rosterMemberOps.ts',
+	'src/lib/sections/sectionActions.ts',
+	'src/lib/sections/sectionArrangeOps.ts',
+	'src/routes/+page.svelte',
+	'src/routes/admin/+page.svelte',
+	'src/routes/event/[id]/+page.svelte',
+	'src/routes/library/+page.svelte',
+	'src/routes/links/+page.svelte',
+	'src/routes/part/[fileId]/+page.svelte',
 	'src/routes/profile/+page.svelte',
 	'src/routes/roster/+page.svelte'
 ];
