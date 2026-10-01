@@ -2,19 +2,15 @@
 	Mounted only while open: untracked prop reads seed the form once at construction, deliberately.
 	submitting/resumeByDb/seriesRunDb stay bindable: the page reads them across unmounts. -->
 <script lang="ts">
-	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
-	import TimeSelect from '$lib/components/TimeSelect.svelte';
-	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { createEvent, createEventSeries } from '$lib/entity/entityCreate';
 	import type { CreateEventSeriesInput } from '$lib/entity/entityCreate';
 	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
 	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
-	import { groupByMonth, monthLabel, tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
+	import { groupByMonth, tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
 	import { writesAvailable } from '$lib/net/online';
 	import {
 		setSeriesCreateResume,
@@ -23,8 +19,12 @@
 		type SeriesCreateFormSnapshot,
 		type SeriesCreateResumeByDb
 	} from '$lib/agenda/seriesCreateResume';
-	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import { focusAfterRender } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
+	import SeriesCreateGeneralFields from '$lib/agenda/SeriesCreateGeneralFields.svelte';
+	import SeriesCreateLocationFields from '$lib/agenda/SeriesCreateLocationFields.svelte';
+	import SeriesCreateScheduleFields from '$lib/agenda/SeriesCreateScheduleFields.svelte';
+	import SeriesCreatePreviewFields from '$lib/agenda/SeriesCreatePreviewFields.svelte';
 
 	interface Props {
 		selected: Collective | null;
@@ -79,9 +79,6 @@
 	let seriesCreateRevealedCount = $state(50);
 	let seriesCreateError = $state<(() => string) | null>(null);
 	let seriesCreateErrorField = $state<SeriesCreateErrorField>(null);
-	const timeErrorAttrs = $derived(
-		fieldErrorAttrs(seriesCreateErrorField, 'time', 'series-create-error')
-	);
 	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
 
 	const seriesCreateResume = $derived(selected ? (resumeByDb[selected.db] ?? null) : null);
@@ -412,329 +409,55 @@
 			{m.write_unavailable_no_signal()}
 		</p>
 	{/if}
-	<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
-		<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
-			{m.series_create_group_general_label()}
-		</legend>
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">{m.series_create_name_label()}</span>
-			<input
-				type="text"
-				data-testid="series-create-name"
-				use:focusOnMount
-				{...fieldErrorAttrs(seriesCreateErrorField, 'name', 'series-create-error')}
-				placeholder={m.series_create_name_placeholder()}
-				disabled={seriesCreateLocked}
-				value={seriesCreateName}
-				oninput={(e) => {
-					seriesCreateName = (e.currentTarget as HTMLInputElement).value;
-					clearSeriesCreateError();
-				}}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			/>
-		</label>
-		<label class="flex w-full flex-col gap-0.5">
-			<span data-testid="series-create-type-label" class="text-xs text-ink-2">
-				{m.series_create_type_label()}
-			</span>
-			<select
-				data-testid="series-create-type"
-				{...fieldErrorAttrs(seriesCreateErrorField, 'type', 'series-create-error')}
-				disabled={seriesCreateLocked}
-				value={seriesCreateType}
-				onchange={(e) => {
-					seriesCreateType = (e.currentTarget as HTMLSelectElement).value;
-					clearSeriesCreateError();
-				}}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			>
-				{#each CANONICAL_EVENT_TYPES as type (type)}
-					<option value={type}>{eventTypeLabel(type)}</option>
-				{/each}
-			</select>
-		</label>
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">
-				{m.series_create_description_label()}
-			</span>
-			<textarea
-				data-testid="series-create-description"
-				placeholder={m.series_create_description_placeholder()}
-				disabled={seriesCreateLocked}
-				value={seriesCreateDescription}
-				oninput={(e) =>
-					(seriesCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			></textarea>
-		</label>
-	</fieldset>
+	<SeriesCreateGeneralFields
+		bind:name={seriesCreateName}
+		bind:eventType={seriesCreateType}
+		bind:description={seriesCreateDescription}
+		errorField={seriesCreateErrorField}
+		locked={seriesCreateLocked}
+		onedit={clearSeriesCreateError}
+	/>
 
-	<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
-		<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
-			{m.series_create_group_location_label()}
-		</legend>
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">
-				{m.series_create_duration_label()}
-			</span>
-			<input
-				type="number"
-				data-testid="series-create-duration"
-				{...fieldErrorAttrs(seriesCreateErrorField, 'duration', 'series-create-error')}
-				placeholder={m.series_create_duration_placeholder()}
-				disabled={seriesCreateLocked}
-				value={seriesCreateDuration}
-				oninput={(e) => {
-					seriesCreateDuration = (e.currentTarget as HTMLInputElement).value;
-					clearSeriesCreateError();
-				}}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			/>
-		</label>
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">
-				{m.series_create_location_label()}
-			</span>
-			<input
-				type="text"
-				data-testid="series-create-location"
-				list={locationSuggestionsId}
-				placeholder={m.series_create_location_placeholder()}
-				disabled={seriesCreateLocked}
-				value={seriesCreateLocation}
-				oninput={(e) => (seriesCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			/>
-		</label>
-	</fieldset>
+	<SeriesCreateLocationFields
+		bind:duration={seriesCreateDuration}
+		bind:location={seriesCreateLocation}
+		{locationSuggestionsId}
+		errorField={seriesCreateErrorField}
+		locked={seriesCreateLocked}
+		onedit={clearSeriesCreateError}
+	/>
 
-	<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
-		<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
-			{m.series_create_group_schedule_label()}
-		</legend>
-		<div class="flex gap-2">
-			<label class="flex min-w-0 flex-1 flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.series_create_repeat_label()}
-				</span>
-				<select
-					data-testid="series-create-repeat"
-					disabled={seriesCreateLocked}
-					value={seriesCreateRepeat}
-					onchange={(e) =>
-						(seriesCreateRepeat = (e.currentTarget as HTMLSelectElement).value as RepeatPattern)}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				>
-					<option value="weekly">{m.series_create_repeat_weekly()}</option>
-					<option value="biweekly">{m.series_create_repeat_biweekly()}</option>
-					<option value="daily">{m.series_create_repeat_daily()}</option>
-				</select>
-			</label>
-			{#if seriesCreateDayApplies}
-				<label class="flex min-w-0 flex-1 flex-col gap-0.5">
-					<span class="text-xs text-ink-2">
-						{m.series_create_day_label()}
-					</span>
-					<select
-						data-testid="series-create-day"
-						{...fieldErrorAttrs(seriesCreateErrorField, 'day', 'series-create-error')}
-						disabled={seriesCreateLocked}
-						value={seriesCreateDay}
-						onchange={(e) => {
-							seriesCreateDay = (e.currentTarget as HTMLSelectElement).value;
-							clearSeriesCreateError();
-						}}
-						class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-					>
-						<option value="">{m.series_create_day_placeholder()}</option>
-						<option value="1">{m.series_create_day_1()}</option>
-						<option value="2">{m.series_create_day_2()}</option>
-						<option value="3">{m.series_create_day_3()}</option>
-						<option value="4">{m.series_create_day_4()}</option>
-						<option value="5">{m.series_create_day_5()}</option>
-						<option value="6">{m.series_create_day_6()}</option>
-						<option value="0">{m.series_create_day_0()}</option>
-					</select>
-				</label>
-			{/if}
-		</div>
+	<SeriesCreateScheduleFields
+		bind:repeat={seriesCreateRepeat}
+		bind:day={seriesCreateDay}
+		bind:time={seriesCreateTime}
+		bind:from={seriesCreateFrom}
+		bind:until={seriesCreateUntil}
+		dayApplies={seriesCreateDayApplies}
+		errorField={seriesCreateErrorField}
+		locked={seriesCreateLocked}
+		onedit={clearSeriesCreateError}
+	/>
 
-		<div class="flex flex-col gap-0.5">
-			<span id="series-create-time-label" class="text-xs text-ink-2">
-				{m.series_create_time_label()}
-			</span>
-			<div
-				data-testid="series-create-time"
-				role="group"
-				aria-labelledby="series-create-time-label"
-				class="flex gap-2"
-			>
-				<TimeSelect
-					prefix="series-create-time"
-					value={seriesCreateTime}
-					disabled={seriesCreateLocked}
-					invalid={timeErrorAttrs['aria-invalid']}
-					describedBy={timeErrorAttrs['aria-describedby']}
-					onchange={(v) => {
-						seriesCreateTime = v;
-						clearSeriesCreateError();
-					}}
-				/>
-			</div>
-		</div>
-
-		<div class="flex gap-2">
-			<label class="flex min-w-0 flex-1 flex-col gap-0.5">
-				<span class="text-xs text-ink-2">{m.series_create_from_label()}</span>
-				<input
-					type="date"
-					data-testid="series-create-from"
-					{...fieldErrorAttrs(seriesCreateErrorField, 'from', 'series-create-error')}
-					disabled={seriesCreateLocked}
-					value={seriesCreateFrom}
-					oninput={(e) => {
-						seriesCreateFrom = (e.currentTarget as HTMLInputElement).value;
-						clearSeriesCreateError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
-			<label class="flex min-w-0 flex-1 flex-col gap-0.5">
-				<span class="text-xs text-ink-2">{m.series_create_until_label()}</span>
-				<input
-					type="date"
-					data-testid="series-create-until"
-					{...fieldErrorAttrs(seriesCreateErrorField, 'until', 'series-create-error')}
-					disabled={seriesCreateLocked}
-					value={seriesCreateUntil}
-					oninput={(e) => {
-						seriesCreateUntil = (e.currentTarget as HTMLInputElement).value;
-						clearSeriesCreateError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
-		</div>
-	</fieldset>
-
-	<fieldset class="flex min-w-0 flex-col gap-1.5 border-0 p-0">
-		<legend class="mb-0.5 text-xs tracking-wide text-ink-2 uppercase">
-			{m.series_create_group_preview_label()}
-		</legend>
-		{#if seriesCreateMonthGroups !== null}
-			<div data-testid="series-create-preview" class="text-xs text-ink-2">
-				<p class="tracking-wide uppercase">
-					{m.series_create_preview_label()}
-				</p>
-				{#if !seriesCreateResume && seriesCreatePreviewDates !== null}
-					<p data-testid="series-create-preview-count" class="text-ink">
-						{seriesCreatePreviewDates.length === 1
-							? m.series_create_preview_count_one()
-							: m.series_create_preview_count_other({
-									count: seriesCreatePreviewDates.length
-								})}
-					</p>
-				{/if}
-				<div class="flex flex-col gap-2">
-					{#each seriesCreateMonthGroups as group (group.month)}
-						<div class="flex flex-col gap-1.5">
-							<h4
-								data-testid="series-create-month-{group.month}"
-								class="text-xs tracking-wide text-ink-2 uppercase"
-							>
-								{monthLabel(group.month)}
-							</h4>
-							<div class="flex flex-wrap gap-1.5">
-								{#each group.items as date (date)}
-									{@const iso = seriesCreateIsoDay(date)}
-									{@const skipped = !seriesCreateResume && seriesCreateSkipDates.includes(iso)}
-									<button
-										type="button"
-										data-testid="series-create-date-{iso}"
-										aria-pressed={skipped ? 'false' : 'true'}
-										aria-label={skipped ? m.series_create_date_skipped({ date: iso }) : undefined}
-										disabled={seriesCreateLocked}
-										class="flex min-h-11 min-w-11 items-center justify-center border border-ink-5 px-1.5 text-xs disabled:opacity-50 {skipped
-											? 'text-ink-2 line-through'
-											: 'text-ink'}"
-										onclick={() => toggleSeriesCreateSkipDate(iso)}
-									>
-										{iso}
-									</button>
-								{/each}
-							</div>
-						</div>
-					{/each}
-				</div>
-				{#if seriesCreateHiddenCount > 0}
-					<div class="flex gap-2">
-						<button
-							type="button"
-							data-testid="series-create-show-next"
-							class="flex min-h-11 items-center border border-ink-5 px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
-							onclick={revealSeriesCreateNext}
-						>
-							{m.series_create_show_next_label({ count: seriesCreateNextBatchSize })}
-						</button>
-						<button
-							type="button"
-							data-testid="series-create-show-all"
-							class="flex min-h-11 items-center border border-ink-5 px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper"
-							onclick={revealSeriesCreateAll}
-						>
-							{m.series_create_show_all_label({
-								count: seriesCreateShowAllCount
-							})}
-						</button>
-					</div>
-				{/if}
-			</div>
-		{/if}
-
-		{#if seriesCreateResume}
-			<p data-testid="series-create-resume" class="text-xs text-ink-2">
-				{m.series_create_resume_notice({
-					remaining: seriesCreateResume.remaining.length,
-					total: seriesCreateResume.total
-				})}
-			</p>
-		{/if}
-
-		{#if seriesCreateProgress}
-			<p data-testid="series-create-progress" role="status" class="text-xs text-ink-2">
-				{m.series_create_progress({
-					current: seriesCreateProgress.current,
-					total: seriesCreateProgress.total
-				})}
-			</p>
-		{/if}
-
-		{#if seriesCreateError}
-			<FormError id="series-create-error" data-testid="series-create-error">
-				{seriesCreateError()}
-			</FormError>
-		{/if}
-
-		<div class="flex gap-2">
-			<button
-				type="button"
-				data-testid="series-create-submit"
-				disabled={submitting || seriesCreateNothingToSubmit || isOffline}
-				aria-busy={submitting}
-				class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-				onclick={() => void submitSeriesCreate()}
-			>
-				{m.series_create_submit()}
-			</button>
-			<button
-				type="button"
-				data-testid="series-create-cancel"
-				disabled={submitting}
-				class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-				onclick={dismissSeriesCreateForm}
-			>
-				{m.roster_cancel()}
-			</button>
-		</div>
-	</fieldset>
+	<SeriesCreatePreviewFields
+		monthGroups={seriesCreateMonthGroups}
+		previewDates={seriesCreatePreviewDates}
+		resume={seriesCreateResume}
+		skipDates={seriesCreateSkipDates}
+		locked={seriesCreateLocked}
+		hiddenCount={seriesCreateHiddenCount}
+		nextBatchSize={seriesCreateNextBatchSize}
+		showAllCount={seriesCreateShowAllCount}
+		progress={seriesCreateProgress}
+		error={seriesCreateError}
+		{submitting}
+		nothingToSubmit={seriesCreateNothingToSubmit}
+		{isOffline}
+		isoDay={seriesCreateIsoDay}
+		ontoggleskip={toggleSeriesCreateSkipDate}
+		onrevealnext={revealSeriesCreateNext}
+		onrevealall={revealSeriesCreateAll}
+		onsubmit={() => void submitSeriesCreate()}
+		oncancel={dismissSeriesCreateForm}
+	/>
 </div>
