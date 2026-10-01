@@ -775,7 +775,7 @@ const AGENDA_LOAD_SOURCE = () =>
 		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
 		.join('\n');
 const EVENT_CREATE_FORM_SOURCE = () =>
-	readFileSync(resolve(process.cwd(), 'src/lib/components/agenda/EventCreateForm.svelte'), 'utf-8');
+	readFileSync(resolve(process.cwd(), 'src/lib/agenda/EventCreateForm.svelte'), 'utf-8');
 
 /** Strip comments first — a pin a comment can flip is not a pin. */
 function stripComments(body: string): string {

@@ -87,11 +87,11 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 			'data-testid="season-manage-conductor-remove-{personId}"'
 		],
 		[
-			'lib/components/agenda/SeasonCreateForm.svelte',
+			'lib/agenda/SeasonCreateForm.svelte',
 			'data-testid="season-create-conductor-remove-{conductor.id}"'
 		],
 		[
-			'lib/components/agenda/EventCreateForm.svelte',
+			'lib/agenda/EventCreateForm.svelte',
 			'data-testid="event-create-conductor-remove-{conductor.id}"'
 		]
 	];

@@ -10,10 +10,6 @@ import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 import type { AttendancePanel } from '$lib/attendance/types';
 import { goto } from '$app/navigation';
 
-// #466 — AgendaList itself calls goto() for whole-card taps; mocked so a
-// component-level render never reaches SvelteKit's real client router (this
-// file had no $app/navigation mock before — the root '/' page specs already
-// carry one, e.g. page.agenda-presence-badges.spec.ts).
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 vi.mock('$lib/paraglide/messages.js', () => {
@@ -23,45 +19,22 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
 		agenda_gap_weeks: (params) => `${(params as { weeks: number }).weeks} weeks later`,
-		// #12 — RsvpControl's keys, added here up front so this mock stays valid once
-		// Byrd's GREEN wires the real RsvpControl (which imports the same module) into
-		// each row.
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
-		// #101 — the row link's accessible name, plus its nameless-event floor
-		// (review fix F2). Enumerated so the tests can tell the two apart.
 		agenda_row_link_label: (params) => `View details for ${(params as { event: string }).event}`,
 		agenda_row_link_label_unnamed: () => 'View event details'
 	};
 	return {
-		// #90 TR.2 — Proxy fallback: any key NOT enumerated above resolves to a
-		// `[key]` stub, so wiring RepertoireElement (which may add its own i18n
-		// keys) into a row can never crash this mock. Assertions on translated
-		// copy keep using the enumerated keys.
 		m: new Proxy(keys, {
 			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
 		})
 	};
 });
 
-// ── #251 — the app-language source for the NARRATIVE header formatter ────────
-//
-// The mock intercepts '$lib/paraglide/runtime.js' — the exact specifier
-// LanguageSelector.svelte:41 and routes/+page.svelte:83 already use; the
-// implementation must import getLocale from the same path. The backing store
-// is a SvelteMap (a REACTIVE signal), so a formatter constructed inside the
-// component's reactive scope ($derived on getLocale() or equivalent) genuinely
-// invalidates when a test switches the locale — while today's
-// construction-time `new Intl.DateTimeFormat(undefined, …)` const cannot.
-//
-// happy-dom runs on Node's Intl, whose DEVICE default here is en-US — so every
-// non-'en' assertion in this file proves device-locale independence by
-// construction: an implementation that keeps following the device renders
-// English and fails.
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({
 	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
@@ -81,9 +54,6 @@ function setAppLocale(locale: AppLocale): void {
 }
 
 afterEach(cleanup);
-// Every test in this file runs under app language 'en' unless it says
-// otherwise — the pre-#251 English assertions below are DELIBERATE under this
-// mock, not vacuous device-locale passes.
 afterEach(() => setAppLocale('en'));
 
 function item(id: string, startDatetime: string, overrides: Partial<AgendaItem> = {}): AgendaItem {
@@ -100,17 +70,14 @@ function item(id: string, startDatetime: string, overrides: Partial<AgendaItem> 
 	};
 }
 
-// Europe/Tallinn is UTC+3 in summer (EEST). These two items are on the same calendar
-// date when viewed in Tallinn (2026-06-15 in Tallinn = 2026-06-14T21:00Z onward).
 const itemSameDay: AgendaItem[] = [
-	item('r1', '2026-06-15T09:00:00.000Z'), // 12:00 Tallinn
-	item('r2', '2026-06-15T16:00:00.000Z', { location: 'Hall A' }) // 19:00 Tallinn
+	item('r1', '2026-06-15T09:00:00.000Z'),
+	item('r2', '2026-06-15T16:00:00.000Z', { location: 'Hall A' })
 ];
 
-// These fall on two different Tallinn calendar dates
 const itemsDifferentDays: AgendaItem[] = [
-	item('r1', '2026-06-15T16:00:00.000Z'), // 19:00 Tallinn, 2026-06-15
-	item('r2', '2026-06-16T16:00:00.000Z', { location: 'Studio' }) // 19:00 Tallinn, 2026-06-16
+	item('r1', '2026-06-15T16:00:00.000Z'),
+	item('r2', '2026-06-16T16:00:00.000Z', { location: 'Studio' })
 ];
 
 describe('AgendaList — date-group headers', () => {
@@ -147,7 +114,6 @@ describe('AgendaList — row content', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const timeEl = row?.querySelector('[data-testid="row-time"]');
-		// r1: 2026-06-15T09:00:00Z = 12:00 in Tallinn (EEST = UTC+3)
 		expect(timeEl?.textContent?.trim()).toBe('12:00');
 	});
 
@@ -173,7 +139,6 @@ describe('AgendaList — row content', () => {
 
 	it('row omits the location element when location is empty', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
-		// r1 has location: ''
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const loc = row?.querySelector('[data-testid="row-location"]');
 		expect(loc).toBeNull();
@@ -189,17 +154,16 @@ describe('AgendaList — TODAY/TOMORROW relative-day labels', () => {
 	});
 
 	it('labels the group matching the current Tallinn day as TODAY', () => {
-		// "now" = 2026-06-15T10:00Z = 13:00 Tallinn -> today's Tallinn day is 2026-06-15
 		vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
-		const items = [item('r1', '2026-06-15T09:00:00.000Z')]; // 12:00 Tallinn, same day
+		const items = [item('r1', '2026-06-15T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-relative-today"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="agenda-relative-tomorrow"]')).toBeNull();
 	});
 
 	it('labels the next Tallinn day as TOMORROW', () => {
-		vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z')); // today = 2026-06-15 Tallinn
-		const items = [item('r1', '2026-06-16T09:00:00.000Z')]; // 12:00 Tallinn on 2026-06-16
+		vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
+		const items = [item('r1', '2026-06-16T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-relative-tomorrow"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="agenda-relative-today"]')).toBeNull();
@@ -214,10 +178,8 @@ describe('AgendaList — TODAY/TOMORROW relative-day labels', () => {
 	});
 
 	it('resolves TODAY by the Tallinn calendar day, not the UTC day', () => {
-		// 2026-06-14T22:00Z = 2026-06-15T01:00 Tallinn (EEST) -> "today" in Tallinn is 2026-06-15,
-		// even though the UTC date is still 2026-06-14.
 		vi.setSystemTime(new Date('2026-06-14T22:00:00.000Z'));
-		const items = [item('r1', '2026-06-14T23:00:00.000Z')]; // 2026-06-15T02:00 Tallinn — same Tallinn day as "now"
+		const items = [item('r1', '2026-06-14T23:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-relative-today"]')).not.toBeNull();
 	});
@@ -230,28 +192,25 @@ describe('AgendaList — multi-week gap marker', () => {
 	});
 
 	it('shows no gap marker for a gap under 6 days', () => {
-		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-06T09:00:00.000Z')]; // 5 days apart
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-06T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
 	});
 
-	// M4 fix: a 7-day gap is a normal weekly rehearsal cadence, not a genuine
-	// multi-week break. The old `days < 6` threshold fired here ("In 1 weeks" on
-	// every ordinary week) — raised to 13 days (~2 weeks) so this stays quiet.
 	it('shows no gap marker for a normal weekly cadence (7 days)', () => {
-		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-08T09:00:00.000Z')]; // 7 days apart
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-08T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
 	});
 
 	it('shows no gap marker for a gap just under the 13-day threshold (12 days)', () => {
-		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-13T09:00:00.000Z')]; // 12 days apart
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-13T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		expect(container.querySelector('[data-testid="agenda-gap-marker"]')).toBeNull();
 	});
 
 	it('shows a gap marker for a genuine multi-week gap (14+ days)', () => {
-		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-15T09:00:00.000Z')]; // 14 days apart
+		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-15T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		const marker = container.querySelector('[data-testid="agenda-gap-marker"]');
 		expect(marker).not.toBeNull();
@@ -306,13 +265,6 @@ describe('AgendaList — loading state', () => {
 	});
 });
 
-// ── AgendaList — RsvpControl per row (#12) ──────────────────────────────────
-// The wiring contract only — RsvpControl's own button/label/tap behavior is
-// covered by RsvpControl.spec.ts. Not testing network here: rsvpByEventId and
-// memberId are plain props, onrsvpchange is a plain callback (team-lead's
-// brief: "keep write calls behind injected props/handlers so the component
-// test stays unit-level").
-
 describe('AgendaList — RsvpControl per row (#12)', () => {
 	it('renders one RsvpControl per row', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
@@ -329,26 +281,18 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 	});
 
 	it("an event ABSENT from rsvpByEventId shows unanswered — no button active (the #11 'not defaulted' AC, display half)", () => {
-		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'going' } }; // only r1 answered
+		const rsvpByEventId: RsvpByEventId = { r1: { rsvpId: 'rsvp-1', status: 'going' } };
 		const { container } = render(AgendaList, { items: itemSameDay, rsvpByEventId, membership: 'member' });
-		const row = container.querySelector('[data-testid="agenda-row-r2"]'); // r2 has no entry
+		const row = container.querySelector('[data-testid="agenda-row-r2"]');
 		const buttons = row?.querySelectorAll('[data-testid^="rsvp-btn-"]');
-		// Guard against a vacuous pass: the loop below proves nothing if the control
-		// isn't rendered at all yet (empty NodeList) — assert its presence first.
 		expect(buttons?.length).toBe(4);
 		for (const btn of buttons ?? []) {
 			expect(btn.getAttribute('aria-pressed')).toBe('false');
 		}
 	});
 
-	// #372 (issue #362 paradigm) — membership no longer has ANY say in the
-	// control's enabled state; `canRsvp` (the Entu grant) is the ONE gate. See
-	// the 'AgendaList — canRsvp is the RSVP gate (#372)' describe below for the
-	// full canRsvp contract; this negative pin stays here, beside the old
-	// (now-superseded) membership claim, so the paradigm shift can't silently
-	// regress back to reading membership.
 	it("membership='member' alone does NOT enable the control — canRsvp is the gate", () => {
-		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' }); // canRsvp defaults 'loading'
+		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
 		expect(btn?.disabled).toBe(true);
@@ -370,12 +314,6 @@ describe('AgendaList — RsvpControl per row (#12)', () => {
 	});
 });
 
-// ── AgendaList — canRsvp is the RSVP gate (#372, issue #362 paradigm) ───────
-// The Entu grant (`_owner`/`_editor` on the singer's own person, resolved by
-// the page via resolveManageRights) is the ONE thing that decides whether a
-// row's control renders at all, and whether it's enabled. Membership is
-// display only now — see the 'membership state' describe below for its
-// (narrowed) remaining job, the non-member hint.
 describe('AgendaList — canRsvp is the RSVP gate (#372)', () => {
 	it("canRsvp='editor' enables every row's control", () => {
 		const { container } = render(AgendaList, { items: itemSameDay, canRsvp: 'editor' });
@@ -398,15 +336,6 @@ describe('AgendaList — canRsvp is the RSVP gate (#372)', () => {
 	});
 });
 
-// ── AgendaList — per-event pending disables the WHOLE control (#15) ─────────
-// Mihkel's ruling: while an event's write is in flight, that event's entire
-// RsvpControl (all 4 buttons) is unclickable — re-enabled on resolve. This is
-// the primary #15 fix (rsvpChangeQueue.spec.ts covers the write-orchestration
-// half); here we only pin that the pending signal actually reaches the row's
-// `disabled` prop, and does so per-event. `canRsvp: 'editor'` throughout —
-// otherwise every row is disabled on the rights gate alone (see the describe
-// above), which would make this block's own claims vacuous.
-
 describe('AgendaList — pending event disables its whole control (#15)', () => {
 	it("an event id in pendingEventIds disables ALL FOUR buttons of that row's control, even with the grant in hand", () => {
 		const { container } = render(AgendaList, {
@@ -426,7 +355,7 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
 			canRsvp: 'editor',
-			pendingEventIds: new Set(['r1']) // only r1 pending
+			pendingEventIds: new Set(['r1'])
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
 		const btn = row2?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
@@ -444,15 +373,6 @@ describe('AgendaList — pending event disables its whole control (#15)', () => 
 		expect(btn?.disabled).toBe(false);
 	});
 });
-
-// ── AgendaList — membership state: the non-member hint only (#372) ──────────
-// renders in the control's place — nothing else. Rules:
-//   'non-member' + canRsvp !== 'editor' → NO control, hint shows instead.
-//   'member'                            → no hint (control's own state is
-//                                          canRsvp's call, see the describe
-//                                          above).
-//   'loading' (unresolved)              → no hint (fail-safe — never a false
-//                                          "Only members can RSVP").
 
 describe('AgendaList — membership state (loading / member / non-member)', () => {
 	it("membership='non-member' + no grant shows the hint, renders NO control", () => {
@@ -476,7 +396,7 @@ describe('AgendaList — membership state (loading / member / non-member)', () =
 		const { container } = render(AgendaList, { items: itemSameDay, membership: 'loading' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]');
 		const btn = row?.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;
-		expect(btn?.disabled).toBe(true); // canRsvp defaults 'loading' too — disabled, not absent
+		expect(btn?.disabled).toBe(true);
 		expect(row?.textContent).not.toContain('You are not an active member.');
 	});
 });
@@ -496,21 +416,12 @@ describe('AgendaList — per-event write-failure indicator (failedEventIds)', ()
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
 			membership: 'member',
-			failedEventIds: new Set(['r1']) // only r1 failed
+			failedEventIds: new Set(['r1'])
 		});
 		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
 		expect(row2?.querySelector('[data-testid="rsvp-save-failed"]')).toBeNull();
 	});
 });
-
-// ── AgendaList — Works line per row (#90 TR.2) ──────────────────────────────
-// Wiring contract only — the collapsed/expanded Works behavior itself is
-// covered by RepertoireElement.spec.ts. Same seam as rsvpByEventId: the page
-// resolves the works view model (resolveEventWorks + edition details) and
-// hands it in as a plain prop, keyed by event id:
-//   worksByEventId: Record<string, WorkRow[]>  (WorkRow shape pinned in
-//   RepertoireElement.spec.ts)
-// An event with no entry (or an empty array) renders NO works line.
 
 describe('AgendaList — Works line per row (#90 TR.2)', () => {
 	const worksByEventId = {
@@ -544,7 +455,7 @@ describe('AgendaList — Works line per row (#90 TR.2)', () => {
 
 	it('renders NO Works line for a row without works — the element is per-event, absent when empty', () => {
 		const { container } = render(AgendaList, { items: itemSameDay, worksByEventId });
-		const row2 = container.querySelector('[data-testid="agenda-row-r2"]'); // r2 has no entry
+		const row2 = container.querySelector('[data-testid="agenda-row-r2"]');
 		expect(row2?.querySelector('[data-testid="works-line"]')).toBeNull();
 	});
 
@@ -564,16 +475,10 @@ describe('AgendaList — Works line per row (#90 TR.2)', () => {
 });
 
 describe('AgendaList — event detail links (#101 TE.1)', () => {
-	// The issue's widget spec: every agenda row becomes tappable and navigates to
-	// /event/{id}, with a ▸ tap indicator; "Row stays functionally identical
-	// (RSVP stays, works line stays)" — so the RSVP buttons must NOT end up
-	// nested inside the anchor (nested interactive controls: a tap on 'Going'
-	// must record an RSVP, never navigate).
 
 	it('upcoming row carries a link to /event/{id}', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
-		// The link may wrap the row or sit inside it — either satisfies "tappable".
 		const link = row.querySelector('a[href="/event/r1"]') ?? row.closest('a[href="/event/r1"]');
 		expect(link).not.toBeNull();
 	});
@@ -598,12 +503,9 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	it('the RSVP control stays functional: its buttons are NEVER nested inside an event link', () => {
 		const { container } = render(AgendaList, { items: itemSameDay, membership: 'member' });
 		const row = container.querySelector('[data-testid="agenda-row-r1"]')!;
-		// The control itself is still there for a member…
 		const rowScope = row.closest('a') ?? row;
 		const host = rowScope.parentElement ?? rowScope;
 		expect(host.querySelectorAll('button').length).toBeGreaterThan(0);
-		// …and no event-detail anchor swallows ANY button (a button inside an <a>
-		// is invalid HTML and makes an RSVP tap navigate away).
 		for (const anchor of container.querySelectorAll('a[href^="/event/"]')) {
 			expect(anchor.querySelector('button')).toBeNull();
 		}
@@ -617,10 +519,6 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 		expect(link).not.toBeNull();
 	});
 
-	// #101 review fix (F2) — a link with no accessible name is announced as an
-	// unnamed link. `listEvents` now inherits a missing name from the parent
-	// series, but an event with no name ANYWHERE must still get a generic label
-	// rather than the bare "View details for ".
 	it('labels the row link with the event name', () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
 		const link = container.querySelector('a[href="/event/r1"][aria-label]')!;
@@ -649,30 +547,18 @@ describe('AgendaList — event detail links (#101 TE.1)', () => {
 	});
 });
 
-// #207 rule 7 (PO standing rule, Gama's 2026-09-02 rulings) — the boundary:
-// row-level dates are TABULAR and render as the Tallinn ISO calendar day
-// (`YYYY-MM-DD`); the day-group HEADER is NARRATIVE and keeps weekday + month
-// name (Gama ruling 2, amended by boundary call (a): "day-group header and
-// event-detail header keep weekday + month name; every row-level date is
-// YYYY-MM-DD"). Both halves pinned in ONE spec so neither can drift alone.
 describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved', () => {
 	it('recent-row date cell renders the Tallinn ISO calendar day, while the day-group header for the same date keeps weekday + month name', () => {
-		// 2026-06-15 is a Monday. Same Tallinn calendar day for both fixtures:
-		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')]; // 12:00 Tallinn, Mon 15 June
-		const recent = [item('p1', '2026-06-15T16:00:00.000Z')]; // 19:00 Tallinn, same day
+		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
+		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
 		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
 
-		// Tabular half — the recent row's date cell is exactly the ISO day.
 		const cell = container.querySelector(
 			'[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]'
 		);
 		expect(cell).not.toBeNull();
 		expect(cell?.textContent?.trim()).toBe('2026-06-15');
 
-		// Narrative half — the header STAYS weekday + month name, no raw ISO.
-		// (#251: getLocale is mocked to 'en' file-wide, so the English words are
-		// the APP language's output, asserted deliberately — not a vacuous pass
-		// on the device locale.)
 		const header = container.querySelector('[data-testid="agenda-date-header"]');
 		const headerText = header?.textContent ?? '';
 		expect(headerText).toMatch(/Monday/i);
@@ -680,20 +566,13 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 		expect(headerText).not.toMatch(/\d{4}-\d{2}-\d{2}/);
 	});
 
-	// #207 rule 7, DST edge — the ISO day shown must be the TALLINN calendar
-	// day, not the UTC one. Both instants below sit on the far side of a UTC
-	// midnight from their Tallinn day, on the two 2026 transition days
-	// (spring-forward 2026-03-29, fall-back 2026-10-25): a formatter that
-	// drops the Europe/Tallinn zone renders the previous day's date.
 	it('DST edges: recent rows near the Tallinn transitions render the Tallinn ISO calendar day, not the UTC one', async () => {
 		const recent = [
-			item('spring', '2026-03-28T23:30:00.000Z'), // 01:30 EET, Sun 2026-03-29 (DST starts 03:00)
-			item('fall', '2026-10-24T22:30:00.000Z') // 01:30 EEST, Sun 2026-10-25 (DST ends 04:00)
+			item('spring', '2026-03-28T23:30:00.000Z'),
+			item('fall', '2026-10-24T22:30:00.000Z')
 		];
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: recent });
 
-		// #471 — only the first recent card renders until asked; 'fall' is the
-		// second array entry, so reveal the rest before reading its date cell.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
@@ -707,22 +586,7 @@ describe('#207 rule 7 — ISO dates on tabular rows, narrative headers preserved
 	});
 });
 
-// ── #251 — narrative headers follow the APP language, not the device locale ──
-//
-// `headerFmt` passed `undefined` as its locale — the RUNTIME default, i.e. the
-// phone's language. An Estonian user with an English device read
-// "TUESDAY, MARCH 23" in an otherwise fully Estonian app (Joosep's 2026-09-05
-// screenshot). The locale ARGUMENT is the only thing that may change: the T5
-// DST block's timeZone/weekday/day/month options and the noon-anchored
-// `new Date(key + 'T12:00:00')` stay byte-identical (T5 build spec §3, #101
-// F4), and the ISO producers groupKeyFmt/shortDateFmt keep their deliberate
-// 'en-CA' per the #207/#212 rulings — both pinned below.
 describe('#251 — date-group headers render in the app language', () => {
-	// done-when 1 + 4 — exact Intl output per app language for Monday
-	// 2026-06-15 (the itemSameDay fixture day). Estonian is the pilot language.
-	// Full-string equality, not /Monday/i sniffing: partial assertions hide
-	// bugs, and the exact string also pins done-when 5's natural casing (see
-	// the dedicated test below).
 	const expectedHeader: Record<AppLocale, string> = {
 		en: 'Monday, June 15',
 		et: 'esmaspäev, 15. juuni',
@@ -738,13 +602,6 @@ describe('#251 — date-group headers render in the app language', () => {
 		});
 	}
 
-	// done-when 2 — the TRAP this issue names: `setLocale` reloads the page
-	// today, so a construction-time constant HAPPENS to work in the live app.
-	// This test is the explicit dependency: switch the app language on a
-	// MOUNTED component and the header must re-render in the new language with
-	// no remount — a formatter frozen at construction time fails here, a
-	// reactive construction ($derived on getLocale() or equivalent) passes.
-	// If whoever removes the reload breaks this, THIS test is the tripwire.
 	it('switching the app language re-renders the header WITHOUT a remount (formatter is rebuilt, not a construction-time constant)', async () => {
 		setAppLocale('en');
 		const { container } = render(AgendaList, { items: itemSameDay });
@@ -758,11 +615,6 @@ describe('#251 — date-group headers render in the app language', () => {
 		});
 	});
 
-	// done-when 3 — the ISO fence: groupKeyFmt and shortDateFmt are ISO
-	// PRODUCERS (grouping keys + tabular row dates, #207 rule 7 / #212), pinned
-	// to 'en-CA' on purpose. Under a non-English app language the grouping must
-	// still key on the Tallinn ISO day (same-day items share ONE header) and
-	// the recent row's date cell must still read YYYY-MM-DD.
 	it("app language 'et': grouping keys stay ISO — same-day items share one header and the recent-row date cell still reads '2026-06-15'", () => {
 		setAppLocale('et');
 		const recent = [item('p1', '2026-06-15T16:00:00.000Z')];
@@ -775,18 +627,9 @@ describe('#251 — date-group headers render in the app language', () => {
 				.querySelector('[data-testid="agenda-recent-row-p1"] [data-testid="recent-row-date"]')
 				?.textContent?.trim()
 		).toBe('2026-06-15');
-		// …and the narrative header did NOT collapse to ISO (#207 rule 7).
 		expect(headers[0]?.textContent ?? '').not.toMatch(/\d{4}-\d{2}-\d{2}/);
 	});
 
-	// done-when 5 — STATED, not guessed: #250 (704c967) KEPT the CSS
-	// `uppercase` on the header line, so Estonian's mid-sentence lowercase
-	// convention does not SHOW today — the display is uppercased by CSS. What
-	// this pins is the text BENEATH the CSS: the formatter output is the
-	// natural-case Estonian ('esmaspäev', lowercase e — Intl's own 'et'
-	// output), so if the uppercase treatment is ever removed, the words are
-	// already right per Estonian convention. #250's class tokens on the line
-	// (text-base header scale, uppercase) must survive this change untouched.
 	it("app language 'et': formatter output is natural-case ('esmaspäev…') beneath #250's untouched CSS uppercase", () => {
 		setAppLocale('et');
 		const { container } = render(AgendaList, { items: itemSameDay });
@@ -798,24 +641,13 @@ describe('#251 — date-group headers render in the app language', () => {
 	});
 });
 
-// ── #220 — the AM/PM preference reaches BOTH agenda clock-time surfaces ──────
-//
-// "Am/pm preference applies globally" (Mihkel): the #207 timeFormatStore must
-// drive the upcoming row's `row-time` AND the recent row's time cell through
-// the ONE shared formatter ($lib/preferences/timeFormat formatTime — see
-// timeFormat.spec.ts for its table and timeFormat.no-hardcoded-render.spec.ts
-// for the structural rule). Reactivity rides the existing writable-store
-// subscription pattern TimeSelect already uses — the store is set BEFORE
-// render and reset in `finally` (page.series-create.spec.ts pattern). Rule 7
-// stays as shipped: DATES are untouched in ampm mode — the day-group header
-// keeps weekday + month name, the recent row's date cell keeps ISO.
 describe('#220 — AM/PM preference on agenda times', () => {
 	it("'ampm': upcoming row-time renders '12:00 PM' and a 09:30 recent row renders '9:30 AM' — dates untouched (rule 7)", async () => {
 		const { timeFormatStore } = await import('$lib/preferences/timeFormat');
 		timeFormatStore.set('ampm');
 		try {
-			const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')]; // 12:00 Tallinn (noon → PM, not 0)
-			const recent = [item('p1', '2026-06-15T06:30:00.000Z')]; // 09:30 Tallinn → leading zero dropped
+			const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
+			const recent = [item('p1', '2026-06-15T06:30:00.000Z')];
 			const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
 
 			const rowTime = container.querySelector(
@@ -823,9 +655,6 @@ describe('#220 — AM/PM preference on agenda times', () => {
 			);
 			expect(rowTime?.textContent?.trim()).toBe('12:00 PM');
 
-			// The recent row's time cell (the span between date and duration in the
-			// aria-hidden link column) — selected by CONTENT since it carries no
-			// testid of its own: exactly one span must say '9:30 AM', none '09:30'.
 			const recentRow = container.querySelector('[data-testid="agenda-recent-row-p1"]');
 			expect(recentRow).not.toBeNull();
 			const spanTexts = [...recentRow!.querySelectorAll('span')].map((s) =>
@@ -834,8 +663,6 @@ describe('#220 — AM/PM preference on agenda times', () => {
 			expect(spanTexts).toContain('9:30 AM');
 			expect(spanTexts).not.toContain('09:30');
 
-			// Rule 7 guards — ampm mode changes CLOCK TIMES only (English words
-			// here are the mocked 'en' APP language — #251):
 			expect(
 				recentRow!.querySelector('[data-testid="recent-row-date"]')?.textContent?.trim()
 			).toBe('2026-06-15');
@@ -850,7 +677,6 @@ describe('#220 — AM/PM preference on agenda times', () => {
 	});
 
 	it("'24h' (the unset default): the SAME fixtures render exactly today's strings — byte-identical, no AM/PM anywhere", () => {
-		// No store touch: the default must render what shipped before #220.
 		const upcoming = [item('r1', '2026-06-15T09:00:00.000Z')];
 		const recent = [item('p1', '2026-06-15T06:30:00.000Z')];
 		const { container } = render(AgendaList, { items: upcoming, recentItems: recent });
@@ -866,12 +692,6 @@ describe('#220 — AM/PM preference on agenda times', () => {
 	});
 });
 
-// ── #466 — the whole agenda card opens the event ─────────────────────────────
-// Tapping anywhere on a card OUTSIDE an in-card control opens /event/{id}
-// (programmatically, via goto — the card is NOT wrapped in an anchor); every
-// in-card control keeps its own behaviour and never navigates. The two #101
-// TE.1 anchors stay byte-identical: the accessible name link remains the row's
-// ONLY tab stop, so the row div gains no tabindex and no role.
 describe('#466 whole card opens the event', () => {
 	const gotoMock = vi.mocked(goto);
 	beforeEach(() => {
@@ -879,8 +699,6 @@ describe('#466 whole card opens the event', () => {
 	});
 
 	const recentP9 = item('p9', '2026-06-01T16:00:00.000Z', { location: 'Old Hall' });
-
-	// (a) — taps on the row's non-interactive body navigate, exactly once.
 
 	it("(a) upcoming: a tap on the row div's own body calls goto('/event/r1') exactly once", async () => {
 		const { container } = render(AgendaList, { items: itemSameDay });
@@ -907,8 +725,6 @@ describe('#466 whole card opens the event', () => {
 		expect(gotoMock).toHaveBeenCalledTimes(1);
 		expect(gotoMock).toHaveBeenCalledWith('/event/p9');
 	});
-
-	// (b) — every in-card control keeps working and NEVER opens the event.
 
 	it('(b) upcoming: an RSVP tap fires onrsvpchange and does NOT navigate', async () => {
 		const onrsvpchange = vi.fn();
@@ -968,13 +784,9 @@ describe('#466 whole card opens the event', () => {
 			attendancePanel: panel
 		});
 		const row = container.querySelector('[data-testid="agenda-recent-row-p9"]')!;
-		// a real button inside the panel does its own job…
 		await fireEvent.click(row.querySelector('[data-testid="attendance-toggle-m1-present"]')!);
 		expect(ontoggle).toHaveBeenCalledTimes(1);
-		// …the panel's own body (the gap between buttons) is a control surface,
-		// not a tap target…
 		await fireEvent.click(row.querySelector('[data-testid="attendance-panel"]')!);
-		// …and the collapse button closes, never navigates.
 		await fireEvent.click(row.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		expect(onclose).toHaveBeenCalledTimes(1);
 		expect(gotoMock).not.toHaveBeenCalled();
@@ -1015,10 +827,6 @@ describe('#466 whole card opens the event', () => {
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 
-	// (c) — the accessible name link is the anchor's own business: the row
-	// handler must ignore it (SvelteKit intercepts internal <a> clicks in the
-	// real app; a goto() here would navigate twice).
-
 	it('(c) a tap on the accessible name link never reaches goto — both families', async () => {
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: [recentP9] });
 		for (const rowId of ['agenda-row-r1', 'agenda-recent-row-p9']) {
@@ -1030,8 +838,6 @@ describe('#466 whole card opens the event', () => {
 		}
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
-
-	// (d) — structural pins: no second tab stop, no role/tabindex on the row.
 
 	it('(d) exactly one focusable event link per row; the row div gains no tabindex and no role', () => {
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: [recentP9] });
@@ -1046,23 +852,12 @@ describe('#466 whole card opens the event', () => {
 	});
 });
 
-// ── #471 — Recent shows one card until asked ─────────────────────────────────
-//
-// Mihkel (issue body): show only the most recent past card; a 'show more'
-// button bottom right of that card; pressing it shows the other past events
-// too and hides the button. Gama's defaults: nothing folds, no card changes
-// shape; the button does not come back on this visit (a reload starts over);
-// with one past event there is no button; season summary and Upcoming are
-// untouched. The button is a control in #466's sense — CARD_CONTROLS catches
-// a bare <button>, so pressing it never opens the event.
 describe('#471 Recent shows one card until asked', () => {
 	const gotoMock = vi.mocked(goto);
 	beforeEach(() => {
 		gotoMock.mockClear();
 	});
 
-	// Reverse-chron ARRAY ORDER, exactly as conductorLogic.recentEvents() hands
-	// it over: index 0 is the most recent past event.
 	const threeRecent = [
 		item('p1', '2026-06-10T16:00:00.000Z'),
 		item('p2', '2026-06-03T16:00:00.000Z'),
@@ -1077,11 +872,8 @@ describe('#471 Recent shows one card until asked', () => {
 	it('three recent items → exactly one card (recentItems[0]) carrying the button; the press reveals all three in order, removes the button, and never navigates', async () => {
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
 
-		// Collapsed: ONE row, and it is recentItems[0].
 		expect(rowIds(container)).toEqual(['agenda-recent-row-p1']);
 
-		// The button sits INSIDE that one card and renders via the paraglide key
-		// (this file's mock resolves unknown keys to '[key]').
 		const row = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
 		const button = row.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(button, 'show-more button inside the one visible card').not.toBeNull();
@@ -1089,7 +881,6 @@ describe('#471 Recent shows one card until asked', () => {
 
 		await fireEvent.click(button!);
 
-		// All three render, in array order; the button is gone.
 		expect(rowIds(container)).toEqual([
 			'agenda-recent-row-p1',
 			'agenda-recent-row-p2',
@@ -1097,7 +888,6 @@ describe('#471 Recent shows one card until asked', () => {
 		]);
 		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
 
-		// The press is a control tap, never a card tap.
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 
@@ -1140,13 +930,6 @@ describe('#471 Recent shows one card until asked', () => {
 		expect(upcomingIds()).toEqual(['agenda-row-r1', 'agenda-row-r2']);
 	});
 
-	// ── review F1 — the past-dated create that lands BEHIND the button ───────
-	//
-	// The page confirms a create by scrolling to, and highlighting,
-	// `[data-testid="agenda-recent-row-<id>"]` (+page.svelte). A past-dated
-	// create that is not the most recent past event is inside `recentItems`
-	// but not in the DOM while collapsed, so that confirmation silently
-	// no-ops. The list must open itself for it.
 	it('justCreatedEventId pointing at a hidden recent row opens the list (all rows render, button gone)', async () => {
 		const { container } = render(AgendaList, {
 			items: itemSameDay,
@@ -1162,8 +945,6 @@ describe('#471 Recent shows one card until asked', () => {
 			]);
 		});
 		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
-		// The row the page addresses is now genuinely reachable, carrying its
-		// highlight mark.
 		expect(
 			container.querySelector('[data-testid="agenda-recent-row-p3"] [data-testid="agenda-row-created-mark"]')
 		).not.toBeNull();
@@ -1180,12 +961,6 @@ describe('#471 Recent shows one card until asked', () => {
 		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).not.toBeNull();
 	});
 
-	// ── review F2 — the press must not drop focus to <body> ──────────────────
-	//
-	// The button deletes itself on activation; a keyboard user who tabbed to it
-	// would otherwise restart the next Tab at the top of the document, well
-	// above the section they were reading — and hear nothing about the rows
-	// that just appeared.
 	it('pressing the button with the keyboard lands focus on the first newly revealed row, not <body>', async () => {
 		const { container } = render(AgendaList, { items: itemSameDay, recentItems: threeRecent });
 		const button = container.querySelector<HTMLElement>(
@@ -1203,8 +978,6 @@ describe('#471 Recent shows one card until asked', () => {
 			);
 		});
 		expect(document.activeElement).not.toBe(document.body);
-		// The focused element is the row's ACCESSIBLE named link (#101 TE.1),
-		// never the aria-hidden decorative twin.
 		expect((document.activeElement as HTMLElement).getAttribute('aria-hidden')).toBeNull();
 		expect((document.activeElement as HTMLElement).getAttribute('aria-label')).toBe(
 			'View details for Rehearsal p2'
@@ -1224,7 +997,6 @@ describe('#471 Recent shows one card until asked', () => {
 	});
 });
 
-// #471 — the button's copy ships in all four locales alongside agenda_recent.
 describe('#471 i18n — agenda_recent_show_more in all four locales', () => {
 	const messages = (locale: string) =>
 		JSON.parse(
@@ -1241,11 +1013,3 @@ describe('#471 i18n — agenda_recent_show_more in all four locales', () => {
 		}
 	});
 });
-
-// (*MVOX:Byrd*)
-// (*MVOX:Tallis* — #90 TR.2 Works-line wiring RED)
-// (*MVOX:Tallis* — #101 TE.1 event-detail row links RED)
-// (*MVOX:Josquin* — #101 TE.1 review fix F2: row-link accessible name)
-// (*MVOX:Tallis* — #466 whole-card-opens-event RED)
-// (*MVOX:Tallis* — #471 recent-shows-one-card-until-asked RED)
-// (*MVOX:Josquin* — #471 review fixes F1 (hidden just-created row) + F2 (focus after the press))

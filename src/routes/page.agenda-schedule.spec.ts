@@ -1,29 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #262 RED — INTEGRATION: schedule times on the REAL agenda route (/).
-//
-// Real +page.svelte + real AgendaList + the REAL schedule data layer
-// ($lib/schedule/scheduleData) driven end-to-end from the stubbed wire — the
-// same harness family as page.agenda-month-view.spec.ts, except the schedule
-// producer is deliberately NOT mocked: these specs are what force GREEN to
-// wire the bulk fetch into the page (a component that renders lines only in
-// isolation cannot pass them).
-//
-// CONTRACT (issue #262, Gama 11:11 amendment + ruling 5558026158):
-//   • The page bulk-fetches schedule items for the VISIBLE event ids —
-//     upcoming AND recent (both row families carry the line) — via ONE
-//     listScheduleItemsByEventId pass (mirror loadWorksAndManagement,
-//     routes/+page.svelte:1195-1212): exactly one schedule GET per visible
-//     event id, results threaded into AgendaList's NEW scheduleItemsByEventId
-//     prop. The shared AgendaItem type is NOT extended.
-//   • The fetch runs under its OWN load-id guard composed with the shared
-//     requestId (the worksLoadId idiom) — pinned by a deterministically
-//     ordered race spec.
-//   • The #247 month view stays four-elements-per-row: AgendaMonthView, its
-//     Props and its rendered output are byte-unchanged — with schedule data
-//     PRESENT in the system, month rows still show none of it
-//     (page.agenda-month-view.spec.ts:21-25 is the standing fence; the
-//     with-items fixture here extends it).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,8 +7,6 @@ import { resolve } from 'node:path';
 import { get } from 'svelte/store';
 import type { AgendaItem } from '$lib/agenda/types';
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`; copy
-// assertions below match on DATA (names, clock digits, testids).
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -73,11 +46,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -144,11 +112,6 @@ function item(
 	} as AgendaItem;
 }
 
-// Verified Tallinn facts (EEST, UTC+3 on these dates):
-//   2030-06-10T16:00Z → 19:00 Tallinn, Monday June 10 (upcoming)
-//   2030-06-10T14:30Z → 17:30 Tallinn — up1's 'kogunemine'
-//   2026-05-01T18:00Z → 21:00 Tallinn (recent)
-//   2026-05-01T17:00Z → 20:00 Tallinn — rec1's 'proov'
 const UP1 = item('up1', 'Kevadkontsert', '2030-06-10T16:00:00.000Z', 'concert');
 const UP_BARE = item('up-bare', 'Tavaline proov', '2030-06-12T16:00:00.000Z');
 const REC1 = item('rec1', 'Talvekontsert', '2026-05-01T18:00:00.000Z', 'concert');
@@ -163,9 +126,7 @@ function scheduleEntity(id: string, name: string, iso: string) {
 }
 
 type ScheduleWire = {
-	/** entities per `<db>:<eventId>` — absent key answers []. */
 	byKey: Record<string, Array<Record<string, unknown>>>;
-	/** hold every schedule GET for this db until release() — the race probe. */
 	holdDb?: string;
 };
 
@@ -206,11 +167,10 @@ function setAuthed(dbs: string[] = ['sampledb']) {
 const DEFAULT_SCHEDULE: ScheduleWire = {
 	byKey: {
 		'sampledb:up1': [
-			// Wire order reversed on purpose — the line must sort chronologically.
-			scheduleEntity('s2', 'kontsert', '2030-06-10T16:00:00.000Z'), // 19:00
-			scheduleEntity('s1', 'kogunemine', '2030-06-10T14:30:00.000Z') // 17:30
+			scheduleEntity('s2', 'kontsert', '2030-06-10T16:00:00.000Z'),
+			scheduleEntity('s1', 'kogunemine', '2030-06-10T14:30:00.000Z')
 		],
-		'sampledb:rec1': [scheduleEntity('s3', 'proov', '2026-05-01T17:00:00.000Z')] // 20:00
+		'sampledb:rec1': [scheduleEntity('s3', 'proov', '2026-05-01T17:00:00.000Z')]
 	}
 };
 
@@ -256,10 +216,6 @@ afterEach(async () => {
 	if (typeof localStorage !== 'undefined') localStorage.clear();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — the REAL producer chain reaches both row families on the real route
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — / renders the times line from the real wire (both families)', () => {
 	it('an upcoming row with items shows its chronological line; bare rows stay line-free', async () => {
 		const { container } = await renderAgenda();
@@ -298,10 +254,6 @@ describe('#262 — / renders the times line from the real wire (both families)',
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — the bulk fetch: one pass over the visible ids (upcoming + recent)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — bulk schedule fetch (the loadWorksAndManagement idiom)', () => {
 	it('issues exactly ONE schedule GET per visible event id, covering upcoming AND recent', async () => {
 		const { container, stub } = await renderAgenda();
@@ -313,10 +265,7 @@ describe('#262 — bulk schedule fetch (the loadWorksAndManagement idiom)', () =
 			.map((c) => String(c[0]))
 			.filter((u) => u.includes('_type.string=schedule_item'));
 		const parents = scheduleUrls.map((u) => u.match(/_parent\.reference=([^&]+)/)?.[1]).sort();
-		// One per visible id — never a per-row refetch storm, never a family
-		// left out (both families carry the line).
 		expect(parents).toEqual(['rec-bare', 'rec1', 'up-bare', 'up1']);
-		// The read shape is the pinned one — type NAME, no raw id, no ordinal.
 		for (const url of scheduleUrls) {
 			expect(url).toContain('props=name,datetime');
 			expect(url).not.toContain('_type.reference');
@@ -324,10 +273,6 @@ describe('#262 — bulk schedule fetch (the loadWorksAndManagement idiom)', () =
 		}
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — deterministic stale-response race (own load-id composed with requestId)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — a stale bulk response never lands after a collective switch', () => {
 	it("collective A's held schedule read, settling after the switch to B, must not reach the agenda", async () => {
@@ -341,7 +286,6 @@ describe('#262 — a stale bulk response never lands after a collective switch',
 			},
 			['sampledb', 'crede']
 		);
-		// The stale read is in flight — held by the test, deterministically.
 		await waitFor(() => {
 			expect(
 				stub.mock.calls.some((c) => String(c[0]).includes('_type.string=schedule_item'))
@@ -354,9 +298,6 @@ describe('#262 — a stale bulk response never lands after a collective switch',
 		});
 		expect(line(container, 'up2')!.textContent).toContain('fresh-item');
 
-		// NOW settle the stale response. Without the composed guard it would
-		// overwrite the fresh record — the real assertions below trip, never a
-		// timeout.
 		release();
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
@@ -365,10 +306,6 @@ describe('#262 — a stale bulk response never lands after a collective switch',
 		expect(line(container, 'up2')!.textContent).toContain('fresh-item');
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — the #247 month view is a deliberate exclusion (four things per row)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#262 — month view shows NO schedule data (extends the #247 fence with a with-items fixture)', () => {
 	it('with schedule items present in the system, month rows render none of them — the four-things contract holds', async () => {
@@ -380,10 +317,7 @@ describe('#262 — month view shows NO schedule data (extends the #247 fence wit
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-month-row-up1"]')).not.toBeNull();
 		});
-		// No times line survives anywhere in month mode…
 		expect(container.querySelectorAll('[data-testid^="agenda-schedule-line-"]')).toHaveLength(0);
-		// …and the with-items event's row carries its four things and nothing of
-		// the schedule: no item name, no item time, not even the event's own time.
 		const row = container.querySelector('[data-testid="agenda-month-row-up1"]')!;
 		expect(row.textContent).toContain('Kevadkontsert');
 		expect(row.querySelector('[data-testid="month-row-date"]')).not.toBeNull();
@@ -394,19 +328,15 @@ describe('#262 — month view shows NO schedule data (extends the #247 fence wit
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — structural fences: the data path is a NEW prop, not a type extension
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#262 — scheduleItemsByEventId is the ONE data path (source fences)', () => {
 	it('the prop lands in AgendaList (positive half — RED trips here) while AgendaMonthView.svelte stays schedule-free (byte-unchanged is the ruling)', () => {
 		const agendaList = readFileSync(
-			resolve('src/lib/components/agenda/AgendaList.svelte'),
+			resolve('src/lib/agenda/AgendaList.svelte'),
 			'utf8'
 		);
 		expect(agendaList).toContain('scheduleItemsByEventId');
 		const monthView = readFileSync(
-			resolve('src/lib/components/agenda/AgendaMonthView.svelte'),
+			resolve('src/lib/agenda/AgendaMonthView.svelte'),
 			'utf8'
 		);
 		expect(monthView).not.toMatch(/schedule/i);
@@ -419,5 +349,3 @@ describe('#262 — scheduleItemsByEventId is the ONE data path (source fences)',
 		expect(types).not.toMatch(/schedule/i);
 	});
 });
-
-// (*MVOX:Tallis* — #262 RED: agenda route integration — bulk fetch, race, month fence)

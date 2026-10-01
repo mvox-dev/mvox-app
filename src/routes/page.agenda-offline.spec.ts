@@ -274,7 +274,7 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 	it('the page resets servedFromCache when its load starts, and reads it for the as-of line', () => {
 		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaSelectedLoad.ts'), 'utf-8');
 		expect(load.includes('resetServedFromCache()'), 'resetServedFromCache()').toBe(true);
-		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
+		const source = readFileSync(resolve(process.cwd(), 'src/lib/agenda/AgendaNotices.svelte'), 'utf-8');
 		for (const needle of [
 			'$servedFromCache',
 			// The line itself is the shared AsOfLine, which owns the today-vs-date rule.

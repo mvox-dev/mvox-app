@@ -227,7 +227,7 @@ describe('#353 — composition + call sites: the label index is WIRED, not besid
 		expect(source).toContain('getAppLabelStore');
 	});
 
-	it.each(['src/routes/+page.svelte', 'src/routes/part/[fileId]/+page.svelte'])(
+	it.each(['src/lib/agenda/agendaPageHandlers.ts', 'src/routes/part/[fileId]/+page.svelte'])(
 		'%s records the label where the bytes land — the delivery `reason` is only knowable there',
 		(page) => {
 			expect(src(page)).toContain('recordPartLabel');

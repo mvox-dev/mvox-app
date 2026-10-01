@@ -14,8 +14,8 @@ const FILES = [
 	'src/lib/events/EventFieldEdit.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
-	'src/lib/components/agenda/EventCreateForm.svelte',
-	'src/lib/components/agenda/SeasonCreateForm.svelte',
+	'src/lib/agenda/EventCreateForm.svelte',
+	'src/lib/agenda/SeasonCreateForm.svelte',
 	'src/lib/agenda/SeasonManageConductors.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
@@ -195,7 +195,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/SeasonManageSeries.svelte': {
 		'series.name': 'an event series'
 	},
-	'src/lib/components/agenda/EventCreateForm.svelte': {
+	'src/lib/agenda/EventCreateForm.svelte': {
 		'eventCreateSeriesDefaults.name': 'the series the event is created in'
 	},
 	'src/lib/events/EventFieldEdit.svelte': {
@@ -230,10 +230,10 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/components/DeleteTrigger.svelte': {
 		className: 'the class prop, inside a quoted class attribute'
 	},
-	'src/lib/components/agenda/AgendaList.svelte': {
+	'src/lib/agenda/AgendaList.svelte': {
 		'item.name': 'the event name'
 	},
-	'src/lib/components/agenda/AgendaMonthView.svelte': {
+	'src/lib/agenda/AgendaMonthView.svelte': {
 		'item.name': 'the event name'
 	},
 	'src/lib/agenda/RepertoireElement.svelte': {

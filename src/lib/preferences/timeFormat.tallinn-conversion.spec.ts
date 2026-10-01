@@ -201,7 +201,7 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	// of +page.svelte into EventCreateForm.svelte — the wiring pin followed it.
 	it('EventCreateForm.svelte imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', () => {
 		const content = readFileSync(
-			resolve(SRC_ROOT, 'lib/components/agenda/EventCreateForm.svelte'),
+			resolve(SRC_ROOT, 'lib/agenda/EventCreateForm.svelte'),
 			'utf8'
 		);
 		expect(
