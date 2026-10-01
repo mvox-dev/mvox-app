@@ -6,6 +6,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { focusOnMount } from '$lib/a11y/focusable';
+	import { formKeydown } from '$lib/a11y/formKeys';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
@@ -123,7 +125,6 @@
 	let eventCreateError = $state<(() => string) | null>(null);
 	let eventCreateErrorField = $state<EventCreateErrorField>(null);
 	let eventCreateLoadId = 0;
-	let eventCreateNameInput = $state<HTMLInputElement | null>(null);
 
 	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
 		eventCreateError = msg;
@@ -171,7 +172,7 @@
 	});
 
 	function onEventCreateFormKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') dismiss();
+		formKeydown(event, { close: dismiss, submit: () => void submitEventCreate() });
 	}
 
 	function handleEventCreateSeasonChange(newSeasonId: string): void {
@@ -347,10 +348,6 @@
 		}
 	}
 
-	$effect(() => {
-		eventCreateNameInput?.focus();
-	});
-
 	let mounted = true;
 	$effect(() => () => {
 		mounted = false;
@@ -438,7 +435,7 @@
 		<input
 			type="text"
 			data-testid="event-create-name"
-			bind:this={eventCreateNameInput}
+			use:focusOnMount
 			aria-invalid={eventCreateInvalid('name')}
 			aria-describedby={eventCreateDescribedBy('name')}
 			placeholder={m.event_create_name_placeholder()}

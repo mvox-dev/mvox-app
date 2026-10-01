@@ -695,5 +695,43 @@ describe('#198 — the create is not double-submittable', () => {
 	});
 });
 
+describe('#560 — one key listener on the work form', () => {
+	it('Escape fired at the form wrapper closes it', async () => {
+		const container = await renderWithFormOpen();
+
+		await fireEvent.keyDown(
+			container.querySelector('[data-testid="create-work-form"]') as HTMLElement,
+			{ key: 'Escape' }
+		);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="create-work-form"]')).toBeNull();
+		});
+		expect(createWorkMock).not.toHaveBeenCalled();
+	});
+
+	it('Enter from the composer field submits the form', async () => {
+		const container = await renderWithFormOpen();
+		createWorkMock.mockResolvedValue('work-new');
+
+		await fireEvent.input(
+			container.querySelector('[data-testid="create-work-name"]') as HTMLInputElement,
+			{ target: { value: 'Missa brevis' } }
+		);
+		const second = container.querySelector(
+			'[data-testid="create-work-composer"]'
+		) as HTMLInputElement;
+		await fireEvent.input(second, { target: { value: 'Arvo Pärt' } });
+		await fireEvent.keyDown(second, { key: 'Enter' });
+
+		await waitFor(() => expect(createWorkMock).toHaveBeenCalledTimes(1));
+		expect(createWorkMock.mock.calls[0][1]).toEqual({
+			name: 'Missa brevis',
+			composer: 'Arvo Pärt',
+			libraryEntityId: 'lib-1'
+		});
+	});
+});
+
 // (*MVOX:Tallis*)
 // (*MVOX:Byrd*)

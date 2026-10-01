@@ -5,6 +5,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
+	import { focusOnMount } from '$lib/a11y/focusable';
+	import { formKeydown } from '$lib/a11y/formKeys';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { createSeason } from '$lib/entity/entityCreate';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
@@ -50,7 +52,6 @@
 	let seasonCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let seasonCreateError = $state<(() => string) | null>(null);
 	let seasonCreateErrorField = $state<'name' | 'dates' | null>(null);
-	let seasonCreateNameInput = $state<HTMLInputElement | null>(null);
 	const seasonConductorOptions = $derived(
 		rosterPickerOptions(seasonCreateConductors.map((c) => c.id))
 	);
@@ -78,13 +79,7 @@
 	}
 
 	function onSeasonFormKeydown(event: KeyboardEvent): void {
-		if (event.key === 'Escape') dismiss();
-	}
-
-	function onSeasonCreateNameKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter') return;
-		event.preventDefault();
-		void submitSeasonCreate();
+		formKeydown(event, { close: dismiss, submit: () => void submitSeasonCreate() });
 	}
 
 	function onSeasonConductorSelect(selection: { id: string | null; label: string }): void {
@@ -163,10 +158,6 @@
 			submitting = false;
 		}
 	}
-
-	$effect(() => {
-		seasonCreateNameInput?.focus();
-	});
 </script>
 
 <div
@@ -185,7 +176,7 @@
 	<input
 		type="text"
 		data-testid="season-create-name"
-		bind:this={seasonCreateNameInput}
+		use:focusOnMount
 		aria-label={m.season_name_label()}
 		placeholder={m.season_name_label()}
 		aria-invalid={seasonCreateErrorField === 'name' ? true : undefined}
@@ -197,7 +188,6 @@
 			seasonCreateName = (e.currentTarget as HTMLInputElement).value;
 			clearSeasonCreateError();
 		}}
-		onkeydown={onSeasonCreateNameKeydown}
 		class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 	/>
 	<div class="flex gap-2">

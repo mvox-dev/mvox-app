@@ -1,60 +1,65 @@
 // @vitest-environment happy-dom
-import { describe, it, expect, vi } from 'vitest';
-import { escapeKeydown, fieldKeydown } from './formKeys';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { formKeydown } from './formKeys';
 
-function key(k: string): KeyboardEvent {
-	return new KeyboardEvent('keydown', { key: k, cancelable: true });
+function formWith(html: string) {
+	const actions = { close: vi.fn(), submit: vi.fn() };
+	const form = document.createElement('div');
+	form.innerHTML = html;
+	form.addEventListener('keydown', (event) => formKeydown(event, actions));
+	document.body.append(form);
+	return { form, actions };
 }
 
-function actions() {
-	return { close: vi.fn(), submit: vi.fn() };
+function press(target: Element, key: string): KeyboardEvent {
+	const event = new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true });
+	target.dispatchEvent(event);
+	return event;
 }
 
-describe('escapeKeydown', () => {
-	it('closes and prevents the default on Escape', () => {
-		const close = vi.fn();
-		const event = key('Escape');
-		escapeKeydown(event, close);
-		expect(close).toHaveBeenCalledTimes(1);
-		expect(event.defaultPrevented).toBe(true);
-	});
-
-	it('ignores Enter and every other key', () => {
-		const close = vi.fn();
-		for (const k of ['Enter', 'a', 'Tab']) {
-			const event = key(k);
-			escapeKeydown(event, close);
-			expect(event.defaultPrevented).toBe(false);
-		}
-		expect(close).not.toHaveBeenCalled();
-	});
+afterEach(() => {
+	document.body.innerHTML = '';
 });
 
-describe('fieldKeydown', () => {
-	it('closes on Escape without submitting', () => {
-		const a = actions();
-		const event = key('Escape');
-		fieldKeydown(event, a);
-		expect(a.close).toHaveBeenCalledTimes(1);
-		expect(a.submit).not.toHaveBeenCalled();
-		expect(event.defaultPrevented).toBe(true);
+describe('formKeydown on the form wrapper', () => {
+	it('Escape from any control closes and prevents the default', () => {
+		const { form, actions } = formWith('<input type="text"><textarea></textarea><button>x</button>');
+		for (const control of [...form.children, form]) {
+			expect(press(control, 'Escape').defaultPrevented).toBe(true);
+		}
+		expect(actions.close).toHaveBeenCalledTimes(4);
+		expect(actions.submit).not.toHaveBeenCalled();
 	});
 
-	it('submits on Enter without closing', () => {
-		const a = actions();
-		const event = key('Enter');
-		fieldKeydown(event, a);
-		expect(a.submit).toHaveBeenCalledTimes(1);
-		expect(a.close).not.toHaveBeenCalled();
-		expect(event.defaultPrevented).toBe(true);
+	it('Enter from a single-line input submits and prevents the default', () => {
+		const { form, actions } = formWith(
+			'<input type="text"><input type="date"><input type="number"><input>'
+		);
+		for (const input of form.children) {
+			expect(press(input, 'Enter').defaultPrevented).toBe(true);
+		}
+		expect(actions.submit).toHaveBeenCalledTimes(4);
+		expect(actions.close).not.toHaveBeenCalled();
 	});
 
-	it('leaves other keys to the field', () => {
-		const a = actions();
-		const event = key('a');
-		fieldKeydown(event, a);
-		expect(a.close).not.toHaveBeenCalled();
-		expect(a.submit).not.toHaveBeenCalled();
-		expect(event.defaultPrevented).toBe(false);
+	it('Enter from a textarea, select, button or checkbox keeps its own behaviour', () => {
+		const { form, actions } = formWith(
+			'<textarea></textarea><select><option>a</option></select><button>x</button>' +
+				'<input type="checkbox"><input type="button">'
+		);
+		for (const control of [...form.children, form]) {
+			expect(press(control, 'Enter').defaultPrevented).toBe(false);
+		}
+		expect(actions.submit).not.toHaveBeenCalled();
+		expect(actions.close).not.toHaveBeenCalled();
+	});
+
+	it('leaves other keys alone', () => {
+		const { form, actions } = formWith('<input type="text">');
+		for (const k of ['a', 'Tab', ' ']) {
+			expect(press(form.children[0], k).defaultPrevented).toBe(false);
+		}
+		expect(actions.submit).not.toHaveBeenCalled();
+		expect(actions.close).not.toHaveBeenCalled();
 	});
 });

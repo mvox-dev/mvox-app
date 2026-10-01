@@ -646,7 +646,7 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 		expect(createEditionMock).not.toHaveBeenCalled();
 	});
 
-	it('Escape works while focus is on the Submit button — wired on the buttons, never the wrapper div', async () => {
+	it('Escape works while focus is on the Submit button, not just the inputs', async () => {
 		const container = await renderWithFormOpen();
 
 		await fireEvent.keyDown(
@@ -1102,6 +1102,44 @@ describe('#271 — the local insert is generation-guarded against a mid-flight c
 			expect(s.textContent?.trim()).toBe('');
 		}
 		expect(container.textContent).not.toContain('created.');
+	});
+});
+
+describe('#560 — one key listener on the edition form', () => {
+	it('Escape fired at the form wrapper closes it', async () => {
+		const container = await renderWithFormOpen('work-2');
+
+		await fireEvent.keyDown(
+			container.querySelector('[data-testid="create-edition-form-work-2"]') as HTMLElement,
+			{ key: 'Escape' }
+		);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="create-edition-form-work-2"]')).toBeNull();
+		});
+		expect(createEditionMock).not.toHaveBeenCalled();
+	});
+
+	it('Enter from the publisher field submits the form', async () => {
+		const container = await renderWithFormOpen('work-2');
+		createEditionMock.mockResolvedValue('edition-new');
+
+		await fireEvent.input(
+			container.querySelector('[data-testid="create-edition-name-work-2"]') as HTMLInputElement,
+			{ target: { value: 'Missa brevis' } }
+		);
+		const second = container.querySelector(
+			'[data-testid="create-edition-publisher-work-2"]'
+		) as HTMLInputElement;
+		await fireEvent.input(second, { target: { value: 'Carus-Verlag' } });
+		await fireEvent.keyDown(second, { key: 'Enter' });
+
+		await waitFor(() => expect(createEditionMock).toHaveBeenCalledTimes(1));
+		expect(createEditionMock.mock.calls[0][1]).toEqual({
+			name: 'Missa brevis',
+			publisher: 'Carus-Verlag',
+			workId: 'work-2'
+		});
 	});
 });
 
