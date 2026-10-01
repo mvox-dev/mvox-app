@@ -38,7 +38,15 @@ const eventSurfacesSource = () =>
 	EVENT_SURFACES.map((file) => readFileSync(resolve(process.cwd(), file), 'utf-8')).join('\n');
 
 const AGENDA_SOURCE = () =>
-	['src/routes/+page.svelte', 'src/lib/agenda/agendaLoad.ts']
+	[
+		'src/routes/+page.svelte',
+		'src/lib/agenda/agendaLoad.ts',
+		'src/lib/agenda/agendaRosterCache.ts',
+		'src/lib/agenda/agendaSelectedLoad.ts',
+		'src/lib/agenda/agendaWorksLoad.ts',
+		'src/lib/agenda/agendaRowStore.ts',
+		'src/lib/agenda/agendaPanels.ts'
+	]
 		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
 		.join('\n');
 

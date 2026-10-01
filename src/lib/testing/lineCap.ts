@@ -5,13 +5,11 @@ export const NEXT_STEP = 700;
 
 // Shrink-only: each file leaves when its split lands.
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/agenda/agendaLoad.ts',
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	'src/routes/+page.svelte'
 ];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
-	'src/lib/agenda/agendaLoad.ts',
 	'src/lib/components/agenda/SeasonManagePanel.svelte',
 	'src/lib/components/agenda/SeriesCreateForm.svelte',
 	'src/lib/seasons/seasonManage.ts',
