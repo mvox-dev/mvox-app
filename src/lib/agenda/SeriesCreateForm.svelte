@@ -12,7 +12,7 @@
 	import { createEvent, createEventSeries } from '$lib/entity/entityCreate';
 	import type { CreateEventSeriesInput } from '$lib/entity/entityCreate';
 	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import { tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
 	import { writesAvailable } from '$lib/net/online';
 	import {
@@ -315,16 +315,12 @@
 		submitting = true;
 		seriesRunDb = runDb;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for series create failed', e);
-				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'series create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: series create with no resolvable database entity', current.personId);
 				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}

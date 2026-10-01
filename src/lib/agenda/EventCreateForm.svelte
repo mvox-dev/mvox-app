@@ -12,7 +12,7 @@
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { createEvent, type CreateEventInput } from '$lib/entity/entityCreate';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import {
 		tallinnHHMM,
 		formatTime,
@@ -282,16 +282,12 @@
 
 		submitting = true;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for event create failed', e);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'event create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: event create with no resolvable database entity', current.personId);
 				setEventCreateError(m.event_create_failed, null);
 				return;
 			}

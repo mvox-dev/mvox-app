@@ -9,7 +9,7 @@
 	import { formKeydown } from '$lib/a11y/formKeys';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { createSeason } from '$lib/entity/entityCreate';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import { writesAvailable } from '$lib/net/online';
@@ -123,16 +123,12 @@
 
 		submitting = true;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for season create failed', e);
-				setSeasonCreateError(m.season_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'season create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: season create with no resolvable database entity', current.personId);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}

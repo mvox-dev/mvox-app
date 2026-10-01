@@ -2,7 +2,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import { tallinnLocalToUtcIso, tallinnWallClockParts } from '$lib/preferences/timeFormat';
 	import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 	import type { Collective } from '$lib/collectives/types';
@@ -173,20 +173,12 @@
 				occurrences = resume.remaining;
 				created = total - occurrences.length;
 			} else {
-				let resolvedDbEntityId: string | null;
-				try {
-					resolvedDbEntityId = await resolveDatabaseEntityId(cfg);
-				} catch (e) {
-					console.error('event detail: resolving the database entity for event conversion failed', e);
-					if (g === generation())
-						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
-					return;
-				}
+				const resolvedDbEntityId = await resolveDbEntityOrLog(
+					cfg,
+					{ area: 'event detail', action: 'event conversion' },
+					selected.personId
+				);
 				if (!resolvedDbEntityId) {
-					console.error(
-						'event detail: event conversion with no resolvable database entity',
-						selected.personId
-					);
 					if (g === generation())
 						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
 					return;
