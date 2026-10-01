@@ -726,5 +726,15 @@
 	"strokes_undo_aria_label": "Atsaukt",
 	"write_unavailable_no_signal": "Nav signāla — pašlaik neko nevar saglabāt.",
 	"write_held_no_signal": "Nav signāla — jūsu izmaiņas joprojām šeit, nesaglabātas.",
-	"feedback_screenshot_alt": "Ekrānuzņēmums no lapas, par kuru ir šī atsauksme"
+	"feedback_screenshot_alt": "Ekrānuzņēmums no lapas, par kuru ir šī atsauksme",
+	"feedback_editor_label": "Atsauksme",
+	"feedback_copy": "Kopēt",
+	"feedback_send": "Sūtīt",
+	"feedback_close": "Aizvērt",
+	"feedback_description_label": "Apraksts",
+	"feedback_copied": "Nokopēts kopā ar zīmējumu.",
+	"feedback_capture_failed": "Ekrānuzņēmumu neizdevās uzņemt.",
+	"feedback_copy_unsupported": "Šī pārlūkprogramma nevar kopēt attēlus.",
+	"feedback_copy_failed": "Ekrānuzņēmumu neizdevās nokopēt.",
+	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt."
 }

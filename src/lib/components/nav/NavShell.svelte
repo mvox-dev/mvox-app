@@ -14,6 +14,9 @@
 		// No NAV_ENTRIES entry reads this now; it stays as NavContext's second visibility
 		// axis so a future entry can gate on it without re-threading the shell.
 		hasMultipleCollectives = false,
+		toolbar,
+		toolbarLabel,
+		overlay,
 		children,
 	}: {
 		entries: NavEntry[];
@@ -22,6 +25,9 @@
 		anonymous?: boolean;
 		isAdmin?: boolean;
 		hasMultipleCollectives?: boolean;
+		toolbar?: Snippet;
+		toolbarLabel?: string;
+		overlay?: Snippet;
 		children: Snippet;
 	} = $props();
 
@@ -88,36 +94,54 @@
 
 {#if !anonymous && visibleEntries.length > 0}
 	<div class="nav-shell" class:rail-right={railSide === 'right'}>
-		<nav
-			role="navigation"
-			aria-label={m.nav_main_label()}
-			class="nav-bar"
-			onkeydown={handleKeydown}
-		>
-			{#each visibleEntries as entry (entry.key)}
-				{@const active = entry.key === activeKey}
-				{@const disabled = isDisabled(entry)}
-				<a
-					href={disabled ? '/profile' : entry.route}
-					class="nav-entry"
-					class:nav-entry--active={active}
-					class:nav-entry--disabled={disabled}
-					aria-current={active ? 'page' : undefined}
-					aria-disabled={disabled ? 'true' : undefined}
-					tabindex={disabled ? -1 : entry.key === activeNavKey ? 0 : -1}
-					onfocus={() => {
-						// Disabled links never claim the stop — see `activeNavKey`.
-						if (!disabled) rovingKey = entry.key;
-					}}
-				>
-					<span class="nav-icon" aria-hidden="true">{@html entry.icon}</span>
-					<span class="nav-label">{entry.label()}</span>
-				</a>
-			{/each}
-		</nav>
-		<main class="nav-content">
-			{@render children?.()}
-		</main>
+		{#if toolbar}
+			<div
+				role="toolbar"
+				aria-label={toolbarLabel}
+				class="nav-bar"
+				tabindex="-1"
+				onkeydown={(e) => rovingKeydown(e, { selector: 'button:not(:disabled)' })}
+			>
+				{@render toolbar()}
+			</div>
+		{:else}
+			<nav
+				role="navigation"
+				aria-label={m.nav_main_label()}
+				class="nav-bar"
+				onkeydown={handleKeydown}
+			>
+				{#each visibleEntries as entry (entry.key)}
+					{@const active = entry.key === activeKey}
+					{@const disabled = isDisabled(entry)}
+					<a
+						href={disabled ? '/profile' : entry.route}
+						class="nav-entry"
+						class:nav-entry--active={active}
+						class:nav-entry--disabled={disabled}
+						aria-current={active ? 'page' : undefined}
+						aria-disabled={disabled ? 'true' : undefined}
+						tabindex={disabled ? -1 : entry.key === activeNavKey ? 0 : -1}
+						onfocus={() => {
+							// Disabled links never claim the stop — see `activeNavKey`.
+							if (!disabled) rovingKey = entry.key;
+						}}
+					>
+						<span class="nav-icon" aria-hidden="true">{@html entry.icon}</span>
+						<span class="nav-label">{entry.label()}</span>
+					</a>
+				{/each}
+			</nav>
+		{/if}
+		<!-- The page stays mounted under the overlay, so closing it returns the page as it was. -->
+		<div class="nav-stage">
+			<main class="nav-content" tabindex="-1" inert={overlay !== undefined}>
+				{@render children?.()}
+			</main>
+			{#if overlay}
+				<div class="nav-overlay">{@render overlay()}</div>
+			{/if}
+		</div>
 	</div>
 {:else}
 	{@render children?.()}
@@ -143,10 +167,24 @@
 		flex-shrink: 0;
 	}
 
-	.nav-content {
+	.nav-stage {
 		order: 0;
 		flex: 1;
+		min-width: 0;
+		min-height: 0;
+		display: grid;
+		grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+	}
+
+	.nav-content,
+	.nav-overlay {
+		grid-area: 1 / 1;
 		overflow-y: auto;
+	}
+
+	.nav-overlay {
+		z-index: 1;
+		background: var(--color-paper);
 	}
 
 	.nav-entry {
@@ -225,8 +263,12 @@
 			gap: 0.125rem;
 		}
 
-		.nav-content {
+		.nav-stage {
 			order: 1;
+		}
+
+		.nav-content,
+		.nav-overlay {
 			padding-left: env(safe-area-inset-left, 0px);
 			padding-right: env(safe-area-inset-right, 0px);
 		}
@@ -272,7 +314,8 @@
 			padding-right: env(safe-area-inset-right, 0px);
 		}
 
-		.nav-shell.rail-right :global(.nav-content) {
+		.nav-shell.rail-right :global(.nav-content),
+		.nav-shell.rail-right :global(.nav-overlay) {
 			padding-left: env(safe-area-inset-left, 0px);
 			padding-right: 0;
 		}
@@ -311,7 +354,7 @@
 			gap: 0.25rem;
 		}
 
-		.nav-content {
+		.nav-stage {
 			order: 1;
 		}
 
