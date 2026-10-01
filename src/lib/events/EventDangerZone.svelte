@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { isDeleteForbidden, isEventCascadePartial } from '$lib/seasons/deleteErrors';
+	import { classifyDeleteFailure, type DeleteFailure } from '$lib/seasons/deleteErrors';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
@@ -25,11 +25,7 @@
 
 	let deleteArmed = $state(false);
 	let deletePending = $state(false);
-	let deleteError = $state<{
-		reason: 'forbidden' | 'partial' | 'generic';
-		deleted?: number;
-		total?: number;
-	} | null>(null);
+	let deleteError = $state<DeleteFailure | null>(null);
 
 	async function armDelete(): Promise<void> {
 		if (isOffline) return;
@@ -56,23 +52,12 @@
 			goto('/');
 		} catch (e) {
 			console.error('event detail: delete failed', evId, e);
-			if (isDeleteForbidden(e)) {
-				deleteError = { reason: 'forbidden' };
-			} else if (isEventCascadePartial(e)) {
-				const partial = e as { deletedCount?: number; totalCount?: number };
-				deleteError = {
-					reason: 'partial',
-					deleted: partial.deletedCount ?? 0,
-					total: partial.totalCount ?? 0
-				};
-			} else {
-				deleteError = { reason: 'generic' };
-			}
+			deleteError = classifyDeleteFailure('event', e);
 			deletePending = false;
 		}
 	}
 
-	function deleteErrorText(failure: NonNullable<typeof deleteError>): string {
+	function deleteErrorText(failure: DeleteFailure): string {
 		switch (failure.reason) {
 			case 'forbidden':
 				return m.event_detail_delete_forbidden();
