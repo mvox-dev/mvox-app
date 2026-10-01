@@ -2,6 +2,7 @@
 <script lang="ts">
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import FormActions from '$lib/components/FormActions.svelte';
 	import { monthLabel } from '$lib/preferences/timeFormat';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
 
@@ -148,25 +149,14 @@
 		</FormError>
 	{/if}
 
-	<div class="flex gap-2">
-		<button
-			type="button"
-			data-testid="series-create-submit"
-			disabled={submitting || nothingToSubmit || isOffline}
-			aria-busy={submitting}
-			class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-			onclick={onsubmit}
-		>
-			{m.series_create_submit()}
-		</button>
-		<button
-			type="button"
-			data-testid="series-create-cancel"
-			disabled={submitting}
-			class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-			onclick={oncancel}
-		>
-			{m.roster_cancel()}
-		</button>
-	</div>
+	<FormActions
+		testid="series-create"
+		submitLabel={m.series_create_submit()}
+		cancelLabel={m.roster_cancel()}
+		{submitting}
+		{isOffline}
+		submitBlocked={nothingToSubmit}
+		{onsubmit}
+		{oncancel}
+	/>
 </fieldset>

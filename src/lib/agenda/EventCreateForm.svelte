@@ -4,6 +4,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -586,25 +587,13 @@
 		</p>
 	{/if}
 
-	<div class="flex gap-2">
-		<button
-			type="button"
-			data-testid="event-create-submit"
-			disabled={submitting || isOffline}
-			aria-busy={submitting}
-			class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-			onclick={() => void submitEventCreate()}
-		>
-			{m.event_create_submit()}
-		</button>
-		<button
-			type="button"
-			data-testid="event-create-cancel"
-			disabled={submitting}
-			class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-			onclick={dismiss}
-		>
-			{m.roster_cancel()}
-		</button>
-	</div>
+	<FormActions
+		testid="event-create"
+		submitLabel={m.event_create_submit()}
+		cancelLabel={m.roster_cancel()}
+		{submitting}
+		{isOffline}
+		onsubmit={() => void submitEventCreate()}
+		oncancel={dismiss}
+	/>
 </div>

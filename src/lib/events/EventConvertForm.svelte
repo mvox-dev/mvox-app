@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
@@ -390,27 +391,15 @@
 					{eventConvertError()}
 				</p>
 			{/if}
-			<div class="flex gap-2">
-				<button
-					type="button"
-					data-testid="event-convert-submit"
-					disabled={eventConvertSubmitting || isOffline}
-					aria-busy={eventConvertSubmitting}
-					class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-					onclick={() => void submitEventConvert()}
-				>
-					{m.event_convert_submit()}
-				</button>
-				<button
-					type="button"
-					data-testid="event-convert-cancel"
-					disabled={eventConvertSubmitting}
-					class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-					onclick={dismissEventConvertForm}
-				>
-					{m.event_convert_cancel()}
-				</button>
-			</div>
+			<FormActions
+				testid="event-convert"
+				submitLabel={m.event_convert_submit()}
+				cancelLabel={m.event_convert_cancel()}
+				submitting={eventConvertSubmitting}
+				{isOffline}
+				onsubmit={() => void submitEventConvert()}
+				oncancel={dismissEventConvertForm}
+			/>
 		</div>
 	{/if}
 {/if}
