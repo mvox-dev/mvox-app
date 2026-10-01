@@ -139,11 +139,12 @@ async function expectSessionExpiredAndNothingSent() {
 }
 
 describe('#550 — admin writes with no token', () => {
-	it('a roles write with no token goes to session-expired, not load-error', async () => {
+	it('a roles write whose token vanished after load sends nothing and goes to session-expired', async () => {
+		setToken('jwt-admin');
 		selectSampledb();
 		const { container } = render(AdminPage);
 		await waitFor(() => expect(q(container, 'admin-add-admin-select')).not.toBeNull());
-		expect(q(container, 'admin-roles-load-error')).toBeNull();
+		clearAll({ preserveProvider: false });
 
 		await fireEvent.change(q<HTMLSelectElement>(container, 'admin-add-admin-select')!, {
 			target: { value: 'p-bela' }

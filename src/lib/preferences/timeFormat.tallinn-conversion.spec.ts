@@ -232,12 +232,12 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	});
 
 	// A loose-text pin on purpose: it is the executable form of "one zone constant" (#548).
-	it("'Europe/Tallinn' is spelled only in timeFormat.ts (TALLINN_TZ)", () => {
+	it('the quoted zone name is spelled only in timeFormat.ts (TALLINN_TZ)', () => {
 		const spellers = findSourceFiles(SRC_ROOT, ['.ts', '.svelte'], {
 			excludeSpecs: true,
 			skipDirs: ['paraglide']
 		})
-			.filter((file) => readFileSync(file, 'utf8').includes("'Europe/Tallinn'"))
+			.filter((file) => /(['"`])Europe\/Tallinn\1/.test(readFileSync(file, 'utf8')))
 			.map((file) => relative(SRC_ROOT, file));
 		expect(spellers).toEqual(['lib/preferences/timeFormat.ts']);
 	});

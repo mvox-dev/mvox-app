@@ -1,6 +1,7 @@
 <!-- /admin: role management (admins, librarians), the collective name, and invites. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { getToken } from '$lib/auth/storage';
 	import { cfgFor } from '$lib/entu/cfg';
 	import {
 		selectedCollectiveStore,
@@ -147,6 +148,11 @@
 		// A collective switch drops the trace of an in-flight write.
 		rolesPending = false;
 		rolesStatus = '';
+		if (!getToken()) {
+			console.error('admin roles: no auth token in storage on a protected route');
+			status = 'load-error';
+			return;
+		}
 		const c: EntuCfg = cfgFor(target.db);
 		cfg = c;
 		viewerId = target.personId;
@@ -281,7 +287,7 @@
 		editingName = false;
 		nameDraft = '';
 		const thisLoad = loadSeq;
-		const writeCfg = cfg;
+		const writeCfg = cfgFor(cfg.db);
 		nameWritePending = true;
 		try {
 			await updateCollectiveName(writeCfg, before.markerId, draft);
@@ -341,7 +347,7 @@
 		rolesStatus = '';
 		rolesPending = true;
 		try {
-			await addAdmin(cfg, dbEntityId, selection.id);
+			await addAdmin(cfgFor(cfg.db), dbEntityId, selection.id);
 			await refreshAdmins(thisLoad);
 			if (thisLoad !== loadSeq) return;
 			rolesStatus = m.admin_roles_saved();
@@ -363,7 +369,7 @@
 		rolesStatus = '';
 		rolesPending = true;
 		try {
-			await addLibrarian(cfg, libraryId, selection.id);
+			await addLibrarian(cfgFor(cfg.db), libraryId, selection.id);
 			await refreshLibrarians(thisLoad);
 			if (thisLoad !== loadSeq) return;
 			rolesStatus = m.admin_roles_saved();
@@ -385,7 +391,7 @@
 		rolesStatus = '';
 		rolesPending = true;
 		try {
-			await removeAdmin(cfg, dbEntityId, personId);
+			await removeAdmin(cfgFor(cfg.db), dbEntityId, personId);
 			await refreshAdmins(thisLoad);
 			if (thisLoad !== loadSeq) return;
 			rolesStatus = m.admin_roles_saved();
@@ -407,7 +413,7 @@
 		rolesStatus = '';
 		rolesPending = true;
 		try {
-			await removeLibrarian(cfg, libraryId, personId);
+			await removeLibrarian(cfgFor(cfg.db), libraryId, personId);
 			await refreshLibrarians(thisLoad);
 			if (thisLoad !== loadSeq) return;
 			rolesStatus = m.admin_roles_saved();
