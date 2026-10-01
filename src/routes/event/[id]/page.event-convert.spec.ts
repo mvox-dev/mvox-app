@@ -1,94 +1,16 @@
 // @vitest-environment happy-dom
-//
-// #313 RED — standalone event → series conversion moves to the EVENT PAGE
-// (integration: real src/routes/event/[id]/+page.svelte; reads go through a
-// fetch stub — the page.series-picker.spec.ts harness — while the WRITE seams
-// (convertEventToSeries, createEvent, resolveDatabaseEntityId) are mocked the
-// way src/routes/page.event-convert.spec.ts mocked them, so every behaviour
-// assertion below is the #196/#212 contract unchanged; only the ENTRY POINT
-// and the route are new).
-//
-// WHY (#313, Mihkel 2026-09-10): "in season editor, we dont need to list
-// events … every event should have these administrator controls on their
-// page." The season panel's standalone-event list is REMOVED in this same
-// slice; convert must live here FIRST — never a window where neither surface
-// offers it.
-//
-// THE GATE (research-313, confirmed from eventConvert.ts): the conversion's
-// wire is a series CREATE (parented [dbEntityId, seasonId]) + ONE `_parent`
-// APPEND on the event + a NAME-value delete — no `_parent` value DELETE
-// anywhere, so #304's owner-only gate (isOwnerTier, unassign-specific) does
-// NOT apply. Convert reuses the page's existing `isEditor` (the ONE rights
-// rule this page owns, manageRightsFrom over the already-loaded detail):
-//   - rendered for an editor-NOT-owner (the tier #304's unassign refuses);
-//   - rendered for an owner (ownership subsumes editing);
-//   - ABSENT (never disabled) for a plain member, while the event read is
-//     still in flight, for a SERIES CHILD (detail.seriesId !== null —
-//     converting one is meaningless), and for a SEASONLESS event (the series
-//     is parented to the season; no season, nowhere to put it) — the #301/
-//     #304 fail-closed posture.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS
-//     event-detail-convert       the entry control on the event page — a real
-//                                BUTTON whose accessible name renders the NEW
-//                                key `event_detail_convert`; GONE while the
-//                                form is open (one entry, one meaning — the
-//                                armed-delete swap idiom), restored on close,
-//                                and Escape hands focus back to it.
-//     event-convert-form         the conversion form — SAME testid family as
-//                                the panel-era form, because the flow is the
-//                                same flow relocated:
-//     event-convert-interval     number input, default '7' (weekly)
-//     event-convert-duration     number input (minutes)
-//     event-convert-end-date     type="date" — the series' last day
-//     event-convert-start-date   #212 — a <p>: label key + the event's
-//                                Tallinn wall-clock ISO date, above end-date
-//     event-convert-submit / -cancel / -error / -progress / -resume-notice
-//
-//   DATA — unchanged from #196:
-//     - submit calls `convertEventToSeries(cfg, input)`; dbEntityId from
-//       `resolveDatabaseEntityId` (never guessed), seasonId = the EVENT's own
-//       season (detail.seasonId — the page resolves it from the detail read,
-//       the relocation of the panel's `manageableSeasonId` gate), eventId =
-//       the page's event, startTime/startDate derived from the event's
-//       startDatetime as EUROPE/TALLINN wall clock.
-//     - the occurrence loop, validation-before-write, step-named failures,
-//       stop-and-resume: all byte-identical behaviour to the panel era.
-//     - success → the form closes AND the page re-reads its event (the world
-//       refreshed: the event is a series child now).
-//     - an OCCURRENCE failure does NOT re-read the event: a refresh would
-//       show detail.seriesId !== null, unmount the convert region, and eat
-//       the resume record — the relocation of the panel's "the standalone
-//       list is deliberately NOT re-read" pin.
-//
-//   UNTOUCHED — event-detail-delete (trigger, armed pair, error slot) is
-//   byte-untouched by this slice; one presence pin below, the full contract
-//   stays in page.event-delete.spec.ts.
-//
-//   I18N — the event_convert_* keys are REUSED by the relocated form (their
-//   locale pins stay in src/routes/page.event-convert.spec.ts); NEW here:
-//   `event_detail_convert` in all four locales, and `event_create_series_hint`
-//   REWRITTEN in all four locales to stop pointing at the season panel.
+// The event page's convert-to-series form (#313), with the create forms' keys (#631).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Pin "now" before the fixture event (2027-04-18) — same hygiene as
-// page.spec.ts: only Date is faked, timers stay real so waitFor polls.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
-// Params append as JSON so a spec can pin that a message RECEIVED its
-// parameter (the event_convert_failed {step} contract, the resume counts)
-// without pinning translated copy. Same mock as the panel-era spec, so the
-// relocated assertions carry over byte-identical.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -125,8 +47,6 @@ const {
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// #196 — the conversion seam. The real module's error class rides along so the
-// page can discriminate EventConvertError from anything else.
 vi.mock('$lib/events/eventConvert', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/events/eventConvert')>();
 	return { ...actual, convertEventToSeries: convertEventToSeriesMock };
@@ -152,19 +72,13 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-/** The page's own cfg shape: { db: selected.db, token: getToken() ?? '' }. */
 const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
 function json(body: unknown, status = 200) {
 	return new Response(JSON.stringify(body), { status });
 }
 
-/** The standalone event #313 converts. Its UTC instant is 2027-04-18T18:00Z —
- *  Europe/Tallinn is EEST (UTC+3) in April, so the wall clock the operator
- *  knows this event by is 21:00 on 2027-04-18. Season parent, NO series. */
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev-9',
@@ -179,16 +93,12 @@ function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 		...over
 	};
 }
-/** Editor-NOT-owner — the tier the #304 owner gate refuses and THIS control
- *  must serve (research-313: convert's wire never deletes a `_parent` value). */
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return standaloneEvent({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
-/** Owner view — ownership subsumes editing (manageRightsFrom). */
 function ownerEvent(over: Partial<Record<string, unknown>> = {}) {
 	return standaloneEvent({ _owner: [{ reference: 'p-viewer' }], ...over });
 }
-/** A series CHILD — detail.seriesId !== null; convert is meaningless. */
 function seriesChildEvent() {
 	return editorEvent({
 		_parent: [
@@ -198,7 +108,6 @@ function seriesChildEvent() {
 		]
 	});
 }
-/** No season parent — nowhere to hang the new series. */
 function seasonlessEvent() {
 	return editorEvent({
 		_parent: [{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' }]
@@ -222,13 +131,9 @@ function series1Entity() {
 }
 
 type WireOpts = {
-	/** Hold the event GET open — the "loading claims nothing" probe. */
 	holdEventGet?: boolean;
 };
 
-/** Read-only wire: the page's fetch traffic (event, season, series list,
- *  anything else empty). WRITES never reach here — the conversion seams are
- *  module mocks above. */
 function wireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}) {
 	const event = eventOver ?? editorEvent();
 	let release: () => void = () => {};
@@ -295,8 +200,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── helpers ─────────────────────────────────────────────────────────────────────
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
@@ -336,18 +239,12 @@ async function fillAndSubmitConvert(
 	await fireEvent.click(q(container, 'event-convert-submit') as HTMLElement);
 }
 
-/** How many times the page has READ its own event off the wire. */
 function eventGets(stub: ReturnType<typeof vi.fn>): number {
 	return stub.mock.calls.filter((c) => {
 		const method = ((c[1] as RequestInit | undefined)?.method ?? 'GET') as string;
 		return method === 'GET' && String(c[0]).includes('/entity/ev-9');
 	}).length;
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 1 — the gate: editor tier, standalone only, fail closed (absent, not disabled)
-//     (integration: rendered by the ACTUAL event page route)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#313 — the convert control on the event page: rendered exactly when editor + standalone + season', () => {
 	it('editor-NOT-owner on a standalone event with a season: event-detail-convert renders as a real BUTTON with the localized accessible name — and the UNTOUCHED delete trigger stands beside it', async () => {
@@ -358,12 +255,8 @@ describe('#313 — the convert control on the event page: rendered exactly when 
 		const name = `${control.getAttribute('aria-label') ?? ''} ${control.textContent ?? ''}`;
 		expect(name).toContain('event_detail_convert');
 
-		// #313 Done-when: delete on the event page is byte-untouched — the #237
-		// trigger still renders for the same editor (full contract stays in
-		// page.event-delete.spec.ts).
 		expect(q(container, 'event-detail-delete')).not.toBeNull();
 
-		// Merely rendering writes nothing.
 		expect(convertEventToSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
@@ -401,10 +294,6 @@ describe('#313 — the convert control on the event page: rendered exactly when 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 2 — the form: relocated intact (open/cancel, defaults, #212 start date)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#313 — clicking convert opens the relocated form; nothing is written yet', () => {
 	it('the form opens with interval pre-filled 7 (weekly), number/number/date inputs — and the ENTRY control leaves while it is open (one entry, one meaning)', async () => {
 		const { container } = renderEventPage(editorEvent());
@@ -439,9 +328,6 @@ describe('#313 — clicking convert opens the relocated form; nothing is written
 	});
 
 	it('#212 relocated — event-convert-start-date renders as labelled TEXT (label key + Tallinn wall-clock ISO date), above the end-date picker, never an input', async () => {
-		// 2026-03-14 is EET (UTC+2, before the late-March DST switch): the UTC
-		// instant 16:00Z is the 18:00 Tallinn wall clock. The date shown must be
-		// the TALLINN date, ISO-formatted.
 		const { container } = renderEventPage(
 			editorEvent({
 				start_datetime: [{ _id: 'val-start-1', datetime: '2026-03-14T16:00:00.000Z' }]
@@ -464,10 +350,6 @@ describe('#313 — clicking convert opens the relocated form; nothing is written
 		).toBeTruthy();
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 3 — submit wiring: the FULL input, success refresh, step-named failures
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#313 — submit hands convertEventToSeries the FULL input off the page’s own detail', () => {
 	it('eventId from the route, dbEntityId resolved (never guessed), seasonId = the EVENT’s season, cadence typed, startTime/startDate = the event as TALLINN wall clock', async () => {
@@ -492,8 +374,6 @@ describe('#313 — submit hands convertEventToSeries the FULL input off the page
 			durationMinutes: 90
 		};
 		expect(convertEventToSeriesMock).toHaveBeenCalledWith(CFG, expected);
-		// Let the occurrence run finish inside the test rather than leaving a
-		// loop POSTing into torn-down mocks.
 		await waitFor(() => {
 			expect(q(container, 'event-convert-form')).toBeNull();
 		});
@@ -589,13 +469,6 @@ describe('#313 — submit hands convertEventToSeries the FULL input off the page
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 4 — the converted event actually REPEATS: the occurrence loop, stop, resume
-// ═════════════════════════════════════════════════════════════════════════════
-
-/** The event's own date is 2027-04-18 (Tallinn 21:00); with interval 7 and an
- *  end date of 2027-06-30 the cadence lands on 11 dates, of which the FIRST is
- *  the converted event itself — 10 further occurrences are written. */
 const FURTHER_OCCURRENCE_UTC = [
 	'2027-04-25T18:00:00.000Z',
 	'2027-05-02T18:00:00.000Z',
@@ -619,8 +492,6 @@ describe('#313 — the occurrence loop relocates intact', () => {
 		await waitFor(() => {
 			expect(createEventMock).toHaveBeenCalledTimes(FURTHER_OCCURRENCE_UTC.length);
 		});
-		// Full shape on the first occurrence — an `objectContaining` here would
-		// hide exactly the wire-shape bugs this loop can produce.
 		expect(createEventMock).toHaveBeenNthCalledWith(1, CFG, {
 			dbEntityId: ORG_EFK,
 			seriesId: 'series-new-9',
@@ -673,12 +544,10 @@ describe('#313 — the occurrence loop relocates intact', () => {
 		});
 		const error = q(container, 'event-convert-error') as HTMLElement;
 		expect(error.textContent).toContain('event_convert_missing_type');
-		// NOT the "series was created, the run stopped" copy — nothing was created.
 		expect(error.textContent).not.toContain('event_convert_generate_failed');
 		expect(error.textContent).not.toContain('event_convert_failed');
 		expect(q(container, 'event-convert-resume-notice')).toBeNull();
 		expect(createEventMock).not.toHaveBeenCalled();
-		// Nothing changed, so nothing is refreshed, and the form stays open.
 		expect(eventGets(fetchStub)).toBe(readsBefore);
 		expect(q(container, 'event-convert-form')).not.toBeNull();
 	});
@@ -721,10 +590,6 @@ describe('#313 — the occurrence loop relocates intact', () => {
 		expect(error.textContent).toContain('event_convert_generate_failed');
 		expect(error.textContent).toContain('"created":1');
 		expect(error.textContent).toContain('"total":10');
-		// The form is still on screen with what the run still owes — and the
-		// event is deliberately NOT re-read: a refresh would show seriesId set,
-		// unmount this region, and eat the ONLY record of the unfinished run
-		// (the relocation of the panel's "standalone list not re-read" pin).
 		expect(q(container, 'event-convert-form')).not.toBeNull();
 		expect(q(container, 'event-convert-resume-notice')?.textContent).toContain('"remaining":9');
 		expect(eventGets(fetchStub)).toBe(readsBefore);
@@ -735,26 +600,18 @@ describe('#313 — the occurrence loop relocates intact', () => {
 		await waitFor(() => {
 			expect(q(container, 'event-convert-form')).toBeNull();
 		});
-		// Re-converting would leave a duplicate series behind — the resume path
-		// must not call the conversion again.
 		expect(convertEventToSeriesMock).toHaveBeenCalledTimes(1);
-		// 1 landed + 1 failed + 9 on the resume run = 11 attempts, 10 occurrences.
 		expect(createEventMock).toHaveBeenCalledTimes(11);
 		expect(
 			createEventMock.mock.calls
 				.slice(2)
 				.map((call) => (call[1] as { startDatetime: string }).startDatetime)
 		).toEqual(FURTHER_OCCURRENCE_UTC.slice(1));
-		// The run genuinely finished — NOW the world refreshes.
 		await waitFor(() => {
 			expect(eventGets(fetchStub)).toBeGreaterThan(readsBefore);
 		});
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 5 — validation before any write, naming the field (relocated intact)
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#313 — conversion form validation: refused BEFORE any write, naming the box', () => {
 	const cases: Array<
@@ -786,7 +643,6 @@ describe('#313 — conversion form validation: refused BEFORE any write, naming 
 			});
 			const error = q(container, 'event-convert-error') as HTMLElement;
 			expect(error.textContent).toContain(expectedKey);
-			// NOT the "(read-event)" failure copy for a step that never ran.
 			expect(error.textContent).not.toContain('event_convert_failed');
 			expect(error.id).toBe('event-convert-error');
 
@@ -817,21 +673,35 @@ describe('#313 — conversion form validation: refused BEFORE any write, naming 
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// 6 — the dialog contract (relocated: no panel around it any more)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#313 — the conversion form as a dialog on the event page', () => {
-	it('takes focus when it opens — a role="dialog" nothing is focused inside promises a container that is not there', async () => {
+	it('#631: focus goes to the first field when it opens', async () => {
 		const { container } = renderEventPage(editorEvent());
 		await openConvertForm(container);
 
 		await waitFor(() => {
-			expect(document.activeElement).toBe(q(container, 'event-convert-form'));
+			expect(document.activeElement).toBe(q(container, 'event-convert-interval'));
 		});
 		expect((q(container, 'event-convert-form') as HTMLElement).getAttribute('tabindex')).toBe(
 			'-1'
 		);
+	});
+
+	it('#631: Enter in a number field submits the form', async () => {
+		const { container } = renderEventPage(editorEvent());
+		await openConvertForm(container);
+		await fill(container, 'event-convert-duration', '90');
+		await fill(container, 'event-convert-end-date', '2027-06-30');
+
+		await fireEvent.keyDown(q(container, 'event-convert-duration') as HTMLElement, {
+			key: 'Enter'
+		});
+
+		await waitFor(() => {
+			expect(convertEventToSeriesMock).toHaveBeenCalledTimes(1);
+		});
+		await waitFor(() => {
+			expect(q(container, 'event-convert-form')).toBeNull();
+		});
 	});
 
 	it('Escape dismisses the form, writes NOTHING, and hands focus back to the entry control', async () => {
@@ -849,10 +719,6 @@ describe('#313 — the conversion form as a dialog on the event page', () => {
 		expect(convertEventToSeriesMock).not.toHaveBeenCalled();
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// 7 — i18n: the new entry key exists; the hint stops pointing at the panel
-// ═════════════════════════════════════════════════════════════════════════════
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
@@ -872,9 +738,6 @@ describe('#313 — i18n: event_detail_convert present and non-empty in all four 
 });
 
 describe('#313 — event_create_series_hint no longer sends people to the season panel', () => {
-	// The rewritten copy is Comenius's; what is PINNED is that no locale keeps
-	// pointing at a surface that no longer offers convert. Stems, not full
-	// phrases, so inflection cannot dodge the pin.
 	const FORBIDDEN: Record<(typeof LOCALES)[number], string> = {
 		en: 'season panel',
 		et: 'hooaja paneel',
@@ -893,9 +756,3 @@ describe('#313 — event_create_series_hint no longer sends people to the season
 		}
 	});
 });
-
-// (*MVOX:Tallis* — #313 RED: convert relocates to the event page — isEditor
-// gate (standalone + season, fail closed), the #196/#212 form/validation/
-// occurrence/resume/dialog contract unchanged with the page's own detail as
-// its season source, success = re-read, occurrence failure = no re-read,
-// event_detail_convert key, event_create_series_hint re-pointed)

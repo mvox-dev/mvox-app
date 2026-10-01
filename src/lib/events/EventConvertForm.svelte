@@ -12,7 +12,8 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
-	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import { focusOnMount, focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import { formKeydown } from '$lib/a11y/formKeys';
 
 	let {
 		detail,
@@ -49,7 +50,6 @@
 		total: number;
 	};
 	let eventConvertResume = $state<EventConvertResume | null>(null);
-	let eventConvertFormEl = $state<HTMLDivElement | null>(null);
 
 	function openEventConvertForm(): void {
 		eventConvertOpen = true;
@@ -91,14 +91,11 @@
 	}
 
 	function onEventConvertFormKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		dismissEventConvertForm();
+		formKeydown(event, {
+			close: dismissEventConvertForm,
+			submit: () => void submitEventConvert()
+		});
 	}
-
-	$effect(() => {
-		if (eventConvertOpen && eventConvertFormEl) eventConvertFormEl.focus();
-	});
 
 	function eventConvertStepOf(e: unknown): string {
 		if (e && typeof e === 'object' && 'step' in e) {
@@ -280,7 +277,6 @@
 			role="dialog"
 			aria-label={m.event_convert_form_label()}
 			tabindex="-1"
-			bind:this={eventConvertFormEl}
 			class="flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
 			onkeydown={onEventConvertFormKeydown}
 		>
@@ -295,6 +291,7 @@
 						type="number"
 						min="1"
 						data-testid="event-convert-interval"
+					use:focusOnMount
 						aria-label={m.event_convert_interval_label()}
 						{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
 						value={eventConvertIntervalDays}
