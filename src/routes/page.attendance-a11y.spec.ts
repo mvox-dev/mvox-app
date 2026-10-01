@@ -60,7 +60,7 @@ vi.mock('$lib/paraglide/messages.js', () => {
 
 import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
-import AgendaList from '$lib/components/agenda/AgendaList.svelte';
+import AgendaList from '$lib/agenda/AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 
 afterEach(cleanup);

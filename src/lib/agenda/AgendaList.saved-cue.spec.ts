@@ -1,12 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #326 RED (list-wiring half) — the saved cue reaches each agenda row
-// PER-EVENT, through a `savedEventIds` set prop that mirrors the existing
-// pendingEventIds/failedEventIds shape (#15's per-event-Set pattern).
-//
-// Granularity pin (issue Done-when + the epic's "dangerous pair"): a cue must
-// never claim more than the key that reconciled — only the row whose event id
-// actually settled shows the saved announcement; every other row stays blank.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
@@ -107,7 +99,7 @@ describe('AgendaList — savedEventIds reaches the matching row and ONLY that ro
 	it("a saved row stays fully interactive — saved is not pending, so its buttons remain enabled", () => {
 		const { container } = render(AgendaList, {
 			items,
-			canRsvp: 'editor', // #372 — canRsvp, not membership, is the enablement gate
+			canRsvp: 'editor',
 			savedEventIds: new Set(['r1'])
 		});
 		const btn = row(container, 'r1')?.querySelector(
@@ -116,5 +108,3 @@ describe('AgendaList — savedEventIds reaches the matching row and ONLY that ro
 		expect(btn?.disabled).toBe(false);
 	});
 });
-
-// (*MVOX:Tallis* — #326 RED)

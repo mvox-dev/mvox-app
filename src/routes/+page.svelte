@@ -2,63 +2,25 @@
 	import { tick, untrack } from 'svelte';
 	import { get } from 'svelte/store';
 	import { authStore } from '$lib/auth/session';
-	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import {
 		collectiveState,
 		selectedCollectiveStore,
 		selectedCollectiveIdentityStore,
 		pickerModeStore,
-		selectCollective,
-		hydrateCollectives,
-		sameCollectiveIdentity
+		selectCollective
 	} from '$lib/collectives/store';
-	import { loadFullAgenda } from '$lib/agenda/agendaData';
-	import type { AgendaItem } from '$lib/agenda/types';
-	import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
-	import { prefetchNextEventParts } from '$lib/files/prefetch';
-	import { refreshEventPageDetail, refreshEventPageWorkRows } from '$lib/events/eventPageData';
-	import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
-	import { cfgFor } from '$lib/entu/cfg';
-	import {
-		findMyMemberId,
-		listMyRsvps,
-		rsvpsByEventId,
-		type MyRsvp,
-		type RsvpByEventId,
-		type RsvpStatus
-	} from '$lib/rsvp/rsvpData';
-	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
-	import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
-	import { createWriteTokens } from '$lib/net/writeTokens';
+	import { findMyMemberId, listMyRsvps, rsvpsByEventId } from '$lib/rsvp/rsvpData';
 	import { completionGateStore } from '$lib/profile/completionGate';
-	import { loadRoster } from '$lib/roster/rosterData';
-	import type { RosterRow } from '$lib/roster/rosterData';
 	import { loadActiveAndArchivedRosters } from '$lib/roster/memberLifecycle';
 	import {
 		listAttendance,
 		listMyAttendance,
 		listAllRsvpsForEvent,
-		attendanceByMemberId,
-		type AttendanceStatus,
-		type EventAttendance,
-		type MyAttendance
+		attendanceByMemberId
 	} from '$lib/attendance/attendanceData';
-	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
-	import { deriveAttendanceRate, deriveAllMemberRates, type MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import { collectSources, buildWorkRows } from '$lib/repertoire/workRows';
-	import { listScheduleItemsByEventId, type ScheduleItem } from '$lib/schedule/scheduleData';
-	import { openFileBytes } from '$lib/files/openFileBytes';
-	import { getAppByteStore } from '$lib/files/appByteStore';
-	import { getAppLabelStore } from '$lib/files/appLabelStore';
-	import { recordPartLabel } from '$lib/files/labelStore';
-	import type {
-		ManageRightsState,
-		PickerOption,
-		RepertoireStatus,
-		WorkRow,
-		WorksManage
-	} from '$lib/repertoire/types';
-	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
+	import { listScheduleItemsByEventId } from '$lib/schedule/scheduleData';
+	import { listRepertoireItems } from '$lib/repertoire/repertoireData';
 	import {
 		canDeleteSeries,
 		canMarkAttendance,
@@ -75,47 +37,48 @@
 		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
-	import {
-		listWorks,
-		listEditions,
-		listAllEditions,
-		listAllCopies,
-		type Copy,
-		type Work
-	} from '$lib/library/libraryData';
+	import { listWorks, listEditions, listAllEditions, listAllCopies } from '$lib/library/libraryData';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import {
 		editionsByWorkId as editionsByWorkIdOf,
 		editionOptionsByRowId as editionOptionsByRowIdOf,
-		pickableEditionOptions,
-		readScopedEditions,
-		withoutProgrammed
+		readScopedEditions
 	} from '$lib/repertoire/editionOptions';
-	import { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowHandlers';
-	import { createPendingMarks } from '$lib/repertoire/repertoirePending';
-	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/agenda/RepertoireElement.svelte';
-	import EventCreateForm from '$lib/components/agenda/EventCreateForm.svelte';
-	import SeasonCreateForm from '$lib/components/agenda/SeasonCreateForm.svelte';
+	import {
+		attendancePanelOf,
+		myAttendanceByEventIdOf,
+		mySeasonRateOf,
+		pickableEditionsByEventIdOf,
+		visibleByEventId,
+		worksManageOf
+	} from '$lib/agenda/agendaWorksManage';
+	import EventCreateForm from '$lib/agenda/EventCreateForm.svelte';
+	import SeasonCreateForm from '$lib/agenda/SeasonCreateForm.svelte';
 	import SeasonManagePanel from '$lib/agenda/SeasonManagePanel.svelte';
-	import { clearSeriesCreateResume, type SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
-	import { isAuthExpiredError } from '$lib/entu/request';
-	// `servedFromCache` is the OLDEST readAt among entries served since
-	// `resetServedFromCache()` (reset at the top of every load) so an online
-	// load never shows a stale line.
-	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
+	import { createAgendaCreateFlows, createCreateFlowState } from '$lib/agenda/agendaCreateFlows';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import AgendaList from '$lib/components/agenda/AgendaList.svelte';
-	import AgendaMonthView from '$lib/components/agenda/AgendaMonthView.svelte';
-	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import AgendaList from '$lib/agenda/AgendaList.svelte';
+	import AgendaMonthView from '$lib/agenda/AgendaMonthView.svelte';
+	import AgendaFilterBar from '$lib/agenda/AgendaFilterBar.svelte';
+	import AgendaNotices from '$lib/agenda/AgendaNotices.svelte';
+	import AgendaCollectivesStatus from '$lib/agenda/AgendaCollectivesStatus.svelte';
+	import { agendaViewStore } from '$lib/preferences/agendaView';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
-	import { listSections, rosterOrder, type SectionNode } from '$lib/sections/sectionData';
-	import type { AttendancePanel } from '$lib/attendance/types';
-	import type { Season } from '$lib/seasons/types';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { createAgendaLoadState, createLoadCounters, createAgendaLoader } from '$lib/agenda/agendaLoad';
-	import { attendanceQueueHandlers } from '$lib/agenda/attendancePanel';
+	import {
+		agendaFilterBucketOf,
+		agendaFilterChipsOf,
+		filterAgendaItems,
+		locationSuggestionsOf,
+		type AgendaTypeFilter
+	} from '$lib/agenda/agendaFilter';
+	import { createAgendaPageHandlers } from '$lib/agenda/agendaPageHandlers';
+	import {
+		PANEL_ADD_WORK_KEY,
+		createAgendaPanelState,
+		createAgendaRepertoireQueues
+	} from '$lib/agenda/agendaRepertoireQueues';
 	import {
 		listEventSeriesForSeason,
 		updateSeasonField,
@@ -126,10 +89,7 @@
 		countSeasonScope as apiCountSeasonScope,
 		deleteSeason as apiDeleteSeason
 	} from '$lib/seasons/seasonManage';
-	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
-	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
-	import { withItem } from '$lib/collections/immutable';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -141,12 +101,42 @@
 
 	const ag = $state(createAgendaLoadState());
 	const seq = createLoadCounters();
+	let pendingEventIds = $state<Set<string>>(new Set());
+	const flow = $state(createCreateFlowState());
+
+	const {
+		openSeasonCreateForm,
+		closeSeasonCreateForm,
+		dismissSeasonCreateForm,
+		openEventCreateForm,
+		openSeriesCreateForm,
+		restoreSeriesCreateRun
+	} = createAgendaCreateFlows(ag, flow, {
+		selected: () => selected,
+		entryPointsBlocked: () => createEntryPointsBlocked,
+		seasonManageOpen: () => seasonManageOpen,
+		openSeasonManagePanel
+	});
+
+	const {
+		refreshPresence,
+		rosterPickerOptions,
+		pickerPromptText,
+		handleRsvpChange,
+		handlePdfClick,
+		attendanceQueue,
+		handleAttendanceToggle
+	} = createAgendaPageHandlers(ag, {
+		selected: () => selected,
+		isOffline: () => isOffline,
+		pendingEventIds: { get: () => pendingEventIds, set: (ids) => (pendingEventIds = ids) },
+		findMyMemberId: (...a) => findMyMemberId(...a)
+	});
+
 	const {
 		getRoster,
 		getSections,
 		loadForSelected,
-		resetManagement,
-		mergePendingRows,
 		refreshWorksAfterWrite,
 		rowStore,
 		openAttendancePanel,
@@ -163,8 +153,8 @@
 		pendingMembersForEvent: (eventId) => attendanceQueue.pendingMembersForEvent(eventId),
 		resetSeasonManage,
 		closeSeasonCreateForm,
-		closeEventCreateForm: () => (eventCreateOpen = false),
-		closeSeriesCreateForm: () => (seriesCreateOpen = false),
+		closeEventCreateForm: () => (flow.eventCreateOpen = false),
+		closeSeriesCreateForm: () => (flow.seriesCreateOpen = false),
 		restoreSeriesCreateRun,
 		refreshPresence,
 		findMyMemberId: (...a) => findMyMemberId(...a),
@@ -185,69 +175,11 @@
 		resolveManageRights: (...a) => resolveManageRights(...a),
 	});
 
-	// hydrateCollectives publishes no loading state of its own on retry (only
-	// the terminal state), so this flag is the only place an in-flight retry
-	// shows — without it a slow retry reads as a dead control.
-	let collectivesRetrying = $state(false);
-
-	async function retryCollectives(): Promise<void> {
-		if (collectivesRetrying) return;
-		const knownErroredDbs = $collectiveState.status === 'error' ? $collectiveState.erroredDbs : [];
-		collectivesRetrying = true;
-		try {
-			await hydrateCollectives();
-		} catch (err) {
-			console.error('collective discovery retry failed', err);
-			collectiveState.set({ status: 'error', erroredDbs: knownErroredDbs });
-		} finally {
-			collectivesRetrying = false;
-		}
-	}
-
-	let pendingEventIds = $state<Set<string>>(new Set());
-
-	type AgendaFilterBucket = (typeof CANONICAL_EVENT_TYPES)[number];
-	type AgendaTypeFilter = 'all' | AgendaFilterBucket;
-	const CANONICAL_EVENT_TYPE_SET = new Set<string>(CANONICAL_EVENT_TYPES);
-	function agendaFilterBucketOf(eventType: string | undefined): AgendaFilterBucket {
-		const type = eventType ?? '';
-		if (type !== 'other' && CANONICAL_EVENT_TYPE_SET.has(type)) return type as AgendaFilterBucket;
-		return 'other';
-	}
-	const agendaFilterChips = $derived.by(() => {
-		const present = new Set<AgendaFilterBucket>();
-		for (const it of ag.agendaItems) present.add(agendaFilterBucketOf(it.eventType));
-		for (const it of ag.recentItems) present.add(agendaFilterBucketOf(it.eventType));
-		return CANONICAL_EVENT_TYPES.filter((type) => present.has(type));
-	});
-	const filteredAgendaItems = $derived(
-		ag.agendaTypeFilter === 'all'
-			? ag.agendaItems
-			: ag.agendaItems.filter((it) => agendaFilterBucketOf(it.eventType) === ag.agendaTypeFilter)
-	);
-	const filteredRecentItems = $derived(
-		ag.agendaTypeFilter === 'all'
-			? ag.recentItems
-			: ag.recentItems.filter((it) => agendaFilterBucketOf(it.eventType) === ag.agendaTypeFilter)
-	);
-	const CHIP_PRESSED_CLASS = 'font-semibold ring-1 ring-ink';
-	function agendaTypeChipClass(type: AgendaFilterBucket): string {
-		return ag.agendaTypeFilter === type
-			? `${eventTypeBadgeClass(type)} ${CHIP_PRESSED_CLASS}`
-			: 'border-ink-4 text-ink-2';
-	}
+	const agendaFilterChips = $derived(agendaFilterChipsOf(ag.agendaItems, ag.recentItems));
+	const filteredAgendaItems = $derived(filterAgendaItems(ag.agendaItems, ag.agendaTypeFilter));
+	const filteredRecentItems = $derived(filterAgendaItems(ag.recentItems, ag.agendaTypeFilter));
 	function selectAgendaTypeFilter(value: AgendaTypeFilter) {
 		ag.agendaTypeFilter = ag.agendaTypeFilter === value ? 'all' : value;
-	}
-
-	function handleAgendaViewKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e, {
-			beforeFocus: (member) => {
-				const view = member.dataset.agendaView as 'list' | 'month' | undefined;
-				if (!view) return false;
-				setAgendaView(view);
-			}
-		});
 	}
 
 	$effect(() => {
@@ -257,205 +189,27 @@
 	});
 
 	const LOCATION_SUGGESTIONS_ID = 'agenda-location-suggestions';
-	const locationSuggestions = $derived.by(() => {
-		const seen = new Set<string>();
-		const out: string[] = [];
-		for (const it of ag.recentItems) {
-			if (it.location && !seen.has(it.location)) {
-				seen.add(it.location);
-				out.push(it.location);
-			}
-		}
-		for (const it of ag.agendaItems) {
-			if (it.location && !seen.has(it.location)) {
-				seen.add(it.location);
-				out.push(it.location);
-			}
-		}
-		return out;
-	});
-
-	let presenceSeq = 0;
-	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
-		const seq = ++presenceSeq;
-		try {
-			getAppByteStore()
-				.heldFileIds(db, personId)
-				.then((ids) => {
-					if (seq !== presenceSeq || !isCurrent()) return;
-					ag.heldFileIds = new Set(ids);
-				})
-				.catch((e) => {
-					console.error('agenda: file presence read failed', e);
-				});
-		} catch (e) {
-			console.error('agenda: file presence read failed', e);
-		}
-	}
+	const locationSuggestions = $derived(locationSuggestionsOf(ag.recentItems, ag.agendaItems));
 
 	let pickableEditionsVisibleByEventId = $state<Record<string, boolean>>({});
 	let pickableWorksVisible = $state<boolean | undefined>(undefined);
 
-	let panelPendingKeys = $state<Set<string>>(new Set());
-	let panelManageError = $state(false);
-	let panelManageStatus = $state('');
-	let panelPickableWorksVisible = $state<boolean | undefined>(undefined);
+	const panel = $state(createAgendaPanelState());
 
-	const rosterPickerLoading = $derived(ag.rosterReadsInFlight > 0);
-
-	function rosterPickerOptions(
-		excludeIds: readonly string[]
-	): Array<{ id: string; label: string }> {
-		return rosterOrder(ag.rosterRows, ag.rosterSections)
-			.filter((row) => !excludeIds.includes(row.personId))
-			.map((row) => ({ id: row.personId, label: row.name }));
-	}
-
-	function pickerPromptText(optionCount: number, addPrompt: string): string {
-		if (optionCount > 0) return addPrompt;
-		if (ag.rosterReadFailed) return m.picker_roster_unavailable();
-		if (rosterPickerLoading) return m.picker_roster_loading();
-		if (ag.rosterRows.length === 0) return m.picker_no_members();
-		return m.picker_everyone_added();
-	}
-
-	const collectiveTokens = () =>
-		createWriteTokens(() => get(selectedCollectiveIdentityStore), sameCollectiveIdentity);
-
-	const rsvpQueue = createRsvpChangeQueue(
-		createRsvpWriteStatus({
-			tokens: collectiveTokens(),
-			accessors: {
-				setEntry(eventId, entry) {
-					const next = { ...ag.rsvpByEventId };
-					if (entry) next[eventId] = entry;
-					else delete next[eventId];
-					ag.rsvpByEventId = next;
-				},
-				setPending: (eventId, pending) => (pendingEventIds = withItem(pendingEventIds, eventId, pending)),
-				setFailed(eventId, failed) {
-					if (failed || ag.failedEventIds.has(eventId)) {
-						ag.failedEventIds = withItem(ag.failedEventIds, eventId, failed);
-					}
-				},
-				setSaved(eventId, saved) {
-					if (saved || ag.savedEventIds.has(eventId)) {
-						ag.savedEventIds = withItem(ag.savedEventIds, eventId, saved);
-					}
-				}
-			}
-		})
-	);
-
-	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
-		if (!selected) return;
-		if (isOffline) return;
-		const cfg = cfgFor(selected.db);
-		const personId = selected.personId;
-		const identity = { db: selected.db, personId };
-
-		const current: RsvpEntry | undefined = ag.rsvpByEventId[item.id];
-		const existing: MyRsvp | null = current
-			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
-			: null;
-
-		rsvpQueue.request({
-			cfg,
-			personId,
-			memberId: ag.memberId,
-			resolveMemberId: async () => {
-				const id = await findMyMemberId(cfg, personId);
-				if (sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					ag.memberId = id;
-					if (!id) ag.membership = 'non-member';
-				}
-				return id;
-			},
-			eventId: item.id,
-			existing,
-			newStatus
-		});
-	}
-
-	function findWorkRowByFileId(fileId: string): WorkRow | undefined {
-		for (const rows of Object.values(ag.worksByEventId)) {
-			const row = rows.find((r) => r.fileId === fileId);
-			if (row) return row;
-		}
-		return undefined;
-	}
-
-	function handlePdfClick(fileId: string) {
-		if (!selected) return;
-		const cfg = cfgFor(selected.db);
-		const identity = get(selectedCollectiveIdentityStore);
-		if (!identity) return;
-		ag.pdfError = false;
-		const row = findWorkRowByFileId(fileId);
-		const tab = window.open('', '_blank');
-		if (tab) tab.opener = null;
-		openFileBytes(cfg, identity, fileId, getAppByteStore())
-			.then(({ url, release, reason }) => {
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					release();
-					tab?.close();
-					return;
-				}
-				if (tab) tab.location.href = url;
-				else window.location.href = url;
-				if (row) {
-					recordPartLabel(
-						getAppLabelStore(),
-						identity,
-						fileId,
-						{ work: row.workName, composer: row.composer, edition: row.editionName, filename: row.fileName },
-						reason
-					);
-				}
-				void reason;
-				if (reason === 'network-stored' || reason === 'network-uncached') {
-					refreshPresence(identity.db, identity.personId, () =>
-						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
-					);
-				}
-			})
-			.catch(() => {
-				tab?.close();
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
-				ag.pdfError = true;
-			});
-	}
-
-	const repertoirePending = createPendingMarks(
-		() => get(selectedCollectiveIdentityStore),
-		sameCollectiveIdentity
-	);
-
-	const repertoireQueue = createRepertoireWriteQueue({
-		setPending(key, pending) {
-			ag.managePendingKeys = repertoirePending.setPending(ag.managePendingKeys, key, pending);
-			if (pending) ag.manageError = false;
-		},
-		reconcile(key) {
-			if (!repertoirePending.settle(key)) return;
-			syncPanelRepertoireAfterAgendaWrite();
-			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorksAfterWrite();
-		},
-		revert(key) {
-			if (!repertoirePending.settle(key)) return;
-			ag.manageError = true;
-			syncPanelRepertoireAfterAgendaWrite();
-			refreshWorksAfterWrite();
-		}
-	});
-
-	function manageCfg(): EntuCfg | null {
-		if (!selected) return null;
-		return cfgFor(selected.db);
-	}
-
-	const rowHandlers = createRepertoireRowHandlers({
-		queue: repertoireQueue,
+	const {
+		repertoireQueue,
+		rowHandlers,
+		manageCfg,
+		handlePanelAddWork,
+		handlePanelStatusChange,
+		handlePanelRemoveItem
+	} = createAgendaRepertoireQueues(ag, seq, panel, {
+		selected: () => selected,
+		isOffline: () => isOffline,
+		seasonManageOpen: () => seasonManageOpen,
+		switchGeneration: () => seasonManageSwitchGeneration,
+		refreshWorksAfterWrite,
+		rows: rowStore,
 		actions: {
 			createRepertoireItem: (...a) => createRepertoireItem(...a),
 			updateRepertoireStatus: (...a) => updateRepertoireStatus(...a),
@@ -466,113 +220,11 @@
 			reorderProgramItems: (...a) => reorderProgramItems(...a),
 			createProgramItem: (...a) => createProgramItem(...a)
 		},
-		rows: rowStore,
-		cfg: manageCfg,
-		isOffline: () => isOffline,
-		seasonId: () => ag.currentSeasonId,
-		editions: () => ag.libraryEditions,
-		seasonRepertoire: {
-			get: () => ag.seasonRepertoire,
-			set: (items) => (ag.seasonRepertoire = items)
-		},
-		pending: repertoirePending
+		createRepertoireWriteQueue,
+		listRepertoireItems: (...a) => listRepertoireItems(...a)
 	});
-
-	const PANEL_ADD_WORK_KEY = '__panel_add_work__';
-
-	function refreshPanelRepertoire(): void {
-		const cfg = manageCfg();
-		const seasonId = seq.panelRepertoireSeasonId;
-		if (!cfg || seasonId === null) return;
-		const thisRequest = seq.requestId;
-		const thisSwitch = seasonManageSwitchGeneration;
-		listRepertoireItems(cfg, seasonId)
-			.then((items) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== seasonManageSwitchGeneration) return;
-				ag.panelRepertoire = items;
-				ag.panelRepertoireItemsOk = true;
-			})
-			.catch(() => {
-			});
-	}
-
-	function syncPanelRepertoireAfterAgendaWrite(): void {
-		if (!seasonManageOpen) return;
-		if (ag.manageableSeasonId === null || ag.manageableSeasonId !== ag.currentSeasonId) return;
-		refreshPanelRepertoire();
-	}
-
-	const panelQueue = createRepertoireWriteQueue({
-		setPending(key, pending) {
-			panelPendingKeys = withItem(panelPendingKeys, key, pending);
-			if (pending) {
-				panelManageError = false;
-				panelManageStatus = '';
-			}
-		},
-		reconcile() {
-			refreshPanelRepertoire();
-			refreshWorksAfterWrite();
-			panelManageStatus = m.repertoire_manage_saved();
-		},
-		revert() {
-			refreshPanelRepertoire();
-			refreshWorksAfterWrite();
-			panelManageError = true;
-		}
-	});
-
-	function handlePanelAddWork(workId: string) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		const seasonId = ag.manageableSeasonId;
-		if (!cfg || seasonId === null) return;
-		panelQueue.request(PANEL_ADD_WORK_KEY, async () => {
-			await createRepertoireItem(cfg, { seasonId, workId });
-		});
-	}
-
-	function handlePanelStatusChange(itemId: string, status: RepertoireStatus) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		if (!cfg) return;
-		const before = ag.panelRepertoire.find((item) => item.id === itemId)?.status;
-		if (before === undefined) return;
-		const thisSwitch = seasonManageSwitchGeneration;
-		panelQueue.request(itemId, () => updateRepertoireStatus(cfg, itemId, status), {
-			apply: () => {
-				ag.panelRepertoire = ag.panelRepertoire.map((item) =>
-					item.id === itemId ? { ...item, status } : item
-				);
-			},
-			rollback: () => {
-				if (thisSwitch !== seasonManageSwitchGeneration) return;
-				ag.panelRepertoire = ag.panelRepertoire.map((item) =>
-					item.id === itemId ? { ...item, status: before } : item
-				);
-			}
-		});
-	}
-
-	function handlePanelRemoveItem(itemId: string) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		if (!cfg) return;
-		const before = ag.panelRepertoire;
-		const thisSwitch = seasonManageSwitchGeneration;
-		panelQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
-			apply: () => {
-				ag.panelRepertoire = ag.panelRepertoire.filter((item) => item.id !== itemId);
-			},
-			rollback: () => {
-				if (thisSwitch !== seasonManageSwitchGeneration) return;
-				ag.panelRepertoire = before;
-			}
-		});
-	}
 
 	const editionsByWorkId = $derived(editionsByWorkIdOf(ag.libraryEditions));
-
 	const editionOptionsByRowId = $derived(
 		editionOptionsByRowIdOf(
 			Object.values(ag.worksByEventId).flat(),
@@ -580,9 +232,7 @@
 			editionsByWorkId
 		)
 	);
-
 	const editionsResolvedWorkIds = $derived(new Set(Object.keys(ag.scopedEditionsByWorkId)));
-
 	const unknownEditionWorkIds = $derived(
 		unresolvedEditionWorkIds(
 			Object.values(ag.worksByEventId).flat(),
@@ -609,22 +259,13 @@
 		);
 	});
 
-	const pickableEditionsByEventId = $derived.by(() => {
-		const all = pickableEditionOptions(ag.libraryWorks, ag.libraryEditions);
-		const out: Record<string, PickerOption[]> = {};
-		for (const [eventId, rows] of Object.entries(ag.worksByEventId)) {
-			out[eventId] = withoutProgrammed(all, rows);
-		}
-		return out;
-	});
+	const pickableEditionsByEventId = $derived(
+		pickableEditionsByEventIdOf(ag.libraryWorks, ag.libraryEditions, ag.worksByEventId)
+	);
 
 	$effect(() => {
 		if (ag.libraryPickersLoading || ag.worksRowsLoading) return;
-		const next: Record<string, boolean> = {};
-		for (const [eventId, options] of Object.entries(pickableEditionsByEventId)) {
-			next[eventId] = options.length > 0;
-		}
-		pickableEditionsVisibleByEventId = next;
+		pickableEditionsVisibleByEventId = visibleByEventId(pickableEditionsByEventId);
 	});
 
 	const pickableWorksList = $derived(pickableWorks(ag.libraryWorks, ag.seasonRepertoire));
@@ -642,98 +283,25 @@
 
 	$effect(() => {
 		if (ag.panelRepertoireLoading || !ag.panelRepertoireItemsOk || !ag.panelWorksSourcesOk) return;
-		panelPickableWorksVisible = panelPickableWorksList.length > 0;
+		panel.pickableWorksVisible = panelPickableWorksList.length > 0;
 	});
 
-	const worksManage = $derived.by<WorksManage | undefined>(() => {
-		const anyEventRight = Object.values(ag.eventManageRights).some((right) => right === 'editor');
-		if (ag.seasonManageRights !== 'editor' && !anyEventRight) return undefined;
-		return {
-			seasonRights: ag.seasonManageRights,
-			eventRightsByEventId: ag.eventManageRights,
+	const worksManage = $derived(
+		worksManageOf(ag, rowHandlers, {
 			pickableWorksList,
 			pickableWorksVisible,
-			pickableWorksPartial: ag.libraryWorksPartial,
-			pickableEditionsPartial: ag.libraryEditionsPartial,
 			pickableEditionsByEventId,
 			pickableEditionsVisibleByEventId,
 			editionOptionsByRowId,
-			editionsResolvedWorkIds,
-			pendingKeys: ag.managePendingKeys,
-			onaddwork: rowHandlers.addWork,
-			onstatuschange: rowHandlers.statusChange,
-			onpinedition: rowHandlers.pinEdition,
-			onremoveitem: rowHandlers.removeItem,
-			onmoveitem: rowHandlers.move,
-			onaddprogramitem: rowHandlers.addProgramItem
-		};
-	});
+			editionsResolvedWorkIds
+		})
+	);
 
-	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag, collectiveTokens()));
-
-	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
-		if (!selected || !ag.attendanceItem) return;
-		if (isOffline) return;
-		const cfg = cfgFor(selected.db);
-		const current = ag.attendanceMap[memberId];
-		const existing: EventAttendance | null = current
-			? { attendanceId: current.attendanceId, memberId, status: current.status }
-			: null;
-		attendanceQueue.request({ cfg, eventId: ag.attendanceItem.id, memberId, existing, newStatus });
-	}
-
-	const attendancePanel = $derived.by<AttendancePanel | undefined>(() => {
-		if (!ag.attendanceItem) return undefined;
-		return {
-			item: ag.attendanceItem,
-			members: ag.attendanceRoster,
-			attendanceByMemberId: ag.attendanceMap,
-			rsvpByMemberId: ag.attendanceRsvpMap,
-			loading: ag.attendanceLoading,
-			error: ag.attendanceError,
-			pendingMemberIds: ag.attendancePendingMemberIds,
-			failedMemberIds: ag.attendanceFailedMemberIds,
-			savedMemberIds: ag.attendanceSavedMemberIds,
-			membersPartial: ag.rosterPartial,
-			ontoggle: handleAttendanceToggle,
-			onclose: closeAttendancePanel
-		};
-	});
-
-	const myAttendanceByEventId = $derived.by(() => {
-		const map: Record<string, AttendanceStatus> = {};
-		for (const a of ag.myAttendance) map[a.eventId] = a.status;
-		return map;
-	});
-	const mySeasonAttendance = $derived((() => {
-		const recentIds = new Set(ag.recentItems.map((i) => i.id));
-		return ag.myAttendance.filter((a) => recentIds.has(a.eventId));
-	})());
-	const mySeasonRate = $derived(deriveAttendanceRate(mySeasonAttendance, ag.recentItems.length));
-
-	let seasonCreateOpen = $state(false);
-	let seasonCreateSubmitting = $state(false);
-	let seasonCreateStatus = $state('');
+	const attendancePanel = $derived(attendancePanelOf(ag, handleAttendanceToggle, closeAttendancePanel));
+	const myAttendanceByEventId = $derived(myAttendanceByEventIdOf(ag.myAttendance));
+	const mySeasonRate = $derived(mySeasonRateOf(ag));
 
 	const showSeasonCreate = $derived(ag.seasonCreateRights === 'editor');
-
-	function openSeasonCreateForm(): void {
-		if (createEntryPointsBlocked) return;
-		eventCreateOpen = false;
-		seriesCreateOpen = false;
-		seasonCreateStatus = '';
-		seasonCreateSubmitting = false;
-		seasonCreateOpen = true;
-	}
-
-	function closeSeasonCreateForm(): void {
-		seasonCreateOpen = false;
-	}
-
-	function dismissSeasonCreateForm(): void {
-		if (seasonCreateSubmitting) return;
-		closeSeasonCreateForm();
-	}
 
 	let seasonManageOpen = $state(false);
 	let seasonManageSwitchGeneration = 0;
@@ -750,14 +318,14 @@
 		ag.panelWorksPartial = false;
 		ag.panelEditions = [];
 		ag.panelCopies = [];
-		panelPendingKeys = new Set();
+		panel.pendingKeys = new Set();
 		ag.panelRepertoireError = false;
-		panelManageError = false;
-		panelManageStatus = '';
+		panel.manageError = false;
+		panel.manageStatus = '';
 		ag.panelRepertoireLoading = false;
 		ag.panelRepertoireItemsOk = false;
 		ag.panelWorksSourcesOk = false;
-		panelPickableWorksVisible = undefined;
+		panel.pickableWorksVisible = undefined;
 	}
 
 	function openSeasonManagePanel(): void {
@@ -770,18 +338,6 @@
 
 	function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
 		seasonManagePanel?.refreshSeasonManageLists(cfg, seasonId);
-	}
-
-	let eventCreateOpen = $state(false);
-	let eventCreateSubmitting = $state(false);
-	let eventCreateStatus = $state('');
-
-	function openEventCreateForm(): void {
-		if (createEntryPointsBlocked) return;
-		closeSeasonCreateForm();
-		seriesCreateOpen = false;
-		eventCreateStatus = '';
-		eventCreateOpen = true;
 	}
 
 	function restoreEventCreateFocus(): void {
@@ -837,56 +393,23 @@
 	});
 
 	function dismissEventCreateForm(): void {
-		if (eventCreateSubmitting) return;
-		eventCreateOpen = false;
+		if (flow.eventCreateSubmitting) return;
+		flow.eventCreateOpen = false;
 		restoreEventCreateFocus();
 	}
 
-	let seriesCreateOpen = $state(false);
-	let seriesCreateSubmitting = $state(false);
-	let seriesRunDb = $state<string | null>(null);
-	let seriesCreateResumeByDb = $state<Record<string, SeriesResumeEntry>>({});
-
-	const seriesCreateResume = $derived(selected ? (seriesCreateResumeByDb[selected.db] ?? null) : null);
-
-	const anyCreateSubmitting = $derived(
-		seasonCreateSubmitting || eventCreateSubmitting || seriesCreateSubmitting
+	const seriesCreateResume = $derived(
+		selected ? (flow.seriesCreateResumeByDb[selected.db] ?? null) : null
 	);
 
-	const seriesRunUnfinished = $derived(seriesCreateSubmitting || seriesCreateResume !== null);
+	const anyCreateSubmitting = $derived(
+		flow.seasonCreateSubmitting || flow.eventCreateSubmitting || flow.seriesCreateSubmitting
+	);
+
+	const seriesRunUnfinished = $derived(flow.seriesCreateSubmitting || seriesCreateResume !== null);
 	const createEntryPointsBlocked = $derived(anyCreateSubmitting || seriesRunUnfinished);
 
 	const seasonCardCollapseDisabled = $derived(seasonManageOpen && seriesRunUnfinished);
-
-	function openSeriesCreateForm(): void {
-		if (ag.manageableSeasonId === null) return;
-		if (createEntryPointsBlocked) return;
-		closeSeasonCreateForm();
-		eventCreateOpen = false;
-		seriesCreateOpen = true;
-	}
-
-	// #508 — field-by-field restore now lives in SeriesCreateForm's own
-	// construction (it reads resumeByDb fresh on every mount); this only needs
-	// to clear a season-mismatched record and flip the flag that mounts it.
-	function restoreSeriesCreateRun(): void {
-		const current = selected;
-		if (!current) return;
-		if (seriesCreateOpen || (seriesCreateSubmitting && seriesRunDb === current.db)) return;
-		const entry = seriesCreateResumeByDb[current.db];
-		if (!entry) return;
-		if (ag.manageableSeasonId !== entry.form.seasonId) {
-			console.warn(
-				'agenda: dropping a series resume record whose season is no longer manageable',
-				current.db,
-				entry.form.seasonId
-			);
-			seriesCreateResumeByDb = clearSeriesCreateResume(seriesCreateResumeByDb, current.db);
-			return;
-		}
-		if (!seasonManageOpen) openSeasonManagePanel();
-		seriesCreateOpen = true;
-	}
 
 	const gatedMembership = $derived(
 		ag.membership === 'member' && $completionGateStore !== 'complete' ? 'loading' : ag.membership
@@ -901,14 +424,10 @@
 
 	$effect(() => {
 		selected;
-		seasonCreateStatus = '';
-		eventCreateStatus = '';
+		flow.seasonCreateStatus = '';
+		flow.eventCreateStatus = '';
 		untrack(() => loadForSelected());
 	});
-
-	function retryAgenda() {
-		loadForSelected();
-	}
 </script>
 
 {#if auth.status === 'authenticated'}
@@ -948,53 +467,21 @@
 								type="button"
 								class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper"
 								data-testid="agenda-retry"
-								onclick={retryAgenda}
+								onclick={() => loadForSelected()}
 							>
 								{m.agenda_retry()}
 							</button>
 						</div>
 					{:else}
-						{#if $servedFromCache}
-							<AsOfLine readAt={$servedFromCache} testid="agenda-as-of" class="mb-3" />
-							<a
-								href="/downloads"
-								class="mb-3 block text-sm text-ink underline"
-								data-testid="agenda-downloads-link-cached"
-							>
-								{m.agenda_downloads_link()}
-							</a>
-						{/if}
-						{#if ag.rsvpPartial}
-							<p
-								data-testid="rsvp-partial-notice"
-								role="status"
-								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-							>
-								{m.rsvp_partial_notice()}
-							</p>
-						{/if}
-						{#if ag.attendancePartial}
-							<p
-								data-testid="attendance-partial-notice"
-								role="status"
-								class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-							>
-								{m.attendance_partial_notice()}
-							</p>
-						{/if}
-						{#if !ag.agendaLoading && ag.seasons.length === 0 && ag.seasonCreateRights === 'editor' && !seasonCreateOpen}
-							<div
-								data-testid="agenda-onboarding"
-								class="mb-3 flex flex-col gap-2 rounded-md border border-dashed border-ink-4 p-3"
-							>
-								<ol class="flex flex-col gap-1 text-sm text-ink-2">
-									<li>{m.agenda_onboarding_step_season()}</li>
-									<li>{m.agenda_onboarding_step_series()}</li>
-									<li>{m.agenda_onboarding_step_events()}</li>
-								</ol>
-							</div>
-						{/if}
-						{#if showSeasonCreate && !seasonCreateOpen}
+						<AgendaNotices
+							rsvpPartial={ag.rsvpPartial}
+							attendancePartial={ag.attendancePartial}
+							showOnboarding={!ag.agendaLoading &&
+								ag.seasons.length === 0 &&
+								ag.seasonCreateRights === 'editor' &&
+								!flow.seasonCreateOpen}
+						/>
+						{#if showSeasonCreate && !flow.seasonCreateOpen}
 							<button
 								type="button"
 								data-testid="season-create"
@@ -1014,14 +501,14 @@
 							manageableSeasonRightsById={ag.manageableSeasonRightsById}
 							bind:seasonManageOpen
 							bind:seasonManagePanelEl
-							bind:seriesCreateOpen
-							bind:seriesCreateSubmitting
-							bind:seriesCreateResumeByDb
-							bind:seriesRunDb
+							bind:seriesCreateOpen={flow.seriesCreateOpen}
+							bind:seriesCreateSubmitting={flow.seriesCreateSubmitting}
+							bind:seriesCreateResumeByDb={flow.seriesCreateResumeByDb}
+							bind:seriesRunDb={flow.seriesRunDb}
 							{seriesRunUnfinished}
 							{seasonCardCollapseDisabled}
 							{createEntryPointsBlocked}
-							{eventCreateOpen}
+							eventCreateOpen={flow.eventCreateOpen}
 							rosterRows={ag.rosterRows}
 							rosterPartial={ag.rosterPartial}
 							sectionsReadFailed={ag.sectionsReadFailed}
@@ -1029,13 +516,13 @@
 							heldFileIds={ag.heldFileIds}
 							{panelWorkRows}
 							{panelPickableWorksList}
-							{panelPickableWorksVisible}
+							panelPickableWorksVisible={panel.pickableWorksVisible}
 							panelWorksPartial={ag.panelWorksPartial}
-							{panelPendingKeys}
+							panelPendingKeys={panel.pendingKeys}
 							panelAddWorkKey={PANEL_ADD_WORK_KEY}
 							panelRepertoireError={ag.panelRepertoireError}
-							{panelManageError}
-							{panelManageStatus}
+							panelManageError={panel.manageError}
+							panelManageStatus={panel.manageStatus}
 							currentRequestId={() => seq.requestId}
 							switchGeneration={() => seasonManageSwitchGeneration}
 							{getRoster}
@@ -1068,17 +555,17 @@
 							role="status"
 							aria-live="polite"
 							class="mb-2 text-xs text-ink-2"
-							class:sr-only={!seasonCreateStatus}
+							class:sr-only={!flow.seasonCreateStatus}
 						>
-							{seasonCreateStatus}
+							{flow.seasonCreateStatus}
 						</div>
-						{#if showSeasonCreate && seasonCreateOpen}
+						{#if showSeasonCreate && flow.seasonCreateOpen}
 							<SeasonCreateForm
 								{selected}
 								rosterPartial={ag.rosterPartial}
 								sectionsReadFailed={ag.sectionsReadFailed}
-								bind:submitting={seasonCreateSubmitting}
-								bind:status={seasonCreateStatus}
+								bind:submitting={flow.seasonCreateSubmitting}
+								bind:status={flow.seasonCreateStatus}
 								{getRoster}
 								{getSections}
 								{rosterPickerOptions}
@@ -1093,11 +580,11 @@
 							role="status"
 							aria-live="polite"
 							class="mb-2 text-xs text-ink-2"
-							class:sr-only={!eventCreateStatus}
+							class:sr-only={!flow.eventCreateStatus}
 						>
-							{eventCreateStatus}
+							{flow.eventCreateStatus}
 						</div>
-						{#if eventCreateOpen}
+						{#if flow.eventCreateOpen}
 							<EventCreateForm
 								{selected}
 								manageableSeasonId={ag.manageableSeasonId}
@@ -1107,8 +594,8 @@
 								rosterPartial={ag.rosterPartial}
 								sectionsReadFailed={ag.sectionsReadFailed}
 								locationSuggestionsId={LOCATION_SUGGESTIONS_ID}
-								bind:submitting={eventCreateSubmitting}
-								bind:status={eventCreateStatus}
+								bind:submitting={flow.eventCreateSubmitting}
+								bind:status={flow.eventCreateStatus}
 								{getRoster}
 								{getSections}
 								{rosterPickerOptions}
@@ -1116,84 +603,17 @@
 								{loadForSelected}
 								{refreshSeasonManageLists}
 								dismiss={dismissEventCreateForm}
-								onclose={() => (eventCreateOpen = false)}
+								onclose={() => (flow.eventCreateOpen = false)}
 								{restoreEventCreateFocus}
 								{surfaceCreatedEvent}
 							/>
 						{/if}
 						{#if agendaFilterChips.length > 0}
-							<div class="flex flex-wrap items-center justify-between gap-2 pb-3">
-								<div
-									role="group"
-									aria-label={m.agenda_filter_group_label()}
-									class="flex flex-wrap gap-2"
-								>
-									<button
-										type="button"
-										data-testid="agenda-filter-all"
-										aria-pressed={ag.agendaTypeFilter === 'all' ? 'true' : 'false'}
-										class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {ag.agendaTypeFilter ===
-										'all'
-											? 'border-ink bg-ink text-paper'
-											: 'border-ink-4 text-ink-2'}"
-										onclick={() => selectAgendaTypeFilter('all')}
-									>
-										{m.agenda_filter_all()}
-									</button>
-									{#each agendaFilterChips as type (type)}
-										<button
-											type="button"
-											data-testid="agenda-filter-{type}"
-											aria-pressed={ag.agendaTypeFilter === type ? 'true' : 'false'}
-											class="rounded-full border px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase {agendaTypeChipClass(
-												type
-											)}"
-											onclick={() => selectAgendaTypeFilter(type)}
-										>
-											{eventTypeLabel(type)}
-										</button>
-									{/each}
-								</div>
-								<div
-									data-testid="agenda-view-toggle"
-									role="radiogroup"
-									tabindex="-1"
-									aria-label={m.agenda_view_toggle_label()}
-									class="inline-flex overflow-hidden rounded-md border border-ink-4"
-									onkeydown={handleAgendaViewKeydown}
-								>
-									<button
-										type="button"
-										data-testid="agenda-view-list"
-										data-agenda-view="list"
-										role="radio"
-										aria-checked={$agendaViewStore === 'list' ? 'true' : 'false'}
-										tabindex={$agendaViewStore === 'list' ? 0 : -1}
-										class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
-										'list'
-											? 'bg-ink text-paper'
-											: 'text-ink-2'}"
-										onclick={() => setAgendaView('list')}
-									>
-										{m.agenda_view_list()}
-									</button>
-									<button
-										type="button"
-										data-testid="agenda-view-month"
-										data-agenda-view="month"
-										role="radio"
-										aria-checked={$agendaViewStore === 'month' ? 'true' : 'false'}
-										tabindex={$agendaViewStore === 'month' ? 0 : -1}
-										class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
-										'month'
-											? 'bg-ink text-paper'
-											: 'text-ink-2'}"
-										onclick={() => setAgendaView('month')}
-									>
-										{m.agenda_view_month()}
-									</button>
-								</div>
-							</div>
+							<AgendaFilterBar
+								chips={agendaFilterChips}
+								filter={ag.agendaTypeFilter}
+								onselect={selectAgendaTypeFilter}
+							/>
 						{/if}
 						{#snippet agendaFilterEmptyState()}
 							<div data-testid="agenda-filter-empty" class="flex min-h-[30vh] items-center justify-center">
@@ -1269,32 +689,6 @@
 				</div>
 			</div>
 	{:else}
-		<main class="flex min-h-screen flex-col items-center justify-center gap-4 bg-paper text-ink">
-			<p class="text-sm text-ink" data-testid="auth-status">{m.agenda_signed_in()}</p>
-			{#if collectives.status === 'none'}
-				<p class="text-sm text-ink">{m.agenda_collectives_none()}</p>
-			{:else if collectives.status === 'error'}
-				<p class="text-sm text-ink">
-					{m.agenda_collectives_error_dbs({ dbs: collectives.erroredDbs.join(', ') })}
-				</p>
-				<button
-					type="button"
-					class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper disabled:cursor-not-allowed disabled:opacity-60"
-					data-testid="collectives-retry"
-					disabled={collectivesRetrying}
-					aria-busy={collectivesRetrying}
-					onclick={() => {
-						void retryCollectives();
-					}}
-				>
-					{m.agenda_collectives_error_retry()}
-				</button>
-				<a href="/downloads" class="text-sm text-ink underline" data-testid="agenda-downloads-link">
-					{m.agenda_downloads_link()}
-				</a>
-			{:else}
-				<p class="text-sm text-ink">{m.agenda_collectives_loading()}</p>
-			{/if}
-		</main>
+		<AgendaCollectivesStatus {collectives} />
 	{/if}
 {/if}

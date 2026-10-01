@@ -14,8 +14,8 @@
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import { getLocale } from '$lib/paraglide/runtime.js';
-	import RsvpControl from './RsvpControl.svelte';
-	import RsvpNonMemberHint from './RsvpNonMemberHint.svelte';
+	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
+	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
 	import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 	import type { WorkRow, WorksManage } from '$lib/repertoire/types';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
