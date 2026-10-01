@@ -1,24 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6, review finding 1 — the STRUCTURAL fence for the agenda.
-//
-// page.season-event-offline.spec.ts pins the two families the slice brief named
-// (season manage, event create). That is exactly why five more agenda/event-page
-// controls shipped still live offline: the series delete inside the very panel
-// that renders `season-manage-write-unavailable`, season create, series create,
-// and the repertoire/programme add+remove controls. Enumeration cannot close a
-// hole it has to remember to list.
-//
-// CONTRACT (the fence): render the REAL agenda for a season editor with the
-// panel open, go offline, then OPERATE EVERY ENABLED CONTROL on the page
-// (exerciseEveryEnabledControl — click/change, re-querying after each so
-// controls an earlier one revealed are swept too) and assert:
-//   • no WRITE SEAM was called — every write this route can reach is
-//     module-mocked with a named handle and collected in `writeSeams()`;
-//   • `nonGetCalls(fetchStub)` is `[]` — anything NOT behind those seams would
-//     still have to reach the wire, and cannot.
-// A control is allowed to be disabled (that IS the gate, and the sweep skips
-// it) or enabled-and-refusing; a sixth missed control is neither.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -33,7 +13,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 }));
 
 const H = vi.hoisted(() => ({
-	// reads
 	loadFullAgenda: vi.fn(),
 	loadRoster: vi.fn(),
 	listSections: vi.fn(),
@@ -44,12 +23,12 @@ const H = vi.hoisted(() => ({
 	findMyMemberId: vi.fn(),
 	listMyRsvps: vi.fn(),
 	listEventSeriesForSeason: vi.fn(),
+	listSeriesOptionsForSeason: vi.fn(),
 	listEventsForSeason: vi.fn(),
 	listRepertoireItems: vi.fn(),
 	getSeriesDefaults: vi.fn(),
 	countSeriesOccurrences: vi.fn(),
 	countSeasonScope: vi.fn(),
-	// WRITES — every write seam this route can reach, one named handle each.
 	updateSeasonField: vi.fn(),
 	addSeasonConductor: vi.fn(),
 	removeSeasonConductor: vi.fn(),
@@ -76,6 +55,7 @@ const H = vi.hoisted(() => ({
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: H.loadFullAgenda }));
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: H.listEventSeriesForSeason,
+	listSeriesOptionsForSeason: H.listSeriesOptionsForSeason,
 	listEventsForSeason: H.listEventsForSeason,
 	updateSeasonField: H.updateSeasonField,
 	addSeasonConductor: H.addSeasonConductor,
@@ -95,10 +75,6 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/collective/databaseEntity')>()),
 	resolveDatabaseEntityId: H.resolveDatabaseEntityId
 }));
-// Every repertoire/programme WRITE seam gets a handle; the pure helpers
-// (pickableWorks, planProgramMove, createRepertoireWriteQueue, manageRightsFrom,
-// canDeleteSeries) stay REAL, so the controls under test are wired exactly as in
-// production.
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: H.resolveManageRights,
@@ -205,8 +181,6 @@ function agendaResult() {
 	});
 }
 
-/** Every WRITE seam the agenda can reach, as (name, mock) pairs — the fence
- *  asserts on the whole list, never a hand-picked subset. */
 function writeSeams(): [string, ReturnType<typeof vi.fn>][] {
 	return [
 		['updateSeasonField', H.updateSeasonField],
@@ -264,14 +238,13 @@ beforeEach(() => {
 	);
 	H.listSections.mockResolvedValue([]);
 	H.resolveDatabaseEntityId.mockResolvedValue(ORG);
-	// 'editor' so the repertoire/programme management controls actually render —
-	// the ones the review found ungated.
 	H.resolveManageRights.mockResolvedValue('editor');
 	H.findMyMemberId.mockResolvedValue('m-pete');
 	H.listMyRsvps.mockResolvedValue(toListRead([]));
 	H.listEventSeriesForSeason.mockResolvedValue(
 		toSeriesRead([{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] }])
 	);
+	H.listSeriesOptionsForSeason.mockResolvedValue([{ id: 'series-1', name: 'Monday rehearsals' }]);
 	H.listEventsForSeason.mockResolvedValue(toListRead([]));
 	H.listRepertoireItems.mockResolvedValue([
 		{ id: 'rep-1', workId: 'work-1', name: 'Missa Brevis', status: 'active', editionId: null }
@@ -329,9 +302,6 @@ describe('agenda — no write control reaches the wire offline (#434 slice 6 fen
 		for (const [, mock] of writeSeams()) mock.mockClear();
 		fetchStub.mockClear();
 
-		// The season card's COLLAPSE control is skipped: it writes nothing, and
-		// closing the panel mid-sweep would hide the very panel controls this fence
-		// exists to reach.
 		const touched = await exerciseEveryEnabledControl(container, {
 			skip: ['season-card-collapse']
 		});
@@ -359,8 +329,6 @@ describe('agenda — no write control reaches the wire offline (#434 slice 6 fen
 				expect(isWriteDisabled(el!), testid).toBe(true);
 			}
 		});
-		// The panel's own sentence covers the series delete; the repertoire element
-		// carries its own, for the add/remove/status controls it renders.
 		expect(
 			container.querySelectorAll('[data-testid="season-manage-write-unavailable"]')
 		).toHaveLength(1);
@@ -370,4 +338,4 @@ describe('agenda — no write control reaches the wire offline (#434 slice 6 fen
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)

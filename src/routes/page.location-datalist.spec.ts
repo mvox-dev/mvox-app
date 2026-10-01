@@ -1,48 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #248 RED — the two AGENDA-PAGE location inputs (series-create-location,
-// event-create-location) suggest previously used venues via a native
-// <datalist>, on the ACTUAL agenda route (integration: real +page.svelte —
-// both create forms are siblings in it; only the data seams are mocked, the
-// same harness family as page.event-create.spec.ts / page.series-create.spec.ts).
-//
-// THE CRITERION THAT OUTRANKS EVERYTHING (issue #248, Gama, twice): typing a
-// BRAND-NEW venue stays exactly as easy as today — free text, no warning, no
-// friction, saved byte-identical. Suggestions are convenience over an
-// inherently open field, never a step toward a closed list.
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   SUGGESTION SET (both fields — ONE shared derivation)
-//     - derived from the agenda state the page ALREADY holds in memory:
-//       `agendaItems` + `recentItems` (the `upcoming`/`recent` halves of the
-//       single existing loadFullAgenda read). NO new fetch of any kind on this
-//       route — the fetch spy below pins it.
-//     - de-duplicated; blank locations dropped.
-//     - ORDERING IS NOT PINNED — it is engineering's call (issue done-when 5:
-//       GREEN states the choice + why in the report). Every assertion below
-//       compares SORTED copies.
-//
-//   MARKUP (native only — standing rule 2; the deleted <Autocomplete> stays
-//   deleted, no custom dropdown of any kind)
-//     - each of the two inputs carries a `list` attribute naming a <datalist>
-//       that exists in the rendered page (the two MAY share one datalist or
-//       have one each — resolved per-input, not pinned).
-//     - the datalist's <option> values are exactly the derived set.
-//     - the inputs stay plain free-text controls: type="text", NOT required,
-//       no pattern, no maxlength — and typing a never-seen venue raises no
-//       alert anywhere in the form.
-//
-//   WIRE (unchanged — #248 touches suggestions only)
-//     - series submit: the typed location arrives at createEventSeries as
-//       `defaultLocation`, byte-identical, inside the SAME full input shape
-//       the pre-#248 suite pins.
-//     - event submit: the typed location arrives at createEvent as `location`,
-//       byte-identical, inside the SAME full input shape.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -70,6 +29,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
@@ -88,6 +48,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
+	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
@@ -96,7 +57,6 @@ const {
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-// T1's write layer — the ONLY create seams this page may use.
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: vi.fn(),
 	createEventSeries: createEventSeriesMock,
@@ -104,6 +64,7 @@ vi.mock('$lib/entity/entityCreate', () => ({
 }));
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeason: listSeriesOptionsForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: updateSeasonFieldMock,
 	addSeasonConductor: addSeasonConductorMock,
@@ -124,11 +85,8 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	listSections: listSectionsMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// $env/dynamic/public is unavailable outside a SvelteKit request context under
-// happy-dom; stubbing the base url keeps every real module in play.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -150,11 +108,6 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
 }));
-// #262 — the agenda's new schedule_item bulk read, stubbed like every other
-// data seam this route touches (workRows/library/repertoireData above): the
-// #248 "ZERO new fetch" pin is about the LOCATION-SUGGESTION derivation
-// staying in-memory, not a ban on every other feature this route legitimately
-// reads — mirrors `loadWorksByEventId`'s own treatment exactly.
 vi.mock('$lib/schedule/scheduleData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/schedule/scheduleData')>()),
 	listScheduleItemsByEventId: vi.fn().mockResolvedValue({})
@@ -185,19 +138,14 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = { db: 'sampledb', token: 'jwt-abc' };
 const SEASON_ID = 'season-1';
 const NEW_SERIES_ID = 'series-new-1';
 
-/** Suggestion-mismatching free-text venues — never present in any fixture
- *  location, unicode-bearing on purpose: the wire pin is BYTE-IDENTICAL. */
 const NEW_VENUE_SERIES = 'Püha Vaimu SAAL — üliuus koht nr 1!';
 const NEW_VENUE_EVENT = 'Viinistu katlamaja (uus!)';
 
-/** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -228,11 +176,6 @@ function item(id: string, location: string, startDatetime: string): AgendaItem {
 	};
 }
 
-/** The in-memory corpus the derivation MUST come from: upcoming + recent,
- *  with a duplicate inside `upcoming`, a duplicate ACROSS the two lists, and
- *  blanks in both — so dedup and blank-drop are both observable. Far-future
- *  upcoming dates (the page renders `upcoming` as handed over, but relative-day
- *  decoration reads the real clock). */
 function upcomingWithLocations(): AgendaItem[] {
 	return [
 		item('up-1', 'Hopneri Maja', '2030-06-10T16:00:00.000Z'),
@@ -250,8 +193,6 @@ function recentWithLocations(): AgendaItem[] {
 	];
 }
 
-/** The derived set — deduped, blanks dropped, SORTED for comparison only
- *  (ordering inside the real datalist is engineering's call, NOT pinned). */
 const EXPECTED_SET = ['Estonia Hall', 'Hopneri Maja', 'Niguliste muuseum'];
 
 function agendaResult(opts: { upcoming?: AgendaItem[]; recent?: AgendaItem[] } = {}) {
@@ -291,8 +232,6 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-/** Every network fetch is a contract violation on this route — ALL data seams
- *  are module mocks; the suggestion set must come from in-memory state. */
 let fetchSpy: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
@@ -317,6 +256,9 @@ beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead(seriesFixture()));
+	listSeriesOptionsForSeasonMock.mockResolvedValue(
+		seriesFixture().map(({ id, name }) => ({ id, name }))
+	);
 	listEventsForSeasonMock.mockResolvedValue(toListRead(standaloneFixture()));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
@@ -339,6 +281,7 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
+	listSeriesOptionsForSeasonMock.mockReset();
 	listEventsForSeasonMock.mockReset();
 	updateSeasonFieldMock.mockReset();
 	addSeasonConductorMock.mockReset();
@@ -348,8 +291,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 });
-
-// ── helpers ─────────────────────────────────────────────────────────────────────
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
@@ -400,8 +341,6 @@ async function selectValue(container: HTMLElement, testid: string, value: string
 	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
-/** Resolve an input's `list=` target: the attribute must name a <datalist>
- *  that actually exists in the rendered document. */
 function resolveDatalist(input: HTMLInputElement): HTMLElement {
 	const listId = input.getAttribute('list');
 	expect(listId, `input ${input.getAttribute('data-testid')} must carry list=`).toBeTruthy();
@@ -410,7 +349,6 @@ function resolveDatalist(input: HTMLInputElement): HTMLElement {
 	return dl as HTMLElement;
 }
 
-/** Option VALUES, sorted — ordering is engineering's call, only the SET is pinned. */
 function optionSet(dl: HTMLElement): string[] {
 	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
 }
@@ -421,25 +359,11 @@ function locationInput(container: HTMLElement, testid: string): HTMLInputElement
 	return el as HTMLInputElement;
 }
 
-/** Any fetch that reached the network layer — the agenda-page derivation must
- *  need NONE (every data seam is a module mock; the corpus is in memory).
- *
- *  #434 slice 3/6 — `runPressureSweepThenPrefetch` -> `prefetchNextEventPartsAfterSettle`
- *  fires the next event's (agendaItems[0], here 'up-1') own metadata prefetch
- *  UNCONDITIONALLY once works settle, entirely independent of this route's
- *  location derivation. It is a real, deliberate background fetch this pin
- *  never claimed to forbid (the pin is about the SUGGESTION DERIVATION, not
- *  every fetch this page ever makes) — excluded by name rather than widening
- *  the contract to cover a feature this spec predates. */
 function entityFetchCalls(): unknown[][] {
 	return fetchSpy.mock.calls.filter(
 		(c) => String(c[0]).includes('entity') && !String(c[0]).includes('entity/up-1?props=event_name')
 	);
 }
-
-// ═════════════════════════════════════════════════════════════════════════════
-// suggestions — series-create-location
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#248 — series-create-location suggests previously used venues', () => {
 	it('carries list= naming a real <datalist> whose options are the deduped, blank-dropped union of agendaItems + recentItems locations — with ZERO new fetch', async () => {
@@ -449,10 +373,8 @@ describe('#248 — series-create-location suggests previously used venues', () =
 		const input = locationInput(container, 'series-create-location');
 		expect(input.type).toBe('text');
 		const dl = resolveDatalist(input);
-		// SET-pin only: sorted on both sides — ordering stays engineering's call.
 		expect(optionSet(dl)).toEqual(EXPECTED_SET);
 
-		// The derivation is in-memory: nothing was fetched for it.
 		expect(entityFetchCalls()).toEqual([]);
 	});
 
@@ -473,10 +395,6 @@ describe('#248 — series-create-location suggests previously used venues', () =
 		).toBeNull();
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// suggestions — event-create-location
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#248 — event-create-location suggests previously used venues', () => {
 	it('carries list= naming a real <datalist> with the SAME derived set (one shared derivation — both forms are siblings on this page); still zero fetch', async () => {
@@ -521,10 +439,6 @@ describe('#248 — event-create-location suggests previously used venues', () =>
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// FREE TEXT outranks everything — byte-identical wire values
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#248 — a brand-new venue saves exactly as typed (wire unchanged)', () => {
 	it('series submit: the mismatching venue arrives at createEventSeries as defaultLocation, byte-identical, inside the unchanged full input shape', async () => {
 		const container = await renderReady();
@@ -542,10 +456,7 @@ describe('#248 — a brand-new venue saves exactly as typed (wire unchanged)', (
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
 		const input = createEventSeriesMock.mock.calls[0][1] as CreateEventSeriesInput;
-		// Byte-identical: strict string equality on the exact typed value.
 		expect(input.defaultLocation).toBe(NEW_VENUE_SERIES);
-		// Full shape otherwise unchanged (partial assertions hide bugs);
-		// untouched description asserted blank/absent the way the suite does.
 		const { defaultDescription, ...rest } = input;
 		expect(rest).toEqual({
 			name: 'Monday rehearsals',
@@ -561,8 +472,6 @@ describe('#248 — a brand-new venue saves exactly as typed (wire unchanged)', (
 		});
 		expect(defaultDescription ?? '').toBe('');
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, input);
-		// Bracket the whole run (serial occurrence creates + agenda refresh)
-		// inside the test — the form unmounting is its last observable step.
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
@@ -575,7 +484,6 @@ describe('#248 — a brand-new venue saves exactly as typed (wire unchanged)', (
 		await selectValue(container, 'event-create-season', SEASON_ID);
 		await selectValue(container, 'event-create-type', 'concert');
 		await fill(container, 'event-create-name', 'Spring concert');
-		// 19:00 Europe/Tallinn on 18 Apr 2027 (EEST, UTC+3) = 16:00Z.
 		await fillDateTime(container, 'event-create-datetime', '2027-04-18', '19:00');
 		await fillTime(container, 'event-create-end', '21:00');
 		await fill(container, 'event-create-location', NEW_VENUE_EVENT);

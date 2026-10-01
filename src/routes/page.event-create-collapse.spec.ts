@@ -55,6 +55,7 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
@@ -72,6 +73,7 @@ const {
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
+	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
@@ -87,6 +89,7 @@ vi.mock('$lib/entity/entityCreate', () => ({
 }));
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
+	listSeriesOptionsForSeason: listSeriesOptionsForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: updateSeasonFieldMock,
 	addSeasonConductor: addSeasonConductorMock,
@@ -253,6 +256,7 @@ beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue(null);
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
+	listSeriesOptionsForSeasonMock.mockResolvedValue([]);
 	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
 	addSeasonConductorMock.mockResolvedValue(undefined);
@@ -275,6 +279,7 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
+	listSeriesOptionsForSeasonMock.mockReset();
 	listEventsForSeasonMock.mockReset();
 	updateSeasonFieldMock.mockReset();
 	addSeasonConductorMock.mockReset();
