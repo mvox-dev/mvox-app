@@ -2,8 +2,9 @@
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { isDeleteForbidden, isEventCascadePartial } from '$lib/seasons/deleteErrors';
+	import { classifyDeleteFailure, type DeleteFailure } from '$lib/seasons/deleteErrors';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
@@ -25,11 +26,7 @@
 
 	let deleteArmed = $state(false);
 	let deletePending = $state(false);
-	let deleteError = $state<{
-		reason: 'forbidden' | 'partial' | 'generic';
-		deleted?: number;
-		total?: number;
-	} | null>(null);
+	let deleteError = $state<DeleteFailure | null>(null);
 
 	async function armDelete(): Promise<void> {
 		if (isOffline) return;
@@ -56,23 +53,12 @@
 			goto('/');
 		} catch (e) {
 			console.error('event detail: delete failed', evId, e);
-			if (isDeleteForbidden(e)) {
-				deleteError = { reason: 'forbidden' };
-			} else if (isEventCascadePartial(e)) {
-				const partial = e as { deletedCount?: number; totalCount?: number };
-				deleteError = {
-					reason: 'partial',
-					deleted: partial.deletedCount ?? 0,
-					total: partial.totalCount ?? 0
-				};
-			} else {
-				deleteError = { reason: 'generic' };
-			}
+			deleteError = classifyDeleteFailure('event', e);
 			deletePending = false;
 		}
 	}
 
-	function deleteErrorText(failure: NonNullable<typeof deleteError>): string {
+	function deleteErrorText(failure: DeleteFailure): string {
 		switch (failure.reason) {
 			case 'forbidden':
 				return m.event_detail_delete_forbidden();
@@ -94,27 +80,19 @@
 	>
 		{#if deleteArmed}
 			<div class="flex items-center gap-2">
-				<button
-					type="button"
-					data-testid="event-detail-delete-confirm"
-					aria-label={m.event_detail_delete_confirm_aria_label()}
-					disabled={deletePending || isOffline}
-					aria-busy={deletePending}
-					class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-					onclick={() => void confirmDelete()}
-				>
-					{m.event_detail_delete_confirm_short()}
-				</button>
-				<button
-					type="button"
-					data-testid="event-detail-delete-cancel"
-					aria-label={m.event_detail_delete_cancel_aria_label()}
-					disabled={deletePending}
-					class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-					onclick={() => void cancelDelete()}
-				>
-					{m.event_detail_delete_cancel_short()}
-				</button>
+				<DeleteConfirmPair
+					confirmTestid="event-detail-delete-confirm"
+					cancelTestid="event-detail-delete-cancel"
+					confirmLabel={m.event_detail_delete_confirm_aria_label()}
+					cancelLabel={m.event_detail_delete_cancel_aria_label()}
+					confirmText={m.event_detail_delete_confirm_short()}
+					cancelText={m.event_detail_delete_cancel_short()}
+					pending={deletePending}
+					busy={deletePending}
+					{isOffline}
+					onconfirm={() => void confirmDelete()}
+					oncancel={() => void cancelDelete()}
+				/>
 			</div>
 		{:else}
 			<DeleteTrigger

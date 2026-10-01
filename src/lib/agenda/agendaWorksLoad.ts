@@ -6,11 +6,11 @@ import { getAppByteStore } from '$lib/files/appByteStore';
 import { prefetchNextEventParts } from '$lib/files/prefetch';
 import { ensureRetentionSweep, seedRetentionKeys } from '$lib/files/retention';
 import type { ManageRightsState, WorkRow } from '$lib/repertoire/types';
-import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { Season } from '$lib/seasons/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
 import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
+import { NO_MANAGE_PICKERS, readManagePickers } from '$lib/repertoire/managePickers';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
@@ -207,29 +207,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 	}
 
 	function loadManagePickers(cfg: EntuCfg, seasonId: string | null, thisRequest: number) {
-		ag.libraryPickersLoading = true;
-		Promise.all([
-			listWorks(cfg),
-			listAllEditions(cfg),
-			seasonId === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, seasonId)
-		])
-			.then(([worksRead, editionsRead, repertoire]) => {
+		readManagePickers(cfg, seasonId, { listWorks, listAllEditions, listRepertoireItems })
+			.then((pickers) => {
 				if (thisRequest !== seq.requestId) return;
-				ag.libraryWorks = worksRead.items;
-				ag.libraryEditions = editionsRead.items;
-				ag.libraryWorksPartial = worksRead.truncated;
-				ag.libraryEditionsPartial = editionsRead.truncated;
-				ag.seasonRepertoire = repertoire;
+				Object.assign(ag, pickers);
 				ag.libraryPickersLoading = false;
 				ag.libraryPickersLoadSucceeded = true;
 			})
 			.catch(() => {
 				if (thisRequest !== seq.requestId) return;
-				ag.libraryWorks = [];
-				ag.libraryEditions = [];
-				ag.libraryWorksPartial = false;
-				ag.libraryEditionsPartial = false;
-				ag.seasonRepertoire = [];
+				Object.assign(ag, NO_MANAGE_PICKERS);
 				ag.libraryPickersLoading = false;
 				ag.libraryPickersLoadSucceeded = false;
 			});

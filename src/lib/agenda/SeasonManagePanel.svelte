@@ -6,6 +6,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 	import SeasonManageFields from '$lib/agenda/SeasonManageFields.svelte';
 	import SeasonManageConductors from '$lib/agenda/SeasonManageConductors.svelte';
@@ -19,9 +20,10 @@
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { SeasonEditableField, SeriesListItem } from '$lib/seasons/seasonManage';
 	import {
+		runSeasonManageDelete,
 		seasonManageDeleteErrorText,
-		seasonManageDeleteFailure,
-		type SeasonManageDeleteError
+		type SeasonManageDeleteError,
+		type SeasonManageDeleteSlot
 	} from '$lib/agenda/seasonManageDelete';
 	import { focusAfterRender, focusTestIdAfterRender } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -177,15 +179,29 @@
 	let seasonManageDeleteStatus = $state('');
 	let seasonManageDeleteProgress = $state<{ current: number; total: number } | null>(null);
 	let seasonManageDeleteGeneration = 0;
-
-	function makeSeasonManageDeleteProgress(
-		generation: number
-	): (current: number, total: number) => void {
-		return (current, total) => {
-			if (generation !== seasonManageDeleteGeneration) return;
-			seasonManageDeleteProgress = { current, total };
-		};
-	}
+	const seasonManageDeleteSlot: SeasonManageDeleteSlot = {
+		get pendingId() {
+			return seasonManageDeletePendingId;
+		},
+		set pendingId(v) {
+			seasonManageDeletePendingId = v;
+		},
+		get error() {
+			return seasonManageDeleteError;
+		},
+		set error(v) {
+			seasonManageDeleteError = v;
+		},
+		get progress() {
+			return seasonManageDeleteProgress;
+		},
+		set progress(v) {
+			seasonManageDeleteProgress = v;
+		},
+		get generation() {
+			return seasonManageDeleteGeneration;
+		}
+	};
 	let seasonManageConductorError = $state(false);
 	let seasonManageConductorPending = $state(false);
 	let seasonManageConductorStatus = $state('');
@@ -369,27 +385,17 @@
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const seasonName = seasonManageDeleteName;
-		seasonManageDeleteError = null;
-		seasonManageDeleteProgress = null;
-		seasonManageDeletePendingId = SEASON_DELETE_ROW_ID;
-		const generation = seasonManageDeleteGeneration;
-		apiDeleteSeason(cfg, seasonId, undefined, {
-			onProgress: makeSeasonManageDeleteProgress(generation)
-		})
-			.then(() => {
-				if (generation !== seasonManageDeleteGeneration) return;
+		runSeasonManageDelete({
+			slot: seasonManageDeleteSlot,
+			rowId: SEASON_DELETE_ROW_ID,
+			logId: seasonId,
+			list: 'season',
+			call: (onProgress) => apiDeleteSeason(cfg, seasonId, undefined, { onProgress }),
+			onDone: () => {
 				loadForSelected();
 				seasonManageDeleteStatus = m.season_delete_success({ name: seasonName });
-			})
-			.catch((e) => {
-				console.error('agenda: deleting season failed', seasonId, e);
-				if (generation !== seasonManageDeleteGeneration) return;
-				seasonManageDeleteError = seasonManageDeleteFailure('season', e);
-			})
-			.finally(() => {
-				seasonManageDeletePendingId = null;
-				if (generation === seasonManageDeleteGeneration) seasonManageDeleteProgress = null;
-			});
+			}
+		});
 	}
 </script>
 
@@ -444,10 +450,10 @@
 							</button>
 						</h2>
 						{#if seasonManageDeleteArmed === SEASON_DELETE_ROW_ID}
-							<button
-								type="button"
-								data-testid="season-manage-delete-season-confirm"
-								aria-label={seasonManageDeleteScope !== null
+							<DeleteConfirmPair
+								confirmTestid="season-manage-delete-season-confirm"
+								cancelTestid="season-manage-delete-season-cancel"
+								confirmLabel={seasonManageDeleteScope !== null
 									? m.season_delete_confirm_scope({
 											name: seasonManageDeleteName,
 											series: seasonManageDeleteScope.series,
@@ -455,31 +461,23 @@
 											repertoire: seasonManageDeleteScope.repertoireItems
 										})
 									: m.season_manage_delete_confirm({ name: seasonManageDeleteName })}
-								disabled={seasonManageDeletePendingId !== null || isOffline}
-								aria-busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
-								class="ml-auto flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-								onclick={onSeasonManageSeasonDelete}
-								onkeydown={onSeasonManagePanelKeydown}
-							>
-								{seasonManageDeleteScope !== null
+								cancelLabel={m.season_manage_delete_cancel({ name: seasonManageDeleteName })}
+								confirmText={seasonManageDeleteScope !== null
 									? m.season_delete_confirm_scope_short({
 											series: seasonManageDeleteScope.series,
 											events: seasonManageDeleteScope.events,
 											repertoire: seasonManageDeleteScope.repertoireItems
 										})
 									: m.season_manage_delete_confirm_short()}
-							</button>
-							<button
-								type="button"
-								data-testid="season-manage-delete-season-cancel"
-								aria-label={m.season_manage_delete_cancel({ name: seasonManageDeleteName })}
-								disabled={seasonManageDeletePendingId !== null}
-								class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-								onclick={() => void disarmSeasonManageDelete('season-manage-delete-season')}
+								cancelText={m.season_manage_delete_cancel_short()}
+								pending={seasonManageDeletePendingId !== null}
+								busy={seasonManageDeletePendingId === SEASON_DELETE_ROW_ID}
+								{isOffline}
+								confirmClass="ml-auto"
+								onconfirm={onSeasonManageSeasonDelete}
+								oncancel={() => void disarmSeasonManageDelete('season-manage-delete-season')}
 								onkeydown={onSeasonManagePanelKeydown}
-							>
-								{m.season_manage_delete_cancel_short()}
-							</button>
+							/>
 						{:else}
 							<DeleteTrigger
 								data-testid="season-manage-delete-season"
@@ -585,14 +583,12 @@
 					bind:seasonManageSeries
 					{seasonManageSeriesError}
 					{seasonManagePartial}
-					bind:seasonManageDeleteError
+					{seasonManageDeleteError}
 					bind:seasonManageDeleteArmed
 					bind:seasonManageArmedSeriesCount
-					bind:seasonManageDeletePendingId
+					{seasonManageDeletePendingId}
 					bind:seasonManageDeleteStatus
-					bind:seasonManageDeleteProgress
-					seasonManageDeleteGeneration={() => seasonManageDeleteGeneration}
-					{makeSeasonManageDeleteProgress}
+					{seasonManageDeleteSlot}
 					{armSeasonManageDelete}
 					{disarmSeasonManageDelete}
 					{openSeriesCreateForm}

@@ -3,6 +3,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import SeriesCreateForm from '$lib/agenda/SeriesCreateForm.svelte';
 	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
@@ -10,9 +11,10 @@
 	import type { SeriesListItem } from '$lib/seasons/seasonManage';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import {
+		runSeasonManageDelete,
 		seasonManageDeleteErrorText,
-		seasonManageDeleteFailure,
-		type SeasonManageDeleteError
+		type SeasonManageDeleteError,
+		type SeasonManageDeleteSlot
 	} from '$lib/agenda/seasonManageDelete';
 
 	interface Props {
@@ -36,9 +38,7 @@
 		seasonManageArmedSeriesCount: number | null;
 		seasonManageDeletePendingId: string | null;
 		seasonManageDeleteStatus: string;
-		seasonManageDeleteProgress: { current: number; total: number } | null;
-		seasonManageDeleteGeneration: () => number;
-		makeSeasonManageDeleteProgress: (generation: number) => (current: number, total: number) => void;
+		seasonManageDeleteSlot: SeasonManageDeleteSlot;
 		armSeasonManageDelete: (rowId: string, confirmTestid: string) => Promise<void>;
 		disarmSeasonManageDelete: (disarmTestid: string) => Promise<void>;
 		openSeriesCreateForm: () => void;
@@ -65,14 +65,12 @@
 		seasonManageSeries = $bindable(),
 		seasonManageSeriesError,
 		seasonManagePartial,
-		seasonManageDeleteError = $bindable(),
+		seasonManageDeleteError,
 		seasonManageDeleteArmed = $bindable(),
 		seasonManageArmedSeriesCount = $bindable(),
-		seasonManageDeletePendingId = $bindable(),
+		seasonManageDeletePendingId,
 		seasonManageDeleteStatus = $bindable(),
-		seasonManageDeleteProgress = $bindable(),
-		seasonManageDeleteGeneration,
-		makeSeasonManageDeleteProgress,
+		seasonManageDeleteSlot,
 		armSeasonManageDelete,
 		disarmSeasonManageDelete,
 		openSeriesCreateForm,
@@ -110,15 +108,13 @@
 		if (seasonManageDeletePendingId !== null) return;
 		if (isOffline) return;
 		const cfg = cfgFor(selected.db);
-		seasonManageDeleteError = null;
-		seasonManageDeleteProgress = null;
-		seasonManageDeletePendingId = series.id;
-		const generation = seasonManageDeleteGeneration();
-		apiDeleteEventSeries(cfg, series.id, undefined, {
-			onProgress: makeSeasonManageDeleteProgress(generation)
-		})
-			.then((deletedOccurrences) => {
-				if (generation !== seasonManageDeleteGeneration()) return;
+		runSeasonManageDelete({
+			slot: seasonManageDeleteSlot,
+			rowId: series.id,
+			logId: series.id,
+			list: 'series',
+			call: (onProgress) => apiDeleteEventSeries(cfg, series.id, undefined, { onProgress }),
+			onDone: (deletedOccurrences) => {
 				seasonManageDeleteArmed = null;
 				seasonManageArmedSeriesCount = null;
 				seasonManageSeries = seasonManageSeries.filter((row) => row.id !== series.id);
@@ -127,16 +123,8 @@
 						? m.season_manage_series_deleted({ name: series.name, count: deletedOccurrences })
 						: m.season_manage_deleted({ name: series.name });
 				refreshAfterSeasonManageDelete(cfg);
-			})
-			.catch((e) => {
-				console.error('agenda: deleting event series failed', series.id, e);
-				if (generation !== seasonManageDeleteGeneration()) return;
-				seasonManageDeleteError = seasonManageDeleteFailure('series', e);
-			})
-			.finally(() => {
-				seasonManageDeletePendingId = null;
-				if (generation === seasonManageDeleteGeneration()) seasonManageDeleteProgress = null;
-			});
+			}
+		});
 	}
 </script>
 
@@ -203,41 +191,31 @@
 				>
 				{#if selected && canDeleteSeries(series, selected.personId)}
 					{#if seasonManageDeleteArmed === series.id}
-						<button
-							type="button"
-							data-testid="season-manage-series-delete-confirm-{series.id}"
-							aria-label={seasonManageArmedSeriesCount !== null &&
+						<DeleteConfirmPair
+							confirmTestid="season-manage-series-delete-confirm-{series.id}"
+							cancelTestid="season-manage-series-delete-cancel-{series.id}"
+							confirmLabel={seasonManageArmedSeriesCount !== null &&
 							seasonManageArmedSeriesCount > 0
 								? m.season_manage_series_delete_confirm({
 										name: series.name,
 										count: seasonManageArmedSeriesCount
 									})
 								: m.season_manage_delete_confirm({ name: series.name })}
-							disabled={seasonManageDeletePendingId !== null || isOffline}
-							aria-busy={seasonManageDeletePendingId === series.id}
-							class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-							onclick={() => onSeasonManageSeriesDelete(series)}
-						>
-							{seasonManageArmedSeriesCount !== null &&
+							cancelLabel={m.season_manage_delete_cancel({ name: series.name })}
+							confirmText={seasonManageArmedSeriesCount !== null &&
 							seasonManageArmedSeriesCount > 0
 								? m.season_manage_series_delete_confirm_short({
 										count: seasonManageArmedSeriesCount
 									})
 								: m.season_manage_delete_confirm_short()}
-						</button>
-						<button
-							type="button"
-							data-testid="season-manage-series-delete-cancel-{series.id}"
-							aria-label={m.season_manage_delete_cancel({ name: series.name })}
-							disabled={seasonManageDeletePendingId !== null}
-							class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-							onclick={() =>
-								void disarmSeasonManageDelete(
-									`season-manage-series-delete-${series.id}`
-								)}
-						>
-							{m.season_manage_delete_cancel_short()}
-						</button>
+							cancelText={m.season_manage_delete_cancel_short()}
+							pending={seasonManageDeletePendingId !== null}
+							busy={seasonManageDeletePendingId === series.id}
+							{isOffline}
+							onconfirm={() => onSeasonManageSeriesDelete(series)}
+							oncancel={() =>
+								void disarmSeasonManageDelete(`season-manage-series-delete-${series.id}`)}
+						/>
 					{:else}
 						<DeleteTrigger
 							data-testid="season-manage-series-delete-{series.id}"

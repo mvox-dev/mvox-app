@@ -5,6 +5,7 @@
 	import PersonName from '$lib/components/PersonName.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
+	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		selected: Collective | null;
@@ -73,19 +74,22 @@
 		})()
 	);
 
-	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
-		if (seasonManageConductorPending || isOffline) return;
-		if (!selection.id || !selected || manageableSeasonId === null) return;
-		const personId = selection.id;
-		if (seasonManageConductorIds.includes(personId)) return;
+	function runConductorWrite(
+		verb: 'add' | 'remove',
+		personId: string,
+		nextIds: string[],
+		revert: () => string[],
+		write: (cfg: EntuCfg, seasonId: string, personId: string) => Promise<unknown>
+	): void {
+		if (!selected || manageableSeasonId === null) return;
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisSeasonManage = switchGeneration();
 		seasonManageConductorError = false;
 		seasonManageConductorStatus = '';
 		seasonManageConductorPending = true;
-		seasonManageConductorIds = [...seasonManageConductorIds, personId];
-		addSeasonConductor(cfg, seasonId, personId)
+		seasonManageConductorIds = nextIds;
+		write(cfg, seasonId, personId)
 			.then(() => {
 				if (thisSeasonManage !== switchGeneration()) return;
 				seasonManageConductorPending = false;
@@ -93,40 +97,35 @@
 			})
 			.catch((e) => {
 				if (thisSeasonManage !== switchGeneration()) return;
-				console.error('agenda: add season conductor failed', personId, e);
-				seasonManageConductorIds = seasonManageConductorIds.filter((id) => id !== personId);
+				console.error(`agenda: ${verb} season conductor failed`, personId, e);
+				seasonManageConductorIds = revert();
 				seasonManageConductorError = true;
 				seasonManageConductorPending = false;
 			});
 	}
 
+	function onSeasonManageConductorSelect(selection: { id: string | null; label: string }): void {
+		if (seasonManageConductorPending || isOffline) return;
+		if (!selection.id || !selected || manageableSeasonId === null) return;
+		const personId = selection.id;
+		if (seasonManageConductorIds.includes(personId)) return;
+		runConductorWrite(
+			'add',
+			personId,
+			[...seasonManageConductorIds, personId],
+			() => seasonManageConductorIds.filter((id) => id !== personId),
+			addSeasonConductor
+		);
+	}
+
 	function onSeasonManageConductorRemove(personId: string, index: number): void {
 		if (seasonManageConductorPending || isOffline) return;
-		if (!selected || manageableSeasonId === null) return;
-		const cfg = cfgFor(selected.db);
-		const seasonId = manageableSeasonId;
-		const thisSeasonManage = switchGeneration();
 		const before = seasonManageConductorIds;
-		seasonManageConductorError = false;
-		seasonManageConductorStatus = '';
-		seasonManageConductorPending = true;
-		seasonManageConductorIds = [
+		const nextIds = [
 			...seasonManageConductorIds.slice(0, index),
 			...seasonManageConductorIds.slice(index + 1)
 		];
-		apiRemoveSeasonConductor(cfg, seasonId, personId)
-			.then(() => {
-				if (thisSeasonManage !== switchGeneration()) return;
-				seasonManageConductorPending = false;
-				seasonManageConductorStatus = m.season_manage_conductor_saved();
-			})
-			.catch((e) => {
-				if (thisSeasonManage !== switchGeneration()) return;
-				console.error('agenda: remove season conductor failed', personId, e);
-				seasonManageConductorIds = before;
-				seasonManageConductorError = true;
-				seasonManageConductorPending = false;
-			});
+		runConductorWrite('remove', personId, nextIds, () => before, apiRemoveSeasonConductor);
 	}
 </script>
 
