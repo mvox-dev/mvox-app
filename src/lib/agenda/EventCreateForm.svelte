@@ -4,22 +4,22 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { focusOnMount } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
-	import PersonName from '$lib/components/PersonName.svelte';
+	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { createEvent, type CreateEventInput } from '$lib/entity/entityCreate';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import {
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
 		tallinnLocalToUtcIso,
-		isoDateFormatter,
-		TALLINN_TZ
+		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
 	import {
 		listSeriesOptionsForSeason,
@@ -96,9 +96,8 @@
 
 	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | 'end' | null;
 
-	const eventCreateStatusDateFmt = isoDateFormatter(TALLINN_TZ);
 	function eventCreateStatusFmt(at: Date): string {
-		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
+		return `${tallinnDayKey(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
 	}
 
 	let eventCreateSeasonId = $state(untrack(() => manageableSeasonId) ?? '');
@@ -124,6 +123,12 @@
 	let eventCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let eventCreateError = $state<(() => string) | null>(null);
 	let eventCreateErrorField = $state<EventCreateErrorField>(null);
+	const datetimeErrorAttrs = $derived(
+		fieldErrorAttrs(eventCreateErrorField, 'datetime', 'event-create-error')
+	);
+	const endErrorAttrs = $derived(
+		fieldErrorAttrs(eventCreateErrorField, 'end', 'event-create-error')
+	);
 	let eventCreateLoadId = 0;
 
 	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
@@ -136,13 +141,6 @@
 		eventCreateErrorField = null;
 	}
 
-	function eventCreateDescribedBy(field: EventCreateErrorField): string | undefined {
-		return eventCreateErrorField === field ? 'event-create-error' : undefined;
-	}
-
-	function eventCreateInvalid(field: EventCreateErrorField): true | undefined {
-		return eventCreateErrorField === field ? true : undefined;
-	}
 
 	function loadEventCreateSeriesOptions(cfg: { db: string; token: string }, seasonId: string): void {
 		const thisLoad = eventCreateLoadId;
@@ -211,20 +209,6 @@
 			});
 	}
 
-	function handleEventCreateConductorSelect(selection: { id: string | null; label: string }): void {
-		if (!selection.id) return;
-		if (eventCreateConductors.some((c) => c.id === selection.id)) return;
-		eventCreateConductors = [...eventCreateConductors, { id: selection.id, name: selection.label }];
-	}
-
-	function removeEventCreateConductor(id: string): void {
-		eventCreateConductors = eventCreateConductors.filter((c) => c.id !== id);
-	}
-
-	const eventCreateConductorOptions = $derived(
-		rosterPickerOptions(eventCreateConductors.map((c) => c.id))
-	);
-
 	function eventCreateNumberOrUndefined(raw: string): number | undefined {
 		const trimmed = raw.trim();
 		if (!trimmed) return undefined;
@@ -282,16 +266,12 @@
 
 		submitting = true;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for event create failed', e);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'event create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: event create with no resolvable database entity', current.personId);
 				setEventCreateError(m.event_create_failed, null);
 				return;
 			}
@@ -373,8 +353,7 @@
 		</span>
 		<select
 			data-testid="event-create-type"
-			aria-invalid={eventCreateInvalid('type')}
-			aria-describedby={eventCreateDescribedBy('type')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'type', 'event-create-error')}
 			value={eventCreateType}
 			onchange={(e) => {
 				eventCreateType = (e.currentTarget as HTMLSelectElement).value;
@@ -393,8 +372,7 @@
 		<span class="text-xs text-ink-2">{m.event_create_season_label()}</span>
 		<select
 			data-testid="event-create-season"
-			aria-invalid={eventCreateInvalid('season')}
-			aria-describedby={eventCreateDescribedBy('season')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'season', 'event-create-error')}
 			value={eventCreateSeasonId}
 			onchange={(e) =>
 				handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
@@ -436,8 +414,7 @@
 			type="text"
 			data-testid="event-create-name"
 			use:focusOnMount
-			aria-invalid={eventCreateInvalid('name')}
-			aria-describedby={eventCreateDescribedBy('name')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'name', 'event-create-error')}
 			placeholder={m.event_create_name_placeholder()}
 			value={eventCreateName}
 			oninput={(e) => {
@@ -467,8 +444,7 @@
 				type="date"
 				data-testid="event-create-datetime-date"
 				aria-label={m.time_select_date_label()}
-				aria-invalid={eventCreateInvalid('datetime')}
-				aria-describedby={eventCreateDescribedBy('datetime')}
+				{...datetimeErrorAttrs}
 				value={eventCreateDate}
 				oninput={(e) => {
 					eventCreateDate = (e.currentTarget as HTMLInputElement).value;
@@ -480,8 +456,8 @@
 			<TimeSelect
 				prefix="event-create-datetime"
 				value={eventCreateTime}
-				invalid={eventCreateInvalid('datetime')}
-				describedBy={eventCreateDescribedBy('datetime')}
+				invalid={datetimeErrorAttrs['aria-invalid']}
+				describedBy={datetimeErrorAttrs['aria-describedby']}
 				onchange={(v) => {
 					eventCreateTime = v;
 					clearEventCreateError();
@@ -504,8 +480,7 @@
 				type="date"
 				data-testid="event-create-end-date"
 				aria-label={m.time_select_date_label()}
-				aria-invalid={eventCreateInvalid('end')}
-				aria-describedby={eventCreateDescribedBy('end')}
+				{...endErrorAttrs}
 				value={eventCreateEndDate}
 				oninput={(e) => {
 					eventCreateEndDate = (e.currentTarget as HTMLInputElement).value;
@@ -517,8 +492,8 @@
 			<TimeSelect
 				prefix="event-create-end"
 				value={eventCreateEndTime}
-				invalid={eventCreateInvalid('end')}
-				describedBy={eventCreateDescribedBy('end')}
+				invalid={endErrorAttrs['aria-invalid']}
+				describedBy={endErrorAttrs['aria-describedby']}
 				onchange={(v) => {
 					eventCreateEndTime = v;
 					clearEventCreateError();
@@ -589,68 +564,16 @@
 		</p>
 	{/if}
 
-	<div data-testid="event-create-conductors-field">
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">{m.event_create_conductor_label()}</span>
-			<select
-				data-testid="event-create-conductor-select"
-				disabled={eventCreateConductorOptions.length === 0}
-				value=""
-				onchange={(e) => {
-					const target = e.currentTarget as HTMLSelectElement;
-					const personId = target.value;
-					target.value = '';
-					if (!personId) return;
-					const label =
-						eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
-						'';
-					handleEventCreateConductorSelect({ id: personId, label });
-				}}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			>
-				<option value="" disabled selected hidden>
-					{pickerPromptText(
-						eventCreateConductorOptions.length,
-						m.event_create_conductor_placeholder()
-					)}
-				</option>
-				{#each eventCreateConductorOptions as option (option.id)}
-					<option value={option.id}>{option.label}</option>
-				{/each}
-		</select>
-		</label>
-		{#if rosterPartial}
-			<p data-testid="event-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
-				{m.picker_partial_members_notice()}
-			</p>
-		{/if}
-		{#if sectionsReadFailed}
-			<p data-testid="event-create-conductor-order-note" class="text-xs text-ink-2">
-				{m.picker_order_fallback()}
-			</p>
-		{/if}
-	</div>
-	{#if eventCreateConductors.length > 0}
-		<ul class="flex flex-wrap gap-1.5">
-			{#each eventCreateConductors as conductor (conductor.id)}
-				<li
-					data-testid="event-create-conductor-{conductor.id}"
-					class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-				>
-					<PersonName name={conductor.name} />
-					<button
-						type="button"
-						data-testid="event-create-conductor-remove-{conductor.id}"
-						aria-label={m.season_conductor_remove({ name: conductor.name })}
-						class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-						onclick={() => removeEventCreateConductor(conductor.id)}
-					>
-						&times;
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	<ConductorChips
+		bind:conductors={eventCreateConductors}
+		testid="event-create-conductor"
+		fieldTestid="event-create-conductors-field"
+		label={m.event_create_conductor_label()}
+		partial={rosterPartial}
+		orderFallback={sectionsReadFailed}
+		{rosterPickerOptions}
+		prompt={(n) => pickerPromptText(n, m.event_create_conductor_placeholder())}
+	/>
 
 	{#if eventCreateError}
 		<p

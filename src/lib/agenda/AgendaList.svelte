@@ -7,13 +7,12 @@
 		tallinnHHMM,
 		formatTime,
 		timeFormatStore,
-		isoDateFormatter,
-		TALLINN_TZ
+		longDayFormatter,
+		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
-	import { getLocale } from '$lib/paraglide/runtime.js';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
 	import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
@@ -114,18 +113,7 @@
 		return myAttendanceByEventId[eventId] ?? 'not-recorded';
 	}
 
-	const groupKeyFmt = isoDateFormatter(TALLINN_TZ);
-
-	const headerFmt = $derived(
-		new Intl.DateTimeFormat(getLocale(), {
-			timeZone: TALLINN_TZ,
-			weekday: 'long',
-			day: 'numeric',
-			month: 'long'
-		})
-	);
-
-	const shortDateFmt = isoDateFormatter(TALLINN_TZ);
+	const headerFmt = $derived(longDayFormatter());
 
 	function rowLinkLabel(name: string): string {
 		return name.trim() === ''
@@ -138,7 +126,7 @@
 		const order: string[] = [];
 		for (const item of items) {
 			const d = new Date(item.startDatetime);
-			const key = groupKeyFmt.format(d);
+			const key = tallinnDayKey(d);
 			if (!seen.has(key)) {
 				seen.set(key, []);
 				order.push(key);
@@ -153,8 +141,8 @@
 	});
 
 	const now = new Date();
-	const todayKey = groupKeyFmt.format(now);
-	const tomorrowKey = groupKeyFmt.format(
+	const todayKey = tallinnDayKey(now);
+	const tomorrowKey = tallinnDayKey(
 		new Date(new Date(todayKey + 'T12:00:00').getTime() + 24 * 60 * 60 * 1000)
 	);
 
@@ -252,7 +240,7 @@
 					<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
 				{/if}
 				<a href="/event/{item.id}" aria-hidden="true" tabindex="-1" class="flex flex-col font-mono">
-					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{shortDateFmt.format(new Date(item.startDatetime))}</span>
+					<span data-testid="recent-row-date" class="text-[10px] text-ink-2">{tallinnDayKey(new Date(item.startDatetime))}</span>
 					<span class="text-sm text-ink">{formatTime(tallinnHHMM(new Date(item.startDatetime)), $timeFormatStore)}</span>
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>

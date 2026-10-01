@@ -1,4 +1,5 @@
 import { writable, type Writable } from 'svelte/store';
+import { getLocale } from '$lib/paraglide/runtime.js';
 
 // Per-device, localStorage-backed; 24h unless the profile page opts into AM/PM.
 
@@ -97,6 +98,46 @@ export function isoDateFormatter(timeZone?: string): Intl.DateTimeFormat {
 		month: '2-digit',
 		day: '2-digit'
 	});
+}
+
+const tallinnIsoDate = isoDateFormatter(TALLINN_TZ);
+
+export function tallinnDayKey(date: Date): string {
+	return tallinnIsoDate.format(date);
+}
+
+export function longDayFormatter(): Intl.DateTimeFormat {
+	return new Intl.DateTimeFormat(getLocale(), {
+		timeZone: TALLINN_TZ,
+		weekday: 'long',
+		day: 'numeric',
+		month: 'long'
+	});
+}
+
+// keyOf returns a YYYY-MM-DD day key; runs of the same month form one group.
+export function groupByMonth<T>(
+	items: readonly T[],
+	keyOf: (item: T) => string
+): Array<{ month: string; items: T[] }> {
+	const groups: Array<{ month: string; items: T[] }> = [];
+	for (const item of items) {
+		const month = keyOf(item).slice(0, 7);
+		const current = groups[groups.length - 1];
+		if (current && current.month === month) {
+			current.items.push(item);
+		} else {
+			groups.push({ month, items: [item] });
+		}
+	}
+	return groups;
+}
+
+export function monthLabel(month: string): string {
+	const [year, monthNum] = month.split('-').map(Number);
+	return new Intl.DateTimeFormat(getLocale(), { month: 'long', year: 'numeric' }).format(
+		new Date(year, monthNum - 1, 1)
+	);
 }
 
 export function tallinnWallClockParts(isoUtc: string): { date: string; time: string } {

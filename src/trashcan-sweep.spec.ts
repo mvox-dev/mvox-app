@@ -82,18 +82,7 @@ function buttonBlock(path: string, testidLiteral: string): string {
 
 describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink empties the idiom)', () => {
 	const chips: Array<[string, string]> = [
-		[
-			'lib/agenda/SeasonManageConductors.svelte',
-			'data-testid="season-manage-conductor-remove-{personId}"'
-		],
-		[
-			'lib/agenda/SeasonCreateForm.svelte',
-			'data-testid="season-create-conductor-remove-{conductor.id}"'
-		],
-		[
-			'lib/agenda/EventCreateForm.svelte',
-			'data-testid="event-create-conductor-remove-{conductor.id}"'
-		]
+		['lib/agenda/ConductorChip.svelte', 'data-testid="{testid}-remove-{personId}"']
 	];
 	for (const [path, testid] of chips) {
 		it(`${testid} keeps × and the muted tone — no trashcan, no red`, () => {
@@ -110,11 +99,8 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 	// The rationale must live in the markup, not only here (read raw, since the
 	// point is that the HTML comment survives in the source).
 	it('the season-manage chip carries the WHY in markup, above the button a future sweeper would convert', () => {
-		const source = readFileSync(
-			join(SRC_ROOT, 'lib/agenda/SeasonManageConductors.svelte'),
-			'utf-8'
-		);
-		const at = source.indexOf('data-testid="season-manage-conductor-remove-{personId}"');
+		const source = readFileSync(join(SRC_ROOT, 'lib/agenda/ConductorChip.svelte'), 'utf-8');
+		const at = source.indexOf('data-testid="{testid}-remove-{personId}"');
 		expect(at, 'the season-manage chip must exist').toBeGreaterThan(-1);
 		const preamble = source.slice(Math.max(0, at - 1400), at);
 		expect(preamble, 'no #237 pointer above the Table-B chip').toContain('#237');

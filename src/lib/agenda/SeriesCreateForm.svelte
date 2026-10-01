@@ -4,7 +4,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getLocale } from '$lib/paraglide/runtime.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
@@ -12,8 +12,8 @@
 	import { createEvent, createEventSeries } from '$lib/entity/entityCreate';
 	import type { CreateEventSeriesInput } from '$lib/entity/entityCreate';
 	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
-	import { tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
+	import { groupByMonth, monthLabel, tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
 	import { writesAvailable } from '$lib/net/online';
 	import {
 		setSeriesCreateResume,
@@ -78,6 +78,9 @@
 	let seriesCreateRevealedCount = $state(50);
 	let seriesCreateError = $state<(() => string) | null>(null);
 	let seriesCreateErrorField = $state<SeriesCreateErrorField>(null);
+	const timeErrorAttrs = $derived(
+		fieldErrorAttrs(seriesCreateErrorField, 'time', 'series-create-error')
+	);
 	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
 
 	const seriesCreateResume = $derived(selected ? (resumeByDb[selected.db] ?? null) : null);
@@ -92,13 +95,6 @@
 		seriesCreateErrorField = null;
 	}
 
-	function seriesCreateDescribedBy(field: SeriesCreateErrorField): string | undefined {
-		return seriesCreateErrorField === field ? 'series-create-error' : undefined;
-	}
-
-	function seriesCreateInvalid(field: SeriesCreateErrorField): true | undefined {
-		return seriesCreateErrorField === field ? true : undefined;
-	}
 
 	const seriesCreateLocked = $derived(seriesCreateResume !== null);
 
@@ -178,27 +174,11 @@
 		return date.slice(0, 10);
 	}
 
-	const seriesCreateMonthGroups = $derived.by(() => {
-		if (seriesCreateVisibleGridDates === null) return null;
-		const groups: { month: string; dates: string[] }[] = [];
-		for (const date of seriesCreateVisibleGridDates) {
-			const month = seriesCreateIsoDay(date).slice(0, 7);
-			const current = groups[groups.length - 1];
-			if (current && current.month === month) {
-				current.dates.push(date);
-			} else {
-				groups.push({ month, dates: [date] });
-			}
-		}
-		return groups;
-	});
-
-	function seriesCreateMonthLabel(month: string): string {
-		const [year, monthNum] = month.split('-').map(Number);
-		return new Intl.DateTimeFormat(getLocale(), { month: 'long', year: 'numeric' }).format(
-			new Date(year, monthNum - 1, 1)
-		);
-	}
+	const seriesCreateMonthGroups = $derived(
+		seriesCreateVisibleGridDates === null
+			? null
+			: groupByMonth(seriesCreateVisibleGridDates, seriesCreateIsoDay)
+	);
 
 	function restoreSeriesCreateFocus(): void {
 		void focusAfterRender(() => seasonManagePanelEl);
@@ -315,16 +295,12 @@
 		submitting = true;
 		seriesRunDb = runDb;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for series create failed', e);
-				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'series create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: series create with no resolvable database entity', current.personId);
 				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
 				return;
 			}
@@ -445,8 +421,7 @@
 				type="text"
 				data-testid="series-create-name"
 				use:focusOnMount
-				aria-invalid={seriesCreateInvalid('name')}
-				aria-describedby={seriesCreateDescribedBy('name')}
+				{...fieldErrorAttrs(seriesCreateErrorField, 'name', 'series-create-error')}
 				placeholder={m.series_create_name_placeholder()}
 				disabled={seriesCreateLocked}
 				value={seriesCreateName}
@@ -463,8 +438,7 @@
 			</span>
 			<select
 				data-testid="series-create-type"
-				aria-invalid={seriesCreateInvalid('type')}
-				aria-describedby={seriesCreateDescribedBy('type')}
+				{...fieldErrorAttrs(seriesCreateErrorField, 'type', 'series-create-error')}
 				disabled={seriesCreateLocked}
 				value={seriesCreateType}
 				onchange={(e) => {
@@ -505,8 +479,7 @@
 			<input
 				type="number"
 				data-testid="series-create-duration"
-				aria-invalid={seriesCreateInvalid('duration')}
-				aria-describedby={seriesCreateDescribedBy('duration')}
+				{...fieldErrorAttrs(seriesCreateErrorField, 'duration', 'series-create-error')}
 				placeholder={m.series_create_duration_placeholder()}
 				disabled={seriesCreateLocked}
 				value={seriesCreateDuration}
@@ -563,8 +536,7 @@
 					</span>
 					<select
 						data-testid="series-create-day"
-						aria-invalid={seriesCreateInvalid('day')}
-						aria-describedby={seriesCreateDescribedBy('day')}
+						{...fieldErrorAttrs(seriesCreateErrorField, 'day', 'series-create-error')}
 						disabled={seriesCreateLocked}
 						value={seriesCreateDay}
 						onchange={(e) => {
@@ -600,8 +572,8 @@
 					prefix="series-create-time"
 					value={seriesCreateTime}
 					disabled={seriesCreateLocked}
-					invalid={seriesCreateInvalid('time')}
-					describedBy={seriesCreateDescribedBy('time')}
+					invalid={timeErrorAttrs['aria-invalid']}
+					describedBy={timeErrorAttrs['aria-describedby']}
 					onchange={(v) => {
 						seriesCreateTime = v;
 						clearSeriesCreateError();
@@ -616,8 +588,7 @@
 				<input
 					type="date"
 					data-testid="series-create-from"
-					aria-invalid={seriesCreateInvalid('from')}
-					aria-describedby={seriesCreateDescribedBy('from')}
+					{...fieldErrorAttrs(seriesCreateErrorField, 'from', 'series-create-error')}
 					disabled={seriesCreateLocked}
 					value={seriesCreateFrom}
 					oninput={(e) => {
@@ -632,8 +603,7 @@
 				<input
 					type="date"
 					data-testid="series-create-until"
-					aria-invalid={seriesCreateInvalid('until')}
-					aria-describedby={seriesCreateDescribedBy('until')}
+					{...fieldErrorAttrs(seriesCreateErrorField, 'until', 'series-create-error')}
 					disabled={seriesCreateLocked}
 					value={seriesCreateUntil}
 					oninput={(e) => {
@@ -671,10 +641,10 @@
 								data-testid="series-create-month-{group.month}"
 								class="text-xs tracking-wide text-ink-2 uppercase"
 							>
-								{seriesCreateMonthLabel(group.month)}
+								{monthLabel(group.month)}
 							</h4>
 							<div class="flex flex-wrap gap-1.5">
-								{#each group.dates as date (date)}
+								{#each group.items as date (date)}
 									{@const iso = seriesCreateIsoDay(date)}
 									{@const skipped = !seriesCreateResume && seriesCreateSkipDates.includes(iso)}
 									<button

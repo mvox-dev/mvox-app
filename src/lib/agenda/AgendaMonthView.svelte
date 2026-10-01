@@ -4,8 +4,7 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
-	import { getLocale } from '$lib/paraglide/runtime.js';
-	import { isoDateFormatter, TALLINN_TZ } from '$lib/preferences/timeFormat';
+	import { groupByMonth, monthLabel, tallinnDayKey } from '$lib/preferences/timeFormat';
 
 	interface Props {
 		items: AgendaItem[];
@@ -15,12 +14,6 @@
 	}
 
 	const { items, loading = false, emptyState, justCreatedEventId = null }: Props = $props();
-
-	const dayKeyFmt = isoDateFormatter(TALLINN_TZ);
-
-	const monthHeaderFmt = $derived(
-		new Intl.DateTimeFormat(getLocale(), { month: 'long', year: 'numeric' })
-	);
 
 	function rowLinkLabel(name: string): string {
 		return name.trim() === ''
@@ -46,27 +39,12 @@
 		return Number(dayKey.slice(8, 10));
 	}
 
-	const monthGroups = $derived.by(() => {
-		const groups: { key: string; label: string; rows: { item: AgendaItem; dayKey: string }[] }[] =
-			[];
-		for (const item of items) {
-			const dayKey = dayKeyFmt.format(new Date(item.startDatetime));
-			const month = dayKey.slice(0, 7);
-			const current = groups[groups.length - 1];
-			const row = { item, dayKey };
-			if (current && current.key === month) {
-				current.rows.push(row);
-			} else {
-				const [year, monthNum] = month.split('-').map(Number);
-				groups.push({
-					key: month,
-					label: monthHeaderFmt.format(new Date(year, monthNum - 1, 1)),
-					rows: [row]
-				});
-			}
-		}
-		return groups;
-	});
+	const monthGroups = $derived(
+		groupByMonth(
+			items.map((item) => ({ item, dayKey: tallinnDayKey(new Date(item.startDatetime)) })),
+			(row) => row.dayKey
+		).map((group) => ({ key: group.month, label: monthLabel(group.month), rows: group.items }))
+	);
 </script>
 
 <div data-testid="agenda-month-list" class="flex flex-col">

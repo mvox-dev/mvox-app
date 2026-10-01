@@ -3,13 +3,14 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { focusOnMount } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
-	import PersonName from '$lib/components/PersonName.svelte';
+	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
 	import { createSeason } from '$lib/entity/entityCreate';
-	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import { writesAvailable } from '$lib/net/online';
@@ -52,9 +53,6 @@
 	let seasonCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let seasonCreateError = $state<(() => string) | null>(null);
 	let seasonCreateErrorField = $state<'name' | 'dates' | null>(null);
-	const seasonConductorOptions = $derived(
-		rosterPickerOptions(seasonCreateConductors.map((c) => c.id))
-	);
 
 	untrack(() => {
 		const current = selected;
@@ -80,16 +78,6 @@
 
 	function onSeasonFormKeydown(event: KeyboardEvent): void {
 		formKeydown(event, { close: dismiss, submit: () => void submitSeasonCreate() });
-	}
-
-	function onSeasonConductorSelect(selection: { id: string | null; label: string }): void {
-		if (!selection.id) return;
-		if (seasonCreateConductors.some((c) => c.id === selection.id)) return;
-		seasonCreateConductors = [...seasonCreateConductors, { id: selection.id, name: selection.label }];
-	}
-
-	function removeSeasonConductor(id: string): void {
-		seasonCreateConductors = seasonCreateConductors.filter((c) => c.id !== id);
 	}
 
 	async function submitSeasonCreate(): Promise<void> {
@@ -123,16 +111,12 @@
 
 		submitting = true;
 		try {
-			let dbEntityId: string | null;
-			try {
-				dbEntityId = await resolveDatabaseEntityId(cfg);
-			} catch (e) {
-				console.error('agenda: resolving the database entity for season create failed', e);
-				setSeasonCreateError(m.season_create_failed, null);
-				return;
-			}
+			const dbEntityId = await resolveDbEntityOrLog(
+				cfg,
+				{ area: 'agenda', action: 'season create' },
+				current.personId
+			);
 			if (!dbEntityId) {
-				console.error('agenda: season create with no resolvable database entity', current.personId);
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}
@@ -179,10 +163,7 @@
 		use:focusOnMount
 		aria-label={m.season_name_label()}
 		placeholder={m.season_name_label()}
-		aria-invalid={seasonCreateErrorField === 'name' ? true : undefined}
-		aria-describedby={seasonCreateErrorField === 'name'
-			? 'season-create-error'
-			: undefined}
+		{...fieldErrorAttrs(seasonCreateErrorField, 'name', 'season-create-error')}
 		value={seasonCreateName}
 		oninput={(e) => {
 			seasonCreateName = (e.currentTarget as HTMLInputElement).value;
@@ -195,10 +176,7 @@
 			type="date"
 			data-testid="season-create-start"
 			aria-label={m.season_start_date_label()}
-			aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
-			aria-describedby={seasonCreateErrorField === 'dates'
-				? 'season-create-error'
-				: undefined}
+			{...fieldErrorAttrs(seasonCreateErrorField, 'dates', 'season-create-error')}
 			value={seasonCreateStartDate}
 			oninput={(e) => {
 				seasonCreateStartDate = (e.currentTarget as HTMLInputElement).value;
@@ -210,10 +188,7 @@
 			type="date"
 			data-testid="season-create-end"
 			aria-label={m.season_end_date_label()}
-			aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
-			aria-describedby={seasonCreateErrorField === 'dates'
-				? 'season-create-error'
-				: undefined}
+			{...fieldErrorAttrs(seasonCreateErrorField, 'dates', 'season-create-error')}
 			value={seasonCreateEndDate}
 			oninput={(e) => {
 				seasonCreateEndDate = (e.currentTarget as HTMLInputElement).value;
@@ -222,63 +197,15 @@
 			class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 		/>
 	</div>
-	<select
-		data-testid="season-create-conductor-select"
-		aria-label={m.season_conductor_label()}
-		disabled={seasonConductorOptions.length === 0}
-		value=""
-		onchange={(e) => {
-			const target = e.currentTarget as HTMLSelectElement;
-			const personId = target.value;
-			target.value = '';
-			if (!personId) return;
-			const label =
-				seasonConductorOptions.find((o) => o.id === personId)?.label ?? '';
-			onSeasonConductorSelect({ id: personId, label });
-		}}
-		class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-	>
-		<option value="" disabled selected hidden>
-			{pickerPromptText(
-				seasonConductorOptions.length,
-				m.season_conductor_placeholder()
-			)}
-		</option>
-		{#each seasonConductorOptions as option (option.id)}
-			<option value={option.id}>{option.label}</option>
-		{/each}
-	</select>
-	{#if rosterPartial}
-		<p data-testid="season-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
-			{m.picker_partial_members_notice()}
-		</p>
-	{/if}
-	{#if sectionsReadFailed}
-		<p data-testid="season-create-conductor-order-note" class="text-xs text-ink-2">
-			{m.picker_order_fallback()}
-		</p>
-	{/if}
-	{#if seasonCreateConductors.length > 0}
-		<ul class="flex flex-wrap gap-1.5">
-			{#each seasonCreateConductors as conductor (conductor.id)}
-				<li
-					data-testid="season-create-conductor-{conductor.id}"
-					class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-				>
-					<PersonName name={conductor.name} />
-					<button
-						type="button"
-						data-testid="season-create-conductor-remove-{conductor.id}"
-						aria-label={m.season_conductor_remove({ name: conductor.name })}
-						class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-						onclick={() => removeSeasonConductor(conductor.id)}
-					>
-						&times;
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	<ConductorChips
+		bind:conductors={seasonCreateConductors}
+		testid="season-create-conductor"
+		ariaLabel={m.season_conductor_label()}
+		partial={rosterPartial}
+		orderFallback={sectionsReadFailed}
+		{rosterPickerOptions}
+		prompt={(n) => pickerPromptText(n, m.season_conductor_placeholder())}
+	/>
 	{#if seasonCreateError}
 		<p
 			id="season-create-error"
