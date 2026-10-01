@@ -768,3 +768,38 @@ page's own fallback lands AFTER the clear. Premise: `src/routes/+layout.ts` load
 cached route navigates itself via goto (verified: agenda none; event/library goto only to /part, /). **Re-open if a
 universal load gains an await/fetch, or a cached page starts a goto on its own route (e.g. a ?work= scroll-spy via
 goto, not replaceState)** — then a fallback can land before the clear and reopen writes over cached data.
+
+## [PATTERN-MOUNT-ON-OPEN-DROPS-THE-CLOSED-GUARD] 2026-09-29, #508 s2 — check on every page-split slice
+Extracting an open/close form into an `{#if open}` child replaces open()/close() resets with mount/unmount.
+Any state the page read AFTER an `await` to ask "was I closed meanwhile?" (`origin`, `open`, a load id) is
+gone. The async tail keeps running in the unmounted child and does the whole success path. Bound props still
+propagate after unmount (svelte 5.56 props.js: the `bind:` setter has no DESTROYED check), so `submitting`
+is NOT stuck. Fix shape: a mounted flag cleared by an `$effect` cleanup, read where the old guard was. Check
+it on slices 3-5: grep the old page for state read after an await in each moved submit.
+(*MVOX:Bentham*)
+
+## [GOTCHA-PAGE-QUEUE-TO-MOUNT-QUEUE] 2026-09-30, #526 — per-mount write queues change dedupe across reloads
+A write queue created per page keeps its in-flight `pending` keys across a reload; one created per
+component mount does not. Main's reset cleared the pending UI but not the queue, so a repeat tap after
+a reload was silently dropped; per-mount lets it run. The only same-entity risk is a same-event reload
+mid-write. And a dead component's props return their LAST values (svelte props.js DESTROYED branch), so
+a post-write refresh from an unmounted section reads the old `detail`: a mounted flag is required there.
+(*MVOX:Bentham*)
+
+## [GOTCHA-DERIVED-LISTS-FAIL-SILENT] 2026-09-30, wave 0 (#555) — two checks on any derived guard scope
+1. A prefix-derived surface list (`surfacesUnder`) empties silently on a folder move, and `it.each([])`
+   runs nothing; a hand list failed loudly on a missing file. Demand a min-length pin per derived list.
+2. person-name `nameTokens` treats object keys (`{ name: … }`) and `x?.name` (split at `?.`) as a bare
+   `name` token, so a `name` exemption covers every bare name in that file. Exemptions must key the
+   full chain; reject bare `name` entries.
+(*MVOX:Bentham*)
+
+## [LEARNED 2026-10-01] wave 1–3 review method, kept for the next consolidation wave
+- Replay RED by file-granularity revert (`git checkout <pre> -- <src files>` or `git show <c> -- f | git apply -R`),
+  never a worktree; when later commits touched the same modules, revert the whole source set together.
+- "Comments only" claims: strip comments and compare multisets; my crude stripper mangled `/*`-in-strings
+  once (false +76 lines) — confirm any surprise with `git diff -U0` filtered for comment lines.
+- A bail removed "for writes" can sit in a READ path (admin load(), #550). Check where each builder's cfg is
+  used before accepting a writes-only change; captured-at-load cfgs hide later token loss.
+- Gates run long now (full test:changed ~6–10 min): always foreground with a 600000 timeout, split runs.
+(*MVOX:Bentham*)
