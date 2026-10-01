@@ -13,10 +13,8 @@ import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
 import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 import type { AttendanceStatus, EventAttendance } from '$lib/attendance/attendanceData';
 import { createWriteTokens } from '$lib/net/writeTokens';
-import { openFileBytes } from '$lib/files/openFileBytes';
 import { getAppByteStore } from '$lib/files/appByteStore';
-import { getAppLabelStore } from '$lib/files/appLabelStore';
-import { recordPartLabel } from '$lib/files/labelStore';
+import { openPart } from '$lib/parts/openPart';
 import type { WorkRow } from '$lib/repertoire/types';
 import { rosterOrder } from '$lib/sections/sectionData';
 import { withItem } from '$lib/collections/immutable';
@@ -26,6 +24,7 @@ export interface AgendaPageHandlerDeps {
 	isOffline: () => boolean;
 	pendingEventIds: { get(): Set<string>; set(ids: Set<string>): void };
 	findMyMemberId: typeof RsvpData.findMyMemberId;
+	panelWorkRows: () => readonly WorkRow[];
 }
 
 export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHandlerDeps) {
@@ -124,7 +123,7 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 	}
 
 	function findWorkRowByFileId(fileId: string): WorkRow | undefined {
-		for (const rows of Object.values(ag.worksByEventId)) {
+		for (const rows of [...Object.values(ag.worksByEventId), deps.panelWorkRows()]) {
 			const row = rows.find((r) => r.fileId === fileId);
 			if (row) return row;
 		}
@@ -134,47 +133,19 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 	function handlePdfClick(fileId: string) {
 		const selected = deps.selected();
 		if (!selected) return;
-		const cfg = cfgFor(selected.db);
-		const identity = get(selectedCollectiveIdentityStore);
-		if (!identity) return;
-		ag.pdfError = false;
 		const row = findWorkRowByFileId(fileId);
-		const tab = window.open('', '_blank');
-		if (tab) tab.opener = null;
-		openFileBytes(cfg, identity, fileId, getAppByteStore())
-			.then(({ url, release, reason }) => {
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) {
-					release();
-					tab?.close();
-					return;
-				}
-				if (tab) tab.location.href = url;
-				else window.location.href = url;
-				if (row) {
-					recordPartLabel(
-						getAppLabelStore(),
-						identity,
-						fileId,
-						{
-							work: row.workName,
-							composer: row.composer,
-							edition: row.editionName,
-							filename: row.fileName
-						},
-						reason
-					);
-				}
-				if (reason === 'network-stored' || reason === 'network-uncached') {
-					refreshPresence(identity.db, identity.personId, () =>
-						sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)
-					);
-				}
-			})
-			.catch(() => {
-				tab?.close();
-				if (!sameCollectiveIdentity(get(selectedCollectiveIdentityStore), identity)) return;
-				ag.pdfError = true;
-			});
+		openPart(
+			selected.db,
+			fileId,
+			row
+				? {
+						work: row.workName,
+						composer: row.composer,
+						edition: row.editionName,
+						filename: row.fileName
+					}
+				: undefined
+		);
 	}
 
 	const attendanceQueue = createAttendanceChangeQueue(

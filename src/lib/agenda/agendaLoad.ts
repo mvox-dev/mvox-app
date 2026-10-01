@@ -49,7 +49,6 @@ export function createAgendaLoadState() {
 		agendaTypeFilter: 'all' as AgendaTypeFilter,
 		worksByEventId: {} as Record<string, WorkRow[]>,
 		scheduleByEventId: {} as Record<string, ScheduleItem[]>,
-		pdfError: false,
 		heldFileIds: null as Set<string> | null,
 		currentSeasonId: null as string | null,
 		seasonManageRights: 'not-editor' as ManageRightsState,

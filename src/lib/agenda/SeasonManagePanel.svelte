@@ -49,6 +49,7 @@
 		sectionsReadFailed: boolean;
 		locationSuggestionsId: string;
 		heldFileIds: RepertoireProps['heldFileIds'];
+		partLinkDb: RepertoireProps['partLinkDb'];
 		panelWorkRows: RepertoireProps['rows'];
 		panelPickableWorksList: RepertoireProps['pickableWorksList'];
 		panelPickableWorksVisible: RepertoireProps['pickableWorksVisible'];
@@ -107,6 +108,7 @@
 		sectionsReadFailed,
 		locationSuggestionsId,
 		heldFileIds,
+		partLinkDb,
 		panelWorkRows,
 		panelPickableWorksList,
 		panelPickableWorksVisible,
@@ -639,6 +641,7 @@
 					expanded={true}
 					onpdfclick={handlePdfClick}
 					{heldFileIds}
+					{partLinkDb}
 					onaddwork={handlePanelAddWork}
 					onstatuschange={handlePanelStatusChange}
 					onremoveitem={handlePanelRemoveItem}
