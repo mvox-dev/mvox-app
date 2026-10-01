@@ -764,7 +764,16 @@ describe('#244 review F3 — a create whose row is never listed must not collaps
 const PAGE_SOURCE = () => readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
 // #508 — submitEventCreate moved out; the row-watcher stays in +page.svelte.
 const AGENDA_LOAD_SOURCE = () =>
-	readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaLoad.ts'), 'utf-8');
+	[
+		'src/lib/agenda/agendaLoad.ts',
+		'src/lib/agenda/agendaRosterCache.ts',
+		'src/lib/agenda/agendaSelectedLoad.ts',
+		'src/lib/agenda/agendaWorksLoad.ts',
+		'src/lib/agenda/agendaRowStore.ts',
+		'src/lib/agenda/agendaPanels.ts'
+	]
+		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
+		.join('\n');
 const EVENT_CREATE_FORM_SOURCE = () =>
 	readFileSync(resolve(process.cwd(), 'src/lib/components/agenda/EventCreateForm.svelte'), 'utf-8');
 

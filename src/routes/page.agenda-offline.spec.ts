@@ -272,7 +272,7 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 	});
 
 	it('the page resets servedFromCache when its load starts, and reads it for the as-of line', () => {
-		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaLoad.ts'), 'utf-8');
+		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaSelectedLoad.ts'), 'utf-8');
 		expect(load.includes('resetServedFromCache()'), 'resetServedFromCache()').toBe(true);
 		const source = readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
 		for (const needle of [
