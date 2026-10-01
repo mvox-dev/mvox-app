@@ -9,6 +9,8 @@
 	import PersonName from '$lib/components/PersonName.svelte';
 	import type { MyRsvp, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
+	import { createWriteTokens } from '$lib/net/writeTokens';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
@@ -20,8 +22,6 @@
 		ev,
 		isOffline,
 		generation,
-		writeGenerations,
-		isCurrentWrite,
 		actions
 	}: {
 		detail: EventDetail;
@@ -29,8 +29,6 @@
 		ev: EventPageState;
 		isOffline: boolean;
 		generation: () => number;
-		writeGenerations: Map<string, number>;
-		isCurrentWrite: (evId: string) => boolean;
 		actions: EventActions;
 	} = $props();
 
@@ -222,39 +220,24 @@
 	}
 
 	const rsvpQueue = untrack(() =>
-		actions.createRsvpChangeQueue({
-			setOptimistic(evId, entry) {
-				if (!isCurrentWrite(evId)) return;
-				myRsvp = entry;
-			},
-			setPending(evId, isPending) {
-				if (isPending) writeGenerations.set(evId, generation());
-				if (!isCurrentWrite(evId)) return;
-				rsvpPending = isPending;
-				if (isPending) rsvpFailed = false;
-				if (isPending) rsvpSaved = false;
-			},
-			reconcile(evId, entry) {
-				const stillCurrent = isCurrentWrite(evId);
-				writeGenerations.delete(evId);
-				if (!stillCurrent) return;
-				myRsvp = entry;
-				rsvpSaved = true;
-				const current = selected;
-				const loaded = detail;
-				if (current && loaded) {
-					loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
+		actions.createRsvpChangeQueue(
+			createRsvpWriteStatus({
+				tokens: createWriteTokens((evId: string) => (evId === detail?.id ? generation() : null)),
+				accessors: {
+					setEntry: (_evId, entry) => (myRsvp = entry),
+					setPending: (_evId, pending) => (rsvpPending = pending),
+					setFailed: (_evId, failed) => (rsvpFailed = failed),
+					setSaved: (_evId, saved) => (rsvpSaved = saved)
+				},
+				onReconcile() {
+					const current = selected;
+					const loaded = detail;
+					if (current && loaded) {
+						loadTally(cfgFor(current.db), loaded.id, generation(), isPastDetail(loaded));
+					}
 				}
-			},
-			revert(evId, before) {
-				const stillCurrent = isCurrentWrite(evId);
-				writeGenerations.delete(evId);
-				if (!stillCurrent) return;
-				myRsvp = before;
-				rsvpFailed = true;
-				rsvpSaved = false;
-			}
-		})
+			})
+		)
 	);
 
 	function handleRsvpChange(newStatus: RsvpStatus | null): void {

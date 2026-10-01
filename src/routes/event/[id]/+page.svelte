@@ -100,14 +100,6 @@
 
 	let generation = 0;
 
-	const writeGenerations = new Map<string, number>();
-
-	function isCurrentWrite(evId: string): boolean {
-		return (
-			detail !== null && evId === detail.id && writeGenerations.get(evId) === generation
-		);
-	}
-
 	let status = $state<Status>('loading');
 	let detail = $state<EventDetail | null>(null);
 
@@ -718,8 +710,6 @@
 					{ev}
 					{isOffline}
 					generation={() => generation}
-					{writeGenerations}
-					isCurrentWrite={(evId) => isCurrentWrite(evId)}
 					{actions}
 				/>
 				<EventWorksSection

@@ -1,6 +1,7 @@
 // Pending bookkeeping for repertoire move/remove writes, shared by the agenda and the event page.
 import type { WorkRow } from '$lib/repertoire/types';
 import { reorderKey } from '$lib/repertoire/workRowOps';
+import { createWriteTokens } from '$lib/net/writeTokens';
 
 export interface PendingMarks {
 	mark(key: string, rowIds: string[]): void;
@@ -11,18 +12,17 @@ export interface PendingMarks {
 
 /** `context` names what a write belongs to; a settle in another context applies nothing. */
 export function createPendingMarks<T>(
-	context: () => T,
+	context: () => T | null,
 	same: (a: T, b: T) => boolean = Object.is
 ): PendingMarks {
 	const marks = new Map<string, string[]>();
-	const tokens = new Map<string, T>();
-	const isCurrent = (key: string) => tokens.has(key) && same(tokens.get(key)!, context());
+	const tokens = createWriteTokens<string, T>(context, same);
 	return {
 		mark(key, rowIds) {
 			marks.set(key, rowIds);
 		},
 		setPending(keys, key, pending) {
-			if (pending) tokens.set(key, context());
+			if (pending) tokens.begin(key);
 			const next = new Set(keys);
 			for (const mark of [key, ...(marks.get(key) ?? [])]) {
 				if (pending) next.add(mark);
@@ -30,12 +30,10 @@ export function createPendingMarks<T>(
 			}
 			return next;
 		},
-		isCurrent,
+		isCurrent: (key) => tokens.isCurrent(key),
 		settle(key) {
-			const current = isCurrent(key);
 			marks.delete(key);
-			tokens.delete(key);
-			return current;
+			return tokens.end(key);
 		}
 	};
 }

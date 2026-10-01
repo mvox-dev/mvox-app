@@ -28,6 +28,8 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
+	import { createWriteTokens } from '$lib/net/writeTokens';
 	import { completionGateStore } from '$lib/profile/completionGate';
 	import { loadRoster } from '$lib/roster/rosterData';
 	import type { RosterRow } from '$lib/roster/rosterData';
@@ -127,7 +129,7 @@
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
-	import { withItem, without } from '$lib/collections/immutable';
+	import { withItem } from '$lib/collections/immutable';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -317,44 +319,33 @@
 		return m.picker_everyone_added();
 	}
 
-	const rsvpQueue = createRsvpChangeQueue({
-		setOptimistic(eventId, entry) {
-			const next = { ...ag.rsvpByEventId };
-			if (entry) next[eventId] = entry;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-		},
-		setPending(eventId, isPending) {
-			pendingEventIds = withItem(pendingEventIds, eventId, isPending);
-			if (isPending && ag.failedEventIds.has(eventId)) {
-				ag.failedEventIds = without(ag.failedEventIds, eventId);
+	const collectiveTokens = () =>
+		createWriteTokens(() => get(selectedCollectiveIdentityStore), sameCollectiveIdentity);
+
+	const rsvpQueue = createRsvpChangeQueue(
+		createRsvpWriteStatus({
+			tokens: collectiveTokens(),
+			accessors: {
+				setEntry(eventId, entry) {
+					const next = { ...ag.rsvpByEventId };
+					if (entry) next[eventId] = entry;
+					else delete next[eventId];
+					ag.rsvpByEventId = next;
+				},
+				setPending: (eventId, pending) => (pendingEventIds = withItem(pendingEventIds, eventId, pending)),
+				setFailed(eventId, failed) {
+					if (failed || ag.failedEventIds.has(eventId)) {
+						ag.failedEventIds = withItem(ag.failedEventIds, eventId, failed);
+					}
+				},
+				setSaved(eventId, saved) {
+					if (saved || ag.savedEventIds.has(eventId)) {
+						ag.savedEventIds = withItem(ag.savedEventIds, eventId, saved);
+					}
+				}
 			}
-			if (isPending && ag.savedEventIds.has(eventId)) {
-				ag.savedEventIds = without(ag.savedEventIds, eventId);
-			}
-		},
-		reconcile(eventId, entry) {
-			const next = { ...ag.rsvpByEventId };
-			if (entry) next[eventId] = entry;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-			const saved = new Set(ag.savedEventIds);
-			saved.add(eventId);
-			ag.savedEventIds = saved;
-		},
-		revert(eventId, before) {
-			const next = { ...ag.rsvpByEventId };
-			if (before) next[eventId] = before;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-			const failed = new Set(ag.failedEventIds);
-			failed.add(eventId);
-			ag.failedEventIds = failed;
-			if (ag.savedEventIds.has(eventId)) {
-				ag.savedEventIds = without(ag.savedEventIds, eventId);
-			}
-		}
-	});
+		})
+	);
 
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
@@ -678,7 +669,7 @@
 		};
 	});
 
-	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag));
+	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag, collectiveTokens()));
 
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
 		if (!selected || !ag.attendanceItem) return;

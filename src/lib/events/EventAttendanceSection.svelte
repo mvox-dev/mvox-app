@@ -12,7 +12,9 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
-	import { withItem, without } from '$lib/collections/immutable';
+	import { withItem } from '$lib/collections/immutable';
+	import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStatus';
+	import { createWriteTokens } from '$lib/net/writeTokens';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 
 	let {
@@ -120,61 +122,32 @@
 		);
 	}
 
-	const attendanceWriteGenerations = new Map<string, number>();
-	function isCurrentAttendanceWrite(evId: string, targetMemberId: string): boolean {
-		return (
-			detail !== null &&
-			evId === detail.id &&
-			attendanceWriteGenerations.get(targetMemberId) === generation()
-		);
-	}
-
 	const attendanceQueue = untrack(() =>
-		actions.createAttendanceChangeQueue({
-			setOptimistic(evId, targetMemberId, entry) {
-				if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
-				const next = { ...ev.attendanceMap };
-				if (entry) next[targetMemberId] = entry;
-				else delete next[targetMemberId];
-				ev.attendanceMap = next;
-			},
-			setPending(evId, targetMemberId, pending) {
-				if (pending) attendanceWriteGenerations.set(targetMemberId, generation());
-				if (!isCurrentAttendanceWrite(evId, targetMemberId)) return;
-				attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
-				if (pending) {
-					attendanceFailedMemberIds = without(attendanceFailedMemberIds, targetMemberId);
-					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
+		actions.createAttendanceChangeQueue(
+			createAttendanceWriteStatus({
+				tokens: createWriteTokens(() => generation()),
+				accessors: {
+					shows: (evId) => evId === detail?.id,
+					setEntry(targetMemberId, entry) {
+						const next = { ...ev.attendanceMap };
+						if (entry) next[targetMemberId] = entry;
+						else delete next[targetMemberId];
+						ev.attendanceMap = next;
+					},
+					setPending(targetMemberId, pending) {
+						attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
+					},
+					setFailed(targetMemberId, failed) {
+						attendanceFailedMemberIds = withItem(attendanceFailedMemberIds, targetMemberId, failed);
+					},
+					setSaved(targetMemberId, saved) {
+						if (saved || attendanceSavedMemberIds.has(targetMemberId)) {
+							attendanceSavedMemberIds = withItem(attendanceSavedMemberIds, targetMemberId, saved);
+						}
+					}
 				}
-			},
-			reconcile(evId, targetMemberId, entry) {
-				const stillCurrent = isCurrentAttendanceWrite(evId, targetMemberId);
-				attendanceWriteGenerations.delete(targetMemberId);
-				if (!stillCurrent) return;
-				const next = { ...ev.attendanceMap };
-				if (entry) next[targetMemberId] = entry;
-				else delete next[targetMemberId];
-				ev.attendanceMap = next;
-				const saved = new Set(attendanceSavedMemberIds);
-				saved.add(targetMemberId);
-				attendanceSavedMemberIds = saved;
-			},
-			revert(evId, targetMemberId, before) {
-				const stillCurrent = isCurrentAttendanceWrite(evId, targetMemberId);
-				attendanceWriteGenerations.delete(targetMemberId);
-				if (!stillCurrent) return;
-				const next = { ...ev.attendanceMap };
-				if (before) next[targetMemberId] = before;
-				else delete next[targetMemberId];
-				ev.attendanceMap = next;
-				const failed = new Set(attendanceFailedMemberIds);
-				failed.add(targetMemberId);
-				attendanceFailedMemberIds = failed;
-				if (attendanceSavedMemberIds.has(targetMemberId)) {
-					attendanceSavedMemberIds = without(attendanceSavedMemberIds, targetMemberId);
-				}
-			}
-		})
+			})
+		)
 	);
 
 	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
