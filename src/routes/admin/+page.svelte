@@ -33,6 +33,7 @@
 	import { writesAvailable } from '$lib/net/online';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
+	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -569,40 +570,16 @@
 					{#if adminOwnerCount === 1}
 						<p class="text-xs text-ink-2">{m.admin_roles_last_owner_hint()}</p>
 					{/if}
-					<!-- The prompt option cannot be committed; with everyone added the select stays, disabled. -->
-					<select
-						data-testid="admin-add-admin-select"
-						aria-label={m.admin_roles_add_admin_label()}
-						disabled={adminOptions.length === 0 || rolesPending || isOffline}
-						value=""
-						onchange={(e) => {
-							const target = e.currentTarget as HTMLSelectElement;
-							const personId = target.value;
-							target.value = '';
-							if (!personId) return;
-							const label = adminOptions.find((o) => o.id === personId)?.label ?? '';
-							void onPickAdmin({ id: personId, label });
-						}}
-						class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-					>
-						<option value="" disabled selected hidden>
-							{pickerPromptText(adminOptions.length, m.admin_roles_add_admin_placeholder())}
-						</option>
-						{#each adminOptions as option (option.id)}
-							<option value={option.id}>{option.label}</option>
-						{/each}
-					</select>
-					<!-- Beside the select, not inside it: once options run out the select is disabled. -->
-					{#if rosterPartial}
-						<p data-testid="admin-add-admin-partial-notice" role="status" class="text-xs text-ink-2">
-							{m.picker_partial_members_notice()}
-						</p>
-					{/if}
-					{#if sectionsError}
-						<p data-testid="admin-add-admin-order-note" class="text-xs text-ink-2">
-							{m.picker_order_fallback()}
-						</p>
-					{/if}
+					<RosterPersonSelect
+						testid="admin-add-admin"
+						options={adminOptions}
+						prompt={pickerPromptText(adminOptions.length, m.admin_roles_add_admin_placeholder())}
+						ariaLabel={m.admin_roles_add_admin_label()}
+						disabled={rolesPending || isOffline}
+						partial={rosterPartial}
+						orderFallback={sectionsError}
+						onselect={(selection) => void onPickAdmin(selection)}
+					/>
 				{:else}
 					<p data-testid="admin-roles-admins-read-only" class="text-xs text-ink-2">
 						{m.admin_roles_read_only()}
@@ -647,42 +624,19 @@
 								{m.admin_roles_remove_self_hint()}
 							</p>
 						{/if}
-						<select
-							data-testid="admin-add-librarian-select"
-							aria-label={m.admin_roles_add_librarian_label()}
-							disabled={librarianOptions.length === 0 || rolesPending || isOffline}
-							value=""
-							onchange={(e) => {
-								const target = e.currentTarget as HTMLSelectElement;
-								const personId = target.value;
-								target.value = '';
-								if (!personId) return;
-								const label = librarianOptions.find((o) => o.id === personId)?.label ?? '';
-								void onPickLibrarian({ id: personId, label });
-							}}
-							class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-						>
-							<option value="" disabled selected hidden>
-								{pickerPromptText(
-									librarianOptions.length,
-									m.admin_roles_add_librarian_placeholder()
-								)}
-							</option>
-							{#each librarianOptions as option (option.id)}
-								<option value={option.id}>{option.label}</option>
-							{/each}
-						</select>
-						<!-- Beside the select, not inside it: once options run out the select is disabled. -->
-						{#if rosterPartial}
-							<p data-testid="admin-add-librarian-partial-notice" role="status" class="text-xs text-ink-2">
-								{m.picker_partial_members_notice()}
-							</p>
-						{/if}
-						{#if sectionsError}
-							<p data-testid="admin-add-librarian-order-note" class="text-xs text-ink-2">
-								{m.picker_order_fallback()}
-							</p>
-						{/if}
+						<RosterPersonSelect
+							testid="admin-add-librarian"
+							options={librarianOptions}
+							prompt={pickerPromptText(
+								librarianOptions.length,
+								m.admin_roles_add_librarian_placeholder()
+							)}
+							ariaLabel={m.admin_roles_add_librarian_label()}
+							disabled={rolesPending || isOffline}
+							partial={rosterPartial}
+							orderFallback={sectionsError}
+							onselect={(selection) => void onPickLibrarian(selection)}
+						/>
 					{:else}
 						<p data-testid="admin-roles-librarians-read-only" class="text-xs text-ink-2">
 							{m.admin_roles_read_only()}

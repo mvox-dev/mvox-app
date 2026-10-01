@@ -2,7 +2,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
-	import PersonName from '$lib/components/PersonName.svelte';
+	import ConductorChip from '$lib/agenda/ConductorChip.svelte';
+	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -136,73 +137,31 @@
 	{#if seasonManageConductorEntries.length > 0}
 		<ul class="mt-1 flex flex-wrap gap-1.5">
 			{#each seasonManageConductorEntries as { key, personId }, entryIndex (key)}
-				<li
-					data-testid="season-manage-conductor-{personId}"
-					data-conductor-key={key}
-					class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-				>
-					<PersonName name={seasonConductorLabel(personId)} />
-					<!-- #237: unlink is not destroy — this chip keeps its × and muted
-					     tone on purpose; DeleteTrigger is for Table A only. -->
-					<button
-						type="button"
-						data-testid="season-manage-conductor-remove-{personId}"
-						aria-label={m.season_conductor_remove({
-							name: seasonConductorLabel(personId)
-						})}
-						disabled={seasonManageConductorPending || isOffline}
-						class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink disabled:opacity-50"
-						onclick={() => onSeasonManageConductorRemove(personId, entryIndex)}
-					>
-						&times;
-					</button>
-				</li>
+				<ConductorChip
+					testid="season-manage-conductor"
+					{personId}
+					name={seasonConductorLabel(personId)}
+					conductorKey={key}
+					disabled={seasonManageConductorPending || isOffline}
+					onremove={() => onSeasonManageConductorRemove(personId, entryIndex)}
+				/>
 			{/each}
 		</ul>
 	{/if}
 	<div class="mt-1.5">
-		<select
-			data-testid="season-manage-conductor-select"
-			aria-label={m.season_conductor_label()}
-			disabled={seasonManageConductorOptions.length === 0 ||
-				seasonManageConductorPending ||
-				isOffline}
-			value=""
-			onchange={(e) => {
-				const target = e.currentTarget as HTMLSelectElement;
-				const personId = target.value;
-				target.value = '';
-				if (!personId) return;
-				const label =
-					seasonManageConductorOptions.find((o) => o.id === personId)
-						?.label ?? '';
-				onSeasonManageConductorSelect({ id: personId, label });
-			}}
-			class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-		>
-			<option value="" disabled selected hidden>
-				{pickerPromptText(
-					seasonManageConductorOptions.length,
-					m.season_conductor_placeholder()
-				)}
-			</option>
-			{#each seasonManageConductorOptions as option (option.id)}
-				<option value={option.id}>{option.label}</option>
-			{/each}
-		</select>
-		{#if rosterPartial}
-			<p data-testid="season-manage-conductor-partial-notice" role="status" class="text-xs text-ink-2">
-				{m.picker_partial_members_notice()}
-			</p>
-		{/if}
-		{#if sectionsReadFailed}
-			<p
-				data-testid="season-manage-conductor-order-note"
-				class="text-xs text-ink-2"
-			>
-				{m.picker_order_fallback()}
-			</p>
-		{/if}
+		<RosterPersonSelect
+			testid="season-manage-conductor"
+			options={seasonManageConductorOptions}
+			prompt={pickerPromptText(
+				seasonManageConductorOptions.length,
+				m.season_conductor_placeholder()
+			)}
+			ariaLabel={m.season_conductor_label()}
+			disabled={seasonManageConductorPending || isOffline}
+			partial={rosterPartial}
+			orderFallback={sectionsReadFailed}
+			onselect={onSeasonManageConductorSelect}
+		/>
 	</div>
 	{#if seasonManageConductorError}
 		<p

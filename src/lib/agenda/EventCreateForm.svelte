@@ -10,7 +10,7 @@
 	import { focusOnMount } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
-	import PersonName from '$lib/components/PersonName.svelte';
+	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { createEvent, type CreateEventInput } from '$lib/entity/entityCreate';
 	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
@@ -210,20 +210,6 @@
 				eventCreateSeriesDefaults = null;
 			});
 	}
-
-	function handleEventCreateConductorSelect(selection: { id: string | null; label: string }): void {
-		if (!selection.id) return;
-		if (eventCreateConductors.some((c) => c.id === selection.id)) return;
-		eventCreateConductors = [...eventCreateConductors, { id: selection.id, name: selection.label }];
-	}
-
-	function removeEventCreateConductor(id: string): void {
-		eventCreateConductors = eventCreateConductors.filter((c) => c.id !== id);
-	}
-
-	const eventCreateConductorOptions = $derived(
-		rosterPickerOptions(eventCreateConductors.map((c) => c.id))
-	);
 
 	function eventCreateNumberOrUndefined(raw: string): number | undefined {
 		const trimmed = raw.trim();
@@ -580,68 +566,16 @@
 		</p>
 	{/if}
 
-	<div data-testid="event-create-conductors-field">
-		<label class="flex w-full flex-col gap-0.5">
-			<span class="text-xs text-ink-2">{m.event_create_conductor_label()}</span>
-			<select
-				data-testid="event-create-conductor-select"
-				disabled={eventCreateConductorOptions.length === 0}
-				value=""
-				onchange={(e) => {
-					const target = e.currentTarget as HTMLSelectElement;
-					const personId = target.value;
-					target.value = '';
-					if (!personId) return;
-					const label =
-						eventCreateConductorOptions.find((o) => o.id === personId)?.label ??
-						'';
-					handleEventCreateConductorSelect({ id: personId, label });
-				}}
-				class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-			>
-				<option value="" disabled selected hidden>
-					{pickerPromptText(
-						eventCreateConductorOptions.length,
-						m.event_create_conductor_placeholder()
-					)}
-				</option>
-				{#each eventCreateConductorOptions as option (option.id)}
-					<option value={option.id}>{option.label}</option>
-				{/each}
-		</select>
-		</label>
-		{#if rosterPartial}
-			<p data-testid="event-create-conductor-partial-notice" role="status" class="text-xs text-ink-2">
-				{m.picker_partial_members_notice()}
-			</p>
-		{/if}
-		{#if sectionsReadFailed}
-			<p data-testid="event-create-conductor-order-note" class="text-xs text-ink-2">
-				{m.picker_order_fallback()}
-			</p>
-		{/if}
-	</div>
-	{#if eventCreateConductors.length > 0}
-		<ul class="flex flex-wrap gap-1.5">
-			{#each eventCreateConductors as conductor (conductor.id)}
-				<li
-					data-testid="event-create-conductor-{conductor.id}"
-					class="flex items-center gap-1 border border-ink-5 px-1.5 text-xs text-ink"
-				>
-					<PersonName name={conductor.name} />
-					<button
-						type="button"
-						data-testid="event-create-conductor-remove-{conductor.id}"
-						aria-label={m.season_conductor_remove({ name: conductor.name })}
-						class="flex min-h-11 min-w-11 items-center justify-center text-ink-2 hover:text-ink"
-						onclick={() => removeEventCreateConductor(conductor.id)}
-					>
-						&times;
-					</button>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+	<ConductorChips
+		bind:conductors={eventCreateConductors}
+		testid="event-create-conductor"
+		fieldTestid="event-create-conductors-field"
+		label={m.event_create_conductor_label()}
+		partial={rosterPartial}
+		orderFallback={sectionsReadFailed}
+		{rosterPickerOptions}
+		prompt={(n) => pickerPromptText(n, m.event_create_conductor_placeholder())}
+	/>
 
 	{#if eventCreateError}
 		<p

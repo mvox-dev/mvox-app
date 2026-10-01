@@ -14,9 +14,7 @@ const FILES = [
 	'src/lib/events/EventFieldEdit.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
-	'src/lib/agenda/EventCreateForm.svelte',
-	'src/lib/agenda/SeasonCreateForm.svelte',
-	'src/lib/agenda/SeasonManageConductors.svelte',
+	'src/lib/agenda/ConductorChip.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
 	'src/lib/components/attendance/SeasonSummary.svelte',
 	'src/lib/profile/ProfileField.svelte'
