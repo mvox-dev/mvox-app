@@ -1,6 +1,6 @@
 // Event delete: an event takes its own attendance and program_item children with it.
 import { entuFetch } from '$lib/entu/request';
-import { EntityDeleteForbiddenError, EventCascadePartialError } from './deleteErrors';
+import { CascadePartialError, EntityDeleteForbiddenError } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
 
 export const CHILD_READ_LIMIT = 500;
@@ -96,7 +96,7 @@ export async function deleteEvent(
 		try {
 			await deleteEntity(cfg, childId, 'deleteEvent child', fetchImpl);
 		} catch (failure) {
-			throw new EventCascadePartialError(eventId, deleted, childIds.length, failure);
+			throw new CascadePartialError('event', eventId, deleted, childIds.length, failure);
 		}
 		deleted += 1;
 	}

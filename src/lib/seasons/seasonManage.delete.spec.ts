@@ -1,67 +1,12 @@
-// #197 RED — the event / event-series DELETE write layer, at the `fetchImpl`
-// seam (same harness family as seasonManage.spec.ts; same endpoint-split
-// discipline as sectionActions.delete.spec.ts).
-//
-// WHY (#197, Joosep / Crede pilot 2026-08-31): there is no way to delete an
-// event or an event series from the app UI — test data and mistakes accumulate
-// until an admin cleans up via the Entu API. Section delete already exists
-// (sectionActions.deleteSection); events and series get the same treatment.
-//
-// Contract under test (GREEN must implement, in src/lib/seasons/seasonManage.ts
-// — the ONE seam the season-manage panel reads/writes seasons through):
-//
-//   deleteEvent(cfg, eventId, fetchImpl?)             → Promise<void>
-//   deleteEventSeries(cfg, seriesId, fetchImpl?)      → Promise<number>
-//   countSeriesOccurrences(cfg, seriesId, fetchImpl?) → Promise<number>
-//
-//   - `deleteEvent` CASCADES to the event's own children (#197 review 2nd pass
-//     F1 — the one-DELETE contract ORPHANED them): one scoped read per child
-//     type (`attendance`, `program_item` — the two types read elsewhere as
-//     `_parent.reference={eventId}`), one `DELETE entity/{id}` per child, then
-//     the event's own DELETE. Everything on the ENTITY endpoint (an event /
-//     attendance / program_item id is an ENTITY id; `/property/{id}` is for
-//     property-VALUE ids only, and a /property DELETE here would 404 and leave
-//     the entity standing).
-//   - `deleteEventSeries` CASCADES (widened by the #197 review, F1 — the
-//     original one-DELETE contract ORPHANED the occurrences): one scoped read
-//     of the series' occurrence events, `deleteEvent` per occurrence (so each
-//     occurrence takes its own children with it), then the series' own DELETE —
-//     in that order, so a failure part-way leaves a still-linked remainder
-//     rather than nameless orphans. Verified against the Entu API source
-//     (routes/[db]/entity/[_id]/index.delete.js): a DELETE soft-deletes every
-//     property REFERENCING the target, i.e. the children's `_parent` values,
-//     while the child entities themselves survive.
-//   - `deleteEventSeries` RESOLVES WITH the number of occurrences it deleted
-//     (#197 review 2nd pass F2) — the panel announces THAT number, never the
-//     client-derived count its list happened to be showing.
-//   - `countSeriesOccurrences` is the live figure the panel's two-step confirm
-//     shows before arming (#197 review 2nd pass F2): the server's own `count`,
-//     not the season-wide list read's client-side tally.
-//   - the auth token rides on every request (nothing is anonymous).
-//   - non-2xx throws with the status surfaced (fail loud, no silent success)
-//     — the panel is what turns that into an inline error. A 403 throws the
-//     TAGGED `EntityDeleteForbiddenError` (#197 review F3): Entu's DELETE needs
-//     `_owner` on the target, which the panel's `_editor` gate does not imply,
-//     and that refusal must not read as "try again".
-//
-// Namespace import + runtime lookup (not a named import) so the file LOADS even
-// while the functions are absent and each test fails with a readable
-// "not a function" instead of a module-resolution explosion.
+// The event, series and season DELETE write layer, driven at the `fetchImpl` wire.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from './entuSeasons';
-import { isDeleteForbidden, isEventCascadePartial, isSeriesCascadePartial } from './deleteErrors';
-import * as deleteErrorsNs from './deleteErrors';
+import { isCascadePartial, isDeleteForbidden } from './deleteErrors';
 import * as manage from './seasonManage';
 
 type DeleteFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<unknown>;
 type CountFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<number>;
 
-// ── #217/#216 contract types ────────────────────────────────────────────────────
-// The kinds the ONE progress counter reports (Gama's #217 ruling, 2026-09-02):
-// the denominator is EVERY entity the cascade deletes — series + events +
-// repertoire items — so those are the only kinds a tick may carry. An event's
-// own attendance / program_item children are deleted too but are NOT part of
-// the promised scope, so they never tick and never inflate the total.
 type ProgressKind = 'series' | 'event' | 'repertoire';
 type OnProgress = (current: number, total: number, kind: ProgressKind) => void;
 interface CascadeOptions {
@@ -99,9 +44,6 @@ const deleteEventSeriesP = (manage as unknown as { deleteEventSeries?: DeleteSer
 const countSeasonScope = (manage as unknown as { countSeasonScope?: CountScopeFn })
 	.countSeasonScope;
 const deleteSeason = (manage as unknown as { deleteSeason?: DeleteSeasonFn }).deleteSeason;
-const isSeasonCascadePartial = (
-	deleteErrorsNs as unknown as { isSeasonCascadePartial?: (reason: unknown) => boolean }
-).isSeasonCascadePartial;
 
 const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
 
@@ -143,11 +85,6 @@ interface StubOpts {
 	deleteStatus?: Record<string, number>;
 }
 
-/**
- * One fetch stub for both cascades: every scoped GET answers from `children`
- * (empty by default, with a matching `count`), every DELETE answers 200 unless
- * `deleteStatus` names its entity. Records every call.
- */
 function stubFetch(opts: StubOpts = {}) {
 	const calls: Call[] = [];
 	const impl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
@@ -199,12 +136,6 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
 	});
 
-	// #197 review 2nd pass F1 — the contract that replaced "one DELETE, child
-	// cleanup is somebody else's problem" at the EVENT level. Entu soft-deletes
-	// the properties REFERENCING a deleted entity, not the referring entities, so
-	// a bare event DELETE left every attendance row and every program_item alive
-	// with its `_parent` → event value stripped: unreachable rows no screen in
-	// the app can list, explain or clean up.
 	it('an event WITH children: every attendance and every program_item is DELETEd, and the event LAST', async () => {
 		const { impl, calls } = stubFetch({
 			children: { 'attendance:ev-9': ['att-1', 'att-2'], 'program_item:ev-9': ['pi-1'] }
@@ -257,7 +188,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 		});
 
 		const failure = await deleteEvent!(cfg, 'ev-9', impl).catch((e) => e);
-		expect(isEventCascadePartial(failure)).toBe(true);
+		expect(isCascadePartial(failure, 'event')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 3 });
 		// pi-1 is untouched and the EVENT is still there — the remainder keeps its
 		// `_parent`, so a retry resumes instead of hunting orphans.
@@ -317,13 +248,6 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
 	});
 
-	// #197 review F1 — the contract that replaced "one DELETE, child cleanup is
-	// somebody else's problem". Without this the 12 occurrences SURVIVE the
-	// series, stripped of their `_parent` reference to it (Entu soft-deletes
-	// properties REFERENCING a deleted entity, not the referring entities), and
-	// a series occurrence carries no own name/duration/location — so what the
-	// agenda is left holding is 12 nameless, 0-duration rows nothing in the app
-	// can re-link or explain.
 	it('a series WITH occurrences: every occurrence is DELETEd, and the series LAST', async () => {
 		const { impl, calls } = stubFetch({
 			children: { 'event:series-1': ['occ-1', 'occ-2', 'occ-3'] }
@@ -374,7 +298,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		});
 
 		const failure = await deleteEventSeries!(cfg, 'series-1', impl).catch((e) => e);
-		expect(isSeriesCascadePartial(failure)).toBe(true);
+		expect(isCascadePartial(failure, 'series')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 3 });
 		// occ-3 is untouched and the SERIES is still there — the remainder keeps
 		// its `_parent`, so a retry resumes instead of hunting orphans.
@@ -474,54 +398,6 @@ describe('countSeriesOccurrences — the live figure behind the confirm', () => 
 		await expect(countSeriesOccurrences!(cfg, 'series-1', impl)).rejects.toThrow(/500/);
 	});
 });
-
-// ═══ #217 (folding #216) — season delete cascade + ONE progress counter ═════════
-//
-// WHY (#217, Mihkel 2026-09-02): "There is no delete season control." #197
-// completed delete for events and series; the season itself still cannot be
-// deleted from the UI. And #216: the series cascade gives no feedback while it
-// runs — creation shows "Loon sündmust X / Y…", deletion shows nothing.
-//
-// PO rulings (Gama, 2026-09-02, last comments on #217 and #216):
-//   - ONE slice closes both issues; the counter is judged on BOTH season and
-//     series deletion.
-//   - Denominator = EVERY entity the cascade deletes: series + events +
-//     repertoire items. One "X / Y" counter; the kind of the current entity is
-//     optional. (An event's attendance / program_item children are deleted too
-//     but were never part of the promised scope — no tick, no denominator.)
-//   - The confirm quotes the LIVE scope: N series, N events, N repertoire items.
-//
-// Contract under test (GREEN must implement, in seasonManage.ts):
-//
-//   countSeasonScope(cfg, seasonId, fetchImpl?)
-//     → { series, events, repertoireItems }
-//     The season's scope via the existing scoped list reads — event_series
-//     children, ONE season-wide event read (`events` counts ALL of the season's
-//     events: series occurrences AND standalone, because the cascade deletes
-//     all of them and the confirm's three numbers must sum to the counter's
-//     denominator), repertoire_item children — honouring CHILD_READ_LIMIT with
-//     the existing over-limit refusal. A read: deletes NOTHING.
-//
-//   deleteEventSeries(cfg, seriesId, fetchImpl?, { onProgress? })
-//     The #197 cascade, unchanged for every existing positional caller; the NEW
-//     trailing options object carries `onProgress(current, total, kind)`.
-//     total = occurrences + 1 (the series entity itself is part of the ruled
-//     denominator); ticks 1..N as each occurrence goes ('event'), then the
-//     final tick for the series entity ('series'). A child (attendance /
-//     program_item) delete never ticks.
-//
-//   deleteSeason(cfg, seasonId, fetchImpl?, { onProgress? })
-//     → { series, events, repertoireItems } — what was actually deleted.
-//     Serial cascade, children before parent: each series via deleteEventSeries
-//     (its occurrences, then it — progress propagated), each STANDALONE event
-//     via deleteEvent, each repertoire_item via DELETE /entity/{id} (a
-//     repertoire_item id is an ENTITY id — the pinned endpoint split), and the
-//     season entity LAST. total = series + ALL their occurrence events +
-//     standalone events + repertoire items, counted UP FRONT; the season entity
-//     itself is outside the ruled denominator and never ticks. A failure
-//     part-way aborts BEFORE the season delete and rejects with the tagged
-//     SeasonCascadePartialError (deleteErrors.ts — same shape as the existing
-//     partial discriminators: deletedCount / totalCount / failure chain).
 
 const SEASON_PARENT = { reference: 'season-1', entity_type: 'season' };
 function inSeries(id: string, seriesId: string) {
@@ -745,11 +621,12 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		});
 
 		const failure = await deleteSeason!(cfg, 'season-1', impl).catch((e) => e);
-		expect(typeof isSeasonCascadePartial).toBe('function');
-		expect(isSeasonCascadePartial!(failure)).toBe(true);
+		expect(typeof isCascadePartial).toBe('function');
+		expect(isCascadePartial(failure, 'season')).toBe(true);
 		expect(failure).toMatchObject({
 			code: 'season-cascade-partial',
-			seasonId: 'season-1',
+			scope: 'season',
+			id: 'season-1',
 			deletedCount: 3, // occ-1 + series-1 + ev-1 of the promised 5
 			totalCount: 5
 		});
@@ -765,17 +642,13 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		});
 
 		const failure = await deleteSeason!(cfg, 'season-1', impl).catch((e) => e);
-		expect(isSeasonCascadePartial!(failure)).toBe(true);
+		expect(isCascadePartial(failure, 'season')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 8 });
-		expect(isSeriesCascadePartial((failure as { failure?: unknown }).failure)).toBe(true);
+		expect(isCascadePartial((failure as { failure?: unknown }).failure, 'series')).toBe(true);
 		// series-2, ev-9, the repertoire and the season are all still standing.
 		expect(deleteTargets(calls)).toEqual(['occ-1', 'occ-2']);
 	});
 
-	// #217 review F1 — the series' OWN final delete failing carries no
-	// SeriesCascadePartialError (every occurrence went; nothing is "partial" one
-	// level down), so the season-level count must come from the ticks the
-	// operator actually watched rather than from that error alone.
 	it('a failed SERIES-ENTITY delete still credits the occurrences that already went — the count never contradicts the counter', async () => {
 		const { impl, calls } = stubFetch({
 			children: seasonChildren(),
@@ -784,7 +657,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		const onProgress = vi.fn();
 
 		const failure = await deleteSeason!(cfg, 'season-1', impl, { onProgress }).catch((e) => e);
-		expect(isSeasonCascadePartial!(failure)).toBe(true);
+		expect(isCascadePartial(failure, 'season')).toBe(true);
 		// occ-1 + occ-2 really are gone — exactly the two ticks that were emitted.
 		expect(failure).toMatchObject({ deletedCount: 2, totalCount: 8 });
 		expect(onProgress.mock.calls).toEqual([
@@ -840,20 +713,13 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 	});
 });
 
-describe('isSeasonCascadePartial — the duck-typed discriminator crosses mock boundaries (#217)', () => {
+describe('isCascadePartial(reason, "season") — the duck-typed discriminator crosses mock boundaries (#217)', () => {
 	it('recognises the tagged code on a PLAIN object (a page spec’s mocked write layer rejects with exactly that) and nothing else', () => {
-		expect(typeof isSeasonCascadePartial).toBe('function');
-		expect(isSeasonCascadePartial!({ code: 'season-cascade-partial' })).toBe(true);
-		expect(isSeasonCascadePartial!({ code: 'series-cascade-partial' })).toBe(false);
-		expect(isSeasonCascadePartial!(new Error('boom'))).toBe(false);
-		expect(isSeasonCascadePartial!(null)).toBe(false);
+		expect(typeof isCascadePartial).toBe('function');
+		expect(isCascadePartial({ code: 'season-cascade-partial' }, 'season')).toBe(true);
+		expect(isCascadePartial({ code: 'series-cascade-partial' }, 'season')).toBe(false);
+		expect(isCascadePartial(new Error('boom'), 'season')).toBe(false);
+		expect(isCascadePartial(null, 'season')).toBe(false);
 	});
 });
 
-// (*MVOX:Tallis* — #197 RED: deleteEvent / deleteEventSeries wire contract)
-// (*MVOX:Palestrina* — #197 review F1/F3: series cascade + tagged 403)
-// (*MVOX:Palestrina* — #197 review 2nd pass F1/F2: event child cascade,
-//  deleted-count return value, live occurrence count)
-// (*MVOX:Tallis* — #217 RED (folds #216): countSeasonScope / deleteSeason wire
-//  contract, deleteEventSeries onProgress option, season-cascade-partial
-//  discriminator, one progress denominator per Gama's 2026-09-02 ruling)

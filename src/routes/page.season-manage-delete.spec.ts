@@ -1,78 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #197 RED — DELETE affordances for event series on the ACTUAL agenda route
-// (integration: real +page.svelte, real season-manage panel; only the data
-// seams are mocked — same harness family as page.season-manage.spec.ts).
-//
-// #313 — the panel's STANDALONE-EVENT list is REMOVED: delete lives on the
-// event page (event-detail-delete, untouched) and convert relocated there too
-// (src/routes/event/[id]/page.event-convert.spec.ts). The #197 event-row
-// delete tests and the #212 convert-disarm tests that drove through
-// `season-manage-event-*` died with the rows; the removal itself is pinned in
-// the "#313 — the standalone-event list is GONE" block below. Series rows and
-// the season's own delete are untouched.
-//
-// WHY (#197, Joosep / Crede pilot 2026-08-31): "I want to delete the 'Proov'
-// series to recreate it with the same name … and the standalone 'Proov' event
-// too. But I can't find a delete option anywhere." The season-manage panel
-// already LISTS the season's series and standalone events; #197 gives each row
-// its delete button.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   DATA — through src/lib/seasons/seasonManage.ts (wire contract pinned in
-//   seasonManage.delete.spec.ts):
-//     - a series row's delete calls `deleteEventSeries(cfg, seriesId)`;
-//     - cfg is the page's usual { db: selected.db, token: getToken() }.
-//
-//   TESTIDS
-//     season-manage-series-delete-<id>   delete BUTTON inside that series' row
-//                                        (season-manage-series-<id>), with an
-//                                        accessible name — icon-only buttons
-//                                        announcing nothing are not shippable.
-//     season-manage-series-delete-confirm-<id>
-//     season-manage-series-delete-cancel-<id>
-//                                        the two-step confirm's halves (review
-//                                        F2), swapped IN for the × when armed.
-//     season-manage-delete-error         inline delete-failed error slot,
-//                                        role="alert", rendered under the list
-//                                        that failed (review F5).
-//     season-manage-delete-status        visually-hidden role="status" success
-//                                        announcement (review F5).
-//
-//   BEHAVIOR
-//     - the affordances live INSIDE the rights-gated panel: no season card for
-//       a non-editor → no panel → no delete buttons anywhere (fail-closed,
-//       same as every other rights gate; #261 — the gear is gone, the card
-//       itself is the way in).
-//     - merely rendering the panel deletes nothing.
-//     - #197 review F2: the × ARMS a two-step confirm and writes nothing; only
-//       the confirm button calls the data layer. Cancel disarms. Closing the
-//       panel disarms. The roster's `section-remove-*` idiom, because this
-//       delete is irreversible and the app has no undo.
-//     - after a SUCCESSFUL delete the row leaves the display (the other rows
-//       survive untouched) AND the page re-reads itself (#197 review F4): the
-//       agenda below the panel renders the very events just deleted, so a
-//       splice-only success left the same screen contradicting itself. The list
-//       mocks below mirror deletions into their fixtures.
-//     - a FAILED delete surfaces season-manage-delete-error (role="alert") and
-//       the row STAYS — a row that silently survives a click, or silently
-//       vanishes and reappears, reads as a bug (house rule: fail loudly). A 403
-//       gets its OWN copy (#197 review F3): the panel's rights gate is
-//       `_owner`-OR-`_editor` on the SEASON while Entu's DELETE demands `_owner`
-//       on the TARGET, so "try again" is a lie for a season editor.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
-// ONE exception (#216/#217): `season_manage_delete_progress` renders its real
-// et template, because the visible "Kustutan X / Y…" line IS the user story —
-// the progress tests below assert that text verbatim, interpolation included,
-// rather than the key-echo every other message gets. (The locale guard at the
-// bottom of this file pins the template in messages/et.json itself.)
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -206,11 +138,7 @@ import Page from './+page.svelte';
 // NOT mocked (and deliberately not part of the seasonManage mock above): the
 // refusal discriminators live in their own module precisely so the page can
 // read them while `$lib/seasons/seasonManage` is replaced wholesale.
-import {
-	EntityDeleteForbiddenError,
-	EventCascadePartialError,
-	SeriesCascadePartialError
-} from '$lib/seasons/deleteErrors';
+import { CascadePartialError, EntityDeleteForbiddenError } from '$lib/seasons/deleteErrors';
 import {
 	openSeasonCardPanel,
 	collapseSeasonCard,
@@ -273,30 +201,14 @@ interface EventRow {
 	startDatetime: string;
 }
 
-// MUTABLE list fixtures: the delete mocks splice them (suite default), so
-// whether GREEN removes locally or refetches the panel lists after a delete,
-// the deleted row is GONE either way — the display assertions below stay
-// implementation-agnostic.
 let seriesRows: SeriesRow[] = [];
 let eventRows: EventRow[] = [];
 
-// #197 review 2nd pass F2 — THREE deliberately DIFFERENT numbers per series, so
-// no assertion below can pass by quoting the wrong source:
-//   - the panel list's `eventCount` (12)  — client-derived from one capped,
-//     season-wide read, i.e. the stale figure;
-//   - `countSeriesOccurrences` (14)       — the live server count the arming
-//     click re-reads, which is what the confirm may quote;
-//   - `deleteEventSeries`' RESOLVED value (9) — what the cascade actually
-//     destroyed, which is what the success announcement must quote.
 let liveOccurrenceCount: Record<string, number> = {};
 let cascadeDeletedCount: Record<string, number> = {};
 
 function resetRows(): void {
 	seriesRows = [
-		// #400 — this suite pins the delete MECHANICS (confirm, cascade,
-		// errors), not the rights gate (that's page.season-manage-series-
-		// owner-gate.spec.ts); the viewer ('person-p') owns both rows so
-		// every trigger below still renders.
 		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] },
 		{ id: 'series-2', name: 'Sectionals', eventCount: 0, ownerIds: ['person-p'] }
 	];
@@ -350,10 +262,6 @@ beforeEach(() => {
 	countSeriesOccurrencesMock.mockImplementation(
 		async (_cfg: unknown, seriesId: string) => liveOccurrenceCount[seriesId] ?? 0
 	);
-	// #217 — the season's LIVE scope (the confirm's three numbers) and the
-	// cascade's own result. Deliberately numbers that appear NOWHERE else in the
-	// fixtures (not 12/14/9, not the 2 series rows), so an assertion can only
-	// pass by quoting countSeasonScope / deleteSeason themselves.
 	countSeasonScopeMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
 	deleteSeasonMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
 });
@@ -397,11 +305,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/**
- * The two-step delete (#197 review F2): tap the row's ×, wait for the confirm
- * that replaces it, tap that. Everything below goes through here — a delete
- * that took ONE tap is the bug this shape exists to prevent.
- */
 async function armAndConfirmDelete(
 	container: HTMLElement,
 	kind: 'series' | 'event',
@@ -486,12 +389,6 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 	});
 
-	// #197 review F4 — the assertion this file used to carry was the INVERSE
-	// (`loadFullAgendaMock` called exactly once, i.e. never refetched), which
-	// pinned a stale page: <AgendaList> renders the very events the panel just
-	// deleted, directly below the panel, and a series delete cascades to
-	// occurrences that are agenda rows too. The create path in the same file
-	// already reloads with `keepSeasonManage` for exactly this reason.
 	it('a SUCCESSFUL delete refetches the agenda the page is showing — the panel survives the reload', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
@@ -549,11 +446,6 @@ describe('agenda — #197 clicking delete removes the series / event', () => {
 		});
 	});
 
-	// #197 review 2nd pass F2 — the announcement is the only report the operator
-	// ever gets of an irreversible cascade, so the number in it comes from the
-	// cascade's own return value (9 here) — not the panel row's client-derived
-	// `eventCount` (12), and not even the live count the confirm quoted (14).
-	// Three different numbers precisely so quoting the wrong source cannot pass.
 	it('announces how many occurrences the CASCADE deleted, not the count the list was showing', async () => {
 		const container = await renderReady();
 		await openPanelWithRows(container);
@@ -604,11 +496,6 @@ describe('agenda — #197 delete is a TWO-step confirm, never a single tap', () 
 		// The × itself is GONE while armed — one control, one meaning.
 		expect(q(container, 'season-manage-series-delete-series-1')).toBeNull();
 
-		// #197 review 2nd pass F2 — arming re-reads the count from the server, and
-		// what the confirm promises is THAT number (14), never the panel list's
-		// client-derived tally (12): the list groups ONE capped season-wide event
-		// read, so it under-reports a big season and misses anything created
-		// since. This is the last screen before an irreversible cascade.
 		await waitFor(() => {
 			expect(countSeriesOccurrencesMock).toHaveBeenCalledWith(CFG, 'series-1');
 		});
@@ -776,10 +663,6 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 		expect(seriesSubPanel?.contains(alert)).toBe(true);
 	});
 
-	// #197 review F3 — the panel gates on `_owner` OR `_editor` on the SEASON;
-	// Entu's DELETE demands `_owner` on the TARGET entity. A season editor who
-	// did not create the row is refused EVERY time, so "Couldn't delete. Try
-	// again." invites a retry that can never work.
 	it('a 403 gets its own copy — a permission refusal, not a retry prompt', async () => {
 		deleteEventSeriesMock.mockRejectedValue(new EntityDeleteForbiddenError('series-1'));
 		const container = await renderReady();
@@ -797,7 +680,7 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 
 	it('a cascade that stopped part-way says how many events went and that the series is still there', async () => {
 		deleteEventSeriesMock.mockRejectedValue(
-			new SeriesCascadePartialError('series-1', 5, 12, new Error('boom'))
+			new CascadePartialError('series', 'series-1', 5, 12, new Error('boom'))
 		);
 		const container = await renderReady();
 		await openPanelWithRows(container);
@@ -821,11 +704,12 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 	// deep it sits (series → occurrence → the occurrence's own child).
 	it('a 403 nested two cascades deep still reads as a permission refusal', async () => {
 		deleteEventSeriesMock.mockRejectedValue(
-			new SeriesCascadePartialError(
+			new CascadePartialError(
+				'series',
 				'series-1',
 				0,
 				3,
-				new EventCascadePartialError('occ-1', 0, 1, new EntityDeleteForbiddenError('pi-1'))
+				new CascadePartialError('event', 'occ-1', 0, 1, new EntityDeleteForbiddenError('pi-1'))
 			)
 		);
 		const container = await renderReady();
@@ -863,17 +747,6 @@ describe('agenda — #197 a FAILED delete surfaces an error and keeps the row', 
 	});
 });
 
-// ── #313: the standalone-event list is GONE from the panel ──────────────────────
-//
-// COMMISSION (Mihkel, #313): "in season editor, we dont need to list events.
-// its redundant as events are already listed below and every event should
-// have these administrator controls on their page." The rows, their two
-// controls (convert ⟳ / delete ×), the `seasonManageEvents` state and its
-// fetch all leave; convert now lives on the event page
-// (src/routes/event/[id]/page.event-convert.spec.ts) and delete was already
-// there. The fixture below still ANSWERS the standalone-list read with a row
-// — the pin is that the page never even asks.
-
 describe('agenda — #313 the panel lists series only; the standalone-event rows are removed', () => {
 	it('opening the panel renders the series rows but NO season-manage-event-* node — and never reads the standalone list at all', async () => {
 		const container = await renderReady();
@@ -900,68 +773,6 @@ describe('agenda — #313 the panel lists series only; the standalone-event rows
 		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 	});
 });
-
-// ═══ #217 (folding #216) — delete the SEASON itself, with ONE progress counter ══
-//
-// WHY (#217, Mihkel 2026-09-02): "There is no delete season control." #197
-// finished events and series; the season row has no ×. And #216: the series
-// cascade runs silently — creation shows "Loon sündmust X / Y…", deletion
-// shows nothing.
-//
-// PO rulings (Gama, 2026-09-02, last comments on #217/#216): one slice closes
-// both; ONE "X / Y" counter whose denominator is EVERY entity the cascade
-// deletes (series + events + repertoire items), rendered under the series list
-// next to the delete-error slot, role="status", the series_create_progress
-// idiom; the two-step confirm quotes the LIVE scope (N series, N events, N
-// repertoire items); the season delete is gated by the same
-// `manageableSeasonRights === 'editor'` check as every other panel control.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   DATA — through src/lib/seasons/seasonManage.ts (wire contract pinned in
-//   seasonManage.delete.spec.ts):
-//     - arming the season × calls `countSeasonScope(cfg, seasonId)`; the confirm
-//       quotes its three numbers via the new key `season_delete_confirm_scope`
-//       (params: series / events / repertoire);
-//     - the confirm calls `deleteSeason(cfg, seasonId, undefined, { onProgress })`;
-//     - a series row's confirm now calls
-//       `deleteEventSeries(cfg, seriesId, undefined, { onProgress })` — the
-//       exact-args assertions earlier in this file carry the options object.
-//
-//   TESTIDS
-//     season-manage-delete-season           the season's own delete BUTTON —
-//                                           #236: a RED TRASHCAN in the card
-//                                           HEADER row, both states (editor-
-//                                           gated with the gear, accessible name)
-//     season-manage-delete-season-confirm   the armed two-step's halves, #197
-//     season-manage-delete-season-cancel    idiom (the trashcan is GONE while
-//                                           armed)
-//     season-manage-delete-progress         the ONE cascade counter — role=
-//                                           "status"; #236: at CARD level so a
-//                                           collapsed-header cascade shows it,
-//                                           text from
-//                                           `season_manage_delete_progress`
-//                                           ("Kustutan {current} / {total}…" in
-//                                           et), shown for BOTH season delete
-//                                           (#217) and series delete (#216),
-//                                           gone when the cascade finishes
-//
-//   BEHAVIOR
-//     - one armed context at a time: the season delete shares the existing
-//       `seasonManageDeleteArmed` slot with the row deletes, so arming one
-//       disarms the other;
-//     - pending guard: the confirm disables while the cascade is on the wire;
-//     - success: the panel CLOSES, the reload is the plain
-//       `loadForSelected()` (NOT keepSeasonManage — the season is gone, the
-//       manageable season must be recomputed), and the role="status" region
-//       announces via the new key `season_delete_success` — which means that
-//       region must survive the panel's unmount, or the announcement is never
-//       made;
-//     - partial failure: the existing season-manage-delete-error slot, new
-//       'season' branch (`season_manage_season_delete_partial`, params
-//       deleted / total), under the series list; the panel and the season stay;
-//     - the counter is cleared on finish, on failure, and on a collective
-//       switch mid-cascade (resetSeasonManage).
 
 type PageOnProgress = (current: number, total: number, kind: string) => void;
 interface PageScope {
@@ -1082,15 +893,6 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 			expect(countSeasonScopeMock).toHaveBeenCalledWith(CFG, SEASON_ID);
 		});
 
-		// Gama's #217 ruling: the confirm promises the FULL scope — N series, N
-		// events, N repertoire items — through `season_delete_confirm_scope`.
-		// The three fixture numbers (3 / 21 / 6) exist nowhere else on this
-		// panel, so this can only pass by quoting countSeasonScope's result.
-		//
-		// #217 review F1 — asserted on the VISIBLE text ALONE, not on a
-		// textContent+aria-label concatenation: a scope that lives only in the
-		// aria-label leaves a sighted operator staring at a bare "Delete?" in
-		// front of a whole-season cascade. The series row's rule, applied here.
 		await waitFor(() => {
 			const confirm = q(container, 'season-manage-delete-season-confirm') as HTMLElement;
 			const visible = confirm.textContent ?? '';
@@ -1177,10 +979,6 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 		});
 	});
 
-	// #217 review F2 — `SEASON_DELETE_ROW_ID` is a CONSTANT, so "the season × is
-	// armed" reads true again in the next collective: the armed check alone
-	// cannot tell the two apart, and the scope read needs the same generation
-	// guard the cascade's own ticks already carry.
 	it('a scope read still in flight when the operator switches collective never lands in the NEW collective’s confirm', async () => {
 		setToken('jwt-abc');
 		authStore.set({
@@ -1270,11 +1068,6 @@ describe('agenda — #217/#216/#236 ONE progress counter at CARD level, for BOTH
 		// each update without focus theft.
 		expect(progress.getAttribute('role')).toBe('status');
 		expect(progress.textContent?.trim()).toBe('Kustutan 3 / 7…');
-		// Placement per the #236 G2 ruling: the counter moves to CARD level,
-		// under the header row — a season cascade can now start from the
-		// COLLAPSED card, and a counter shut inside the panel would be
-		// invisible there. Card level serves both states; it must no longer
-		// live inside the panel.
 		const card = q(container, 'agenda-admin-card') as HTMLElement;
 		expect(card.contains(progress), '#236 — the counter renders at card level').toBe(true);
 		expect(
@@ -1521,11 +1314,6 @@ describe('agenda — #217 a FAILED season cascade lands in the delete-error slot
 		expect(alert.textContent).not.toContain('season_manage_delete_partial ');
 		expect(alert.textContent).not.toContain('season_manage_event_delete_partial');
 
-		// #236 G2 ruling — the SEASON branch of the error moves to CARD level,
-		// under the header, rendering in BOTH states (the season target has no
-		// row of its own and is the only cascade that can run collapsed). The
-		// 'series' and 'events' branches keep their per-list placement — #197
-		// review F5 stays intact, and its tests above are untouched.
 		const card = q(container, 'agenda-admin-card') as HTMLElement;
 		expect(card.contains(alert), '#236 — season-branch error at card level').toBe(true);
 		expect(
@@ -1558,14 +1346,6 @@ describe('agenda — #217 a FAILED season cascade lands in the delete-error slot
 		expect(text).not.toContain('season_manage_delete_error');
 	});
 });
-
-// ── #261 — the season delete runs from the OPENED row; feedback survives ──────
-//
-// #236 made the whole arm → confirm → cascade reachable from the COLLAPSED
-// card; #261 REVERSES that (the collapsed face is the name alone — the pins
-// above). What #236's G2 ruling established and #261 preserves is the
-// FEEDBACK placement: the counter and the season-branch error render at CARD
-// level, so a cascade whose card gets folded shut mid-run stays visible.
 
 describe('agenda — #261 the season delete arms on the OPENED row; card-level feedback survives a collapse', () => {
 	it('arming on the opened row re-reads the LIVE scope; the armed pair renders ON the title row beside the name; the cascade + card-level counter run, and a MID-CASCADE collapse keeps the counter visible', async () => {
@@ -1669,18 +1449,8 @@ describe('agenda — #261 the season delete arms on the OPENED row; card-level f
 		});
 		expect(q(container, 'season-manage-delete-season-confirm')).toBeNull();
 		expect(deleteSeasonMock).not.toHaveBeenCalled();
-		// The ruling forbids a NEW disarm branch: one call to the existing
-		// closeSeasonManagePanel() clears the armed state AND returns focus to
-		// the collapsed card's expand control (#261's focus anchor — the gear is
-		// gone). That landing spot is the observable signature of routing
-		// through the existing function.
 		expect(document.activeElement).toBe(q(container, SEASON_CARD_EXPAND));
 	});
-
-	// (#236's roving-tabindex pins — armed pair as toolbar members, the stop
-	// moving off the disabled pair mid-cascade, last-focused hand-over — lived
-	// here. #261 retires role="toolbar" and the roving pattern with the gear;
-	// the confirm-disabled-while-running pin above survives on its own.)
 
 	it('#236 review F3 (held through #261) — Escape on the standalone [+ Season] with nothing open and nothing armed is inert: focus stays put', async () => {
 		const container = await renderReady();
@@ -1716,14 +1486,6 @@ describe('agenda — #261 the season delete arms on the OPENED row; card-level f
 		}
 	});
 });
-
-// ── #217/#216: the four locales carry the new keys ──────────────────────────────
-//
-// The page above renders keys through the lenient mock; THIS is where the real
-// copy is pinned. The et progress template is Gama's ruled idiom (the exact
-// string the progress tests above render through the mock's one verbatim key);
-// the en confirm template is the contract's ruled copy; lv/uk must exist and
-// carry the same placeholders (natural translations are Comenius's).
 
 describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () => {
 	type MessageFile = Record<string, string>;
@@ -1786,42 +1548,11 @@ describe('#217/#216 — i18n: the season-delete keys exist in en/et/lv/uk', () =
 		);
 		expect(readLocale('en').season_delete_success).toContain('{name}');
 		expect(readLocale('et').season_delete_success).toContain('{name}');
-		// #217 review F3 — `season_delete_success` is NOT a redundant twin of the
-		// rows' `season_manage_deleted`, even though en/et spell them alike: lv
-		// agrees the participle with the subject's gender, so the season's
-		// announcement declines differently from an event's/series'. Pinned here
-		// so nobody "de-duplicates" the pair back into a mis-declined string.
 		expect(readLocale('lv').season_delete_success).not.toBe(
 			readLocale('lv').season_manage_deleted
 		);
 	});
 });
-
-// (*MVOX:Tallis* — #197 RED: delete buttons on series/standalone rows in the
-// season-manage panel — rights-gated rendering, delete-call wiring, row removal,
-// loud failure)
-// (*MVOX:Palestrina* — #197 review F2/F3/F4/F5: two-step confirm, 403 copy,
-// post-delete refresh, per-list error placement + status announcement)
-// (*MVOX:Palestrina* — #197 review 2nd pass F1/F2: live confirm count,
-// cascade-reported deletion count, event-cascade copy)
-// (*MVOX:Tallis* — #313: the standalone-event rows and their tests are removed
-// — the removal pins live in the "#313" block above; the #212 convert-disarm
-// tests moved with the convert flow to the event page)
-// (*MVOX:Tallis* — #217 RED (folds #216): season delete control + two-step
-// confirm quoting the live scope, deleteSeason wiring with onProgress, ONE
-// progress counter under the series list for both cascades, success close +
-// announcement, season-partial error branch, locale guard for the new keys)
-
-// ── #237: the red-trashcan sweep — series rows (panel internals; #313 removed
-//    the event rows) ─────────────────────────────────────────────────────────────
-//
-// The idle × triggers become the SHARED delete-trigger unit (DeleteTrigger →
-// TrashIcon inside a red 44px button — see DeleteTrigger.spec.ts for the unit
-// contract, trashcan-sweep.spec.ts for the one-definition pin). ONLY the glyph
-// and its colour change: testids, aria-labels (glyph-independent keys), the
-// arm→confirm/cancel two-step, disabled/aria-busy wiring, and the shared
-// single-armed-slot rule are all byte-preserved — the existing #197/#212/#217
-// suites above locate by testid and must stay green through the swap.
 
 describe('agenda — #237 the series delete triggers render the shared red trashcan (integration: real route)', () => {
 	it('EVERY idle series trigger wraps an aria-hidden TrashIcon in the shared red 44px face — no × glyph left', async () => {

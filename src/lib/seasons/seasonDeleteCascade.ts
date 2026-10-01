@@ -1,5 +1,5 @@
 // Series and season delete cascades, with the one progress counter they share.
-import { SeasonCascadePartialError, SeriesCascadePartialError } from './deleteErrors';
+import { CascadePartialError } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
 import { deleteEntity, deleteEvent, listChildIds, readChildren } from './seasonDeleteEvent';
 import { seriesRefOf, type EventEntity } from './seasonShared';
@@ -41,7 +41,7 @@ export async function deleteEventSeries(
 		try {
 			await deleteEvent(cfg, eventId, fetchImpl);
 		} catch (failure) {
-			throw new SeriesCascadePartialError(seriesId, deleted, occurrenceIds.length, failure);
+			throw new CascadePartialError('series', seriesId, deleted, occurrenceIds.length, failure);
 		}
 		deleted += 1;
 		onProgress?.(deleted, total, 'event');
@@ -128,7 +128,7 @@ export async function deleteSeason(
 				}
 			});
 		} catch (failure) {
-			throw new SeasonCascadePartialError(seasonId, lastTicked, total, failure);
+			throw new CascadePartialError('season', seasonId, lastTicked, total, failure);
 		}
 		done = baseDone + occurrencesDeleted + 1;
 		deletedEvents += occurrencesDeleted;
@@ -139,7 +139,7 @@ export async function deleteSeason(
 		try {
 			await deleteEvent(cfg, eventId, fetchImpl);
 		} catch (failure) {
-			throw new SeasonCascadePartialError(seasonId, done, total, failure);
+			throw new CascadePartialError('season', seasonId, done, total, failure);
 		}
 		done += 1;
 		deletedEvents += 1;
@@ -150,7 +150,7 @@ export async function deleteSeason(
 		try {
 			await deleteEntity(cfg, repertoireId, 'deleteSeason', fetchImpl);
 		} catch (failure) {
-			throw new SeasonCascadePartialError(seasonId, done, total, failure);
+			throw new CascadePartialError('season', seasonId, done, total, failure);
 		}
 		done += 1;
 		deletedRepertoire += 1;
