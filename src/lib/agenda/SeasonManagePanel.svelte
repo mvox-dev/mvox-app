@@ -268,7 +268,6 @@
 			.catch((e) => {
 				if (thisRequest !== currentRequestId() || thisSwitch !== switchGeneration()) return;
 				console.error('agenda: loading the season\'s event series failed', e);
-				seasonManageSeries = [];
 				seasonManageSeriesError = true;
 				seasonManagePartial = false;
 			});
