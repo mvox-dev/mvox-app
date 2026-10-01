@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import SectionPicker from '$lib/sections/SectionPicker.svelte';
@@ -108,13 +109,9 @@
 			/>
 		</div>
 		{#if memberOps.sectionWriteError?.memberId === row.memberId}
-			<p
-				data-testid="section-write-error-{row.memberId}"
-				role="alert"
-				class="relative text-xs text-red-700"
-			>
+			<FormError data-testid="section-write-error-{row.memberId}" class="relative">
 				{m.roster_section_write_failed()}
-			</p>
+			</FormError>
 		{/if}
 	{/if}
 </li>

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -170,13 +171,9 @@
 		/>
 	{/if}
 	{#if seasonManageSeriesError}
-		<p
-			data-testid="season-manage-series-error"
-			role="alert"
-			class="mt-1 text-xs text-red-700"
-		>
+		<FormError data-testid="season-manage-series-error" class="mt-1">
 			{m.season_manage_list_load_error()}
-		</p>
+		</FormError>
 	{/if}
 	{#each seasonManageSeries as series (series.id)}
 		<div
@@ -228,12 +225,8 @@
 		</div>
 	{/each}
 	{#if seasonManageDeleteError?.list === 'series'}
-		<p
-			data-testid="season-manage-delete-error"
-			role="alert"
-			class="mt-1 text-xs text-red-700"
-		>
+		<FormError data-testid="season-manage-delete-error" class="mt-1">
 			{seasonManageDeleteErrorText(seasonManageDeleteError)}
-		</p>
+		</FormError>
 	{/if}
 </div>

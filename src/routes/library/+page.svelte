@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	// #54/#73 — the library: works, editions and copies with availability from lending, the
 	// member's own loans, and the librarian's tools. The page owns every load and every write.
@@ -628,7 +629,7 @@
 		{/if}
 
 		{#if returnError}
-			<p data-testid="return-error" class="text-xs text-red-700" role="alert">{returnError}</p>
+			<FormError data-testid="return-error">{returnError}</FormError>
 		{/if}
 
 		<MyLoansSection

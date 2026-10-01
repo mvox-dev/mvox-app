@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { MemberOpsState, RosterState } from '$lib/roster/rosterPageState';
@@ -74,32 +75,20 @@
 			{#if memberOps.copiedByMemberId[row.memberId]}{m.admin_invite_copied()}{/if}
 		</p>
 		{#if memberOps.copyFailedByMemberId[row.memberId]}
-			<p
-				data-testid="roster-invite-copy-error-{row.memberId}"
-				role="alert"
-				class="text-xs text-red-700"
-			>
+			<FormError data-testid="roster-invite-copy-error-{row.memberId}">
 				{m.admin_invite_copy_error()}
-			</p>
+			</FormError>
 		{/if}
 		<p class="text-xs text-ink-3">{m.admin_invite_bearer_warning()}</p>
 	{/if}
 	{#if memberOps.inviteErrorByMemberId[row.memberId]}
-		<p
-			data-testid="roster-invite-error-{row.memberId}"
-			role="alert"
-			class="text-xs text-red-700"
-		>
+		<FormError data-testid="roster-invite-error-{row.memberId}">
 			{m.admin_invite_error()}
-		</p>
+		</FormError>
 	{/if}
 	{#if memberOps.withdrawErrorByMemberId[row.memberId]}
-		<p
-			data-testid="roster-withdraw-error-{row.memberId}"
-			role="alert"
-			class="text-xs text-red-700"
-		>
+		<FormError data-testid="roster-withdraw-error-{row.memberId}">
 			{m.roster_member_withdraw_failed()}
-		</p>
+		</FormError>
 	{/if}
 {/if}

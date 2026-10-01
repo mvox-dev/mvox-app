@@ -1,5 +1,8 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import Field from '$lib/components/Field.svelte';
+	import FormActions from '$lib/components/FormActions.svelte';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
@@ -9,7 +12,8 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions } from '$lib/events/eventPageState';
-	import { focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import { focusOnMount, focusTestIdAfterRender } from '$lib/a11y/focusable';
+	import { formKeydown } from '$lib/a11y/formKeys';
 
 	let {
 		detail,
@@ -46,7 +50,6 @@
 		total: number;
 	};
 	let eventConvertResume = $state<EventConvertResume | null>(null);
-	let eventConvertFormEl = $state<HTMLDivElement | null>(null);
 
 	function openEventConvertForm(): void {
 		eventConvertOpen = true;
@@ -88,14 +91,11 @@
 	}
 
 	function onEventConvertFormKeydown(event: KeyboardEvent): void {
-		if (event.key !== 'Escape') return;
-		event.preventDefault();
-		dismissEventConvertForm();
+		formKeydown(event, {
+			close: dismissEventConvertForm,
+			submit: () => void submitEventConvert()
+		});
 	}
-
-	$effect(() => {
-		if (eventConvertOpen && eventConvertFormEl) eventConvertFormEl.focus();
-	});
 
 	function eventConvertStepOf(e: unknown): string {
 		if (e && typeof e === 'object' && 'step' in e) {
@@ -277,7 +277,6 @@
 			role="dialog"
 			aria-label={m.event_convert_form_label()}
 			tabindex="-1"
-			bind:this={eventConvertFormEl}
 			class="flex flex-col gap-1.5 border border-dashed border-ink-5 p-2"
 			onkeydown={onEventConvertFormKeydown}
 		>
@@ -286,48 +285,47 @@
 					{m.write_unavailable_no_signal()}
 				</p>
 			{/if}
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_interval_label()}
-				</span>
-				<input
-					type="number"
-					min="1"
-					data-testid="event-convert-interval"
-					aria-label={m.event_convert_interval_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertIntervalDays}
-					oninput={(e) => {
-						eventConvertIntervalDays = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_duration_label()}
-				</span>
-				<input
-					type="number"
-					min="1"
-					data-testid="event-convert-duration"
-					aria-label={m.event_convert_duration_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'duration', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertDuration}
-					oninput={(e) => {
-						eventConvertDuration = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
+			<Field label={m.event_convert_interval_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="number"
+						min="1"
+						data-testid="event-convert-interval"
+					use:focusOnMount
+						aria-label={m.event_convert_interval_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
+						value={eventConvertIntervalDays}
+						oninput={(e) => {
+							eventConvertIntervalDays = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						disabled={control.disabled}
+						class={control.class}
+					/>
+				{/snippet}
+			</Field>
+			<Field label={m.event_convert_duration_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="number"
+						min="1"
+						data-testid="event-convert-duration"
+						aria-label={m.event_convert_duration_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'duration', 'event-convert-error')}
+						value={eventConvertDuration}
+						oninput={(e) => {
+							eventConvertDuration = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						disabled={control.disabled}
+						class={control.class}
+					/>
+				{/snippet}
+			</Field>
 			<p
 				data-testid="event-convert-start-date"
 				class="flex w-full flex-col gap-0.5"
@@ -339,26 +337,25 @@
 					{tallinnWallClockParts(detail.startDatetime).date}
 				</span>
 			</p>
-			<label class="flex w-full flex-col gap-0.5">
-				<span class="text-xs text-ink-2">
-					{m.event_convert_end_date_label()}
-				</span>
-				<input
-					type="date"
-					data-testid="event-convert-end-date"
-					aria-label={m.event_convert_end_date_label()}
-					{...fieldErrorAttrs(eventConvertErrorField, 'end', 'event-convert-error')}
-					disabled={eventConvertLocked}
-					value={eventConvertEndDate}
-					oninput={(e) => {
-						eventConvertEndDate = (
-							e.currentTarget as HTMLInputElement
-						).value;
-						clearEventConvertError();
-					}}
-					class="w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50"
-				/>
-			</label>
+			<Field label={m.event_convert_end_date_label()} disabled={eventConvertLocked}>
+				{#snippet children(control)}
+					<input
+						type="date"
+						data-testid="event-convert-end-date"
+						aria-label={m.event_convert_end_date_label()}
+						{...fieldErrorAttrs(eventConvertErrorField, 'end', 'event-convert-error')}
+						value={eventConvertEndDate}
+						oninput={(e) => {
+							eventConvertEndDate = (
+								e.currentTarget as HTMLInputElement
+							).value;
+							clearEventConvertError();
+						}}
+						disabled={control.disabled}
+						class={control.class}
+					/>
+				{/snippet}
+			</Field>
 			{#if eventConvertProgress}
 				<p
 					data-testid="event-convert-progress"
@@ -381,36 +378,19 @@
 				</p>
 			{/if}
 			{#if eventConvertError}
-				<p
-					id="event-convert-error"
-					data-testid="event-convert-error"
-					role="alert"
-					class="text-xs text-red-700"
-				>
+				<FormError id="event-convert-error" data-testid="event-convert-error">
 					{eventConvertError()}
-				</p>
+				</FormError>
 			{/if}
-			<div class="flex gap-2">
-				<button
-					type="button"
-					data-testid="event-convert-submit"
-					disabled={eventConvertSubmitting || isOffline}
-					aria-busy={eventConvertSubmitting}
-					class="flex min-h-11 items-center border border-ink px-2 py-1 text-xs text-ink hover:bg-ink hover:text-paper disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-ink"
-					onclick={() => void submitEventConvert()}
-				>
-					{m.event_convert_submit()}
-				</button>
-				<button
-					type="button"
-					data-testid="event-convert-cancel"
-					disabled={eventConvertSubmitting}
-					class="flex min-h-11 items-center px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50 disabled:hover:text-ink-2"
-					onclick={dismissEventConvertForm}
-				>
-					{m.event_convert_cancel()}
-				</button>
-			</div>
+			<FormActions
+				testid="event-convert"
+				submitLabel={m.event_convert_submit()}
+				cancelLabel={m.event_convert_cancel()}
+				submitting={eventConvertSubmitting}
+				{isOffline}
+				onsubmit={() => void submitEventConvert()}
+				oncancel={dismissEventConvertForm}
+			/>
 		</div>
 	{/if}
 {/if}

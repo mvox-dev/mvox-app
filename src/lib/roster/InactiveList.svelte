@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import EntuRef from '$lib/components/EntuRef.svelte';
@@ -62,14 +63,10 @@
 							{m.roster_member_reinstate()}
 						</button>
 						{#if memberOps.deactivateActionError?.memberId === row.memberId && memberOps.deactivateActionError.kind === 'reinstate'}
-							<p
-								data-testid="member-reinstate-failed-{row.memberId}"
-								role="alert"
-								class="text-xs text-red-700"
-							>
+							<FormError data-testid="member-reinstate-failed-{row.memberId}">
 								{m.roster_member_reinstate_failed()}
 								<EntuRef id={row.memberId} />
-							</p>
+							</FormError>
 						{/if}
 					</li>
 				{/each}

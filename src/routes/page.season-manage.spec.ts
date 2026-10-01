@@ -2265,6 +2265,25 @@ describe('#321 review F1 — the season-manage panel’s partial notice', () => 
 		expect(q(container, PARTIAL_NOTICE)).toBeNull();
 	});
 
+	it('a failed refresh keeps the rows and the partial notice, with the error (#632)', async () => {
+		listEventSeriesForSeasonMock.mockResolvedValueOnce(truncatedSeriesRead());
+		const container = await renderReady();
+		await openPanel(container);
+		await waitFor(() => {
+			expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+		});
+
+		listEventSeriesForSeasonMock.mockRejectedValue(new Error('read down'));
+		await armAndConfirmSeriesDelete(container, 'series-1');
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-error')).not.toBeNull();
+		});
+		expect(listEventSeriesForSeasonMock).toHaveBeenCalledTimes(2);
+		expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
+		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
+	});
+
 	it('a COLLECTIVE switch does not carry A’s truncation onto B’s panel', async () => {
 		let pendingReads = 0;
 		listEventSeriesForSeasonMock.mockImplementation(() =>
