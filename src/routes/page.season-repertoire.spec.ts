@@ -1,76 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #234 RED — the season-manage panel gains a REPERTOIRE section (integration:
-// real +page.svelte, real repertoire data layer, real write actions; the
-// network is stubbed at `fetch` — same harness family as
-// page.repertoire-manage-wiring.spec.ts, with the panel's non-repertoire reads
-// (roster, sections, series/events lists) module-mocked as in
-// page.season-manage.spec.ts).
-//
-// WHY (#234, Mihkel live-gate): "I cant see the programme management on season
-// management card." Season repertoire has no season-scoped management home —
-// it is only reachable through an unprogrammed event's fallback works line.
-//
-// Pinned contract (GREEN must implement — the SPIKE-equivalent, settled here
-// from research-234.json + Gama's PO ruling on the issue):
-//
-//   SECTION — the panel gains a `season-manage-repertoire` container: a
-//   heading using the NEW key `season_manage_repertoire_label` (sibling of
-//   season_manage_series_label / season_manage_events_label, four locales),
-//   the managed season's repertoire_items as WorkRow rows (same work +
-//   composer + edition labeling the works lines use, retired items INCLUDED —
-//   this is the editor surface, the status toggle must stay two-way), each
-//   row's remove control, and the existing add-work select + button (#204
-//   composer labels via the shared workLabel). RepertoireElement in
-//   'repertoire' context drops in (research: prop-driven, fetch-free) — an
-//   equivalent renderer is acceptable IF every testid below still holds.
-//
-//   SEASON/RIGHTS SCOPE — PO ruling (issue #234, last comment): the section
-//   scopes to the season THE PANEL MANAGES (`manageableSeasonId`), and rights
-//   are the season-repertoire-editor KIND evaluated against THAT season —
-//   i.e. the panel's own `manageableSeasonRights` gate, NOT the
-//   currentSeasonId-scoped `seasonManageRights` viewer signal. The divergence
-//   case (lapsed current season + future season queued: currentSeason picks
-//   the lapsed one, manageableSeason the future one) is pinned below: the
-//   section lists, excludes-from-add, and WRITES against the PANEL's season.
-//   The page-level `seasonRepertoire`/`pickableWorksList` (currentSeasonId-
-//   scoped) and the per-event handlers (hardcoded to currentSeasonId +
-//   worksByEventId) are therefore NOT reusable verbatim — panel-scoped
-//   state/handlers are required, and the divergence tests fail against any
-//   implementation that reuses the current-season plumbing.
-//
-//   SYNC — a repertoire_item is a child of the SEASON, so the same row shows
-//   on every event falling back to it. A panel-side remove/add must reflect
-//   in the agenda's fallback works rows (optimistic cross-drop or refetch —
-//   the world below serves post-write truth, so either passes).
-//
-//   RESET — a collective switch clears the section's rows: stale rows from
-//   the previous collective must not survive into the next panel open
-//   (resetManagement/resetSeasonManage must cover any new state).
-//
-//   TESTIDS — RepertoireElement's row testids (work-row, work-manage-*, …)
-//   are NOT per-instance, so the panel section + a simultaneously-expanded
-//   agenda fallback line render DUPLICATE testids page-wide. That duplication
-//   is ACCEPTED and documented here; the strategy is CONTAINER SCOPING: every
-//   assertion in this file queries within [data-testid="season-manage-
-//   repertoire"] or explicitly OUTSIDE the panel — never a bare page-wide
-//   single-match query for a row-level testid. Existing suites keep their
-//   bare queries because their scenarios never render both surfaces at once;
-//   new specs must scope. The fail-closed ADMIN_TESTIDS sweep
-//   (page.agenda-admin.spec.ts) gains 'season-manage-repertoire'.
-//
-//   UNTOUCHED — RepertoireElement.spec.ts (incl. the :713 per-surface rights
-//   describe), page.repertoire-manage-wiring.spec.ts, AgendaList.spec.ts and
-//   the event/[id] specs stay green as-is: the per-event works lines and the
-//   'repertoire'-context fallback (an event editor's only entry point) keep
-//   byte-identical behavior.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get: (_target, key) => () => `[${String(key)}]`
@@ -105,13 +39,8 @@ const {
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// $env/dynamic/public is unavailable outside a SvelteKit request context under
-// happy-dom; stubbing the base url keeps every real module in play.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// The panel's NON-repertoire reads — not what is under test here; mocked the
-// way page.season-manage.spec.ts mocks them. The repertoire path (repertoireData,
-// workRows, libraryData, repertoireActions) stays REAL down to `fetch`.
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -120,10 +49,6 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	removeSeasonConductor: vi.fn(),
 	getSeriesDefaults: vi.fn(),
 	deleteEvent: deleteEventMock,
-	// Review 2 F1 (re-pointed by #313) — the panel-side SERIES delete is the
-	// surviving `loadForSelected({ keepSeasonManage: true })` trigger (the
-	// standalone-event rows are removed), and that panel-preserving reload is
-	// exactly what the reset pin below needs.
 	deleteEventSeries: deleteEventSeriesMock,
 	countSeriesOccurrences: countSeriesOccurrencesMock,
 	countSeasonScope: vi.fn(),
@@ -140,18 +65,10 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	listSections: listSectionsMock
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
-// #343 — the panel's onpdfclick now reads through the byte store
-// (openFileBytes -> $lib/files/appByteStore); an in-memory fake stands in for
-// IndexedDB (unavailable under happy-dom) so this pre-existing signing-wiring
-// pin keeps exercising the real click -> signFileUrl path unchanged.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => createFakeByteStore() }));
-// #353 — the click's success path also records a part label; the real
-// label store is IndexedDB-backed too (unavailable under happy-dom), so it
-// gets the same treatment as the byte store above.
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} })
 }));
-// Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue(null),
 	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
@@ -184,15 +101,10 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── fixtures ────────────────────────────────────────────────────────────────────
-
-/** ISO calendar date `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-/** The ALIGNED shape: one running season — currentSeason and manageableSeason
- *  both pick it, the panel and the agenda fallback manage the SAME season. */
 function runningSeason(): Season {
 	return {
 		id: 'season-1',
@@ -205,10 +117,6 @@ function runningSeason(): Season {
 	};
 }
 
-/** The DIVERGENCE shape (#167 mechanics, PO ruling on #234): the current
- *  season has LAPSED with a later one queued. `currentSeason` (ignores
- *  end_date) picks the lapsed season-a; `manageableSeason` picks the future
- *  season-b. The panel manages season-b — so must its repertoire section. */
 function lapsedSeason(): Season {
 	return {
 		id: 'season-a',
@@ -233,9 +141,6 @@ function futureSeason(): Season {
 }
 
 const futureStart = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-/** One agenda event with NO program_items — its works line renders the season
- *  repertoire fallback ('repertoire' context), the second surface the sync
- *  and scoping pins need on screen simultaneously with the panel. */
 const EV_FALLBACK = {
 	id: 'ev-1',
 	name: 'Rehearsal',
@@ -268,9 +173,6 @@ const EDITIONS: EntityRaw[] = [
 		_id: 'ed-1',
 		name: [{ string: '40-part original' }],
 		_parent: [{ reference: 'work-1', entity_type: 'work' }],
-		// Review F2 — an edition WITH a score file: the panel row must offer the
-		// PDF link and it must actually sign. The original fixture carried no
-		// files at all, so a rendered-but-inert button went unnoticed.
 		file: [{ _id: 'file-1', filename: 'spem.pdf', filesize: 1024, filetype: 'application/pdf' }]
 	},
 	{
@@ -305,32 +207,14 @@ function json(body: unknown, status = 200) {
 }
 
 interface WorldOptions {
-	/** Mutable per-season repertoire_item state, keyed by season id. Writes
-	 *  (POST create / DELETE) mutate it, so any refetch serves the post-write
-	 *  truth — the sync pins accept optimistic OR refetch mechanics. */
 	repertoireBySeason: Record<string, EntityRaw[]>;
-	/** Dbs whose repertoire_item GET never resolves — the stale-state trap for
-	 *  the collective-switch pin. */
 	pendingRepertoireDbs?: string[];
-	/** Repertoire_item GET answers 500 — the read-failure pin (review F4). */
 	failRepertoireRead?: boolean;
-	/** Entity CREATE never settles — the in-flight pin for the panel's own
-	 *  add-work pending key (review F3). */
 	holdCreates?: boolean;
-	/** Consulted on EVERY repertoire_item GET: while it answers true the read
-	 *  never settles. Review 2 F1's trap — flipped on after the panel is loaded,
-	 *  so whatever the section shows across a panel-preserving reload is exactly
-	 *  what the resets left standing, with no refetch to paper over a wipe. */
 	holdRepertoireReads?: () => boolean;
-	/** #321 — the server `count` the panel's own WORK list read answers with.
-	 *  Above the number of works served, that read is TRUNCATED, which the
-	 *  panel's closed-set add-work picker must say out loud. Omitted = no count
-	 *  on the wire = complete, the shape every other fixture here describes. */
 	workCount?: number;
 }
 
-/** The Entu stand-in, db-aware and stateful. Routed by url + method so an
- *  assertion can say exactly which wire call a tap produced. */
 function installWorld(options: WorldOptions) {
 	const {
 		repertoireBySeason,
@@ -359,8 +243,6 @@ function installWorld(options: WorldOptions) {
 			return json({ deleted: true });
 		}
 		if (method === 'POST') {
-			// Entity CREATE (POST .../entity with no id) — parse the props, append
-			// the new repertoire_item to its season's list.
 			if (/\/entity(\?|$)/.test(url)) {
 				if (holdCreates) return new Promise<Response>(() => {});
 				const props = JSON.parse(String(init?.body ?? '[]')) as Array<{
@@ -382,11 +264,9 @@ function installWorld(options: WorldOptions) {
 				}
 				return json({ _id: id });
 			}
-			// Property write on an existing entity (status replace etc.).
 			return json({ _id: url.split('/').pop() });
 		}
 
-		// Pre-write value-id lookups (GET → POST → DELETE replace semantics).
 		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
 		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-ri' }] });
@@ -437,8 +317,6 @@ beforeEach(() => {
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
 	deleteEventSeriesMock.mockResolvedValue(0);
 	countSeriesOccurrencesMock.mockResolvedValue(0);
-	// Never settles: the signing call is what the pin asserts, and letting it
-	// resolve would send happy-dom off navigating a stub tab.
 	signFileUrlMock.mockReturnValue(new Promise<string>(() => {}));
 });
 
@@ -461,8 +339,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── scoped query helpers (the ACCEPTED-duplication strategy) ────────────────────
-
 function q(scope: ParentNode, testid: string): HTMLElement | null {
 	return scope.querySelector(`[data-testid="${testid}"]`);
 }
@@ -470,15 +346,12 @@ function qa(scope: ParentNode, testid: string): HTMLElement[] {
 	return Array.from(scope.querySelectorAll(`[data-testid="${testid}"]`));
 }
 
-/** The panel's repertoire section — every panel-side assertion scopes to it. */
 function repertoireSection(container: HTMLElement): HTMLElement {
 	const section = q(container, 'season-manage-repertoire');
 	if (!section) throw new Error('season-manage-repertoire section not in the DOM');
 	return section;
 }
 
-/** The agenda fallback's expanded works region — the works-expanded that is
- *  NOT inside the season-manage panel. */
 function agendaWorksExpanded(container: HTMLElement): HTMLElement {
 	const panel = q(container, 'season-manage-panel');
 	const outside = qa(container, 'works-expanded').filter((el) => !panel?.contains(el));
@@ -488,7 +361,6 @@ function agendaWorksExpanded(container: HTMLElement): HTMLElement {
 	return outside[0];
 }
 
-/** The work-row rendering the named work, WITHIN the given scope only. */
 function rowByName(scope: ParentNode, workName: string): HTMLElement | null {
 	return (
 		qa(scope, 'work-row').find(
@@ -505,7 +377,6 @@ async function renderAgendaReady(waitTestid: string): Promise<HTMLElement> {
 	return container as HTMLElement;
 }
 
-/** #261 — expand the season card, wait for the panel (shared helper). */
 async function openPanel(container: HTMLElement): Promise<HTMLElement> {
 	return await openSeasonCardPanel(container);
 }
@@ -530,8 +401,6 @@ function deletesTo(fetchMock: ReturnType<typeof installWorld>, fragment: string)
 	);
 }
 
-// ── the section itself ──────────────────────────────────────────────────────────
-
 describe('#234 — season-manage panel: the repertoire section', () => {
 	it('renders inside the panel: heading key, the full unfiltered row list (work + composer + edition labeling, retired included), a remove control per row, and the #204 add-work select', async () => {
 		installWorld({ repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] } });
@@ -544,39 +413,26 @@ describe('#234 — season-manage panel: the repertoire section', () => {
 			expect(q(panel, 'season-manage-repertoire')).not.toBeNull();
 		});
 		const section = repertoireSection(container);
-		// The heading follows the sibling-section pattern (season_manage_series_label /
-		// season_manage_events_label) with the NEW key.
 		expect(section.textContent).toContain('[season_manage_repertoire_label]');
 
-		// Rows appear without any further tap — this is a management section, not
-		// a collapsed disclosure.
 		await waitFor(() => {
 			expect(qa(section, 'work-row').length).toBe(2);
 		});
 
-		// Full row shape, work + edition labeling exactly as the works lines
-		// render it (same renderer or byte-equal equivalent).
 		const spem = rowByName(section, 'Spem in alium');
 		expect(spem, 'Spem in alium row').not.toBeNull();
 		expect(q(spem!, 'work-composer')?.textContent?.trim()).toBe('Thomas Tallis');
 		expect(q(spem!, 'work-edition')?.textContent?.trim()).toBe('40-part original');
 		expect(spem!.getAttribute('data-status')).toBe('active');
 		expect(q(spem!, 'work-manage-remove'), 'remove control on the row').not.toBeNull();
-		// The editor management row (status controls) renders — the section is an
-		// editor surface, same as the 'repertoire' context on the works lines.
 		expect(q(spem!, 'work-manage-row')).not.toBeNull();
 
-		// Retired items are LISTED (unfiltered editor read — the status toggle
-		// stays two-way), with the no-edition marker for an unpinned row.
 		const warhorse = rowByName(section, 'Old warhorse');
 		expect(warhorse, 'retired row must be listed for the editor').not.toBeNull();
 		expect(warhorse!.getAttribute('data-status')).toBe('retired');
 		expect(q(warhorse!, 'work-no-edition')).not.toBeNull();
 		expect(q(warhorse!, 'work-manage-remove')).not.toBeNull();
 
-		// The add-work control: native select, prompt option first, then EXACTLY
-		// the works not yet in this season's repertoire, labeled by the shared
-		// #204 workLabel ("Name - Composer", bare "Name" when composerless).
 		const select = addWorkSelect(section);
 		const options = Array.from(select.querySelectorAll('option'));
 		expect(options.map((o) => o.value)).toEqual(['', 'work-3']);
@@ -600,8 +456,6 @@ describe('#234 — season-manage panel: the repertoire section', () => {
 		}
 	});
 });
-
-// ── season scope: the PANEL's season, not the viewer's current season ───────────
 
 describe('#234 — divergence (manageable ≠ current): the section tracks the PANEL’s season', () => {
 	function installDivergentWorld() {
@@ -633,9 +487,6 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 			expect(qa(section, 'work-row').length).toBe(1);
 		});
 		expect(rowByName(section, 'Nunc dimittis'), "season-b's row").not.toBeNull();
-		// The current (lapsed) season's rows must NOT leak into the panel — an
-		// implementation reusing the currentSeasonId-scoped seasonRepertoire /
-		// worksByEventId plumbing fails here.
 		expect(rowByName(section, 'Spem in alium')).toBeNull();
 		expect(rowByName(section, 'Old warhorse')).toBeNull();
 	});
@@ -651,10 +502,6 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 		});
 		const section = repertoireSection(container);
 
-		// Exclusion set = the PANEL season's repertoire: season-b holds work-3,
-		// so work-1 and work-2 are pickable and work-3 is not. (The page-level
-		// pickableWorksList — excluding season-A's work-1/work-2 — would offer
-		// exactly the opposite; that is the divergence this pin exists for.)
 		const select = addWorkSelect(section);
 		const options = Array.from(select.querySelectorAll('option'));
 		expect(options.map((o) => o.value)).toEqual(['', 'work-1', 'work-2']);
@@ -664,7 +511,6 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 		await fireEvent.change(select, { target: { value: 'work-1' } });
 		await fireEvent.click(q(section, 'work-manage-add-work-button') as HTMLElement);
 
-		// The create targets THE PANEL's season — full wire shape, verbatim.
 		await waitFor(() => {
 			expect(postsTo(fetchMock, '/entity').length).toBeGreaterThan(0);
 		});
@@ -693,8 +539,6 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 		expect(learning, 'status control on the panel row').not.toBeNull();
 		await fireEvent.click(learning!);
 
-		// The write must actually reach the wire — a control wired to the
-		// existing worksByEventId-backed handler silently no-ops here.
 		await waitFor(() => {
 			expect(postsTo(fetchMock, '/entity/ri-b1').length).toBe(1);
 		});
@@ -705,8 +549,6 @@ describe('#234 — divergence (manageable ≠ current): the section tracks the P
 	});
 });
 
-// ── sync with the agenda fallback rows ──────────────────────────────────────────
-
 describe('#234 — panel-side add/remove syncs the agenda fallback works rows', () => {
 	function alignedAgendaWithEvent() {
 		loadFullAgendaMock.mockResolvedValue(
@@ -714,9 +556,6 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		);
 	}
 
-	/** Render, expand the agenda event's fallback works line, THEN open the
-	 *  panel — both surfaces show the same season's repertoire simultaneously
-	 *  (the documented duplicate-testid state; all queries stay scoped). */
 	async function bothSurfacesOpen(): Promise<HTMLElement> {
 		setAuthed();
 		const container = await renderAgendaReady('works-line');
@@ -739,7 +578,6 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		const container = await bothSurfacesOpen();
 		const section = repertoireSection(container);
 
-		// The agenda side genuinely shows the row before the panel-side remove.
 		expect(rowByName(agendaWorksExpanded(container), 'Spem in alium')).not.toBeNull();
 
 		const spem = rowByName(section, 'Spem in alium')!;
@@ -748,15 +586,12 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		await waitFor(() => {
 			expect(deletesTo(fetchMock, '/entity/ri-1').length).toBe(1);
 		});
-		// Both surfaces drop the row (same repertoire_item, child of the season).
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Spem in alium')).toBeNull();
 		});
 		await waitFor(() => {
 			expect(rowByName(agendaWorksExpanded(container), 'Spem in alium')).toBeNull();
 		});
-		// The fallback surface itself survives — the per-event entry point is
-		// untouched (#234 Done-when 3): the other row is still there.
 		expect(rowByName(agendaWorksExpanded(container), 'Old warhorse')).not.toBeNull();
 	});
 
@@ -775,8 +610,6 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 		await waitFor(() => {
 			expect(postsTo(fetchMock, '/entity').length).toBeGreaterThan(0);
 		});
-		// No optimistic row for a create (the id is server-assigned): the settle
-		// refetch brings the real row — to BOTH surfaces.
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Nunc dimittis')).not.toBeNull();
 		});
@@ -786,14 +619,10 @@ describe('#234 — panel-side add/remove syncs the agenda fallback works rows', 
 	});
 });
 
-// ── collective switch: no stale rows ────────────────────────────────────────────
-
 describe('#234 — collective switch resets the section’s state', () => {
 	it('rows from the previous collective never show in the next collective’s panel', async () => {
 		installWorld({
 			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] },
-			// org-b's repertoire read NEVER resolves: whatever the section shows
-			// after the switch is exactly what the reset left behind.
 			pendingRepertoireDbs: ['org-b']
 		});
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
@@ -806,7 +635,6 @@ describe('#234 — collective switch resets the section’s state', () => {
 
 		selectedCollectiveDbStore.set('org-b');
 
-		// The panel tears down on the switch; reopen it for org-b.
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
@@ -814,13 +642,6 @@ describe('#234 — collective switch resets the section’s state', () => {
 		await waitFor(() => {
 			expect(q(container, 'season-manage-repertoire')).not.toBeNull();
 		});
-		// org-b's read is still pending, so ANY row here is stale state from
-		// sampledb that a reset failed to clear.
-		//
-		// Asserted on ROWS, not on the section's raw text (review F1): the
-		// add-work select is fed by the panel's own works read, which is
-		// independent of the repertoire read and DOES resolve for org-b — its
-		// options legitimately name the same works. Only rows can be stale.
 		const section = repertoireSection(container);
 		expect(qa(section, 'work-row')).toEqual([]);
 		expect(rowByName(section, 'Spem in alium')).toBeNull();
@@ -828,16 +649,7 @@ describe('#234 — collective switch resets the section’s state', () => {
 	});
 });
 
-// ── review round 1 (#234 YELLOW) ────────────────────────────────────────────────
-
 describe('#234 review F1 — the FUTURE-ONLY season: the section is fully usable', () => {
-	/** The state the PO ruling names as the whole reason for manageableSeasonId
-	 *  scoping: one future season and nothing else. `currentSeason()` returns
-	 *  null → the currentSeasonId-scoped picker load (`loadManagePickers`, gated
-	 *  on `seasonManageRights === 'editor'` or an event editor) never fires, so
-	 *  an implementation borrowing `libraryWorks`/`libraryEditions` renders the
-	 *  section list-only: an add-work select holding just its prompt, and rows
-	 *  with no composer/edition join. */
 	function installFutureOnly() {
 		const fetchMock = installWorld({ repertoireBySeason: { 'season-b': [RI_B] } });
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [futureSeason()] }));
@@ -854,8 +666,6 @@ describe('#234 review F1 — the FUTURE-ONLY season: the section is fully usable
 		});
 		const section = repertoireSection(container);
 
-		// The row's work join actually happened — 'Arvo Pärt' lives on work-3,
-		// nowhere on the repertoire_item itself.
 		const row = rowByName(section, 'Nunc dimittis')!;
 		await waitFor(() => {
 			expect(q(row, 'work-composer')?.textContent?.trim()).toBe('Arvo Pärt');
@@ -901,11 +711,12 @@ describe('#234 review F1 — the FUTURE-ONLY season: the section is fully usable
 });
 
 describe('#234 review F2 — the panel row’s PDF link is wired', () => {
-	it('renders the score button for a pinned edition carrying a file and signs THAT file on click', async () => {
+	it('renders the score button for a pinned edition carrying a file and opens THAT file in the part viewer on click', async () => {
 		installWorld({ repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] } });
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
 		setAuthed();
-		vi.stubGlobal('open', vi.fn(() => null));
+		const openSpy = vi.fn(() => null);
+		vi.stubGlobal('open', openSpy);
 		const container = await renderAgendaReady('agenda-empty');
 		await openPanel(container);
 		await waitFor(() => {
@@ -921,9 +732,23 @@ describe('#234 review F2 — the panel row’s PDF link is wired', () => {
 		});
 
 		await fireEvent.click(pdf);
-		// An unwired onpdfclick renders the same button and does nothing.
-		expect(signFileUrlMock).toHaveBeenCalledTimes(1);
-		expect(signFileUrlMock.mock.calls[0][1]).toBe('file-1');
+		expect(gotoMock.mock.calls.filter((c) => String(c[0]).startsWith('/part/'))).toEqual([
+			[
+				'/part/file-1?db=sampledb',
+				{
+					state: {
+						partLabel: {
+							work: 'Spem in alium',
+							composer: 'Thomas Tallis',
+							edition: '40-part original',
+							filename: 'spem.pdf'
+						}
+					}
+				}
+			]
+		]);
+		expect(openSpy).not.toHaveBeenCalled();
+		expect(signFileUrlMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -948,8 +773,6 @@ describe('#234 review F3 — the panel’s add-work sentinel reaches the control
 		expect(button.disabled).toBe(false);
 		await fireEvent.click(button);
 
-		// The create never settles, so the pending key stays set — the section
-		// must SHOW it. A key the component never receives leaves both enabled.
 		await waitFor(() => {
 			expect(button.disabled).toBe(true);
 		});
@@ -972,7 +795,6 @@ describe('#234 review F4 — a failed panel read says so', () => {
 			expect(error!.getAttribute('role')).toBe('alert');
 			expect(error!.textContent).toContain('[season_manage_list_load_error]');
 		});
-		// And no rows pretending the season is simply empty.
 		expect(qa(section, 'work-row')).toEqual([]);
 	});
 
@@ -989,29 +811,10 @@ describe('#234 review F4 — a failed panel read says so', () => {
 	});
 });
 
-// ── review round 2 (#234 YELLOW) ────────────────────────────────────────────────
-
 describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section standing', () => {
-	/** `loadForSelected({ keepSeasonManage: true })` is the reload every
-	 *  panel-born write issues (series delete, panel-born event create, series
-	 *  create): the panel deliberately stays open across it. The section's
-	 *  state must survive it too — resetting it on that path blanked the rows
-	 *  (reading as "this season has no repertoire") and emptied the add-work
-	 *  select down to its prompt, killing Done-when 2 until the editor closed
-	 *  and re-opened the panel.
-	 *
-	 *  #313 removed the panel's standalone-event rows (the old cheapest
-	 *  trigger); this is now driven through the SURVIVING write-triggered
-	 *  reload — a series delete (`refreshAfterSeasonManageDelete`), the ONLY
-	 *  remaining coverage of the panel staying open across that reload. */
-	// #400 — `ownerIds` includes the viewer ('person-p') so the delete
-	// trigger this test clicks still renders; this pin is about the panel
-	// reload surviving, not the rights gate.
 	const SERIES_ROW = { id: 'series-9', name: 'Proovid', eventCount: 3, ownerIds: ['person-p'] };
 
 	it('rows and the add-work select survive a series delete, with no repertoire refetch to hide a wipe', async () => {
-		// The trap: from the moment the delete fires, every repertoire_item read
-		// hangs. Whatever the section shows afterwards is what the resets left.
 		const hold = { on: false };
 		installWorld({
 			repertoireBySeason: { 'season-1': [RI_ACTIVE, RI_RETIRED] },
@@ -1038,7 +841,6 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 
 		hold.on = true;
 
-		// Two-tap delete (#197 review F2) — only the confirm writes.
 		await fireEvent.click(q(container, 'season-manage-series-delete-series-9') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'season-manage-series-delete-confirm-series-9')).not.toBeNull();
@@ -1050,33 +852,23 @@ describe('#234 review 2 F1 — a panel-PRESERVING reload leaves the section stan
 		await waitFor(() => {
 			expect(deleteEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		// The panel-preserving reload has actually run (a second agenda read).
 		await waitFor(() => {
 			expect(loadFullAgendaMock.mock.calls.length).toBeGreaterThanOrEqual(2);
 		});
-		// …and the panel is still open, which is the whole point of that reload.
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 
 		const section = repertoireSection(container);
 		expect(qa(section, 'work-row').length).toBe(2);
 		expect(rowByName(section, 'Spem in alium')).not.toBeNull();
 		expect(rowByName(section, 'Old warhorse')).not.toBeNull();
-		// No false "nothing here" either — an empty section with no error line is
-		// exactly the misreading this pin exists for.
 		expect(q(section, 'season-manage-repertoire-error')).toBeNull();
 
-		// Done-when 2 is still alive: the add-work select still offers a work.
 		const options = Array.from(addWorkSelect(section).querySelectorAll('option'));
 		expect(options.map((o) => o.value)).toEqual(['', 'work-3']);
 	});
 });
 
 describe('#234 review 2 F2 — an AGENDA-side repertoire write syncs the panel section', () => {
-	/** The mirror of the panel→agenda sync above. Both surfaces render the SAME
-	 *  season's repertoire_items whenever the panel's season is the current one
-	 *  (`manageableSeasonId === currentSeasonId` — the common, aligned case), but
-	 *  they now hold SEPARATE copies of those rows. Before #234 they shared one
-	 *  `seasonRepertoire` and could not diverge. */
 	function alignedAgendaWithEvent() {
 		loadFullAgendaMock.mockResolvedValue(
 			fullAgendaResult({ seasons: [runningSeason()], upcoming: [EV_FALLBACK] })
@@ -1117,13 +909,9 @@ describe('#234 review 2 F2 — an AGENDA-side repertoire write syncs the panel s
 		await waitFor(() => {
 			expect(deletesTo(fetchMock, '/entity/ri-1').length).toBe(1);
 		});
-		// A row left standing here is a DELETE waiting to be fired at a
-		// repertoire_item the server no longer has.
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Spem in alium')).toBeNull();
 		});
-		// …and the exclusion set the panel's add-work select derives from is the
-		// same stale copy, so it has to move too.
 		await waitFor(() => {
 			expect(panelAddOptions(container)).toEqual(['', 'work-1', 'work-3']);
 		});
@@ -1148,42 +936,15 @@ describe('#234 review 2 F2 — an AGENDA-side repertoire write syncs the panel s
 		await waitFor(() => {
 			expect(rowByName(repertoireSection(container), 'Nunc dimittis')).not.toBeNull();
 		});
-		// The work is in the season now: still offering it from the panel invites
-		// a DUPLICATE repertoire_item for the same season. #311 sharpens the
-		// original prompt-only assertion: with NOTHING left to pick after a
-		// successfully-settled sync, the panel's select is not an empty chooser —
-		// it is GONE (the commission's own case, and duplication-proof outright).
 		await waitFor(() => {
 			expect(q(repertoireSection(container), 'work-manage-add-work-select')).toBeNull();
 		});
 	});
 });
 
-// ── #311 — the Add Work picker in the SEASON-MANAGE PANEL ───────────────────────
-//
-// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
-// RepertoireElement's `pickableWorksVisible` defaults to RENDER; a caller may
-// pass `false` only off a load that COMPLETED SUCCESSFULLY with nothing left
-// to pick. The panel is ruled INTO this issue's scope, including the loading
-// flag it lacks today: `loadPanelRepertoire` has no
-// `libraryPickersLoading`-equivalent (research-311 finding: zero grep hits),
-// so before #311 the panel has NO signal to build the override from. GREEN
-// gives it one — a `$state` boolean raised before the fetch and cleared in
-// BOTH settle paths (success AND catch).
-//
-// The panel's catch ALSO raises `panelRepertoireError` (a visible role=alert
-// banner) — a failure philosophy the main flow's silent catch does not share.
-// Hiding on failure here would stack an INVISIBLE picker under a VISIBLE
-// error; the failed→visible rule applies identically.
 describe('#311 — the panel’s Add Work picker keys hiding off "nothing left to pick once its load COMPLETED SUCCESSFULLY"', () => {
-	/** All three library works already in the season → after a clean load there
-	 *  is genuinely nothing left to pick. */
 	const ALL_TAKEN = { 'season-1': [RI_ACTIVE, RI_RETIRED, RI_B] };
 
-	/** Wraps `installWorld` with holdable / failable `_type.string=work` GETs —
-	 *  the read `panelWorks` (one of `panelPickableWorksList`'s two inputs)
-	 *  comes from. Holding it holds `loadPanelRepertoire`'s whole sources
-	 *  Promise.all while the repertoire_item read lands free. */
 	function installPanelPickerWorld({
 		repertoireBySeason,
 		failWorks = false
@@ -1205,12 +966,10 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 		});
 		vi.stubGlobal('fetch', wrapped);
 		return {
-			/** From now on, hold every `_type.string=work` GET open. */
 			armWorkHold() {
 				holdArmed = true;
 			},
 			heldCount: () => held.length,
-			/** Resolve every held work read with the base world's WORKS. */
 			async releaseWorkReads() {
 				holdArmed = false;
 				for (const resolve of held.splice(0, held.length)) {
@@ -1227,19 +986,14 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 		const container = await renderAgendaReady('agenda-empty');
 		await openPanel(container);
 
-		// Settled: all three rows are on screen, so both panel reads landed.
 		await waitFor(() => {
 			expect(qa(repertoireSection(container), 'work-row').length).toBe(3);
 		});
 		const section = repertoireSection(container);
-		// The commission's exact complaint: a select you can open, find nothing
-		// in, and never use, beside a permanently disabled Add. Confirmed-empty
-		// after a successful load is the ONE case that hides it.
 		await waitFor(() => {
 			expect(q(section, 'work-manage-add-work-select')).toBeNull();
 		});
 		expect(q(section, 'work-manage-add-work-button')).toBeNull();
-		// Hiding a picker never takes the section with it.
 		expect(qa(section, 'work-row').length).toBe(3);
 	});
 
@@ -1250,15 +1004,9 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [runningSeason()] }));
 		setAuthed();
 		const container = await renderAgendaReady('agenda-empty');
-		// Armed AFTER the agenda phase (whose own loadManagePickers work GET has
-		// fired by now) and BEFORE the panel opens — so the held read is the
-		// panel’s own.
 		world.armWorkHold();
 		await openPanel(container);
 
-		// The repertoire_item read lands free while the works read is held:
-		// rows on screen, `panelWorks` still blank → `panelPickableWorksList`
-		// is transiently empty. Non-vacuous: the hold is genuinely in flight.
 		await waitFor(() => {
 			expect(qa(repertoireSection(container), 'work-row').length).toBe(2);
 		});
@@ -1270,7 +1018,6 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 			'panel load in flight → the select must not be withheld off a transiently-empty list'
 		).not.toBeNull();
 
-		// Loading completes with work-3 pickable → visible, with the real option.
 		await world.releaseWorkReads();
 		await waitFor(() => {
 			const select = q(
@@ -1292,29 +1039,16 @@ describe('#311 — the panel’s Add Work picker keys hiding off "nothing left t
 		const container = await renderAgendaReady('agenda-empty');
 		await openPanel(container);
 
-		// The catch settled: `panelRepertoireError` is up (review F4 behaviour,
-		// unchanged) and `panelWorks` was blanked.
 		const section = repertoireSection(container);
 		await waitFor(() => {
 			expect(q(section, 'season-manage-repertoire-error')).not.toBeNull();
 		});
-		// `!loading && length === 0` is true here — and hiding would be wrong:
-		// this settle was a FAILURE, not a confirmed emptiness. The select
-		// stays, empty, exactly as the visible-but-empty choice intends.
 		expect(
 			q(section, 'work-manage-add-work-select'),
 			'a FAILED panel load must never hide the control'
 		).not.toBeNull();
 	});
 });
-
-// ── #321 review F2 — the PANEL's own add-work picker states its truncated feed ───
-//
-// The panel reads works/editions/copies itself (its season can diverge from the
-// agenda's — see the section's own doc), so its add-work select is a second closed
-// set over a second read. This site carried the same "out of the RED-pinned scope"
-// narrowing the PO's ruling rejected: a work the list does not offer cannot be
-// added, and the gap reads as "that piece isn't in the library".
 
 describe('#234/#321 — the panel add-work picker states a truncated library read', () => {
 	const WORK_OPTION = 'work-manage-add-work-partial-option';
@@ -1335,7 +1069,6 @@ describe('#234/#321 — the panel add-work picker states a truncated library rea
 		const last = options[options.length - 1];
 		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
 		expect(last.disabled).toBe(true);
-		// The works it DID return stay pickable — a notice is not an error state.
 		expect(options.some((o) => o.textContent?.includes('Spem in alium'))).toBe(true);
 	});
 
@@ -1353,9 +1086,3 @@ describe('#234/#321 — the panel add-work picker states a truncated library rea
 		expect(q(section, WORK_OPTION)).toBeNull();
 	});
 });
-
-// (*MVOX:Tallis*)
-// (*MVOX:Tallis* — #311 RED: the panel’s Add Work picker + its missing loading flag)
-// (*MVOX:Josquin* — #321 review F2: the panel picker states its own feed)
-// (*MVOX:Josquin* — #343: appByteStore mocked so the panel's onpdfclick pin
-// keeps exercising the real signFileUrl wiring under the read-through flip)

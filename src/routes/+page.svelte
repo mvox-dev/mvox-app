@@ -130,7 +130,8 @@
 		selected: () => selected,
 		isOffline: () => isOffline,
 		pendingEventIds: { get: () => pendingEventIds, set: (ids) => (pendingEventIds = ids) },
-		findMyMemberId: (...a) => findMyMemberId(...a)
+		findMyMemberId: (...a) => findMyMemberId(...a),
+		panelWorkRows: () => panelWorkRows
 	});
 
 	const {
@@ -514,6 +515,7 @@
 							sectionsReadFailed={ag.sectionsReadFailed}
 							locationSuggestionsId={LOCATION_SUGGESTIONS_ID}
 							heldFileIds={ag.heldFileIds}
+							partLinkDb={selected.db}
 							{panelWorkRows}
 							{panelPickableWorksList}
 							panelPickableWorksVisible={panel.pickableWorksVisible}
@@ -642,6 +644,7 @@
 								worksByEventId={ag.worksByEventId}
 								{worksManage}
 								heldFileIds={ag.heldFileIds}
+								partLinkDb={selected.db}
 								scheduleItemsByEventId={ag.scheduleByEventId}
 								{attendancePanel}
 								{justCreatedEventId}
@@ -674,11 +677,6 @@
 								{justCreatedEventId}
 								emptyState={ag.agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 							/>
-						{/if}
-						{#if ag.pdfError}
-							<p data-testid="repertoire-pdf-error" class="pt-2 text-xs text-red-700" role="alert">
-								{m.repertoire_pdf_error()}
-							</p>
 						{/if}
 						{#if ag.manageError}
 							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">

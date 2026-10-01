@@ -43,6 +43,7 @@
 		worksByEventId?: Record<string, WorkRow[]>;
 		onpdfclick?: (fileId: string) => void;
 		heldFileIds?: ReadonlySet<string> | null;
+		partLinkDb?: string;
 		worksManage?: WorksManage;
 		emptyState?: Snippet;
 		recentEmptyState?: Snippet;
@@ -68,6 +69,7 @@
 		worksByEventId = {},
 		onpdfclick,
 		heldFileIds = null,
+		partLinkDb,
 		worksManage,
 		emptyState,
 		recentEmptyState,
@@ -191,6 +193,7 @@
 			rows={worksByEventId[item.id] ?? NO_OPTIONS}
 			{onpdfclick}
 			{heldFileIds}
+			{partLinkDb}
 			context={worksContext(item.id)}
 			seasonRights={worksManage?.seasonRights ?? 'not-editor'}
 			eventRights={eventRightsFor(item.id)}

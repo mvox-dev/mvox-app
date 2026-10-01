@@ -66,7 +66,6 @@ export function createSelectedLoad(
 			ag.agendaTypeFilter = 'all';
 			ag.worksByEventId = {};
 			ag.scheduleByEventId = {};
-			ag.pdfError = false;
 			ag.heldFileIds = null;
 			resetManagement();
 			ag.libraryPickersLoading = false;
@@ -108,7 +107,6 @@ export function createSelectedLoad(
 		ag.savedEventIds = new Set();
 		ag.worksByEventId = {};
 		ag.scheduleByEventId = {};
-		ag.pdfError = false;
 		ag.heldFileIds = null;
 		resetManagement();
 		if (!keepSeasonManage) {
