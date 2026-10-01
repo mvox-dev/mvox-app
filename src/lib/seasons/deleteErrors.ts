@@ -119,3 +119,5 @@ export function classifyDeleteFailure(
 	if (partial(reason)) return { reason: 'partial', deleted, total };
 	return { reason: 'write' };
 }
+
+// (*MVOX:Palestrina*)

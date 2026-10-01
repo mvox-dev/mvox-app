@@ -111,6 +111,7 @@
 		runSeasonManageDelete({
 			slot: seasonManageDeleteSlot,
 			rowId: series.id,
+			logId: series.id,
 			list: 'series',
 			call: (onProgress) => apiDeleteEventSeries(cfg, series.id, undefined, { onProgress }),
 			onDone: (deletedOccurrences) => {

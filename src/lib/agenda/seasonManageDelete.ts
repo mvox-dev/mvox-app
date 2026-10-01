@@ -43,12 +43,14 @@ const DELETE_LOG_NAME = { season: 'season', series: 'event series' } as const;
 export function runSeasonManageDelete<T>({
 	slot,
 	rowId,
+	logId,
 	list,
 	call,
 	onDone
 }: {
 	slot: SeasonManageDeleteSlot;
 	rowId: string;
+	logId: string;
 	list: 'series' | 'season';
 	call: (onProgress: (current: number, total: number) => void) => Promise<T>;
 	onDone: (result: T) => void;
@@ -64,7 +66,7 @@ export function runSeasonManageDelete<T>({
 			if (generation === slot.generation) onDone(result);
 		})
 		.catch((e) => {
-			console.error(`agenda: deleting ${DELETE_LOG_NAME[list]} failed`, rowId, e);
+			console.error(`agenda: deleting ${DELETE_LOG_NAME[list]} failed`, logId, e);
 			if (generation === slot.generation) slot.error = seasonManageDeleteFailure(list, e);
 		})
 		.finally(() => {

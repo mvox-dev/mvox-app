@@ -388,6 +388,7 @@
 		runSeasonManageDelete({
 			slot: seasonManageDeleteSlot,
 			rowId: SEASON_DELETE_ROW_ID,
+			logId: seasonId,
 			list: 'season',
 			call: (onProgress) => apiDeleteSeason(cfg, seasonId, undefined, { onProgress }),
 			onDone: () => {
