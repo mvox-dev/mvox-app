@@ -228,6 +228,9 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/components/DeleteTrigger.svelte': {
 		className: 'the class prop, inside a quoted class attribute'
 	},
+	'src/lib/components/EditActivator.svelte': {
+		className: 'the class prop, inside a quoted class attribute'
+	},
 	'src/lib/agenda/AgendaList.svelte': {
 		'item.name': 'the event name'
 	},

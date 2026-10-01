@@ -13,6 +13,7 @@
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
 	import { focusOnMount } from '$lib/a11y/focusable';
+	import EditActivator from '$lib/components/EditActivator.svelte';
 
 	let {
 		detail,
@@ -390,26 +391,22 @@
 									</div>
 								</div>
 							{:else if isEditor}
-								<button
-									type="button"
+								<EditActivator
+									label={m.event_schedule_edit_aria_label()}
 									data-testid={`event-schedule-edit-${row.id}`}
 									disabled={scheduleWritePending[`schedule-edit-name-${row.id}`] ===
 										true ||
 										scheduleWritePending[`schedule-edit-datetime-${row.id}`] ===
 											true ||
 										isOffline}
-									class="group flex min-h-11 flex-1 appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-sm text-ink disabled:opacity-40"
+									class="flex-1 items-center gap-2 text-sm text-ink"
 									onclick={() => beginScheduleEdit(row)}
 								>
-									<span class="sr-only">{m.event_schedule_edit_aria_label()}</span>
-									<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-										>✎</span
-									>
 									<span data-testid="event-schedule-row-name">{row.name}</span>
 									<span data-testid="event-schedule-row-time" class="text-ink-2"
 										>{scheduleRowTime(row.datetime, $timeFormatStore)}</span
 									>
-								</button>
+								</EditActivator>
 							{:else}
 								<span data-testid="event-schedule-row-name">{row.name}</span>
 								<span data-testid="event-schedule-row-time" class="text-ink-2"

@@ -35,6 +35,7 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import EditActivator from '$lib/components/EditActivator.svelte';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
@@ -478,17 +479,14 @@
 							aria-labelledby="admin-collective-name-value"
 							class="font-display text-2xl"
 						>
-							<button
-								type="button"
+							<EditActivator
+								label={m.admin_collective_name_edit_aria_label()}
 								data-testid="admin-collective-name-edit"
 								disabled={nameWritePending || isOffline}
-								bind:this={namePencilRef}
-								class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
+								bind:element={namePencilRef}
+								class="w-full items-center gap-2 font-display text-2xl"
 								onclick={beginNameEdit}
 							>
-								<span class="sr-only">{m.admin_collective_name_edit_aria_label()}</span>
-								<!-- Preflight sets no pointer cursor on buttons; the hover colour is the cue. -->
-								<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 								{#if nameMarker.name}
 									<span id="admin-collective-name-value">{nameMarker.name}</span>
 								{:else}
@@ -496,7 +494,7 @@
 										{m.admin_collective_name_unnamed()}
 									</span>
 								{/if}
-							</button>
+							</EditActivator>
 						</div>
 					{/if}
 					{#if nameError}
