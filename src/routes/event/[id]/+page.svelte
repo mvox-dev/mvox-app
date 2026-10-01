@@ -38,7 +38,7 @@
 	} from '$lib/attendance/attendanceData';
 	import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 	import { loadRosterIncludingArchived } from '$lib/roster/memberLifecycle';
-	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
+	import { listRepertoireItems } from '$lib/repertoire/repertoireData';
 	import {
 		canMarkAttendance,
 		createProgramItem,
@@ -54,7 +54,8 @@
 		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
-	import { listWorks, listEditions, listAllEditions } from '$lib/library/libraryData';
+	import { listEditions } from '$lib/library/libraryData';
+	import { NO_MANAGE_PICKERS, readManagePickers } from '$lib/repertoire/managePickers';
 	import type { ManageRightsState } from '$lib/repertoire/types';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
@@ -407,28 +408,16 @@
 	}
 
 	function loadManagePickers(cfg: EntuCfg, sid: string | null, g: number): void {
-		Promise.all([
-			listWorks(cfg),
-			listAllEditions(cfg),
-			sid === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, sid)
-		])
-			.then(([worksRead, editionsRead, repertoire]) => {
+		readManagePickers(cfg, sid)
+			.then((pickers) => {
 				if (g !== routeLoad.generation) return;
-				ev.libraryWorks = worksRead.items;
-				ev.libraryEditions = editionsRead.items;
-				ev.libraryWorksPartial = worksRead.truncated;
-				ev.libraryEditionsPartial = editionsRead.truncated;
-				ev.seasonRepertoire = repertoire;
+				Object.assign(ev, pickers);
 				ev.libraryPickersLoading = false;
 				ev.libraryPickersLoadSucceeded = true;
 			})
 			.catch(() => {
 				if (g !== routeLoad.generation) return;
-				ev.libraryWorks = [];
-				ev.libraryEditions = [];
-				ev.libraryWorksPartial = false;
-				ev.libraryEditionsPartial = false;
-				ev.seasonRepertoire = [];
+				Object.assign(ev, NO_MANAGE_PICKERS);
 				ev.libraryPickersLoading = false;
 				ev.libraryPickersLoadSucceeded = false;
 			});
