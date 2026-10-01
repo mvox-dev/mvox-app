@@ -1,6 +1,14 @@
 // The attendance write-status reducer shared by the agenda panel and the event page.
 import type { AttendanceChangeCallbacks, AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type { WriteTokens } from '$lib/net/writeTokens';
+import type { EventAttendance } from '$lib/attendance/attendanceData';
+
+export function existingAttendance(
+	entry: AttendanceEntry | undefined,
+	memberId: string
+): EventAttendance | null {
+	return entry ? { attendanceId: entry.attendanceId, memberId, status: entry.status } : null;
+}
 
 export interface AttendanceWriteAccessors {
 	/** Whether this event's member rows are on screen. */

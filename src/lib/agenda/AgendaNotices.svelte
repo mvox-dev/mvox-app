@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	// `servedFromCache` is the OLDEST readAt among entries served since
 	// `resetServedFromCache()` (reset at the top of every load) so an online
@@ -28,22 +29,14 @@
 	</a>
 {/if}
 {#if rsvpPartial}
-	<p
-		data-testid="rsvp-partial-notice"
-		role="status"
-		class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-	>
-		{m.rsvp_partial_notice()}
-	</p>
+	<PartialNotice testid="rsvp-partial-notice" text={m.rsvp_partial_notice()} class="mb-3 text-sm" />
 {/if}
 {#if attendancePartial}
-	<p
-		data-testid="attendance-partial-notice"
-		role="status"
-		class="mb-3 rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-	>
-		{m.attendance_partial_notice()}
-	</p>
+	<PartialNotice
+		testid="attendance-partial-notice"
+		text={m.attendance_partial_notice()}
+		class="mb-3 text-sm"
+	/>
 {/if}
 {#if showOnboarding}
 	<div

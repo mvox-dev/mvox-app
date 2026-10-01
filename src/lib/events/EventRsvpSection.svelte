@@ -7,9 +7,9 @@
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
-	import type { MyRsvp, RsvpStatus } from '$lib/rsvp/rsvpData';
+	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
 	import type { RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
-	import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
+	import { createRsvpWriteStatus, existingRsvp } from '$lib/rsvp/rsvpWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import type { Collective } from '$lib/collectives/types';
@@ -246,9 +246,7 @@
 		const cfg = cfgFor(selected.db);
 		const personId = selected.personId;
 		const g = generation();
-		const existing: MyRsvp | null = myRsvp
-			? { rsvpId: myRsvp.rsvpId, eventId: detail.id, status: myRsvp.status }
-			: null;
+		const existing = existingRsvp(myRsvp, detail.id);
 		rsvpQueue.request({
 			cfg,
 			personId,

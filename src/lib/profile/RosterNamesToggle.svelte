@@ -1,6 +1,7 @@
 <!-- #267 — the admin-only roster-names toggle. The page calls load() and reset() through
 	bind:this, so the generation-guarded read keeps the page's load order. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { adminStore } from '$lib/nav/adminStore';
 	import { readRosterNamesSetting, updateRosterShowRealNames } from '$lib/collective/rosterNames';
@@ -112,9 +113,9 @@
 			{m.profile_roster_names_hint()}
 		</p>
 		{#if rosterError}
-			<p data-testid="profile-roster-names-error" role="alert" class="text-xs text-red-700">
+			<FormError data-testid="profile-roster-names-error">
 				{rosterError}
-			</p>
+			</FormError>
 		{/if}
 		<!-- Persistent live region: mounted empty, cleared at the start of the next attempt. -->
 		<div

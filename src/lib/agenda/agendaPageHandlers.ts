@@ -7,17 +7,18 @@ import type { AgendaItem } from '$lib/agenda/types';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 import { attendanceQueueHandlers } from '$lib/agenda/attendancePanel';
 import type * as RsvpData from '$lib/rsvp/rsvpData';
-import type { MyRsvp, RsvpStatus } from '$lib/rsvp/rsvpData';
-import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
-import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
+import type { RsvpStatus } from '$lib/rsvp/rsvpData';
+import { createRsvpChangeQueue } from '$lib/rsvp/rsvpChangeQueue';
+import { createRsvpWriteStatus, existingRsvp } from '$lib/rsvp/rsvpWriteStatus';
 import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
-import type { AttendanceStatus, EventAttendance } from '$lib/attendance/attendanceData';
+import { existingAttendance } from '$lib/attendance/attendanceWriteStatus';
+import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 import { createWriteTokens } from '$lib/net/writeTokens';
 import { getAppByteStore } from '$lib/files/appByteStore';
 import { openPart } from '$lib/parts/openPart';
 import type { WorkRow } from '$lib/repertoire/types';
 import { rosterOrder } from '$lib/sections/sectionData';
-import { withItem } from '$lib/collections/immutable';
+import { withEntry, withItem, withItemIfPresent } from '$lib/collections/immutable';
 
 export interface AgendaPageHandlerDeps {
 	selected: () => { db: string; personId: string } | null | undefined;
@@ -70,22 +71,15 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 			tokens: collectiveTokens(),
 			accessors: {
 				setEntry(eventId, entry) {
-					const next = { ...ag.rsvpByEventId };
-					if (entry) next[eventId] = entry;
-					else delete next[eventId];
-					ag.rsvpByEventId = next;
+					ag.rsvpByEventId = withEntry(ag.rsvpByEventId, eventId, entry);
 				},
 				setPending: (eventId, pending) =>
 					deps.pendingEventIds.set(withItem(deps.pendingEventIds.get(), eventId, pending)),
 				setFailed(eventId, failed) {
-					if (failed || ag.failedEventIds.has(eventId)) {
-						ag.failedEventIds = withItem(ag.failedEventIds, eventId, failed);
-					}
+					ag.failedEventIds = withItemIfPresent(ag.failedEventIds, eventId, failed);
 				},
 				setSaved(eventId, saved) {
-					if (saved || ag.savedEventIds.has(eventId)) {
-						ag.savedEventIds = withItem(ag.savedEventIds, eventId, saved);
-					}
+					ag.savedEventIds = withItemIfPresent(ag.savedEventIds, eventId, saved);
 				}
 			}
 		})
@@ -99,10 +93,7 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 		const personId = selected.personId;
 		const identity = { db: selected.db, personId };
 
-		const current: RsvpEntry | undefined = ag.rsvpByEventId[item.id];
-		const existing: MyRsvp | null = current
-			? { rsvpId: current.rsvpId, eventId: item.id, status: current.status }
-			: null;
+		const existing = existingRsvp(ag.rsvpByEventId[item.id], item.id);
 
 		rsvpQueue.request({
 			cfg,
@@ -157,10 +148,7 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 		if (!selected || !ag.attendanceItem) return;
 		if (deps.isOffline()) return;
 		const cfg = cfgFor(selected.db);
-		const current = ag.attendanceMap[memberId];
-		const existing: EventAttendance | null = current
-			? { attendanceId: current.attendanceId, memberId, status: current.status }
-			: null;
+		const existing = existingAttendance(ag.attendanceMap[memberId], memberId);
 		attendanceQueue.request({ cfg, eventId: ag.attendanceItem.id, memberId, existing, newStatus });
 	}
 

@@ -5,7 +5,8 @@
 	import type { Edition, Work } from '$lib/library/libraryData';
 	import type { EditionFilesState, LibraryState, TreeActions } from '$lib/library/libraryState';
 	import type { LendingView } from '$lib/library/lendingView';
-	import { COPY_SORT_KEYS, handleCopySortKeydown, sortCopies } from '$lib/library/copySort';
+	import { COPY_SORT_KEYS, sortCopies } from '$lib/library/copySort';
+	import RadioChips from '$lib/components/RadioChips.svelte';
 	import CopyRow from '$lib/library/CopyRow.svelte';
 	import EditionFiles from '$lib/library/EditionFiles.svelte';
 
@@ -62,33 +63,21 @@
 			{:else if copies.length === 0}
 				<p class="text-xs text-ink-2">{m.library_copies_empty()}</p>
 			{:else}
-				<!-- #156 — radiogroup, not toolbar: arrows here move AND select. aria-checked,
-				     never aria-pressed, which is invalid on role="radio". -->
-				<div
-					data-testid="copy-sort-{edition.id}"
-					role="radiogroup"
-					tabindex="-1"
-					aria-label={m.library_copy_sort_label()}
+				<RadioChips
+					testid="copy-sort-{edition.id}"
+					label={m.library_copy_sort_label()}
 					class="mb-1 flex items-center gap-1"
-					onkeydown={(e) => handleCopySortKeydown(e, actions.setCopySortKey)}
-				>
-					{#each COPY_SORT_KEYS as key (key)}
-						<button
-							type="button"
-							data-testid="copy-sort-{key}-{edition.id}"
-							data-sort-key={key}
-							role="radio"
-							aria-checked={lib.copySortKey === key ? 'true' : 'false'}
-							tabindex={lib.copySortKey === key ? 0 : -1}
-							class="rounded border px-1.5 py-0.5 text-[10px] {lib.copySortKey === key
-								? 'border-ink bg-ink text-paper'
-								: 'border-ink-5 text-ink-2'}"
-							onclick={() => actions.setCopySortKey(key)}
-						>
-							{COPY_SORT_LABEL[key]()}
-						</button>
-					{/each}
-				</div>
+					options={COPY_SORT_KEYS.map((key) => ({
+						value: key,
+						label: COPY_SORT_LABEL[key](),
+						testid: `copy-sort-${key}-${edition.id}`
+					}))}
+					selected={lib.copySortKey}
+					onselect={actions.setCopySortKey}
+					chipClass="rounded border px-1.5 py-0.5 text-[10px]"
+					onClass="border-ink bg-ink text-paper"
+					offClass="border-ink-5 text-ink-2"
+				/>
 				{#each sortCopies(copies, lib.copySortKey, { activeLendingForCopy: view.activeLendingForCopy, borrowerNames: lib.borrowerNames }) as copy (copy.id)}
 					<CopyRow
 						{copy}

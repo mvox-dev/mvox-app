@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import RedactedField from '$lib/components/RedactedField.svelte';
 	import EntuRef from '$lib/components/EntuRef.svelte';
@@ -28,14 +29,10 @@
 </script>
 
 {#if memberOps.recordEditorLookup?.state === 'damaged'}
-	<p
-		data-testid="roster-record-damaged-{row.memberId}"
-		role="alert"
-		class="mt-1 text-xs text-red-700"
-	>
+	<FormError data-testid="roster-record-damaged-{row.memberId}" class="mt-1">
 		{m.roster_record_damaged()}
 		<EntuRef id={row.personId} />
-	</p>
+	</FormError>
 {:else if memberOps.recordEditorLookup !== null}
 	<div class="mt-1 flex flex-col gap-2 rounded-md border border-ink-5 p-2">
 		<RedactedField
@@ -96,7 +93,7 @@
 			</button>
 		</div>
 		{#if memberOps.recordSaveError?.memberId === row.memberId}
-			<p data-testid="roster-record-save-error" role="alert" class="text-xs text-red-700">
+			<FormError data-testid="roster-record-save-error">
 				{#if memberOps.recordSaveError.kind === 'partial'}
 					{m.roster_record_save_partial({
 						saved: memberOps.recordSaveError.savedFields
@@ -114,7 +111,7 @@
 				{:else}
 					{m.roster_record_save_failed()}
 				{/if}
-			</p>
+			</FormError>
 		{/if}
 	</div>
 {/if}

@@ -1,6 +1,11 @@
 // The RSVP write-status reducer shared by the agenda and the event page.
 import type { RsvpChangeCallbacks, RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
 import type { WriteTokens } from '$lib/net/writeTokens';
+import type { MyRsvp } from '$lib/rsvp/rsvpData';
+
+export function existingRsvp(entry: RsvpEntry | null | undefined, eventId: string): MyRsvp | null {
+	return entry ? { rsvpId: entry.rsvpId, eventId, status: entry.status } : null;
+}
 
 export interface RsvpWriteAccessors {
 	setEntry(eventId: string, entry: RsvpEntry | null): void;

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -218,9 +219,9 @@
 		</div>
 	{/if}
 	{#if seasonEditErrors.name}
-		<p data-testid="season-edit-error-name" role="alert" class="text-xs text-red-700">
+		<FormError data-testid="season-edit-error-name">
 			{seasonFieldErrorText('name')}
-		</p>
+		</FormError>
 	{/if}
 </div>
 
@@ -260,13 +261,9 @@
 				</EditActivator>
 			{/if}
 			{#if seasonEditErrors[field]}
-				<p
-					data-testid="season-edit-error-{field}"
-					role="alert"
-					class="text-xs text-red-700"
-				>
+				<FormError data-testid="season-edit-error-{field}">
 					{seasonFieldErrorText(field)}
-				</p>
+				</FormError>
 			{/if}
 		</div>
 	{/each}

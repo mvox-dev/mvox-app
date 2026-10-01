@@ -1,18 +1,6 @@
-<!-- src/lib/components/attendance/SeasonSummary.svelte -->
-<!--
-	#85 TA.4 — the season summary, ALWAYS visible at the top of the Recent
-	section (never conditional on data: zero attendance renders "Attended 0 of
-	N", it never hides the block). Every signed-in member sees her own rate;
-	a conductor additionally gets an expand affordance into the full-roster
-	per-member rates. A non-conductor gets no expand affordance at all — the
-	roster view is unreachable from here, not just visually collapsed.
-
-	Presentation only: the page owns the underlying reads (listMyAttendance,
-	roster + per-event listAttendance for the expanded view) and the expanded/
-	collapsed state, exactly like AttendanceSurface owns none of the attendance
-	write mechanics itself.
--->
+<!-- Always shown; a conductor can expand into per-member rates. The page owns the reads. -->
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { MemberAttendanceRate } from '$lib/attendance/attendanceSummary';
 	import PersonName from '$lib/components/PersonName.svelte';
@@ -24,24 +12,14 @@
 		expanded?: boolean;
 		/** Roster-order, zero-filled per-member rates — only rendered once expanded. */
 		memberRates?: MemberAttendanceRate[];
-		/** F2 fix: explicit loading/error for the roster rate read. */
 		loading?: boolean;
 		error?: boolean;
-		/** #321 (PO ruling 2026-09-11) — one of the member reads behind
-		 *  `memberRates` was partial, so rows are MISSING from a table that
-		 *  invites comparison between named people: a dropped singer is absent
-		 *  from a comparison the others are being judged in, and nothing else on
-		 *  screen says the set is a prefix. Default false keeps every other caller
-		 *  unchanged. */
+		/** A member read was partial, so rows are missing from a comparison table. */
 		membersPartial?: boolean;
 		onexpand?: () => void;
 	}
 	const { myRate, canExpand = false, expanded = false, memberRates = [], loading = false, error = false, membersPartial = false, onexpand }: Props = $props();
 
-	// A stable per-instance id for the member-rates region — $props.id()
-	// generates a component-scoped ID that is consistent between server and
-	// client (Svelte 5.20+), eliminating the SSR hydration mismatch latent in
-	// the previous Math.random() approach.
 	const componentId = $props.id();
 	const membersRegionId = `season-summary-members-${componentId}`;
 </script>
@@ -75,34 +53,22 @@
 			{#if loading}
 				<p data-testid="season-rates-loading" class="text-xs text-ink-3">{m.attendance_season_loading()}</p>
 			{:else if error}
-				<!-- #151 — surface-level error role, matched to AttendanceSurface's panel
-				     error (its sibling in the same feature and structural position). -->
+				<!-- role="alert" matches AttendanceSurface's panel error. -->
 				<p data-testid="season-rates-error" class="text-sm text-red-700" role="alert">{m.attendance_season_load_error()}</p>
 			{:else}
-				<!-- #321 (PO ruling) — the shared notice shape (visible paragraph,
-				     role="status", own testid, copy through i18n), inside the list it is
-				     about and above the rows so it is read before them. Absent from the
-				     DOM once both member reads are complete; never in the loading or
-				     error branch, neither of which has rows to be partial. -->
+				<!-- Above the rows so it is read first; absent once both member reads complete. -->
 				{#if membersPartial}
-					<p
-						data-testid="season-summary-partial-notice"
-						role="status"
-						class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
-					>
-						{m.season_summary_partial_notice()}
-					</p>
+					<PartialNotice
+						testid="season-summary-partial-notice"
+						text={m.season_summary_partial_notice()}
+						class="text-xs"
+					/>
 				{/if}
 				<div role="list" class="flex flex-col gap-1">
 					{#each memberRates as rate (rate.memberId)}
 						{#if rate.inactive}
-							<!-- #255 done-when 3 — history keeps its subject: a deactivated
-							     member's row stays, marked, with the attended COUNT and NO
-							     rate (see attendanceSummary.ts's deriveAllMemberRates doc for
-							     why a percentage would be a false judgement about her). A
-							     DIFFERENT testid (`member-rate-inactive-*`, not
-							     `member-rate-*`) so nothing can mistake this for the
-							     rate-bearing row it deliberately is not. -->
+							<!-- A deactivated member keeps a marked row: the count, no rate (see
+							     deriveAllMemberRates), and its own testid. -->
 							<div
 								data-testid="member-rate-inactive-{rate.memberId}"
 								role="listitem"

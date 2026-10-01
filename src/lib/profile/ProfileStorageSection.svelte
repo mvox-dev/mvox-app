@@ -1,6 +1,7 @@
 <!-- #352 — "Remove downloaded parts from this device", scoped to the signed-in (db,
 	personId). The page calls load() and reset() through bind:this. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { formatFileSize } from '$lib/files/fileSize';
@@ -170,9 +171,9 @@
 		<h2 class="text-sm font-semibold">{m.profile_storage_title()}</h2>
 
 		{#if storageError}
-			<p data-testid="profile-storage-error" role="alert" class="text-xs text-red-700">
+			<FormError data-testid="profile-storage-error">
 				{storageError}
-			</p>
+			</FormError>
 		{/if}
 
 		<div data-testid="profile-storage-mine" class="flex flex-col gap-2">

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { goto } from '$app/navigation';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -107,9 +108,9 @@
 			</DeleteTrigger>
 		{/if}
 		{#if deleteError}
-			<p data-testid="event-detail-delete-error" role="alert" class="text-xs text-red-700">
+			<FormError data-testid="event-detail-delete-error">
 				{deleteErrorText(deleteError)}
-			</p>
+			</FormError>
 		{/if}
 	</div>
 {/if}

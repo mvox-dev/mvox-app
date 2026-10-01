@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -321,9 +322,9 @@
 	{/if}
 {/if}
 {#if edit.errors.event_type}
-	<p data-testid="event-edit-error-event_type" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-event_type">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 {#if edit.editingField === 'event_name'}
 	<input
@@ -358,9 +359,9 @@
 	<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
 {/if}
 {#if edit.errors.event_name}
-	<p data-testid="event-edit-error-name" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-name">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'start_datetime'}
@@ -427,9 +428,9 @@
 	/>
 {/if}
 {#if edit.errors.start_datetime}
-	<p data-testid="event-edit-error-start_datetime" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-start_datetime">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'duration_minutes'}
@@ -483,13 +484,13 @@
 	{/if}
 {/if}
 {#if edit.rangeErrors.duration_minutes}
-	<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-duration_minutes">
 		{m.event_end_before_start()}
-	</p>
+	</FormError>
 {:else if edit.errors.duration_minutes}
-	<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-duration_minutes">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'location'}
@@ -532,9 +533,9 @@
 	{/if}
 {/if}
 {#if edit.errors.location}
-	<p data-testid="event-edit-error-location" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-location">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if detail.conductorNames.length > 0}
@@ -578,9 +579,9 @@
 	{/if}
 {/if}
 {#if edit.errors.description}
-	<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-description">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if isEditor && isOffline}

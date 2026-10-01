@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
@@ -245,9 +246,9 @@
 				detail && rowHandlers.addProgramItem(detail.id, editionId, ordinal)}
 		/>
 		{#if manageError}
-			<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
+			<FormError data-testid="repertoire-manage-error" class="pt-2">
 				{m.repertoire_manage_error()}
-			</p>
+			</FormError>
 		{/if}
 		<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
 			{manageStatus}
