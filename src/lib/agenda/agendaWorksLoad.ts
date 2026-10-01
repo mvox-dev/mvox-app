@@ -10,6 +10,7 @@ import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { Season } from '$lib/seasons/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
+import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
@@ -95,16 +96,21 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		loadManagePickers(cfg, seasonId, thisRequest);
 		const thisWorksLoad = ++seq.worksLoadId;
 		ag.worksRowsLoading = true;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, { includeInactive: true })
-			.then((byEvent) => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
+		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, true));
+	}
+
+	function worksRefetch(thisRequest: number, thisWorksLoad: number, includeInactive: boolean) {
+		return {
+			includeInactive,
+			isCurrent: () => thisRequest === seq.requestId && thisWorksLoad === seq.worksLoadId,
+			onRows: (byEvent: Record<string, WorkRow[]>) => {
 				ag.worksByEventId = mergePendingRows(byEvent);
 				ag.worksRowsLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
+			},
+			onFailure: () => {
 				ag.worksRowsLoading = false;
-			});
+			}
+		};
 	}
 
 	function loadWorksAndManagement(
@@ -245,26 +251,16 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const seasonId = ag.currentSeasonId;
 		const thisRequest = seq.requestId;
 		const thisWorksLoad = ++seq.worksLoadId;
-		refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {
-			includeInactive: ag.seasonManageRights === 'editor'
-		})
-			.then((byEvent) => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
-				ag.worksByEventId = mergePendingRows(byEvent);
-				ag.worksRowsLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
-				ag.worksRowsLoading = false;
-			});
-		if (seasonId !== null && ag.seasonManageRights === 'editor') {
-			listRepertoireItems(cfg, seasonId)
-				.then((items) => {
-					if (thisRequest !== seq.requestId) return;
-					ag.seasonRepertoire = items;
-				})
-				.catch(() => {
-				});
+		const editor = ag.seasonManageRights === 'editor';
+		refetchWorkRows(cfg, eventIds, seasonId, worksRefetch(thisRequest, thisWorksLoad, editor));
+		if (seasonId !== null && editor) {
+			refetchSeasonRepertoire(
+				cfg,
+				seasonId,
+				listRepertoireItems,
+				() => thisRequest === seq.requestId,
+				(items) => (ag.seasonRepertoire = items)
+			);
 		}
 	}
 
