@@ -19,8 +19,7 @@
 		formatTime,
 		timeFormatStore,
 		tallinnLocalToUtcIso,
-		isoDateFormatter,
-		TALLINN_TZ
+		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
 	import {
 		listSeriesOptionsForSeason,
@@ -97,9 +96,8 @@
 
 	type EventCreateErrorField = 'type' | 'season' | 'datetime' | 'name' | 'end' | null;
 
-	const eventCreateStatusDateFmt = isoDateFormatter(TALLINN_TZ);
 	function eventCreateStatusFmt(at: Date): string {
-		return `${eventCreateStatusDateFmt.format(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
+		return `${tallinnDayKey(at)} ${formatTime(tallinnHHMM(at), $timeFormatStore)}`;
 	}
 
 	let eventCreateSeasonId = $state(untrack(() => manageableSeasonId) ?? '');

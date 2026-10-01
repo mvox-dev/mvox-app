@@ -1,14 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getLocale } from '$lib/paraglide/runtime.js';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { listEventLocations, type EventDetail } from '$lib/events/eventDetail';
 	import {
 		tallinnLocalToUtcIso,
 		timeFormatStore,
 		toTallinnLocalInputValue,
-		TALLINN_TZ
+		longDayFormatter
 	} from '$lib/preferences/timeFormat';
 	import { parseStartAt, timeRange } from '$lib/events/eventTime';
 	import { eventTypeLabel, CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
@@ -40,14 +39,7 @@
 		patchDetail: (field: EditableEventField, value: string | number) => void;
 	} = $props();
 
-	const dateFmt = $derived(
-		new Intl.DateTimeFormat(getLocale(), {
-			timeZone: TALLINN_TZ,
-			weekday: 'long',
-			day: 'numeric',
-			month: 'long'
-		})
-	);
+	const dateFmt = $derived(longDayFormatter());
 
 	const startAt = $derived(parseStartAt(detail.startDatetime));
 
