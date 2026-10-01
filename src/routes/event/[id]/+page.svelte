@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
@@ -30,6 +31,7 @@
 		type SeriesDefaults
 	} from '$lib/seasons/seasonManage';
 	import { findMyMemberId, findMyRsvpForEvent } from '$lib/rsvp/rsvpData';
+	import { loadMembership } from '$lib/rsvp/membershipLoad';
 	import { createRsvpChangeQueue } from '$lib/rsvp/rsvpChangeQueue';
 	import {
 		listAllRsvpsForEvent,
@@ -54,9 +56,9 @@
 		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
+	import { manageRightsOrNone } from '$lib/repertoire/manageRights';
 	import { listEditions } from '$lib/library/libraryData';
 	import { NO_MANAGE_PICKERS, readManagePickers } from '$lib/repertoire/managePickers';
-	import type { ManageRightsState } from '$lib/repertoire/types';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -172,7 +174,11 @@
 				if (!isCurrent()) return;
 				detail = loaded;
 				status = 'ready';
-				loadMembership(cfg, current.personId, g);
+				loadMembership(
+					findMyMemberId(cfg, current.personId),
+					() => g === routeLoad.generation,
+					ev
+				);
 				loadComposeSurfaces(cfg, loaded, current.personId, g);
 			} catch (e) {
 				if (!(e instanceof EventDetailLoadError && e.unavailable)) throw e;
@@ -182,20 +188,6 @@
 			}
 		}
 	});
-
-	function loadMembership(cfg: EntuCfg, personId: string, g: number): void {
-		findMyMemberId(cfg, personId)
-			.then((id) => {
-				if (g !== routeLoad.generation) return;
-				ev.memberId = id;
-				ev.membership = id ? 'member' : 'non-member';
-			})
-			.catch(() => {
-				if (g !== routeLoad.generation) return;
-				ev.memberId = null;
-				ev.membership = 'loading';
-			});
-	}
 
 	function resetSeriesState(): void {
 		seriesOptions = [];
@@ -216,10 +208,12 @@
 	function loadComposeSurfaces(cfg: EntuCfg, loaded: EventDetail, personId: string, g: number): void {
 		const sid = loaded.seasonId;
 		ev.seasonId = sid;
-		const seasonRights: ManageRightsState =
-			sid === null
-				? 'not-editor'
-				: manageRightsFrom(loaded.seasonOwnerIds, loaded.seasonEditorIds, personId);
+		const seasonRights = manageRightsOrNone(
+			sid,
+			loaded.seasonOwnerIds,
+			loaded.seasonEditorIds,
+			personId
+		);
 		ev.seasonManageRights = seasonRights;
 		const eventEditor = manageRightsFrom(loaded.ownerIds, loaded.editorIds, personId) === 'editor';
 
@@ -639,9 +633,9 @@
 							</p>
 						{/if}
 						{#if seriesError}
-							<p data-testid="event-series-error" role="alert" class="text-xs text-red-700">
+							<FormError data-testid="event-series-error">
 								{seriesError}
-							</p>
+							</FormError>
 						{/if}
 					</div>
 				{/if}

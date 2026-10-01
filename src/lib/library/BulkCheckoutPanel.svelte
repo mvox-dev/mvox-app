@@ -1,6 +1,8 @@
 <!-- #74 — bulk checkout: pick a work, then an edition, then the borrowers. The selection
 	lives on the page (bound here), so a same-collective refresh keeps it. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { workLabel } from '$lib/repertoire/workLabel';
@@ -82,13 +84,11 @@
 		<div data-testid="bulk-checkout-member-list" class="mt-2 flex flex-col gap-1">
 			<!-- #321 — a truncated borrower set reads as "not a member", so the list says so. -->
 			{#if membersPartial}
-				<p
-					data-testid="bulk-checkout-members-partial-notice"
-					role="status"
-					class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
-				>
-					{m.picker_partial_members_notice()}
-				</p>
+				<PartialNotice
+					testid="bulk-checkout-members-partial-notice"
+					text={m.picker_partial_members_notice()}
+					class="text-xs"
+				/>
 			{/if}
 			{#each allMembers as member (member.memberId)}
 				{@const existingLending = view.memberLending(member.memberId, editionCopyIds)}
@@ -110,13 +110,13 @@
 		</div>
 		<input data-testid="bulk-checkout-due-date" type="date" bind:value={bulk.dueDate} class="mt-1 w-full rounded border border-ink-5 px-2 py-1" />
 		{#if bulk.members.size > availability.available}
-			<p data-testid="bulk-checkout-too-many" class="mt-1 text-xs text-red-700" role="alert">{m.library_bulk_checkout_too_many()}</p>
+			<FormError data-testid="bulk-checkout-too-many" class="mt-1">{m.library_bulk_checkout_too_many()}</FormError>
 		{/if}
 		<button type="button" data-testid="bulk-checkout-submit" class="mt-1 self-start rounded-md border border-ink px-3 py-1 text-xs hover:bg-ink hover:text-paper" disabled={bulk.members.size === 0 || bulk.members.size > availability.available || isOffline} onclick={submit}>
 			{m.library_checkout_submit()}
 		</button>
 		{#if bulk.error}
-			<p data-testid="bulk-checkout-error" class="text-xs text-red-700" role="alert">{bulk.error}</p>
+			<FormError data-testid="bulk-checkout-error">{bulk.error}</FormError>
 		{/if}
 	{/if}
 </div>

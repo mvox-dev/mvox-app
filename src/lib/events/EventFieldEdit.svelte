@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -18,6 +19,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventActions, EventEditState } from '$lib/events/eventPageState';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import EditActivator from '$lib/components/EditActivator.svelte';
 
 	let {
 		detail,
@@ -293,16 +295,14 @@
 	</select>
 {:else if detail.eventType || isEditor}
 	{#if isEditor}
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_event_type_aria_label()}
 			data-testid="event-edit-btn-event_type"
-			class="group flex min-h-11 w-fit appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+			class="w-fit items-center gap-2"
 			disabled={edit.writePending.event_type === true || isOffline}
-			bind:this={edit.pencilRefs.event_type}
+			bind:element={edit.pencilRefs.event_type}
 			onclick={() => beginFieldEdit('event_type')}
 		>
-			<span class="sr-only">{m.event_edit_event_type_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			{#if detail.eventType}
 				<span
 					data-testid="event-detail-type"
@@ -311,7 +311,7 @@
 					{eventTypeLabel(detail.eventType)}
 				</span>
 			{/if}
-		</button>
+		</EditActivator>
 	{:else}
 		<span
 			data-testid="event-detail-type"
@@ -322,9 +322,9 @@
 	{/if}
 {/if}
 {#if edit.errors.event_type}
-	<p data-testid="event-edit-error-event_type" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-event_type">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 {#if edit.editingField === 'event_name'}
 	<input
@@ -344,26 +344,24 @@
 		aria-labelledby="event-detail-name-value"
 		class="font-display text-2xl"
 	>
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_name_aria_label()}
 			data-testid="event-edit-btn-name"
-			class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-2xl disabled:opacity-40"
+			class="w-full items-center gap-2 font-display text-2xl"
 			disabled={edit.writePending.event_name === true || isOffline}
-			bind:this={edit.pencilRefs.event_name}
+			bind:element={edit.pencilRefs.event_name}
 			onclick={() => beginFieldEdit('event_name')}
 		>
-			<span class="sr-only">{m.event_edit_name_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			<span id="event-detail-name-value">{detail.name}</span>
-		</button>
+		</EditActivator>
 	</h1>
 {:else}
 	<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
 {/if}
 {#if edit.errors.event_name}
-	<p data-testid="event-edit-error-name" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-name">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'start_datetime'}
@@ -394,16 +392,14 @@
 	</div>
 {:else if startAt}
 	{#if isEditor}
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_start_datetime_aria_label()}
 			data-testid="event-edit-btn-start_datetime"
-			class="group flex min-h-11 w-full appearance-none flex-wrap items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+			class="w-full flex-wrap items-center gap-2 text-base text-ink-2"
 			disabled={edit.writePending.start_datetime === true || isOffline}
-			bind:this={edit.pencilRefs.start_datetime}
+			bind:element={edit.pencilRefs.start_datetime}
 			onclick={() => beginFieldEdit('start_datetime')}
 		>
-			<span class="sr-only">{m.event_edit_start_datetime_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			<span data-testid="event-detail-time" class="flex flex-wrap items-center gap-2">
 				<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
 					startAt,
@@ -411,7 +407,7 @@
 					$timeFormatStore
 				)}
 			</span>
-		</button>
+		</EditActivator>
 	{:else}
 		<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-base text-ink-2">
 			<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
@@ -422,22 +418,19 @@
 		</p>
 	{/if}
 {:else if isEditor}
-	<button
-		type="button"
+	<EditActivator
+		label={m.event_edit_start_datetime_aria_label()}
 		data-testid="event-edit-btn-start_datetime"
-		class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-xs text-ink-3 disabled:opacity-40"
+		class="w-full items-center gap-2 text-xs text-ink-3"
 		disabled={edit.writePending.start_datetime === true || isOffline}
-		bind:this={edit.pencilRefs.start_datetime}
+		bind:element={edit.pencilRefs.start_datetime}
 		onclick={() => beginFieldEdit('start_datetime')}
-	>
-		<span class="sr-only">{m.event_edit_start_datetime_aria_label()}</span>
-		<span aria-hidden="true" class="group-hover:text-ink">✎</span>
-	</button>
+	/>
 {/if}
 {#if edit.errors.start_datetime}
-	<p data-testid="event-edit-error-start_datetime" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-start_datetime">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'duration_minutes'}
@@ -468,22 +461,20 @@
 	</div>
 {:else if detail.durationMinutes > 0 || isEditor}
 	{#if isEditor}
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_duration_minutes_aria_label()}
 			data-testid="event-edit-btn-duration_minutes"
-			class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+			class="w-full items-center gap-2 text-base text-ink-2"
 			disabled={edit.writePending.duration_minutes === true || isOffline}
-			bind:this={edit.pencilRefs.duration_minutes}
+			bind:element={edit.pencilRefs.duration_minutes}
 			onclick={() => beginFieldEdit('duration_minutes')}
 		>
-			<span class="sr-only">{m.event_edit_duration_minutes_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			{#if detail.durationMinutes > 0}
 				<span data-testid="event-detail-duration">
 					{m.agenda_duration_min({ minutes: detail.durationMinutes })}
 				</span>
 			{/if}
-		</button>
+		</EditActivator>
 	{:else}
 		<p class="flex items-center gap-2 text-base text-ink-2">
 			<span data-testid="event-detail-duration">
@@ -493,13 +484,13 @@
 	{/if}
 {/if}
 {#if edit.rangeErrors.duration_minutes}
-	<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-duration_minutes">
 		{m.event_end_before_start()}
-	</p>
+	</FormError>
 {:else if edit.errors.duration_minutes}
-	<p data-testid="event-edit-error-duration_minutes" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-duration_minutes">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if edit.editingField === 'location'}
@@ -523,20 +514,18 @@
 	</datalist>
 {:else if detail.location || isEditor}
 	{#if isEditor}
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_location_aria_label()}
 			data-testid="event-edit-btn-location"
-			class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left text-base text-ink-2 disabled:opacity-40"
+			class="w-full items-center gap-2 text-base text-ink-2"
 			disabled={edit.writePending.location === true || isOffline}
-			bind:this={edit.pencilRefs.location}
+			bind:element={edit.pencilRefs.location}
 			onclick={() => beginFieldEdit('location')}
 		>
-			<span class="sr-only">{m.event_edit_location_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			{#if detail.location}
 				<span data-testid="event-detail-location">{detail.location}</span>
 			{/if}
-		</button>
+		</EditActivator>
 	{:else}
 		<p class="flex items-center gap-2 text-base text-ink-2">
 			<span data-testid="event-detail-location">{detail.location}</span>
@@ -544,9 +533,9 @@
 	{/if}
 {/if}
 {#if edit.errors.location}
-	<p data-testid="event-edit-error-location" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-location">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if detail.conductorNames.length > 0}
@@ -571,20 +560,18 @@
 	></textarea>
 {:else if detail.description || isEditor}
 	{#if isEditor}
-		<button
-			type="button"
+		<EditActivator
+			label={m.event_edit_description_aria_label()}
 			data-testid="event-edit-btn-description"
-			class="group mt-2 flex min-h-11 w-full appearance-none items-start gap-2 border-0 bg-transparent p-0 text-left text-base text-ink disabled:opacity-40"
+			class="mt-2 w-full items-start gap-2 text-base text-ink"
 			disabled={edit.writePending.description === true || isOffline}
-			bind:this={edit.pencilRefs.description}
+			bind:element={edit.pencilRefs.description}
 			onclick={() => beginFieldEdit('description')}
 		>
-			<span class="sr-only">{m.event_edit_description_aria_label()}</span>
-			<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink">✎</span>
 			{#if detail.description}
 				<span data-testid="event-detail-description">{detail.description}</span>
 			{/if}
-		</button>
+		</EditActivator>
 	{:else}
 		<p class="mt-2 flex items-start gap-2 text-base text-ink">
 			<span data-testid="event-detail-description">{detail.description}</span>
@@ -592,9 +579,9 @@
 	{/if}
 {/if}
 {#if edit.errors.description}
-	<p data-testid="event-edit-error-description" role="alert" class="text-xs text-red-700">
+	<FormError data-testid="event-edit-error-description">
 		{m.event_edit_save_error()}
-	</p>
+	</FormError>
 {/if}
 
 {#if isEditor && isOffline}

@@ -1,5 +1,6 @@
 <!-- The conductor's inline attendance panel: one row per member with a P/A/L toggle. -->
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { onMount, tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
@@ -173,13 +174,11 @@
 	{:else}
 		<div class="flex flex-col gap-2">
 			{#if membersPartial}
-				<p
-					data-testid="attendance-panel-partial-notice"
-					role="status"
-					class="rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
-				>
-					{m.picker_partial_members_notice()}
-				</p>
+				<PartialNotice
+					testid="attendance-panel-partial-notice"
+					text={m.picker_partial_members_notice()}
+					class="text-xs"
+				/>
 			{/if}
 			{#each members as member (member.memberId)}
 				<div

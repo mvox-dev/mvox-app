@@ -2,8 +2,10 @@
 	import type { Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { AgendaItem } from '$lib/agenda/types';
-	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
-	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
+	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
+	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
+	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
+	import AgendaCreatedMark from '$lib/agenda/AgendaCreatedMark.svelte';
 	import { groupByMonth, monthLabel, tallinnDayKey } from '$lib/preferences/timeFormat';
 
 	interface Props {
@@ -14,12 +16,6 @@
 	}
 
 	const { items, loading = false, emptyState, justCreatedEventId = null }: Props = $props();
-
-	function rowLinkLabel(name: string): string {
-		return name.trim() === ''
-			? m.agenda_row_link_label_unnamed()
-			: m.agenda_row_link_label({ event: name });
-	}
 
 	function weekdayKey(dayKey: string): string {
 		const weekday = new Date(dayKey + 'T12:00:00').getDay();
@@ -61,9 +57,7 @@
 		{#if emptyState}
 			{@render emptyState()}
 		{:else}
-			<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
-				<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
-			</div>
+			<AgendaEmpty />
 		{/if}
 	{:else}
 		{#each monthGroups as group (group.key)}
@@ -80,9 +74,7 @@
 						class="border-b border-dashed border-ink-5 py-1.5 last:border-b-0"
 						class:bg-highlight={item.id === justCreatedEventId}
 					>
-						{#if item.id === justCreatedEventId}
-							<span data-testid="agenda-row-created-mark" aria-hidden="true" class="sr-only"></span>
-						{/if}
+						<AgendaCreatedMark show={item.id === justCreatedEventId} />
 						<a
 							href="/event/{item.id}"
 							aria-label={rowLinkLabel(item.name)}
@@ -95,14 +87,7 @@
 							>
 							<span class="min-w-0 flex-1 truncate text-sm text-ink">{item.name}</span>
 							{#if item.eventType}
-								<span
-									data-testid="event-type-badge-{item.id}"
-									class="shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] tracking-wide uppercase {eventTypeBadgeClass(
-										item.eventType
-									)}"
-								>
-									{eventTypeLabel(item.eventType)}
-								</span>
+								<EventTypeBadge id={item.id} eventType={item.eventType} class="shrink-0" />
 							{/if}
 						</a>
 					</div>

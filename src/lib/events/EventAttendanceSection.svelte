@@ -7,13 +7,16 @@
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import AttendanceBadge from '$lib/components/attendance/AttendanceBadge.svelte';
 	import TakeAttendanceButton from '$lib/components/attendance/TakeAttendanceButton.svelte';
-	import type { AttendanceStatus, EventAttendance } from '$lib/attendance/attendanceData';
+	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
-	import { withItem } from '$lib/collections/immutable';
-	import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStatus';
+	import { withEntry, withItem, withItemIfPresent } from '$lib/collections/immutable';
+	import {
+		createAttendanceWriteStatus,
+		existingAttendance
+	} from '$lib/attendance/attendanceWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import {
@@ -140,13 +143,8 @@
 				accessors: {
 					shows: (evId) => evId === detail?.id,
 					setEntry(targetMemberId, entry) {
-						const next = { ...ev.attendanceMap };
-						if (entry) next[targetMemberId] = entry;
-						else delete next[targetMemberId];
-						ev.attendanceMap = next;
-						panelMarks = { ...panelMarks };
-						if (entry) panelMarks[targetMemberId] = entry;
-						else delete panelMarks[targetMemberId];
+						ev.attendanceMap = withEntry(ev.attendanceMap, targetMemberId, entry);
+						panelMarks = withEntry(panelMarks, targetMemberId, entry);
 					},
 					setPending(targetMemberId, pending) {
 						attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
@@ -155,9 +153,8 @@
 						attendanceFailedMemberIds = withItem(attendanceFailedMemberIds, targetMemberId, failed);
 					},
 					setSaved(targetMemberId, saved) {
-						if (saved || attendanceSavedMemberIds.has(targetMemberId)) {
-							attendanceSavedMemberIds = withItem(attendanceSavedMemberIds, targetMemberId, saved);
-						}
+						const ids = attendanceSavedMemberIds;
+						attendanceSavedMemberIds = withItemIfPresent(ids, targetMemberId, saved);
 					}
 				},
 				onPending(evId, targetMemberId) {
@@ -184,10 +181,7 @@
 		if (!selected || !detail) return;
 		if (isOffline) return;
 		const cfg = cfgFor(selected.db);
-		const current = ev.attendanceMap[targetMemberId];
-		const existing: EventAttendance | null = current
-			? { attendanceId: current.attendanceId, memberId: targetMemberId, status: current.status }
-			: null;
+		const existing = existingAttendance(ev.attendanceMap[targetMemberId], targetMemberId);
 		attendanceQueue.request({ cfg, eventId: detail.id, memberId: targetMemberId, existing, newStatus });
 	}
 </script>

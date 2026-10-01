@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -162,13 +163,11 @@
 		/>
 	{/if}
 	{#if seasonManagePartial}
-		<p
-			data-testid="season-manage-partial-notice"
-			role="status"
-			class="mt-1 rounded-md border border-dashed border-ink-4 p-2 text-xs text-ink-2"
-		>
-			{m.season_manage_partial_notice()}
-		</p>
+		<PartialNotice
+			testid="season-manage-partial-notice"
+			text={m.season_manage_partial_notice()}
+			class="mt-1 text-xs"
+		/>
 	{/if}
 	{#if seasonManageSeriesError}
 		<p

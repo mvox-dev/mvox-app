@@ -18,6 +18,7 @@ import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type * as LibraryData from '$lib/library/libraryData';
 import type * as MemberLifecycle from '$lib/roster/memberLifecycle';
 import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
+import type * as ManageRights from '$lib/repertoire/manageRights';
 import type * as RepertoireData from '$lib/repertoire/repertoireData';
 import type * as RsvpData from '$lib/rsvp/rsvpData';
 import type * as ScheduleData from '$lib/schedule/scheduleData';
@@ -153,6 +154,7 @@ export interface AgendaLoadDeps {
 	loadActiveAndArchivedRosters: typeof MemberLifecycle.loadActiveAndArchivedRosters;
 	canMarkAttendance: typeof RepertoireActions.canMarkAttendance;
 	manageRightsFrom: typeof RepertoireActions.manageRightsFrom;
+	manageRightsOrNone: typeof ManageRights.manageRightsOrNone;
 	resolveManageRights: typeof RepertoireActions.resolveManageRights;
 }
 

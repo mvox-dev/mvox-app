@@ -2,6 +2,7 @@
 	Mounted only while open: untracked prop reads seed the form once at construction, deliberately.
 	submitting/resumeByDb/seriesRunDb stay bindable: the page reads them across unmounts. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
@@ -709,9 +710,9 @@
 		{/if}
 
 		{#if seriesCreateError}
-			<p id="series-create-error" data-testid="series-create-error" role="alert" class="text-xs text-red-700">
+			<FormError id="series-create-error" data-testid="series-create-error">
 				{seriesCreateError()}
-			</p>
+			</FormError>
 		{/if}
 
 		<div class="flex gap-2">

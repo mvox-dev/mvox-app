@@ -4,6 +4,7 @@ import { sameCollectiveIdentity } from '$lib/collectives/store';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { resetServedFromCache } from '$lib/entu/readCache';
 import type { ManageRightsState } from '$lib/repertoire/types';
+import { loadMembership } from '$lib/rsvp/membershipLoad';
 import type { createAgendaWorksLoad } from '$lib/agenda/agendaWorksLoad';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
@@ -34,6 +35,7 @@ export function createSelectedLoad(
 		listMyAttendance,
 		canMarkAttendance,
 		manageRightsFrom,
+		manageRightsOrNone,
 		resolveManageRights
 	} = deps;
 	const {
@@ -157,10 +159,12 @@ export function createSelectedLoad(
 					const events = [...upcoming, ...recent];
 					const eventIds = events.map((item) => item.id);
 					ag.currentSeasonId = seasonId;
-					ag.seasonManageRights =
-						seasonId === null
-							? 'not-editor'
-							: manageRightsFrom(seasonOwners, seasonEditors, personId);
+					ag.seasonManageRights = manageRightsOrNone(
+						seasonId,
+						seasonOwners,
+						seasonEditors,
+						personId
+					);
 					const nowDateOnly = new Date().toISOString().slice(0, 10);
 					const candidateSeasons = fullSeasons.filter(
 						(s) => s.id === mSeasonId || s.endDate === '' || s.endDate >= nowDateOnly
@@ -183,8 +187,7 @@ export function createSelectedLoad(
 							deps.closeSeriesCreateForm();
 						}
 						ag.manageableSeasonId = mSeasonId;
-						ag.manageableSeasonRights =
-							mSeasonId === null ? 'not-editor' : manageRightsFrom(mOwners, mEditors, personId);
+						ag.manageableSeasonRights = manageRightsOrNone(mSeasonId, mOwners, mEditors, personId);
 					}
 					restoreSeriesCreateRun();
 					ag.seasonCreateRights = deriveSeasonCreateRights(
@@ -266,11 +269,11 @@ export function createSelectedLoad(
 			});
 		}
 
-		findMyMemberId(cfgFor(current.db), personId)
-			.then((id) => {
-				if (thisRequest !== seq.requestId) return;
-				ag.memberId = id;
-				ag.membership = id ? 'member' : 'non-member';
+		loadMembership(
+			findMyMemberId(cfgFor(current.db), personId),
+			() => thisRequest === seq.requestId,
+			ag,
+			(id) => {
 				if (id) {
 					listMyAttendance(cfgFor(current.db), id)
 						.then((result) => {
@@ -287,12 +290,8 @@ export function createSelectedLoad(
 					ag.myAttendance = [];
 					ag.attendancePartial = false;
 				}
-			})
-			.catch(() => {
-				if (thisRequest !== seq.requestId) return;
-				ag.memberId = null;
-				ag.membership = 'loading';
-			});
+			}
+		);
 
 		listMyRsvps(cfgFor(current.db), personId)
 			.then((result) => {

@@ -1,5 +1,6 @@
 <!-- The librarian's inline create form for a work or an edition; the caller owns the state. -->
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { focusOnMount } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
@@ -85,9 +86,9 @@
 				class="min-h-11 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
 			/>
 			{#if view.error}
-				<p id={id('error')} role="alert" data-testid={id('error')} class="text-xs text-red-700">
+				<FormError id={id('error')} data-testid={id('error')}>
 					{view.error()}
-				</p>
+				</FormError>
 			{/if}
 			<div class="flex gap-2">
 				<button

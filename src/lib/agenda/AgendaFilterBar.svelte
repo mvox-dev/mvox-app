@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import { agendaViewStore, setAgendaView } from '$lib/preferences/agendaView';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import RadioChips from '$lib/components/RadioChips.svelte';
 	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import type { AgendaFilterBucket, AgendaTypeFilter } from '$lib/agenda/agendaFilter';
@@ -26,16 +26,6 @@
 		return filter === type
 			? `${eventTypeBadgeClass(type)} ${CHIP_PRESSED_CLASS}`
 			: 'border-ink-4 text-ink-2';
-	}
-
-	function handleAgendaViewKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e, {
-			beforeFocus: (member) => {
-				const view = member.dataset.agendaView as 'list' | 'month' | undefined;
-				if (!view) return false;
-				setAgendaView(view);
-			}
-		});
 	}
 </script>
 
@@ -71,30 +61,19 @@
 			</button>
 		{/each}
 	</div>
-	<div
-		data-testid="agenda-view-toggle"
-		role="radiogroup"
-		tabindex="-1"
-		aria-label={m.agenda_view_toggle_label()}
+	<RadioChips
+		testid="agenda-view-toggle"
+		label={m.agenda_view_toggle_label()}
 		class="inline-flex overflow-hidden rounded-md border border-ink-4"
-		onkeydown={handleAgendaViewKeydown}
-	>
-		{#each views as { view, label } (view)}
-			<button
-				type="button"
-				data-testid="agenda-view-{view}"
-				data-agenda-view={view}
-				role="radio"
-				aria-checked={$agendaViewStore === view ? 'true' : 'false'}
-				tabindex={$agendaViewStore === view ? 0 : -1}
-				class="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0 {$agendaViewStore ===
-				view
-					? 'bg-ink text-paper'
-					: 'text-ink-2'}"
-				onclick={() => setAgendaView(view)}
-			>
-				{label()}
-			</button>
-		{/each}
-	</div>
+		options={views.map(({ view, label }) => ({
+			value: view,
+			label: label(),
+			testid: `agenda-view-${view}`
+		}))}
+		selected={$agendaViewStore}
+		onselect={setAgendaView}
+		chipClass="border-r border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase last:border-r-0"
+		onClass="bg-ink text-paper"
+		offClass="text-ink-2"
+	/>
 </div>

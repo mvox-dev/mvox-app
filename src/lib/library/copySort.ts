@@ -1,4 +1,3 @@
-import { rovingKeydown } from '$lib/a11y/roving';
 import type { Copy, Lending } from '$lib/library/libraryData';
 
 export type CopySortKey = 'nr' | 'member' | 'since';
@@ -36,16 +35,4 @@ export function sortCopies(copies: Copy[], key: CopySortKey, ctx: CopySortContex
 	lent.sort((a, b) => compareByKey(a, b, key, ctx));
 	available.sort((a, b) => compareByKey(a, b, 'nr', ctx));
 	return [...lent, ...available];
-}
-
-/** Radiogroup keys: arrows move AND select. The walk stays inside the group that got the
- *  event, so one edition's chips never move another's. */
-export function handleCopySortKeydown(e: KeyboardEvent, select: (key: CopySortKey) => void): void {
-	rovingKeydown(e, {
-		beforeFocus: (member) => {
-			const key = member.dataset.sortKey as CopySortKey | undefined;
-			if (!key) return false;
-			select(key);
-		}
-	});
 }

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	// #54/#73 — the library: works, editions and copies with availability from lending, the
 	// member's own loans, and the librarian's tools. The page owns every load and every write.
 	import { openPart } from '$lib/parts/openPart';
@@ -573,13 +574,11 @@
 		<!-- #321 — a truncated list is a standing fact: visible, never sr-only, and gone
 		     once every read is complete. -->
 		{#if libraryPartial}
-			<p
-				data-testid="library-partial-notice"
-				role="status"
-				class="rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-			>
-				{m.library_partial_notice()}
-			</p>
+			<PartialNotice
+				testid="library-partial-notice"
+				text={m.library_partial_notice()}
+				class="text-sm"
+			/>
 		{/if}
 
 		{#if isLibrarian}

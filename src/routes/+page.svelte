@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { tick, untrack } from 'svelte';
 	import { get } from 'svelte/store';
 	import { authStore } from '$lib/auth/session';
@@ -37,6 +38,7 @@
 		resolveManageRights,
 		updateRepertoireStatus
 	} from '$lib/repertoire/repertoireActions';
+	import { manageRightsOrNone } from '$lib/repertoire/manageRights';
 	import { listWorks, listEditions, listAllEditions, listAllCopies } from '$lib/library/libraryData';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
 	import {
@@ -174,6 +176,7 @@
 		loadActiveAndArchivedRosters: (...a) => loadActiveAndArchivedRosters(...a),
 		canMarkAttendance: (...a) => canMarkAttendance(...a),
 		manageRightsFrom: (...a) => manageRightsFrom(...a),
+		manageRightsOrNone: (...a) => manageRightsOrNone(...a),
 		resolveManageRights: (...a) => resolveManageRights(...a),
 	});
 
@@ -680,9 +683,9 @@
 							/>
 						{/if}
 						{#if ag.manageError}
-							<p data-testid="repertoire-manage-error" class="pt-2 text-xs text-red-700" role="alert">
+							<FormError data-testid="repertoire-manage-error" class="pt-2">
 								{m.repertoire_manage_error()}
-							</p>
+							</FormError>
 						{/if}
 						<div data-testid="repertoire-manage-status" role="status" aria-live="polite" class="sr-only">
 							{ag.manageStatus}

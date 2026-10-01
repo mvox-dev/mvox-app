@@ -1,7 +1,8 @@
 <script lang="ts">
+	import PartialNotice from '$lib/components/PartialNotice.svelte';
+	import RadioChips from '$lib/components/RadioChips.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { rovingKeydown } from '$lib/a11y/roving';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 	import type { ListRead } from '$lib/entu/listRead';
@@ -264,15 +265,20 @@
 		else if (mode === 'expanded') roster.expandedIds = new Set(allSectionIdsList);
 	}
 
-	function handleViewModeKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e, {
-			beforeFocus: (member) => {
-				const mode = member.dataset.viewMode as RosterViewMode | undefined;
-				if (!mode) return false;
-				setViewMode(mode);
-			}
-		});
-	}
+	const VIEW_MODE_LABEL: Record<RosterViewMode, () => string> = {
+		collapsed: m.roster_view_collapsed,
+		expanded: m.roster_view_expanded,
+		arrange: m.roster_view_arrange
+	};
+	const viewModeOptions = $derived(
+		(Object.keys(VIEW_MODE_LABEL) as RosterViewMode[])
+			.filter((mode) => mode !== 'arrange' || admin === 'admin')
+			.map((mode) => ({
+				value: mode,
+				label: VIEW_MODE_LABEL[mode](),
+				testid: `roster-view-chip-${mode}`
+			}))
+	);
 
 	const arrangeRows = $derived(
 		listArrangeRows(visibleSections, (id) => groupById.get(id)?.memberCount ?? 0)
@@ -410,13 +416,7 @@
 		{/if}
 
 		{#if rosterPartial}
-			<p
-				data-testid="roster-partial-notice"
-				role="status"
-				class="rounded-md border border-dashed border-ink-4 p-2 text-sm text-ink-2"
-			>
-				{m.roster_partial_notice()}
-			</p>
+			<PartialNotice testid="roster-partial-notice" text={m.roster_partial_notice()} class="text-sm" />
 		{/if}
 
 		<div data-testid="roster-reorder-status" role="status" aria-live="polite" class="sr-only">
@@ -557,59 +557,17 @@
 			</div>
 
 			{#if roster.view === 'grouped' && !roster.sectionsError}
-				<div
-					data-testid="roster-view-modes"
-					role="radiogroup"
-					tabindex="-1"
-					aria-label={m.roster_view_modes_label()}
+				<RadioChips
+					testid="roster-view-modes"
+					label={m.roster_view_modes_label()}
 					class="inline-flex flex-wrap items-center gap-1.5 self-start"
-					onkeydown={handleViewModeKeydown}
-				>
-					<button
-						type="button"
-						data-testid="roster-view-chip-collapsed"
-						data-view-mode="collapsed"
-						role="radio"
-						aria-checked={roster.viewMode === 'collapsed' ? 'true' : 'false'}
-						tabindex={roster.viewMode === 'collapsed' ? 0 : -1}
-						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {roster.viewMode === 'collapsed'
-							? 'border-ink bg-ink text-paper'
-							: 'border-ink-4 text-ink-2 hover:text-ink'}"
-						onclick={() => setViewMode('collapsed')}
-					>
-						{m.roster_view_collapsed()}
-					</button>
-					<button
-						type="button"
-						data-testid="roster-view-chip-expanded"
-						data-view-mode="expanded"
-						role="radio"
-						aria-checked={roster.viewMode === 'expanded' ? 'true' : 'false'}
-						tabindex={roster.viewMode === 'expanded' ? 0 : -1}
-						class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {roster.viewMode === 'expanded'
-							? 'border-ink bg-ink text-paper'
-							: 'border-ink-4 text-ink-2 hover:text-ink'}"
-						onclick={() => setViewMode('expanded')}
-					>
-						{m.roster_view_expanded()}
-					</button>
-					{#if admin === 'admin'}
-						<button
-							type="button"
-							data-testid="roster-view-chip-arrange"
-							data-view-mode="arrange"
-							role="radio"
-							aria-checked={roster.viewMode === 'arrange' ? 'true' : 'false'}
-							tabindex={roster.viewMode === 'arrange' ? 0 : -1}
-							class="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase {roster.viewMode === 'arrange'
-								? 'border-ink bg-ink text-paper'
-								: 'border-ink-4 text-ink-2 hover:text-ink'}"
-							onclick={() => setViewMode('arrange')}
-						>
-							{m.roster_view_arrange()}
-						</button>
-					{/if}
-				</div>
+					options={viewModeOptions}
+					selected={roster.viewMode}
+					onselect={setViewMode}
+					chipClass="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase"
+					onClass="border-ink bg-ink text-paper"
+					offClass="border-ink-4 text-ink-2 hover:text-ink"
+				/>
 				{#if roster.viewMode === 'arrange' && admin === 'admin'}
 					<SectionArrange
 						{roster}

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -6,6 +7,7 @@
 	import type * as SeasonManage from '$lib/seasons/seasonManage';
 	import type { SeasonEditableField } from '$lib/seasons/seasonManage';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
+	import EditActivator from '$lib/components/EditActivator.svelte';
 
 	interface Props {
 		selected: Collective | null;
@@ -205,25 +207,21 @@
 		/>
 	{:else}
 		<div class="font-display text-lg text-ink">
-			<button
-				type="button"
+			<EditActivator
+				label={m.season_manage_edit_name_label()}
 				data-testid="season-edit-btn-name"
 				disabled={seasonEditPending.name === true || isOffline}
-				class="group flex min-h-11 w-full appearance-none items-center gap-2 border-0 bg-transparent p-0 text-left font-display text-lg text-ink disabled:opacity-40"
+				class="w-full items-center gap-2 font-display text-lg text-ink"
 				onclick={() => beginSeasonFieldEdit('name')}
 			>
-				<span class="sr-only">{m.season_manage_edit_name_label()}</span>
-				<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-					>✎</span
-				>
 				<span data-testid="season-manage-name">{seasonManageName}</span>
-			</button>
+			</EditActivator>
 		</div>
 	{/if}
 	{#if seasonEditErrors.name}
-		<p data-testid="season-edit-error-name" role="alert" class="text-xs text-red-700">
+		<FormError data-testid="season-edit-error-name">
 			{seasonFieldErrorText('name')}
-		</p>
+		</FormError>
 	{/if}
 </div>
 
@@ -246,17 +244,13 @@
 					class="border-b border-ink bg-transparent text-ink"
 				/>
 			{:else}
-				<button
-					type="button"
+				<EditActivator
+					label={editLabel()}
 					data-testid="season-edit-btn-{field}"
 					disabled={seasonEditPending[field] === true || isOffline}
-					class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+					class="w-full items-center gap-1"
 					onclick={() => beginSeasonFieldEdit(field)}
 				>
-					<span class="sr-only">{editLabel()}</span>
-					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-						>✎</span
-					>
 					<span data-testid="season-manage-{field}" class="text-base text-ink-2">
 						{#if seasonFieldValue(field)}
 							{formatSeasonDate(seasonFieldValue(field))}
@@ -264,16 +258,12 @@
 							{m.season_manage_date_unset()}
 						{/if}
 					</span>
-				</button>
+				</EditActivator>
 			{/if}
 			{#if seasonEditErrors[field]}
-				<p
-					data-testid="season-edit-error-{field}"
-					role="alert"
-					class="text-xs text-red-700"
-				>
+				<FormError data-testid="season-edit-error-{field}">
 					{seasonFieldErrorText(field)}
-				</p>
+				</FormError>
 			{/if}
 		</div>
 	{/each}

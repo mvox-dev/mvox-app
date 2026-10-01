@@ -2,7 +2,7 @@ import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStat
 import type { AttendanceChangeCallbacks, AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 import type { WriteTokens } from '$lib/net/writeTokens';
-import { withItem } from '$lib/collections/immutable';
+import { withEntry, withItem, withItemIfPresent } from '$lib/collections/immutable';
 import { withFailedMark } from '$lib/attendance/attendancePanelLoad';
 
 function setMyAttendance(ag: AgendaLoadState, eventId: string, entry: AttendanceEntry | null): void {
@@ -30,23 +30,18 @@ export function attendanceQueueHandlers(
 		accessors: {
 			shows: (eventId) => eventId === ag.attendanceItem?.id,
 			setEntry(memberId, entry) {
-				const next = { ...ag.attendanceMap };
-				if (entry) next[memberId] = entry;
-				else delete next[memberId];
-				ag.attendanceMap = next;
+				ag.attendanceMap = withEntry(ag.attendanceMap, memberId, entry);
 			},
 			setPending(memberId, pending) {
 				ag.attendancePendingMemberIds = withItem(ag.attendancePendingMemberIds, memberId, pending);
 			},
 			setFailed(memberId, failed) {
-				if (failed || ag.attendanceFailedMemberIds.has(memberId)) {
-					ag.attendanceFailedMemberIds = withItem(ag.attendanceFailedMemberIds, memberId, failed);
-				}
+				const ids = ag.attendanceFailedMemberIds;
+				ag.attendanceFailedMemberIds = withItemIfPresent(ids, memberId, failed);
 			},
 			setSaved(memberId, saved) {
-				if (saved || ag.attendanceSavedMemberIds.has(memberId)) {
-					ag.attendanceSavedMemberIds = withItem(ag.attendanceSavedMemberIds, memberId, saved);
-				}
+				const ids = ag.attendanceSavedMemberIds;
+				ag.attendanceSavedMemberIds = withItemIfPresent(ids, memberId, saved);
 			}
 		},
 		onPending(eventId, memberId) {

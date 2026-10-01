@@ -8,8 +8,7 @@ export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/agenda/SeriesCreateForm.svelte',
-	'src/lib/seasons/seasonManage.ts',
-	'src/routes/event/[id]/+page.svelte'
+	'src/lib/seasons/seasonManage.ts'
 ];
 
 const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];

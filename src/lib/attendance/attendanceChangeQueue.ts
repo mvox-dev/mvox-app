@@ -13,7 +13,6 @@ export interface AttendanceChangeCallbacks {
 	setOptimistic(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
 	/** The caller checks `eventId` against the open event before disabling the row. */
 	setPending(eventId: string, memberId: string, pending: boolean): void;
-	/** A write settled successfully — the final, reconciled value for this event+member. */
 	reconcile(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
 	/** A write failed — restore exactly this event+member's PRE-tap value. Nothing else. */
 	revert(eventId: string, memberId: string, before: AttendanceEntry | null): void;
@@ -36,6 +35,7 @@ export interface AttendanceChangeQueue {
 	pendingEntriesForEvent(eventId: string): Record<string, AttendanceEntry>;
 }
 
+// Keyed by event and member, so one event's write never blocks the same member in another.
 function pendingKey(eventId: string, memberId: string): string {
 	return `${eventId}:${memberId}`;
 }

@@ -109,6 +109,21 @@ describe('#237 — Table B keeps the × (PO ruling: a red trashcan on an unlink 
 			'the ruling itself (unlink is not destroy) must be stated at the site, not only in the tests'
 		).toMatch(/unlink/i);
 	});
+
+	it('every conductor chip renders through ConductorChip, so a re-inlined chip fails here', () => {
+		const renderers: Array<[string, RegExp]> = [
+			['lib/agenda/SeasonCreateForm.svelte', /<ConductorChips\s/],
+			['lib/agenda/EventCreateForm.svelte', /<ConductorChips\s/],
+			['lib/agenda/ConductorChips.svelte', /<ConductorChip\s/],
+			['lib/agenda/SeasonManageConductors.svelte', /<ConductorChip\s/]
+		];
+		for (const [path, tag] of renderers) {
+			const markup = markupOf(join(SRC_ROOT, path));
+			expect(markup, `${path} must render the shared chip`).toMatch(tag);
+			expect(markup, `${path} must not inline the chip's ×`).not.toContain('&times;');
+			expect(markup, `${path} must not inline the chip's ×`).not.toContain('×');
+		}
+	});
 });
 
 // ── 4. the #238 lesson, fenced ─────────────────────────────────────────────────
