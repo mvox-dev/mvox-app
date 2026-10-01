@@ -7,6 +7,7 @@
 	import { scheduleRowTime } from '$lib/events/eventTime';
 	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { ScheduleItem } from '$lib/schedule/scheduleData';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
@@ -419,36 +420,23 @@
 							{#if isEditor && scheduleEditingId !== row.id}
 								{#if scheduleRemoveArmedId === row.id}
 									<div class="flex items-center gap-1">
-										<button
-											type="button"
-											data-testid={`event-schedule-remove-confirm-${row.id}`}
-											aria-label={m.event_schedule_remove_confirm_aria_label({
+										<DeleteConfirmPair
+											confirmTestid={`event-schedule-remove-confirm-${row.id}`}
+											cancelTestid={`event-schedule-remove-cancel-${row.id}`}
+											confirmLabel={m.event_schedule_remove_confirm_aria_label({
 												name: row.name
 											})}
-											disabled={scheduleWritePending[
-												`schedule-remove-${row.id}`
-											] === true || isOffline}
-											aria-busy={scheduleWritePending[`schedule-remove-${row.id}`] ===
-												true}
-											class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-											onclick={() => confirmScheduleRemove(row.id)}
-										>
-											{m.event_schedule_remove_confirm_short()}
-										</button>
-										<button
-											type="button"
-											data-testid={`event-schedule-remove-cancel-${row.id}`}
-											aria-label={m.event_schedule_remove_cancel_aria_label({
+											cancelLabel={m.event_schedule_remove_cancel_aria_label({
 												name: row.name
 											})}
-											disabled={scheduleWritePending[
-												`schedule-remove-${row.id}`
-											] === true}
-											class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-											onclick={() => cancelScheduleRemove()}
-										>
-											{m.event_schedule_remove_cancel_short()}
-										</button>
+											confirmText={m.event_schedule_remove_confirm_short()}
+											cancelText={m.event_schedule_remove_cancel_short()}
+											pending={scheduleWritePending[`schedule-remove-${row.id}`] === true}
+											busy={scheduleWritePending[`schedule-remove-${row.id}`] === true}
+											{isOffline}
+											onconfirm={() => confirmScheduleRemove(row.id)}
+											oncancel={() => cancelScheduleRemove()}
+										/>
 									</div>
 								{:else}
 									<DeleteTrigger

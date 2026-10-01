@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import type { ArrangeRow } from '$lib/sections/sectionTree';
 	import {
@@ -233,27 +234,20 @@
 		</svg>
 	</button>
 	{#if arrange.pendingRemoveId === row.id}
-		<button
-			type="button"
-			data-testid="section-remove-confirm-{row.id}"
-			aria-label={m.roster_section_remove_confirm({ name: row.name })}
-			disabled={structuralWritePending || isOffline}
-			aria-busy={arrange.removePending}
-			class="flex min-h-11 items-center rounded px-1 text-xs text-red-700 underline disabled:opacity-50"
-			onclick={() => void ops.handleRemoveSection(row.id)}
-		>
-			{m.roster_section_remove_confirm_short()}
-		</button>
-		<button
-			type="button"
-			data-testid="section-remove-cancel-{row.id}"
-			aria-label={m.roster_section_remove_cancel({ name: row.name })}
-			disabled={structuralWritePending}
-			class="flex min-h-11 items-center rounded px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-			onclick={() => void ops.disarmRemove(row.id)}
-		>
-			{m.roster_section_remove_cancel_short()}
-		</button>
+		<DeleteConfirmPair
+			confirmTestid="section-remove-confirm-{row.id}"
+			cancelTestid="section-remove-cancel-{row.id}"
+			confirmLabel={m.roster_section_remove_confirm({ name: row.name })}
+			cancelLabel={m.roster_section_remove_cancel({ name: row.name })}
+			confirmText={m.roster_section_remove_confirm_short()}
+			cancelText={m.roster_section_remove_cancel_short()}
+			pending={structuralWritePending}
+			busy={arrange.removePending}
+			{isOffline}
+			class="rounded"
+			onconfirm={() => void ops.handleRemoveSection(row.id)}
+			oncancel={() => void ops.disarmRemove(row.id)}
+		/>
 	{:else}
 		<DeleteTrigger
 			data-testid="section-remove-{row.id}"

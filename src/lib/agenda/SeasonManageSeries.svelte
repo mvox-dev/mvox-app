@@ -3,6 +3,7 @@
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import DeleteTrigger from '$lib/components/DeleteTrigger.svelte';
+	import DeleteConfirmPair from '$lib/components/DeleteConfirmPair.svelte';
 	import SeriesCreateForm from '$lib/agenda/SeriesCreateForm.svelte';
 	import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
 	import type { SeriesResumeEntry } from '$lib/agenda/seriesCreateResume';
@@ -189,41 +190,31 @@
 				>
 				{#if selected && canDeleteSeries(series, selected.personId)}
 					{#if seasonManageDeleteArmed === series.id}
-						<button
-							type="button"
-							data-testid="season-manage-series-delete-confirm-{series.id}"
-							aria-label={seasonManageArmedSeriesCount !== null &&
+						<DeleteConfirmPair
+							confirmTestid="season-manage-series-delete-confirm-{series.id}"
+							cancelTestid="season-manage-series-delete-cancel-{series.id}"
+							confirmLabel={seasonManageArmedSeriesCount !== null &&
 							seasonManageArmedSeriesCount > 0
 								? m.season_manage_series_delete_confirm({
 										name: series.name,
 										count: seasonManageArmedSeriesCount
 									})
 								: m.season_manage_delete_confirm({ name: series.name })}
-							disabled={seasonManageDeletePendingId !== null || isOffline}
-							aria-busy={seasonManageDeletePendingId === series.id}
-							class="flex min-h-11 items-center px-1 text-xs text-red-700 underline disabled:opacity-50"
-							onclick={() => onSeasonManageSeriesDelete(series)}
-						>
-							{seasonManageArmedSeriesCount !== null &&
+							cancelLabel={m.season_manage_delete_cancel({ name: series.name })}
+							confirmText={seasonManageArmedSeriesCount !== null &&
 							seasonManageArmedSeriesCount > 0
 								? m.season_manage_series_delete_confirm_short({
 										count: seasonManageArmedSeriesCount
 									})
 								: m.season_manage_delete_confirm_short()}
-						</button>
-						<button
-							type="button"
-							data-testid="season-manage-series-delete-cancel-{series.id}"
-							aria-label={m.season_manage_delete_cancel({ name: series.name })}
-							disabled={seasonManageDeletePendingId !== null}
-							class="flex min-h-11 items-center px-1 text-xs text-ink-2 underline hover:text-ink disabled:opacity-50"
-							onclick={() =>
-								void disarmSeasonManageDelete(
-									`season-manage-series-delete-${series.id}`
-								)}
-						>
-							{m.season_manage_delete_cancel_short()}
-						</button>
+							cancelText={m.season_manage_delete_cancel_short()}
+							pending={seasonManageDeletePendingId !== null}
+							busy={seasonManageDeletePendingId === series.id}
+							{isOffline}
+							onconfirm={() => onSeasonManageSeriesDelete(series)}
+							oncancel={() =>
+								void disarmSeasonManageDelete(`season-manage-series-delete-${series.id}`)}
+						/>
 					{:else}
 						<DeleteTrigger
 							data-testid="season-manage-series-delete-{series.id}"
