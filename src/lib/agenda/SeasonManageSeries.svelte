@@ -10,9 +10,10 @@
 	import type { SeriesListItem } from '$lib/seasons/seasonManage';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import {
+		runSeasonManageDelete,
 		seasonManageDeleteErrorText,
-		seasonManageDeleteFailure,
-		type SeasonManageDeleteError
+		type SeasonManageDeleteError,
+		type SeasonManageDeleteSlot
 	} from '$lib/agenda/seasonManageDelete';
 
 	interface Props {
@@ -36,9 +37,7 @@
 		seasonManageArmedSeriesCount: number | null;
 		seasonManageDeletePendingId: string | null;
 		seasonManageDeleteStatus: string;
-		seasonManageDeleteProgress: { current: number; total: number } | null;
-		seasonManageDeleteGeneration: () => number;
-		makeSeasonManageDeleteProgress: (generation: number) => (current: number, total: number) => void;
+		seasonManageDeleteSlot: SeasonManageDeleteSlot;
 		armSeasonManageDelete: (rowId: string, confirmTestid: string) => Promise<void>;
 		disarmSeasonManageDelete: (disarmTestid: string) => Promise<void>;
 		openSeriesCreateForm: () => void;
@@ -65,14 +64,12 @@
 		seasonManageSeries = $bindable(),
 		seasonManageSeriesError,
 		seasonManagePartial,
-		seasonManageDeleteError = $bindable(),
+		seasonManageDeleteError,
 		seasonManageDeleteArmed = $bindable(),
 		seasonManageArmedSeriesCount = $bindable(),
-		seasonManageDeletePendingId = $bindable(),
+		seasonManageDeletePendingId,
 		seasonManageDeleteStatus = $bindable(),
-		seasonManageDeleteProgress = $bindable(),
-		seasonManageDeleteGeneration,
-		makeSeasonManageDeleteProgress,
+		seasonManageDeleteSlot,
 		armSeasonManageDelete,
 		disarmSeasonManageDelete,
 		openSeriesCreateForm,
@@ -110,15 +107,12 @@
 		if (seasonManageDeletePendingId !== null) return;
 		if (isOffline) return;
 		const cfg = cfgFor(selected.db);
-		seasonManageDeleteError = null;
-		seasonManageDeleteProgress = null;
-		seasonManageDeletePendingId = series.id;
-		const generation = seasonManageDeleteGeneration();
-		apiDeleteEventSeries(cfg, series.id, undefined, {
-			onProgress: makeSeasonManageDeleteProgress(generation)
-		})
-			.then((deletedOccurrences) => {
-				if (generation !== seasonManageDeleteGeneration()) return;
+		runSeasonManageDelete({
+			slot: seasonManageDeleteSlot,
+			rowId: series.id,
+			list: 'series',
+			call: (onProgress) => apiDeleteEventSeries(cfg, series.id, undefined, { onProgress }),
+			onDone: (deletedOccurrences) => {
 				seasonManageDeleteArmed = null;
 				seasonManageArmedSeriesCount = null;
 				seasonManageSeries = seasonManageSeries.filter((row) => row.id !== series.id);
@@ -127,16 +121,8 @@
 						? m.season_manage_series_deleted({ name: series.name, count: deletedOccurrences })
 						: m.season_manage_deleted({ name: series.name });
 				refreshAfterSeasonManageDelete(cfg);
-			})
-			.catch((e) => {
-				console.error('agenda: deleting event series failed', series.id, e);
-				if (generation !== seasonManageDeleteGeneration()) return;
-				seasonManageDeleteError = seasonManageDeleteFailure('series', e);
-			})
-			.finally(() => {
-				seasonManageDeletePendingId = null;
-				if (generation === seasonManageDeleteGeneration()) seasonManageDeleteProgress = null;
-			});
+			}
+		});
 	}
 </script>
 

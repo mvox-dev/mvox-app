@@ -30,3 +30,45 @@ export function seasonManageDeleteErrorText(failure: SeasonManageDeleteError): s
 			return m.season_manage_delete_error();
 	}
 }
+
+export interface SeasonManageDeleteSlot {
+	pendingId: string | null;
+	error: SeasonManageDeleteError | null;
+	progress: { current: number; total: number } | null;
+	readonly generation: number;
+}
+
+const DELETE_LOG_NAME = { season: 'season', series: 'event series' } as const;
+
+export function runSeasonManageDelete<T>({
+	slot,
+	rowId,
+	list,
+	call,
+	onDone
+}: {
+	slot: SeasonManageDeleteSlot;
+	rowId: string;
+	list: 'series' | 'season';
+	call: (onProgress: (current: number, total: number) => void) => Promise<T>;
+	onDone: (result: T) => void;
+}): void {
+	slot.error = null;
+	slot.progress = null;
+	slot.pendingId = rowId;
+	const generation = slot.generation;
+	call((current, total) => {
+		if (generation === slot.generation) slot.progress = { current, total };
+	})
+		.then((result) => {
+			if (generation === slot.generation) onDone(result);
+		})
+		.catch((e) => {
+			console.error(`agenda: deleting ${DELETE_LOG_NAME[list]} failed`, rowId, e);
+			if (generation === slot.generation) slot.error = seasonManageDeleteFailure(list, e);
+		})
+		.finally(() => {
+			slot.pendingId = null;
+			if (generation === slot.generation) slot.progress = null;
+		});
+}
