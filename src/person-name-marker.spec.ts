@@ -243,7 +243,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/AgendaMonthView.svelte': {
 		'item.name': 'the event name'
 	},
-	'src/lib/agenda/RepertoireElement.svelte': {
+	'src/lib/agenda/RepertoireWorkRow.svelte': {
 		'row.workName': 'a repertoire work'
 	},
 	'src/lib/roster/MemberDeactivate.svelte': {
