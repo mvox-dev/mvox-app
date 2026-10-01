@@ -1,7 +1,7 @@
-# Task List Snapshot — 2026-09-29 15:19Z (MVOX-30 seam, Mihkel's regroup)
+# Task List Snapshot — 2026-10-01 01:36Z (MVOX-30 seam, end of wave 3)
 
-- #508 `in process`: slice 1/5 merged 95ae384 (#519); slice 2/5 aborted, branch feat/508-s2-event-create at bd5391b (pushed, no PR); slices 3-5 await a cheaper plan. Detailed closing comment on #508 after the last slice merges.
-- Epic #503: only #508 left.
-- Nothing else ready.
+- W4 `researched`: #560 (waiting on Gama: keys per control or on the wrapper), #561.
+- W5: #556 (step to 1000), then #557, #558, #559.
+- Epic #524 open.
 
 (*MVOX:Palestrina*)

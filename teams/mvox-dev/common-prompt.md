@@ -5,6 +5,7 @@
 - **Team name:** `mvox-dev`
 - **Members:** team-lead/Palestrina (coordinator), byrd (frontend), josquin (database/API), tallis (testing), bentham (reviewer), comenius (i18n), victoria (requirements analyst), finn (research), perotin (data manager — on-demand)
 - **Human PO:** The human user is the Product Owner. Victoria drafts requirements; the PO decides.
+- **Fresh instances (Mihkel, 2026-09-30):** an implementer is spawned per issue from a brief file (`~/workspace/scratchpad/brief-<N>.md`) and released when it merges. Finn is spawned per research task and released after it. Bentham is released at the end of each wave. Pérotin is spawned only for live-data jobs. Lessons travel in briefs and scratchpads, not in a long-lived context. Run gates in the foreground, and commit and push before reporting.
 
 ## Project
 
@@ -54,6 +55,19 @@ How `src/comment-rules.spec.ts` counts these, on every code file a change touche
 - The top line is the file's first non-blank line, if it is a whole-line comment (`// x`, `/* x */`, `<!-- x -->`); the rest of its run counts, and it still obeys the 3-line, 100-character and narration rules. A `.svelte` file gets it only for a `<!-- -->` line above `<script>`.
 - The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
 - A comment TRAILING code (`const x = 1; // why`) is exempt from the 3-line and 10% counts — that line is code — but NOT from the narration and 100-character rules, which read the comment text alone. A `//` inside a string opens no comment, so URLs are safe.
+- The check skips UNTRACKED files until that is fixed: `git add -N` a new file before running gates.
+
+## Code Layout and Size
+
+From #524 (Mihkel, 2026-09-30). The issue body is the source of truth.
+
+- One folder per area: `src/lib/<area>/` holds that area's modules, components (PascalCase.svelte) and specs, each spec beside its file. `src/lib/components/` keeps only shared, area-free UI. Routes stay thin: `+page.svelte` composes the area's components. A helper lives with the area it serves, not the page it came from. Files move to this layout when a change touches them.
+- The file-size ladder steps down 1500 → 1000 → 700 → 500 → 400 lines for source files (specs are off it). `src/routes/page.line-cap.spec.ts` gates the current step. A file a change adds must be at most the next step, and files over the next step are listed in the register.
+- At each step boundary there is a consolidation run. Duplicates tagged IDENTICAL are merged as code-only changes. Those tagged DIFFERS go to the PO as product questions, with the differences listed.
+
+## Tests and Source Text
+
+A test that pins loose text in a source file (`readFileSync` + `toContain`/regex) is a deliberate, stated choice only (Mihkel, 2026-09-30). Ask for data or an export and test behaviour instead; a comment can satisfy a text pin, and a comment can trip a text fence. When a text scan is the right tool (a fence), its one-line why says so, and it ignores comments (`stripComments`).
 
 ## Stack
 
