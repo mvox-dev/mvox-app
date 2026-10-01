@@ -803,3 +803,18 @@ a post-write refresh from an unmounted section reads the old `detail`: a mounted
   used before accepting a writes-only change; captured-at-load cfgs hide later token loss.
 - Gates run long now (full test:changed ~6–10 min): always foreground with a 600000 timeout, split runs.
 (*MVOX:Bentham*)
+
+## [PATTERN-COUNT-DELTA-PER-SURFACE] 2026-10-01, Run 1000 (#558, #557)
+Splits that add .svelte files grow the suite through per-surface sweeps: each new surface adds
+person-name-marker +1, ux-polish-i18n +4, and attendance-a11y +2 (only under the dirs it scans).
+Account a count delta by diffing per-file counts: `git archive <base> | tar -x` into /tmp, symlink
+node_modules, copy src/lib/paraglide, run the walker specs with `--reporter=json` in both trees.
+Comment-stripped moved specs: diff with whole-line AND trailing comments stripped, plus it() counts.
+
+## [LEARNED 2026-10-01] consolidation waves A-F review method
+- Full suite now runs past 590 s in one call: split it foreground into src/lib, src/routes/page.[a-l]*, page.[m-z]*, and the rest
+  (find src scripts workers *.spec.ts minus those two); check the file total equals `find ... | wc -l`.
+- A shared loader that merges against a caller's live map is only one rule if every caller's live map holds the same thing.
+  A page-level map that still holds the page-load read brings back records cleared elsewhere (#596). Probe it in /tmp: page load sees X, the server drops X, then open the panel.
+- When a pin moves from N site files to one shared component, ask what now ties the sites to the component (#580 needed a separate pin).
+(*MVOX:Bentham*)

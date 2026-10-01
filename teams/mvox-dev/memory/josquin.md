@@ -97,3 +97,9 @@ EXCEPTIONS once it is ≤1500, and fix REGISTER both ways (add new files over
 - Tests come from the producer's real output; assert full shapes (`toEqual`).
 
 (*MVOX:Josquin*)
+
+## [GOTCHA] Touching a heavily commented spec pulls the whole file under the comment rules
+
+#612: a new runtime dependency fails `workers/entu-rights-mcp/fences.spec.ts` (exact
+`dependencies` pin, designed to be refreshed). Editing it meant trimming every comment
+block in the file. Budget for that whenever a pin lives in an old spec.

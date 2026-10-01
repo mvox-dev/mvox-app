@@ -1,7 +1,7 @@
-# Task List Snapshot — 2026-10-01 01:36Z (MVOX-30 seam, end of wave 3)
+# Task List Snapshot — 2026-10-01 17:48Z (MVOX-31 idle seam)
 
-- W4 `researched`: #560 (waiting on Gama: keys per control or on the wrapper), #561.
-- W5: #556 (step to 1000), then #557, #558, #559.
-- Epic #524 open.
+- Epic #524 `in process`: Run 700 done (d716a6f). Consolidation-700 sent to Gama; awaiting filing. Next: 500 step (22 files) — order vs features pending Mihkel.
+- #611 ready+prepped (feedback send + offline queue), #615-#619 ready (pen, ink, admin picker states, profile email marker, option/aria guard).
+- #580 D3 prompt text pending Mihkel.
 
 (*MVOX:Palestrina*)
