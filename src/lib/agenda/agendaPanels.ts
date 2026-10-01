@@ -3,26 +3,20 @@ import { cfgFor } from '$lib/entu/cfg';
 import { deriveAllMemberRates } from '$lib/attendance/attendanceSummary';
 import { focusAfterRender } from '$lib/a11y/focusable';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { RosterRow } from '$lib/roster/rosterData';
+import { createAttendancePanelLoad, failedMarksFor } from '$lib/attendance/attendancePanelLoad';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
-export function createAgendaPanels(
-	ag: AgendaLoadState,
-	seq: LoadCounters,
-	deps: AgendaLoadDeps,
-	getRoster: (cfg: { db: string; token: string }) => Promise<RosterRow[]>
-) {
+export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const {
 		listAttendance,
-		listAllRsvpsForEvent,
-		attendanceByMemberId,
 		loadActiveAndArchivedRosters,
 		listRepertoireItems,
 		listWorks,
 		listAllEditions,
 		listAllCopies
 	} = deps;
+	const attendanceLoad = createAttendancePanelLoad({ ...deps, label: 'agenda' });
 
 	function openAttendancePanel(item: AgendaItem) {
 		const selected = deps.selected();
@@ -32,53 +26,32 @@ export function createAgendaPanels(
 		ag.attendanceLoading = true;
 		ag.attendanceError = false;
 		ag.attendanceRoster = [];
+		ag.attendanceRosterPartial = false;
 		ag.attendanceMap = {};
 		ag.attendanceRsvpMap = {};
 		ag.attendancePendingMemberIds = deps.pendingMembersForEvent(item.id);
-		ag.attendanceFailedMemberIds = new Set(ag.attendanceFailedByEvent.get(item.id) ?? []);
+		ag.attendanceFailedMemberIds = failedMarksFor(ag.attendanceFailedByEvent, item.id);
 		ag.attendanceSavedMemberIds = new Set();
-
-		const cfg = cfgFor(selected.db);
-		const thisRequest = ++seq.attendanceRequestId;
-
-		const rosterPromise = getRoster(cfg);
-
-		const requestIssuedAt = Date.now();
-		Promise.all([rosterPromise, listAttendance(cfg, item.id), listAllRsvpsForEvent(cfg, item.id)])
-			.then(([roster, records, rsvps]) => {
-				if (thisRequest !== seq.attendanceRequestId) return;
-				ag.attendanceRoster = roster;
-				const pendingMembers = deps.pendingMembersForEvent(item.id);
-				const serverMap = attendanceByMemberId(records);
-				const merged = { ...serverMap };
-				for (const mid of pendingMembers) {
-					if (mid in ag.attendanceMap) merged[mid] = ag.attendanceMap[mid];
-					else delete merged[mid];
-				}
-				for (const mid of Object.keys(ag.attendanceMap)) {
-					if (pendingMembers.has(mid)) continue;
-					const liveEntry = ag.attendanceMap[mid];
-					const serverEntry = serverMap[mid];
-					if (liveEntry && (!serverEntry || serverEntry.attendanceId !== liveEntry.attendanceId)) {
-						merged[mid] = liveEntry;
-					}
-				}
-				ag.attendanceMap = merged;
-				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
-				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
-				ag.attendanceRsvpMap = rsvpMap;
+		attendanceLoad.open(cfgFor(selected.db), item.id, {
+			isCurrent: () => true,
+			liveAttendance: () => ag.attendanceMap,
+			loaded(read) {
+				ag.attendanceRoster = read.roster;
+				ag.attendanceRosterPartial = read.rosterPartial;
+				ag.attendanceMap = read.attendance;
+				ag.attendanceRsvpMap = read.rsvps;
 				ag.attendanceLoading = false;
-			})
-			.catch(() => {
-				if (thisRequest !== seq.attendanceRequestId) return;
+			},
+			failed() {
 				ag.attendanceLoading = false;
 				ag.attendanceError = true;
-			});
+			}
+		});
 	}
 
 	function closeAttendancePanel() {
 		const closedItemId = untrack(() => ag.attendanceItem?.id);
-		seq.attendanceRequestId++;
+		attendanceLoad.cancel();
 		ag.attendanceItem = null;
 		ag.attendanceLoading = false;
 		ag.attendanceError = false;

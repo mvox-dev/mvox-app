@@ -89,6 +89,7 @@ export function createAgendaLoadState() {
 		attendanceLoading: false,
 		attendanceError: false,
 		attendanceRoster: [] as RosterRow[],
+		attendanceRosterPartial: false,
 		attendanceMap: {} as Record<string, { attendanceId: string; status: AttendanceStatus }>,
 		attendanceRsvpMap: {} as Record<string, { rsvpId: string; status: string }>,
 		attendancePendingMemberIds: new Set() as Set<string>,
@@ -112,7 +113,6 @@ export function createLoadCounters() {
 	return {
 		scopedEditionWorkIdsRequested: new Set<string>(),
 		panelRepertoireSeasonId: null as string | null,
-		attendanceRequestId: 0,
 		requestId: 0,
 		pressureSweepRanAtOpen: false,
 		worksLoadId: 0,
@@ -157,7 +157,7 @@ export interface AgendaLoadDeps {
 export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const roster = createAgendaRosterCache(ag);
 	const works = createAgendaWorksLoad(ag, seq, deps);
-	const panels = createAgendaPanels(ag, seq, deps, roster.getRoster);
+	const panels = createAgendaPanels(ag, seq, deps);
 	const loadForSelected = createSelectedLoad(ag, seq, deps, {
 		...works,
 		closeAttendancePanel: panels.closeAttendancePanel

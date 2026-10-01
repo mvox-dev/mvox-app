@@ -85,7 +85,7 @@ export function attendancePanelOf(
 		pendingMemberIds: ag.attendancePendingMemberIds,
 		failedMemberIds: ag.attendanceFailedMemberIds,
 		savedMemberIds: ag.attendanceSavedMemberIds,
-		membersPartial: ag.rosterPartial,
+		membersPartial: ag.attendanceRosterPartial,
 		ontoggle,
 		onclose
 	};

@@ -2,7 +2,8 @@ import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStat
 import type { AttendanceChangeCallbacks, AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
 import type { WriteTokens } from '$lib/net/writeTokens';
-import { withItem, without } from '$lib/collections/immutable';
+import { withItem } from '$lib/collections/immutable';
+import { withFailedMark } from '$lib/attendance/attendancePanelLoad';
 
 function setMyAttendance(ag: AgendaLoadState, eventId: string, entry: AttendanceEntry | null): void {
 	if (entry) {
@@ -49,14 +50,8 @@ export function attendanceQueueHandlers(
 			}
 		},
 		onPending(eventId, memberId) {
-			const eventFailed = ag.attendanceFailedByEvent.get(eventId);
-			if (eventFailed?.has(memberId)) {
-				const cleared = without(eventFailed, memberId);
-				ag.attendanceFailedByEvent =
-					cleared.size === 0
-						? without(ag.attendanceFailedByEvent, eventId)
-						: new Map(ag.attendanceFailedByEvent).set(eventId, cleared);
-			}
+			const byEvent = ag.attendanceFailedByEvent;
+			ag.attendanceFailedByEvent = withFailedMark(byEvent, eventId, memberId, false);
 		},
 		onReconcile(eventId, memberId, entry) {
 			ag.seasonRatesLoaded = false;
@@ -64,11 +59,8 @@ export function attendanceQueueHandlers(
 		},
 		onRevert(eventId, memberId, before) {
 			ag.seasonRatesLoaded = false;
-			const eventFailed = new Set(ag.attendanceFailedByEvent.get(eventId) ?? []);
-			eventFailed.add(memberId);
-			const nextMap = new Map(ag.attendanceFailedByEvent);
-			nextMap.set(eventId, eventFailed);
-			ag.attendanceFailedByEvent = nextMap;
+			const byEvent = ag.attendanceFailedByEvent;
+			ag.attendanceFailedByEvent = withFailedMark(byEvent, eventId, memberId, true);
 			if (memberId === ag.memberId) setMyAttendance(ag, eventId, before);
 		}
 	});
