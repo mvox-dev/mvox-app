@@ -187,6 +187,22 @@ describe('/event/[id] attendance panel load (#596)', () => {
 		expect(pressed(container, 'attendance-toggle-m1-present')).toBe('true');
 	});
 
+	it('does not bring back a record the server no longer has', async () => {
+		loadEventDetailMock.mockResolvedValue(pastEditedDetail());
+		loadRosterMock.mockResolvedValue(ROSTER_READ);
+		listAttendanceMock
+			.mockResolvedValueOnce([{ attendanceId: 'att-1', memberId: 'm1', status: 'present' }])
+			.mockResolvedValue([]);
+		listAllRsvpsForEventMock.mockResolvedValue([]);
+		const { container } = renderPage();
+		await waitFor(() => expect(q(container, 'event-detail-attendance-tally')).not.toBeNull());
+		await openPanel(container);
+		await waitFor(() => expect(q(container, 'attendance-row-m1')).not.toBeNull());
+
+		expect(listAttendanceMock).toHaveBeenCalledTimes(2);
+		expect(pressed(container, 'attendance-toggle-m1-present')).toBe('false');
+	});
+
 	it('remembers a failed mark across close and reopen', async () => {
 		loadEventDetailMock.mockResolvedValue(pastEditedDetail());
 		loadRosterMock.mockResolvedValue(ROSTER_READ);

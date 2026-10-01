@@ -20,6 +20,7 @@
 		createAttendancePanelLoad,
 		failedMarksFor,
 		withFailedMark,
+		type AttendanceMap,
 		type AttendanceRsvpMap,
 		type FailedByEvent
 	} from '$lib/attendance/attendancePanelLoad';
@@ -54,6 +55,7 @@
 	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
 	let attendanceSavedMemberIds = $state<Set<string>>(new Set());
 	let failedByEvent: FailedByEvent = new Map();
+	let panelMarks: AttendanceMap = {};
 
 	const myAttendanceStatus = $derived<AttendanceStatus | 'not-recorded' | null>(
 		ev.memberId === null ? null : (ev.attendanceMap[ev.memberId]?.status ?? 'not-recorded')
@@ -101,10 +103,14 @@
 		const evId = detail.id;
 		const g = generation();
 		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(evId);
+		panelMarks = {};
+		for (const mid of attendancePendingMemberIds) {
+			if (mid in ev.attendanceMap) panelMarks[mid] = ev.attendanceMap[mid];
+		}
 		attendanceFailedMemberIds = failedMarksFor(failedByEvent, evId);
 		attendanceLoad.open(cfgFor(selected.db), evId, {
 			isCurrent: () => g === generation() && detail?.id === evId,
-			liveAttendance: () => ev.attendanceMap,
+			liveAttendance: () => panelMarks,
 			loaded(read) {
 				attendanceRoster = read.roster;
 				attendanceRosterPartial = read.rosterPartial;
@@ -141,6 +147,9 @@
 						if (entry) next[targetMemberId] = entry;
 						else delete next[targetMemberId];
 						ev.attendanceMap = next;
+						panelMarks = { ...panelMarks };
+						if (entry) panelMarks[targetMemberId] = entry;
+						else delete panelMarks[targetMemberId];
 					},
 					setPending(targetMemberId, pending) {
 						attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
