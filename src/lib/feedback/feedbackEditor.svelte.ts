@@ -1,4 +1,5 @@
 // The feedback editor's state, shared by its overlay and the bar that replaces the nav.
+import { tick } from 'svelte';
 import type { StrokeData } from '$lib/strokes/strokes';
 import { captureScreen, ClipboardImageUnsupported, copyInked, type Capture } from './capture';
 import { sendFeedback } from './sendFeedback';
@@ -25,10 +26,13 @@ export function createFeedbackEditor() {
 	let notice = $state<EditorNotice | null>(null);
 	let capturing = false;
 	let stage: HTMLElement | undefined;
+	let returnFocus: HTMLElement | null = null;
 
 	async function capture(pagePath: string): Promise<void> {
 		if (open || capturing) return;
 		capturing = true;
+		const active = document.activeElement;
+		returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
 		try {
 			const taken = await captureScreen();
 			shot = { ...taken, url: URL.createObjectURL(taken.blob), pagePath };
@@ -45,11 +49,16 @@ export function createFeedbackEditor() {
 		open = true;
 	}
 
-	function close(): void {
+	// Focus waits a tick: the page is inert until the overlay has gone.
+	async function close(): Promise<void> {
 		if (shot) URL.revokeObjectURL(shot.url);
 		shot = null;
 		notice = null;
 		open = false;
+		const target = returnFocus?.isConnected ? returnFocus : null;
+		returnFocus = null;
+		await tick();
+		(target ?? document.querySelector<HTMLElement>('main.nav-content'))?.focus();
 	}
 
 	async function copy(): Promise<void> {

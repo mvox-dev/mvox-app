@@ -46,6 +46,15 @@ describe('captureScreen', () => {
 		);
 	});
 
+	it('captures a scrolled page where it is scrolled to', async () => {
+		domToBlobMock.mockResolvedValueOnce(PNG);
+		await captureScreen();
+		expect(domToBlobMock).toHaveBeenCalledWith(
+			document.body,
+			expect.objectContaining({ features: { restoreScrollPosition: true } })
+		);
+	});
+
 	it('releases the marker after the capture, and after a failed one', async () => {
 		markedPage();
 		domToBlobMock.mockResolvedValueOnce(PNG);

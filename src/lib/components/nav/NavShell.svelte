@@ -135,7 +135,7 @@
 		{/if}
 		<!-- The page stays mounted under the overlay, so closing it returns the page as it was. -->
 		<div class="nav-stage">
-			<main class="nav-content" inert={overlay !== undefined}>
+			<main class="nav-content" tabindex="-1" inert={overlay !== undefined}>
 				{@render children?.()}
 			</main>
 			{#if overlay}

@@ -147,6 +147,30 @@ describe('+layout — a double tap captures the screen and opens the feedback ed
 		expect(sendMock).not.toHaveBeenCalled();
 	});
 
+	it('moves focus to the first editor control, and close returns it to where it was', async () => {
+		render(Layout, { props: { children } });
+		signIn();
+		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
+		const before = screen.getByTestId('page-button');
+		before.focus();
+		doubleTap(screen.getByTestId('plain'));
+		await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
+
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Copy' }))
+		);
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+		await vi.waitFor(() => expect(document.activeElement).toBe(before));
+	});
+
+	it('close returns focus to the main content when nothing had it before', async () => {
+		await openEditor();
+		await fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+		await vi.waitFor(() => expect(document.activeElement).toBe(document.querySelector('main')));
+	});
+
 	it('copy puts the screenshot with its ink on the clipboard as image/png', async () => {
 		const write = vi.fn().mockResolvedValue(undefined);
 		class FakeClipboardItem {

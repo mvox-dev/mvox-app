@@ -18,7 +18,14 @@ export async function captureScreen(): Promise<Capture> {
 	const width = window.innerWidth;
 	const height = window.innerHeight;
 	const blob = await withRedaction(() =>
-		domToBlob(document.body, { width, height, type: 'image/png', scale: window.devicePixelRatio })
+		domToBlob(document.body, {
+			width,
+			height,
+			type: 'image/png',
+			scale: window.devicePixelRatio,
+			// Pages scroll inside NavShell's main; without this the capture shows its top.
+			features: { restoreScrollPosition: true }
+		})
 	);
 	return { blob, width, height };
 }
