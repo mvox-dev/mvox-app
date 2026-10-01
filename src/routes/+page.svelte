@@ -28,6 +28,8 @@
 		type RsvpStatus
 	} from '$lib/rsvp/rsvpData';
 	import { createRsvpChangeQueue, type RsvpEntry } from '$lib/rsvp/rsvpChangeQueue';
+	import { createRsvpWriteStatus } from '$lib/rsvp/rsvpWriteStatus';
+	import { createWriteTokens } from '$lib/net/writeTokens';
 	import { completionGateStore } from '$lib/profile/completionGate';
 	import { loadRoster } from '$lib/roster/rosterData';
 	import type { RosterRow } from '$lib/roster/rosterData';
@@ -49,7 +51,6 @@
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { getAppLabelStore } from '$lib/files/appLabelStore';
 	import { recordPartLabel } from '$lib/files/labelStore';
-	import { workLabel } from '$lib/repertoire/workLabel';
 	import type {
 		ManageRightsState,
 		PickerOption,
@@ -80,10 +81,18 @@
 		listAllEditions,
 		listAllCopies,
 		type Copy,
-		type Edition,
 		type Work
 	} from '$lib/library/libraryData';
 	import { unresolvedEditionWorkIds } from '$lib/repertoire/editionUnknown';
+	import {
+		editionsByWorkId as editionsByWorkIdOf,
+		editionOptionsByRowId as editionOptionsByRowIdOf,
+		pickableEditionOptions,
+		readScopedEditions,
+		withoutProgrammed
+	} from '$lib/repertoire/editionOptions';
+	import { createRepertoireRowHandlers } from '$lib/repertoire/repertoireRowHandlers';
+	import { createPendingMarks } from '$lib/repertoire/repertoirePending';
 	import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/components/agenda/RepertoireElement.svelte';
 	import EventCreateForm from '$lib/components/agenda/EventCreateForm.svelte';
 	import SeasonCreateForm from '$lib/components/agenda/SeasonCreateForm.svelte';
@@ -120,7 +129,7 @@
 	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
 	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 	import { writesAvailable } from '$lib/net/online';
-	import { withItem, without } from '$lib/collections/immutable';
+	import { withItem } from '$lib/collections/immutable';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -137,16 +146,9 @@
 		getSections,
 		loadForSelected,
 		resetManagement,
-		reorderKey,
 		mergePendingRows,
 		refreshWorksAfterWrite,
-		mapRows,
-		patchRow,
-		findRow,
-		snapshotRow,
-		restoreRow,
-		dropRow,
-		setOrdinals,
+		rowStore,
 		openAttendancePanel,
 		closeAttendancePanel,
 		handleExpandSeasonSummary,
@@ -317,44 +319,33 @@
 		return m.picker_everyone_added();
 	}
 
-	const rsvpQueue = createRsvpChangeQueue({
-		setOptimistic(eventId, entry) {
-			const next = { ...ag.rsvpByEventId };
-			if (entry) next[eventId] = entry;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-		},
-		setPending(eventId, isPending) {
-			pendingEventIds = withItem(pendingEventIds, eventId, isPending);
-			if (isPending && ag.failedEventIds.has(eventId)) {
-				ag.failedEventIds = without(ag.failedEventIds, eventId);
+	const collectiveTokens = () =>
+		createWriteTokens(() => get(selectedCollectiveIdentityStore), sameCollectiveIdentity);
+
+	const rsvpQueue = createRsvpChangeQueue(
+		createRsvpWriteStatus({
+			tokens: collectiveTokens(),
+			accessors: {
+				setEntry(eventId, entry) {
+					const next = { ...ag.rsvpByEventId };
+					if (entry) next[eventId] = entry;
+					else delete next[eventId];
+					ag.rsvpByEventId = next;
+				},
+				setPending: (eventId, pending) => (pendingEventIds = withItem(pendingEventIds, eventId, pending)),
+				setFailed(eventId, failed) {
+					if (failed || ag.failedEventIds.has(eventId)) {
+						ag.failedEventIds = withItem(ag.failedEventIds, eventId, failed);
+					}
+				},
+				setSaved(eventId, saved) {
+					if (saved || ag.savedEventIds.has(eventId)) {
+						ag.savedEventIds = withItem(ag.savedEventIds, eventId, saved);
+					}
+				}
 			}
-			if (isPending && ag.savedEventIds.has(eventId)) {
-				ag.savedEventIds = without(ag.savedEventIds, eventId);
-			}
-		},
-		reconcile(eventId, entry) {
-			const next = { ...ag.rsvpByEventId };
-			if (entry) next[eventId] = entry;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-			const saved = new Set(ag.savedEventIds);
-			saved.add(eventId);
-			ag.savedEventIds = saved;
-		},
-		revert(eventId, before) {
-			const next = { ...ag.rsvpByEventId };
-			if (before) next[eventId] = before;
-			else delete next[eventId];
-			ag.rsvpByEventId = next;
-			const failed = new Set(ag.failedEventIds);
-			failed.add(eventId);
-			ag.failedEventIds = failed;
-			if (ag.savedEventIds.has(eventId)) {
-				ag.savedEventIds = without(ag.savedEventIds, eventId);
-			}
-		}
-	});
+		})
+	);
 
 	function handleRsvpChange(item: AgendaItem, newStatus: RsvpStatus | null) {
 		if (!selected) return;
@@ -435,25 +426,23 @@
 			});
 	}
 
-	const managePendingMarks = new Map<string, string[]>();
+	const repertoirePending = createPendingMarks(
+		() => get(selectedCollectiveIdentityStore),
+		sameCollectiveIdentity
+	);
 
 	const repertoireQueue = createRepertoireWriteQueue({
 		setPending(key, pending) {
-			const next = new Set(ag.managePendingKeys);
-			for (const mark of [key, ...(managePendingMarks.get(key) ?? [])]) {
-				if (pending) next.add(mark);
-				else next.delete(mark);
-			}
-			ag.managePendingKeys = next;
+			ag.managePendingKeys = repertoirePending.setPending(ag.managePendingKeys, key, pending);
 			if (pending) ag.manageError = false;
 		},
 		reconcile(key) {
-			managePendingMarks.delete(key);
+			if (!repertoirePending.settle(key)) return;
 			syncPanelRepertoireAfterAgendaWrite();
 			if (key === ADD_WORK_KEY || key === ADD_PROGRAMME_KEY) refreshWorksAfterWrite();
 		},
 		revert(key) {
-			managePendingMarks.delete(key);
+			if (!repertoirePending.settle(key)) return;
 			ag.manageError = true;
 			syncPanelRepertoireAfterAgendaWrite();
 			refreshWorksAfterWrite();
@@ -465,75 +454,29 @@
 		return cfgFor(selected.db);
 	}
 
-	function handleAddWork(workId: string) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		const seasonId = ag.currentSeasonId;
-		if (!cfg || seasonId === null) return;
-		repertoireQueue.request(ADD_WORK_KEY, async () => {
-			await createRepertoireItem(cfg, { seasonId, workId });
-		});
-	}
-
-	function handleStatusChange(itemId: string, status: RepertoireStatus) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		const row = findRow(itemId);
-		if (!cfg || !row || row.kind !== 'repertoire') return;
-		const before = row.status;
-		repertoireQueue.request(
-			itemId,
-			() => updateRepertoireStatus(cfg, itemId, status),
-			{
-				apply: () => patchRow(itemId, { status }),
-				rollback: () => patchRow(itemId, { status: before })
-			}
-		);
-	}
-
-	function handlePinEdition(itemId: string, editionId: string) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		const row = findRow(itemId);
-		if (!cfg || !row || row.kind !== 'repertoire') return;
-		const before = { editionId: row.editionId, editionName: row.editionName };
-		const editionName = ag.libraryEditions.find((e) => e.id === editionId)?.name ?? '';
-		repertoireQueue.request(
-			itemId,
-			() => pinEdition(cfg, itemId, editionId),
-			{
-				apply: () => patchRow(itemId, { editionId, editionName }),
-				rollback: () => patchRow(itemId, before)
-			}
-		);
-	}
-
-	function handleRemoveItem(eventId: string, itemId: string) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		const row = ag.worksByEventId[eventId]?.find((r) => r.id === itemId);
-		if (!cfg || !row) return;
-		if (row.kind === 'program') {
-			const snapshot = snapshotRow(itemId, eventId);
-			repertoireQueue.request(itemId, () => deleteProgramItem(cfg, itemId), {
-				apply: () => dropRow(itemId, eventId),
-				rollback: () => restoreRow(snapshot)
-			});
-			return;
-		}
-		const snapshot = snapshotRow(itemId);
-		const repertoireBefore = ag.seasonRepertoire;
-		repertoireQueue.request(itemId, () => deleteRepertoireItem(cfg, itemId), {
-			apply: () => {
-				dropRow(itemId);
-				ag.seasonRepertoire = ag.seasonRepertoire.filter((item) => item.id !== itemId);
-			},
-			rollback: () => {
-				restoreRow(snapshot);
-				ag.seasonRepertoire = repertoireBefore;
-			}
-		});
-	}
+	const rowHandlers = createRepertoireRowHandlers({
+		queue: repertoireQueue,
+		actions: {
+			createRepertoireItem: (...a) => createRepertoireItem(...a),
+			updateRepertoireStatus: (...a) => updateRepertoireStatus(...a),
+			pinEdition: (...a) => pinEdition(...a),
+			deleteProgramItem: (...a) => deleteProgramItem(...a),
+			deleteRepertoireItem: (...a) => deleteRepertoireItem(...a),
+			planProgramMove: (...a) => planProgramMove(...a),
+			reorderProgramItems: (...a) => reorderProgramItems(...a),
+			createProgramItem: (...a) => createProgramItem(...a)
+		},
+		rows: rowStore,
+		cfg: manageCfg,
+		isOffline: () => isOffline,
+		seasonId: () => ag.currentSeasonId,
+		editions: () => ag.libraryEditions,
+		seasonRepertoire: {
+			get: () => ag.seasonRepertoire,
+			set: (items) => (ag.seasonRepertoire = items)
+		},
+		pending: repertoirePending
+	});
 
 	const PANEL_ADD_WORK_KEY = '__panel_add_work__';
 
@@ -628,73 +571,15 @@
 		});
 	}
 
-	function handleMoveItem(eventId: string, itemId: string, direction: 'up' | 'down') {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		if (!cfg) return;
-		const rows = ag.worksByEventId[eventId] ?? [];
-		const items = rows
-			.filter((row) => row.kind === 'program')
-			.map((row) => ({ id: row.id, ordinal: row.ordinal ?? 0 }));
-		const plan = planProgramMove(items, itemId, direction);
-		if (plan.length === 0) return;
+	const editionsByWorkId = $derived(editionsByWorkIdOf(ag.libraryEditions));
 
-		const key = reorderKey(eventId);
-		managePendingMarks.set(
-			key,
-			items.map((item) => item.id)
-		);
-		const before = new Map(
-			plan.map((entry) => [entry.id, items.find((i) => i.id === entry.id)?.ordinal ?? 0])
-		);
-		const after = new Map(plan.map((entry) => [entry.id, entry.ordinal]));
-		repertoireQueue.request(key, () => reorderProgramItems(cfg, plan), {
-			apply: () => setOrdinals(eventId, after),
-			rollback: () => setOrdinals(eventId, before)
-		});
-	}
-
-	function handleAddProgramItem(eventId: string, editionId: string, ordinal: number) {
-		if (isOffline) return;
-		const cfg = manageCfg();
-		if (!cfg) return;
-		repertoireQueue.request(ADD_PROGRAMME_KEY, async () => {
-			await createProgramItem(cfg, { eventId, editionId, ordinal });
-		});
-	}
-
-	const editionsByWorkId = $derived.by(() => {
-		const map = new Map<string, Edition[]>();
-		for (const edition of ag.libraryEditions) {
-			const workId = edition.workId ?? '';
-			if (workId === '') continue;
-			const list = map.get(workId);
-			if (list) list.push(edition);
-			else map.set(workId, [edition]);
-		}
-		return map;
-	});
-
-	function editionLabel(edition: Edition): string {
-		return edition.name || edition.publisher || edition.id;
-	}
-
-	const editionOptionsByRowId = $derived.by(() => {
-		const out: Record<string, PickerOption[]> = {};
-		for (const rows of Object.values(ag.worksByEventId)) {
-			for (const row of rows) {
-				if (row.kind !== 'repertoire' || row.workId === '' || out[row.id]) continue;
-				const options =
-					ag.scopedEditionsByWorkId[row.workId] ??
-					(editionsByWorkId.get(row.workId) ?? []).map((edition) => ({
-						id: edition.id,
-						label: editionLabel(edition)
-					}));
-				if (options.length > 0) out[row.id] = options;
-			}
-		}
-		return out;
-	});
+	const editionOptionsByRowId = $derived(
+		editionOptionsByRowIdOf(
+			Object.values(ag.worksByEventId).flat(),
+			ag.scopedEditionsByWorkId,
+			editionsByWorkId
+		)
+	);
 
 	const editionsResolvedWorkIds = $derived(new Set(Object.keys(ag.scopedEditionsByWorkId)));
 
@@ -713,42 +598,22 @@
 		const cfg = manageCfg();
 		if (!cfg) return;
 		const thisRequest = seq.requestId;
-		for (const workId of workIds) {
-			if (seq.scopedEditionWorkIdsRequested.has(workId)) continue;
-			seq.scopedEditionWorkIdsRequested.add(workId);
-			listEditions(cfg, workId)
-				.then((read) => {
-					if (thisRequest !== seq.requestId) return;
-					if (read.truncated) return;
-					ag.scopedEditionsByWorkId = {
-						...ag.scopedEditionsByWorkId,
-						[workId]: read.items.map((edition) => ({
-							id: edition.id,
-							label: editionLabel(edition)
-						}))
-					};
-				})
-				.catch(() => {
-				});
-		}
+		readScopedEditions(
+			workIds,
+			seq.scopedEditionWorkIdsRequested,
+			(workId) => listEditions(cfg, workId),
+			() => thisRequest === seq.requestId,
+			(workId, options) => {
+				ag.scopedEditionsByWorkId = { ...ag.scopedEditionsByWorkId, [workId]: options };
+			}
+		);
 	});
 
 	const pickableEditionsByEventId = $derived.by(() => {
-		const workById = new Map(ag.libraryWorks.map((work) => [work.id, work]));
-		const all: PickerOption[] = ag.libraryEditions.map((edition) => {
-			const work = workById.get(edition.workId ?? '');
-			const prefix = work === undefined ? '' : workLabel(work);
-			return {
-				id: edition.id,
-				label: prefix === '' ? editionLabel(edition) : `${prefix} — ${editionLabel(edition)}`
-			};
-		});
+		const all = pickableEditionOptions(ag.libraryWorks, ag.libraryEditions);
 		const out: Record<string, PickerOption[]> = {};
 		for (const [eventId, rows] of Object.entries(ag.worksByEventId)) {
-			const programmed = new Set(
-				rows.filter((row) => row.kind === 'program').map((row) => row.editionId)
-			);
-			out[eventId] = all.filter((option) => !programmed.has(option.id));
+			out[eventId] = withoutProgrammed(all, rows);
 		}
 		return out;
 	});
@@ -795,16 +660,16 @@
 			editionOptionsByRowId,
 			editionsResolvedWorkIds,
 			pendingKeys: ag.managePendingKeys,
-			onaddwork: handleAddWork,
-			onstatuschange: handleStatusChange,
-			onpinedition: handlePinEdition,
-			onremoveitem: handleRemoveItem,
-			onmoveitem: handleMoveItem,
-			onaddprogramitem: handleAddProgramItem
+			onaddwork: rowHandlers.addWork,
+			onstatuschange: rowHandlers.statusChange,
+			onpinedition: rowHandlers.pinEdition,
+			onremoveitem: rowHandlers.removeItem,
+			onmoveitem: rowHandlers.move,
+			onaddprogramitem: rowHandlers.addProgramItem
 		};
 	});
 
-	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag));
+	const attendanceQueue = createAttendanceChangeQueue(attendanceQueueHandlers(ag, collectiveTokens()));
 
 	function handleAttendanceToggle(memberId: string, newStatus: AttendanceStatus | null) {
 		if (!selected || !ag.attendanceItem) return;
