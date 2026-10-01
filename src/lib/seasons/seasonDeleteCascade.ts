@@ -1,8 +1,7 @@
 // Series and season delete cascades, with the one progress counter they share.
-import { entuFetch } from '$lib/entu/request';
 import { SeasonCascadePartialError, SeriesCascadePartialError } from './deleteErrors';
 import type { EntuCfg } from './entuSeasons';
-import { CHILD_READ_LIMIT, deleteEntity, deleteEvent, listChildIds } from './seasonDeleteEvent';
+import { deleteEntity, deleteEvent, listChildIds, readChildren } from './seasonDeleteEvent';
 import { seriesRefOf, type EventEntity } from './seasonShared';
 
 /** The ruled denominator: series, events and repertoire items, never a child or the season. */
@@ -80,35 +79,16 @@ async function readSeasonScope(
 	fetchImpl: typeof fetch = fetch
 ): Promise<SeasonScopeIds> {
 	const seriesIds = await listChildIds(cfg, seasonId, 'event_series', op, fetchImpl);
-	const eventEntities = await listSeasonEvents(cfg, seasonId, op, fetchImpl);
-	const repertoireIds = await listChildIds(cfg, seasonId, 'repertoire_item', op, fetchImpl);
-	return { seriesIds, eventEntities, repertoireIds };
-}
-
-/** Like `listChildIds`, but keeps `_parent` to tell occurrences from standalone events. */
-async function listSeasonEvents(
-	cfg: EntuCfg,
-	seasonId: string,
-	op: string,
-	fetchImpl: typeof fetch = fetch
-): Promise<EventEntity[]> {
-	const res = await entuFetch(
-		cfg.db,
-		`entity?_type.string=event&_parent.reference=${encodeURIComponent(seasonId)}&props=_id,_parent&limit=${CHILD_READ_LIMIT}`,
-		cfg.token,
-		{},
+	const eventEntities = await readChildren<EventEntity>(
+		cfg,
+		seasonId,
+		'event',
+		'_id,_parent',
+		op,
 		fetchImpl
 	);
-	if (!res.ok) throw new Error(`${op} event lookup failed: ${res.status}`);
-	const body = (await res.json()) as { count?: number; entities?: EventEntity[] };
-	const rows = body.entities ?? [];
-	const total = body.count ?? rows.length;
-	if (total > rows.length) {
-		throw new Error(
-			`${op}: ${seasonId} has ${total} event children, more than the ${CHILD_READ_LIMIT}-row cascade read can carry — nothing was deleted`
-		);
-	}
-	return rows;
+	const repertoireIds = await listChildIds(cfg, seasonId, 'repertoire_item', op, fetchImpl);
+	return { seriesIds, eventEntities, repertoireIds };
 }
 
 /** Series, standalone events, repertoire items, then the season, serially. A failure
