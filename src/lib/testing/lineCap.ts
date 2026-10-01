@@ -14,7 +14,6 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/entu/readCache.ts',
 	'src/lib/events/EventFieldEdit.svelte',
 	'src/lib/events/EventScheduleSection.svelte',
-	'src/lib/events/eventDetail.ts',
 	'src/lib/files/byteStore.ts',
 	'src/lib/invite/inviteData.ts',
 	'src/lib/library/libraryData.ts',

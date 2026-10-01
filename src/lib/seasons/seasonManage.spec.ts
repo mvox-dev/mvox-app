@@ -1,44 +1,7 @@
-// #132/T3 RED — the season-management DATA layer's wire contract, tested at the
-// `fetchImpl` seam (same harness family as entuSeasons.spec.ts). The module
-// under test does not exist yet; this spec IS its contract:
-//
-//   src/lib/seasons/seasonManage.ts
-//     listEventSeriesForSeason(cfg, seasonId, fetchImpl) → SeriesListItem[]
-//         { id, name, eventCount } — the season's event_series children, with
-//         each series' event count. NO N+1 (review checklist #2): counts come
-//         from ONE season-wide event read grouped client-side by the events'
-//         denormalized `_parent[].entity_type === 'event_series'` ref — never
-//         one count query per series. TWO fetches total, however many series.
-//     listEventsForSeason(cfg, seasonId, fetchImpl) → StandaloneEvent[]
-//         { id, name, startDatetime } — events parented DIRECTLY to the season
-//         and NOT to any event_series (multi-parent: series events carry both,
-//         so "standalone" = no event_series ref in `_parent`). ALL event types
-//         (a standalone event is typically a concert — no rehearsal filter).
-//     updateSeasonField(cfg, seasonId, field, value, fetchImpl)
-//         field ∈ 'name' | 'start_date' | 'end_date'. Replace semantics per the
-//         pinned Entu wire contract (POST APPENDS to implicitly multi-valued
-//         props), in eventFieldEdit.ts's exact choreography and order:
-//           1. GET entity/{seasonId}?props={field} — the PRE-EXISTING value ids
-//           2. POST entity/{seasonId} with exactly ONE new value
-//           3. DELETE /property/{id} for EVERY id from step 1
-//         POST BEFORE DELETE (#91 F5 house rule): a failed POST leaves the old
-//         value untouched; a failed DELETE leaves a recoverable duplicate.
-//         Field-typed wire values: name → {type,string}; start_date/end_date →
-//         {type,date} (seasons carry calendar DATES — `date`, not `datetime`).
-//     addSeasonConductor(cfg, seasonId, personRef, fetchImpl)
-//         `conductor` is multi-valued BY DESIGN, so adding IS a plain append:
-//         ONE POST [{type:'conductor', reference}], no GET, no DELETE.
-//     removeSeasonConductor(cfg, seasonId, personRef, fetchImpl)
-//         GET entity/{seasonId}?props=conductor → DELETE /property/{id} of the
-//         value(s) whose `reference` matches personRef — and ONLY those (the
-//         other conductors' values must survive). Absent ref → no-op resolve.
-//
-// Non-2xx anywhere throws (fail loud, no silent success) — the panel is what
-// turns that into an inline error.
+// The season-management data layer's wire contract, tested at the `fetchImpl` seam.
 import { describe, expect, it, vi } from 'vitest';
 import {
 	listEventSeriesForSeason,
-	listEventsForSeason,
 	updateSeasonField,
 	addSeasonConductor,
 	removeSeasonConductor,
@@ -165,65 +128,9 @@ describe('listEventSeriesForSeason — series with event counts, no N+1', () => 
 	});
 });
 
-// ── listEventsForSeason ─────────────────────────────────────────────────────────
-
-describe('listEventsForSeason — standalone events only (no event_series parent)', () => {
-	const seasonEvents = [
-		{
-			_id: 'e-series',
-			// #420 — events carry their own name on `event_name`, never `name`.
-			event_name: [{ string: 'Weekly rehearsal' }],
-			start_datetime: [{ datetime: '2026-09-07T16:00:00.000Z' }],
-			_parent: [
-				{ reference: 'season1', entity_type: 'season' },
-				{ reference: 's1', entity_type: 'event_series' }
-			]
-		},
-		{
-			_id: 'e-solo',
-			event_name: [{ string: 'Spring concert' }],
-			start_datetime: [{ datetime: '2027-04-18T18:00:00.000Z' }],
-			_parent: [{ reference: 'season1', entity_type: 'season' }]
-		}
-	];
-
-	it('returns ONLY events without an event_series parent, in full { id, name, startDatetime } shape', async () => {
-		const { impl } = recordingFetch(() => json({ entities: seasonEvents }));
-		const result = await listEventsForSeason(cfg, 'season1', impl);
-
-		expect(result.items).toEqual([
-			{ id: 'e-solo', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }
-		]);
-	});
-
-	it('reads ALL event types under the season (a standalone event is typically a concert): _type.string=event scoped by _parent.reference, and NO event_type filter', async () => {
-		const { impl, calls } = recordingFetch(() => json({ entities: seasonEvents }));
-		await listEventsForSeason(cfg, 'season1', impl);
-
-		const url = calls[0].url;
-		expect(url).toContain('_type.string=event');
-		expect(url).toContain('_parent.reference=season1');
-		expect(url).not.toContain('event_type.string');
-	});
-
-	it('the standalone-events query asks for event_name and NEVER the retired bare name (#420)', async () => {
-		const { impl, calls } = recordingFetch(() => json({ entities: seasonEvents }));
-		await listEventsForSeason(cfg, 'season1', impl);
-
-		const props = (/[?&]props=([^&]*)/.exec(calls[0].url)?.[1] ?? '').split(',');
-		expect(props).toContain('event_name');
-		expect(props).not.toContain('name');
-	});
-
-	it('throws on a non-2xx response', async () => {
-		const { impl } = recordingFetch(() => json({}, 403));
-		await expect(listEventsForSeason(cfg, 'season1', impl)).rejects.toThrow(/403/);
-	});
-});
-
 // ── updateSeasonField — the replace choreography ────────────────────────────────
 
-describe('updateSeasonField — GET old → POST new → DELETE old, in that order', () => {
+describe('updateSeasonField — GET old → POST over the first old value → DELETE only extras', () => {
 	function editRoute(existing: Array<{ _id: string }>) {
 		return (url: string, method: string): Response => {
 			if (method === 'GET') return json({ entity: { _id: 'season1', name: existing } });
@@ -231,19 +138,18 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		};
 	}
 
-	it('name: GETs the pre-existing value ids FIRST, POSTs exactly ONE {type:"name", string} value, then DELETEs EVERY old id (not just the first)', async () => {
+	it('name: GETs the pre-existing value ids FIRST, POSTs exactly ONE {type:"name", string} value carrying the first old _id, then DELETEs only the extra', async () => {
 		const { impl, calls } = recordingFetch(
 			editRoute([{ _id: 'old-1' }, { _id: 'old-2' }])
 		);
 		await updateSeasonField(cfg, 'season1', 'name', 'Autumn splendour', impl);
 
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'DELETE', 'DELETE']);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'DELETE']);
 		expect(calls[0].url).toContain('/entity/season1');
 		expect(calls[0].url).toContain('props=name');
 		expect(calls[1].url).toContain('/entity/season1');
-		expect(calls[1].body).toEqual([{ type: 'name', string: 'Autumn splendour' }]);
-		expect(calls[2].url).toContain('/property/old-1');
-		expect(calls[3].url).toContain('/property/old-2');
+		expect(calls[1].body).toEqual([{ _id: 'old-1', type: 'name', string: 'Autumn splendour' }]);
+		expect(calls[2].url).toContain('/property/old-2');
 	});
 
 	it('start_date goes over the wire as {type:"start_date", date} — a season carries calendar DATES, never datetime', async () => {
@@ -254,7 +160,7 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 
 		const post = calls.find((c) => c.method === 'POST');
 		expect(post).toBeDefined();
-		expect(post!.body).toEqual([{ type: 'start_date', date: '2026-10-01' }]);
+		expect(post!.body).toEqual([{ _id: 'sd-1', type: 'start_date', date: '2026-10-01' }]);
 	});
 
 	it('end_date likewise: {type:"end_date", date}', async () => {
@@ -264,7 +170,7 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		await updateSeasonField(cfg, 'season1', 'end_date', '2027-06-30', impl);
 
 		const post = calls.find((c) => c.method === 'POST');
-		expect(post!.body).toEqual([{ type: 'end_date', date: '2027-06-30' }]);
+		expect(post!.body).toEqual([{ _id: 'ed-1', type: 'end_date', date: '2027-06-30' }]);
 	});
 
 	it('a FAILED POST throws and issues NO delete — the old value survives server-side (the whole point of POST-before-DELETE)', async () => {
@@ -290,6 +196,23 @@ describe('updateSeasonField — GET old → POST new → DELETE old, in that ord
 		);
 		await updateSeasonField(cfg, 'season1', 'name', 'First name ever', impl);
 		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
+	});
+
+	it('a failure after the POST leaves the field holding exactly one value, the new one', async () => {
+		let stored: Array<{ _id: string; string: string }> = [{ _id: 'old-1', string: 'Old name' }];
+		const { impl, calls } = recordingFetch((_url, method) => {
+			if (method === 'GET') return json({ entity: { name: stored } });
+			if (method === 'DELETE') return json({}, 500);
+			const [entry] = calls[calls.length - 1].body as Array<{ _id?: string; string: string }>;
+			stored = entry._id
+				? stored.map((v) => (v._id === entry._id ? { _id: v._id, string: entry.string } : v))
+				: [...stored, { _id: 'new-1', string: entry.string }];
+			return json({});
+		});
+
+		await updateSeasonField(cfg, 'season1', 'name', 'New name', impl).catch(() => {});
+
+		expect(stored).toEqual([{ _id: 'old-1', string: 'New name' }]);
 	});
 });
 
@@ -343,10 +266,6 @@ describe('removeSeasonConductor — delete ONLY the matching value', () => {
 		await expect(removeSeasonConductor(cfg, 'season1', 'p-ada', impl)).rejects.toThrow(/500/);
 	});
 
-	// #483 — two racing writers can leave the SAME person twice on a season.
-	// Removing one copy is ONE GET + ONE DELETE of the FIRST matching value's
-	// `_id`; the identical twin survives (the panel removes one entry per click).
-	// Regression guard: the wire already does this; the panel relies on it.
 	it('#483 — the SAME person held twice: exactly one DELETE, of the first matching value; the twin and the others survive', async () => {
 		const doubled = [
 			{ _id: 'c-1', reference: 'p-ada' },
@@ -384,10 +303,6 @@ describe('getSeriesDefaults — ONE read, every field the read side inherits', (
 		expect(calls).toHaveLength(1);
 		expect(calls[0].method).toBe('GET');
 		expect(calls[0].url).toContain('/entity/series1');
-		// `default_description` included (#132/T4 review 2nd-pass F4): the read
-		// side inherits it (eventDetail's `event.description ?? series
-		// .default_description`), so the write-time preview must be able to show
-		// it — otherwise a blank description looks like it inherits nothing.
 		expect(calls[0].url).toContain(
 			'props=name,default_location,duration_minutes,default_description'
 		);

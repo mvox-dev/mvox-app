@@ -1,86 +1,7 @@
-// #196 RED — standalone event → series conversion: `convertEventToSeries`
-// ($lib/events/eventConvert), the data layer behind "I created a standalone
-// 'proov' and now want it to repeat" (Joosep, Crede pilot 2026-08-31).
-//
-// Pinned contract (GREEN must implement — see also the eventConvert.ts stub
-// header):
-//
-//   INPUT — { eventId, dbEntityId, seasonId, intervalDays, startTime,
-//   startDate, endDate, durationMinutes }. NO `name` field, ever: the series
-//   takes the EVENT'S stored name (the whole point of "convert", and the
-//   reason the conversion path is exempt from createEvent's standalone-name
-//   validation — it never calls createEvent at all). Type-level pin below.
-//
-//   CHOREOGRAPHY — four steps, exactly this order, fail-loud at every one:
-//
-//     1. read-event    GET entity/{eventId}?props=event_name,event_type (#420 —
-//                      the EVENT's own name lives on `event_name`, never `name`)
-//                      The event's own name (string AND value `_id`s — the ids
-//                      feed step 4) and event_type. An event whose name OR
-//                      event_type is absent/blank REFUSES here, before any
-//                      write: v4E marks BOTH `required: true` on event_series,
-//                      and #196 review F1 — the typeless case used to create the
-//                      (invalid) series first and only then discover it could
-//                      write no occurrences, stranding a converted event with no
-//                      in-app way back. The refusal carries a `reason`
-//                      ('missing-name' / 'missing-event-type') so the caller can
-//                      say WHICH, a transient HTTP 500 at the same step being a
-//                      materially different thing.
-//     2. create-series COMPOSED on `createEventSeries` ($lib/entity/entityCreate),
-//                      the app's ONE event_series create path — never a local
-//                      copy of it (#196 review F1). On the wire that is still
-//                      ONE resolveTypeId GET (cached per db:typeName) + ONE POST
-//                      to the COLLECTION `entity` endpoint. Body: `_type` as a
-//                      REFERENCE (#10), `_parent` = [dbEntityId, seasonId] one
-//                      prop per id, name + event_type from the EVENT,
-//                      interval_days/start_time/start_date/end_date/
-//                      duration_minutes from the input. NO `_sharing`, NO
-//                      inherit-rights flag (the #132 design decision).
-//     3. link-event    POST entity/{eventId} with EXACTLY ONE prop:
-//                      { type: '_parent', reference: <new series id> }.
-//                      The event's existing db + season `_parent` values are
-//                      NEVER deleted: `listEvents` selects on
-//                      `_parent.reference=<seasonId>` with NO ancestor
-//                      expansion (pinned in entityCreate.ts's multi-parent
-//                      contract), so removing the season parent would vanish
-//                      the converted event from the very agenda the user is
-//                      looking at. The ordered call-log assertion below is
-//                      what pins the absence of any such DELETE.
-//     4. delete-name   DELETE property/{id} for EACH old event_name value (#420) — strictly
-//                      AFTER the link POST landed (POST before DELETE, the
-//                      eventFieldEdit ordering), so a failure part-way leaves
-//                      a NAMED standalone event, never a nameless orphan. With
-//                      the own value gone the displayed name falls back to the
-//                      series name through the read-side inheritance merge
-//                      (listEvents / loadEventDetail), so renaming the series
-//                      propagates — the integration block drives that merge
-//                      through the REAL listEvents producer.
-//
-//   FAILURE — every step failure throws EventConvertError whose `step` names
-//   the failed step, whose MESSAGE contains that step name verbatim (loud, and
-//   greppable in an error surface), and whose `seriesId` carries the created
-//   series' id for every failure AFTER create-series succeeded. No rollback
-//   (Entu has no transactions) — the error is what tells the operator where
-//   the run stopped. No silent success, no partial resolve.
-//
-//   VALIDATION — user-input hygiene BEFORE any fetch (entityCreate's pattern:
-//   Entu `mandatory` rejects nothing, so this module is the enforcement
-//   point): blank eventId/dbEntityId/seasonId, intervalDays < 1, non-finite
-//   durationMinutes, blank startTime, and an inverted date range all reject
-//   with the field named and ZERO fetches issued. #196 review F2 — those
-//   refusals are EventConvertError('validate', …) too: a plain Error has no
-//   `.step`, and a caller duck-typing the step off the rejection then named
-//   'read-event' — a step that had not run — for an empty form field.
-//
-// INTEGRATION — the final block wires a stateful in-memory Entu fake (create /
-// append / delete / query, same wire shapes the live API serves) and drives
-// the REAL producers end to end: convertEventToSeries writes, then
-// entuSeasons.listEvents and seasonManage.listEventsForSeason /
-// listEventSeriesForSeason READ the converted world back. No hand-set state —
-// what the agenda shows is exactly what the conversion wrote.
+// Standalone event to series conversion: the data layer, then the real readers end to end.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, listEvents, type EntuCfg } from '$lib/seasons/entuSeasons';
-import { listEventSeriesForSeason, listEventsForSeason } from '$lib/seasons/seasonManage';
+import { listEventSeriesForSeason } from '$lib/seasons/seasonManage';
 import { createEvent } from '$lib/entity/entityCreate';
 import {
 	convertEventToSeries,
@@ -123,10 +44,6 @@ function defaultEventEntity(): unknown {
 	};
 }
 
-/**
- * Routes the five wire shapes the conversion may issue, each step's response
- * overridable so one step at a time can be made to fail.
- */
 function makeConvertWire(
 	overrides: {
 		eventEntity?: unknown;
@@ -244,10 +161,6 @@ describe('convertEventToSeries — happy path choreography', () => {
 	it('resolves to the new series id AND the event’s own event_type — full result shape', async () => {
 		const fetchImpl = makeConvertWire();
 		const result = await convertEventToSeries(cfg, validInput, fetchImpl);
-		// #196 review F1 — `eventType` rides back because the caller needs it to
-		// write the series' FURTHER occurrences (each `createEvent` carries its own
-		// event_type; no reader inherits it from the series), and this function has
-		// already read it.
 		expect(result).toEqual({ seriesId: 'series-new-1', eventType: 'rehearsal' });
 	});
 
@@ -301,11 +214,6 @@ describe('convertEventToSeries — input validation (zero fetches on refusal)', 
 	it.each(cases)(
 		'%s → the refusal is an EventConvertError naming step "validate", never a bare Error a caller must guess a step for',
 		async (_label, patch) => {
-			// #196 review F2 — the fail-loud contract covers the validation stage
-			// too. A plain Error has no `.step`, so a caller duck-typing the step
-			// (the page does exactly that across its mocked module boundary) fell
-			// back to naming 'read-event' for a blank form field: a step that never
-			// ran, retried identically, with no clue which box was empty.
 			const fetchImpl = makeConvertWire();
 			const failure = await failureOf(
 				convertEventToSeries(cfg, { ...validInput, ...patch }, fetchImpl)
@@ -320,9 +228,6 @@ describe('convertEventToSeries — input validation (zero fetches on refusal)', 
 
 	it('type-level pin: the conversion input does NOT accept a `name` — the series name comes from the EVENT, which is why the conversion path is exempt from standalone-name validation', () => {
 		// @ts-expect-error — ConvertEventToSeriesInput must never grow a `name`
-		// field: a caller-supplied name would freeze a copy instead of converting
-		// the event's own, and would re-open the createEvent name-validation
-		// question the conversion design deliberately sidesteps.
 		const rejected: ConvertEventToSeriesInput = { ...validInput, name: 'frozen copy' };
 		expect(rejected).toBeDefined();
 	});
@@ -358,11 +263,6 @@ describe('convertEventToSeries — partial failure surfaces loudly and NAMES the
 	});
 
 	it('a TYPELESS event refuses in read-event too — BEFORE any write, so nothing is stranded (#196 review F1)', async () => {
-		// The old behaviour created the series WITHOUT event_type (v4E marks it
-		// `required: true`, and Entu's `mandatory` rejects nothing), linked the
-		// event, deleted the event's own name — and only THEN discovered the
-		// occurrence loop could not run, with the event out of the standalone list
-		// and no in-app way back. Nothing past the GET may go on the wire.
 		const fetchImpl = makeConvertWire({
 			eventEntity: { entity: { _id: 'ev-9', event_name: [{ _id: 'nv-1', string: 'Proov' }] } }
 		});
@@ -476,14 +376,6 @@ type FakeProp = {
 type FakeSeed = Omit<FakeProp, '_id'>;
 type FakeEntity = { id: string; type: string; props: Record<string, FakeProp[]> };
 
-/**
- * A stateful in-memory Entu: create (collection POST, `_type` resolved via the
- * referenced type-def entity — the real wire contract), property append
- * (entity/{id} POST), property-value DELETE, entity GET, and filtered listing
- * with the denormalized `_parent[].entity_type` the real API serves. Just
- * enough wire for the conversion to WRITE through and the agenda/panel
- * producers to READ back — no hand-set app state anywhere.
- */
 class FakeEntu {
 	private entities = new Map<string, FakeEntity>();
 	private seq = 0;
@@ -625,11 +517,6 @@ describe('integration — conversion writes, the REAL agenda/panel producers rea
 	it('the converted event appears on the agenda UNDER the series: listEvents still finds it via its season parent, name/duration/location merged (own values win, series fills the name gap)', async () => {
 		const wire = seededWire();
 
-		// sanity: BEFORE conversion the panel classifies ev-9 as standalone
-		expect((await listEventsForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([
-			{ id: 'ev-9', name: 'Proov', startDatetime: '2027-04-20T18:00:00.000Z' }
-		]);
-
 		const { seriesId } = await convertEventToSeries(icfg, conversionInput, wire.fetch);
 		expect(seriesId).toMatch(/\S/);
 
@@ -660,11 +547,10 @@ describe('integration — conversion writes, the REAL agenda/panel producers rea
 		expect(row.name).toBe('Esmaspäeva proovid');
 	});
 
-	it('the panel reclassifies: ev-9 is no longer a standalone event, and the new series lists under the season with the event’s name and eventCount 1', async () => {
+	it('the panel lists the new series under the season with the event’s name and eventCount 1', async () => {
 		const wire = seededWire();
 		const { seriesId } = await convertEventToSeries(icfg, conversionInput, wire.fetch);
 
-		expect((await listEventsForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([]);
 		expect((await listEventSeriesForSeason(icfg, 'season-1', wire.fetch)).items).toEqual([
 			// #400 — the fake wire's create doesn't simulate Entu's
 			// auto-granted-creator `_owner` doc, so the read comes back empty.

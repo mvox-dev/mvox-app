@@ -1,8 +1,9 @@
 // The season's event series: the manage panel's list and the event page's picker options.
 import { entuFetch } from '$lib/entu/request';
 import { isTruncated } from '$lib/entu/listRead';
+import { referenceIds } from '$lib/entu/references';
 import type { EntuCfg } from './entuSeasons';
-import { ownerIdsOf, seriesRefOf, type EventEntity, type SeriesEntity } from './seasonShared';
+import { seriesRefOf, type EventEntity, type SeriesEntity } from './seasonShared';
 
 export interface SeriesListItem {
 	id: string;
@@ -18,22 +19,38 @@ export interface SeriesListRead {
 	truncated: boolean;
 }
 
+async function readSeriesEntities(
+	cfg: EntuCfg,
+	seasonId: string,
+	props: string,
+	op: string,
+	fetchImpl: typeof fetch
+): Promise<{ entities: SeriesEntity[]; count?: number }> {
+	const res = await entuFetch(
+		cfg.db,
+		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=${props}&limit=200`,
+		cfg.token,
+		{},
+		fetchImpl
+	);
+	if (!res.ok) throw new Error(`${op} failed: ${res.status}`);
+	const body = (await res.json()) as { count?: number; entities?: SeriesEntity[] };
+	return { entities: body.entities ?? [], count: body.count };
+}
+
 export async function listEventSeriesForSeason(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SeriesListRead> {
-	const seriesRes = await entuFetch(
-		cfg.db,
-		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name,_owner&limit=200`,
-		cfg.token,
-		{},
+	const { entities: seriesList, count } = await readSeriesEntities(
+		cfg,
+		seasonId,
+		'name,_owner',
+		'listEventSeriesForSeason',
 		fetchImpl
 	);
-	if (!seriesRes.ok) throw new Error(`listEventSeriesForSeason failed: ${seriesRes.status}`);
-	const seriesBody = (await seriesRes.json()) as { count?: number; entities?: SeriesEntity[] };
-	const seriesList = seriesBody.entities ?? [];
-	const seriesTruncated = isTruncated(seriesList.length, seriesBody.count);
+	const seriesTruncated = isTruncated(seriesList.length, count);
 	if (seriesList.length === 0) return { items: [], truncated: seriesTruncated };
 
 	// One season-wide event read grouped client-side, never a per-series count query.
@@ -61,7 +78,7 @@ export async function listEventSeriesForSeason(
 			id: series._id,
 			name: series.name?.[0]?.string ?? '',
 			eventCount: counts.get(series._id) ?? 0,
-			ownerIds: ownerIdsOf(series)
+			ownerIds: referenceIds(series._owner)
 		})),
 		truncated: seriesTruncated || eventsTruncated
 	};
@@ -79,16 +96,14 @@ export async function listSeriesOptionsForSeason(
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SeriesOption[]> {
-	const res = await entuFetch(
-		cfg.db,
-		`entity?_type.string=event_series&_parent.reference=${seasonId}&props=name&limit=200`,
-		cfg.token,
-		{},
+	const { entities } = await readSeriesEntities(
+		cfg,
+		seasonId,
+		'name',
+		'listSeriesOptionsForSeason',
 		fetchImpl
 	);
-	if (!res.ok) throw new Error(`listSeriesOptionsForSeason failed: ${res.status}`);
-	const body = (await res.json()) as { entities?: SeriesEntity[] };
-	return (body.entities ?? []).map((series) => ({
+	return entities.map((series) => ({
 		id: series._id,
 		name: series.name?.[0]?.string ?? ''
 	}));

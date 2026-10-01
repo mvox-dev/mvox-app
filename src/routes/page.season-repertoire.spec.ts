@@ -18,7 +18,6 @@ const {
 	loadRosterMock,
 	listSectionsMock,
 	signFileUrlMock,
-	listEventsForSeasonMock,
 	deleteEventMock,
 	listEventSeriesForSeasonMock,
 	deleteEventSeriesMock,
@@ -30,7 +29,6 @@ const {
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
-	listEventsForSeasonMock: vi.fn(),
 	deleteEventMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	deleteEventSeriesMock: vi.fn(),
@@ -43,7 +41,6 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
-	listEventsForSeason: listEventsForSeasonMock,
 	updateSeasonField: vi.fn(),
 	addSeasonConductor: vi.fn(),
 	removeSeasonConductor: vi.fn(),
@@ -312,7 +309,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 	loadRosterMock.mockResolvedValue(toListRead([]));
 	listSectionsMock.mockResolvedValue([]);
-	listEventsForSeasonMock.mockResolvedValue(toListRead([]));
 	deleteEventMock.mockResolvedValue(undefined);
 	listEventSeriesForSeasonMock.mockResolvedValue(toSeriesRead([]));
 	deleteEventSeriesMock.mockResolvedValue(0);
@@ -327,7 +323,6 @@ afterEach(() => {
 	loadRosterMock.mockReset();
 	listSectionsMock.mockReset();
 	signFileUrlMock.mockReset();
-	listEventsForSeasonMock.mockReset();
 	deleteEventMock.mockReset();
 	listEventSeriesForSeasonMock.mockReset();
 	deleteEventSeriesMock.mockReset();

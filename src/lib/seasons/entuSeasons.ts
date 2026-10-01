@@ -1,12 +1,7 @@
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { EventRaw, RightsRefs, Season, SeasonRaw, SeriesRaw } from './types';
-
-/** The `_owner`/`_editor` refs the caller can actually see, flattened. Private
- *  bucket: a caller with no grant reads neither prop, which flattens to []. */
-function rightsRefs(raw: RightsRefs, prop: '_owner' | '_editor'): string[] {
-	return (raw[prop] ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-}
+import { referenceIds } from '$lib/entu/references';
+import type { EventRaw, Season, SeasonRaw, SeriesRaw } from './types';
 
 export interface EntuCfg {
 	/** Runtime db (the selected collective) — threaded as the URL path segment. */
@@ -17,12 +12,6 @@ export interface EntuCfg {
 
 const typeIdCache = new Map<string, string>();
 
-/**
- * Resolve an Entu entity-type NAME (e.g. 'rsvp') to its type-definition entity id,
- * so callers can send `{ type: '_type', reference: <id> }` on create — Entu create
- * bodies require refs as `reference`, never `string` (#10 pinned wire-shape). Cached
- * per `db:typeName` — type definitions don't change at runtime.
- */
 export async function resolveTypeId(
 	cfg: EntuCfg,
 	typeName: string,
@@ -32,10 +21,6 @@ export async function resolveTypeId(
 	const cached = typeIdCache.get(key);
 	if (cached) return cached;
 
-	// #321 class-1 — scoped by name.string, not _parent (a type-definition
-	// entity is global to the db, not a child of anything queryable). Exactly
-	// one type-definition entity exists per name (Entu platform guarantee, not
-	// an app assumption); limit=1 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=entity&name.string=${encodeURIComponent(typeName)}&props=_id&limit=1`,
@@ -60,27 +45,6 @@ export function resetTypeIdCache(): void {
 
 // (*MVOX:Tallis*)
 
-/**
- * List the collective's seasons, scoped to the DATABASE entity.
- *
- * #161 (collective = database, Mihkel ruling 2026-08-16) — seasons are children
- * of the DATABASE entity. Scoped the same way `resolveAdmin`/`resolveMyLibraryId`
- * scope their reads: resolve the database entity (`resolveDatabaseEntityId`),
- * then filter by `_parent.reference`. No visible database entity -> `[]` (not
- * an error: same "nothing visible" shape `resolveDatabaseEntityId` documents).
- *
- * #161 review fix round 2 — the dead `personId` parameter is DELETED from the
- * call contract (not merely renamed/shadowed): `listSeasons(cfg, fetchImpl?)`,
- * `.length === 1`, pinned in entuSeasons.database.spec.ts.
- *
- * #434 slice 2/6 — `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF
- * (review round finding 2: this reader also serves /library, slice 3's screen,
- * which has no "as of" line yet — a flag hard-wired here would paint a stored
- * copy as live there). The agenda's own path passes `CACHED_READ` down from
- * `loadFullAgenda`; the same `opts` rides on to the `resolveDatabaseEntityId`
- * underneath, because the season read is useless offline without the parent id
- * it filters on.
- */
 export async function listSeasons(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch,
@@ -90,12 +54,6 @@ export async function listSeasons(
 	const dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl, opts);
 	if (!dbEntityId) return [];
 
-	// #321 class (1) — one collective's seasons, `_parent`-scoped to the single
-	// database entity resolved above. A season is a CALENDAR YEAR of the
-	// collective's life (start_date/end_date; `currentSeason` picks the one
-	// containing today), so limit=200 is two centuries of the choir's existence —
-	// an explicit, ample bound reached by construction, not by estimate. This cap
-	// is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
 		// `_owner,_editor` ride along (#91 F1): the repertoire management controls
@@ -117,56 +75,20 @@ export async function listSeasons(
 				name: raw.name?.[0]?.string ?? '',
 				startDate: raw.start_date?.[0]?.date?.slice(0, 10) ?? '',
 				endDate: raw.end_date?.[0]?.date?.slice(0, 10) ?? '',
-				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : [])),
-				owners: rightsRefs(raw, '_owner'),
-				editors: rightsRefs(raw, '_editor')
+				conductors: referenceIds(raw.conductor),
+				owners: referenceIds(raw._owner),
+				editors: referenceIds(raw._editor)
 			})
 		)
 		.sort((a, b) => a.startDate.localeCompare(b.startDate));
 }
 
-/**
- * List a season's events as AgendaItems, applying the read-time
- * series-inheritance merge. Season-scoped (events under the season).
- *
- * Series identification is DE-FANNED: single-collective drops the org arg, so we
- * find the event's `event_series` parent via the denormalized `_parent[].entity_type`
- * (the old code found it as "the ref that is neither org nor season"). The MERGE
- * itself is kept VERBATIM from the harvest: fetch each parent series once (cache →
- * no N+1), fill `duration_minutes`/`location` that are absent on the event; never a
- * formula (rights-leak); the explicit event value always wins.
- *
- * #194/#202 — renamed from `listRehearsals`: the query no longer filters on
- * `event_type` (that hardcoded `event_type.string=rehearsal` hid every event
- * whose free-text type wasn't the literal word 'rehearsal' — e.g. the Crede
- * pilot's 'proov' rehearsals). Every event under the season comes back now,
- * each carrying its OWN `eventType` verbatim ('' when absent) — never
- * inherited from the series, unlike duration/location/name: the agenda labels
- * what the event itself claims to be.
- *
- * #434 slice 2/6 — `opts` is `entuFetch`'s own `EntuFetchOptions`, DEFAULT OFF,
- * threaded onto BOTH this query and the per-series lookup below (a merged row
- * offline needs its series too). The agenda's own path passes `CACHED_READ`
- * down from `loadFullAgenda`.
- */
 export async function listEvents(
 	cfg: EntuCfg,
 	seasonId: string,
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<AgendaItem[]> {
-	// #321 class (1) — ONE season's events, `_parent`-scoped to that season. A
-	// season spans a calendar year (`listSeasons` above), so limit=500 is about 1.4
-	// events every single day of it, summed over every section that rehearses
-	// separately; a weekly-rehearsing choir with a full concert calendar lands
-	// around 60-80. An explicit, ample bound.
-	//   One asymmetry worth naming so the next reader does not read it as a
-	// contradiction: `seasonManage.ts`'s `listEventsForSeason` issues the SAME
-	// season-scoped event query and DOES report `truncated`. Not because its bound
-	// differs — it does not — but because that module already parses this
-	// response's `count` for the neighbouring delete-cascade refuse-guards
-	// (`listChildIds`, `listSeasonEvents`), so reporting it there cost nothing.
-	// Detection is never wrong; class (1) only claims the cap is not reachable.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=event&_parent.reference=${seasonId}&props=event_name,start_datetime,duration_minutes,location,event_type,_parent,conductor,_owner,_editor&limit=500`,
@@ -208,11 +130,6 @@ export async function listEvents(
 			const series = seriesCache.get(seriesIdFor(raw));
 			return {
 				id: raw._id,
-				// #101 review fix (F2) — name inherits from the series exactly like
-				// duration/location do (and exactly like `loadEventDetail` does for
-				// the detail page). Before this, an event carrying its name only on
-				// its series rendered a BLANK agenda row whose detail link had no
-				// accessible name, then opened a page showing a populated name.
 				name: raw.event_name?.[0]?.string ?? series?.name?.[0]?.string ?? '',
 				startDatetime: raw.start_datetime?.[0]?.datetime ?? '',
 				// event value wins; series fills the gap; else 0/''.
@@ -222,12 +139,12 @@ export async function listEvents(
 				// #194/#202 — the event's OWN value only, never the series': the
 				// series-inheritance merge above is deliberately not extended here.
 				eventType: raw.event_type?.[0]?.string ?? '',
-				conductors: (raw.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : [])),
+				conductors: referenceIds(raw.conductor),
 				// Rights are NEVER merged from the series the way duration/location
 				// are: Entu keeps rights per entity, so a series editor is not
 				// thereby an editor of this event.
-				owners: rightsRefs(raw, '_owner'),
-				editors: rightsRefs(raw, '_editor')
+				owners: referenceIds(raw._owner),
+				editors: referenceIds(raw._editor)
 			};
 		})
 		.sort((a, b) => a.startDatetime.localeCompare(b.startDatetime));

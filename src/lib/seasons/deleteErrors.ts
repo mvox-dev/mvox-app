@@ -15,45 +15,43 @@ export class EntityDeleteForbiddenError extends Error {
 	}
 }
 
-const SERIES_CASCADE_PARTIAL = 'series-cascade-partial';
+export type CascadeScope = 'event' | 'series' | 'season';
+
+// The per-scope codes are what crosses the mock boundary in specs and callers.
+const CASCADE_PARTIAL: Record<CascadeScope, string> = {
+	event: 'event-cascade-partial',
+	series: 'series-cascade-partial',
+	season: 'season-cascade-partial'
+};
+
+const CASCADE_TEXT: Record<CascadeScope, { op: string; unit: string }> = {
+	event: { op: 'deleteEvent', unit: 'child entit(ies)' },
+	series: { op: 'deleteEventSeries', unit: 'occurrence(s)' },
+	season: { op: 'deleteSeason', unit: 'entit(ies)' }
+};
 
 // Each cascade deletes children first and stops before the parent, so a retry resumes.
 // `failure` is the child rejection; not `cause`, which the runtime may fill.
-export class SeriesCascadePartialError extends Error {
-	readonly code = SERIES_CASCADE_PARTIAL;
+export class CascadePartialError extends Error {
+	readonly code: string;
 
 	constructor(
-		readonly seriesId: string,
+		readonly scope: CascadeScope,
+		readonly id: string,
 		readonly deletedCount: number,
 		readonly totalCount: number,
 		readonly failure: unknown
 	) {
+		const { op, unit } = CASCADE_TEXT[scope];
 		super(
-			`deleteEventSeries: cascade stopped after ${deletedCount} of ${totalCount} occurrence(s) of series ${seriesId}; the series was NOT deleted`
+			`${op}: cascade stopped after ${deletedCount} of ${totalCount} ${unit} of ${scope} ${id}; the ${scope} was NOT deleted`
 		);
-		this.name = 'SeriesCascadePartialError';
+		this.code = CASCADE_PARTIAL[scope];
+		this.name = 'CascadePartialError';
 	}
 }
 
-const EVENT_CASCADE_PARTIAL = 'event-cascade-partial';
-
-export class EventCascadePartialError extends Error {
-	readonly code = EVENT_CASCADE_PARTIAL;
-
-	constructor(
-		readonly eventId: string,
-		readonly deletedCount: number,
-		readonly totalCount: number,
-		readonly failure: unknown
-	) {
-		super(
-			`deleteEvent: cascade stopped after ${deletedCount} of ${totalCount} child entit(ies) of event ${eventId}; the event was NOT deleted`
-		);
-		this.name = 'EventCascadePartialError';
-	}
-}
-
-// series → occurrence → its children nest three deep; bounded so a self-referential chain stops.
+// series → occurrence → its children nest three deep; bounded so a self-referential chain ends.
 const FAILURE_CHAIN_DEPTH = 5;
 
 // Duck-typed on `code`: reasons cross mock boundaries as plain tagged objects.
@@ -66,35 +64,8 @@ export function isDeleteForbidden(reason: unknown): boolean {
 	return false;
 }
 
-export function isSeriesCascadePartial(reason: unknown): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === SERIES_CASCADE_PARTIAL;
-}
-
-export function isEventCascadePartial(reason: unknown): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === EVENT_CASCADE_PARTIAL;
-}
-
-const SEASON_CASCADE_PARTIAL = 'season-cascade-partial';
-
-// The counts cover series + events + repertoire items, never the season itself.
-export class SeasonCascadePartialError extends Error {
-	readonly code = SEASON_CASCADE_PARTIAL;
-
-	constructor(
-		readonly seasonId: string,
-		readonly deletedCount: number,
-		readonly totalCount: number,
-		readonly failure: unknown
-	) {
-		super(
-			`deleteSeason: cascade stopped after ${deletedCount} of ${totalCount} entit(ies) of season ${seasonId}; the season was NOT deleted`
-		);
-		this.name = 'SeasonCascadePartialError';
-	}
-}
-
-export function isSeasonCascadePartial(reason: unknown): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === SEASON_CASCADE_PARTIAL;
+export function isCascadePartial(reason: unknown, scope: CascadeScope): boolean {
+	return (reason as { code?: unknown } | null | undefined)?.code === CASCADE_PARTIAL[scope];
 }
 
 export interface DeleteFailure {
@@ -112,11 +83,12 @@ export function classifyDeleteFailure(
 	const counts = reason as { deletedCount?: number; totalCount?: number } | null | undefined;
 	const deleted = counts?.deletedCount ?? 0;
 	const total = counts?.totalCount ?? 0;
-	if (target === 'season' && isSeasonCascadePartial(reason)) {
+	if (target === 'season' && isCascadePartial(reason, 'season')) {
 		return { reason: 'partial-season', deleted, total };
 	}
-	const partial = target === 'event' ? isEventCascadePartial : isSeriesCascadePartial;
-	if (partial(reason)) return { reason: 'partial', deleted, total };
+	if (isCascadePartial(reason, target === 'event' ? 'event' : 'series')) {
+		return { reason: 'partial', deleted, total };
+	}
 	return { reason: 'write' };
 }
 

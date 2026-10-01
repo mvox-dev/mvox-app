@@ -1,129 +1,39 @@
-// src/lib/events/eventDetail.ts
-//
-// #101 TE.1 — the /event/[id] detail page's data layer: one event, resolved to
-// its FULL header shape (name/type/time/duration/location/description/conductor).
-//
-// Series inheritance is the SAME read-time merge `listEvents` performs
-// (entuSeasons.ts:104) — event value wins, series fills the gap, else 0/''. Kept
-// as its own small merge here rather than reused verbatim: this reads a SINGLE
-// event by id (no season-scoped list, no series cache), and additionally carries
-// `name`/`description`, which listEvents's AgendaItem never needed.
-//
-// Conductor resolution reuses `resolveConductors` verbatim (#77's model,
-// conductorLogic.ts) against the event's own season (read here, not passed in —
-// this page has no season list already loaded the way the agenda does).
-//
-// Conductor NAMES: the SAME domain-or-public scan `toRosterRow` inlines
-// (rosterData.ts) — never `resolveField`, never a private-tier name, domain
-// preferred when both tiers hold one — OVERLAID (#469 review F3) with the
-// collective's real name for that person when `roster_show_real_names` is on
-// and she has an `admin_member_record`, through the same single decision point
-// every roster surface uses (`resolveRealNameByPerson`, rosterData.ts). A
-// conductor with neither a record name nor a profile name is DROPPED from
-// `conductorNames` (never a raw entity id — "Entity IDs need names" cuts both
-// ways), while `conductorIds` keeps every resolved id regardless.
+// One event's detail header: own values first, then the series', conductors and rights.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveConductors } from '$lib/attendance/conductorLogic';
 import { listMyProfiles, type MyProfile } from '$lib/profile/profileData';
 import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
+import { referenceIds } from '$lib/entu/references';
+import type { EventWire, SeasonWire, SeriesWire } from '$lib/entu/wireTypes';
 
-/**
- * #304 — the four fields an event inherits from its parent series (module doc
- * above). Display order pinned: name, durationMinutes, location, description.
- */
 export type EventInheritedField = 'name' | 'durationMinutes' | 'location' | 'description';
 
 export type EventDetail = {
 	id: string;
-	/** Event value, else the parent series' name, else ''. */
 	name: string;
-	/** `event_type` (e.g. 'rehearsal'), verbatim — never inherited. */
 	eventType: string;
-	/** ISO datetime the event starts, verbatim — never inherited. */
 	startDatetime: string;
-	/** Event value, else the parent series', else 0. */
 	durationMinutes: number;
-	/** Event value, else the parent series' `default_location`, else ''. */
 	location: string;
-	/** Event value, else the parent series' `default_description`, else ''. */
 	description: string;
-	/** resolveConductors(season.conductor, event.conductor) — every resolved id. */
 	conductorIds: string[];
-	/** Display names, same order as `conductorIds`; a nameless conductor is dropped. */
 	conductorNames: string[];
-	/** #102 TE.2 — event.capacity, null when unset (0 is a real, distinct value). */
 	capacity: number | null;
-	/**
-	 * #102 TE.2 — the `_owner` refs VISIBLE to this caller. Same private-bucket
-	 * mechanics as `editorIds` below. Carried ALONGSIDE the editors (never
-	 * merged into one list) so the caller can run the app's single rights rule,
-	 * `manageRightsFrom(owners, editors, personId)` — ownership subsumes editing
-	 * (repertoireActions.ts), and an owner-only conductor must not be told she
-	 * is not an editor of her own event.
-	 */
+	// Kept apart from editorIds so callers run manageRightsFrom: an owner also manages.
 	ownerIds: string[];
-	/**
-	 * #102 TE.2 — the `_editor` refs VISIBLE to this caller. Rights props live in
-	 * the private bucket (rights-visibility memory note), so a non-granted
-	 * reader gets [] — indistinguishable from "no editors set" by design; the
-	 * caller only ever uses this to test membership, never to assert the full
-	 * editor roster.
-	 */
 	editorIds: string[];
-	/**
-	 * #103 TE.3 — the parent SEASON's id, null when the event has no season
-	 * parent (or it is not visible). Already known from the event's `_parent`
-	 * read; surfaced instead of discarded so no caller has to GET the same
-	 * entity a second time just to learn it.
-	 */
 	seasonId: string | null;
-	/**
-	 * #103 TE.3 — the parent season's `_owner`/`_editor` refs VISIBLE to this
-	 * caller, same private-bucket mechanics as `ownerIds`/`editorIds` above.
-	 * The season entity is ALREADY read here (conductor source), so its rights
-	 * props ride along on that same GET: the caller runs `manageRightsFrom`
-	 * over them as pure computation and spends no round-trip resolving season
-	 * management rights (#91 review F1's rule, applied to one event instead of
-	 * 500). [] whenever `seasonId` is null or the season read failed.
-	 */
 	seasonOwnerIds: string[];
 	seasonEditorIds: string[];
-	/**
-	 * #304 — the event's `event_series` parent id, `null` when the event is
-	 * standalone (or the parent is not visible) — the SAME "null, never ''"
-	 * rule `seasonId` already follows, so an empty string can never be misread
-	 * as a real id. Computed at the SAME `_parent` read as `seasonId` above
-	 * (line ~203 here), previously discarded — a series picker needs it to
-	 * know which series is currently assigned without a second read.
-	 */
 	seriesId: string | null;
-	/**
-	 * #304 — exactly which of the four inheriting fields THIS event's display
-	 * is ACTUALLY drawing from its series right now: the event's own raw value
-	 * is ABSENT (`event.<prop>?.[0] === undefined` — presence, never the
-	 * merged value's truthiness; a stored `''`/`0` is a real value and blocks
-	 * inheritance even though it displays blank, see the module doc) AND the
-	 * series supplies one (its own raw value is present). A field the series
-	 * does not carry either is not "inherited" — nothing actually comes from
-	 * it. Consequently this is always `[]` for a standalone event (nothing to
-	 * inherit FROM), independent of whether the event's own values are set.
-	 * Display order pinned: name, durationMinutes, location, description.
-	 */
+	// Own value absent and the series' present; a stored '' or 0 blocks inheritance.
 	inheritedFields: EventInheritedField[];
 };
 
-/**
- * #101 review fix (F5) — a load failure that carries WHY it failed, so the page
- * can tell "this event is not visible in the selected collective" (retrying can
- * never help — the id belongs to another db) apart from a transient failure
- * (retry is the right offer). Previously every failure became a bare `Error` and
- * the page offered a Retry button that, after a collective switch, could not
- * possibly succeed.
- */
 export class EventDetailLoadError extends Error {
-	/** HTTP status of the failing event read; 0 when the response was 2xx but carried no entity. */
+	// 0 when a 2xx response carried no entity.
 	readonly status: number;
 
 	constructor(message: string, status: number) {
@@ -132,62 +42,36 @@ export class EventDetailLoadError extends Error {
 		this.status = status;
 	}
 
-	/**
-	 * True when THIS id is simply not readable in THIS db — 403 (no rights), 404
-	 * (no such entity), or a 2xx that carried no entity at all (status 0). Retry
-	 * is futile for all three; the caller should point at the back link instead.
-	 */
+	// Not readable in this db, so a retry cannot help.
 	get unavailable(): boolean {
 		return this.status === 0 || this.status === 403 || this.status === 404;
 	}
 }
 
-interface EventRaw {
-	_id: string;
-	event_name?: Array<{ string: string }>;
-	event_type?: Array<{ string: string }>;
-	start_datetime?: Array<{ datetime: string }>;
-	duration_minutes?: Array<{ number: number }>;
-	location?: Array<{ string: string }>;
-	description?: Array<{ string: string }>;
-	conductor?: Array<{ reference: string }>;
-	// Denormalized `entity_type` per parent (same shape EventRaw relies on,
-	// seasons/types.ts) — how the season/series parents are told apart without an
-	// org arg.
-	_parent?: Array<{ reference: string; entity_type?: string }>;
-	/** #102 TE.2 — seat capacity, absent/empty means unset. */
-	capacity?: Array<{ number: number }>;
-	/** #102 TE.2 — rights props; visible only to a caller with rights on this event.
-	 *  BOTH tiers are read: the app's rule is owner-OR-editor everywhere else
-	 *  (manageRightsFrom, entuSeasons's `_owner,_editor` per season/event). */
-	_owner?: Array<{ reference: string }>;
-	_editor?: Array<{ reference: string }>;
-}
+type EventRaw = Pick<
+	EventWire,
+	| '_id'
+	| 'event_name'
+	| 'event_type'
+	| 'start_datetime'
+	| 'duration_minutes'
+	| 'location'
+	| 'description'
+	| 'conductor'
+	| '_parent'
+	| 'capacity'
+	| '_owner'
+	| '_editor'
+>;
 
-interface SeasonRaw {
-	_id: string;
-	conductor?: Array<{ reference: string }>;
-	/** #103 TE.3 — the season's rights tiers, read on the SAME GET the conductor
-	 *  list comes from; private-bucket, so a non-granted reader gets neither. */
-	_owner?: Array<{ reference: string }>;
-	_editor?: Array<{ reference: string }>;
-}
+type SeasonRaw = Pick<SeasonWire, '_id' | 'conductor' | '_owner' | '_editor'>;
 
-interface SeriesRaw {
-	_id: string;
-	name?: Array<{ string: string }>;
-	duration_minutes?: Array<{ number: number }>;
-	default_location?: Array<{ string: string }>;
-	default_description?: Array<{ string: string }>;
-}
+type SeriesRaw = Pick<
+	SeriesWire,
+	'_id' | 'name' | 'duration_minutes' | 'default_location' | 'default_description'
+>;
 
-/**
- * Same domain-or-public scan `toRosterRow` inlines (rosterData.ts) — NEVER
- * `resolveField`, NEVER a private-tier name (narrower-wins would let a
- * PRIVATE-only name leak into the conductor line). Domain preferred when both
- * tiers hold a name. '' when neither does — the caller drops that id from
- * `conductorNames`.
- */
+// Never a private-tier name: it would leak into the conductor line.
 function domainOrPublicName(profiles: MyProfile[]): string {
 	let domain: MyProfile | undefined;
 	let pub: MyProfile | undefined;
@@ -200,40 +84,7 @@ function domainOrPublicName(profiles: MyProfile[]): string {
 	return domainName !== '' ? domainName : publicName;
 }
 
-/**
- * Load ONE event's full detail shape: the event entity, its parent season
- * (conductor source) and parent series (inheritance source), merged per the
- * module doc. Fails loud on a non-2xx event read (no silent empty detail) — the
- * season/series reads are best-effort (a missing/unreadable parent degrades to
- * "nothing to inherit/no conductors from it", never a thrown error, matching
- * `listEvents`'s own series-cache posture).
- *
- * #434 slice 3/6 — SHARED reader (also the page's post-write refresh), so it
- * hard-wires no cache flag (slice 2 review round, finding 2). `opts` threads
- * into EVERY read this function makes — the event entity, the parent season
- * (`fetchSeason`), the parent series (`fetchSeries`), each conductor's profile
- * read (`listMyProfiles`) AND the real-names overlay
- * (`resolveRealNameByPerson`, rosterData.ts: its toggle read, the
- * `resolveDatabaseEntityId` underneath it and its records read) — so a caller
- * that opts in gets the WHOLE header served offline, never a header with its
- * conductor or its series-inherited fields missing.
- *
- * The overlay is threaded, not excluded (slice 3 review round, finding 1),
- * BECAUSE it degrades. Its degrade is to the profile name, and with
- * `roster_show_real_names` ON that is a DIFFERENT name from the one the online
- * header showed — and for a conductor named only by her `admin_member_record`
- * (private profile, or none at all) it is the empty string, which the
- * `conductorNames` filter drops: an offline header with no conductor where the
- * online one named her. Exactly what the paragraph above promises not to happen.
- *
- * Two entry points pass a flag, both in eventPageData.ts: `loadEventPageDetail`
- * (the mounted screen's load) passes `CACHED_READ` — store and serve, age noted
- * on `servedFromCache` for the page's "as of <time>" line — and
- * `refreshEventPageDetail` passes `CACHED_READ_STORE_ONLY`, used by the page's
- * own post-write refresh and by the agenda's next-event prefetch: it stores, so
- * the stored header stays level with the write that just landed, and never
- * serves, so a read the screen is not rendering can never age-stamp it.
- */
+// Shared with post-write refreshes, so `opts` reaches every read, the real-names overlay too.
 export async function loadEventDetail(
 	cfg: EntuCfg,
 	eventId: string,
@@ -259,11 +110,7 @@ export async function loadEventDetail(
 		);
 
 	const parents = event._parent ?? [];
-	// null (not '') is the surfaced "no season parent" — `seasonId` is part of
-	// the returned contract now, and '' would read as a real id to a caller.
 	const seasonId = parents.find((p) => p.entity_type === 'season')?.reference ?? null;
-	// #304 — null (not ''), same rule as `seasonId` above: '' would read as a
-	// real id to a caller (now also surfaced on the return contract below).
 	const seriesId = parents.find((p) => p.entity_type === 'event_series')?.reference ?? null;
 
 	const [season, series] = await Promise.all([
@@ -278,21 +125,7 @@ export async function loadEventDetail(
 	const description =
 		event.description?.[0]?.string ?? series?.default_description?.[0]?.string ?? '';
 
-	// #304 — the RAW-PRESENCE test, both sides: the event's own array slot is
-	// ABSENT (never a truthiness check on the merged value above — a stored ''
-	// or 0 is a real value and is excluded here on purpose) AND the series'
-	// own array slot is PRESENT (a field neither side carries is not
-	// "inherited", it is simply unset). Order pinned to the module doc's table.
-	//
-	// #420 — the presence test below keys on the event's own `event_name`;
-	// the SERIES side stays `series.name` (event_series is untouched).
-	//
-	// #421 will make `name` formula-owned on the EVENT type, and a formula
-	// prop always carries a persisted value: `event.name?.[0] === undefined`
-	// would then be permanently false, 'name' would drop out of
-	// `inheritedFields`, and the nameless-after-unassign warning
-	// (`event_detail_series_unassign_name_empty`) would stop firing. That is
-	// why the test moved off `name` first.
+	// Keyed on `event_name`, not the formula-owned `name`, which always holds a value.
 	const inheritedFields: EventInheritedField[] = [];
 	if (event.event_name?.[0] === undefined && series?.name?.[0] !== undefined) {
 		inheritedFields.push('name');
@@ -307,64 +140,18 @@ export async function loadEventDetail(
 		inheritedFields.push('description');
 	}
 
-	const seasonConductors = (season?.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const eventConductors = (event.conductor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	// #483 — a season (or event) can hold the same person's reference twice
-	// (two racing writers each appended once). This header has no rights gate
-	// and no per-entry remove control (unlike the season-manage panel, which
-	// keeps the raw duplicate so its writer can remove one) — so it is the
-	// place distinct-by-id belongs: first-seen order, BEFORE names are
-	// resolved, so `conductorIds` and `conductorNames` below stay aligned and
-	// each conductor is named once. Distinct by id, never by name — two
-	// different people who share a display name both still show.
+	const seasonConductors = referenceIds(season?.conductor);
+	const eventConductors = referenceIds(event.conductor);
+	// Racing writers can store one person twice; dedupe by id so ids and names stay aligned.
 	const conductorIds = [...new Set(resolveConductors(seasonConductors, eventConductors))];
 
-	// One profile read per conductor (genuinely independent, same fan-out shape
-	// as loadRoster — rosterData.ts:224-235).
 	const profilesById = new Map<string, MyProfile[]>();
 	await Promise.all(
 		conductorIds.map(async (id) => {
 			profilesById.set(id, await listMyProfiles(cfg, id, fetchImpl, opts));
 		})
 	);
-	// #469 review F3 — the header's conductor line obeys `roster_show_real_names`
-	// too. It used to be the last profile-name-only member surface on this page:
-	// the attendance panel and the RSVP tally card both went through `loadRoster`
-	// / `loadRosterIncludingArchived` and so picked the overlay up from #469,
-	// while the header two sections above them kept naming the SAME person by her
-	// profile name — and the agenda's conductor chips, which read the overlaid
-	// roster rows, disagreed with the header as well.
-	//
-	// A conductor is a PERSON reference, not a member reference: a guest
-	// conductor may hold no `member` entity and therefore no
-	// `admin_member_record` at all. That needs no new rule — it is exactly the
-	// per-row rule `applyRealNames` already applies to every roster row: show the
-	// record name when this person HAS one, keep the profile name when she does
-	// not. So the map is consulted per conductor and the profile name is the
-	// fallback, never a hole. A conductor with NEITHER is still DROPPED (module
-	// doc, "Entity IDs need names") — the overlay only ever adds a name, it never
-	// takes one away.
-	//
-	// No conductors to name → no toggle read and no records read, the same guard
-	// `applyRealNames` puts on an empty row list.
-	//
-	// #469 review F2, ruled: the event page keeps THREE INDEPENDENT OVERLAYS —
-	// this header resolve, the attendance panel's own `loadRoster`, and the
-	// tally card's. They are not consolidated into one shared read. Each reads
-	// the same toggle and the same records, so they agree on every normal load;
-	// they can disagree only in a transport window, where one of the three
-	// record reads fails while another succeeds and the page shows a real name
-	// in one place and a profile name in another for the same person. That is
-	// accepted for this slice: each surface already degrades to the profile name
-	// on its own (never to a hole or a raw id), and a shared read would couple
-	// three independently-mounted regions to one failure. Revisit only with a
-	// case where the split is visible to a user in practice.
-	//
-	// #434 slice 3 review round, finding 1 — `opts` reaches the overlay too. The
-	// degrade above ("the profile name is the fallback, never a hole") is a
-	// statement about an ONLINE failure; offline, with the toggle on, it would
-	// rename every conductor the header had just been showing by her record name,
-	// and DROP any conductor who has no domain/public profile name at all.
+	// Record name if the person has one, else the profile name; a conductor with neither is dropped.
 	const recordNameByPerson =
 		conductorIds.length === 0
 			? new Map<string, string>()
@@ -376,12 +163,11 @@ export async function loadEventDetail(
 		})
 		.filter((resolvedName) => resolvedName !== '');
 
-	// 0 is a real, representable capacity — only an ABSENT prop means "unset".
 	const capacity = event.capacity?.[0]?.number ?? null;
-	const ownerIds = (event._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const editorIds = (event._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const seasonOwnerIds = (season?._owner ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
-	const seasonEditorIds = (season?._editor ?? []).flatMap((r) => (r.reference ? [r.reference] : []));
+	const ownerIds = referenceIds(event._owner);
+	const editorIds = referenceIds(event._editor);
+	const seasonOwnerIds = referenceIds(season?._owner);
+	const seasonEditorIds = referenceIds(season?._editor);
 
 	return {
 		id: event._id,
@@ -404,14 +190,7 @@ export async function loadEventDetail(
 	};
 }
 
-/**
- * The parent season: conductor source AND (since #103 TE.3) season-rights
- * source. `_owner`/`_editor` are asked for on this SAME GET — an unrequested
- * prop comes back absent, which every caller would read as "no rights", and a
- * second `entity/{seasonId}?props=_owner,_editor` round-trip to learn what this
- * read could have carried is the per-entity rights fan-out #91 review F1
- * removed from the agenda.
- */
+// Rights ride on the conductor GET: an unrequested prop reads as "no rights".
 async function fetchSeason(
 	cfg: EntuCfg,
 	seasonId: string,
@@ -431,44 +210,7 @@ async function fetchSeason(
 	return body.entity;
 }
 
-/**
- * #248 — the detail route's location-suggestion corpus. This route holds no
- * multi-event location list in memory (unlike the agenda page's
- * agendaItems/recentItems — see page.location-datalist.spec.ts's header), so
- * per the PO ruling (option c) the corpus is fetched, but the CALLER decides
- * when: this function itself fires unconditionally on every call — the
- * lazy-on-first-focus / single-flight discipline lives in the page (a request
- * a caller never makes is the only kind that never happens on page load).
- *
- * Collective-scoped (db-scoped — "collective = database", databaseEntity.ts —
- * a single-collective db has no narrower org to filter by), existing entu list
- * shape (Path C: entuFetch only), smallest projection (`location` alone).
- * De-duplicated and blank-dropped HERE (not left to the caller) since a
- * suggestion corpus is the only thing this read is for. Ordering is whatever
- * the wire returns — not pinned, matching the spec's SORTED-comparison-only
- * assertions.
- */
-// #321 — collective-LIFETIME, no season/date scope: the same "grows without
-// a natural ceiling" shape the library case names, one layer further from a
-// rendered list (this feeds an autocomplete datalist, never a page a reader
-// scrolls). `truncated` compares the server `count` against the RAW wire
-// array length, BEFORE dedup/blank-dropping below, so shrinking `items`
-// through those never fabricates a truncation the server never reported.
-//
-// TREATMENT: log-only — and the PO ruling of 2026-09-11 settles WHY on ground
-// that stays true for surfaces nobody has built yet. The test for an option
-// list is REACHABILITY: can the user get to the item another way? A CLOSED-SET
-// picker fails it — the options are the whole reachable world, so a missing one
-// reads as an absence ("that person isn't a member", "that copy isn't in the
-// library") and the user acts on that. Those pickers therefore DO carry a
-// notice inside themselves (picker_partial_members_notice /
-// picker_partial_options_notice). This corpus feeds a native <datalist> on a
-// FREE-TEXT input (+page.svelte, event/[id]): the member types whatever they
-// like, so nothing here is unreachable. It is a typing aid, and truncating an
-// aid costs a thinner suggestion list rather than a false absence. Hence
-// detection without a UI completeness claim, logged for whoever reads the
-// console — not because it is "only a picker", but for a reason that will still
-// hold when the caps or the surfaces change.
+// Feeds a free-text datalist, so truncation is logged, not shown: no option becomes unreachable.
 export async function listEventLocations(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
@@ -516,11 +258,3 @@ async function fetchSeries(
 	const body = (await res.json()) as { entity?: SeriesRaw };
 	return body.entity;
 }
-
-// (*MVOX:Josquin* — #101 TE.1 GREEN)
-// (*MVOX:Josquin* — #101 TE.1 review round 2, F5: typed EventDetailLoadError)
-// (*MVOX:Byrd* — #102 TE.2 GREEN: capacity + editorIds)
-// (*MVOX:Byrd* — #102 TE.2 review F1: ownerIds alongside editorIds — owner-or-editor)
-// (*MVOX:Palestrina* — #103 TE.3 review round 2, F1/F2: seasonId + season rights
-//  on the one read that already happened; loadEventSeasonId deleted)
-// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
