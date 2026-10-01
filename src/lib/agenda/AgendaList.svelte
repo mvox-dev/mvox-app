@@ -10,8 +10,9 @@
 		longDayFormatter,
 		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
-	import { eventTypeLabel } from '$lib/events/eventTypeLabels';
-	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
+	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
+	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
+	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
 	import type { RsvpByEventId, RsvpStatus } from '$lib/rsvp/rsvpData';
 	import RsvpControl from '$lib/components/agenda/RsvpControl.svelte';
 	import RsvpNonMemberHint from '$lib/components/agenda/RsvpNonMemberHint.svelte';
@@ -115,12 +116,6 @@
 
 	const headerFmt = $derived(longDayFormatter());
 
-	function rowLinkLabel(name: string): string {
-		return name.trim() === ''
-			? m.agenda_row_link_label_unnamed()
-			: m.agenda_row_link_label({ event: name });
-	}
-
 	const groups = $derived.by(() => {
 		const seen = new Map<string, AgendaItem[]>();
 		const order: string[] = [];
@@ -213,6 +208,25 @@
 	{/if}
 {/snippet}
 
+{#snippet rowBody(item: AgendaItem, locationTestid?: string)}
+	<a
+		href="/event/{item.id}"
+		aria-label={rowLinkLabel(item.name)}
+		class="flex min-w-0 items-baseline gap-1"
+	>
+		<span class="truncate text-sm text-ink">{item.name}</span>
+		<span aria-hidden="true" class="text-ink-3">▸</span>
+	</a>
+	{#if item.eventType}
+		<EventTypeBadge id={item.id} eventType={item.eventType} class="w-fit" />
+	{/if}
+	{#if item.location}
+		<span data-testid={locationTestid} class="truncate text-xs text-ink-2">{item.location}</span>
+	{/if}
+	{@render worksElement(item)}
+	{@render scheduleLine(item)}
+{/snippet}
+
 {#if recentItems.length > 0 || recentEmptyState}
 	<section data-testid="agenda-recent" class="flex flex-col">
 		<h2
@@ -245,27 +259,7 @@
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>
 				<div class="flex min-w-0 flex-col gap-1">
-					<a
-						href="/event/{item.id}"
-						aria-label={rowLinkLabel(item.name)}
-						class="flex min-w-0 items-baseline gap-1"
-					>
-						<span class="truncate text-sm text-ink">{item.name}</span>
-						<span aria-hidden="true" class="text-ink-3">▸</span>
-					</a>
-					{#if item.eventType}
-						<span
-							data-testid="event-type-badge-{item.id}"
-							class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(item.eventType)}"
-						>
-							{eventTypeLabel(item.eventType)}
-						</span>
-					{/if}
-					{#if item.location}
-						<span class="truncate text-xs text-ink-2">{item.location}</span>
-					{/if}
-					{@render worksElement(item)}
-					{@render scheduleLine(item)}
+					{@render rowBody(item)}
 					<RsvpControl status={rsvpByEventId[item.id]?.status ?? null} pending={true} />
 					{#if membership === 'member'}
 						<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
@@ -336,9 +330,7 @@
 		{#if emptyState}
 			{@render emptyState()}
 		{:else}
-			<div data-testid="agenda-empty" class="flex min-h-[30vh] items-center justify-center">
-				<p class="font-display text-xl text-ink-2">{m.agenda_empty_no_events()}</p>
-			</div>
+			<AgendaEmpty />
 		{/if}
 	{:else}
 		{#each decoratedGroups as group (group.key)}
@@ -377,27 +369,7 @@
 							<span data-testid="row-duration" class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 						</a>
 						<div class="flex min-w-0 flex-col gap-1">
-							<a
-								href="/event/{item.id}"
-								aria-label={rowLinkLabel(item.name)}
-								class="flex min-w-0 items-baseline gap-1"
-							>
-								<span class="truncate text-sm text-ink">{item.name}</span>
-								<span aria-hidden="true" class="text-ink-3">▸</span>
-							</a>
-							{#if item.eventType}
-								<span
-									data-testid="event-type-badge-{item.id}"
-									class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(item.eventType)}"
-								>
-									{eventTypeLabel(item.eventType)}
-								</span>
-							{/if}
-							{#if item.location}
-								<span data-testid="row-location" class="truncate text-xs text-ink-2">{item.location}</span>
-							{/if}
-							{@render worksElement(item)}
-							{@render scheduleLine(item)}
+							{@render rowBody(item, 'row-location')}
 							{#if membership === 'non-member'}
 								<RsvpNonMemberHint />
 							{:else if canRsvp !== 'not-editor'}
