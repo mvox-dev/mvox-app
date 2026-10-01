@@ -11,7 +11,7 @@ import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
 
 const FILES = [
 	'src/routes/admin/+page.svelte',
-	'src/lib/events/EventFieldEdit.svelte',
+	'src/lib/events/EventFieldEditNotes.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
 	'src/lib/agenda/ConductorChip.svelte',
@@ -196,10 +196,10 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/EventCreateForm.svelte': {
 		'eventCreateSeriesDefaults.name': 'the series the event is created in'
 	},
-	'src/lib/events/EventFieldEdit.svelte': {
+	'src/lib/events/EventFieldEditTitle.svelte': {
 		'detail.name': 'the event\'s own name'
 	},
-	'src/lib/events/EventScheduleSection.svelte': {
+	'src/lib/events/EventScheduleRow.svelte': {
 		'row.name': 'a schedule (agenda) row'
 	},
 	'src/lib/library/WorkRow.svelte': {

@@ -23,11 +23,23 @@ const rel = (p: string) => relative(process.cwd(), p);
 const WRITE_METHOD = /method:\s*'(POST|DELETE|PUT|PATCH)'/;
 const writesToEntu = (source: string) => WRITE_METHOD.test(stripComments(source));
 
-const WRITE_SEAMS = ALL.filter(
+const DIRECT_SEAMS = ALL.filter(
 	(p) => p.endsWith('.ts') && !p.endsWith('.spec.ts') && p.startsWith(join(SRC, 'lib'))
 )
 	.filter((p) => writesToEntu(readFileSync(p, 'utf-8')))
 	.map((p) => '$lib/' + relative(join(SRC, 'lib'), p).replace(/\.ts$/, '').split(/[\\/]/).join('/'));
+
+// Modules that hand a page its writes without issuing them; one counts as a seam
+// while it value-imports a direct seam.
+const WRITE_RELAYS = ['$lib/events/eventActions'];
+const relaySource = (seam: string) =>
+	readFileSync(join(SRC, 'lib', seam.replace(/^\$lib\//, '') + '.ts'), 'utf-8');
+const WRITE_SEAMS = [
+	...DIRECT_SEAMS,
+	...WRITE_RELAYS.filter((relay) =>
+		valueImportSpecifiers(relaySource(relay)).some((s) => DIRECT_SEAMS.includes(s))
+	)
+];
 
 /** Every `$lib/...` specifier this file imports VALUES from (a bare `import
  *  type { … } from` contributes nothing). */
@@ -96,6 +108,10 @@ describe('#434 — every write surface reads the write gate', () => {
 		]) {
 			expect(WRITE_SEAMS, seam).toContain(seam);
 		}
+	});
+
+	it('eventActions.ts counts as a write path: it relays the event page\'s writes', () => {
+		expect(WRITE_SEAMS).toContain('$lib/events/eventActions');
 	});
 
 	it('no .svelte file value-imports a write seam without also importing $lib/net/online', () => {

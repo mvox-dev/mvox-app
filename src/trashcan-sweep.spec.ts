@@ -53,7 +53,7 @@ describe('#237 — every Table-A route imports the shared unit (integration floo
 	const routes = [
 		'lib/agenda/SeasonManagePanel.svelte',
 		'lib/agenda/SeasonManageSeries.svelte',
-		'lib/events/EventScheduleSection.svelte',
+		'lib/events/EventScheduleRow.svelte',
 		'lib/events/EventDangerZone.svelte',
 		'lib/sections/SectionArrangeRow.svelte'
 	];

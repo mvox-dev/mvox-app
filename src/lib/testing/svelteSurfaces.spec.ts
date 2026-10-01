@@ -37,8 +37,14 @@ describe('svelteSurfaces', () => {
 			'src/lib/events/EventConvertForm.svelte',
 			'src/lib/events/EventDangerZone.svelte',
 			'src/lib/events/EventFieldEdit.svelte',
+			'src/lib/events/EventFieldEditNotes.svelte',
+			'src/lib/events/EventFieldEditTime.svelte',
+			'src/lib/events/EventFieldEditTitle.svelte',
 			'src/lib/events/EventRsvpSection.svelte',
+			'src/lib/events/EventScheduleAddForm.svelte',
+			'src/lib/events/EventScheduleRow.svelte',
 			'src/lib/events/EventScheduleSection.svelte',
+			'src/lib/events/EventSeriesPicker.svelte',
 			'src/lib/events/EventWorksSection.svelte',
 			'src/routes/event/[id]/+page.svelte'
 		]);

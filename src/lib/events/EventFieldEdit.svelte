@@ -1,25 +1,16 @@
 <script lang="ts">
-	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { listEventLocations, type EventDetail } from '$lib/events/eventDetail';
-	import {
-		tallinnLocalToUtcIso,
-		timeFormatStore,
-		toTallinnLocalInputValue,
-		longDayFormatter
-	} from '$lib/preferences/timeFormat';
-	import { parseStartAt, timeRange } from '$lib/events/eventTime';
-	import { eventTypeLabel, CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
-	import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
-	import TimeSelect from '$lib/components/TimeSelect.svelte';
-	import PersonName from '$lib/components/PersonName.svelte';
+	import type { EventDetail } from '$lib/events/eventDetail';
+	import { tallinnLocalToUtcIso, toTallinnLocalInputValue } from '$lib/preferences/timeFormat';
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventActions, EventEditState } from '$lib/events/eventPageState';
-	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
-	import EditActivator from '$lib/components/EditActivator.svelte';
+	import { focusAfterRender } from '$lib/a11y/focusable';
+	import EventFieldEditTitle from '$lib/events/EventFieldEditTitle.svelte';
+	import EventFieldEditTime from '$lib/events/EventFieldEditTime.svelte';
+	import EventFieldEditNotes from '$lib/events/EventFieldEditNotes.svelte';
 
 	let {
 		detail,
@@ -41,27 +32,6 @@
 		patchDetail: (field: EditableEventField, value: string | number) => void;
 	} = $props();
 
-	const dateFmt = $derived(longDayFormatter());
-
-	const startAt = $derived(parseStartAt(detail.startDatetime));
-
-	const LOCATION_SUGGESTIONS_ID = 'event-edit-location-suggestions';
-	function ensureLocationCorpusLoaded(): void {
-		if (edit.locationCorpusRequested) return;
-		edit.locationCorpusRequested = true;
-		if (!selected) return;
-		const cfg = cfgFor(selected.db);
-		listEventLocations(cfg)
-			.then((result) => {
-				edit.locationSuggestions = result.items;
-				if (result.truncated) {
-					console.warn('event detail: location-suggestion corpus is truncated');
-				}
-			})
-			.catch((e) => {
-				console.error('event detail: loading location suggestions failed', e);
-			});
-	}
 	$effect(() => {
 		if (!isOffline) edit.heldOffline = false;
 	});
@@ -142,26 +112,6 @@
 			edit.draft = String(fieldValue(detail, field));
 		}
 		edit.editingField = field;
-	}
-
-	function updateCompositeDraft(datePart: string, timePart: string): void {
-		edit.draftDate = datePart;
-		edit.draftTime = timePart;
-		edit.draft = datePart && timePart ? `${datePart}T${timePart}` : '';
-	}
-
-	function handleStartDatetimeFocusOut(e: FocusEvent): void {
-		const wrapper = e.currentTarget as HTMLElement;
-		const next = e.relatedTarget as Node | null;
-		if (next && wrapper.contains(next)) return;
-		confirmFieldEdit('start_datetime', false);
-	}
-
-	function handleDurationEndFocusOut(e: FocusEvent): void {
-		const wrapper = e.currentTarget as HTMLElement;
-		const next = e.relatedTarget as Node | null;
-		if (next && wrapper.contains(next)) return;
-		confirmFieldEdit('duration_minutes', false);
 	}
 
 	function restorePencilFocus(field: EditableEventField): void {
@@ -277,312 +227,36 @@
 	}
 </script>
 
-{#if edit.editingField === 'event_type'}
-	<select
-		data-testid="event-edit-input-event_type"
-		aria-label={m.event_edit_event_type_aria_label()}
-		class="w-fit border-b border-ink bg-transparent text-ink-2"
-		value={edit.draft}
-		use:focusOnMount
-		onchange={(e) => (edit.draft = (e.currentTarget as HTMLSelectElement).value)}
-		onblur={() => confirmFieldEdit('event_type', false)}
-		onkeydown={(e) => handleFieldKeydown(e, 'event_type', false)}
-	>
-		<option value=""></option>
-		{#each CANONICAL_EVENT_TYPES as type (type)}
-			<option value={type}>{eventTypeLabel(type)}</option>
-		{/each}
-	</select>
-{:else if detail.eventType || isEditor}
-	{#if isEditor}
-		<EditActivator
-			label={m.event_edit_event_type_aria_label()}
-			data-testid="event-edit-btn-event_type"
-			class="w-fit items-center gap-2"
-			disabled={edit.writePending.event_type === true || isOffline}
-			bind:element={edit.pencilRefs.event_type}
-			onclick={() => beginFieldEdit('event_type')}
-		>
-			{#if detail.eventType}
-				<span
-					data-testid="event-detail-type"
-					class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
-				>
-					{eventTypeLabel(detail.eventType)}
-				</span>
-			{/if}
-		</EditActivator>
-	{:else}
-		<span
-			data-testid="event-detail-type"
-			class="w-fit rounded-full border px-1.5 py-0.5 font-mono text-[9px] tracking-wide uppercase {eventTypeBadgeClass(detail.eventType)}"
-		>
-			{eventTypeLabel(detail.eventType)}
-		</span>
-	{/if}
-{/if}
-{#if edit.errors.event_type}
-	<FormError data-testid="event-edit-error-event_type">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
-{#if edit.editingField === 'event_name'}
-	<input
-		type="text"
-		data-testid="event-edit-input-name"
-		aria-label={m.event_edit_name_aria_label()}
-		class="border-b border-ink bg-transparent font-display text-2xl"
-		value={edit.draft}
-		use:focusOnMount
-		oninput={(e) => (edit.draft = (e.currentTarget as HTMLInputElement).value)}
-		onblur={() => confirmFieldEdit('event_name', false)}
-		onkeydown={(e) => handleFieldKeydown(e, 'event_name', false)}
-	/>
-{:else if isEditor}
-	<h1
-		data-testid="event-detail-name"
-		aria-labelledby="event-detail-name-value"
-		class="font-display text-2xl"
-	>
-		<EditActivator
-			label={m.event_edit_name_aria_label()}
-			data-testid="event-edit-btn-name"
-			class="w-full items-center gap-2 font-display text-2xl"
-			disabled={edit.writePending.event_name === true || isOffline}
-			bind:element={edit.pencilRefs.event_name}
-			onclick={() => beginFieldEdit('event_name')}
-		>
-			<span id="event-detail-name-value">{detail.name}</span>
-		</EditActivator>
-	</h1>
-{:else}
-	<h1 data-testid="event-detail-name" class="font-display text-2xl">{detail.name}</h1>
-{/if}
-{#if edit.errors.event_name}
-	<FormError data-testid="event-edit-error-name">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
+<EventFieldEditTitle
+	{detail}
+	{edit}
+	{isEditor}
+	{isOffline}
+	{beginFieldEdit}
+	{confirmFieldEdit}
+	{handleFieldKeydown}
+/>
 
-{#if edit.editingField === 'start_datetime'}
-	<div
-		data-testid="event-edit-input-start_datetime"
-		role="group"
-		aria-label={m.event_edit_start_datetime_aria_label()}
-		class="flex flex-wrap items-center gap-2 text-ink-2"
-		onfocusout={handleStartDatetimeFocusOut}
-	>
-		<input
-			type="date"
-			data-testid="event-edit-input-start_datetime-date"
-			aria-label={m.time_select_date_label()}
-			class="min-w-0 border-b border-ink bg-transparent text-ink-2"
-			value={edit.draftDate}
-			use:focusOnMount
-			oninput={(e) =>
-				updateCompositeDraft((e.currentTarget as HTMLInputElement).value, edit.draftTime)}
-			onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
-		/>
-		<TimeSelect
-			prefix="event-edit-input-start_datetime"
-			value={edit.draftTime}
-			onkeydown={(e) => handleFieldKeydown(e, 'start_datetime', false)}
-			onchange={(v) => updateCompositeDraft(edit.draftDate, v)}
-		/>
-	</div>
-{:else if startAt}
-	{#if isEditor}
-		<EditActivator
-			label={m.event_edit_start_datetime_aria_label()}
-			data-testid="event-edit-btn-start_datetime"
-			class="w-full flex-wrap items-center gap-2 text-base text-ink-2"
-			disabled={edit.writePending.start_datetime === true || isOffline}
-			bind:element={edit.pencilRefs.start_datetime}
-			onclick={() => beginFieldEdit('start_datetime')}
-		>
-			<span data-testid="event-detail-time" class="flex flex-wrap items-center gap-2">
-				<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
-					startAt,
-					detail.durationMinutes,
-					$timeFormatStore
-				)}
-			</span>
-		</EditActivator>
-	{:else}
-		<p data-testid="event-detail-time" class="flex flex-wrap items-center gap-2 text-base text-ink-2">
-			<span data-testid="event-detail-date">{dateFmt.format(startAt)}</span>, {timeRange(
-				startAt,
-				detail.durationMinutes,
-				$timeFormatStore
-			)}
-		</p>
-	{/if}
-{:else if isEditor}
-	<EditActivator
-		label={m.event_edit_start_datetime_aria_label()}
-		data-testid="event-edit-btn-start_datetime"
-		class="w-full items-center gap-2 text-xs text-ink-3"
-		disabled={edit.writePending.start_datetime === true || isOffline}
-		bind:element={edit.pencilRefs.start_datetime}
-		onclick={() => beginFieldEdit('start_datetime')}
-	/>
-{/if}
-{#if edit.errors.start_datetime}
-	<FormError data-testid="event-edit-error-start_datetime">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
+<EventFieldEditTime
+	{detail}
+	{edit}
+	{isEditor}
+	{isOffline}
+	{beginFieldEdit}
+	{confirmFieldEdit}
+	{handleFieldKeydown}
+/>
 
-{#if edit.editingField === 'duration_minutes'}
-	<div
-		data-testid="event-edit-input-duration_minutes"
-		role="group"
-		aria-label={m.event_edit_duration_minutes_aria_label()}
-		class="flex flex-wrap items-center gap-2 text-ink-2"
-		onfocusout={handleDurationEndFocusOut}
-	>
-		<input
-			type="date"
-			data-testid="event-edit-input-duration_minutes-date"
-			aria-label={m.time_select_date_label()}
-			class="min-w-0 border-b border-ink bg-transparent text-ink-2"
-			value={edit.draftDate}
-			use:focusOnMount
-			oninput={(e) =>
-				updateCompositeDraft((e.currentTarget as HTMLInputElement).value, edit.draftTime)}
-			onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
-		/>
-		<TimeSelect
-			prefix="event-edit-input-duration_minutes"
-			value={edit.draftTime}
-			onkeydown={(e) => handleFieldKeydown(e, 'duration_minutes', false)}
-			onchange={(v) => updateCompositeDraft(edit.draftDate, v)}
-		/>
-	</div>
-{:else if detail.durationMinutes > 0 || isEditor}
-	{#if isEditor}
-		<EditActivator
-			label={m.event_edit_duration_minutes_aria_label()}
-			data-testid="event-edit-btn-duration_minutes"
-			class="w-full items-center gap-2 text-base text-ink-2"
-			disabled={edit.writePending.duration_minutes === true || isOffline}
-			bind:element={edit.pencilRefs.duration_minutes}
-			onclick={() => beginFieldEdit('duration_minutes')}
-		>
-			{#if detail.durationMinutes > 0}
-				<span data-testid="event-detail-duration">
-					{m.agenda_duration_min({ minutes: detail.durationMinutes })}
-				</span>
-			{/if}
-		</EditActivator>
-	{:else}
-		<p class="flex items-center gap-2 text-base text-ink-2">
-			<span data-testid="event-detail-duration">
-				{m.agenda_duration_min({ minutes: detail.durationMinutes })}
-			</span>
-		</p>
-	{/if}
-{/if}
-{#if edit.rangeErrors.duration_minutes}
-	<FormError data-testid="event-edit-error-duration_minutes">
-		{m.event_end_before_start()}
-	</FormError>
-{:else if edit.errors.duration_minutes}
-	<FormError data-testid="event-edit-error-duration_minutes">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
-
-{#if edit.editingField === 'location'}
-	<input
-		type="text"
-		data-testid="event-edit-input-location"
-		aria-label={m.event_edit_location_aria_label()}
-		class="border-b border-ink bg-transparent text-ink-2"
-		list={LOCATION_SUGGESTIONS_ID}
-		value={edit.draft}
-		use:focusOnMount
-		oninput={(e) => (edit.draft = (e.currentTarget as HTMLInputElement).value)}
-		onfocus={ensureLocationCorpusLoaded}
-		onblur={() => confirmFieldEdit('location', false)}
-		onkeydown={(e) => handleFieldKeydown(e, 'location', false)}
-	/>
-	<datalist id={LOCATION_SUGGESTIONS_ID}>
-		{#each edit.locationSuggestions as loc (loc)}
-			<option value={loc}></option>
-		{/each}
-	</datalist>
-{:else if detail.location || isEditor}
-	{#if isEditor}
-		<EditActivator
-			label={m.event_edit_location_aria_label()}
-			data-testid="event-edit-btn-location"
-			class="w-full items-center gap-2 text-base text-ink-2"
-			disabled={edit.writePending.location === true || isOffline}
-			bind:element={edit.pencilRefs.location}
-			onclick={() => beginFieldEdit('location')}
-		>
-			{#if detail.location}
-				<span data-testid="event-detail-location">{detail.location}</span>
-			{/if}
-		</EditActivator>
-	{:else}
-		<p class="flex items-center gap-2 text-base text-ink-2">
-			<span data-testid="event-detail-location">{detail.location}</span>
-		</p>
-	{/if}
-{/if}
-{#if edit.errors.location}
-	<FormError data-testid="event-edit-error-location">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
-
-{#if detail.conductorNames.length > 0}
-	<p data-testid="event-detail-conductors" class="text-base text-ink-2">
-		{m.event_detail_conductor_label()}:
-		{#each detail.conductorNames as conductorName, conductorIndex (conductorName + conductorIndex)}{#if conductorIndex > 0}{', '}{/if}<PersonName
-				name={conductorName}
-			/>{/each}
-	</p>
-{/if}
-
-{#if edit.editingField === 'description'}
-	<textarea
-		data-testid="event-edit-input-description"
-		aria-label={m.event_edit_description_aria_label()}
-		class="mt-2 min-h-24 w-full border border-ink-4 bg-transparent p-2 text-ink"
-		value={edit.draft}
-		use:focusOnMount
-		oninput={(e) => (edit.draft = (e.currentTarget as HTMLTextAreaElement).value)}
-		onblur={() => confirmFieldEdit('description', false)}
-		onkeydown={(e) => handleFieldKeydown(e, 'description', true)}
-	></textarea>
-{:else if detail.description || isEditor}
-	{#if isEditor}
-		<EditActivator
-			label={m.event_edit_description_aria_label()}
-			data-testid="event-edit-btn-description"
-			class="mt-2 w-full items-start gap-2 text-base text-ink"
-			disabled={edit.writePending.description === true || isOffline}
-			bind:element={edit.pencilRefs.description}
-			onclick={() => beginFieldEdit('description')}
-		>
-			{#if detail.description}
-				<span data-testid="event-detail-description">{detail.description}</span>
-			{/if}
-		</EditActivator>
-	{:else}
-		<p class="mt-2 flex items-start gap-2 text-base text-ink">
-			<span data-testid="event-detail-description">{detail.description}</span>
-		</p>
-	{/if}
-{/if}
-{#if edit.errors.description}
-	<FormError data-testid="event-edit-error-description">
-		{m.event_edit_save_error()}
-	</FormError>
-{/if}
+<EventFieldEditNotes
+	{detail}
+	{selected}
+	{edit}
+	{isEditor}
+	{isOffline}
+	{beginFieldEdit}
+	{confirmFieldEdit}
+	{handleFieldKeydown}
+/>
 
 {#if isEditor && isOffline}
 	<p data-testid="event-edit-write-unavailable" role="status" class="text-xs text-ink-2">

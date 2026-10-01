@@ -1,4 +1,10 @@
-import type { deleteEvent } from '$lib/seasons/seasonManage';
+import type {
+	deleteEvent,
+	getSeriesDefaults,
+	SeriesDefaults,
+	SeriesOption
+} from '$lib/seasons/seasonManage';
+import type { reassignEventSeries, unassignEventSeries } from '$lib/events/eventSeriesActions';
 import type { convertEventToSeries } from '$lib/events/eventConvert';
 import type { createEvent } from '$lib/entity/entityCreate';
 import type { findMyMemberId, findMyRsvpForEvent } from '$lib/rsvp/rsvpData';
@@ -68,6 +74,9 @@ export interface EventActions {
 	updateScheduleItemField: typeof updateScheduleItemField;
 	removeScheduleItem: typeof removeScheduleItem;
 	updateEventField: typeof updateEventField;
+	getSeriesDefaults: typeof getSeriesDefaults;
+	reassignEventSeries: typeof reassignEventSeries;
+	unassignEventSeries: typeof unassignEventSeries;
 }
 
 /** What the page loads and more than one section reads; reset on every load. */
@@ -118,6 +127,33 @@ export function createEventPageState(): EventPageState {
 export function resetEventPageState(ev: EventPageState): void {
 	const { pickableWorksVisible: _keep, ...fresh } = createEventPageState();
 	Object.assign(ev, fresh);
+}
+
+/** The series picker's state; reset when no collective or event is selected. */
+export interface EventSeriesState {
+	options: SeriesOption[];
+	optionsLoaded: boolean;
+	armedTarget: { id: string } | null;
+	previewDefaults: SeriesDefaults | null;
+	pending: boolean;
+	error: string | null;
+	status: string;
+}
+
+export function createEventSeriesState(): EventSeriesState {
+	return {
+		options: [],
+		optionsLoaded: false,
+		armedTarget: null,
+		previewDefaults: null,
+		pending: false,
+		error: null,
+		status: ''
+	};
+}
+
+export function resetEventSeriesState(series: EventSeriesState): void {
+	Object.assign(series, createEventSeriesState());
 }
 
 type FieldFlags = Partial<Record<EditableEventField, boolean>>;
