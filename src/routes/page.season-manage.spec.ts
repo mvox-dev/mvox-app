@@ -1306,6 +1306,28 @@ describe('agenda — the panel lists the season’s series and standalone events
 		expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
 		expect(q(container, 'season-manage-series-series-2')).not.toBeNull();
 	});
+
+	it('a failed first read for another season shows only the error, never the previous season’s rows (#598)', async () => {
+		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
+		listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) =>
+			seasonId === SEASON_B_ID
+				? Promise.reject(new Error('read down'))
+				: Promise.resolve({ items: seriesA, truncated: false })
+		);
+		const container = await renderReady();
+		await openPanelForSeason(container, 'Season 2026');
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-series-a1')).not.toBeNull();
+		});
+
+		await openPanelForSeason(container, 'Season 2027');
+
+		await waitFor(() => {
+			expect(q(container, 'season-manage-series-error')).not.toBeNull();
+		});
+		expect(listEventSeriesForSeasonMock).toHaveBeenCalledWith(CFG, SEASON_B_ID);
+		expect(q(container, 'season-manage-series-series-a1')).toBeNull();
+	});
 });
 
 describe('agenda — the panel’s reads respect the page-wide requestId guard', () => {
