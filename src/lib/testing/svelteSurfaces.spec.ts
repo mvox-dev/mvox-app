@@ -39,6 +39,7 @@ describe('svelteSurfaces', () => {
 			'src/lib/events/EventFieldEdit.svelte',
 			'src/lib/events/EventRsvpSection.svelte',
 			'src/lib/events/EventScheduleSection.svelte',
+			'src/lib/events/EventSeriesPicker.svelte',
 			'src/lib/events/EventWorksSection.svelte',
 			'src/routes/event/[id]/+page.svelte'
 		]);
