@@ -4,6 +4,7 @@
 <script lang="ts">
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { focusOnMount } from '$lib/a11y/focusable';
@@ -124,6 +125,12 @@
 	let eventCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let eventCreateError = $state<(() => string) | null>(null);
 	let eventCreateErrorField = $state<EventCreateErrorField>(null);
+	const datetimeErrorAttrs = $derived(
+		fieldErrorAttrs(eventCreateErrorField, 'datetime', 'event-create-error')
+	);
+	const endErrorAttrs = $derived(
+		fieldErrorAttrs(eventCreateErrorField, 'end', 'event-create-error')
+	);
 	let eventCreateLoadId = 0;
 
 	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
@@ -136,13 +143,6 @@
 		eventCreateErrorField = null;
 	}
 
-	function eventCreateDescribedBy(field: EventCreateErrorField): string | undefined {
-		return eventCreateErrorField === field ? 'event-create-error' : undefined;
-	}
-
-	function eventCreateInvalid(field: EventCreateErrorField): true | undefined {
-		return eventCreateErrorField === field ? true : undefined;
-	}
 
 	function loadEventCreateSeriesOptions(cfg: { db: string; token: string }, seasonId: string): void {
 		const thisLoad = eventCreateLoadId;
@@ -369,8 +369,7 @@
 		</span>
 		<select
 			data-testid="event-create-type"
-			aria-invalid={eventCreateInvalid('type')}
-			aria-describedby={eventCreateDescribedBy('type')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'type', 'event-create-error')}
 			value={eventCreateType}
 			onchange={(e) => {
 				eventCreateType = (e.currentTarget as HTMLSelectElement).value;
@@ -389,8 +388,7 @@
 		<span class="text-xs text-ink-2">{m.event_create_season_label()}</span>
 		<select
 			data-testid="event-create-season"
-			aria-invalid={eventCreateInvalid('season')}
-			aria-describedby={eventCreateDescribedBy('season')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'season', 'event-create-error')}
 			value={eventCreateSeasonId}
 			onchange={(e) =>
 				handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
@@ -432,8 +430,7 @@
 			type="text"
 			data-testid="event-create-name"
 			use:focusOnMount
-			aria-invalid={eventCreateInvalid('name')}
-			aria-describedby={eventCreateDescribedBy('name')}
+			{...fieldErrorAttrs(eventCreateErrorField, 'name', 'event-create-error')}
 			placeholder={m.event_create_name_placeholder()}
 			value={eventCreateName}
 			oninput={(e) => {
@@ -463,8 +460,7 @@
 				type="date"
 				data-testid="event-create-datetime-date"
 				aria-label={m.time_select_date_label()}
-				aria-invalid={eventCreateInvalid('datetime')}
-				aria-describedby={eventCreateDescribedBy('datetime')}
+				{...datetimeErrorAttrs}
 				value={eventCreateDate}
 				oninput={(e) => {
 					eventCreateDate = (e.currentTarget as HTMLInputElement).value;
@@ -476,8 +472,8 @@
 			<TimeSelect
 				prefix="event-create-datetime"
 				value={eventCreateTime}
-				invalid={eventCreateInvalid('datetime')}
-				describedBy={eventCreateDescribedBy('datetime')}
+				invalid={datetimeErrorAttrs['aria-invalid']}
+				describedBy={datetimeErrorAttrs['aria-describedby']}
 				onchange={(v) => {
 					eventCreateTime = v;
 					clearEventCreateError();
@@ -500,8 +496,7 @@
 				type="date"
 				data-testid="event-create-end-date"
 				aria-label={m.time_select_date_label()}
-				aria-invalid={eventCreateInvalid('end')}
-				aria-describedby={eventCreateDescribedBy('end')}
+				{...endErrorAttrs}
 				value={eventCreateEndDate}
 				oninput={(e) => {
 					eventCreateEndDate = (e.currentTarget as HTMLInputElement).value;
@@ -513,8 +508,8 @@
 			<TimeSelect
 				prefix="event-create-end"
 				value={eventCreateEndTime}
-				invalid={eventCreateInvalid('end')}
-				describedBy={eventCreateDescribedBy('end')}
+				invalid={endErrorAttrs['aria-invalid']}
+				describedBy={endErrorAttrs['aria-describedby']}
 				onchange={(v) => {
 					eventCreateEndTime = v;
 					clearEventCreateError();

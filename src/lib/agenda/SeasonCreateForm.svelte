@@ -3,6 +3,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { focusOnMount } from '$lib/a11y/focusable';
@@ -175,10 +176,7 @@
 		use:focusOnMount
 		aria-label={m.season_name_label()}
 		placeholder={m.season_name_label()}
-		aria-invalid={seasonCreateErrorField === 'name' ? true : undefined}
-		aria-describedby={seasonCreateErrorField === 'name'
-			? 'season-create-error'
-			: undefined}
+		{...fieldErrorAttrs(seasonCreateErrorField, 'name', 'season-create-error')}
 		value={seasonCreateName}
 		oninput={(e) => {
 			seasonCreateName = (e.currentTarget as HTMLInputElement).value;
@@ -191,10 +189,7 @@
 			type="date"
 			data-testid="season-create-start"
 			aria-label={m.season_start_date_label()}
-			aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
-			aria-describedby={seasonCreateErrorField === 'dates'
-				? 'season-create-error'
-				: undefined}
+			{...fieldErrorAttrs(seasonCreateErrorField, 'dates', 'season-create-error')}
 			value={seasonCreateStartDate}
 			oninput={(e) => {
 				seasonCreateStartDate = (e.currentTarget as HTMLInputElement).value;
@@ -206,10 +201,7 @@
 			type="date"
 			data-testid="season-create-end"
 			aria-label={m.season_end_date_label()}
-			aria-invalid={seasonCreateErrorField === 'dates' ? true : undefined}
-			aria-describedby={seasonCreateErrorField === 'dates'
-				? 'season-create-error'
-				: undefined}
+			{...fieldErrorAttrs(seasonCreateErrorField, 'dates', 'season-create-error')}
 			value={seasonCreateEndDate}
 			oninput={(e) => {
 				seasonCreateEndDate = (e.currentTarget as HTMLInputElement).value;

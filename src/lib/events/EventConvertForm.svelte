@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
+	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { generateIntervalDates } from '$lib/events/recurrence';
 	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
@@ -33,7 +34,7 @@
 	let eventConvertDuration = $state('');
 	let eventConvertEndDate = $state('');
 	let eventConvertSubmitting = $state(false);
-	let eventConvertError = $state<string | null>(null);
+	let eventConvertError = $state<(() => string) | null>(null);
 	type EventConvertErrorField = 'interval' | 'duration' | 'end' | null;
 	let eventConvertErrorField = $state<EventConvertErrorField>(null);
 	let eventConvertProgress = $state<{ current: number; total: number } | null>(null);
@@ -63,7 +64,7 @@
 		clearEventConvertError();
 	}
 
-	function setEventConvertError(message: string, field: EventConvertErrorField): void {
+	function setEventConvertError(message: () => string, field: EventConvertErrorField): void {
 		eventConvertError = message;
 		eventConvertErrorField = field;
 	}
@@ -73,13 +74,6 @@
 		eventConvertErrorField = null;
 	}
 
-	function eventConvertDescribedBy(field: EventConvertErrorField): string | undefined {
-		return eventConvertErrorField === field ? 'event-convert-error' : undefined;
-	}
-
-	function eventConvertInvalid(field: EventConvertErrorField): true | undefined {
-		return eventConvertErrorField === field ? true : undefined;
-	}
 
 	const eventConvertLocked = $derived(eventConvertResume !== null);
 
@@ -113,11 +107,11 @@
 
 	const EVENT_CONVERT_RESOLVE_STEP = 'resolve-collective';
 
-	function eventConvertRefusalMessage(e: unknown): string | null {
+	function eventConvertRefusalMessage(e: unknown): (() => string) | null {
 		if (!e || typeof e !== 'object' || !('reason' in e)) return null;
 		const reason = (e as { reason?: unknown }).reason;
-		if (reason === 'missing-name') return m.event_convert_missing_name();
-		if (reason === 'missing-event-type') return m.event_convert_missing_type();
+		if (reason === 'missing-name') return m.event_convert_missing_name;
+		if (reason === 'missing-event-type') return m.event_convert_missing_type;
 		return null;
 	}
 
@@ -132,25 +126,25 @@
 		const { date: startDate, time: startTime } = tallinnWallClockParts(detail.startDatetime);
 		if (!startDate || !startTime) {
 			console.error('event detail: converting an event with no readable start', detail.id, detail.startDatetime);
-			setEventConvertError(m.event_convert_start_missing(), null);
+			setEventConvertError(m.event_convert_start_missing, null);
 			return;
 		}
 		const intervalDays = Number(eventConvertIntervalDays);
 		if (!eventConvertIntervalDays.trim() || !Number.isFinite(intervalDays) || intervalDays < 1) {
-			setEventConvertError(m.event_convert_interval_required(), 'interval');
+			setEventConvertError(m.event_convert_interval_required, 'interval');
 			return;
 		}
 		const durationMinutes = Number(eventConvertDuration);
 		if (!eventConvertDuration.trim() || !Number.isFinite(durationMinutes) || durationMinutes < 1) {
-			setEventConvertError(m.event_convert_duration_required(), 'duration');
+			setEventConvertError(m.event_convert_duration_required, 'duration');
 			return;
 		}
 		if (!eventConvertEndDate) {
-			setEventConvertError(m.event_convert_end_required(), 'end');
+			setEventConvertError(m.event_convert_end_required, 'end');
 			return;
 		}
 		if (eventConvertEndDate < startDate) {
-			setEventConvertError(m.event_convert_end_before_start(), 'end');
+			setEventConvertError(m.event_convert_end_before_start, 'end');
 			return;
 		}
 
@@ -180,7 +174,10 @@
 				);
 				if (!resolvedDbEntityId) {
 					if (g === generation())
-						setEventConvertError(m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }), null);
+						setEventConvertError(
+							() => m.event_convert_failed({ step: EVENT_CONVERT_RESOLVE_STEP }),
+							null
+						);
 					return;
 				}
 				if (g !== generation()) return;
@@ -201,11 +198,13 @@
 					eventType = result.eventType;
 				} catch (e) {
 					console.error('event detail: event conversion failed', eventId, e);
-					if (g === generation())
+					if (g === generation()) {
+						const step = eventConvertStepOf(e);
 						setEventConvertError(
-							eventConvertRefusalMessage(e) ?? m.event_convert_failed({ step: eventConvertStepOf(e) }),
+							eventConvertRefusalMessage(e) ?? (() => m.event_convert_failed({ step })),
 							null
 						);
+					}
 					return;
 				}
 				if (g !== generation()) return;
@@ -248,7 +247,7 @@
 						remaining: occurrences.slice(i),
 						total
 					};
-					setEventConvertError(m.event_convert_generate_failed({ created, total }), null);
+					setEventConvertError(() => m.event_convert_generate_failed({ created, total }), null);
 					return;
 				}
 			}
@@ -296,8 +295,7 @@
 					min="1"
 					data-testid="event-convert-interval"
 					aria-label={m.event_convert_interval_label()}
-					aria-invalid={eventConvertInvalid('interval')}
-					aria-describedby={eventConvertDescribedBy('interval')}
+					{...fieldErrorAttrs(eventConvertErrorField, 'interval', 'event-convert-error')}
 					disabled={eventConvertLocked}
 					value={eventConvertIntervalDays}
 					oninput={(e) => {
@@ -318,8 +316,7 @@
 					min="1"
 					data-testid="event-convert-duration"
 					aria-label={m.event_convert_duration_label()}
-					aria-invalid={eventConvertInvalid('duration')}
-					aria-describedby={eventConvertDescribedBy('duration')}
+					{...fieldErrorAttrs(eventConvertErrorField, 'duration', 'event-convert-error')}
 					disabled={eventConvertLocked}
 					value={eventConvertDuration}
 					oninput={(e) => {
@@ -350,8 +347,7 @@
 					type="date"
 					data-testid="event-convert-end-date"
 					aria-label={m.event_convert_end_date_label()}
-					aria-invalid={eventConvertInvalid('end')}
-					aria-describedby={eventConvertDescribedBy('end')}
+					{...fieldErrorAttrs(eventConvertErrorField, 'end', 'event-convert-error')}
 					disabled={eventConvertLocked}
 					value={eventConvertEndDate}
 					oninput={(e) => {
@@ -391,7 +387,7 @@
 					role="alert"
 					class="text-xs text-red-700"
 				>
-					{eventConvertError}
+					{eventConvertError()}
 				</p>
 			{/if}
 			<div class="flex gap-2">
