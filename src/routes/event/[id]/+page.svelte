@@ -1,12 +1,9 @@
 <script lang="ts">
-	// Same load-on-effect/requestId-guard shape as roster and the agenda: a stale
-	// load can never clobber a newer route-param combination. No getToken()-missing
-	// gate here: the token threads straight through to Entu, the real authority.
 	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
-	import { getToken } from '$lib/auth/storage';
+	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import {
@@ -61,7 +58,6 @@
 	import type { ManageRightsState } from '$lib/repertoire/types';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
-	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import {
 		listScheduleItems,
@@ -90,15 +86,7 @@
 	const eventId = $derived(page.params.id ?? '');
 	const isOffline = $derived(!$writesAvailable);
 
-	type Status =
-		| 'loading'
-		| 'no-collective'
-		| 'load-error'
-		| 'not-available'
-		| 'session-expired'
-		| 'ready';
-
-	let generation = 0;
+	type Status = RouteLoadStatus | 'not-available';
 
 	let status = $state<Status>('loading');
 	let detail = $state<EventDetail | null>(null);
@@ -159,51 +147,50 @@
 			)
 	);
 
-	async function loadForSelected(): Promise<void> {
-		const current = selected;
-		const id = eventId;
-		const g = ++generation;
-		if (!current || !id) {
-			status = 'no-collective';
+	const routeLoad = createRouteLoadMachine({
+		name: 'event detail',
+		selected: () => selected,
+		setStatus: (s) => {
+			status = s;
+		},
+		reset: ({ selected: current }) => {
 			detail = null;
 			resetEventPageState(ev);
-			resetSeriesState();
-			return;
-		}
-		status = 'loading';
-		detail = null;
-		resetEventPageState(ev);
-		resetServedFromCache();
-		try {
-			const cfg = cfgFor(current.db);
-			const loaded = await loadEventPageDetail(cfg, id);
-			if (g !== generation) return;
-			detail = loaded;
-			status = 'ready';
-			loadMembership(cfg, current.personId, g);
-			loadComposeSurfaces(cfg, loaded, current.personId, g);
-		} catch (e) {
-			if (g !== generation) return;
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				detail = null;
+			if (current && eventId) resetServedFromCache();
+		},
+		onNoCollective: resetSeriesState,
+		async load({ cfg, selected: current, g, isCurrent }) {
+			const id = eventId;
+			if (!id) {
+				status = 'no-collective';
+				resetSeriesState();
 				return;
 			}
-			console.error('event detail: load failed', e);
-			status = e instanceof EventDetailLoadError && e.unavailable ? 'not-available' : 'load-error';
-			detail = null;
+			try {
+				const loaded = await loadEventPageDetail(cfg, id);
+				if (!isCurrent()) return;
+				detail = loaded;
+				status = 'ready';
+				loadMembership(cfg, current.personId, g);
+				loadComposeSurfaces(cfg, loaded, current.personId, g);
+			} catch (e) {
+				if (!(e instanceof EventDetailLoadError && e.unavailable)) throw e;
+				if (!isCurrent()) return;
+				console.error('event detail: load failed', e);
+				status = 'not-available';
+			}
 		}
-	}
+	});
 
 	function loadMembership(cfg: EntuCfg, personId: string, g: number): void {
 		findMyMemberId(cfg, personId)
 			.then((id) => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.memberId = id;
 				ev.membership = id ? 'member' : 'non-member';
 			})
 			.catch(() => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.memberId = null;
 				ev.membership = 'loading';
 			});
@@ -222,14 +209,7 @@
 	$effect(() => {
 		void selected;
 		void eventId;
-		loadForSelected().catch((e) => {
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('event detail: load failed', e);
-			status = 'load-error';
-		});
+		void routeLoad.loadForSelected();
 	});
 
 	function loadComposeSurfaces(cfg: EntuCfg, loaded: EventDetail, personId: string, g: number): void {
@@ -248,27 +228,27 @@
 			includeInactive: seasonRights === 'editor'
 		})
 			.then((byEvent) => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.workRows = byEvent[loaded.id] ?? [];
 			})
 			.catch(() => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.workRows = [];
 			});
 
-		refreshPresence(cfg.db, personId, () => g === generation);
+		refreshPresence(cfg.db, personId, () => g === routeLoad.generation);
 
 		if (seasonRights === 'editor' || eventEditor) loadManagePickers(cfg, sid, g);
 
 		listScheduleItems(cfg, loaded.id, fetch)
 			.then((rows) => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.scheduleRows = rows;
 				ev.scheduleLoaded = true;
 			})
 			.catch((e) => {
 				console.error('event detail: schedule load failed', e);
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.scheduleRows = [];
 				ev.scheduleLoaded = true;
 			});
@@ -276,12 +256,12 @@
 		if (isPastDetail(loaded)) {
 			listAttendance(cfg, loaded.id)
 				.then((records) => {
-					if (g !== generation) return;
+					if (g !== routeLoad.generation) return;
 					ev.attendanceMap = attendanceByMemberId(records);
 				})
 				.catch((e) => {
 					console.error('event detail: attendance load failed', e);
-					if (g !== generation) return;
+					if (g !== routeLoad.generation) return;
 					ev.attendanceMap = {};
 				});
 		}
@@ -290,13 +270,13 @@
 	function loadSeriesOptions(cfg: EntuCfg, sid: string, g: number): void {
 		listSeriesOptionsForSeason(cfg, sid, fetch)
 			.then((list) => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				seriesOptions = list;
 				seriesOptionsLoaded = true;
 			})
 			.catch((e) => {
 				console.error('event detail: series options load failed', e);
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				seriesOptions = [];
 				seriesOptionsLoaded = true;
 			});
@@ -382,7 +362,7 @@
 	async function commitSeriesChange(newId: string, selectEl: HTMLSelectElement | null): Promise<void> {
 		if (!detail || !selected) return;
 		if (isOffline) return;
-		const g = generation;
+		const g = routeLoad.generation;
 		const evId = detail.id;
 		const previousId = detail.seriesId ?? '';
 		seriesPending = true;
@@ -395,15 +375,15 @@
 			} else {
 				await reassignEventSeries(cfg, evId, newId);
 			}
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			seriesArmedTarget = null;
 			seriesPreviewDefaults = null;
 			await refreshEventDetail(evId, g);
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			seriesPending = false;
 			seriesStatus = m.event_detail_series_saved();
 		} catch (err) {
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			console.error('event detail: series write failed', evId, err);
 			seriesArmedTarget = null;
 			seriesPreviewDefaults = null;
@@ -418,10 +398,10 @@
 		try {
 			const cfg = cfgFor(selected.db);
 			const refreshed = await refreshEventPageDetail(cfg, evId);
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			detail = refreshed;
 		} catch (err) {
-			if (g !== generation) return;
+			if (g !== routeLoad.generation) return;
 			console.error('event detail: post-series-write refresh failed', evId, err);
 		}
 	}
@@ -433,7 +413,7 @@
 			sid === null ? Promise.resolve<RepertoireItem[]>([]) : listRepertoireItems(cfg, sid)
 		])
 			.then(([worksRead, editionsRead, repertoire]) => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.libraryWorks = worksRead.items;
 				ev.libraryEditions = editionsRead.items;
 				ev.libraryWorksPartial = worksRead.truncated;
@@ -443,7 +423,7 @@
 				ev.libraryPickersLoadSucceeded = true;
 			})
 			.catch(() => {
-				if (g !== generation) return;
+				if (g !== routeLoad.generation) return;
 				ev.libraryWorks = [];
 				ev.libraryEditions = [];
 				ev.libraryWorksPartial = false;
@@ -541,7 +521,7 @@
 					type="button"
 					data-testid="event-detail-retry"
 					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={() => loadForSelected()}
+					onclick={() => routeLoad.loadForSelected()}
 				>
 					{m.event_detail_retry()}
 				</button>
@@ -681,7 +661,7 @@
 					{selected}
 					{canConvert}
 					{isOffline}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 					refreshDetail={(evId, g) => refreshEventDetail(evId, g)}
 				/>
@@ -691,7 +671,7 @@
 					{edit}
 					{isEditor}
 					{isOffline}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 					patchDetail={(field, value) => patchDetail(field, value)}
 				/>
@@ -701,7 +681,7 @@
 					{ev}
 					{isEditor}
 					{isOffline}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 				/>
 				<EventRsvpSection
@@ -709,7 +689,7 @@
 					{selected}
 					{ev}
 					{isOffline}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 				/>
 				<EventWorksSection
@@ -718,7 +698,7 @@
 					{ev}
 					{isEditor}
 					{isOffline}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 				/>
 				<EventAttendanceSection
@@ -727,7 +707,7 @@
 					{ev}
 					{isOffline}
 					{canMarkAttendanceForEvent}
-					generation={() => generation}
+					generation={() => routeLoad.generation}
 					{actions}
 				/>
 				<EventDangerZone {detail} {selected} {isEditor} {isOffline} {actions} />

@@ -1,27 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #351 RED — the EVENT DETAIL surface: the same one-indicator-two-states
-// presence badge on every part row that carries a file, mirrored from the
-// /library pins (page.library-presence-badges.spec.ts — the shared testid
-// contract is [data-testid="file-presence-{fileId}"] + the two
-// file_presence_* message keys; the wording-honesty locale pins live there,
-// once, for both surfaces).
-//
-//   - A row whose file the store HOLDS (current identity's partition) badges
-//     m.file_presence_on_device(); a row whose file it does not badges
-//     m.file_presence_needs_network(); a row with NO file gets NO badge.
-//   - While the store has not answered: NEITHER — an absent badge is not a
-//     claim, and needs-network-then-correct is the forbidden flicker.
-//   - THE trap (issue #351): presence is ONE heldFileIds(db, personId) call
-//     for the whole works list — never a per-row get(), which counts as an
-//     open and would collapse the store's LRU to render order.
-//   - The badge is not a control; the row's open behaviour is #427's, now:
-//     tapping the PDF link navigates to the fullscreen part viewer, no tab
-//     and no byte fetch on this page at all.
-//
-// INTEGRATION posture (house rule): the REAL route component renders; only
-// the wire, loadWorksByEventId, signFileUrl and the $lib/files/appByteStore
-// seam are substituted — same seams as page.pdf-open-bytes.spec.ts.
+
+// Each part row with a file badges on-device or needs-network, from ONE heldFileIds call
+// for the whole list (a per-row get() would count as an open); no badge before the store
+// answers, none on a fileless row. The wire, works read, signing and byte store are stubbed.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,6 +40,7 @@ vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -203,6 +185,7 @@ async function worksVisible(container: HTMLElement): Promise<void> {
 }
 
 beforeEach(() => {
+	setToken('jwt-editor');
 	fakeByteStore = createFakeByteStore();
 	resetTypeIdCache();
 });
@@ -311,19 +294,13 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(gotoMock.mock.calls.length).toBe(before);
 
-		// Tapping the held row's part affordance navigates to the viewer (#427)
-		// — it no longer opens a tab or touches a byte on this page at all.
-		// #434 slice 5: on a HELD row that affordance is the part LINK, and it
-		// is the only one on the row (the `work-link-pdf` button renders on the
-		// other rows, whose parts are not on the device). The label handoff
-		// below is exactly what pins that the link did not lose it.
+		// On a held row the part link is the only affordance; tapping it navigates to the
+		// viewer and touches no tab or byte on this page.
 		expect(container.querySelector('[data-testid="part-link-file-held"]')).not.toBeNull();
 		expect(container.querySelectorAll('[data-testid="work-link-pdf"]').length).toBe(1);
 		await fireEvent.click(container.querySelector('[data-testid="part-link-file-held"]')!);
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		// #427 review finding 3 — the part's NAME rides the navigation: this
-		// page is the only place that has it, the viewer is where the bytes
-		// land. Full shape, both arguments.
+		// The part's name rides the navigation: only this page has it.
 		expect(gotoMock.mock.calls.slice(before)).toEqual([
 			[
 				'/part/file-held?db=sampledb',
@@ -342,16 +319,8 @@ describe('#351 — event detail: presence badges on part rows (integration)', ()
 		expect(openSpy).not.toHaveBeenCalled();
 	});
 
-	// #351's two eviction-cascade pins (store put evicts a held row / evicts
-	// then the write itself rejects) lived here because this page's OWN click
-	// used to reach openFileBytes' store.put directly. #427 moved that read
-	// (and so every write it can trigger) into the fullscreen part viewer —
-	// this page's click is now a bare `goto`, so there is no store write left
-	// on THIS surface for a page-reaction test to pin. The eviction
-	// arithmetic itself stays covered in byteStore.presence.spec.ts; the
-	// "page re-queries presence after its own write" shape these two
-	// exercised has no place to live until the viewer (or a return-to-page
-	// refresh) grows the same coverage — flagged, not silently dropped.
+	// Eviction after the page's own byte write has no home here: the click is a bare `goto`
+	// and the viewer owns the write. The arithmetic stays in byteStore.presence.spec.ts.
 });
 
 // (*MVOX:Tallis*)

@@ -1,19 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #343 established: this page's PDF open reads THROUGH the byte store.
-// #427 moves the consumption: the click no longer opens a blank tab and
-// navigates it to a blob: URL — it is a plain in-app navigation to the
-// fullscreen part viewer, /part/<fileId>?db=<db>, and THE VIEWER runs the
-// openFileBytes read-through (see src/routes/part/page.part-viewer.spec.ts).
-// The old popup-blocker dance (window.open('', '_blank') sync in the click)
-// existed to survive an async gap before a cross-document navigation; an
-// in-app goto has no such gap and must open no tab at all.
-//
-// INTEGRATION posture (house rule): the REAL route component renders; only
-// the wire (global fetch), the works read (loadWorksByEventId — the module
-// seam the agenda works-wiring spec uses), signFileUrl, and the
-// $lib/files/appByteStore persistence seam are substituted — kept in place
-// precisely to pin that the click TOUCHES NONE OF THEM anymore.
+
+// The PDF affordance is a plain in-app navigation to the part viewer, which owns the byte
+// read. The wire, the works read, signFileUrl and the byte store stay substituted, so the
+// spec can pin that the click touches none of them and opens no tab.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
@@ -53,6 +42,7 @@ vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -160,6 +150,7 @@ async function pdfLink(container: HTMLElement): Promise<Element> {
 }
 
 beforeEach(() => {
+	setToken('jwt-editor');
 	fakeByteStore = createFakeByteStore();
 	resetTypeIdCache();
 });
@@ -189,9 +180,8 @@ describe('#427 — the PDF affordance navigates to the in-app part viewer', () =
 		await fireEvent.click(link);
 
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		// #427 review finding 3 — the label rides the navigation: this page is
-		// the only place that knows the part's NAME, the viewer is the only
-		// place that knows whether bytes landed. Full shape, both arguments.
+		// The label rides the navigation: this page alone knows the part's name, the viewer
+		// alone knows whether bytes landed.
 		expect(gotoMock.mock.calls.slice(before)).toEqual([
 			[
 				'/part/file-score?db=sampledb',

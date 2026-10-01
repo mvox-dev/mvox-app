@@ -1,17 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (event-page integration) — the event page's RSVP is
-// gated while offline. The SAME RsvpControl the agenda row uses, so the gate
-// arrives with the component; this pins that the event page's instance gets it
-// too (the real +page.svelte, only global fetch stubbed at the wire, so an
-// RSVP write is a real non-GET fetch).
-//
-// CONTRACT: with the signal ($lib/net/online) offline —
-//   • every rsvp-btn-* in event-detail-rsvp is `disabled`;
-//   • [data-testid="rsvp-write-unavailable"] = m.write_unavailable_no_signal()
-//     is visible inside that section's rsvp-control;
-//   • a click issues NO fetch at all;
-//   • back online: enabled, the sentence gone, and a click reaches the wire.
+
+// Offline, the event page's RSVP buttons are disabled, the section says why, and a click
+// sends nothing; back online they write again. Only the wire fetch is stubbed.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // only Date is faked, timers stay real so waitFor keeps polling.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
@@ -45,6 +36,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -231,4 +223,4 @@ describe('/event/[id] — RSVP while offline (#434 slice 6)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)

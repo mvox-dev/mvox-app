@@ -1,17 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #372 RED (event-page surface) — the RSVP control asks Entu whether the
-// singer may write. Same law, same ONE primitive as the agenda surface
-// (routes/page.rsvp-rights-gate.spec.ts — see its header for the paradigm):
-// the rsvp write targets a child of the singer's own PERSON entity, so the
-// control's enabled state derives from `_owner`/`_editor` on that person,
-// read as GET entity/{personId}?props=_owner,_editor. This page carried its
-// OWN copy of the membership gate (Gama ruling: both surfaces fixed under
-// #372, one primitive) — membership survives only as display (the non-member
-// hint) and as the write payload's memberId, never as enablement.
-//
-// INTEGRATION posture (page.rsvp-fact-read.spec.ts family): the REAL page +
-// REAL data layer, only global fetch stubbed at the wire.
+
+// RSVP enablement comes from `_owner`/`_editor` on the singer's own person entity
+// (GET entity/{personId}?props=_owner,_editor). Membership drives only the non-member hint
+// and the write's memberId. Real page and data layer; only the wire fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 // only Date is faked, timers stay real so waitFor keeps polling.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
@@ -45,6 +37,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,

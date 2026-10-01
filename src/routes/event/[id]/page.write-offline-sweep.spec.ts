@@ -1,29 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6, review finding 1 — the STRUCTURAL fence for /event/[id].
-//
-// The per-family offline specs beside this one (page.event-edit-offline,
-// page.rsvp-offline, page.attendance-offline) each pin ONE write surface. That
-// is what let five more controls — the event's own delete, the series picker,
-// convert-to-series, and the whole schedule_item section — ship still live
-// offline: nothing asserted anything about a control nobody had listed.
-//
-// CONTRACT (the fence, not a family): render the REAL page for a viewer who
-// holds every right it gates on, go offline, then OPERATE EVERY ENABLED CONTROL
-// on it (exerciseEveryEnabledControl — click/change, re-querying after each so
-// controls revealed by an earlier one are swept too) and assert
-// `nonGetCalls(fetchStub)` is still `[]`. A control is allowed to be disabled
-// (that IS the gate, and the sweep skips it) or enabled-and-refusing; a sixth
-// missed control is neither, so it fails here rather than passing silently.
-//
-// Only global `fetch` is stubbed — every read, every rights resolution and every
-// write path on the page is the real one, so "no non-GET reached the wire" means
-// exactly that.
+
+// The structural offline fence: for a viewer holding every right, go offline, operate every
+// enabled control, and assert no non-GET reached the wire. A missed control fails here
+// instead of passing silently. Only the global fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 	fakeByteStore.current = createFakeByteStore();
@@ -57,6 +42,7 @@ vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore
 import Page from './+page.svelte';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -77,10 +63,8 @@ function json(body: unknown, status = 200) {
 }
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
-// The viewer (`p-viewer`) is `_owner` on the event and `_editor` on the season,
-// so EVERY gated surface renders: the six inline pencils, the danger-zone
-// delete (owner-gated), the series picker, convert-to-series, the schedule
-// section, the works/programme management controls, RSVP and attendance.
+// The viewer (`p-viewer`) is `_owner` on the event and `_editor` on the season, so every
+// gated surface renders.
 
 const EVENT = {
 	_id: 'ev1',
@@ -149,12 +133,8 @@ const MEMBER = {
 	_parent: [{ reference: 'org1', entity_type: 'organization' }]
 };
 
-/**
- * A liberal read router: serves whichever fixture the url names, whether the
- * page reads by id or by `_type.string` query. Any non-GET is recorded and
- * answered 200 — the assertion is that none is ever ISSUED, so failing them
- * would only hide the very calls this fence exists to see.
- */
+/** A liberal read router keyed on the url. Any non-GET is recorded and answered 200:
+ *  failing it would hide the very calls this fence exists to see. */
 function wireStub() {
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -267,4 +247,4 @@ describe('/event/[id] — no write control reaches the wire offline (#434 slice 
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)

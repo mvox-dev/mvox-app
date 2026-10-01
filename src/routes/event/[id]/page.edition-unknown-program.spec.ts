@@ -1,35 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #337 — a reader's PROGRAM row with an unnameable pin must say UNKNOWN, never
-// "No pinned edition".
-//
-// On /event/[id] program rows are the PRIMARY shape (buildWorkRows' 'program'
-// branch): a program_item's `edition` is a REQUIRED reference, so `editionId`
-// is non-empty by construction, and `editionName` degrades to '' whenever the
-// collective-wide `listAllEditions` label lookup did not carry that edition —
-// truncated past its limit=500 cap, or the edition unreadable/deleted. Today
-// `editionUnknown()`'s `row.kind !== 'repertoire'` gate excludes program rows
-// before any logic, so such a row falls to RepertoireElement's terminal
-// `{:else}` and renders `repertoire_no_edition` — a claim of absence a program
-// row cannot express (#331 review, finding 2; the gate is #329's and is a gap,
-// not a ruling — see editionUnknown.ts's header).
-//
-// Sibling of page.edition-unknown-reader.spec.ts, same INTEGRATION posture and
-// the same harness: nothing in the repertoire path is mocked. The REAL page
-// runs the REAL data layer (loadEventDetail, resolveEventWorksBatch,
-// loadWorksByEventId) against a wire `fetch` stub, and the truncation is built
-// where production builds it — a `listAllEditions` response whose `count`
-// exceeds the rows it returned, flowing through the real `deriveListRead`.
-// Nothing in this file hands the page a `truncated` field (the issue's
-// done-when forbids it). The one fixture difference from the sibling: the
-// stubbed event HAS program_items, so the page renders the 'program' branch —
-// the sibling stubs that read empty and so could never see this defect.
+
+// A reader's program row whose pinned edition the label lookup cannot name says unknown,
+// never "No pinned edition". Real page and data layer; only the wire fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Pin "now" before the fixture event (2026-09-01) — only Date is faked.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
@@ -57,6 +36,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -97,14 +77,8 @@ function seasonEntity() {
 	};
 }
 
-// The event HAS a programme — the 'program' branch renders, no season
-// fallback. Two shapes:
-//   pi-1  edition ed-1, which the collective-wide read DID return — the
-//         resolving pin, must keep its name byte-identical to today
-//   pi-2  edition ed-9, which that read never returns (past the cap when it
-//         truncated; a dangling/unreadable reference when it did not). The
-//         edition reference is REQUIRED on a program_item, so this row holds
-//         a real pin whose label nothing resolves — the #337 shape.
+// The event has a programme, so the 'program' branch renders. pi-1 pins ed-1, which the
+// collective-wide read returns; pi-2 pins ed-9, which it never returns.
 const PROGRAM_ITEMS = [
 	{
 		_id: 'pi-1',
@@ -132,14 +106,8 @@ const EDITIONS = [
 	}
 ];
 
-/**
- * `editionCount` is the ONLY knob: present and above the returned row count, the
- * collective-wide edition read is TRUNCATED exactly as production reports it
- * (`deriveListRead`: `count > entities.length`); absent, the read is complete.
- * Nothing in this file hands the page a `truncated` field — `loadWorksByEventId`
- * has to derive it from this response and put it on every row, program rows
- * included (it already does: the flag is mapped onto rows uniformly).
- */
+/** `editionCount` above the returned row count makes the collective-wide edition read
+ *  truncated, as `deriveListRead` reports it; absent, the read is complete. */
 function wireStub(opts: { editionCount?: number } = {}) {
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -259,10 +227,8 @@ describe("/event/[id] #337 — a reader's PROGRAM rows under a TRUNCATED edition
 			workRowOf(container, 'Ghost piece').querySelector('[data-testid="work-edition-unknown"]')
 		).not.toBeNull();
 
-		// Exactly ONE edition read, the collective-wide label lookup inside
-		// `loadWorksByEventId` — and no SCOPED per-work read (`_parent.reference=`
-		// matched only among edition reads; the program_item read on this page
-		// carries that fragment too, legitimately).
+		// Exactly one edition read (the label lookup in `loadWorksByEventId`) and no scoped
+		// per-work read; the program_item read also carries `_parent.reference=`.
 		const reads = editionReads(fetchStub);
 		expect(reads.length).toBe(1);
 		expect(reads.some((u) => u.includes('_parent.reference='))).toBe(false);
@@ -271,11 +237,8 @@ describe("/event/[id] #337 — a reader's PROGRAM rows under a TRUNCATED edition
 
 describe("/event/[id] #337 — the reader's COMPLETE read", () => {
 	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#342 wording)', async () => {
-		// No `count` — the read is complete; ed-9 is simply not in it (deleted or
-		// unreadable). Mirrors the sibling suite's ri-3/ed-9 repertoire case
-		// (#331 item 4): the unnameable-pin shape never needed truncation.
-		// #342 — and because nothing here is incomplete, the wording is the NEW
-		// key, never the truncated state's incompleteness claim.
+		// No `count`: the read is complete and ed-9 is simply not in it, so the wording is
+		// the unknown key, never the truncated state's incompleteness claim.
 		const { container } = await renderAsReader({});
 		const li = workRowOf(container, 'Ghost piece');
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
@@ -297,4 +260,4 @@ describe("/event/[id] #337 — the reader's COMPLETE read", () => {
 	});
 });
 
-// (*MVOX:Tallis* — #337 RED)
+// (*MVOX:Tallis*)
