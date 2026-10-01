@@ -1,29 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #329 RED (event-page half, site (b)) — the work-edition picker says UNKNOWN.
-//
-// Same ruling, same contract as page.edition-unknown.spec.ts (the agenda
-// half): a zero-match row under a TRUNCATED `listAllEditions` read renders
-// the UNKNOWN state (new key `repertoire_edition_unknown`), never the
-// known-absent wording; the picker is NOT gated out on unknown; the page reads
-// `listEditions(workId)` SCOPED for that one work and the row becomes a stated
-// fact the moment it lands COMPLETE (review round — a scoped read truncated
-// against its own cap leaves the row unknown); matched rows and complete-read
-// known-absent stay byte-identical to today. The event detail page runs its OWN
-// copy of the `editionsByWorkId` join + the `options.length > 0` gate (the
-// second #321 residual site), so the pins run here too — a fix on one page must
-// not leave the other printing the negative.
-//
-// INTEGRATION posture (page.spec.ts family): the REAL page + REAL data layer
-// (loadEventDetail, loadWorksByEventId, loadManagePickers), only global fetch
-// stubbed at the wire. i18n presence for the new key is pinned once, in the
-// agenda half.
+
+// The work-edition picker says unknown for a zero-match row under a truncated
+// `listAllEditions` read, then states the fact once that work's scoped read lands complete.
+// Real page and data layer; only the wire fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Pin "now" before the fixture event (2026-09-01) — only Date is faked.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
@@ -51,6 +37,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,

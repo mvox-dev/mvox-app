@@ -1,46 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #331 (event-page half) — the READER's unknown branch must be reachable, and
-// the flag that reaches it must be PRODUCED, not handed over.
-//
-// Same defect as the agenda half (page.edition-unknown-reader.spec.ts), by
-// this page's own route to the same false claim: `pickableEditionsPartial` is
-// fed from `libraryEditionsPartial`, which is only ever ASSIGNED inside
-// `loadManagePickers` — "only fetched for a rights-holder". A viewer with no
-// manage rights keeps its `false` default forever, so `rowEditionUnknown`'s
-// `if (!partial) return false` gate closes the reader branch RepertoireElement
-// carries for exactly her, and a truncated read's blank `editionName` renders
-// as "No pinned edition" — a stated negative the read cannot back.
-//
-// Settled fix (do not re-fork): the flag rides each row as the optional
-// `WorkRow.truncated`, set by `loadWorksByEventId` from the edition read it
-// already makes.
-//
-// INTEGRATION posture, and deliberately the STRICTER of the two reader suites
-// (#331 review, finding 1): the agenda half mocks `loadWorksByEventId` at its
-// module seam and hands `truncated` to the page by hand — which means it cannot
-// observe whether the producer sets that field at all. This suite mocks
-// NOTHING in the repertoire path. The REAL page runs the REAL data layer
-// (loadEventDetail, resolveEventWorksBatch, loadWorksByEventId) against a wire
-// `fetch` stub, exactly like the #329 sibling page.edition-unknown.spec.ts, and
-// the truncation is built where production builds it: a collective-wide
-// `listAllEditions` response whose `count` exceeds the rows it returned. So one
-// test spans `listAllEditions.truncated` -> `WorkRow.truncated` ->
-// `readerEditionUnknown` -> `repertoire_edition_unknown`, and dropping the
-// `truncated` ride in workRows.ts turns it red here.
-//
-// The discriminating row is the UNPINNED one. A row holding a pin the read
-// could not name is unknown for a reader either way (#331 item 4 —
-// `unnameablePinNeedsNoTruncation`), so it says nothing about `truncated`;
-// "nothing pinned" is the shape whose wording flips with the flag, and it is
-// the shape RepertoireElement's terminal `{:else}` would otherwise print
-// `repertoire_no_edition` for.
+
+// A reader's unpinned row under a truncated edition read says unknown. The flag comes from
+// `loadWorksByEventId` off the wire response, never handed to the page, so dropping the
+// `truncated` ride in workRows.ts turns this red.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Pin "now" before the fixture event (2026-09-01) — only Date is faked.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
+	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
 });
@@ -68,6 +37,7 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
@@ -96,10 +66,8 @@ function eventEntity() {
 	};
 }
 
-/** The viewer p-viewer holds NOTHING here: the season's `_editor` names
- *  someone else, the event names nobody. `loadManagePickers` never runs for
- *  her, so `libraryEditionsPartial` keeps its `false` default — the exact
- *  route by which the editor-side flag can never reach a reader's rows. */
+/** The viewer p-viewer holds nothing here, so `loadManagePickers` never runs and
+ *  `libraryEditionsPartial` keeps its `false` default. */
 function seasonEntity() {
 	return {
 		_id: 'season1',
@@ -109,12 +77,8 @@ function seasonEntity() {
 	};
 }
 
-// The three reader shapes, all `status: active` (a reader's fallback read drops
-// retired/dropped — `includeInactive` is an editor-only option):
-//   ri-1  nothing pinned            — the flag-discriminating row
-//   ri-2  pinned to an edition the collective-wide read DID return
-//   ri-3  pinned to ed-9, which that read never returns (past the cap when it
-//         truncated; a dangling reference when it did not)
+// Three active reader rows: ri-1 nothing pinned (the flag-discriminating row), ri-2 pinned
+// to an edition the read returns, ri-3 pinned to ed-9, which the read never returns.
 const REPERTOIRE_ITEMS = [
 	{
 		_id: 'ri-1',
@@ -154,13 +118,8 @@ const EDITIONS = [
 	}
 ];
 
-/**
- * `editionCount` is the ONLY knob: present and above the returned row count, the
- * collective-wide edition read is TRUNCATED exactly as production reports it
- * (`deriveListRead`: `count > entities.length`); absent, the read is complete.
- * Nothing in this file hands the page a `truncated` field — `loadWorksByEventId`
- * has to derive it from this response and put it on every row.
- */
+/** `editionCount` above the returned row count makes the collective-wide edition read
+ *  truncated, as `deriveListRead` reports it; absent, the read is complete. */
 function wireStub(opts: { editionCount?: number } = {}) {
 	return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -284,19 +243,15 @@ describe('/event/[id] #331 — a rights-less reader under a TRUNCATED edition re
 
 	it('costs her no extra read — the flag came out of the label lookup she already got', async () => {
 		const { container, fetchStub } = await renderAsReader({ editionCount: 4000 });
-		// Wait out the scoped-read effect: it is keyed off `libraryEditionsPartial`
-		// (the manage read a reader never triggers), so it must have had every
+		// The scoped-read effect is keyed off `libraryEditionsPartial`, so give it every
 		// chance to fire before "it did not" is an assertion.
 		for (let i = 0; i < 5; i++) await new Promise((resolve) => setTimeout(resolve, 0));
 		expect(
 			workRowOf(container, 'Old warhorse').querySelector('[data-testid="work-edition-unknown"]')
 		).not.toBeNull();
 
-		// Exactly ONE edition read, the collective-wide label lookup inside
-		// `loadWorksByEventId` — and no SCOPED per-work read (its own URL pattern,
-		// `_parent.reference=`, matched only among edition reads: every
-		// _parent-scoped read on this page also carries that fragment, e.g. the
-		// RSVP and schedule_item reads it makes regardless of edition state).
+		// Exactly one edition read (the label lookup in `loadWorksByEventId`) and no scoped
+		// per-work read; other _parent-scoped reads on this page carry that fragment too.
 		const reads = editionReads(fetchStub);
 		expect(reads.length).toBe(1);
 		expect(reads.some((u) => u.includes('_parent.reference='))).toBe(false);
@@ -323,9 +278,8 @@ describe("/event/[id] #331 — the reader's COMPLETE read keeps every stated fac
 	});
 
 	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#331 item 4; #342 wording)', async () => {
-		// #342 — the read finished and ed-9 is simply gone: nothing is incomplete,
-		// so the wording is the NEW key, never the truncated state's
-		// incompleteness claim.
+		// The read finished and ed-9 is simply gone, so the wording is the unknown key,
+		// never the truncated state's incompleteness claim.
 		const { container } = await renderAsReader({});
 		const li = workRowOf(container, 'Spem in alium');
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
@@ -337,6 +291,5 @@ describe("/event/[id] #331 — the reader's COMPLETE read keeps every stated fac
 	});
 });
 
-// (*MVOX:Tallis* — #331 RED)
-// (*MVOX:Josquin* — #331 review, finding 1: producer no longer mocked; the
-// truncation is built at the wire so the whole chain is under test)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)
