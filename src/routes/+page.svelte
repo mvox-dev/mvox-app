@@ -152,6 +152,7 @@
 		collectivesState: () => get(collectiveState),
 		isRepertoirePending: (key) => repertoireQueue.isPending(key),
 		pendingMembersForEvent: (eventId) => attendanceQueue.pendingMembersForEvent(eventId),
+		pendingEntriesForEvent: (eventId) => attendanceQueue.pendingEntriesForEvent(eventId),
 		resetSeasonManage,
 		closeSeasonCreateForm,
 		closeEventCreateForm: () => (flow.eventCreateOpen = false),

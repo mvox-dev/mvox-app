@@ -1,41 +1,8 @@
+// The attendance optimistic write queue: one write per (event, member) tap.
 import { applyAttendanceChange } from './attendanceOptimistic';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { EventAttendance, AttendanceStatus } from './attendanceData';
 
-// #84 TA.3 — the attendance optimistic queue. Mirrors rsvpChangeQueue.ts
-// EXACTLY, with the pending key changed from eventId to a composite
-// eventId:memberId key: the conductor's panel shows one P/A/L toggle row per
-// member for ONE event, so the unit of "a write in flight" is the member row
-// WITHIN that event. Per-tap immediate writes — every request() fires exactly
-// one applyAttendanceChange round-trip; nothing batches.
-//
-// The #15 lesson carries over verbatim: the primary double-tap guard is the UI
-// disabling the member's toggle row while pending (via setPending); the queue's
-// own per-(event,member) guard is a defensive backstop. All callbacks are
-// PER-MEMBER (scoped by eventId) — there is no whole-map operation in this API
-// for a caller to misuse, so one member's failure structurally cannot clobber
-// another member's in-flight state.
-//
-// #77 fix-forward — two prior FIX attempts (be08583, debe746) tried a
-// "generation" guard in the PAGE's callbacks, comparing a snapshot variable
-// against a live one. That failed because BOTH variables were re-synced to the
-// same value on every panel open — by the time a stale write's callback fired,
-// the comparison always read as "current", never as "stale". Root cause fixed
-// here instead, at the source:
-//   1. Every callback now receives `eventId` as its first argument, so the
-//      CALLER can validate a settling write against whichever event is
-//      CURRENTLY open, evaluated fresh at callback-fire time (no snapshot
-//      variable to fall out of sync).
-//   2. The pending Set is keyed by `${eventId}:${memberId}`, not memberId
-//      alone. This is what makes reopening the SAME event correctly preserve
-//      in-flight pending state (a duplicate tap on the same event+member while
-//      pending is still a no-op) while a write for one event never blocks a
-//      later request for the SAME member in a DIFFERENT event. There is no
-//      longer a `reset()` escape hatch for a caller to misuse (that whole-set
-//      clear was reset()'s bug: it wiped in-flight state for the SAME event
-//      too, whenever the panel was merely reopened).
-
-/** The row's value for one member — same shape as AttendanceByMemberId's values. */
 export interface AttendanceEntry {
 	attendanceId: string;
 	status: AttendanceStatus;
@@ -44,9 +11,7 @@ export interface AttendanceEntry {
 export interface AttendanceChangeCallbacks {
 	/** Apply the optimistic value for exactly this event+member, synchronously. */
 	setOptimistic(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
-	/** Mark/unmark this event+member as having a write in flight — the caller
-	 *  threads this into that row's toggle `disabled` prop (all 3 buttons),
-	 *  after checking `eventId` against whichever event is currently open. */
+	/** The caller checks `eventId` against the open event before disabling the row. */
 	setPending(eventId: string, memberId: string, pending: boolean): void;
 	/** A write settled successfully — the final, reconciled value for this event+member. */
 	reconcile(eventId: string, memberId: string, entry: AttendanceEntry | null): void;
@@ -65,12 +30,10 @@ export interface RequestAttendanceChangeInput {
 
 export interface AttendanceChangeQueue {
 	request(input: RequestAttendanceChangeInput): void;
-	/** Return the set of member IDs currently pending for a given event. Used on
-	 *  same-event reopen to carry in-flight state back into the UI's pending set
-	 *  (Finding 3 — without this, reopening the same event while a write is in
-	 *  flight shows the toggle as enabled and unpressed, and a tap is silently
-	 *  swallowed by the queue's own guard). */
+	/** Reopening an event reads these back, so a row still saving shows as pending. */
 	pendingMembersForEvent(eventId: string): Set<string>;
+	/** The in-flight values for an event's members; a pending clear has no entry. */
+	pendingEntriesForEvent(eventId: string): Record<string, AttendanceEntry>;
 }
 
 function pendingKey(eventId: string, memberId: string): string {
@@ -78,38 +41,37 @@ function pendingKey(eventId: string, memberId: string): string {
 }
 
 export function createAttendanceChangeQueue(callbacks: AttendanceChangeCallbacks): AttendanceChangeQueue {
-	// The only mutable state this module owns: which (event, member) pairs
-	// currently have a write in flight. Everything else (the actual attendance
-	// values) lives with the caller, touched exclusively through the per-event-
-	// per-member callbacks above.
-	const pending = new Set<string>();
+	const pending = new Map<string, AttendanceEntry | null>();
+
+	function pendingFor(eventId: string): Array<[string, AttendanceEntry | null]> {
+		const prefix = `${eventId}:`;
+		return [...pending]
+			.filter(([key]) => key.startsWith(prefix))
+			.map(([key, entry]) => [key.slice(prefix.length), entry]);
+	}
 
 	return {
 		pendingMembersForEvent(eventId: string): Set<string> {
-			const result = new Set<string>();
-			const prefix = `${eventId}:`;
-			for (const key of pending) {
-				if (key.startsWith(prefix)) {
-					result.add(key.slice(prefix.length));
-				}
-			}
+			return new Set(pendingFor(eventId).map(([memberId]) => memberId));
+		},
+		pendingEntriesForEvent(eventId: string): Record<string, AttendanceEntry> {
+			const result: Record<string, AttendanceEntry> = {};
+			for (const [memberId, entry] of pendingFor(eventId)) if (entry) result[memberId] = entry;
 			return result;
 		},
 		request(input) {
 			const { cfg, eventId, memberId, existing, newStatus } = input;
 			const key = pendingKey(eventId, memberId);
 
-			// Defensive backstop (see module doc) — the primary guard is the UI
-			// disabling the toggle for a pending member.
+			// Backstop only: the UI disables a pending member's toggle.
 			if (pending.has(key)) return;
-
-			pending.add(key);
-			callbacks.setPending(eventId, memberId, true);
 
 			const optimisticEntry: AttendanceEntry | null =
 				newStatus !== null
 					? { attendanceId: existing?.attendanceId ?? '__optimistic__', status: newStatus }
 					: null;
+			pending.set(key, optimisticEntry);
+			callbacks.setPending(eventId, memberId, true);
 			callbacks.setOptimistic(eventId, memberId, optimisticEntry);
 
 			applyAttendanceChange({ cfg, eventId, memberId, existing, newStatus })

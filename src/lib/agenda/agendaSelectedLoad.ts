@@ -46,84 +46,40 @@ export function createSelectedLoad(
 		closeAttendancePanel
 	} = parts;
 
-	return function loadForSelected(opts: { keepSeasonManage?: boolean } = {}) {
-		const keepSeasonManage = opts.keepSeasonManage === true;
-		const heldSeasonId = keepSeasonManage && deps.seasonManageOpen() ? ag.manageableSeasonId : null;
-		const current = deps.selected();
-		if (!current) {
-			ag.agendaItems = [];
-			ag.agendaLoading = false;
-			ag.agendaError = false;
-			ag.memberId = null;
-			ag.membership = 'loading';
-			ag.rsvpRights = 'loading';
-			ag.rsvpByEventId = {};
-			ag.rsvpPartial = false;
-			ag.failedEventIds = new Set();
-			ag.savedEventIds = new Set();
-			ag.recentItems = [];
-			ag.attendanceEventIds = new Set();
-			ag.agendaTypeFilter = 'all';
-			ag.worksByEventId = {};
-			ag.scheduleByEventId = {};
-			ag.heldFileIds = null;
-			resetManagement();
-			ag.libraryPickersLoading = false;
-			ag.worksRowsLoading = false;
-			closeAttendancePanel();
-			ag.rosterCache = null;
-			ag.rosterRows = [];
-			ag.rosterPartial = false;
-			ag.sectionsCache = null;
-			ag.rosterSections = [];
-			ag.rosterReadFailed = false;
-			ag.sectionsReadFailed = false;
-			resetSeasonManage();
-			ag.attendanceFailedByEvent = new Map();
-			ag.myAttendance = [];
-			ag.attendancePartial = false;
-			ag.seasonSummaryExpanded = false;
-			ag.seasonMemberRates = [];
-			ag.seasonRatesLoaded = false;
-			ag.seasonRatesLoading = false;
-			ag.seasonRatesError = false;
-			ag.seasonRatesPartial = false;
-			ag.seasons = [];
-			closeSeasonCreateForm();
-			deps.closeEventCreateForm();
-			deps.closeSeriesCreateForm();
-			return;
-		}
-		const thisRequest = ++seq.requestId;
-		closeAttendancePanel();
-		ag.agendaLoading = true;
-		ag.agendaError = false;
-		ag.sessionExpired = false;
-		resetServedFromCache();
+	function resetMembership() {
 		ag.memberId = null;
 		ag.membership = 'loading';
 		ag.rsvpRights = 'loading';
 		ag.failedEventIds = new Set();
 		ag.savedEventIds = new Set();
+	}
+
+	function resetWorks() {
 		ag.worksByEventId = {};
 		ag.scheduleByEventId = {};
 		ag.heldFileIds = null;
 		resetManagement();
-		if (!keepSeasonManage) {
-			ag.agendaTypeFilter = 'all';
-			ag.rosterCache = null;
-			ag.rosterRows = [];
-			ag.rosterPartial = false;
-			ag.sectionsCache = null;
-			ag.rosterSections = [];
-			ag.rosterReadFailed = false;
-			ag.sectionsReadFailed = false;
-			resetSeasonManage();
-			deps.closeSeriesCreateForm();
-		}
+	}
+
+	function resetWorksIdle() {
+		resetWorks();
+		ag.libraryPickersLoading = false;
+		ag.worksRowsLoading = false;
+	}
+
+	function resetRosterCaches() {
+		ag.rosterCache = null;
+		ag.rosterRows = [];
+		ag.rosterPartial = false;
+		ag.sectionsCache = null;
+		ag.rosterSections = [];
+		ag.rosterReadFailed = false;
+		ag.sectionsReadFailed = false;
+	}
+
+	function resetSeasonRates() {
 		ag.attendanceFailedByEvent = new Map();
 		ag.myAttendance = [];
-		ag.rsvpPartial = false;
 		ag.attendancePartial = false;
 		ag.seasonSummaryExpanded = false;
 		ag.seasonMemberRates = [];
@@ -134,6 +90,46 @@ export function createSelectedLoad(
 		ag.seasons = [];
 		closeSeasonCreateForm();
 		deps.closeEventCreateForm();
+	}
+
+	return function loadForSelected(opts: { keepSeasonManage?: boolean } = {}) {
+		const keepSeasonManage = opts.keepSeasonManage === true;
+		const heldSeasonId = keepSeasonManage && deps.seasonManageOpen() ? ag.manageableSeasonId : null;
+		const current = deps.selected();
+		if (!current) {
+			ag.agendaItems = [];
+			ag.agendaLoading = false;
+			ag.agendaError = false;
+			resetMembership();
+			ag.rsvpByEventId = {};
+			ag.rsvpPartial = false;
+			ag.recentItems = [];
+			ag.attendanceEventIds = new Set();
+			ag.agendaTypeFilter = 'all';
+			resetWorksIdle();
+			closeAttendancePanel();
+			resetRosterCaches();
+			resetSeasonManage();
+			resetSeasonRates();
+			deps.closeSeriesCreateForm();
+			return;
+		}
+		const thisRequest = ++seq.requestId;
+		closeAttendancePanel();
+		ag.agendaLoading = true;
+		ag.agendaError = false;
+		ag.sessionExpired = false;
+		resetServedFromCache();
+		resetMembership();
+		resetWorks();
+		if (!keepSeasonManage) {
+			ag.agendaTypeFilter = 'all';
+			resetRosterCaches();
+			resetSeasonManage();
+			deps.closeSeriesCreateForm();
+		}
+		ag.rsvpPartial = false;
+		resetSeasonRates();
 
 		const personId = current.personId;
 
@@ -256,12 +252,7 @@ export function createSelectedLoad(
 				}
 				ag.recentItems = [];
 				ag.attendanceEventIds = new Set();
-				ag.worksByEventId = {};
-				ag.scheduleByEventId = {};
-				ag.heldFileIds = null;
-				resetManagement();
-				ag.libraryPickersLoading = false;
-				ag.worksRowsLoading = false;
+				resetWorksIdle();
 				resetSeasonManage();
 				ag.seasons = [];
 			});

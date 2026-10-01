@@ -45,6 +45,19 @@
 
 	const seasonDateFmt = isoDateFormatter('UTC');
 
+	const dateFields = [
+		{
+			field: 'start_date',
+			label: m.season_manage_start_date_label,
+			editLabel: m.season_manage_edit_start_date_label
+		},
+		{
+			field: 'end_date',
+			label: m.season_manage_end_date_label,
+			editLabel: m.season_manage_edit_end_date_label
+		}
+	] as const;
+
 	function formatSeasonDate(isoDate: string): string {
 		if (!isoDate) return '';
 		const at = new Date(isoDate);
@@ -215,100 +228,55 @@
 </div>
 
 <div class="flex gap-4">
-	<div class="min-w-0 flex-1">
-		<p class="text-xs tracking-wide text-ink-2 uppercase">
-			{m.season_manage_start_date_label()}
-		</p>
-		{#if seasonEditingField === 'start_date'}
-			<input
-				type="date"
-				data-testid="season-edit-input-start_date"
-				aria-label={m.season_manage_start_date_label()}
-				value={seasonEditDraft}
-				use:focusOnMount
-				oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
-				onblur={() => confirmSeasonFieldEdit('start_date')}
-				onkeydown={(e) => handleSeasonFieldKeydown(e, 'start_date')}
-				class="border-b border-ink bg-transparent text-ink"
-			/>
-		{:else}
-			<button
-				type="button"
-				data-testid="season-edit-btn-start_date"
-				disabled={seasonEditPending.start_date === true || isOffline}
-				class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
-				onclick={() => beginSeasonFieldEdit('start_date')}
-			>
-				<span class="sr-only">{m.season_manage_edit_start_date_label()}</span>
-				<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-					>✎</span
-				>
-				<span data-testid="season-manage-start_date" class="text-base text-ink-2">
-					{#if seasonManageStartDate}
-						{formatSeasonDate(seasonManageStartDate)}
-					{:else}
-						{m.season_manage_date_unset()}
-					{/if}
-				</span>
-			</button>
-		{/if}
-		{#if seasonEditErrors.start_date}
-			<p
-				data-testid="season-edit-error-start_date"
-				role="alert"
-				class="text-xs text-red-700"
-			>
-				{seasonFieldErrorText('start_date')}
+	{#each dateFields as { field, label, editLabel } (field)}
+		<div class="min-w-0 flex-1">
+			<p class="text-xs tracking-wide text-ink-2 uppercase">
+				{label()}
 			</p>
-		{/if}
-	</div>
-	<div class="min-w-0 flex-1">
-		<p class="text-xs tracking-wide text-ink-2 uppercase">
-			{m.season_manage_end_date_label()}
-		</p>
-		{#if seasonEditingField === 'end_date'}
-			<input
-				type="date"
-				data-testid="season-edit-input-end_date"
-				aria-label={m.season_manage_end_date_label()}
-				value={seasonEditDraft}
-				use:focusOnMount
-				oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
-				onblur={() => confirmSeasonFieldEdit('end_date')}
-				onkeydown={(e) => handleSeasonFieldKeydown(e, 'end_date')}
-				class="border-b border-ink bg-transparent text-ink"
-			/>
-		{:else}
-			<button
-				type="button"
-				data-testid="season-edit-btn-end_date"
-				disabled={seasonEditPending.end_date === true || isOffline}
-				class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
-				onclick={() => beginSeasonFieldEdit('end_date')}
-			>
-				<span class="sr-only">{m.season_manage_edit_end_date_label()}</span>
-				<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
-					>✎</span
+			{#if seasonEditingField === field}
+				<input
+					type="date"
+					data-testid="season-edit-input-{field}"
+					aria-label={label()}
+					value={seasonEditDraft}
+					use:focusOnMount
+					oninput={(e) => (seasonEditDraft = (e.currentTarget as HTMLInputElement).value)}
+					onblur={() => confirmSeasonFieldEdit(field)}
+					onkeydown={(e) => handleSeasonFieldKeydown(e, field)}
+					class="border-b border-ink bg-transparent text-ink"
+				/>
+			{:else}
+				<button
+					type="button"
+					data-testid="season-edit-btn-{field}"
+					disabled={seasonEditPending[field] === true || isOffline}
+					class="group flex min-h-11 w-full appearance-none items-center gap-1 border-0 bg-transparent p-0 text-left disabled:opacity-40"
+					onclick={() => beginSeasonFieldEdit(field)}
 				>
-				<span data-testid="season-manage-end_date" class="text-base text-ink-2">
-					{#if seasonManageEndDate}
-						{formatSeasonDate(seasonManageEndDate)}
-					{:else}
-						{m.season_manage_date_unset()}
-					{/if}
-				</span>
-			</button>
-		{/if}
-		{#if seasonEditErrors.end_date}
-			<p
-				data-testid="season-edit-error-end_date"
-				role="alert"
-				class="text-xs text-red-700"
-			>
-				{seasonFieldErrorText('end_date')}
-			</p>
-		{/if}
-	</div>
+					<span class="sr-only">{editLabel()}</span>
+					<span aria-hidden="true" class="text-xs text-ink-3 group-hover:text-ink"
+						>✎</span
+					>
+					<span data-testid="season-manage-{field}" class="text-base text-ink-2">
+						{#if seasonFieldValue(field)}
+							{formatSeasonDate(seasonFieldValue(field))}
+						{:else}
+							{m.season_manage_date_unset()}
+						{/if}
+					</span>
+				</button>
+			{/if}
+			{#if seasonEditErrors[field]}
+				<p
+					data-testid="season-edit-error-{field}"
+					role="alert"
+					class="text-xs text-red-700"
+				>
+					{seasonFieldErrorText(field)}
+				</p>
+			{/if}
+		</div>
+	{/each}
 </div>
 
 <div

@@ -6,6 +6,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { AttendanceStatus, MyAttendance } from '$lib/attendance/attendanceData';
+import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type { ManageRightsState, PickerOption, WorkRow } from '$lib/repertoire/types';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
@@ -89,6 +90,7 @@ export function createAgendaLoadState() {
 		attendanceLoading: false,
 		attendanceError: false,
 		attendanceRoster: [] as RosterRow[],
+		attendanceRosterPartial: false,
 		attendanceMap: {} as Record<string, { attendanceId: string; status: AttendanceStatus }>,
 		attendanceRsvpMap: {} as Record<string, { rsvpId: string; status: string }>,
 		attendancePendingMemberIds: new Set() as Set<string>,
@@ -112,7 +114,6 @@ export function createLoadCounters() {
 	return {
 		scopedEditionWorkIdsRequested: new Set<string>(),
 		panelRepertoireSeasonId: null as string | null,
-		attendanceRequestId: 0,
 		requestId: 0,
 		pressureSweepRanAtOpen: false,
 		worksLoadId: 0,
@@ -130,6 +131,7 @@ export interface AgendaLoadDeps {
 	collectivesState: () => CollectiveState;
 	isRepertoirePending: (key: string) => boolean;
 	pendingMembersForEvent: (eventId: string) => Set<string>;
+	pendingEntriesForEvent: (eventId: string) => Record<string, AttendanceEntry>;
 	resetSeasonManage: () => void;
 	closeSeasonCreateForm: () => void;
 	closeEventCreateForm: () => void;
@@ -157,7 +159,7 @@ export interface AgendaLoadDeps {
 export function createAgendaLoader(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const roster = createAgendaRosterCache(ag);
 	const works = createAgendaWorksLoad(ag, seq, deps);
-	const panels = createAgendaPanels(ag, seq, deps, roster.getRoster);
+	const panels = createAgendaPanels(ag, seq, deps);
 	const loadForSelected = createSelectedLoad(ag, seq, deps, {
 		...works,
 		closeAttendancePanel: panels.closeAttendancePanel

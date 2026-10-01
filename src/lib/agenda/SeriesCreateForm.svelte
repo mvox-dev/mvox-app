@@ -105,35 +105,29 @@
 	const seriesCreateDayApplies = $derived(seriesCreateRepeat !== 'daily');
 	const seriesCreateDayOfWeek = $derived(seriesCreateDay === '' ? 0 : Number(seriesCreateDay));
 
-	const seriesCreatePreviewDates = $derived.by(() => {
-		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
-		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
-			return null;
-		}
+	function datesFor(skipDates: string[]): string[] {
 		return generateEventDates({
 			repeat: seriesCreateRepeat,
 			dayOfWeek: seriesCreateDayOfWeek,
 			timeOfDay: seriesCreateTime,
 			from: seriesCreateFrom,
 			until: seriesCreateUntil,
-			skipDates: seriesCreateSkipDates
+			skipDates
 		});
-	});
+	}
 
-	const seriesCreateCandidateDates = $derived.by(() => {
-		if (seriesCreateDayApplies && seriesCreateDay === '') return null;
-		if (!seriesCreateTime || !seriesCreateFrom || !seriesCreateUntil) {
-			return null;
-		}
-		return generateEventDates({
-			repeat: seriesCreateRepeat,
-			dayOfWeek: seriesCreateDayOfWeek,
-			timeOfDay: seriesCreateTime,
-			from: seriesCreateFrom,
-			until: seriesCreateUntil,
-			skipDates: []
-		});
-	});
+	const seriesCreateDatesReady = $derived(
+		!(seriesCreateDayApplies && seriesCreateDay === '') &&
+			!!seriesCreateTime &&
+			!!seriesCreateFrom &&
+			!!seriesCreateUntil
+	);
+
+	const seriesCreatePreviewDates = $derived(
+		seriesCreateDatesReady ? datesFor(seriesCreateSkipDates) : null
+	);
+
+	const seriesCreateCandidateDates = $derived(seriesCreateDatesReady ? datesFor([]) : null);
 
 	const seriesCreateGridDates = $derived.by(() => {
 		if (seriesCreateCandidateDates === null) return null;
@@ -278,16 +272,7 @@
 			return;
 		}
 
-		const dates: string[] =
-			resume?.remaining ??
-			generateEventDates({
-				repeat: seriesCreateRepeat,
-				dayOfWeek: seriesCreateDayOfWeek,
-				timeOfDay: time,
-				from: seriesCreateFrom,
-				until: seriesCreateUntil,
-				skipDates: seriesCreateSkipDates
-			});
+		const dates: string[] = resume?.remaining ?? datesFor(seriesCreateSkipDates);
 		if (dates.length === 0) {
 			setSeriesCreateError(m.series_create_no_dates, null);
 			return;

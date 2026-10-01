@@ -2,7 +2,7 @@
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import type { RosterRow } from '$lib/roster/rosterData';
 	import { isPastDetail } from '$lib/events/eventTime';
 	import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 	import AttendanceBadge from '$lib/components/attendance/AttendanceBadge.svelte';
@@ -16,6 +16,14 @@
 	import { createAttendanceWriteStatus } from '$lib/attendance/attendanceWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
 	import { focusAfterRender } from '$lib/a11y/focusable';
+	import {
+		createAttendancePanelLoad,
+		failedMarksFor,
+		withFailedMark,
+		type AttendanceMap,
+		type AttendanceRsvpMap,
+		type FailedByEvent
+	} from '$lib/attendance/attendancePanelLoad';
 
 	let {
 		detail,
@@ -42,10 +50,12 @@
 	let attendancePanelError = $state(false);
 	let attendanceRoster = $state<RosterRow[]>([]);
 	let attendanceRosterPartial = $state(false);
-	let attendanceRsvpMap = $state<Record<string, { rsvpId: string; status: string }>>({});
+	let attendanceRsvpMap = $state<AttendanceRsvpMap>({});
 	let attendancePendingMemberIds = $state<Set<string>>(new Set());
 	let attendanceFailedMemberIds = $state<Set<string>>(new Set());
 	let attendanceSavedMemberIds = $state<Set<string>>(new Set());
+	let failedByEvent: FailedByEvent = new Map();
+	let panelMarks: AttendanceMap = {};
 
 	const myAttendanceStatus = $derived<AttendanceStatus | 'not-recorded' | null>(
 		ev.memberId === null ? null : (ev.attendanceMap[ev.memberId]?.status ?? 'not-recorded')
@@ -90,30 +100,31 @@
 		attendancePanelLoading = true;
 		attendancePanelError = false;
 		attendanceSavedMemberIds = new Set();
-		const cfg = cfgFor(selected.db);
 		const evId = detail.id;
 		const g = generation();
-		Promise.all([loadRoster(cfg), actions.listAttendance(cfg, evId), actions.listAllRsvpsForEvent(cfg, evId)])
-			.then(([rosterRead, records, rsvps]) => {
-				if (g !== generation() || detail?.id !== evId) return;
-				attendanceRoster = rosterRead.items;
-				attendanceRosterPartial = rosterRead.truncated;
-				ev.attendanceMap = actions.attendanceByMemberId(records);
-				const rsvpMap: Record<string, { rsvpId: string; status: string }> = {};
-				for (const r of rsvps) rsvpMap[r.memberId] = { rsvpId: r.rsvpId, status: r.status };
-				attendanceRsvpMap = rsvpMap;
+		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(evId);
+		panelMarks = attendanceQueue.pendingEntriesForEvent(evId);
+		attendanceFailedMemberIds = failedMarksFor(failedByEvent, evId);
+		attendanceLoad.open(cfgFor(selected.db), evId, {
+			isCurrent: () => g === generation() && detail?.id === evId,
+			liveAttendance: () => panelMarks,
+			loaded(read) {
+				attendanceRoster = read.roster;
+				attendanceRosterPartial = read.rosterPartial;
+				ev.attendanceMap = read.attendance;
+				attendanceRsvpMap = read.rsvps;
 				attendancePanelLoading = false;
-			})
-			.catch((e) => {
-				console.error('event detail: attendance panel load failed', e);
-				if (g !== generation() || detail?.id !== evId) return;
+			},
+			failed() {
 				attendancePanelLoading = false;
 				attendancePanelError = true;
 				attendanceRosterPartial = false;
-			});
+			}
+		});
 	}
 
 	function closeAttendancePanel(): void {
+		attendanceLoad.cancel();
 		attendancePanelOpen = false;
 		void focusAfterRender(() =>
 			document.querySelector<HTMLElement>(
@@ -133,6 +144,9 @@
 						if (entry) next[targetMemberId] = entry;
 						else delete next[targetMemberId];
 						ev.attendanceMap = next;
+						panelMarks = { ...panelMarks };
+						if (entry) panelMarks[targetMemberId] = entry;
+						else delete panelMarks[targetMemberId];
 					},
 					setPending(targetMemberId, pending) {
 						attendancePendingMemberIds = withItem(attendancePendingMemberIds, targetMemberId, pending);
@@ -145,9 +159,25 @@
 							attendanceSavedMemberIds = withItem(attendanceSavedMemberIds, targetMemberId, saved);
 						}
 					}
+				},
+				onPending(evId, targetMemberId) {
+					failedByEvent = withFailedMark(failedByEvent, evId, targetMemberId, false);
+				},
+				onRevert(evId, targetMemberId) {
+					failedByEvent = withFailedMark(failedByEvent, evId, targetMemberId, true);
 				}
 			})
 		)
+	);
+
+	const attendanceLoad = untrack(() =>
+		createAttendancePanelLoad({
+			label: 'event detail',
+			listAttendance: actions.listAttendance,
+			listAllRsvpsForEvent: actions.listAllRsvpsForEvent,
+			attendanceByMemberId: actions.attendanceByMemberId,
+			pendingMembersForEvent: (evId) => attendanceQueue.pendingMembersForEvent(evId)
+		})
 	);
 
 	function handleAttendanceToggle(targetMemberId: string, newStatus: AttendanceStatus | null): void {
