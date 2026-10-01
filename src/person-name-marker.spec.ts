@@ -183,8 +183,11 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/+page.svelte': {
 		'selected.name': 'the selected collective'
 	},
-	'src/lib/agenda/SeasonManagePanel.svelte': {
+	'src/lib/agenda/SeasonCardHeader.svelte': {
 		'ms.name': 'a season',
+		seasonManageDeleteName: 'the season being deleted'
+	},
+	'src/lib/agenda/SeasonManagePanel.svelte': {
 		seasonManageDeleteName: 'the season being deleted'
 	},
 	'src/lib/agenda/SeasonManageFields.svelte': {
