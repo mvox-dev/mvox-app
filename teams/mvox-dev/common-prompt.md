@@ -166,14 +166,14 @@ Josquin merges after Bentham GREEN + team-lead approval. This is a delegation fr
 
 ### Merge Procedure
 
-**Every merge goes through a pull request.** Since 2026-09-19 (#415, Mihkel) main carries branch protection with the CI check `check + test` required, so a direct push to main is rejected. This repo has no git hooks — author the co-author trailer into the squash body by hand.
+**Every merge goes through a pull request.** Since 2026-09-19 (#415, Mihkel) main carries branch protection with the CI check `check + test` required, so a direct push to main is rejected. Commits and PR bodies end with only the author's `(*MVOX:<Name>*)`: no Co-authored-by trailer, email or session link (Mihkel 2026-10-01).
 
 ```bash
 git checkout <feature-branch> && git push -u origin <feature-branch>
 cat > /tmp/pr-<N>.md <<'EOF'
 ...body (STATED CHOICES, review line, Closes #N)...
 
-Co-authored-by: Mihkel Putrinš <mihkel.putrinsh@gmail.com>
+(*MVOX:<Name>*)
 EOF
 gh pr create --base main --head <feature-branch> --title "feat(#N): title" --body-file /tmp/pr-<N>.md
 # the CI run can take a few seconds to register — poll before watching

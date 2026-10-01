@@ -103,3 +103,15 @@ EXCEPTIONS once it is ≤1500, and fix REGISTER both ways (add new files over
 #612: a new runtime dependency fails `workers/entu-rights-mcp/fences.spec.ts` (exact
 `dependencies` pin, designed to be refreshed). Editing it meant trimming every comment
 block in the file. Budget for that whenever a pin lives in an old spec.
+
+## [PATTERN] Comment-rule trims on touched files (consolidation-700 W1, 2026-10-01)
+
+Bulk trim: drop whole-line comment runs >3 lines or with review history, then drop short
+runs until the share is under 10%; keep directives. Check that `git diff -U0` removes only
+`//`, `*` or blank lines, then rewrite the top line by hand, because a cut run leaves it mid-sentence.
+
+## [GOTCHA] Spread attributes hide a control's class from unclassed-controls.spec (#633, 2026-10-01)
+
+A snippet-param spread (`{...control}`) on an input/select/textarea fails the guard, which
+needs `class=` in the tag. Write `class={control.class}` by name. The guard is in src/*.spec.ts,
+which `test:changed` does not run, so run the root specs by path before committing.
