@@ -360,7 +360,8 @@
 					eventCreateType = (e.currentTarget as HTMLSelectElement).value;
 					clearEventCreateError();
 				}}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			>
 				<option value="">{m.event_create_type_placeholder()}</option>
 				{#each CANONICAL_EVENT_TYPES as type (type)}
@@ -378,7 +379,8 @@
 				value={eventCreateSeasonId}
 				onchange={(e) =>
 					handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			>
 				<option value="">{m.event_create_season_placeholder()}</option>
 				{#each seasons as season (season.id)}
@@ -395,7 +397,8 @@
 				value={eventCreateSeriesId}
 				onchange={(e) =>
 					handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			>
 				<option value="">{m.event_create_series_none()}</option>
 				{#each eventCreateSeriesOptions as series (series.id)}
@@ -424,7 +427,8 @@
 					eventCreateName = (e.currentTarget as HTMLInputElement).value;
 					clearEventCreateError();
 				}}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>
@@ -524,7 +528,8 @@
 				value={eventCreateCapacity}
 				oninput={(e) =>
 					(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>
@@ -539,7 +544,8 @@
 				value={eventCreateLocation}
 				oninput={(e) =>
 					(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>
@@ -559,7 +565,8 @@
 				value={eventCreateDescription}
 				oninput={(e) =>
 					(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			></textarea>
 		{/snippet}
 	</Field>

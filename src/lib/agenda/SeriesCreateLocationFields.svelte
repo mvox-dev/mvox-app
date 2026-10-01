@@ -40,7 +40,8 @@
 					duration = (e.currentTarget as HTMLInputElement).value;
 					onedit();
 				}}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>
@@ -53,7 +54,8 @@
 				placeholder={m.series_create_location_placeholder()}
 				value={location}
 				oninput={(e) => (location = (e.currentTarget as HTMLInputElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>

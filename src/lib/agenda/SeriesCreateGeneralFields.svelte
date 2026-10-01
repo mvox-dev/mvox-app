@@ -43,7 +43,8 @@
 					name = (e.currentTarget as HTMLInputElement).value;
 					onedit();
 				}}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			/>
 		{/snippet}
 	</Field>
@@ -57,7 +58,8 @@
 					eventType = (e.currentTarget as HTMLSelectElement).value;
 					onedit();
 				}}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			>
 				{#each CANONICAL_EVENT_TYPES as type (type)}
 					<option value={type}>{eventTypeLabel(type)}</option>
@@ -73,7 +75,8 @@
 				value={description}
 				oninput={(e) =>
 					(description = (e.currentTarget as HTMLTextAreaElement).value)}
-				{...control}
+				disabled={control.disabled}
+				class={control.class}
 			></textarea>
 		{/snippet}
 	</Field>

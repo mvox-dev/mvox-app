@@ -46,7 +46,8 @@
 					value={repeat}
 					onchange={(e) =>
 						(repeat = (e.currentTarget as HTMLSelectElement).value as RepeatPattern)}
-					{...control}
+					disabled={control.disabled}
+					class={control.class}
 				>
 					<option value="weekly">{m.series_create_repeat_weekly()}</option>
 					<option value="biweekly">{m.series_create_repeat_biweekly()}</option>
@@ -65,7 +66,8 @@
 							day = (e.currentTarget as HTMLSelectElement).value;
 							onedit();
 						}}
-						{...control}
+						disabled={control.disabled}
+						class={control.class}
 					>
 						<option value="">{m.series_create_day_placeholder()}</option>
 						<option value="1">{m.series_create_day_1()}</option>
@@ -117,7 +119,8 @@
 						from = (e.currentTarget as HTMLInputElement).value;
 						onedit();
 					}}
-					{...control}
+					disabled={control.disabled}
+					class={control.class}
 				/>
 			{/snippet}
 		</Field>
@@ -132,7 +135,8 @@
 						until = (e.currentTarget as HTMLInputElement).value;
 						onedit();
 					}}
-					{...control}
+					disabled={control.disabled}
+					class={control.class}
 				/>
 			{/snippet}
 		</Field>

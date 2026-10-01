@@ -301,7 +301,8 @@
 							).value;
 							clearEventConvertError();
 						}}
-						{...control}
+						disabled={control.disabled}
+						class={control.class}
 					/>
 				{/snippet}
 			</Field>
@@ -320,7 +321,8 @@
 							).value;
 							clearEventConvertError();
 						}}
-						{...control}
+						disabled={control.disabled}
+						class={control.class}
 					/>
 				{/snippet}
 			</Field>
@@ -349,7 +351,8 @@
 							).value;
 							clearEventConvertError();
 						}}
-						{...control}
+						disabled={control.disabled}
+						class={control.class}
 					/>
 				{/snippet}
 			</Field>
