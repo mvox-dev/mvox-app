@@ -103,10 +103,7 @@
 		const evId = detail.id;
 		const g = generation();
 		attendancePendingMemberIds = attendanceQueue.pendingMembersForEvent(evId);
-		panelMarks = {};
-		for (const mid of attendancePendingMemberIds) {
-			if (mid in ev.attendanceMap) panelMarks[mid] = ev.attendanceMap[mid];
-		}
+		panelMarks = attendanceQueue.pendingEntriesForEvent(evId);
 		attendanceFailedMemberIds = failedMarksFor(failedByEvent, evId);
 		attendanceLoad.open(cfgFor(selected.db), evId, {
 			isCurrent: () => g === generation() && detail?.id === evId,

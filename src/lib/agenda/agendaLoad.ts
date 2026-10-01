@@ -6,6 +6,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { AttendanceStatus, MyAttendance } from '$lib/attendance/attendanceData';
+import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type { ManageRightsState, PickerOption, WorkRow } from '$lib/repertoire/types';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
@@ -130,6 +131,7 @@ export interface AgendaLoadDeps {
 	collectivesState: () => CollectiveState;
 	isRepertoirePending: (key: string) => boolean;
 	pendingMembersForEvent: (eventId: string) => Set<string>;
+	pendingEntriesForEvent: (eventId: string) => Record<string, AttendanceEntry>;
 	resetSeasonManage: () => void;
 	closeSeasonCreateForm: () => void;
 	closeEventCreateForm: () => void;

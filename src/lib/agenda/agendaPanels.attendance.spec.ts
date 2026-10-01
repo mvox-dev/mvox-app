@@ -5,10 +5,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+const { applyAttendanceChangeMock } = vi.hoisted(() => ({ applyAttendanceChangeMock: vi.fn() }));
+vi.mock('$lib/attendance/attendanceOptimistic', () => ({
+	applyAttendanceChange: applyAttendanceChangeMock
+}));
 
 import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from './agendaLoad';
 import type { AgendaLoadDeps } from './agendaLoad';
 import type { AgendaItem } from './types';
+import { attendanceQueueHandlers } from './attendancePanel';
+import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
+import { attendanceByMemberId } from '$lib/attendance/attendanceData';
+import { createWriteTokens } from '$lib/net/writeTokens';
 import { setToken, clearAll } from '$lib/auth/storage';
 
 const ITEM: AgendaItem = {
@@ -31,18 +39,23 @@ function setup(listAttendance = vi.fn().mockResolvedValue([])) {
 	ag.attendanceEventIds = new Set([ITEM.id]);
 	const deps = {
 		selected: () => ({ db: 'sampledb', personId: 'person-p' }),
-		pendingMembersForEvent: () => new Set<string>(),
+		pendingMembersForEvent: (eventId: string) => queue.pendingMembersForEvent(eventId),
+		pendingEntriesForEvent: (eventId: string) => queue.pendingEntriesForEvent(eventId),
 		listAttendance,
 		listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
-		attendanceByMemberId: () => ({})
+		attendanceByMemberId
 	} as unknown as AgendaLoadDeps;
-	return { ag, loader: createAgendaLoader(ag, createLoadCounters(), deps) };
+	const queue = createAttendanceChangeQueue(
+		attendanceQueueHandlers(ag, createWriteTokens(() => 'sampledb'))
+	);
+	return { ag, queue, loader: createAgendaLoader(ag, createLoadCounters(), deps) };
 }
 
 beforeEach(() => setToken('jwt-abc'));
 
 afterEach(() => {
 	loadRosterMock.mockReset();
+	applyAttendanceChangeMock.mockReset();
 	vi.restoreAllMocks();
 	clearAll({ preserveProvider: false });
 });
@@ -63,6 +76,24 @@ describe('agenda attendance panel load', () => {
 		expect(loadRosterMock).toHaveBeenCalledTimes(2);
 		expect(ag.attendanceRoster).toEqual([ALICE, BERTA]);
 		expect(ag.attendanceRosterPartial).toBe(true);
+	});
+
+	it('keeps a mark still saving from before a reopen when the server has the old value', async () => {
+		const old = { attendanceId: 'att-1', memberId: 'm1', status: 'absent' as const };
+		const { ag, queue, loader } = setup(vi.fn().mockResolvedValue([old]));
+		loadRosterMock.mockResolvedValue({ items: [ALICE], total: 1, truncated: false });
+		applyAttendanceChangeMock.mockReturnValue(new Promise(() => {}));
+		loader.openAttendancePanel(ITEM);
+		await settle();
+
+		const cfg = { db: 'sampledb', token: 'jwt-abc' };
+		queue.request({ cfg, eventId: ITEM.id, memberId: 'm1', existing: old, newStatus: 'present' });
+		loader.closeAttendancePanel();
+		loader.openAttendancePanel(ITEM);
+		await settle();
+
+		expect(ag.attendanceMap).toEqual({ m1: { attendanceId: 'att-1', status: 'present' } });
+		expect(ag.attendancePendingMemberIds).toEqual(new Set(['m1']));
 	});
 
 	it('logs a failed load', async () => {

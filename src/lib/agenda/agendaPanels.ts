@@ -27,7 +27,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 		ag.attendanceError = false;
 		ag.attendanceRoster = [];
 		ag.attendanceRosterPartial = false;
-		ag.attendanceMap = {};
+		ag.attendanceMap = deps.pendingEntriesForEvent(item.id);
 		ag.attendanceRsvpMap = {};
 		ag.attendancePendingMemberIds = deps.pendingMembersForEvent(item.id);
 		ag.attendanceFailedMemberIds = failedMarksFor(ag.attendanceFailedByEvent, item.id);
