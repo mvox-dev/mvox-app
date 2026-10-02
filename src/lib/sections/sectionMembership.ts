@@ -1,5 +1,6 @@
 // Section membership writes: a member's sections are its `_parent` references (PO, 2026-08-11).
 import { entuFetch } from '$lib/entu/request';
+import { readParentValues } from '$lib/entu/readParents';
 import { SectionMembershipMissingError } from './sectionErrors';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
@@ -37,12 +38,13 @@ export async function unassignMemberSection(
 	sectionId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(cfg.db, `entity/${memberId}?props=_parent`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`unassignMemberSection lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: { _parent?: MemberParentValue[] } };
-	const matches = (body.entity?._parent ?? []).filter(
-		(p) => p.entity_type === 'section' && p.reference === sectionId
+	const parents = await readParentValues<MemberParentValue>(
+		cfg,
+		memberId,
+		'unassignMemberSection',
+		fetchImpl
 	);
+	const matches = parents.filter((p) => p.entity_type === 'section' && p.reference === sectionId);
 
 	// Tagged: the server already holds the state the optimistic UI moved to, so the caller
 	// keeps the removal instead of reverting it.

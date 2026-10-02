@@ -11,7 +11,6 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/components/StrokeSurface.svelte',
 	'src/lib/components/admin/InviteSurface.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
-	'src/lib/roster/memberLifecycle.ts',
 	'src/routes/part/[fileId]/+page.svelte'
 ];
 
