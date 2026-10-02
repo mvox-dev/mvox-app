@@ -1,27 +1,4 @@
-// #165 review F5 — the shared "replace a single-valued Entu property"
-// choreography, extracted from eventFieldEdit.ts / collectiveName.ts. Both
-// callers keep their own specs pinning the wire shape AT the caller boundary;
-// this file pins the rule itself, once, at the place it now lives.
-//
-// #264 RED — the rule goes ATOMIC (PO ruling, branch (i)). Entu's native
-// overwrite: a POST entry carrying the OLD property value's `_id` alongside
-// the new value fields replaces that exact value in the SAME setEntity call
-// (entu-www docs, "Overwriting a Property Value"; entu-api entity.js —
-// `_id` → oldPIds → soft-deleted). The old GET → POST-new → DELETE-old
-// choreography left a half-landing window (POST lands, DELETE fails →
-// phantom duplicate); the atomic overwrite closes it, and every caller of
-// this helper inherits the fix.
-//
-// The pinned choreography is now:
-//   1. GET entity/{entityId}?props={prop} — the existing value id(s). Still
-//      first: the overwrite entry cannot be built blind.
-//   2. POST entity/{entityId}:
-//      - ≥1 existing → body EXACTLY [{ _id: <first existing id>, ...value }]
-//      - none existing → body EXACTLY [value]
-//   3. EXTRA stale ids (corrupted multi-value state only) → DELETE
-//      /property/{id} each, strictly AFTER the POST — a failure leaves a
-//      recoverable duplicate, never an empty property. The NORMAL path
-//      (zero or one existing value) issues ZERO deletes.
+// The shared overwrite and removal helpers: wire shape, order of writes, and failure outcomes.
 import { describe, expect, it, vi } from 'vitest';
 import { replaceEntityProperty, clearEntityProperty, overwriteEntityValues } from './replaceProperty';
 

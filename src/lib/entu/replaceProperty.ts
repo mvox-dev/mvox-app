@@ -1,87 +1,68 @@
-// src/lib/entu/replaceProperty.ts
-//
-// #165 review F5 — the ONE implementation of Entu's "replace a single-valued
-// property" choreography. Extracted from eventFieldEdit.ts (#104 TE.4), which
-// collectiveName.ts (#165) had cloned verbatim; both are now thin callers so
-// the house rule below only ever has to be corrected in one place.
-//
-// #264 (PO ruling, branch (i)) — the rule goes ATOMIC. Entu's native overwrite
-// (entu-www docs, "Overwriting a Property Value"; entu-api entity.js — a POST
-// entry carrying an existing value's `_id` alongside the new fields makes
-// `setEntity` soft-delete that old value in the SAME call) replaces the old
-// GET → POST-new → DELETE-old choreography, which left a half-landing window
-// (POST lands, DELETE fails → phantom duplicate). The pinned choreography is
-// now:
-//
-//   1. GET entity/{entityId}?props={prop} — the existing value id(s). Still
-//      first: the overwrite entry cannot be built blind.
-//   2. POST entity/{entityId}:
-//      - ≥1 existing → body EXACTLY [{ _id: <FIRST existing id>, ...value }]
-//        (the atomic overwrite: `_id` pairs the new fields with the value
-//        being replaced, in the SAME call).
-//      - none existing → body EXACTLY [value] (nothing to overwrite).
-//   3. EXTRA stale ids (corrupted multi-value state ONLY — normal data never
-//      holds more than one) → DELETE /property/{id} each, strictly AFTER the
-//      POST landed. A failed extra-sweep leaves a recoverable duplicate,
-//      never an empty property. The NORMAL path (zero or one existing value)
-//      issues ZERO deletes.
-//
-// Non-2xx anywhere throws (fail loud, no silent success) — turning that into
-// an optimistic revert + inline error is the calling surface's job.
-//
-// #264 review F2 — THE OVERWRITE IS NOT A COMPARE-AND-SWAP. `_id` names the
-// value to soft-delete; it is not a precondition. entu-api's `insertProperties`
-// (utils/entity.js) pops `_id` off the entry and inserts the new value
-// unconditionally, then `markPropertiesDeleted` runs ONE `updateMany` filtered
-// on `{ _id: { $in: oldPIds }, entity, deleted: { $exists: false } }` with NO
-// matched-count check. So a POST carrying an `_id` that no longer names a live
-// value returns 200 and simply APPENDS — a silent duplicate, not an error.
-// Concurrency consequence: two overlapping replaces of the same property both
-// GET the same value id; the first POST consumes it; the SECOND lands 200 and
-// leaves the entity holding TWO values. Loudness is gone from this layer (the
-// old GET→POST→DELETE wire at least 404'd the losing DELETE), so every caller
-// whose control can be double-fired MUST keep its own single-flight guard —
-// that guard is now the only thing standing between a double-tap and a
-// duplicate value.
-//
-// This is a deliberate trade, not an oversight: the failure the PO ruling
-// closes (a POST that lands with a DELETE that 403s, leaving an entity with a
-// duplicate AND no way for a non-owner to clean it up) is unconditional on the
-// old wire, while the duplicate above needs a genuine race that the UI guards
-// already refuse.
+// The one implementation of Entu property overwrite (POST with the old value's `_id`) and removal.
 import { entuFetch } from './request';
 
-/** One Entu property value on the wire: `type` names the property, the other
- *  key is the typed slot it is written under (`string` / `number` /
- *  `datetime` / `reference` / …). */
 export type EntuWireValue = { type: string } & Record<string, unknown>;
 
-/**
- * Rewrite `value.type` on `entityId` to exactly `value` (see module header for
- * the pinned atomic-overwrite choreography). `label` prefixes the thrown
- * messages so a caller's failures stay identifiable in the console.
- */
+export type OverwriteStep = 'lookup' | 'post' | 'delete';
+
+export interface OverwriteOptions {
+	label?: string;
+	fail?: (step: OverwriteStep, res: Response) => Error | Promise<Error>;
+}
+
+export interface OverwriteEntry {
+	value: EntuWireValue;
+	existing: ReadonlyArray<{ _id: string }>;
+}
+
+const STEP_WORD: Record<OverwriteStep, string> = { lookup: 'lookup', post: 'POST', delete: 'delete' };
+
+function optionsOf(opts: string | OverwriteOptions, fallbackLabel: string) {
+	const options = typeof opts === 'string' ? { label: opts } : opts;
+	return { ...options, label: options.label ?? fallbackLabel };
+}
+
+async function failure(
+	step: OverwriteStep,
+	res: Response,
+	opts: OverwriteOptions & { label: string }
+): Promise<Error> {
+	if (opts.fail) return opts.fail(step, res);
+	return new Error(`${opts.label} ${STEP_WORD[step]} failed: ${res.status}`);
+}
+
 export async function replaceEntityProperty(
 	cfg: { db: string; token: string },
 	entityId: string,
 	value: EntuWireValue,
 	fetchImpl: typeof fetch = fetch,
-	label = 'replaceEntityProperty'
+	opts: string | OverwriteOptions = 'replaceEntityProperty'
 ): Promise<void> {
-	// The property to replace is the one being written — deriving it from the
-	// value (rather than taking it as a second argument) makes a GET/POST
-	// mismatch unrepresentable.
+	const options = optionsOf(opts, 'replaceEntityProperty');
 	const prop = value.type;
 
 	const getRes = await entuFetch(cfg.db, `entity/${entityId}?props=${prop}`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`${label} lookup failed: ${getRes.status}`);
+	if (!getRes.ok) throw await failure('lookup', getRes, options);
 	const body = (await getRes.json()) as { entity?: Record<string, Array<{ _id: string }>> };
 	const existing = body.entity?.[prop] ?? [];
-	const [oldValue, ...extras] = existing;
 
-	// The atomic overwrite: pair the FIRST existing value's `_id` with the new
-	// fields (or send `value` bare when there is nothing to overwrite).
-	const entry = oldValue ? { _id: oldValue._id, ...value } : value;
+	await overwriteEntityValues(cfg, entityId, [{ value, existing }], fetchImpl, options);
+}
+
+// The `_id` makes Entu replace the old value in the same call, so a failed POST leaves it intact.
+// It is not compare-and-swap: a gone `_id` appends, so double-firing callers keep their own guard.
+// Extra values exist only in damaged data and are deleted after the POST, never before.
+export async function overwriteEntityValues(
+	cfg: { db: string; token: string },
+	entityId: string,
+	entries: ReadonlyArray<OverwriteEntry>,
+	fetchImpl: typeof fetch = fetch,
+	opts: string | OverwriteOptions = 'overwriteEntityValues'
+): Promise<void> {
+	const options = optionsOf(opts, 'overwriteEntityValues');
+	const body = entries.map(({ value, existing }) =>
+		existing[0] ? { _id: existing[0]._id, ...value } : value
+	);
 
 	const postRes = await entuFetch(
 		cfg.db,
@@ -90,49 +71,22 @@ export async function replaceEntityProperty(
 		{
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([entry])
+			body: JSON.stringify(body)
 		},
 		fetchImpl
 	);
-	if (!postRes.ok) throw new Error(`${label} POST failed: ${postRes.status}`);
+	if (!postRes.ok) throw await failure('post', postRes, options);
 
-	// EXTRA-sweep — corrupted multi-value state only. STRICTLY AFTER the POST:
-	// a failure here leaves a stale duplicate (recoverable), never an empty
-	// property.
-	for (const v of extras) {
-		const delRes = await entuFetch(cfg.db, `property/${v._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`${label} delete failed: ${delRes.status}`);
+	for (const { existing } of entries) {
+		for (const v of existing.slice(1)) {
+			const delRes = await entuFetch(cfg.db, `property/${v._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+			if (!delRes.ok) throw await failure('delete', delRes, options);
+		}
 	}
 }
 
-/**
- * REMOVE `prop` from `entityId` entirely — the counterpart to
- * `replaceEntityProperty` for the one case an overwrite cannot express.
- *
- * #268 review F1 — WHY THIS EXISTS. An overwrite writes a VALUE, and every
- * typed slot needs a value that is legal for its type. `string: ''` is a legal
- * (if empty) string, so clearing a `string` property is still an overwrite.
- * A `datetime` slot has no such empty value: entu-api's `insertProperties`
- * (utils/entity.js) coerces with `if (property.datetime) { property.datetime =
- * new Date(property.datetime) }`, so `datetime: ''` is FALSY, skips the
- * coercion, and is inserted verbatim as a JS string — and
- * `validatePropertyTypes` waves it through (it only requires SOME non-meta
- * key), so the POST returns 200 while the stored value is type-invalid. It
- * then poisons everything that trusts the slot: a formula reaches
- * `''.toISOString()` (TypeError) and a datetime range filter's `new Date(value)`
- * can never match. So: clearing a non-string-typed property is a REMOVAL, not
- * an overwrite.
- *
- *   1. GET entity/{entityId}?props={prop} — the live value id(s).
- *   2. DELETE /property/{id} for each (the documented removal path — entu-www
- *      "Deleting a Property"; soft-delete, audit-preserving).
- *
- * Nothing existing → zero deletes, no POST, no throw. This is NOT the #264
- * ban's territory: that ruling forbids DELETE as part of the OVERWRITE
- * choreography (where a failed delete leaves a phantom duplicate). Here the
- * delete IS the operation, so a failure leaves the OLD value intact and
- * throws — never a half-cleared, never a type-invalid, property.
- */
+// A datetime slot has no empty value (Entu stores `datetime: ''` as a bad string), so clearing a
+// non-string property deletes its values instead of overwriting them.
 export async function clearEntityProperty(
 	cfg: { db: string; token: string },
 	entityId: string,
@@ -151,6 +105,5 @@ export async function clearEntityProperty(
 	}
 }
 
-// (*MVOX:Palestrina* — #165 review F5)
-// (*MVOX:Palestrina* — #264 GREEN: atomic overwrite-POST, extras-only sweep)
-// (*MVOX:Josquin* — #268 review F1: clearEntityProperty, the removal path)
+// (*MVOX:Palestrina*)
+// (*MVOX:Josquin*)

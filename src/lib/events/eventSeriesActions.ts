@@ -4,6 +4,7 @@
 // value, since "the first value" may be the season's.
 import { entuFetch } from '$lib/entu/request';
 import { readParentValues } from '$lib/entu/readParents';
+import { overwriteEntityValues } from '$lib/entu/replaceProperty';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 interface EventParentValue {
@@ -36,22 +37,18 @@ export async function reassignEventSeries(
 		fetchImpl
 	);
 	const existingSeries = seriesParentValueOf(parents);
-	const entry = existingSeries
-		? { _id: existingSeries._id, type: '_parent', reference: newSeriesId }
-		: { type: '_parent', reference: newSeriesId };
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${eventId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([entry])
-		},
-		fetchImpl
+	await overwriteEntityValues(
+		cfg,
+		eventId,
+		[
+			{
+				value: { type: '_parent', reference: newSeriesId },
+				existing: existingSeries ? [existingSeries] : []
+			}
+		],
+		fetchImpl,
+		'reassignEventSeries'
 	);
-	if (!postRes.ok) throw new Error(`reassignEventSeries write failed: ${postRes.status}`);
 }
 
 // Owner-gated on the wire for an editor; a 403 throws like any non-2xx, Entu is the authority.

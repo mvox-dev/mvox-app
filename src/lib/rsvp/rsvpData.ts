@@ -1,17 +1,8 @@
+// A singer's own rsvp on an event. Member lookup assumes one active member row per person per db.
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
+import { overwriteEntityValues } from '$lib/entu/replaceProperty';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
-
-// The RSVP write path (#10) — a singer's own status on an event. Harvested from
-// `mvox_v4e_web` `src/lib/rsvp/rsvpData.ts` (tally functions dropped — out of
-// scope for slice-2, see epic #8 "Out of slice-2").
-//
-// `member` resolution is DE-FANNED to match `listSeasons`/`listEvents`: no
-// dbEntityId param. In the dev/test collective (single-collective) a person has
-// exactly one active `member` row, so `person.reference` + `status.string=active`
-// alone disambiguates — same simplification already landed for seasons ("in a
-// single-collective db all seasons are EFK's"). Not the end state; flagged to
-// team-lead alongside the RED report.
 
 export type RsvpStatus = 'going' | 'not_going' | 'maybe' | 'late';
 
@@ -32,29 +23,14 @@ export interface MyRsvp {
 /** The row-control's initial state, keyed by event id. */
 export type RsvpByEventId = Record<string, { rsvpId: string; status: RsvpStatus }>;
 
-/**
- * Resolve the singer's own active `member` id in the current collective. Returns
- * null when no active membership exists (e.g. a signed-in person with no roster
- * row yet) — callers use this to gate the RSVP control (#12).
- *
- * #434 slice 4 review round, finding 2 — `opts` (trailing, DEFAULT OFF) is the
- * read-cache flag. SHARED with the RSVP WRITE path (the agenda and the event
- * page both resolve this id and then POST it as `member` on an rsvp), which is
- * exactly the "a GET that is a step inside a write" shape readCache.ts forbids
- * the flag on — so nothing is hard-wired here. The library page's my-loans
- * section, which is a READ, switches it on from `libraryPageData.ts`.
- */
+// The singer's active member id, or null with no roster row. Callers that write must not pass
+// a cache flag in `opts`: this read is a step inside the rsvp write.
 export async function findMyMemberId(
 	cfg: EntuCfg,
 	personId: string,
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<string | null> {
-	// #321 class-1 — scoped by person.reference + status.string=active: the
-	// single-collective-per-db invariant (this module header) means a signed-in
-	// person has AT MOST ONE active member row; limit=1 is an explicit, ample
-	// bound (a second concurrent active row would be damaged data, not a
-	// truncation this read could ever observe).
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=member&person.reference=${encodeURIComponent(personId)}&status.string=active&props=_id&limit=1`,
@@ -68,16 +44,7 @@ export async function findMyMemberId(
 	return body.entities?.[0]?._id ?? null;
 }
 
-/**
- * The viewer's own rsvp for ONE event — the FACT read (#329, ruled on #321's
- * residual). `rsvp` is a child of `person`; scoped by BOTH `_parent.reference`
- * (this person) AND `event.reference` (this event) — a singer has at most one
- * rsvp per event by construction (the agenda's own map keys on eventId, same
- * invariant `findMyMemberId` above leans on for its own limit=1), so `limit=1`
- * is an explicit, ample bound, never a truncation this read could observe.
- * `null` means CONFIRMED no answer — the scoped read cannot lose a real answer
- * to a cap, so its empty result IS the fact, not a derived negative.
- */
+// One rsvp per person per event, so limit=1 never truncates and null means no answer.
 export async function findMyRsvpForEvent(
 	cfg: EntuCfg,
 	personId: string,
@@ -98,21 +65,8 @@ export async function findMyRsvpForEvent(
 	return { rsvpId: row._id, status: (row.status?.[0]?.string ?? 'going') as RsvpStatus };
 }
 
-/**
- * List the singer's own rsvps (#11). `rsvp` is a child of `person` — scoping by
- * `_parent.reference=personId` is the whole query, native under the singer's own
- * person, no cross-person read (issue AC). Used to seed each agenda row's answer
- * (routes/+page.svelte) — its ONLY remaining consumer after #329: the event
- * page's own-answer state moved to the scoped one-row `findMyRsvpForEvent`
- * above, which reads that fact directly instead of deriving it from this list.
- *
- * #321 — person-LIFETIME, no season boundary: a weekly-rehearsal member of
- * ten years reaches the `limit=500` cap on real rows (50/yr x 10yr), so this
- * is a reachable bound, not a provably-unreachable one. `truncated` (server
- * `count` > RAW entities.length, same request) tells the agenda page when its
- * "answer set" is incomplete — see `$lib/entu/listRead` for the shared
- * contract.
- */
+// Person-lifetime, no season bound: a long-time member can reach the 500 cap, so `truncated`
+// tells the agenda its answer set is incomplete.
 export async function listMyRsvps(
 	cfg: EntuCfg,
 	personId: string,
@@ -143,11 +97,7 @@ export async function listMyRsvps(
 	return deriveListRead(items, raw.length, body.count);
 }
 
-/**
- * Index rsvps by event id for the agenda row controls' initial state. Pure — no
- * fetch. An event with no rsvp is simply ABSENT from the map — renders unanswered,
- * never defaulted to any status (issue AC).
- */
+// An event without an rsvp is absent from the map, never defaulted to a status.
 export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
 	const map: RsvpByEventId = {};
 	for (const r of rsvps) {
@@ -156,27 +106,13 @@ export function rsvpsByEventId(rsvps: MyRsvp[]): RsvpByEventId {
 	return map;
 }
 
-/**
- * Create a new rsvp under the singer's own person. Sends `_type` as a resolved
- * `reference` (never `string` — #10 pinned wire-shape), plus the ONE sentinel
- * matching `status`; the other three sentinels are simply absent (a fresh create
- * has no stale values to clear).
- *
- * #133: NO explicit `_sharing` here — the parent (person) inherits `domain` from
- * the database ROOT entity at create time (inviteData.ts sends no explicit
- * `_sharing` either — #133), so Entu's create-time copy (utils/entity.js:296-327)
- * already lands `domain` on the rsvp; the #82 widen this comment used to defend is
- * achieved for free via inherit, not by resending the tier.
- */
+// One sentinel, matching `status`. No `_sharing`: Entu copies the person's `domain` at create.
 export async function createRsvp(
 	cfg: EntuCfg,
 	input: CreateRsvpInput,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
 	const rsvpTypeId = await resolveTypeId(cfg, 'rsvp', fetchImpl);
-	// One sentinel (`<status>_ref`) matching the chosen status; the other three are
-	// simply absent on a fresh create. `_sharing` is inherited from the person
-	// parent (which is itself domain) via Entu's create-time copy — #133.
 	const props = [
 		{ type: '_type', reference: rsvpTypeId },
 		{ type: '_parent', reference: input.personId },
@@ -197,25 +133,8 @@ export async function createRsvp(
 	return body._id;
 }
 
-/**
- * Change an existing rsvp's status. #264 (PO ruling, branch (i), item 3) —
- * ATOMIC overwrite, superseding the old clear-then-set choreography (which
- * deleted the status + sentinel values BEFORE posting the new ones — a
- * rejected POST left the rsvp with NO status at all, an EMPTY half-landing
- * worse than a stranded duplicate). Reads the current entity (status + event +
- * all four sentinel value-ids), then issues ONE POST whose two entries pair
- * the FIRST existing status id with the new status, and the FIRST existing
- * sentinel id (across all four sentinel props, in `going_ref, not_going_ref,
- * maybe_ref, late_ref` order) with the new `<status>_ref` — Entu's native
- * overwrite soft-deletes both old values in that SAME call, cross-type pairing
- * being platform-legal (`setEntity` matches by `_id` regardless of the new
- * entry's `type`). An entry drops its `_id` when no old value exists to pair.
- * Any REMAINING corrupted-state values (a second status, or sentinels beyond
- * the first) are swept at `/property/{id}` strictly AFTER the POST — never
- * before, so the normal (≤1 status, ≤1 sentinel) path issues ZERO deletes. The
- * sentinel's event reference is sourced from the GET, not the caller — this
- * function only ever receives a status change, not an event.
- */
+// One atomic overwrite POST for status and sentinel, so a failed POST leaves the old status.
+// A sentinel pairs with any old sentinel; the event id comes from the stored rsvp.
 export async function updateRsvpStatus(
 	cfg: EntuCfg,
 	rsvpId: string,
@@ -241,60 +160,27 @@ export async function updateRsvpStatus(
 		};
 	};
 	const entity = body.entity ?? {};
-	// Sentinel event reference comes from the stored rsvp, never the caller — this
-	// function only ever takes a status change.
 	const eventId = entity.event?.[0]?.reference ?? '';
 
-	const [oldStatus, ...extraStatus] = entity.status ?? [];
-	// GENERIC across all four sentinel props, in fixed order — corrupted state
-	// (two sentinels set at once) should never happen, but the sweep stays
-	// generic rather than assuming only the expected one exists.
 	const allSentinels = [
 		...(entity.going_ref ?? []),
 		...(entity.not_going_ref ?? []),
 		...(entity.maybe_ref ?? []),
 		...(entity.late_ref ?? [])
 	];
-	const [oldSentinel, ...extraSentinels] = allSentinels;
-
-	const statusEntry = oldStatus
-		? { _id: oldStatus._id, type: 'status', string: status }
-		: { type: 'status', string: status };
-	const sentinelEntry = oldSentinel
-		? { _id: oldSentinel._id, type: `${status}_ref`, reference: eventId }
-		: { type: `${status}_ref`, reference: eventId };
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${rsvpId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([statusEntry, sentinelEntry])
-		},
-		fetchImpl
+	await overwriteEntityValues(
+		cfg,
+		rsvpId,
+		[
+			{ value: { type: 'status', string: status }, existing: entity.status ?? [] },
+			{ value: { type: `${status}_ref`, reference: eventId }, existing: allSentinels }
+		],
+		fetchImpl,
+		'updateRsvpStatus'
 	);
-	if (!postRes.ok) throw new Error(`updateRsvpStatus POST failed: ${postRes.status}`);
-
-	// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
-	for (const value of [...extraStatus, ...extraSentinels]) {
-		const delRes = await entuFetch(
-			cfg.db,
-			`property/${value._id}`,
-			cfg.token,
-			{ method: 'DELETE' },
-			fetchImpl
-		);
-		if (!delRes.ok) throw new Error(`updateRsvpStatus delete failed: ${delRes.status}`);
-	}
 }
 
-/**
- * Clear an rsvp (tap-active-to-toggle-off). The `status` enum has no "none"
- * value, so deletion IS the "no answer" representation — this is also what keeps
- * the four sentinels from surviving as orphan phantom counts.
- */
+// `status` has no "none" value, so deleting the rsvp is how an answer is cleared.
 export async function deleteRsvp(
 	cfg: EntuCfg,
 	rsvpId: string,
