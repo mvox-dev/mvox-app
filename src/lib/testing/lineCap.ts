@@ -5,7 +5,6 @@ export const NEXT_STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/sections/sectionActions.ts',
 	'src/routes/+page.svelte'
 ];
 
@@ -15,7 +14,6 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/components/admin/InviteSurface.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/roster/memberLifecycle.ts',
-	'src/lib/sections/sectionActions.ts',
 	'src/routes/+page.svelte',
 	'src/routes/part/[fileId]/+page.svelte'
 ];
