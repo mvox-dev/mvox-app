@@ -1,6 +1,6 @@
 // admin_member_record: load, lazy create, per-field writes, PII kept out of messages.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const { resolveTypeIdMock, replaceEntityPropertyMock } = vi.hoisted(() => ({
 	resolveTypeIdMock: vi.fn(),
@@ -24,11 +24,7 @@ import {
 	MemberRecordPartialSaveError
 } from './memberRecord';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('sampledb');
 
 beforeEach(() => {
 	resolveTypeIdMock.mockReset().mockResolvedValue('type-amr');

@@ -7,15 +7,10 @@ import {
 	removeSeasonConductor,
 	getSeriesDefaults
 } from './seasonManage';
-import type { EntuCfg } from './entuSeasons';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-type Call = { url: string; method: string; body: unknown };
 
 /** fetchImpl that routes by URL/method and records every call in order. */
 function recordingFetch(route: (url: string, method: string) => Response | Promise<Response>) {

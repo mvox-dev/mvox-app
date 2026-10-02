@@ -1,20 +1,15 @@
+// The season, series and event reads behind the agenda.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { listSeasons, listEvents, resolveTypeId, resetTypeIdCache, type EntuCfg } from './entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const ORG_ID = 'org-1';
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** The database entity lookup response (#161 — collective = database). */
 function databaseBody(dbEntityId: string | null) {
 	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }
 
-/** Routed mock: database-entity lookup (`resolveDatabaseEntityId`), then the
- *  collective-scoped seasons list. */
 function mockSeasonsFetch(opts: {
 	member?: unknown;
 	memberStatus?: number;
@@ -30,13 +25,9 @@ function mockSeasonsFetch(opts: {
 	}) as unknown as typeof fetch;
 }
 
-// A rehearsal event as Entu returns it, parented to org + season + series with
-// denormalized entity_type on each parent.
 function eventRaw(over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'e1',
-		// #420 — the EVENT's own name lives on `event_name`; `name` is retired
-		// on events (the series side of the merge stays `series.name`).
 		event_name: [{ string: 'Mon rehearsal' }],
 		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
 		_parent: [
@@ -48,11 +39,6 @@ function eventRaw(over: Partial<Record<string, unknown>> = {}) {
 	};
 }
 
-// #144 review — re-fans the de-fan: `listSeasons` now scopes to the
-// DATABASE entity (#161, resolved via `resolveDatabaseEntityId`, same as
-// `resolveAdmin`/`resolveMyLibraryId`) instead of reading every `season` row
-// in the db. The routed mock stands in for the two calls: the database-entity
-// lookup, then the collective-scoped seasons list.
 describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 	it('queries seasons WITH a _parent.reference filter, scoped to the database entity', async () => {
 		const fetchImpl = mockSeasonsFetch({ member: databaseBody(ORG_ID), seasons: { entities: [] } });
@@ -90,8 +76,6 @@ describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 		});
 	});
 
-	// #91 review F1 — repertoire management gates on `_editor` on the SEASON.
-	// Asking for it in THIS query is what removes the per-entity rights probe.
 	it('asks for _owner,_editor and surfaces the refs the caller can see', async () => {
 		const fetchImpl = mockSeasonsFetch({
 			member: databaseBody(ORG_ID),
@@ -113,7 +97,6 @@ describe('listSeasons (scoped via resolveDatabaseEntityId, #161)', () => {
 		);
 		expect(urls.some((u) => u.includes('_owner,_editor'))).toBe(true);
 		expect(seasons[0].owners).toEqual(['p-owner']);
-		// A ref-less entry is dropped, never surfaced as an undefined person id.
 		expect(seasons[0].editors).toEqual(['p-editor']);
 	});
 
@@ -164,8 +147,6 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 				conductors: [],
 				owners: [],
 				editors: [],
-				// #194/#202 — every AgendaItem carries its event_type verbatim ('' when
-				// the event has none). Full-shape toEqual so a dropped field fails HERE.
 				eventType: ''
 			}
 		]);
@@ -181,28 +162,20 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 						default_location: [{ string: 'Church Hall' }]
 					}
 				});
-			// event has NO duration_minutes, NO location → both inherited
 			return json({ entities: [eventRaw()] });
 		});
 		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0]).toMatchObject({ durationMinutes: 120, location: 'Church Hall' });
 	});
 
-	// #101 review fix (F2) — `loadEventDetail` (the detail page) already inherited
-	// `name` from the parent series while `listEvents` (the agenda) did not.
-	// The asymmetry rendered a BLANK agenda row — and, once #101 made the row a
-	// link, an anchor with no accessible name — that opened a detail page showing
-	// a populated name.
 	it('merges an absent name from the parent series, same as duration + location', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1'))
 				return json({ entity: { _id: 'series1', name: [{ string: 'Tuesday Series' }] } });
-			// event has NO event_name of its own → inherited from the series
 			return json({ entities: [eventRaw({ event_name: [] })] });
 		});
 		const items = await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		expect(items[0].name).toBe('Tuesday Series');
-		// …and the series GET must actually ASK for the name (props list).
 		const seriesCall = fetchImpl.mock.calls.find((c) => String(c[0]).includes('/entity/series1'))!;
 		expect(String(seriesCall[0])).toContain('name');
 	});
@@ -276,8 +249,6 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 		await expect(listEvents(cfg, 'season1', fetchImpl)).rejects.toThrow(/listEvents failed: 403/);
 	});
 
-	// #91 review F1 — the programme controls gate on `_editor` on the EVENT.
-	// Riding on this query is what replaced one rights GET per agenda event.
 	it('asks for _owner,_editor and carries the visible refs onto each AgendaItem', async () => {
 		const fetchImpl = vi.fn(async (url: string) => {
 			if (url.includes('/entity/series1')) return json({ entity: { _id: 'series1' } });
@@ -301,23 +272,6 @@ describe('listEvents (de-fanned series id + verbatim inheritance merge)', () => 
 	});
 });
 
-// ── #194 + #202 RED — listEvents (renamed from listRehearsals) queries ALL
-// event types.
-//
-// #194 (bug): the query hardcoded `event_type.string=rehearsal`. `event_type`
-// is FREE TEXT — Estonian users write 'proov', and the Crede pilot's 39 'proov'
-// rehearsals were all invisible on the agenda.
-// #202 (feature): a choir's calendar includes concerts, festivals, … — the
-// agenda shows ALL of them, labeled by type (the label is the UI's job; this
-// layer carries `eventType` verbatim on every AgendaItem).
-//
-// Contract pinned here (GREEN must implement in entuSeasons.ts):
-//   - the function is `listEvents` — `listRehearsals` no longer exists
-//   - the events query has NO `event_type` FILTER of any kind
-//   - the query ASKS for `event_type` in its props list
-//   - each AgendaItem carries `eventType` (first value's `.string`, '' when
-//     absent — same '??' posture as name/duration/location, but NEVER inherited
-//     from the series: the agenda labels what the event itself claims to be)
 describe('listEvents — no event_type filter, eventType carried (#194 + #202)', () => {
 	it('the rename is a RENAME: the module no longer exports listRehearsals', async () => {
 		const mod: Record<string, unknown> = await import('./entuSeasons');
@@ -329,12 +283,8 @@ describe('listEvents — no event_type filter, eventType carried (#194 + #202)',
 		const fetchImpl = vi.fn(async (_url?: string) => json({ entities: [] }));
 		await listEvents(cfg, 'season1', fetchImpl as unknown as typeof fetch);
 		const url = String(fetchImpl.mock.calls[0][0]);
-		// No filter in ANY spelling — `event_type.string=…`, `event_type=…`.
-		// (`props=…,event_type,…` is fine and asserted separately below; a filter
-		// is a query PARAM starting with event_type.)
 		const params = [...new URL(url).searchParams.keys()];
 		expect(params.some((k) => k === 'event_type' || k.startsWith('event_type.'))).toBe(false);
-		// …and the scoping that IS the query survives the fix:
 		expect(url).toContain('_type.string=event');
 		expect(url).toContain('_parent.reference=season1');
 	});
@@ -357,7 +307,6 @@ describe('listEvents — no event_type filter, eventType carried (#194 + #202)',
 		const eventsUrl = String(fetchImpl.mock.calls[0][0]);
 		const props = new URL(eventsUrl).searchParams.get('props') ?? '';
 		expect(props.split(',')).toContain('event_type');
-		// Free-text value VERBATIM — 'proov' is exactly the #194 reproduction.
 		expect(items[0].eventType).toBe('proov');
 	});
 
@@ -401,9 +350,6 @@ describe('listEvents — no event_type filter, eventType carried (#194 + #202)',
 	});
 });
 
-// resolveTypeId — new shared infra for #10 (rsvp create needs `_type` as a
-// resolved `reference`, not `_type.string`). Ported from the mvox_v4e_web
-// original: same query shape, same per-db cache.
 describe('resolveTypeId', () => {
 	beforeEach(() => {
 		resetTypeIdCache();
@@ -426,9 +372,6 @@ describe('resolveTypeId', () => {
 	});
 
 	it('a different db triggers a new fetch even for the same typeName', async () => {
-		// Fresh Response per call — a Response body is single-read, and real fetch
-		// mints a new one each time. mockResolvedValue would hand back one already-
-		// consumed body on the second (cache-miss) call.
 		const fetchImpl = vi
 			.fn()
 			.mockImplementation(() => Promise.resolve(json({ entities: [{ _id: 'rsvp-type-id' }] })));
@@ -450,4 +393,4 @@ describe('resolveTypeId', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #101 TE.1 review fix F2: series name inheritance)
+// (*MVOX:Josquin*)

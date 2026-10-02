@@ -1,5 +1,5 @@
+// The section data layer: the tree and its members.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { RosterRow } from '$lib/roster/rosterData';
 import {
 	listSections,
@@ -7,24 +7,10 @@ import {
 	type SectionNode,
 	type SectionGroup
 } from './sectionData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// TS.1/#95 RED — the section data layer. `sectionData.ts`'s exports are stubs that
-// throw 'not implemented', so every assertion below FAILS until GREEN.
-//
-// Contract under test (see sectionData.ts module header):
-//   - listSections: section entities → recursive tree, display_order-sorted at
-//     every level, FAIL LOUD when any fetched section can't be placed in the tree.
-//   - groupBySection: PURE rows+tree → pre-order flat group list with depth,
-//     recursive member counts, every section emitted (empty included),
-//     'Unassigned' last and only when non-empty.
+const cfg = testCfg('testdb');
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** Raw wire-shape section entity. `parent` = parent SECTION id; omitted → database-parented (root, #161). */
 function rawSection(id: string, name: string, order?: number, parent?: string) {
 	return {
 		_id: id,
@@ -35,8 +21,6 @@ function rawSection(id: string, name: string, order?: number, parent?: string) {
 			: [{ reference: 'org-1', entity_type: 'database' }]
 	};
 }
-
-// ── listSections — recursive tree, sorted by display_order ─────────────────────
 
 describe('listSections — parses section entities into a recursive tree sorted by display_order', () => {
 	it('URL: _type.string=section, props=name,display_order,_parent, an explicit limit', async () => {
@@ -81,7 +65,6 @@ describe('listSections — parses section entities into a recursive tree sorted 
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
-					// Deliberately shuffled: children before parents, out of display order.
 					rawSection('sec-sop2', 'Soprano 2', 2, 'sec-sop'),
 					rawSection('sec-sop1a', 'Soprano 1a', 1, 'sec-sop1'),
 					rawSection('sec-alto', 'Alto', 2),
@@ -184,15 +167,10 @@ describe('listSections — parses section entities into a recursive tree sorted 
 		]);
 	});
 
-	// #161 (collective = database, Mihkel ruling 2026-08-16) — the collective
-	// must SURVIVE the parse. Sections across different databases must not be
-	// treated as one indistinguishable set of "siblings", which is what made
-	// the picker refuse a top-level name that only exists in another database.
 	it("carries each root's OWNING COLLECTIVE (`_parent` entity_type 'database'); a sub-section, being section-parented, has dbEntityId null", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
-					// One database's root + its child, and another database's same-named root.
 					{
 						_id: 'sec-efk-sop',
 						name: [{ string: 'Soprano' }],
@@ -254,13 +232,10 @@ describe('listSections — parses section entities into a recursive tree sorted 
 	});
 });
 
-// ── groupBySection — pure: rows + tree → pre-order groups ──────────────────────
-
 function row(memberId: string, name: string, sectionIds: string[]): RosterRow {
 	return { memberId, personId: `p-${memberId}`, name, email: `${memberId}@x.com`, sectionIds };
 }
 
-/** Literal fixture tree — Soprano ▸ (Soprano 1 ▸ Soprano 1a, Soprano 2), Alto. */
 function fixtureTree(): SectionNode[] {
 	const sop1a: SectionNode = {
 		id: 'sec-sop1a',
@@ -307,8 +282,6 @@ function fixtureTree(): SectionNode[] {
 
 describe('groupBySection — pure: members grouped by sectionIds, display_order pre-order, Unassigned at bottom', () => {
 	it('full shape — pre-order group list with depth; members name-sorted within group; RECURSIVE member counts; Unassigned (sectionId null) LAST', () => {
-		// Input deliberately shuffled — both across sections and within a section — to
-		// prove groupBySection itself sorts (never relies on input order).
 		const members: RosterRow[] = [
 			row('m-pete', 'Pete Wilson', []), // unassigned
 			row('m-carol', 'Carol Williams', ['sec-sop']),
@@ -325,7 +298,6 @@ describe('groupBySection — pure: members grouped by sectionIds, display_order 
 				sectionId: 'sec-sop',
 				name: 'Soprano',
 				depth: 0,
-				// Recursive roll-up: 2 direct + Soprano 1 (2 + 1 in Soprano 1a) + Soprano 2 (1) = 6
 				memberCount: 6,
 				members: [row('m-ada', 'Ada Lovelace', ['sec-sop']), row('m-carol', 'Carol Williams', ['sec-sop'])]
 			},
@@ -412,18 +384,14 @@ describe('groupBySection — pure: members grouped by sectionIds, display_order 
 		]);
 	});
 
-	// ── F1 code-review fix: multi-section members ──────────────────────────────
-
 	it('F1: a member with sectionIds in TWO different sections is pushed into BOTH groups\' member lists — not collapsed onto just one', () => {
 		const groups = groupBySection([row('m-multi', 'Multi Singer', ['sec-sop', 'sec-alto'])], fixtureTree());
 		const sop = groups.find((g) => g.sectionId === 'sec-sop');
 		const alto = groups.find((g) => g.sectionId === 'sec-alto');
 		expect(sop?.members).toEqual([row('m-multi', 'Multi Singer', ['sec-sop', 'sec-alto'])]);
 		expect(alto?.members).toEqual([row('m-multi', 'Multi Singer', ['sec-sop', 'sec-alto'])]);
-		// She is counted in BOTH sections' memberCount — not deduplicated across sections.
 		expect(sop?.memberCount).toBe(1);
 		expect(alto?.memberCount).toBe(1);
-		// And she is NOT also in Unassigned.
 		expect(groups.some((g) => g.sectionId === null)).toBe(false);
 	});
 
@@ -438,5 +406,5 @@ describe('groupBySection — pure: members grouped by sectionIds, display_order 
 	});
 });
 
-// (*MVOX:Tallis* — TS.1/#95 RED)
-// (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
+// (*MVOX:Tallis*)
+// (*MVOX:Palestrina*)

@@ -1,37 +1,14 @@
+// The section assignment write layer.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { assignMemberSection, unassignMemberSection } from './sectionActions';
 import {
 	SECTION_PARENT_MISSING,
 	SectionMembershipMissingError,
 	isSectionMembershipMissing
 } from './sectionErrors';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// TS.2/#96 RED — the section ASSIGNMENT write layer. `sectionActions.ts`'s
-// exports are stubs that throw 'not implemented', so every assertion below
-// FAILS until GREEN.
-//
-// Contract under test (see sectionActions.ts module header):
-//
-// PO ruling 2026-08-11 (#95/#80): section membership lives SOLELY in the
-// member's `_parent` references (`entity_type: 'section'`) — NOT a
-// `current_section` property (the #96 issue body predates the ruling). Members
-// can be in MULTIPLE sections, so:
-//   - assign = APPEND one `_parent` reference (Entu POST appends to
-//     multi-valued props — one POST, no read-modify-write, nothing deleted).
-//   - unassign = remove THE ONE SPECIFIC section's `_parent` value(s) by
-//     property-value id (`DELETE /property/{valueId}`) — never the org parent,
-//     never other sections, and NEVER `DELETE /entity/{memberId}` (the
-//     endpoint split: conflating property-value and entity DELETE would
-//     delete the member herself).
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// ── assignMemberSection — one appending POST ────────────────────────────────────
+const cfg = testCfg('testdb');
 
 describe('assignMemberSection — appends ONE `_parent` reference to the member (POST appends; nothing read, nothing deleted)', () => {
 	it('POSTs to entity/{memberId} with body EXACTLY [{ type: "_parent", reference: sectionId }] — no _type, no _sharing, no entity_type (server-derived on read)', async () => {
@@ -42,8 +19,6 @@ describe('assignMemberSection — appends ONE `_parent` reference to the member 
 		const [url, init] = fetchImpl.mock.calls[0] as [string, RequestInit];
 		expect(String(url)).toContain('/testdb/entity/m-1');
 		expect(init.method).toBe('POST');
-		// FULL-shape toEqual, not arrayContaining — an extra stray prop (a second
-		// `_parent`, a `_sharing`, a `current_section`) is a bug this must catch.
 		expect(JSON.parse(String(init.body))).toEqual([{ type: '_parent', reference: 'sec-sop' }]);
 	});
 
@@ -61,13 +36,7 @@ describe('assignMemberSection — appends ONE `_parent` reference to the member 
 	});
 });
 
-// ── unassignMemberSection — targeted property-value DELETE ──────────────────────
-
 describe('unassignMemberSection — removes the ONE matching section `_parent` value(s), nothing else', () => {
-	/**
-	 * Member `m-1`'s `_parent` on the wire: the ORG parent plus two section
-	 * parents. Unassigning `sec-sop` must delete pv-sop ONLY.
-	 */
 	function memberParents() {
 		return {
 			entity: {
@@ -98,8 +67,6 @@ describe('unassignMemberSection — removes the ONE matching section `_parent` v
 
 		const deleteUrls = calls.filter(([, init]) => init?.method === 'DELETE').map(([u]) => String(u));
 		expect(deleteUrls).toEqual([expect.stringContaining('/testdb/property/pv-sop')]);
-		// The endpoint split, pinned: property-VALUE ids go to /property/{id};
-		// `DELETE /entity/...` anywhere here would delete the member entity.
 		for (const u of deleteUrls) expect(u).not.toContain('/entity/');
 	});
 
@@ -145,7 +112,6 @@ describe('unassignMemberSection — removes the ONE matching section `_parent` v
 		await expect(unassignMemberSection(cfg, 'm-1', 'sec-tenor', fetchImpl)).rejects.toThrow(
 			/m-1.*sec-tenor|sec-tenor.*m-1/
 		);
-		// And nothing was deleted on the way to the throw.
 		const deletes = (fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>).filter(
 			([, init]) => init?.method === 'DELETE'
 		);
@@ -162,7 +128,6 @@ describe('unassignMemberSection — removes the ONE matching section `_parent` v
 			(e: unknown) => e
 		);
 		expect(isSectionMembershipMissing(reason)).toBe(true);
-		// The tag rides ON the error, and the loud message is untouched.
 		expect((reason as { code?: string }).code).toBe(SECTION_PARENT_MISSING);
 		expect(String((reason as Error).message)).toContain('m-1');
 		expect(String((reason as Error).message)).toContain('sec-tenor');
@@ -193,4 +158,4 @@ describe('unassignMemberSection — removes the ONE matching section `_parent` v
 	});
 });
 
-// (*MVOX:Tallis* — TS.2/#96 RED)
+// (*MVOX:Tallis*)

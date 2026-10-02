@@ -1,5 +1,6 @@
 // schedule_item data layer: read, bulk read, create, edit, remove; no ordinal (#246).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
@@ -14,10 +15,6 @@ import {
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 
 const cfg = { db: 'sampledb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function urls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
 	return fetchImpl.mock.calls.map((c) => String(c[0]));

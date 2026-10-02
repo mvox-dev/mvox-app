@@ -1,27 +1,12 @@
+// A top-level section is created as a direct child of the database entity.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createSection } from './sectionActions';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #161 RED — collective = database: a TOP-LEVEL section is a direct child of the
-// DATABASE entity. The legacy no-dbEntityId fallback (`entity?_type.string=
-// organization&limit=1`, sectionActions.ts:110-149) is REMOVED — organization
-// instances no longer exist (#159), so that query can only answer wrong or
-// empty. In its place: resolve the database entity
-// (`_type.string=database&limit=1` — one per db, guaranteed by entu, so the
-// multi-org ambiguity guard has nothing left to guard) and parent there.
-//
-// Unchanged (pinned by sectionActions.create.spec.ts / create-org.spec.ts's
-// surviving cases): `parentId` present → the section IS the parent; explicit
-// collective id present (the `dbEntityId` input field — the roster page threads
-// the DATABASE entity id through it) → verbatim, zero lookups.
-
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 const TYPE_SECTION = 'type-section-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 type Recorded = { url: string; init?: RequestInit };
 
@@ -31,16 +16,12 @@ function makeRouter(): { fetchImpl: typeof fetch; calls: Recorded[] } {
 		const url = String(input);
 		calls.push({ url, init });
 		if (url.includes('name.string=section')) {
-			// resolveTypeId's type-definition lookup
-			// (`_type.string=entity&name.string=section&props=_id&limit=1`).
 			return json({ entities: [{ _id: TYPE_SECTION }], count: 1 });
 		}
 		if (url.includes('_type.string=database')) {
 			return json({ entities: [{ _id: DB_ENTITY }], count: 1 });
 		}
 		if (url.includes('_type.string=organization')) {
-			// The RETIRED query. Answer plausibly (one readable org) so the OLD code
-			// path would happily take it — the assertions below are what refuse it.
 			return json({ entities: [{ _id: 'org-umbrella' }], count: 1 });
 		}
 		if (init?.method === 'POST') {
@@ -65,12 +46,9 @@ describe('createSection — top-level fallback resolves the DATABASE entity (#16
 		const id = await createSection(cfg, { name: 'Tenor' }, fetchImpl);
 		expect(id).toBe('sec-new-1');
 
-		// The retired lookup must be gone entirely.
 		expect(calls.some((c) => c.url.includes('_type.string=organization'))).toBe(false);
-		// The database-entity discovery replaced it.
 		expect(calls.some((c) => c.url.includes('_type.string=database'))).toBe(true);
 
-		// The create POST parents to the DATABASE entity.
 		const post = calls.find((c) => c.init?.method === 'POST');
 		expect(post).toBeDefined();
 		const props = JSON.parse(String(post?.init?.body)) as Array<{
@@ -97,4 +75,4 @@ describe('createSection — top-level fallback resolves the DATABASE entity (#16
 	});
 });
 
-// (*MVOX:Tallis* — #161 RED)
+// (*MVOX:Tallis*)

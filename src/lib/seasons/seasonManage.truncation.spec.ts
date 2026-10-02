@@ -1,17 +1,13 @@
 // The season panel's list reads report truncation; the cascade refusals stay as they were.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from './entuSeasons';
 import {
 	listEventSeriesForSeason,
 	countSeriesOccurrences,
 	countSeasonScope
 } from './seasonManage';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 /** Route fetch mock by URL substring; throws on anything unrouted. */
 function router(routes: Array<[match: string, body: unknown]>) {

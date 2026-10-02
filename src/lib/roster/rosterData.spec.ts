@@ -1,3 +1,4 @@
+// The roster data layer: members, sections, names and grants on the wire.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from '$lib/profile/profileData';
@@ -9,24 +10,9 @@ import {
 	type ActiveMember,
 	type RosterRow
 } from './rosterData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// T3.2/#18 RED — the roster data layer. `rosterData.ts`'s exports are stubs that
-// throw 'not implemented', so every assertion below FAILS until Josquin's GREEN.
-//
-// HARD RULE under test throughout: NO client-side privacy-boundary filtering. The
-// server (entu-api Gate A/B) is what keeps a private-tier profile entity from ever
-// reaching `listProfilesForPerson`'s caller — this file asserts the QUERY SHAPE never
-// requests private-tier fields (the honest unit-level proxy for that server-side
-// property; the boundary itself needs live Entu, deferred to T3.4) and that
-// `toRosterRow`/`loadRoster` never add a defensive `_sharing !== 'private'` branch of
-// their own (test 14 proves the opposite — resolveField has zero independent defense
-// and that is BY DESIGN, not a bug to "fix" with a client filter).
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 function profile(sharing: MyProfile['_sharing'], name: string, email = ''): MyProfile {
 	return { _id: `p-${sharing}`, name, email, _sharing: sharing };
@@ -35,10 +21,6 @@ function profile(sharing: MyProfile['_sharing'], name: string, email = ''): MyPr
 beforeEach(() => {
 	resetTypeIdCache();
 });
-
-// ── listActiveMembers ──────────────────────────────────────────────────────────
-// Lists ALL active members, domain-wide — no person/org scoping (RULED target:
-// members are _sharing:'domain'). Widened variant of findMyMemberId's query.
 
 describe('listActiveMembers — lists ALL active members, domain-wide (no person filter)', () => {
 	it('happy path — maps member,_parent into ActiveMember[]; a member with no section _parent → sectionIds: []', async () => {
@@ -59,12 +41,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// #161 (collective = database) — dbEntityId now rides along too: member-2's
-		// fixture happens to carry a database `_parent`, so she picks one up here
-		// even though this test predates that contract (see
-		// rosterData.database.spec.ts for the dedicated pins).
-		// #321 — the reader returns `{ items, total, truncated }`; the MAPPING is what
-		// this file pins, the read shape itself lives in rosterData.truncation.spec.ts.
 		expect(members.items).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
@@ -93,7 +69,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
 		expect(members.items).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
@@ -122,7 +97,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// TU.1/#109 (finding #10) — dbEntityId rides along (see comment above).
 		expect(members.items).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
@@ -134,17 +108,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 		]);
 	});
 
-	// #470 review round 3 (RED-470.1) — the roster's section pickers render a
-	// KEYED {#each} over these ids, and Svelte throws each_key_duplicate (in
-	// production too) when a key repeats, taking out the whole roster render: a
-	// member nobody can then unassign, because her row will not draw. A repeated
-	// section reference needs no bug to arrive — `assignMemberSection` POSTs
-	// `_parent` with no `_id`, and Entu appends a new value alongside the
-	// existing ones (entu-www src/api/properties/index.md:92), so two admins or
-	// two tabs assigning the same section both land. Neither sees the other: the
-	// page never refetches. So the guard belongs HERE, at the boundary where
-	// foreign data enters, not on a UI path — the next writer of a duplicate is
-	// not a UI path.
 	it('review round 3: the same section reference twice on one member collapses to ONE id — a keyed render cannot be handed a duplicate key', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
@@ -163,8 +126,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// FULL array, not a uniqueness predicate: first-seen wire order survives the
-		// dedupe, so 'sec-sop' keeps its original position ahead of 'sec-lead'.
 		expect(members.items).toEqual<ActiveMember[]>([
 			{
 				memberId: 'member-1',
@@ -206,10 +167,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 	});
 
 	it('#456: a member with an unreadable person reference is SKIPPED — one console.warn naming her member id, healthy rows returned in wire order (full ListRead shape)', async () => {
-		// Deleting the person in Entu soft-deletes every property referencing it
-		// (entu-www db-mutations), so `person` is genuinely absent on the wire —
-		// the row skips (house shape: attendanceData listAttendance, libraryData
-		// listLendings), the rest of the roster renders.
 		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		try {
 			const fetchImpl = vi.fn().mockResolvedValue(
@@ -231,11 +188,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 				})
 			);
 			const read = await listActiveMembers(cfg, fetchImpl);
-			// FULL toEqual: the two healthy rows in wire order; `total` stays the
-			// server's count (the orphan is still a member the server holds);
-			// `truncated` false — deriveListRead keys off the RAW wire length, so a
-			// client-side drop can never fabricate a truncation the server never
-			// reported.
 			expect(read).toEqual({
 				items: [
 					{
@@ -256,7 +208,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 				total: 3,
 				truncated: false
 			});
-			// One warning per dropped row per load, naming the member id.
 			expect(warn).toHaveBeenCalledTimes(1);
 			expect(warn).toHaveBeenCalledWith(expect.stringContaining('member-orphan'));
 		} finally {
@@ -312,10 +263,6 @@ describe('listActiveMembers — lists ALL active members, domain-wide (no person
 	});
 });
 
-// ── listProfilesForPerson ──────────────────────────────────────────────────────
-// Reuse claim: identical wire call to listMyProfiles for the same personId. Proven
-// as a pass-through equivalence test, not a reimplementation test.
-
 describe('listProfilesForPerson — reuses listMyProfiles\'s exact query for an arbitrary personId', () => {
 	it('issues the identical URL listMyProfiles would (props=name,email,_sharing&limit=10, _parent.reference=<personId>) for another member\'s person id', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
@@ -346,8 +293,6 @@ describe('listProfilesForPerson — reuses listMyProfiles\'s exact query for an 
 		]);
 	});
 });
-
-// ── toRosterRow — pure per-member resolver (literal fixtures, no fetch) ──────────
 
 describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 	const member: ActiveMember = { memberId: 'member-1', personId: 'person-a', sectionIds: [] };
@@ -470,8 +415,6 @@ describe('toRosterRow — pure: member + profiles → RosterRow | null', () => {
 	});
 });
 
-// ── loadRoster — orchestration (mocked fetch, branching on URL substring) ───────
-
 describe('loadRoster — list members, fan out per-member profile reads, resolve, drop nameless, sort by name', () => {
 	function makeFetchMock(
 		members: Array<{ _id: string; person: string }>,
@@ -509,18 +452,12 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				'person-b': [] // no domain profile → nameless, excluded
 			}
 		);
-		// #321 — `loadRoster` reports `{ items, total, truncated }` since the PO's
-		// reachability ruling (its closed-set picker consumers say the truncation
-		// out loud); the row shape below is what `items` carries.
 		const rows = (await loadRoster(cfg, fetchImpl)).items;
 		expect(rows).toEqual<RosterRow[]>([
 			{
 				memberId: 'member-1',
 				personId: 'person-a',
 				name: 'Ada Lovelace',
-				// #269 — `loadRoster` now always carries the profile resolution
-				// alongside the displayed name (equal here: no real-names overlay
-				// wired into this fixture's toggle read).
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
 				sectionIds: [],
@@ -551,16 +488,12 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 				json({ entities: [rawProfile('domain', 'Ada Lovelace', 'ada@example.com')] })
 			);
 		});
-		// #321 — `loadRoster` reports `{ items, total, truncated }` since the PO's
-		// reachability ruling (its closed-set picker consumers say the truncation
-		// out loud); the row shape below is what `items` carries.
 		const rows = (await loadRoster(cfg, fetchImpl)).items;
 		expect(rows).toEqual<RosterRow[]>([
 			{
 				memberId: 'member-1',
 				personId: 'person-a',
 				name: 'Ada Lovelace',
-				// #269 — see the previous test's note.
 				profileName: 'Ada Lovelace',
 				email: 'ada@example.com',
 				sectionIds: ['sec-sop', 'sec-lead'],
@@ -577,10 +510,6 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		await loadRoster(cfg, fetchImpl);
 		for (const call of fetchImpl.mock.calls as Array<[string]>) {
 			const url = String(call[0]);
-			// #285 BLIND-SPOT FIX: the fence named only 'idcode' (no underscore) —
-			// but the REAL prop-def shipped by #282 is `id_code`, which that
-			// substring never matches, so the fence was blind to the one leak it
-			// exists to catch. `id_code` added; `idcode` kept too (belt).
 			expect(url).not.toMatch(/props=[^&]*\b(notes|idcode|id_code|birthdate|phone)\b/);
 		}
 	});
@@ -625,14 +554,6 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		expect(read.items.map((r) => r.name)).toEqual(['Ann', 'Zelda']);
 	});
 
-	// ── #268 privacy fence — the member-visible roster load fetches NOTHING new.
-	// The module docstring's fence stays true: rosterData is a MEMBER-VISIBLE
-	// path, so it must never read the admin's record layer. The `props=`
-	// negative assertion above (no notes/idcode/birthdate/phone) is the standing
-	// half; these pin the other half — no roster-load request ever names the
-	// admin_member_record type at all. (Fence pins: they PASS against the
-	// pre-#268 tree by design and guard GREEN from widening the read.)
-
 	it('#268 fence: no roster-load URL ever contains admin_member_record — the admin record layer is a separate, admin-only read', async () => {
 		const fetchImpl = makeFetchMock(
 			[{ _id: 'member-1', person: 'person-a' }],
@@ -653,16 +574,6 @@ describe('loadRoster — list members, fan out per-member profile reads, resolve
 		);
 	});
 });
-
-// ── #467 — the member's own `_created` stamp rides the SAME list read ─────────
-//
-// "Not invited since <yyyy-mm-dd>" reads the member record's `_created`, which
-// (unlike a regular value's `created` sub-object) DOES embed into the entity
-// read when named in `props=` (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-author-filter-2026-09-21.ts, step
-// q4a: key set [_id, datetime, entity_type, property_type, reference, string]).
-// Only `.datetime` may leave this reader — `.reference` is the AUTHOR, a person
-// id with a PII-bearing `.string` alongside (ER-26): dropped at extraction,
-// never carried onto the row.
 
 describe('#467 — listActiveMembers requests and threads the member _created stamp', () => {
 	it('URL: props widened to person,_parent,_created — the stamp rides the existing read, no extra request', async () => {
@@ -724,9 +635,6 @@ describe('#467 — listActiveMembers requests and threads the member _created st
 		warnSpy.mockRestore();
 	});
 
-	// #467 review F1 — a non-string `_created[0].datetime` (a JSON `null`) is
-	// the same absence: letting it through typed `string` is what reaches the
-	// roster's date formatter as `new Date(null)` → a fabricated 1970-01-01.
 	it('_created[0].datetime = null (non-string) → createdAt undefined, not a null typed as string', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
@@ -772,8 +680,6 @@ describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', (
 	});
 });
 
-// ── #468 — the member's own _owner grant rides the list read (picker gate) ─────
-
 describe('#468 — listActiveMembers requests and threads member _owner references (the section-picker gate source)', () => {
 	it('URL: props widened to person,_parent,_created,_owner — the gate rides the ONE existing list read, no per-row fetchRights fan-out', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
@@ -792,9 +698,6 @@ describe('#468 — listActiveMembers requests and threads member _owner referenc
 						_parent: [{ reference: 'org-1', entity_type: 'database' }],
 						_created: [{ datetime: '2026-06-01T09:00:00.000Z' }],
 						_owner: [
-							// Inherited from the database entity — Entu's aggregate view
-							// flags it (see fetchRights, roleManagement.ts) but the gate
-							// keeps it: an inherited owner may move the member too.
 							{ reference: 'person-db-owner', string: 'Olga Owner', inherited: true },
 							{ reference: 'person-direct', string: 'Dora Direct' }
 						]
@@ -803,8 +706,6 @@ describe('#468 — listActiveMembers requests and threads member _owner referenc
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// FULL toEqual — the partial-assertions-hide-bugs rule: the row carries the
-		// references and NOTHING else rode along (no `.string`, no tier objects).
 		expect(members.items).toEqual([
 			{
 				memberId: 'member-1',
@@ -864,9 +765,6 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 					})
 				);
 			}
-			// #469 — loadRoster now runs applyRealNames unconditionally: resolve
-			// the database entity, then the toggle — absent here, same as no
-			// setting configured, so NO admin_member_record read is ever spent.
 			if (u.includes('_type.string=database')) {
 				return Promise.resolve(json({ entities: [{ _id: 'db-ent-1' }] }));
 			}
@@ -898,13 +796,9 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 				ownerIds: ['person-db-owner', 'person-p']
 			}
 		]);
-		// ER-26 — the baked person names never leave the extraction.
 		const flat = JSON.stringify(rows);
 		expect(flat).not.toContain('Olga Owner');
 		expect(flat).not.toContain('Paula Person');
-		// ONE list read + ONE profile read + ONE database resolve + ONE toggle
-		// read (#469) — the gate added no per-row fetch, and the toggle being
-		// absent means NO admin_member_record read at all.
 		expect(fetchImpl).toHaveBeenCalledTimes(4);
 		expect(
 			fetchImpl.mock.calls.map((c) => String(c[0])).some((u) => u.includes('admin_member_record'))
@@ -913,7 +807,4 @@ describe('#468 — ownerIds thread through to the RosterRow verbatim', () => {
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Tallis* — #268 fence pins)
-// (*MVOX:Tallis* — #467 RED: _created widening + createdAt threading, author dropped)
-// (*MVOX:Josquin* — #467 review F1: non-string _created datetime → undefined)
-// (*MVOX:Tallis* — #468 RED: _owner widening + ownerIds threading, .string dropped)
+// (*MVOX:Josquin*)

@@ -1,22 +1,9 @@
-// #321 RED — truncation detection for `listMyRsvps`, the person-LIFETIME rsvp
-// read (`_parent.reference={personId}&limit=500`, no season boundary). A
-// weekly-rehearsal member of ten years reaches 500 real rows (research-321
-// inv finding: 50/yr × 10yr) — this is a class-(2) reachable bound.
-//
-// Same contract as libraryData.truncation.spec.ts (the module-level pin):
-// `{ items, total, truncated }`, `truncated` = server `count` > RAW
-// entities.length on the SAME single request; `entities.length === limit` is
-// probe-proven unusable and never consulted. Query string unchanged (no cap
-// raise, no skip=).
+// listMyRsvps flags a truncated lifetime read from the server count.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyRsvps } from './rsvpData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 describe('listMyRsvps — count-based truncation detection (#321)', () => {
 	it('count > entities.length → truncated, full shape', async () => {
@@ -37,7 +24,6 @@ describe('listMyRsvps — count-based truncation detection (#321)', () => {
 			total: 503,
 			truncated: true
 		});
-		// One request, unchanged query — detection never costs a second read.
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=rsvp');
@@ -89,4 +75,4 @@ describe('listMyRsvps — count-based truncation detection (#321)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — RED spec, #321)
+// (*MVOX:Tallis*)

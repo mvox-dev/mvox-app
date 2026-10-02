@@ -1,71 +1,14 @@
+// A failed reorder reports a half-landed reparent with the server's reason.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { reorderSections, reparentSection } from './sectionActions';
 import {
 	SectionReparentPartialError,
 	SECTION_REPARENT_PARTIAL,
 	isSectionReparentPartial
 } from './sectionErrors';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-// #253 RED — a failed section reorder can leave a half-landed reparent
-// reported as "did not save", with the server's WHY thrown away.
-//
-// Today every non-2xx in `reorderSections` (sectionActions.ts:315,330,334) and
-// `reparentSection` (:462,477,481) throws a plain `Error` carrying ONLY
-// `res.status` — the response body (the server's stated reason: rate limit
-// text, rights refusal, validation message) is never read, so every real
-// occurrence is unverifiable after the fact. PO ruling on #253: capture status
-// AND body into a typed error, house-precedent shape (SeriesCascadePartialError
-// carries deletedCount/totalCount + the stopping failure; ProfileSaveError
-// carries createdProfileId).
-//
-// Contract pinned here (GREEN implements in sectionErrors.ts + sectionActions.ts):
-//
-//   - `SectionReparentPartialError extends Error`, name
-//     'SectionReparentPartialError', `code = SECTION_REPARENT_PARTIAL`
-//     ('section-reparent-partial'), duck-type helper
-//     `isSectionReparentPartial(reason)` (the roster page's spec mocks the
-//     write layer wholesale, so the discriminator must live in sectionErrors —
-//     same reason SectionMembershipMissingError does).
-//   - Fields (readable evidence, full shape):
-//       step:            'reparent' | 'renumber' — WHICH write failed. The
-//                        `_parent` move is 'reparent'; the destination-group
-//                        display_order sweep is 'renumber'.
-//       renumberedCount: sections FULLY renumbered (POST landed AND every old
-//                        value deleted) before the failure. 0 for step
-//                        'reparent' (the renumber never began).
-//       totalCount:      size of the sibling group being renumbered; 0 for
-//                        step 'reparent'.
-//       status:          the non-2xx HTTP status.
-//       body:            the response body TEXT, read defensively ('' when the
-//                        body cannot be read).
-//   - The message still names the status (existing specs pin rejects.toThrow(/500/)).
-//   - NO retry: the choreography is NOT idempotent (a blind re-run after an
-//     ambiguous timeout duplicates values or overwrites the wrong generation) —
-//     pinned below as "requests stop AT the failure, exactly one POST per
-//     section, nothing re-issued".
-//
-// #264 UPDATE (PO ruling, branch (i)): both writes are now ATOMIC — the POST
-// carries the old value's `_id` (Entu's native overwrite; setEntity
-// soft-deletes the old value in the same call), so the normal path issues NO
-// `DELETE /property/{id}` at all. Consequences pinned here:
-//   - the renumber loop is GET → one overwrite-POST per section; a mid-loop
-//     failure leaves NO deletes anywhere in the call log;
-//   - the 'reparent' step's old "DELETE fails after the POST landed" scenario
-//     IS DELETED AS IMPOSSIBLE — there is no DELETE left to fail. Its
-//     replacement (the ≠1-`_parent`-values damaged-data refusal) is pinned in
-//     sectionActions.reparent.spec.ts.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-interface Call {
-	url: string;
-	method: string;
-}
+const cfg = testCfg('testdb');
 
 function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
 	return (fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>).map(([u, init]) => ({
@@ -74,7 +17,6 @@ function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
 	}));
 }
 
-/** Run the promise, expect a SectionReparentPartialError, hand it back typed. */
 async function catchPartial(p: Promise<unknown>): Promise<SectionReparentPartialError> {
 	let caught: unknown;
 	try {
@@ -86,8 +28,6 @@ async function catchPartial(p: Promise<unknown>): Promise<SectionReparentPartial
 	return caught as SectionReparentPartialError;
 }
 
-/** The FULL evidence shape — toEqual, not objectContaining (a missing field is
- *  exactly the "evidence thrown away" defect this issue is about). */
 function shapeOf(err: SectionReparentPartialError) {
 	return {
 		name: err.name,
@@ -99,8 +39,6 @@ function shapeOf(err: SectionReparentPartialError) {
 		body: err.body
 	};
 }
-
-// ── reorderSections — the 'renumber' step ───────────────────────────────────
 
 describe('reorderSections — a non-2xx mid-loop throws SectionReparentPartialError carrying step/progress/status/BODY (#253)', () => {
 	it('POST fails on section 2 of 3 → step "renumber", renumberedCount 1 of 3, status AND response body captured — and the loop STOPS: NO DELETE anywhere (atomic overwrite, #264), nothing for section 3, no retry POST', async () => {
@@ -127,14 +65,8 @@ describe('reorderSections — a non-2xx mid-loop throws SectionReparentPartialEr
 			status: 429,
 			body: 'rate limit exceeded for testdb'
 		});
-		// The status still travels in the message (existing /500/-style pins).
 		expect(err.message).toMatch(/429/);
 
-		// REFUSAL (PO #253): no retry/backoff — the sequence is not idempotent.
-		// Requests stop AT the failure: section 3 untouched, the failing POST
-		// issued EXACTLY once. #264: the completed section (sec-a) was renumbered
-		// by ONE atomic overwrite-POST — its old value id rode the POST body, so
-		// the call log holds NO property DELETE for anyone.
 		const calls = callsOf(fetchImpl);
 		expect(calls.filter((c) => c.url.includes('sec-c'))).toEqual([]);
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
@@ -164,13 +96,7 @@ describe('reorderSections — a non-2xx mid-loop throws SectionReparentPartialEr
 		expect(calls).toHaveLength(1);
 	});
 
-	// #264 — the old third scenario here ("an old-value DELETE fails mid-loop")
-	// is DELETED AS IMPOSSIBLE: the renumber's replace is one atomic
-	// overwrite-POST per section, so no DELETE exists on the normal path to
-	// fail. sectionActions.reorder.spec.ts pins the atomic wire shape.
 });
-
-// ── reparentSection — the 'reparent' step ───────────────────────────────────
 
 describe('reparentSection — a non-2xx throws SectionReparentPartialError with step "reparent" and the captured body (#253)', () => {
 	it('POST fails → step "reparent", 0 of 0, status AND body captured; the rejected POST was the ATOMIC overwrite (old value id in the body, #264), so nothing landed and no DELETE ever went out', async () => {
@@ -198,8 +124,6 @@ describe('reparentSection — a non-2xx throws SectionReparentPartialError with 
 		const calls = callsOf(fetchImpl);
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 		expect(calls.filter((c) => c.method === 'POST')).toHaveLength(1);
-		// #264 — the atomic shape is what makes this rejection mean NOTHING
-		// landed: the old value id rode the same call that failed.
 		expect(bodies).toEqual([[{ _id: 'pv-old-parent', type: '_parent', reference: 'sec-sop' }]]);
 	});
 
@@ -222,15 +146,7 @@ describe('reparentSection — a non-2xx throws SectionReparentPartialError with 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
-	// #264 — the old third scenario here ("an old-parent DELETE fails after the
-	// POST landed") is DELETED AS IMPOSSIBLE, not kept as a spec for an
-	// unreachable path: the atomic overwrite-POST replaces the old value in the
-	// same call, so no separate DELETE exists to fail after it. Its replacement
-	// — the ≠1-`_parent`-values damaged-data refusal (zero AND two-plus) — is
-	// pinned in sectionActions.reparent.spec.ts.
 });
-
-// ── defensive body read + the duck-type seam ────────────────────────────────
 
 describe('SectionReparentPartialError — defensive body read and the cross-mock discriminator (#253)', () => {
 	it('an UNREADABLE response body degrades to "" — the status still surfaces, the throw still types', async () => {
@@ -239,9 +155,6 @@ describe('SectionReparentPartialError — defensive body read and the cross-mock
 			status: 502,
 			text: () => Promise.reject(new Error('stream detached'))
 		} as unknown as Response;
-		// #264 — exactly ONE existing value: the zero-value case now refuses
-		// BEFORE any POST (SectionParentDamagedError, reparent.spec.ts), so the
-		// broken-body path has to be reached through a clean single-value GET.
 		const fetchImpl = vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
 			if (init?.method === 'POST') return Promise.resolve(brokenRes);
 			return Promise.resolve(json({ entity: { _parent: [{ _id: 'pv-old' }] } }));
@@ -275,4 +188,4 @@ describe('SectionReparentPartialError — defensive body read and the cross-mock
 	});
 });
 
-// (*MVOX:Tallis* — #253 RED)
+// (*MVOX:Tallis*)
