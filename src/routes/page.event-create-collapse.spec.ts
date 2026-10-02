@@ -775,7 +775,9 @@ const AGENDA_LOAD_SOURCE = () =>
 		'src/lib/agenda/agendaSelectedLoad.ts',
 		'src/lib/agenda/agendaWorksLoad.ts',
 		'src/lib/agenda/agendaRowStore.ts',
-		'src/lib/agenda/agendaPanels.ts'
+		'src/lib/agenda/agendaPanels.ts',
+		'src/lib/agenda/agendaPageView.svelte.ts',
+		'src/lib/agenda/AgendaManageArea.svelte'
 	]
 		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
 		.join('\n');
