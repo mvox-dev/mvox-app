@@ -1,13 +1,6 @@
-// #318 RED — the two tools, and ONLY these two (#318 body):
-//   rights_rule(id)     — one rule, VERBATIM, + probe-script/result-file paths
-//   rights_rules(topic) — matching identifiers for a caller without the id
-//
-// "Deliberately NOT served: generated per-question answers" — enforced here by
-// (a) full-shape key pins on structuredContent (no field a generated answer
-// could live in), (b) every served text asserted doc-derived (verbatim rule
-// text; context lines that are byte-substrings of a rule's text), and (c) the
-// human-readable content channel required to be exactly the JSON serialization
-// of structuredContent, so no prose channel exists at all.
+// The two tools, rights_rule(id) and rights_rules(topic), and no generated answers:
+// structuredContent shapes are pinned whole, served text is doc-derived, and the text
+// channel is exactly the JSON of structuredContent.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -52,7 +45,7 @@ describe('rights_rule(id): one rule, verbatim, evidence, stamp', () => {
 			id: 'ER-13',
 			text: er13?.text,
 			evidence: {
-				sourceRefs: ['utils/entity.js:296-327'],
+				sourceRefs: ['utils/entity.js:369-378'],
 				probeScripts: [],
 				resultFiles: []
 			},
