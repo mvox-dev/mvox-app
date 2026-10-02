@@ -8,8 +8,9 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 import { readManagePickers } from '$lib/repertoire/managePickers';
 import type { Edition, Work } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-1' };
+const CFG = testCfg('sampledb', 'jwt-1');
 const WORK = { id: 'work-1', title: 'Ave verum' } as unknown as Work;
 const EDITION = { id: 'ed-1', workId: 'work-1' } as unknown as Edition;
 const ITEM: RepertoireItem = {

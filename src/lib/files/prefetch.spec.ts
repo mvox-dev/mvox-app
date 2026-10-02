@@ -1,32 +1,4 @@
-// #409 RED — prefetchNextEventParts: the opportunistic-while-open byte
-// prefetch for the next event's parts (epic #334's standing constraint:
-// every byte fetch runs on HER OWN key, while the app is open — never in the
-// background while away; the no-wake-hooks half of that constraint is pinned
-// in page.works-wiring.spec.ts, this file pins the fetch mechanics).
-//
-// Pinned contract — prefetchNextEventParts(cfg, identity, fileIds, store,
-// fetchImpl, isCurrent) resolves to per-file results `{ fileId, outcome }`:
-//   - HELD PARTS ARE SKIPPED, and the skip is decided from ONE
-//     store.heldFileIds(db, personId) call — keys only, so a prefetch NEVER
-//     counts as an open (mirrors byteStore.presence.spec.ts:76's trap: no
-//     adapter.touch, no re-put, no stamp moved, no get()). outcome: 'held'.
-//   - MISSING PARTS go through openFileBytes — the ONE read-through seam —
-//     SEQUENTIALLY: the next part's signFileUrl happens only after the
-//     previous part's put resolved. No parallel S3 storms on app open.
-//     outcome: openFileBytes' own delivery reason ('network-stored' etc.).
-//   - EVERY MINTED BLOB URL IS RELEASED: nothing consumes a prefetched URL
-//     (there is no tab), and openFileBytes' OBJECT-URL OWNERSHIP rule 2 says
-//     an unconsumed URL is its caller's leak. release() per open, always.
-//   - IDENTITY: `isCurrent` is consulted at each settle; the moment it
-//     answers false the walk STOPS — no further part is signed, nothing is
-//     ever put under an identity the fetch was not issued for (openFileBytes
-//     already stores under the ISSUING identity by construction).
-//   - NEVER THROWS: a failed part (signing rejected) is a RESULT
-//     (outcome: 'failed'), not a raise, and the walk continues; a byte fetch
-//     that rejects resolves through openFileBytes as 'fallback-navigation'
-//     (nothing stored) and the walk continues. A null identity resolves []
-//     — the page guards identity, but a race must degrade silently, not
-//     take the load chain down.
+// prefetchNextEventParts: fetch the next event's parts while the app is open.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { signFileUrlMock } = vi.hoisted(() => ({ signFileUrlMock: vi.fn() }));
@@ -40,8 +12,9 @@ import {
 	type FakeAdapter,
 	type FakeByteStore
 } from '$lib/testing/byteStoreFakes';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const A = { db: 'sampledb', personId: 'person-a' };
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]); // "%PDF-1.7"
@@ -60,7 +33,6 @@ function pdfResponse(): Response {
 	});
 }
 
-/** Signs per-file distinct urls and answers bytes for them — the happy path. */
 function happySigning() {
 	signFileUrlMock.mockImplementation(
 		async (_cfg: unknown, fileId: string) => `https://s3.example/signed-${fileId}`
@@ -99,7 +71,6 @@ describe('#409 — prefetchNextEventParts: missing parts are fetched and stored'
 		expect(signFileUrlMock.mock.calls[0].slice(0, 2)).toEqual([CFG, 'file-1']);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		expect(String(fetchImpl.mock.calls[0][0])).toBe('https://s3.example/signed-file-1');
-		// Full shape on puts — not a contains-check (the partial-assertions law).
 		expect(
 			store.puts.map((p) => ({
 				identity: p.identity,
@@ -117,7 +88,6 @@ describe('#409 — prefetchNextEventParts: missing parts are fetched and stored'
 				bytes: Array.from(PDF_BYTES)
 			}
 		]);
-		// Nothing consumes a prefetched URL — every mint is released here.
 		expect(createSpy).toHaveBeenCalledTimes(1);
 		expect(revokeSpy).toHaveBeenCalledWith(String(createSpy.mock.results[0]!.value));
 	});
@@ -146,9 +116,6 @@ describe('#409 — prefetchNextEventParts: missing parts are fetched and stored'
 
 describe('#409 — held parts are skipped, and a prefetch NEVER counts as an open', () => {
 	it('every part already held: heldFileIds read ONCE, no get(), no touch, no re-put, no stamp moved, no network (the presence-spec trap, mirrored)', async () => {
-		// The REAL policy core over the fake adapter — the same harness
-		// byteStore.presence.spec.ts:76 uses, so any recency movement is a
-		// changed number, not a race.
 		const adapter: FakeAdapter = createFakeAdapter();
 		await adapter.put(A.db, A.personId, 'file-1', {
 			bytes: PDF_BYTES.slice().buffer,
@@ -183,11 +150,8 @@ describe('#409 — held parts are skipped, and a prefetch NEVER counts as an ope
 			{ fileId: 'file-1', outcome: 'held' },
 			{ fileId: 'file-2', outcome: 'held' }
 		]);
-		// ONE keys-only presence read decided both skips.
 		expect(heldSpy).toHaveBeenCalledTimes(1);
 		expect(heldSpy).toHaveBeenCalledWith(A.db, A.personId);
-		// The trap: no per-row get() (a get counts as an open), no touch, no
-		// re-put, every seeded stamp exactly as seeded.
 		expect(getSpy).not.toHaveBeenCalled();
 		expect(adapter.touchLog).toEqual([]);
 		expect(adapter.putLog.length).toBe(putsAfterSeeding);
@@ -197,7 +161,6 @@ describe('#409 — held parts are skipped, and a prefetch NEVER counts as an ope
 			{ fileId: 'file-1', openedAt: 1000 },
 			{ fileId: 'file-2', openedAt: 2000 }
 		]);
-		// And no network at all.
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
@@ -255,9 +218,6 @@ describe('#409 — sequential, never a parallel S3 storm', () => {
 			() => true
 		);
 
-		// The FULL interleaving, pinned exactly: a parallel launch would front-
-		// load every sign before any put; sequential walks sign→fetch→put per
-		// part, in input order.
 		expect(log).toEqual([
 			'sign:file-1',
 			'fetch:file-1',
@@ -279,7 +239,6 @@ describe('#409 — collective switch mid-prefetch', () => {
 		const realPut = store.put.bind(store);
 		vi.spyOn(store, 'put').mockImplementation(async (identity, fileId, data) => {
 			await realPut(identity, fileId, data);
-			// The singer switches collectives exactly as part 1's write lands.
 			current = false;
 		});
 		const createSpy = vi.spyOn(URL, 'createObjectURL');
@@ -294,8 +253,6 @@ describe('#409 — collective switch mid-prefetch', () => {
 			() => current
 		);
 
-		// Part 1 was issued while current and stores under the ISSUING identity
-		// (openFileBytes' own law) — truthfully reported. The walk then STOPS.
 		expect(results).toEqual([{ fileId: 'file-1', outcome: 'network-stored' }]);
 		expect(signFileUrlMock).toHaveBeenCalledTimes(1);
 		expect(signFileUrlMock.mock.calls[0].slice(0, 2)).toEqual([CFG, 'file-1']);
@@ -303,7 +260,6 @@ describe('#409 — collective switch mid-prefetch', () => {
 		expect(store.puts.map((p) => ({ identity: p.identity, fileId: p.fileId }))).toEqual([
 			{ identity: A, fileId: 'file-1' }
 		]);
-		// The stale settle's minted URL is not left pinning a copy of the score.
 		expect(createSpy).toHaveBeenCalledTimes(1);
 		expect(revokeSpy).toHaveBeenCalledWith(String(createSpy.mock.results[0]!.value));
 	});
@@ -357,9 +313,6 @@ describe('#409 — a failed part is a result, never a raise', () => {
 			{ fileId: 'file-2', outcome: 'fallback-navigation' },
 			{ fileId: 'file-3', outcome: 'network-stored' }
 		]);
-		// A fallback delivers a signed URL to a CLICKING caller; a prefetch has
-		// no caller to deliver to — the one thing that matters is that nothing
-		// half-fetched reached the store.
 		expect(store.puts.map((p) => p.fileId)).toEqual(['file-1', 'file-3']);
 	});
 });

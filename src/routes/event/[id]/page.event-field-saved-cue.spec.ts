@@ -2,7 +2,7 @@
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
-import { json } from '$lib/testing/entuFetchKit';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -200,14 +200,6 @@ async function commitEdit(
 	await fireEvent.blur(input);
 }
 
-function gate(): { promise: Promise<void>; release: () => void } {
-	let release!: () => void;
-	const promise = new Promise<void>((r) => {
-		release = r;
-	});
-	return { promise, release };
-}
-
 describe('#328 event fields — the saved-cue region exists from first render', () => {
 	it('editor view: a PERSISTENT empty role="status" aria-live="polite" region (event-edit-status) is mounted BEFORE any write — its own node, exactly one', async () => {
 		const { container } = renderEditPage();
@@ -227,7 +219,7 @@ describe('#328 event fields — the saved-cue region exists from first render', 
 describe('#328 event fields — a write that reconciles announces saved', () => {
 	it('name blur-commit: NOTHING announced while the POST is held open; the settle sets event_edit_saved into event-edit-status; no error node', async () => {
 		const { container, controls } = renderEditPage();
-		const g = gate();
+		const g = deferred();
 		controls.holdEditPost = g.promise;
 
 		await commitEdit(container, 'name', 'Autumn Sing');
@@ -236,7 +228,7 @@ describe('#328 event fields — a write that reconciles announces saved', () => 
 		});
 		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
 
-		g.release();
+		g.resolve();
 		controls.holdEditPost = null;
 		await waitFor(() => {
 			expect(q(container, 'event-edit-status')?.textContent).toContain('[event_edit_saved]');
@@ -252,12 +244,12 @@ describe('#328 event fields — a write that reconciles announces saved', () => 
 			expect(q(container, 'event-edit-status')?.textContent).toContain('[event_edit_saved]');
 		});
 
-		const g = gate();
+		const g = deferred();
 		controls.holdEditPost = g.promise;
 		await commitEdit(container, 'location', 'Concert Hall');
 		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
 
-		g.release();
+		g.resolve();
 		controls.holdEditPost = null;
 		await waitFor(() => {
 			expect(q(container, 'event-edit-status')?.textContent).toContain('[event_edit_saved]');
@@ -365,7 +357,7 @@ describe('#328 event fields — the saved cue does not outlive its event', () =>
 
 	it('a name write still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the new event’s region stays blank (editWriteGenerations gates the settle)', async () => {
 		const { container, controls } = renderEditPage(['sampledb', 'crede']);
-		const g = gate();
+		const g = deferred();
 		controls.holdEditPost = g.promise;
 
 		await commitEdit(container, 'name', 'Autumn Sing');
@@ -379,7 +371,7 @@ describe('#328 event fields — the saved cue does not outlive its event', () =>
 		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
 
 		controls.holdEditPost = null;
-		g.release();
+		g.resolve();
 		await flush();
 
 		expect(

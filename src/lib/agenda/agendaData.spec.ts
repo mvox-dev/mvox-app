@@ -1,12 +1,9 @@
 // @vitest-environment happy-dom
+// The agenda data layer: what loadFullAgenda reads and threads through.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgendaItem } from './types';
 import type { Season } from '$lib/seasons/types';
 
-// Mock the read helpers (orchestration is tested independently of the queries) and
-// T4's selectedCollectiveStore (so loadFullAgenda's db/token-threading is
-// observable). Mocking both also severs the transitive entu-config -> $env
-// import under happy-dom.
 const { listSeasonsMock, listEventsMock, collectiveHolder } = vi.hoisted(() => ({
 	listSeasonsMock: vi.fn(),
 	listEventsMock: vi.fn(),
@@ -26,13 +23,11 @@ vi.mock('$lib/collectives/store', async () => {
 
 import { listFullAgenda, loadFullAgenda } from './agendaData';
 import { setToken } from '$lib/auth/storage';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const NOW = new Date('2026-09-05T10:00:00.000Z');
 
-// #194/#202 — AgendaItem now carries `eventType`; the orchestration layer must
-// pass it through untouched (upcoming AND recent are split by TIME only, never
-// by type — a concert is as much agenda as a rehearsal).
 function item(id: string, startDatetime: string, conductors: string[] = []): AgendaItem {
 	return {
 		id,
@@ -56,10 +51,6 @@ beforeEach(() => {
 	listSeasonsMock.mockReset();
 	listEventsMock.mockReset();
 	collectiveHolder.store.set(null);
-	// #161 review fix round 2 — every read in this module goes through the mocked
-	// helpers, so nothing here may touch the network. Making the global `fetch`
-	// throw means an argument-position shift (e.g. a stale 4-arg call sliding
-	// `fetchImpl` into the `now` slot) fails loudly instead of falling back.
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(() => {
@@ -73,12 +64,6 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
-// ---- listFullAgenda: upcoming items (same contract as the old listAgenda) ----
-
-// #161 review fix round 2 — arity guard. `personId` was dead weight in position 2
-// of a 4-arg signature: dropping it at a call site without dropping it here would
-// have slid `now` into `personId` and `fetchImpl` into `now`. Pin the shape so a
-// regression to 4 args fails here rather than at runtime.
 describe('listFullAgenda — signature', () => {
 	it('takes exactly (cfg, now) as required params — no dead personId slot', () => {
 		expect(listFullAgenda.length).toBe(2);
@@ -101,9 +86,6 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 		expect(result.upcoming[0]).toEqual(item('soon', '2026-09-10T16:00:00.000Z'));
 	});
 
-	// #194/#202 — the split into upcoming/recent is by TIME only. A concert (or a
-	// free-text 'proov') coming back from listEvents lands on the agenda exactly
-	// like a rehearsal, eventType intact.
 	it('keeps non-rehearsal event types in upcoming, eventType passed through', async () => {
 		listSeasonsMock.mockResolvedValue([season('s1', '2026-01-01', '2027-05-31')]);
 		listEventsMock.mockResolvedValue([
@@ -183,11 +165,8 @@ describe('listFullAgenda — upcoming items (de-fanned to one collective)', () =
 	});
 });
 
-// ---- listFullAgenda: recent items + season data (the #83 addition) ----
-
 describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 	it('returns the current season\'s PAST events as recent, reverse-chronological', async () => {
-		// Season started 2026-09-01, NOW is 2026-09-05T10:00Z -> season is current
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
 		]);
@@ -217,10 +196,6 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		expect(result.seasonConductors).toEqual(['p-anna', 'p-bert']);
 	});
 
-	// #132/T2 — the page's season-list consumers (event-create <select>,
-	// zero-season onboarding gate, `deriveSeasonCreateRights`'s fallback) read
-	// this straight off the load, no extra fetch. NOT an upcoming-season
-	// suppression gate: #261 (PO:Gama reopen, 2026-09-07) removed that.
 	it('carries the FULL season list (both past/current and future) as `seasons`', async () => {
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31'),
@@ -274,13 +249,11 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		// Only the current season's past events appear in recent
 		expect(result.recent.map((i) => i.id)).toEqual(['cur-past']);
 		expect(result.seasonId).toBe('s-cur');
 	});
 
 	it('paired.find correctly matches the current season by id', async () => {
-		// Two started seasons — currentSeason picks the latest start
 		listSeasonsMock.mockResolvedValue([
 			season('s-old', '2025-09-01', '2026-05-31'),
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
@@ -295,13 +268,11 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		// recent must contain only the current season's events, not the old season's
 		expect(result.recent.map((i) => i.id)).toEqual(['cur-event']);
 		expect(result.seasonConductors).toEqual(['p-anna']);
 	});
 
 	it('returns empty recent when the current season has no past events yet', async () => {
-		// Season just started, all events are upcoming
 		listSeasonsMock.mockResolvedValue([
 			season('s-cur', '2026-09-01', '2027-05-31', ['p-anna'])
 		]);
@@ -317,24 +288,6 @@ describe('listFullAgenda -- recent items + current season (#83 F1+F2)', () => {
 		expect(result.seasonConductors).toEqual(['p-anna']);
 	});
 });
-
-// ---- listFullAgenda: the MANAGEABLE season (#167) ----
-//
-// #167 RED — the page's event/series creation gates need the season an ADMIN
-// manages, which is NOT always the viewer's current season: a just-created
-// season with a future start date has no "current" status yet, but it is
-// exactly the season the admin must populate with events NOW.
-//
-// Contract pinned here (GREEN wires conductorLogic's `manageableSeason` into
-// `listFullAgenda`): `FullAgendaResult` gains three fields —
-//   manageableSeasonId       string | null
-//   manageableSeasonOwners   string[]  (the manageable season's visible `_owner` refs)
-//   manageableSeasonEditors  string[]  (its visible `_editor` refs)
-// When a current season exists these MIRROR seasonId/seasonOwners/seasonEditors.
-// When only future seasons exist, they carry the SOONEST-starting future
-// season's data, while the VIEWER fields keep their existing semantics
-// (`seasonId` stays null, `recent` stays empty — those pins above must keep
-// passing untouched).
 
 describe('listFullAgenda — manageable season (#167)', () => {
 	function seasonWithRights(
@@ -369,10 +322,8 @@ describe('listFullAgenda — manageable season (#167)', () => {
 
 		const result = await listFullAgenda(cfg, NOW);
 
-		// viewer semantics untouched:
 		expect(result.seasonId).toBeNull();
 		expect(result.recent).toEqual([]);
-		// admin semantics (#167):
 		expect(result.manageableSeasonId).toBe('s-future');
 		expect(result.manageableSeasonOwners).toEqual(['p-owner']);
 		expect(result.manageableSeasonEditors).toEqual(['p-editor']);
@@ -403,8 +354,6 @@ describe('listFullAgenda — manageable season (#167)', () => {
 	});
 });
 
-// ---- loadFullAgenda (threads the T4 selected db + token) ----
-
 describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 	it('resolves db from selectedCollectiveStore and token from storage — personId is never threaded', async () => {
 		collectiveHolder.store.set({ db: 'sampledb', personId: 'person-123' });
@@ -413,14 +362,6 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 
 		await loadFullAgenda(NOW);
 
-		// #161 review fix round 2 — `listSeasons` is db-scoped, not person-scoped:
-		// `listFullAgenda` no longer threads personId into the call.
-		//
-		// #434 slice 2 review round, finding 2 — the FOURTH argument is the whole
-		// point of that round: the read-cache opt-in is an argument threaded from
-		// HERE (the agenda page's own entry point), not a flag hard-wired inside
-		// `listSeasons`, which also serves /library. Asserted as the exact value,
-		// not `expect.anything()`: `{}` here would be the bug.
 		expect(listSeasonsMock).toHaveBeenCalledWith(
 			{ db: 'sampledb', token: 'jwt-live' },
 			expect.anything(),
@@ -454,9 +395,6 @@ describe('loadFullAgenda (threads the T4 selected db + token)', () => {
 		expect(listEventsMock).toHaveBeenCalledWith(cfg, 'cur', expect.anything(), {});
 	});
 
-	// #167 — the empty shape carries the manageable* fields too (full-shape
-	// toEqual, so a partial NO_SEASON object fails here rather than as an
-	// `undefined` leaking into the page's gates).
 	it('returns empty result without reading when no collective is selected', async () => {
 		setToken('jwt-live'); // token present, but no collective
 		const result = await loadFullAgenda(NOW);

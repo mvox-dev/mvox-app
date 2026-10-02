@@ -1,40 +1,15 @@
 // @vitest-environment happy-dom
-/**
- * #373 RED — the board reads each issue's KIND from the native GitHub issue
- * type; the kind label is only the fallback for issues that predate types.
- *
- * Since #393 the forms assign only the type, so a new issue carries no kind
- * label at all. The board must therefore:
- *
- *   - render a kind chip saying what the TYPE says, whatever labels the issue
- *     carries (a typed Bug wearing a legacy `task` label chips as `bug`);
- *   - fall back to the kind label only when the issue has no type (the
- *     archive: ~380 pre-type issues, many closed);
- *   - treat a typed Task exactly like a `task`-labeled one in the #340
- *     staleness predicate — pinned here with a TYPED-ONLY fixture;
- *   - leave MOTION untouched: `ready` / `blocked` / `in process` /
- *     `in research` / `prepped` / `needs-po` are labels, stay labels, and
- *     their chips render BYTE-IDENTICAL to the pre-#373 board (Mihkel's
- *     explicit fear is this change eradicating movement display).
- *
- * Kind derivation itself lives in issue-model.ts (#384's model) — render.ts
- * consumes the model, never a raw GitHub shape; fetch-issues.ts is the only
- * file that sees the REST payload's `type` object.
- *
- * Label strings/colours are the REAL ones (gh api repos/mvox-dev/mvox-app/labels,
- * 2026-09-18). Same caveat as active-float.spec.ts: a fixture cannot see a
- * GitHub-side rename.
- *
- * (*PO:Gama*)
- */
+// The board reads each issue's kind from its native GitHub issue type.
 import { describe, expect, it } from 'vitest';
 import { fetchBoard, normalizeIssue } from './fetch-issues';
 import { kindFromLabels, kindFromType, kindOf } from './issue-model';
 import { displayLead, displayTitle, renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
+import { json } from '$lib/testing/entuFetchKit';
+
+const JSON_HEADERS = { 'content-type': 'application/json' };
 
 const GENERATED_AT = '2026-09-18T09:00:00.000Z';
 
-/** Live palette (gh api repos/mvox-dev/mvox-app/labels, 2026-09-18). */
 const TASK: RoadmapLabel = { name: 'task', color: '1d76db' };
 const BUG: RoadmapLabel = { name: 'bug', color: 'd73a4a' };
 const EPIC: RoadmapLabel = { name: 'epic', color: '6f42c1' };
@@ -68,7 +43,6 @@ function parse(html: string): Document {
 	return new DOMParser().parseFromString(html, 'text/html');
 }
 
-/** The chip names under one issue's own `.issue-labels` span, in render order. */
 function chipNames(doc: Document, number: number): string[] {
 	const entry = doc.querySelector(`[data-issue="${number}"]`);
 	expect(entry, `no entry for #${number}`).not.toBeNull();
@@ -78,7 +52,6 @@ function chipNames(doc: Document, number: number): string[] {
 	);
 }
 
-/** A closed issue so the board always has a Tehtud group. */
 const CLOSED_DONE = issue({
 	number: 200,
 	title: 'Done long ago',
@@ -218,15 +191,11 @@ describe('#373 — kind chips render from the type, whatever labels the issue ca
 		);
 		expect(chipNames(doc, 400)).toEqual(['task']);
 		expect(chipNames(doc, 401)).toEqual(['epic']);
-		// #354 keeps filtering motion off closed issues; the kind label stays.
 		expect(chipNames(doc, 210)).toEqual(['task']);
 	});
 });
 
 describe('#373 — MOTION IS UNTOUCHED: movement chips render byte-identical', () => {
-	// The exact chip markup renderLabel emitted BEFORE #373, one literal per
-	// motion label (live palette). Hardcoded bytes on purpose: this pin fails
-	// if the kind change so much as reorders an attribute in a motion chip.
 	const MOTION_CHIP_BYTES = [
 		'<span class="label" style="background-color: #0e8a16; color: #000000;">ready</span>',
 		'<span class="label" style="background-color: #b60205; color: #ffffff;">blocked</span>',
@@ -263,9 +232,6 @@ describe('#373 — MOTION IS UNTOUCHED: movement chips render byte-identical', (
 	});
 
 	it('adding a type to an issue changes NOTHING about its motion chips', () => {
-		// Same issue rendered pre-type and typed; the motion chip substrings on
-		// the page must be identical strings — the type may add a kind chip and
-		// dedupe the kind label, never touch movement.
 		const motionChips = (html: string): string[] =>
 			[...html.matchAll(/<span class="label"[^>]*>[^<]*<\/span>/g)]
 				.map((m) => m[0])
@@ -291,7 +257,6 @@ describe('#373 — the #340 staleness predicate treats a typed Task like a task-
 	const warningEl = (doc: Document) => doc.querySelector(`.${WARNING_CLASS}`);
 
 	it('TYPED-ONLY fixture: an open typed Task carrying only `ready` is named a violator', () => {
-		// No `task` label anywhere on it — exactly what #393's forms now file.
 		const board = [
 			issue({ number: 406, title: 'Groomed, idle, typed', issueType: 'Task', labels: [READY] }),
 			CLOSED_DONE
@@ -328,8 +293,6 @@ describe('#373 — the #340 staleness predicate treats a typed Task like a task-
 });
 
 describe('#373 — fetchBoard resolves sub-issues for a typed Epic with no labels', () => {
-	// The post-#393 shape: a new epic carries type Epic and zero labels. The
-	// sub-issue fetch keyed on the `epic` LABEL would leave its children flat.
 	interface RestIssue {
 		number: number;
 		title: string;
@@ -352,15 +315,13 @@ describe('#373 — fetchBoard resolves sub-issues for a typed Epic with no label
 		html_url: `https://github.com/mvox-dev/mvox-app/issues/${number}`,
 		...(type !== null ? { type: { name: type } } : {})
 	});
-	const jsonResponse = (body: unknown): Response =>
-		new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
 	const githubStub =
 		(list: RestIssue[], subs: Record<number, RestIssue[]>): typeof fetch =>
 		(async (input: RequestInfo | URL) => {
 			const url = String(input);
 			const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
-			if (match) return jsonResponse(subs[Number(match[1])] ?? []);
-			if (url.includes('/issues?')) return jsonResponse(list);
+			if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
+			if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
 			throw new Error(`unexpected request: ${url}`);
 		}) as unknown as typeof fetch;
 

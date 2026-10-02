@@ -1,75 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 1/6 RED — the read cache core ("Offline, last seen data"). No UI.
-//
-// ISSUE LAW: "It caches reads only, never a write."
-//
-// SHARED DESIGN (team-lead, fixed for all six slices):
-//   - The service worker stays out ($lib/sw/swPolicy.ts fences "Entu never
-//     cached"). The copy lives in the app: `$lib/entu/readCache` over a NEW
-//     IndexedDB database 'mvox-read-cache' — NOT #343's 'mvox-byte-store'
-//     (bumping or sharing that one is a cache flush of every downloaded part).
-//   - Key [db, personId, pathAndQuery]; value { body: <parsed JSON>, readAt:
-//     ISO string, bytes: UTF-8 size of the JSON text } (bytes: review round 3).
-//   - personId = the session's `personIdByDb[db]` (authStore, $lib/auth/session).
-//     No personId → nothing is cached and nothing is served.
-//   - Nothing is ever cleared on logout or token expiry (#343's law).
-//   - Reads only: only GET calls through `entuFetch` are cached. A non-GET
-//     never reads and never writes the cache.
-//   - OPT IN (#434 review round 1, findings 1 and 2): a GET is cached only when
-//     its caller asks for it — `entuFetch(db, path, token, init, fetchImpl,
-//     CACHED_READ)`. Every other call keeps the pre-slice promise chain and no
-//     cache at all. Two kinds of GET must never be cache-served, and an
-//     exclusion list is not the shape that keeps them out: a 60-second signed
-//     file url (`property/{id}`, entu-www `src/api/files/index.md`) and the
-//     lookup step INSIDE a write choreography (replaceProperty, linkActions,
-//     eventSeriesActions read the property `_id`s their POST/DELETE targets).
-//     Slice 1 turns the flag on for NO reader at all (#434 review round 2,
-//     finding 2): a reader opts in in the same slice that ships its screen's
-//     "as of <time>" line, which the issue's Done-when pairs it with.
-//   - BOUNDED (#434 review round 1, finding 3; review round 3, F1): the stored
-//     bodies total at most READ_CACHE_MAX_BYTES, oldest-`readAt` evicted first
-//     on a put that takes the total over — no entry-count cap, because the
-//     offline screens fan out per entity — and a body
-//     over READ_CACHE_MAX_ENTRY_BYTES — measured in UTF-8 BYTES, not UTF-16
-//     code units (#434 review round 2, finding 3) — is not stored at all. This
-//     database shares the origin's quota with #343's self-capping (200MB) part
-//     byte store.
-//   - Offline = the network call THROWS (fetch rejects). Then the cached entry
-//     for the same key is served; with none, the ORIGINAL error is rethrown.
-//     A resolved response of any status (401, 500) is not "offline".
-//   - `servedFromCache` (readable store) = the OLDEST readAt among entries
-//     served since the last `resetServedFromCache()`; null when everything
-//     came from the network.
-//
-// CONTRACT for the GREEN implementer — `src/lib/entu/readCache.ts` exports:
-//   READ_CACHE_DB_NAME = 'mvox-read-cache'
-//   setReadCacheFactory(factory?: IDBFactory | null): void
-//       Test seam, same idea as idbAdapter's injectable factory. `undefined`
-//       restores the default (globalThis.indexedDB, resolved LAZILY at first
-//       use — absent under node migration scripts → caching is off, silently).
-//       `null` disables. Every call drops any memoised open connection.
-//   readCacheGet(db, personId, pathAndQuery): Promise<{ body, readAt, bytes } | undefined>
-//   flushReadCache(): Promise<void>  — settles once every pending cache write
-//       started by entuFetch has settled (so specs can assert deterministically
-//       without entuFetch having to await the write on the hot path).
-//   pendingCacheWriteCount(): number — writes still in flight; returns to 0 on
-//       its own, with no flush (#434 review round 2, finding 1: the app never
-//       calls flushReadCache, so the list must not be append-only).
-//   servedFromCache: Readable<string | null>
-//   resetServedFromCache(): void
-// and `entuFetch` ($lib/entu/request) routes its GET path through it.
-// A cache failure (IDB unavailable, open throws) must never break an online
-// read. NOTE for GREEN (found by a throwaway sketch against the full suite):
-// several specs `vi.mock('$lib/auth/session', ...)` WITHOUT an `authStore`
-// export (e.g. src/routes/auth/callback/run-link-callback.spec.ts). The
-// personId lookup must treat a missing/throwing store as "no personId", or
-// those suites' GETs start failing. The suite must stay green as a whole.
+// The read cache core: it caches reads only, never a write.
 import { IDBFactory } from 'fake-indexeddb';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Severs the $env/dynamic/public chain, same as request.auth-expired.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from './request';
@@ -89,6 +23,7 @@ import { replaceEntityProperty } from './replaceProperty';
 import { authStore, endSession } from '$lib/auth/session';
 import { listWorks } from '$lib/library/libraryData';
 import { signFileUrl } from '$lib/repertoire/fileUrls';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const OTHER_DB = 'crede';
@@ -98,8 +33,6 @@ const PATH = 'entity?_type.string=work&props=name,composer&limit=500';
 const TOKEN = 'jwt-abc';
 
 const BODY = { count: 1, entities: [{ _id: 'w1', name: [{ string: 'Bogoróditse Djévo' }] }] };
-// What the entry spends of the byte budget: its JSON text in UTF-8 bytes
-// (the 'ó'/'é' are two bytes each, so this is not `.length`).
 const BODY_BYTES = new TextEncoder().encode(JSON.stringify(BODY)).length;
 
 function signIn(personIdByDb: Record<string, string>): void {
@@ -217,9 +150,6 @@ describe('entuFetch GET — online stores the read', () => {
 	});
 });
 
-// #434 slice 3 review round, findings 1 and 2 — the THIRD mode: store, never
-// serve, never touch `servedFromCache`. What a read that is not what the
-// mounted screen renders gets: a background warm-up, or a post-write re-read.
 describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () => {
 	it('stores the body online, exactly as CACHED_READ does', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
@@ -245,7 +175,6 @@ describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () =
 	});
 
 	it('offline it leaves servedFromCache alone — a background read cannot age-stamp a live screen', async () => {
-		// The mounted screen's own read came back live, so the age line is absent.
 		await storeOnline(DB, 'entity/screens-own-read');
 		await storeOnline(DB, PATH);
 		resetServedFromCache();
@@ -276,26 +205,12 @@ describe('entuFetch GET — CACHED_READ_STORE_ONLY stores without serving', () =
 		await entuFetch(DB, PATH, TOKEN, {}, online(after), CACHED_READ_STORE_ONLY);
 		await flushReadCache();
 
-		// Offline, a SERVING reader of the same key now sees the post-write body.
 		const served = await entuFetch(DB, PATH, TOKEN, {}, offline(), CACHED_READ);
 		expect(await served.json()).toEqual(after);
 	});
 });
 
-// #434 slice 3 review round, finding 2 — the factory GENERATION. Dropping
-// `dbPromise` does not reach a read that already holds a resolved
-// `IDBDatabase`, so before this guard a read started against one factory could
-// finish against it after a swap: serve a foreign body, and age-stamp the ONE
-// global `servedFromCache` for whatever screen (or test) was live by then. That
-// is what made `page.agenda-offline.spec.ts` order-dependent.
-//
-// BOTH tests below RE-REGISTER THE SAME FACTORY, on purpose. Swapping in a fresh
-// `IDBFactory` proves nothing: the lookup would then open an EMPTY database and
-// miss anyway, so such a test passes with the guard removed. Handing back the
-// same factory keeps the stored entry findable, so the only thing that can stop
-// the serve is the generation check itself.
 describe('readCache — a read that outlives its factory serves nothing', () => {
-	/** A fetch that stays pending until the test rejects it by hand. */
 	function heldOffline(): { impl: typeof fetch; reject: (reason: unknown) => void } {
 		let reject: (reason: unknown) => void = () => undefined;
 		const impl = vi.fn(
@@ -312,8 +227,6 @@ describe('readCache — a read that outlives its factory serves nothing', () => 
 		const held = heldOffline();
 		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
 
-		// What a spec's `beforeEach` does between tests, while this read is still
-		// in flight — the caller it belonged to is gone.
 		setReadCacheFactory(factory);
 		resetServedFromCache();
 
@@ -328,11 +241,6 @@ describe('readCache — a read that outlives its factory serves nothing', () => 
 		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
 
 		held.reject(new TypeError('Failed to fetch'));
-		// Two microtask turns: the rejection handler has run (so `readThroughGet`'s
-		// own check already passed) and its lookup is awaiting the ALREADY-OPEN
-		// database. The IDB request completes on a later task, so the swap lands
-		// inside exactly the window `dbPromise = null` does not reach — the one the
-		// agenda spec's leak came through.
 		await Promise.resolve();
 		await Promise.resolve();
 		setReadCacheFactory(factory);
@@ -350,13 +258,6 @@ describe('readCache — a read that outlives its factory serves nothing', () => 
 	});
 });
 
-// #434 slice 3 review round 3, F1 — the LOAD epoch. Neither page cancels an
-// in-flight read: a superseded or unmounted load's cache-served read used to
-// stamp `servedFromCache` for the NEXT screen, painting "as of" over live rows.
-// Every screen calls `resetServedFromCache()` before its own reads start, so a
-// read begun before the latest reset belongs to a load that is no longer on
-// screen: it still gets its body (harmless to a dead caller) but stamps nothing.
-// Same factory throughout — only the reset moves.
 describe('readCache — a read from a superseded load serves its body but stamps no age', () => {
 	function heldOffline(): { impl: typeof fetch; reject: (reason: unknown) => void } {
 		let reject: (reason: unknown) => void = () => undefined;
@@ -374,7 +275,6 @@ describe('readCache — a read from a superseded load serves its body but stamps
 		const held = heldOffline();
 		const pending = entuFetch(DB, PATH, TOKEN, {}, held.impl, CACHED_READ);
 
-		// The next screen's load starts while this read is still in flight.
 		resetServedFromCache();
 
 		held.reject(new TypeError('Failed to fetch'));
@@ -554,7 +454,6 @@ describe('no personId — no cache', () => {
 		await expect(entuFetch(DB, PATH, TOKEN, {}, offline(err), CACHED_READ)).rejects.toBe(err);
 		expect(get(servedFromCache)).toBeNull();
 
-		// Nothing landed under any plausible stand-in key either.
 		expect(await readCacheGet(DB, '', PATH)).toBeUndefined();
 		expect(await readCacheGet(DB, 'undefined', PATH)).toBeUndefined();
 	});
@@ -636,11 +535,6 @@ describe('a cache failure never breaks an online read', () => {
 	});
 });
 
-// An opted-in read of a REAL screen's path and wire body, end to end through
-// `entuFetch`. Deliberately not through `listWorks` (#434 review round 2,
-// finding 2): no reader carries CACHED_READ in slice 1 — a reader gets the flag
-// in the slice that also ships its screen's "as of <time>" line, so this pins
-// the mechanism the library's own reader will opt into in slice 4.
 describe('integration — an opted-in read of a real screen path (library works list)', () => {
 	it('online then offline returns byte-identical body from the cache', async () => {
 		const wire = {
@@ -672,10 +566,6 @@ describe('integration — an opted-in read of a real screen path (library works 
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #434 review round 1 (Bentham, RED) — the three findings, each pinned here.
-// ---------------------------------------------------------------------------
-
 describe('the cache is OPT IN — a GET reaches it only by asking (review finding 1/2)', () => {
 	it('a GET with no cache option stores nothing', async () => {
 		const res = await entuFetch(DB, PATH, TOKEN, {}, online());
@@ -702,7 +592,7 @@ describe('the cache is OPT IN — a GET reaches it only by asking (review findin
 describe('a short-lived body is never cached: the 60s signed file url (finding 1)', () => {
 	const FILE_ID = 'file-prop-1';
 	const SIGNED = 'https://bucket.invalid/part.pdf?X-Amz-Expires=60&sig=abc';
-	const cfg = { db: DB, token: TOKEN } as never;
+	const cfg = testCfg(DB, TOKEN);
 
 	it('signFileUrl online stores nothing under its property path', async () => {
 		expect(await signFileUrl(cfg, FILE_ID, online({ url: SIGNED }))).toBe(SIGNED);
@@ -711,10 +601,6 @@ describe('a short-lived body is never cached: the 60s signed file url (finding 1
 	});
 
 	it('offline, signFileUrl REJECTS — an expired url is never handed back from a copy', async () => {
-		// Whatever an earlier online click stored anywhere, this call must fail:
-		// openFileBytes turns a resolved sign into a browser navigation, so a
-		// stale url resolves onto the bucket's AccessDenied instead of failing
-		// where the caller can say so (#343 review round 3, finding 2).
 		expect(await signFileUrl(cfg, FILE_ID, online({ url: SIGNED }))).toBe(SIGNED);
 		await flushReadCache();
 
@@ -729,7 +615,6 @@ describe('a GET that is a STEP inside a write is never cache-served (finding 2)'
 	const VALUE = { type: 'name', string: 'Uus nimi' };
 	const LOOKUP = `entity/${ENTITY}?props=name`;
 
-	/** The live wire: the lookup GET answers one existing value id, the POST 200s. */
 	function liveWire(): ReturnType<typeof vi.fn> {
 		return vi.fn((_url: string, init?: RequestInit) =>
 			Promise.resolve(
@@ -758,8 +643,6 @@ describe('a GET that is a STEP inside a write is never cache-served (finding 2)'
 		const flapping = vi.fn((_url: string, init?: RequestInit) => {
 			const method = (init?.method ?? 'GET').toUpperCase();
 			methods.push(method);
-			// The network is back for everything but the lookup — the exact shape
-			// that would feed a cache-served, stale `_id` into a live POST.
 			return method === 'GET'
 				? Promise.reject(err)
 				: Promise.resolve(new Response('{}', { status: 200 }));
@@ -774,13 +657,10 @@ describe('a GET that is a STEP inside a write is never cache-served (finding 2)'
 });
 
 describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; round 3)', () => {
-	// Bodies just under the per-entry ceiling, all the same encoded size (the
-	// id is fixed-width), so the budget holds exactly FITS of them.
 	const big = (i: number) => ({ _id: `e${String(i).padStart(3, '0')}`, pad: 'x'.repeat(900_000) });
 	const BIG_BYTES = new TextEncoder().encode(JSON.stringify(big(0))).length;
 	const FITS = Math.floor(READ_CACHE_MAX_BYTES / BIG_BYTES);
 
-	/** Fills the budget with exactly FITS entries, one per minute, oldest first. */
 	async function fillToBudget(baseMs: number): Promise<void> {
 		for (let i = 0; i < FITS; i += 1) {
 			vi.setSystemTime(new Date(baseMs + i * 60_000));
@@ -810,7 +690,6 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 		const base = Date.parse('2026-09-28T00:00:00.000Z');
 		await fillToBudget(base);
 
-		// e0, the oldest, is read online again — now the freshest entry there is.
 		vi.setSystemTime(new Date(base + 10 * 60 * 60_000));
 		await storeOnline(DB, 'entity/e0', big(0));
 
@@ -848,8 +727,6 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 	});
 
 	it('the ceiling is BYTES: a body under it in characters but over it in UTF-8 is not stored (round 2, finding 3)', async () => {
-		// 'ы' is two UTF-8 bytes and one UTF-16 code unit: 0.6M of them is ~600k
-		// characters (under the ceiling) and ~1.2MB encoded (over it).
 		const body = { entities: [{ _id: 'w1', name: 'ы'.repeat(600_000) }] };
 		const text = JSON.stringify(body);
 		expect(text.length).toBeLessThan(READ_CACHE_MAX_ENTRY_BYTES);
@@ -864,18 +741,7 @@ describe('bounded: a byte budget, and oldest-readAt eviction on put (finding 3; 
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #434 review round 3 (Bentham, F1) — the budget is BYTES, not entries. The
-// three offline screens fan out per ENTITY (resolveCopyChains: one GET per copy
-// and per edition; resolveBorrowerName: one per member plus a profiles read;
-// loadWorksByEventId: ~N+4 for N events; listFullAgenda: one listEvents per
-// season), so a real library + agenda load is well past 64 paths. A 64-entry
-// cap evicted a screen's own earliest reads mid-load, and offline its
-// Promise.all then rejected instead of showing last-seen data.
-// ---------------------------------------------------------------------------
-
 describe('bounded by bytes: a real screen fan-out survives, the budget evicts oldest-first (round 3)', () => {
-	/** A kilobyte-class entity body, the size real Entu reads come back at. */
 	function entityBody(id: string, extra: string): unknown {
 		return {
 			_id: id,
@@ -885,8 +751,6 @@ describe('bounded by bytes: a real screen fan-out survives, the budget evicts ol
 		};
 	}
 
-	/** The library + agenda fan-out: lists, then one read per copy, edition,
-	 *  member and profile, then one listEvents per season and per-event works. */
 	function libraryShapedPaths(): string[] {
 		const paths = [
 			'entity?_type.string=work&props=name,composer&limit=500',
@@ -918,8 +782,6 @@ describe('bounded by bytes: a real screen fan-out survives, the budget evicts ol
 	it('over READ_CACHE_MAX_BYTES, the oldest-readAt entries go first until the total fits', async () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		const base = Date.parse('2026-09-28T00:00:00.000Z');
-		// Bodies just under the per-entry ceiling, so the budget is crossed in a
-		// few dozen puts.
 		const big = (i: number) => ({ _id: `e${String(i).padStart(3, '0')}`, pad: 'x'.repeat(900_000) });
 		const bytesEach = new TextEncoder().encode(JSON.stringify(big(0))).length;
 		const fits = Math.floor(READ_CACHE_MAX_BYTES / bytesEach);
@@ -940,14 +802,7 @@ describe('bounded by bytes: a real screen fan-out survives, the budget evicts ol
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #434 review round 2 (Bentham) — finding 1: the pending-write list must not
-// grow for the life of the tab. `flushReadCache` is a spec affordance; the app
-// never calls it, so a settled write has to drop itself.
-// ---------------------------------------------------------------------------
-
 describe('pending cache writes drain themselves, with no flush (review round 2, finding 1)', () => {
-	// No `flushReadCache()` anywhere in here — that is the whole point.
 	async function settle(): Promise<void> {
 		for (let i = 0; i < 200 && pendingCacheWriteCount() > 0; i += 1) {
 			await new Promise((resolve) => setTimeout(resolve, 0));
@@ -963,7 +818,6 @@ describe('pending cache writes drain themselves, with no flush (review round 2, 
 		await settle();
 
 		expect(pendingCacheWriteCount()).toBe(0);
-		// The writes really did land — draining is not "the writes were dropped".
 		expect(await readCacheEntryCount()).toBe(5);
 	});
 
@@ -1001,5 +855,5 @@ describe('pending cache writes drain themselves, with no flush (review round 2, 
 	});
 });
 
-// (*MVOX:Tallis*) — review-round-1 and review-round-2 additions (*MVOX:Josquin*)
-// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

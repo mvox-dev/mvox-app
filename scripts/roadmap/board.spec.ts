@@ -1,30 +1,13 @@
 // @vitest-environment happy-dom
-/**
- * #305 — the fetch → render seam.
- *
- * render.spec.ts pins the renderer against hand-built input; fetch-issues.spec.ts
- * pins the pure fetch-step helpers. Neither sees the shape fetchBoard actually
- * PRODUCES, and that gap hid two real defects in a row: sub-issues rendered
- * twice (they are ordinary repo issues, so `/issues?state=all` returns them at
- * top level as well as under their epic), and then, once de-parented, a
- * two-level chain silently lost its grandchild. Live today every epic has zero
- * sub-issues, so neither showed on the page — these specs drive the real
- * fetchBoard so they cannot hide again.
- *
- * The network seam is the house `fetchImpl` parameter (see
- * src/lib/testing/networkGuard.setup.ts): the stub below is passed in
- * explicitly, so the global fetch guard is never touched.
- *
- * (*MVOX:Byrd*)
- */
+// The roadmap board's fetch and render seam.
 import { describe, expect, it } from 'vitest';
 import { fetchBoard } from './fetch-issues';
 import { renderBoard } from './render';
+import { json } from '$lib/testing/entuFetchKit';
 
 const GENERATED_AT = '2026-09-10T12:34:56Z';
 const REPO = 'mvox-dev/mvox-app';
 
-/** A GitHub REST issue payload, in the shape `/issues?state=all` really returns. */
 interface RawIssue {
 	number: number;
 	title: string;
@@ -36,7 +19,6 @@ interface RawIssue {
 	html_url: string;
 }
 
-/** Live palette values (gh api repos/mvox-dev/mvox-app/labels, 2026-09-10). */
 const PALETTE: Record<string, string> = {
 	epic: '6f42c1',
 	task: '1d76db',
@@ -62,25 +44,14 @@ function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}
 	};
 }
 
-function jsonResponse(body: unknown): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: { 'content-type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'content-type': 'application/json' };
 
-/**
- * Stands in for the GitHub REST API: `list` is the repo's issues (which always
- * includes every sub-issue, since sub-issues are ordinary issues), and `subs`
- * maps an epic's number to the children its sub_issues endpoint reports. No
- * `Link` header — one page, so pagination stops after it.
- */
 function githubStub(list: RawIssue[], subs: Record<number, RawIssue[]> = {}): typeof fetch {
 	return (async (input: RequestInfo | URL) => {
 		const url = String(input);
 		const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
-		if (match) return jsonResponse(subs[Number(match[1])] ?? []);
-		if (url.includes('/issues?')) return jsonResponse(list);
+		if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
+		if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
 		throw new Error(`unexpected request: ${url}`);
 	}) as unknown as typeof fetch;
 }
@@ -118,8 +89,6 @@ describe('fetchBoard → renderBoard — one level', () => {
 });
 
 describe('fetchBoard → renderBoard — two levels', () => {
-	// epic 289 → epic 290 → task 291. De-parenting must not strand 291: the
-	// nested 290 has to be the same object whose children were resolved.
 	const list = [raw(289, ['epic']), raw(290, ['epic']), raw(291, ['task']), raw(305, ['task'])];
 	const subs = { 289: [raw(290, ['epic'])], 290: [raw(291, ['task'])] };
 
@@ -146,9 +115,6 @@ describe('fetchBoard → renderBoard — two levels', () => {
 
 describe('fetchBoard — request shape', () => {
 	it('asks for a parent\'s whole 100-sub-issue ceiling in one page', async () => {
-		// GitHub caps a parent at 100 sub-issues and this endpoint's page size at
-		// 100, so one page always covers a parent. The endpoint's own default is
-		// 30: without per_page a 35-child epic would nest 30 and strand the rest.
 		const urls: string[] = [];
 		const inner = githubStub([raw(289, ['epic']), raw(290, ['task'])], { 289: [raw(290, ['task'])] });
 		const recording = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -165,9 +131,6 @@ describe('fetchBoard — request shape', () => {
 });
 
 describe('fetchBoard → renderBoard — #307 colours and ordering ride the real pipeline', () => {
-	// Integration on purpose: unit specs can pass with the feature unwired.
-	// These drive the REST payload shape through the real fetchBoard into
-	// renderBoard, so label colours / closed_at must survive normalization.
 	it('carries label colours from the REST payload into the rendered chips', async () => {
 		const html = renderBoard(await board([raw(305, ['task']), raw(262, ['blocked'])]), GENERATED_AT);
 		const doc = parse(html);
@@ -185,7 +148,6 @@ describe('fetchBoard → renderBoard — #307 colours and ordering ride the real
 	});
 
 	it('orders open by number and closed by closed_at through the real fetch step, divided by Pooleli/Tehtud', async () => {
-		// API order deliberately wrong on both sides of the line.
 		const list = [
 			raw(305, ['task']),
 			raw(262, ['bug']),
@@ -211,12 +173,7 @@ describe('fetchBoard → renderBoard — #307 colours and ordering ride the real
 });
 
 describe('fetchBoard → renderBoard — #310 active float rides the real pipeline', () => {
-	// Integration on purpose: the tier is matched against the exact label
-	// strings GitHub sends, so it must survive normalization end-to-end —
-	// a unit spec can go green with the comparator never seeing wire labels.
 	it('floats in process above in research above the rest through the real fetch step, closed group untouched', async () => {
-		// API order deliberately inverted: rest, research, process — and the
-		// closed pair carries a stale `in process` label on the OLDER close.
 		const list = [
 			raw(262, ['bug']),
 			raw(298, ['task', 'in research']),
@@ -234,20 +191,14 @@ describe('fetchBoard → renderBoard — #310 active float rides the real pipeli
 			expect(i, `data-issue="${n}" missing from the page`).toBeGreaterThan(-1);
 			return i;
 		};
-		// Open tier order: 305 (in process), 298 (in research), 262 (rest).
 		expect(pos(305)).toBeLessThan(pos(298));
 		expect(pos(298)).toBeLessThan(pos(262));
-		// Closed: closedAt-desc only — 210's stale `in process` must not float it.
 		expect(pos(304)).toBeLessThan(pos(210));
 		expect(pos(262)).toBeLessThan(pos(304));
 	});
 });
 
 describe('fetchBoard → renderBoard — #309 card links ride the real pipeline', () => {
-	// Integration on purpose: a unit spec can go green with html_url normalized
-	// but never fetched, or fetched but never rendered. This drives the REST
-	// payload's html_url through the real fetchBoard into renderBoard and reads
-	// it back off the page — top level and nested alike.
 	it('carries html_url from the REST payload onto the rendered card links, nested children included', async () => {
 		const html = renderBoard(
 			await board([raw(289, ['epic']), raw(290, ['task']), raw(305, ['task'])], {
@@ -275,7 +226,6 @@ describe('fetchBoard → renderBoard — #309 card links ride the real pipeline'
 
 describe('fetchBoard → renderBoard — graphs that are not trees', () => {
 	it('renders a child reported under two epics once, not once per parent', async () => {
-		// GitHub allows one parent per sub-issue; the code does not assume it.
 		const result = await board([raw(289, ['epic']), raw(292, ['epic']), raw(290, ['task'])], {
 			289: [raw(290, ['task'])],
 			292: [raw(290, ['task'])]
@@ -286,8 +236,6 @@ describe('fetchBoard → renderBoard — graphs that are not trees', () => {
 	});
 
 	it('terminates on a parent cycle instead of hanging the build', async () => {
-		// 289 and 290 each claim the other as a sub-issue. Shared objects make this
-		// an infinite walk without the renderer's guard; the build must not hang.
 		const result = await board([raw(289, ['epic']), raw(290, ['epic']), raw(305, ['task'])], {
 			289: [raw(290, ['epic'])],
 			290: [raw(289, ['epic'])]

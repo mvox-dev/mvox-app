@@ -2,7 +2,7 @@
 // The delete button on the event detail page.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -49,7 +49,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const CFG = { db: 'sampledb', token: 'jwt-token' };
+const CFG = testCfg('sampledb', 'jwt-token');
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {

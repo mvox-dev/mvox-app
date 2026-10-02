@@ -6,8 +6,9 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 }));
 
 import { resolveDbEntityOrLog } from './resolveDbEntityOrLog';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 't' };
+const CFG = testCfg('sampledb', 't');
 const LABEL = { area: 'agenda', action: 'event create' };
 
 describe('resolveDbEntityOrLog', () => {

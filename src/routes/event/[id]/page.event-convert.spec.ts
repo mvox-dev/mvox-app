@@ -4,7 +4,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -74,7 +74,7 @@ import {
 } from '$lib/collectives/store';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {

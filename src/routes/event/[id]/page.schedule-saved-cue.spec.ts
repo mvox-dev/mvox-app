@@ -2,7 +2,7 @@
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
-import { json } from '$lib/testing/entuFetchKit';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -238,14 +238,6 @@ async function commitRowNameEdit(container: HTMLElement, id: string, value: stri
 	await fireEvent.blur(nameInput);
 }
 
-function gate(): { promise: Promise<void>; release: () => void } {
-	let release!: () => void;
-	const promise = new Promise<void>((r) => {
-		release = r;
-	});
-	return { promise, release };
-}
-
 describe('#328 schedule items — the saved-cue region exists from first render', () => {
 	it('editor view: a PERSISTENT empty role="status" aria-live="polite" region (event-schedule-status) is mounted BEFORE any write, exactly one', async () => {
 		const { container } = renderSchedulePage();
@@ -284,14 +276,14 @@ describe('#328 schedule items — a write that reconciles announces saved', () =
 		const { container, controls } = renderSchedulePage();
 		await waitReady(container);
 
-		const g = gate();
+		const g = deferred();
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si1', 'kutse');
 
 		await new Promise((r) => setTimeout(r, 10));
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
-		g.release();
+		g.resolve();
 		controls.holdItemPost = null;
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-status')?.textContent).toContain(
@@ -391,12 +383,12 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 			'another row’s reconcile must not clear this row’s alert'
 		).not.toBeNull();
 
-		const g = gate();
+		const g = deferred();
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si2', 'kindralproov');
 		await new Promise((r) => setTimeout(r, 10));
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
-		g.release();
+		g.resolve();
 		controls.holdItemPost = null;
 		await waitFor(() => {
 			expect(q(container, 'event-schedule-status')?.textContent).toContain(
@@ -414,7 +406,7 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 			expect(scheduleSection(container)?.textContent).toContain('kogunemine');
 		});
 
-		const g = gate();
+		const g = deferred();
 		controls.holdItemPost = g.promise;
 		await commitRowNameEdit(container, 'si1', 'sissejuhatus');
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
@@ -426,7 +418,7 @@ describe('#328 schedule items — a late settle never announces onto the NEXT ev
 		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 
 		controls.holdItemPost = null;
-		g.release();
+		g.resolve();
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
