@@ -1,37 +1,13 @@
+// Only the allowlisted create paths may carry the _inheritrights literal; one creates profiles.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { findSourceFiles, isSoleCreatePathViolation } from '$lib/testing/soleLiteralGuard';
 
-// T4.4/#25 AC4 — "exactly one code path can create a profile entity; no other
-// path can produce one." The four intended create sites (T4.6 ×3 lazy, T4.10 ×1
-// migration, T4.7 move) don't exist yet, so this can't be proven by calling them
-// — instead this is a STANDING structural guard: `_inheritrights` is the literal
-// that only an explicit entity-create payload ever needs to set, so the set of
-// files carrying it must equal an ENUMERATED allowlist. As of T4.5 that
-// allowlist was exactly two entries (profileData.ts + inviteData.ts); #264
-// item 6 (PO nod 2026-09-06) added a THIRD, non-profile entry — createSection
-// asserting the same rights-cascade dependency inviteData.ts already asserts,
-// not a new profile-adjacent create path, so the guard's PROFILE invariant
-// (AC4) is untouched:
-// - lib/profile/profileData.ts   — the sole profile-create path (T4.4)
-// - lib/invite/inviteData.ts     — the sole invite person+member create path
-//   (T4.5/#31; its own sole-mechanism guard lives in
-//   lib/invite/singleInviteMechanism.spec.ts)
-// - lib/sections/sectionActions.ts — createSection's explicit
-//   `_inheritrights: true` (#264 item 6); a section is not a profile, and this
-//   entry does not touch profileData.ts's sole-create-path guarantee.
-// - lib/links/linkActions.ts — createLink's explicit `_inheritrights: true`
-//   (#256, same #264-item-6 discipline as createSection); a link is not a
-//   profile either, and this entry does not touch profileData.ts's
-//   sole-create-path guarantee.
-// The predicate/walker now live in $lib/testing/soleLiteralGuard (shared with the
-// T4.5 guard — never import one spec file from another).
-
 const NEEDLE = '_inheritrights';
 const EXEMPT = [
 	'lib/profile/profileData.ts',
-	'lib/invite/inviteData.ts',
+	'lib/invite/inviteCreate.ts',
 	'lib/sections/sectionActions.ts',
 	'lib/links/linkActions.ts'
 ];
@@ -43,11 +19,11 @@ describe('isSoleCreatePathViolation (guard predicate)', () => {
 		);
 	});
 
-	it('does NOT flag the exempt paths (profileData.ts / inviteData.ts)', () => {
+	it('does NOT flag the exempt paths (profileData.ts / inviteCreate.ts)', () => {
 		expect(isSoleCreatePathViolation('lib/profile/profileData.ts', "type: '_inheritrights'", NEEDLE, EXEMPT)).toBe(
 			false
 		);
-		expect(isSoleCreatePathViolation('lib/invite/inviteData.ts', "type: '_inheritrights'", NEEDLE, EXEMPT)).toBe(
+		expect(isSoleCreatePathViolation('lib/invite/inviteCreate.ts', "type: '_inheritrights'", NEEDLE, EXEMPT)).toBe(
 			false
 		);
 	});
@@ -82,11 +58,13 @@ describe('T4.4 sole-create-path guard (integration — real src/ tree)', () => {
 });
 
 describe('YELLOW-T4.4.1 — the invite create path stays out of the profile domain', () => {
-	it("lib/invite/inviteData.ts never contains the substring 'profile' — resolveTypeId(cfg, 'profile') stays sole to profileData.ts, and T4.5 creates NO profile entities", () => {
-		const inviteDataPath = join(import.meta.dirname, '..', 'invite', 'inviteData.ts');
-		const content = readFileSync(inviteDataPath, 'utf-8');
-		expect(content.includes('profile')).toBe(false);
-	});
+	it.each(['inviteData.ts', 'inviteConstants.ts', 'inviteCreate.ts', 'inviteSelfLink.ts'])(
+		"lib/invite/%s never contains the substring 'profile' — resolveTypeId(cfg, 'profile') stays sole to profileData.ts, and T4.5 creates NO profile entities",
+		(file) => {
+			const content = readFileSync(join(import.meta.dirname, '..', 'invite', file), 'utf-8');
+			expect(content.includes('profile')).toBe(false);
+		}
+	);
 });
 
 describe('T4.7/#27 — the visibility-move modules compose on the sole create path, never re-implement it', () => {
@@ -103,7 +81,7 @@ describe('T4.7/#27 — the visibility-move modules compose on the sole create pa
 	it("the allowlist is still exactly the T4.4/T4.5/#264-item-6/#256 entries — T4.7 added NO new create site", () => {
 		expect(EXEMPT).toEqual([
 			'lib/profile/profileData.ts',
-			'lib/invite/inviteData.ts',
+			'lib/invite/inviteCreate.ts',
 			'lib/sections/sectionActions.ts',
 			'lib/links/linkActions.ts'
 		]);

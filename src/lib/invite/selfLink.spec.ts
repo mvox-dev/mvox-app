@@ -1,31 +1,4 @@
-// #193 RED — self-invite mint on the user's OWN person (profile auth-provider
-// linking). Per the SPIKE (2026-09-01, live-probed on the dev/test collective):
-//
-// - The mint trigger fires on the UPDATE endpoint too: POST /{db}/entity/{personId}
-//   with [{type:'entu_user', string:'trigger invite token'}] mints an invite JWT
-//   on an EXISTING person and returns it UNMASKED exactly once (entu-api
-//   utils/entity.js:462-467 via insertProperties; the update route returns raw
-//   pIds, routes/[db]/entity/[_id]/index.post.js:138,152).
-// - APPEND is platform-level: a POST of a NEW entu_user value leaves existing
-//   bound identities untouched (proved live — two properties coexisted).
-// - Hazard 2 (orphan accumulation): findStoredInvite takes the FIRST value with
-//   `invite` (routes/auth/index.get.js:270-275), so stale un-redeemed invite
-//   placeholders MUST be deleted before minting a fresh one — and a value
-//   carrying `uid` (a real bound identity) must NEVER be deleted.
-// - Hazard (rights): invite-joined users hold self-`_editor` via mvox's own
-//   grant (inviteData.ts editor-grant phase); auto-provisioned users via
-//   entu-api routes/auth/index.get.js:330. A 403 here means that grant is
-//   missing — surface it LOUDLY by name, never fall back.
-//
-// The mint lives INSIDE lib/invite/inviteData.ts (the sole module allowed to
-// carry the `entu_user` create-payload literal — singleInviteMechanism guard),
-// reusing the exported INVITE_MINT_TRIGGER constant.
-//
-// Contract under test (GREEN implements exactly this):
-//   mintSelfLinkInvite(cfg: EntuCfg, personId: string, fetchImpl?): Promise<{ inviteToken: string }>
-//   throws SelfLinkMintError { phase: 'identity-read'|'stale-invite-cleanup'|'mint',
-//                              reason: 'http'|'contract'|'missing-self-editor' }
-
+// mintSelfLinkInvite: sweep stale invite placeholders, then mint on the caller's own person.
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
@@ -52,12 +25,6 @@ async function captureError(p: Promise<unknown>): Promise<SelfLinkMintError> {
 
 type MintProp = { type: string; string?: string };
 
-/**
- * URL/method-dispatching fetch mock for the whole self-mint sequence:
- *   1. GET  entity/{personId}?props=entu_user   — read existing values
- *   2. DELETE property/{id}                     — per stale invite placeholder
- *   3. POST entity/{personId}                   — the mint
- */
 function makeFetchMock(
 	overrides: Partial<{
 		identityRead: () => Response;
@@ -110,9 +77,6 @@ describe('mintSelfLinkInvite — the POST wire shape (the real mint producer)', 
 		expect(calls[0].url).toContain('/sampledb/entity/person-me?props=entu_user');
 		expect(calls[0].headers.Authorization).toBe('Bearer jwt-me');
 
-		// 2. the mint — POST to the entity UPDATE endpoint (the existing person),
-		//    body is EXACTLY the one trigger property. Full toEqual: any extra
-		//    property here (a name, an email, a second entu_user) is a bug.
 		expect(calls[1].method).toBe('POST');
 		expect(calls[1].url).toContain('/sampledb/entity/person-me');
 		expect(calls[1].headers.Authorization).toBe('Bearer jwt-me');
@@ -122,9 +86,6 @@ describe('mintSelfLinkInvite — the POST wire shape (the real mint producer)', 
 	});
 
 	it('the trigger constant is never anything email-shaped (legacy email-migration lookup matches on entu_user.string)', () => {
-		// entu-api routes/auth/index.get.js:161-181 matches
-		// private.entu_user.string === session.user.email — the trigger must never
-		// collide with that space.
 		expect(INVITE_MINT_TRIGGER).toBe('trigger invite token');
 		expect(INVITE_MINT_TRIGGER).not.toContain('@');
 	});
@@ -223,13 +184,7 @@ describe('mintSelfLinkInvite — fail loud, every step named (no silent fallback
 	});
 });
 
-// ── Sole-mint-mechanism companion guard (SPIKE hazard 5c) ───────────────────────
-// The singleInviteMechanism guard's needle is the bare substring `entu_user`,
-// which GREEN must widen with a read-side exemption (lib/profile/
-// linkedIdentities.ts READS the property but is not a mechanism). This narrower
-// companion keeps the guard's real invariant literally true: the TRIGGER literal
-// — the thing that actually mints — appears in exactly one non-spec module.
-describe('sole mint mechanism — the trigger literal lives ONLY in lib/invite/inviteData.ts', () => {
+describe('sole mint mechanism — the trigger literal lives ONLY in lib/invite/inviteConstants.ts', () => {
 	it('no other non-spec source file contains the mint-trigger literal', () => {
 		const libDir = join(import.meta.dirname, '..'); // src/lib
 		const srcDir = join(libDir, '..'); // src
@@ -242,7 +197,7 @@ describe('sole mint mechanism — the trigger literal lives ONLY in lib/invite/i
 			.filter(({ rel }) => !rel.endsWith('.spec.ts'))
 			.filter(({ full }) => readFileSync(full, 'utf-8').includes('trigger invite token'))
 			.map(({ rel }) => rel);
-		expect(offenders).toEqual(['lib/invite/inviteData.ts']);
+		expect(offenders).toEqual(['lib/invite/inviteConstants.ts']);
 	});
 });
 
