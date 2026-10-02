@@ -1,16 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #91 TR.3 — the WIRING half of repertoire/programme management, and the whole
-// reason this file exists: the write layer (repertoireActions) and the renderer
-// (RepertoireElement) were each unit-covered while NOTHING joined them to the
-// page. `manageRights` never left its 'not-editor' default, so every control
-// was unreachable in the running app with 1047 green tests — the exact shape of
-// the "partial assertions hide bugs" lesson.
-//
-// These specs therefore mock only the AGENDA (the event list is not what is
-// under test) and stub the network at `fetch`. Everything between a tap and the
-// wire — rights resolution, the picker derivations, the write queue, the Entu
-// request shapes — runs for real.
+// Repertoire and programme management wired through the agenda page; only fetch is stubbed.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,12 +18,8 @@ const { loadFullAgendaMock, discoverMock, gotoMock } = vi.hoisted(() => ({
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// $env/dynamic/public is unavailable outside a SvelteKit request context under
-// happy-dom; stubbing the base url keeps every real module in play.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Supplementary page data, irrelevant here — mocked to keep the fetch router
-// focused on the repertoire traffic under test.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
 	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
@@ -43,12 +28,6 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: vi.fn()
 }));
-// #288 — resolves (empty): opening the season-create form warms the roster
-// cache through this seam; a bare vi.fn()'s undefined broke `.then` on it.
-// #321 — `loadRoster` answers a ListRead now (its closed-set picker consumers
-// state the truncation), so an array here fed `rosterRows = undefined` and the
-// picker's `rosterOrder` threw an unhandled "members is not iterable" while the
-// tests still went green.
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: vi.fn(async () => ({ items: [], total: 0, truncated: false }))
 }));
@@ -108,21 +87,11 @@ function json(body: unknown, status = 200) {
 }
 
 interface WorldOptions {
-	/** Does person-p hold `_editor` on the season? */
 	seasonEditor?: boolean;
-	/** Does person-p hold `_editor` on ev-1? */
 	eventEditor?: boolean;
-	/** program_items under ev-1 — empty means the season-repertoire fallback. */
 	programItems?: Array<Record<string, unknown>>;
-	/** repertoire_items under season-1. */
 	repertoireItems?: Array<Record<string, unknown>>;
-	/** #321 — the server `count` the WORK list read answers with. Above the
-	 *  number of works served, that read is TRUNCATED (`isTruncated` compares
-	 *  the count against the raw wire array), which the closed-set "Add work"
-	 *  picker has to say out loud. Omitted = no count on the wire = complete,
-	 *  the shape every pre-#321 fixture here describes. */
 	workCount?: number;
-	/** #321 — the same for the EDITION list read behind "Add to programme". */
 	editionCount?: number;
 }
 
@@ -140,10 +109,6 @@ const RI_RETIRED = {
 	status: [{ string: 'retired' }]
 };
 
-/**
- * The Entu stand-in. Routed by url + method so an assertion can say exactly
- * which wire call a tap produced — the point of this file.
- */
 function installWorld(options: WorldOptions = {}) {
 	const {
 		seasonEditor = true,
@@ -154,12 +119,6 @@ function installWorld(options: WorldOptions = {}) {
 		editionCount
 	} = options;
 
-	// #91 review F1 — rights arrive WITH THE AGENDA now: listSeasons/listEvents
-	// ask for `_owner,_editor` (private bucket → absent for a non-grantee, which
-	// IS the 'not-editor' signal), so the page derives them with zero extra
-	// round-trips. The fetch router below therefore has NO rights route left: a
-	// regression back to per-entity probing surfaces as an unrouted 404 here, and
-	// as a failure of the "issues NO per-entity rights probe" spec.
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [{ ...upcoming[0], editors: eventEditor ? ['person-p'] : [] }],
 		recent: [],
@@ -176,13 +135,9 @@ function installWorld(options: WorldOptions = {}) {
 		if (method === 'DELETE') return json({ deleted: true });
 		if (method === 'POST') return json({ _id: 'new-1' });
 
-		// Pre-write value-id lookups (GET → POST → DELETE replace semantics).
 		if (url.includes('?props=status')) return json({ entity: { status: [{ _id: 'val-status' }] } });
 		if (url.includes('?props=edition')) return json({ entity: { edition: [] } });
 		if (url.includes('?props=ordinal')) {
-			// #264 — the atomic overwrite now reads this `_id` back INTO the write
-			// (not just as a DELETE target), so it must be the clean entity id, not
-			// the tail of the URL WITH its query string glued on.
 			const itemId = url.split('/').pop()?.split('?')[0];
 			return json({ entity: { ordinal: [{ _id: `val-${itemId}` }] } });
 		}
@@ -225,7 +180,6 @@ function installWorld(options: WorldOptions = {}) {
 	return fetchMock;
 }
 
-/** Open the row's Works disclosure and hand back the container. */
 async function renderAndExpand() {
 	const rendered = render(Page);
 	await vi.waitFor(() => {
@@ -235,16 +189,6 @@ async function renderAndExpand() {
 	return rendered;
 }
 
-/**
- * The status a named work row RENDERS (`data-status` on the <li>).
- *
- * Deliberately not the <select>'s `value`: `fireEvent.change(select, { target:
- * { value } })` writes that value onto the DOM node itself before dispatching,
- * and the component's `value={row.status ?? 'active'}` expression is unchanged
- * when the optimistic patch never happens — so Svelte patches nothing, the
- * test-written value survives, and the assertion passes whether the feature
- * works or not. `data-status` is only ever written by the render (#111 review).
- */
 function rowStatus(container: HTMLElement, workName: string): string | null {
 	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
 		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
@@ -252,7 +196,6 @@ function rowStatus(container: HTMLElement, workName: string): string | null {
 	return li?.getAttribute('data-status') ?? null;
 }
 
-/** The <li> rendering the named work, for scoping a status-button click to it. */
 function rowEl(container: HTMLElement, workName: string): HTMLElement {
 	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
 		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
@@ -350,8 +293,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		});
 		const urls = fetchMock.mock.calls.map(([url, init]) => `${(init as RequestInit | undefined)?.method ?? 'GET'} ${String(url)}`);
 		expect(urls).toContain('GET https://api.entu-test.invalid/sampledb/entity/ri-1?props=status');
-		// #264 — the atomic overwrite replaces the old value IN the POST (its
-		// `_id` rides the entry); no separate DELETE remains on this path.
 		expect(urls).not.toContain('DELETE https://api.entu-test.invalid/sampledb/property/val-status');
 		expect(JSON.parse(String(postsTo(fetchMock, 'entity/ri-1')[0][1]!.body))).toEqual([
 			{ _id: 'val-status', type: 'status', string: 'learning' }
@@ -363,8 +304,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
-		// Asserted through `rowStatus` (the rendered `data-status`), never a
-		// button's aria-pressed — see the helper's note.
 		await vi.waitFor(() => {
 			expect(rowStatus(container, 'Spem in alium')).toBe('active');
 		});
@@ -381,7 +320,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			const select = container.querySelector(
 				'[data-testid="work-manage-add-work-select"]'
 			) as HTMLSelectElement;
-			// work-1 / work-2 are already in the repertoire; only work-3 is pickable.
 			expect(select?.querySelectorAll('option').length).toBe(2);
 		});
 		await fireEvent.change(container.querySelector('[data-testid="work-manage-add-work-select"]')!, {
@@ -401,9 +339,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	// #91 review F1 — the fanout. `listEvents` reads up to 500 events, and the
-	// old shape fired one rights GET per event PLUS one for the season, on every
-	// page load, for every member.
 	it('issues NO per-entity rights probe — rights ride on the agenda read', async () => {
 		const fetchMock = installWorld({ seasonEditor: true });
 		setAuthedWithOneCollective();
@@ -412,20 +347,12 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="work-status-active"]')).not.toBeNull();
 		});
-		// #372 — one GET now rides on EVERY load regardless: entity/{personId}
-		// (the rsvp enablement read, resolveManageRights(cfg, personId, personId)
-		// — see page.rsvp-rights-gate.spec.ts). This test's subject is the
-		// PER-ENTITY fanout (season/event) the old shape paid, so the rsvp
-		// self-probe is excluded, not counted against it.
 		const rightsProbes = fetchMock.mock.calls.filter(
 			([url]) => String(url).includes('props=_owner,_editor') && !String(url).includes('/entity/person-p?')
 		);
 		expect(rightsProbes).toEqual([]);
 	});
 
-	// #91 review F3 — a status/pin/ordinal/delete tap already holds the
-	// authoritative value; refetching costs the whole four-collection join plus
-	// one program_item read per agenda event.
 	it('an in-place write does NOT trigger a full agenda-works refetch', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
 		setAuthedWithOneCollective();
@@ -448,11 +375,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		).toBe(worksReadsBefore);
 	});
 
-	// #264 (PO ruling, branch (i)) — the status write is now an ATOMIC
-	// overwrite-POST: the old value's `_id` rides the SAME call that writes the
-	// new one, so a failed POST cannot leave the status property EMPTY (the old
-	// value was never touched) — superseding the #91 review F5 POST-before-
-	// DELETE choreography, which had a separate DELETE step to order.
 	it('the status write is ONE atomic overwrite-POST carrying the old value id — no DELETE round-trip remains', async () => {
 		const fetchMock = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
 		setAuthedWithOneCollective();
@@ -474,19 +396,12 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	// #91 review F2 — the refetch a CREATE triggers must not roll back a write
-	// that is still in flight. Same defect class the #77 review caught for
-	// attendance, and the same fix: the server value goes UNDER the optimistic
-	// one for every pending key.
 	it('a settling create does NOT clobber a still-in-flight status change', async () => {
 		let releaseStatusPost: (() => void) | undefined;
 		const statusPostLanded = new Promise<void>((resolve) => {
 			releaseStatusPost = resolve;
 		});
 		const base = installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
-		// Re-route: ri-1's status POST hangs; everything else behaves as before, so
-		// the create settles first and refetches a repertoire that still says
-		// 'active'.
 		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 			const url = String(input);
 			if ((init?.method ?? 'GET') === 'POST' && url.endsWith('/entity/ri-1')) {
@@ -504,7 +419,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 		await fireEvent.click(container.querySelector('[data-testid="work-status-learning"]')!);
 		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 
-		// Now a create settles and refetches the (stale) repertoire.
 		await fireEvent.change(container.querySelector('[data-testid="work-manage-add-work-select"]')!, {
 			target: { value: 'work-3' }
 		});
@@ -524,13 +438,10 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			).toBeGreaterThan(1);
 		});
 
-		// The in-flight status is still on screen — not snapped back to 'active'.
 		expect(rowStatus(container, 'Spem in alium')).toBe('learning');
 		releaseStatusPost!();
 	});
 
-	// #91 review F3 side-effect — with the blanket refetch gone, the "Add work"
-	// exclusion set has to move with the row a Remove deletes.
 	it('a removed work becomes pickable again without waiting for a page reload', async () => {
 		installWorld({ seasonEditor: true, repertoireItems: [RI_ACTIVE] });
 		setAuthedWithOneCollective();
@@ -540,7 +451,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 			container.querySelector('[data-testid="work-manage-add-work-select"]')?.querySelectorAll('option')
 				.length ?? 0;
 
-		// work-1 is in the repertoire → placeholder + work-2 + work-3.
 		await vi.waitFor(() => {
 			expect(optionCount()).toBe(3);
 		});
@@ -571,8 +481,6 @@ describe('+page — repertoire management wiring (#91 TR.3)', () => {
 	});
 });
 
-// The programme half: an event WITH program_items renders its own list, and the
-// controls on it must only ever hand up program_item ids.
 describe('+page — programme management wiring (#91 TR.3)', () => {
 	const programItems = [
 		{ _id: 'pi-a', name: [{ string: 'First' }], edition: [{ reference: 'ed-1' }], ordinal: [{ number: 0 }] },
@@ -602,15 +510,7 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 		]);
 	});
 
-	// #91 review F4 — a move is a RENUMBER: the plan can rewrite any row's
-	// ordinal, so the pending guard has to cover the whole programme. With a
-	// per-row key, moving B and then immediately C issued a SECOND concurrent
-	// ordinal write to a row the first move was already writing.
 	it('a reorder disables EVERY row in the programme, and a second move while it runs is a no-op', async () => {
-		// THREE items, because that is what exposes the bug: moving B renumbers
-		// only {A, B}, so with a per-row key C stayed enabled — and tapping C
-		// planned a SECOND concurrent write to A while A's first write was still
-		// in flight.
 		const threeItems = [
 			...programItems,
 			{
@@ -631,26 +531,15 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 		await vi.waitFor(() => {
 			expect(container.querySelectorAll('[data-testid="work-manage-move-up"]').length).toBe(3);
 		});
-		// Move 'Second' up — the plan touches pi-b and pi-a only.
 		await fireEvent.click(container.querySelectorAll('[data-testid="work-manage-move-up"]')[1]);
 
-		// EVERY row in the programme disables, including the one the plan did not
-		// name: the renumber's blast radius is the whole programme.
 		const ups = [...container.querySelectorAll('[data-testid="work-manage-move-up"]')];
 		expect(ups.every((btn) => (btn as HTMLButtonElement).disabled)).toBe(true);
 
-		// And a second move against the same programme is swallowed by the queue:
-		// still exactly one ordinal write per item.
 		await fireEvent.click(ups[2]);
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/pi-b').length).toBe(1);
 		});
-		// #107 — entuFetch now inspects every response's status (401 recovery),
-		// which adds a promise hop between the fetch call and its resolution; the
-		// pi-a write can therefore still be in flight the instant pi-b's is
-		// observed. Same wait, not a weaker assertion — the write always happens
-		// (it's part of the FIRST move's sequential plan), this just stops
-		// asserting on it a tick early.
 		await vi.waitFor(() => {
 			expect(postsTo(fetchMock, 'entity/pi-a').length).toBe(1);
 		});
@@ -721,17 +610,6 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 	});
 });
 
-// ── #204 — work pickers show composer (agenda page route) ────────────────────
-//
-// RED contract: every work-picker label on the AGENDA page carries the
-// composer as "Name - Composer" (issue #204, "Silmavalgus - P. Uusberg"):
-//   • the "Add work" select's options, and
-//   • the "Add to programme" edition-picker's work half
-//     ("Work - Composer — Edition").
-// A work with no composer keeps its bare name — no dangling " - ".
-//
-// installWorld's fixtures stay untouched; this wrapper re-routes ONLY the
-// work/edition GETs so composers exist on the wire, and delegates the rest.
 type WireWork = { _id: string; name?: Array<{ string: string }>; composer?: Array<{ string: string }> };
 
 const DEFAULT_COMPOSER_WORKS: WireWork[] = [
@@ -740,7 +618,6 @@ const DEFAULT_COMPOSER_WORKS: WireWork[] = [
 		name: [{ string: 'Spem in alium' }],
 		composer: [{ string: 'Thomas Tallis' }]
 	},
-	// work-2 deliberately has NO composer — the no-dangling case.
 	{ _id: 'work-2', name: [{ string: 'Old warhorse' }] },
 	{
 		_id: 'work-3',
@@ -791,7 +668,6 @@ describe('#204 — agenda page work pickers show composer', () => {
 		const select = container.querySelector(
 			'[data-testid="work-manage-add-work-select"]'
 		) as HTMLSelectElement;
-		// work-1/work-2 are already in the repertoire; work-3 is the pickable one.
 		await vi.waitFor(() => {
 			expect(select.querySelectorAll('option').length).toBe(2);
 		});
@@ -819,22 +695,17 @@ describe('#204 — agenda page work pickers show composer', () => {
 		expect(labels).toEqual([
 			'[repertoire_add_programme_label]',
 			'Spem in alium - Thomas Tallis — 40-part original',
-			// work-2 has no composer: bare name, NO dangling " - " before the "—".
 			'Old warhorse — Eulenburg'
 		]);
 	});
 
 	it('an edition whose work has NO name on the wire falls back to the bare edition label — no leading " — "', async () => {
-		// Entu's `mandatory` is a UI hint only, so a nameless work entity is
-		// reachable; listWorks maps the missing name to ''. The work IS found in
-		// the map, so guarding on `work !== undefined` would emit " — Eulenburg".
 		installComposerWorld({ seasonEditor: false, eventEditor: true, programItems: [] }, [
 			{
 				_id: 'work-1',
 				name: [{ string: 'Spem in alium' }],
 				composer: [{ string: 'Thomas Tallis' }]
 			},
-			// work-2: no name property at all, and a whitespace-only composer.
 			{ _id: 'work-2', composer: [{ string: '   ' }] }
 		]);
 		setAuthedWithOneCollective();
@@ -860,19 +731,6 @@ describe('#204 — agenda page work pickers show composer', () => {
 	});
 });
 
-// ── #272 — programme control: conditional select + link, on the PAGE ─────────
-//
-// RED contract (Mihkel's four-part ruling, parts 3+4, exercised through the
-// real agenda page so the wiring — rights, picker derivation, write queue —
-// runs for real, not just the component in isolation):
-//   • the "Add to programme" button is ABSENT until an edition is selected
-//     (today it renders disabled), and absent AGAIN after a successful add
-//     (the handler's existing selection reset now also hides it);
-//   • with NOTHING pickable the <select> does not render at all — while the
-//     work-manage-add-programme wrapper block stays (the first-program_item
-//     scar: the block must keep rendering on the season-repertoire fallback).
-
-/** installWorld, with the edition read returning NOTHING pickable. */
 function installEditionlessWorld(options: WorldOptions = {}) {
 	const base = installWorld(options);
 	const wrapped = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
@@ -898,7 +756,6 @@ describe('#272 — agenda page: programme select + add link are conditionally sh
 				container.querySelector('[data-testid="work-manage-add-programme-select"]')
 			).not.toBeNull();
 		});
-		// Part 3 — hidden, not disabled: no edition selected → no button in the DOM.
 		expect(
 			container.querySelector('[data-testid="work-manage-add-programme-button"]'),
 			'nothing selected → the button must be absent (the old shape was disabled-but-present)'
@@ -914,13 +771,11 @@ describe('#272 — agenda page: programme select + add link are conditionally sh
 		expect(button, 'edition selected → the button appears').not.toBeNull();
 
 		await fireEvent.click(button!);
-		// The write itself is unchanged — the create still goes out…
 		await vi.waitFor(() => {
 			expect(
 				postsTo(fetchMock, '/entity').filter(([url]) => String(url).endsWith('/entity')).length
 			).toBe(1);
 		});
-		// …and the handler's selection reset now hides the button again.
 		await vi.waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="work-manage-add-programme-button"]'),
@@ -930,11 +785,6 @@ describe('#272 — agenda page: programme select + add link are conditionally sh
 	});
 
 	it('an EVENT editor with NO programme yet and NOTHING pickable still gets the wrapper — select absent, button absent, the fallback works render un-crashed', async () => {
-		// Sibling of "…can still start one" above: same rights shape, same
-		// season-repertoire fallback (the block deliberately not gated on
-		// context — the scar comment in RepertoireElement.svelte), but the
-		// edition read yields nothing to pick. Part 4's gate lands on the INNER
-		// select only; the wrapper stays.
 		installEditionlessWorld({ seasonEditor: false, eventEditor: true, programItems: [] });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
@@ -947,60 +797,9 @@ describe('#272 — agenda page: programme select + add link are conditionally sh
 			'empty pickable list → a placeholder-only dropdown must not render'
 		).toBeNull();
 		expect(container.querySelector('[data-testid="work-manage-add-programme-button"]')).toBeNull();
-		// The surface around it is intact: the fallback rows are on screen.
 		expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
 	});
 });
-
-// ── #288 item 1 — the programme control survives its own load window ─────────
-//
-// The control renders `{#if pickableEditions.length > 0}`, and the caller
-// derives that list from `libraryWorks`/`libraryEditions`, which
-// `resetManagement()` blanks SYNCHRONOUSLY on every `loadForSelected()` —
-// including every same-collective refresh (season create, event create, series
-// bulk, convert resume, agenda retry). The refill is asynchronous, so a control
-// the admin saw a moment ago disappears and returns, which reads as a fault.
-//
-// PO ruling: key visibility off "no options once loading has COMPLETED", not
-// "no options right now". Mihkel's #272 rule is preserved — a chooser with
-// nothing to choose is still not shown — but *still loading* is not *empty*,
-// and today the caller cannot tell them apart. First render is unaffected.
-//
-// Existing specs touching this control's presence/absence, and why each
-// survives this contract (reasoned per the #288 brief):
-//   • RepertoireElement.programme-control.spec.ts — hands `pickableEditions`
-//     to the COMPONENT directly (empty→hidden / non-empty→shown); no page
-//     async in play, so a caller-level load-state fix leaves them true.
-//   • RepertoireElement.spec.ts / .ux.spec.ts — non-empty fixtures, rights
-//     gating and classes; orthogonal to load-state.
-//   • this file's own `vi.waitFor(select appears)` specs — FIRST render:
-//     hidden until the picker fetch lands, which the PO ruling keeps ("first
-//     render is unaffected"); waitFor tolerates the load window either way.
-//   • installEditionlessWorld specs — loaded-and-EMPTY: select stays absent.
-//     That is the "resolved by actual emptiness" half of the ruling, already
-//     pinned above; the first-render guard below pins its while-loading twin.
-//   • page.repertoire-a11y.spec.ts / event/[id]/page.spec.ts — non-empty
-//     fixtures on other surfaces; #288 as filed scopes to the agenda page.
-//
-// The reload driver is a real same-collective trigger (season create success →
-// `loadForSelected()`), through the real page. The picker reads are HELD open:
-// `loadWorksAndManagement` dispatches `loadManagePickers` (listWorks +
-// listAllEditions) FIRST, then `loadWorksByEventId` (which fetches the same
-// two types again for the row join) — so the gate holds only the FIRST
-// work-GET and FIRST edition-GET after arming, letting the rows land while the
-// pickers stay in flight. That coupling to dispatch order is deliberate and
-// checked non-vacuously (the held count is asserted before anything else).
-//
-// #288 review F1 — the ROW read is holdable INDEPENDENTLY, because the picker
-// reads are only ONE of the two async sources the visibility decision reads.
-// The other is `worksByEventId`, blanked by the same synchronous reset and
-// refilled by `loadWorksByEventId` — a separate settle. `listAllCopies`
-// (`_type.string=copy`) is issued by that read and by nothing else on this
-// page, so holding it holds the row load alone, letting the pickers settle
-// FIRST. That is the ordering the reload world's picker hold cannot produce
-// (releasing the pickers there lets the rows land first), and it is the one the
-// real page most likely takes: 3 picker GETs against 4+ row GETs including the
-// per-event program_item fanout.
 
 type HeldRead = { kind: 'work' | 'edition'; url: string; resolve: (r: Response) => void };
 
@@ -1016,8 +815,6 @@ function installReloadWorld(options: WorldOptions = {}) {
 	const wrapped = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
-		// Season create resolves the collective identity first — unrouted in the
-		// base world (nothing else needed it).
 		if (method === 'GET' && url.includes('_type.string=database')) {
 			return json({ entities: [{ _id: 'db-entity-1' }] });
 		}
@@ -1040,32 +837,17 @@ function installReloadWorld(options: WorldOptions = {}) {
 	vi.stubGlobal('fetch', wrapped);
 	return {
 		fetchMock: wrapped,
-		/** From now on, hold the NEXT picker read pair (listWorks + listAllEditions). */
 		armPickerHold() {
 			armed = true;
 			heldWork = false;
 			heldEdition = false;
 		},
-		/** From now on, hold the NEXT row read (`loadWorksByEventId`'s
-		 *  `listAllCopies`), so `worksByEventId` stays blank while the pickers
-		 *  settle. */
 		armRowHold() {
 			armedRows = true;
 			heldRow = false;
 		},
-		/** How many picker reads are currently held open. */
 		heldCount: () => held.length,
-		/** How many row reads are currently held open. */
 		rowHeldCount: () => heldRows.length,
-		/** Resolve the held picker reads — with the base world's entities, or
-		 *  with NO editions when the reload should complete to genuine emptiness.
-		 *  #311 twins: `worksEmpty` completes the WORK read to genuine emptiness
-		 *  (the Add Work picker's confirmed-empty case — note the picker's
-		 *  Promise.all also reads repertoire_item, which is never held, so a
-		 *  blank work read alone is what makes `pickableWorksList` resolve
-		 *  empty); `fail` completes both held reads with a 500, which rejects
-		 *  `loadManagePickers`' Promise.all and lands in its catch — the
-		 *  "Empty pickers, not a broken page" path. */
 		async releasePickerReads({ editionsEmpty = false, worksEmpty = false, fail = false } = {}) {
 			armed = false;
 			const toRelease = held.splice(0, held.length);
@@ -1081,7 +863,6 @@ function installReloadWorld(options: WorldOptions = {}) {
 				}
 			}
 		},
-		/** Resolve the held row read, letting `worksByEventId` refill. */
 		async releaseRowReads() {
 			armedRows = false;
 			const toRelease = heldRows.splice(0, heldRows.length);
@@ -1092,8 +873,6 @@ function installReloadWorld(options: WorldOptions = {}) {
 	};
 }
 
-/** Drive the page through a REAL same-collective reload: season create success
- *  → `loadForSelected()`. Returns once the reload's picker reads are held. */
 async function submitSeasonCreateAndEnterReload(
 	container: HTMLElement,
 	world: ReturnType<typeof installReloadWorld>,
@@ -1115,10 +894,6 @@ async function submitSeasonCreateAndEnterReload(
 	world.armPickerHold();
 	if (holdRows) world.armRowHold();
 	await fireEvent.click(container.querySelector('[data-testid="season-create-submit"]')!);
-	// Non-vacuous: BOTH picker reads of the reload are genuinely in flight and
-	// held. This also proves the agenda phase of the reload is over — the
-	// pickers are dispatched after `agendaLoading` goes false, so the rows are
-	// (re)renderable while we hold.
 	await vi.waitFor(() => {
 		expect(world.heldCount()).toBe(2);
 	});
@@ -1129,7 +904,6 @@ async function submitSeasonCreateAndEnterReload(
 	}
 }
 
-/** Re-open the remounted Works disclosure after a reload. */
 async function reExpandWorks(container: HTMLElement) {
 	await vi.waitFor(() => {
 		expect(container.querySelector('[data-testid="works-line"]')).not.toBeNull();
@@ -1146,7 +920,6 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
-		// The starting point the issue describes: the control is on screen.
 		await vi.waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="work-manage-add-programme-select"]')
@@ -1156,8 +929,6 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 		await submitSeasonCreateAndEnterReload(container, world);
 		await reExpandWorks(container);
 
-		// THE #288 WINDOW: the reload's picker reads are held open. "Still
-		// loading" is not "empty" — the select must not have vanished.
 		expect(
 			container.querySelector('[data-testid="work-manage-add-programme-select"]'),
 			'reload in flight → the control the admin just saw must STAY on screen (PO ruling: ' +
@@ -1165,7 +936,6 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 				'still-loading list being transiently empty)'
 		).not.toBeNull();
 
-		// Loading completes with options → visible, with the real options.
 		await world.releasePickerReads();
 		await vi.waitFor(() => {
 			const select = container.querySelector(
@@ -1190,16 +960,11 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 		await submitSeasonCreateAndEnterReload(container, world);
 		await reExpandWorks(container);
 
-		// Mid-window: still loading → still visible (same pin as above; this is
-		// where the fault lives today).
 		expect(
 			container.querySelector('[data-testid="work-manage-add-programme-select"]'),
 			'reload in flight → the control must STAY visible until loading has COMPLETED'
 		).not.toBeNull();
 
-		// Loading completes to genuine emptiness → Mihkel's #272 rule takes over:
-		// a chooser with nothing to choose is not shown. The wrapper stays (the
-		// first-program_item scar), the rows stay.
 		await world.releasePickerReads({ editionsEmpty: true });
 		await vi.waitFor(() => {
 			expect(
@@ -1216,20 +981,14 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
-		// Same starting point as the two specs above: the control is on screen.
 		await vi.waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="work-manage-add-programme-select"]')
 			).not.toBeNull();
 		});
 
-		// This time BOTH of the visibility decision's sources are held: the picker
-		// pair AND the row read (`listAllCopies`).
 		await submitSeasonCreateAndEnterReload(container, world, { holdRows: true });
 
-		// Rows are blank while their read is held, so the element renders its
-		// `works-manage-empty` branch (no `works-line`, nothing to re-open) — and
-		// the control the admin just saw is still there.
 		await vi.waitFor(() => {
 			expect(container.querySelector('[data-testid="works-manage-empty"]')).not.toBeNull();
 		});
@@ -1238,11 +997,7 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 			'both sources in flight → the control must STAY on screen'
 		).not.toBeNull();
 
-		// Release ONLY the pickers. `libraryWorks`/`libraryEditions` are back;
-		// `worksByEventId` is still blank.
 		await world.releasePickerReads();
-		// Proven landed, not merely awaited: the add-work select's option comes off
-		// `libraryWorks`, so it could not exist before this release.
 		await vi.waitFor(() => {
 			const addWork = container.querySelector('[data-testid="work-manage-add-work-select"]');
 			expect(addWork).not.toBeNull();
@@ -1263,7 +1018,6 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 				'just moved to the other read.'
 		).not.toBeNull();
 
-		// Both settled, options exist → visible with the real options, over real rows.
 		await world.releaseRowReads();
 		await reExpandWorks(container);
 		const select = container.querySelector(
@@ -1275,11 +1029,6 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 	});
 
 	it('FIRST render guard (unchanged by #288): while the initial picker load is in flight the select is NOT yet shown — no placeholder-only flash — and appears once it lands', async () => {
-		// Holds the INITIAL picker pair (armed before render). The PO ruling
-		// changes nothing here: a control never yet shown has nothing to keep
-		// visible, so a naive `length > 0 || loading` gate — which would flash a
-		// placeholder-only dropdown on every first paint — is ruled out by this
-		// pin exactly as the vanish is ruled out by the two above.
 		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
 		world.armPickerHold();
 		setAuthedWithOneCollective();
@@ -1305,34 +1054,12 @@ describe('#288 item 1 — the programme control keys visibility off "no options 
 	});
 });
 
-// ── #311 — the Add Work picker on the MAIN AGENDA FLOW ──────────────────────
-//
-// Gama's option-B ruling (issue #311, comments 5613696176 + 5613945883):
-// RepertoireElement's new `pickableWorksVisible` DEFAULTS TO RENDER; hiding is
-// an explicit opt-in a caller may compute ONLY from a load that COMPLETED
-// SUCCESSFULLY with nothing left to pick. This page is the first of the three
-// production callers to opt in.
-//
-// `pickableWorksList` (pickableWorks(libraryWorks, seasonRepertoire)) has BOTH
-// of its inputs settled by `loadManagePickers`' single Promise.all under the
-// single `libraryPickersLoading` flag — so unlike its per-event sibling
-// `pickableEditionsVisibleByEventId` (a Record gated on TWO flags), this
-// override is one page-held SCALAR, threaded WorksManage → AgendaList's
-// worksElement snippet → RepertoireElement. Research-311 confirmed the row
-// read (`worksByEventId`) plays no part here; do NOT copy the Record shape.
-//
-// The three causes of `pickableWorksList.length === 0`, pinned in order:
-//   1. confirmed empty after a SUCCESSFUL load → hidden (the only hiding case)
-//   2. not loaded yet → visible (no flicker; a reload never vanishes it)
-//   3. load FAILED → visible (the catch's "Empty pickers, not a broken page"
-//      choice stands — a failed load never hides)
 describe('#311 — the Add Work picker keys hiding off "nothing left to pick once loading COMPLETED SUCCESSFULLY"', () => {
 	it('RELOAD resolving works-EMPTY: the select stays through the window, then hides once the load completes with nothing left to pick', async () => {
 		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
 		setAuthedWithOneCollective();
 		const { container } = await renderAndExpand();
 
-		// Starting point: work-3 is pickable, the control is on screen with it.
 		await vi.waitFor(() => {
 			const select = container.querySelector('[data-testid="work-manage-add-work-select"]');
 			expect(select).not.toBeNull();
@@ -1342,16 +1069,11 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 		await submitSeasonCreateAndEnterReload(container, world);
 		await reExpandWorks(container);
 
-		// Cause 2 mid-window: the reload's picker reads are held open, the
-		// synchronous reset has already blanked `libraryWorks` — still loading
-		// is not empty, the select must not have vanished.
 		expect(
 			container.querySelector('[data-testid="work-manage-add-work-select"]'),
 			'reload in flight → the Add Work control the admin just saw must STAY on screen'
 		).not.toBeNull();
 
-		// Cause 1: the work read completes SUCCESSFULLY to genuine emptiness —
-		// nothing left to pick, and only now does the control go.
 		await world.releasePickerReads({ worksEmpty: true });
 		await vi.waitFor(() => {
 			expect(
@@ -1360,7 +1082,6 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 			).toBeNull();
 		});
 		expect(container.querySelector('[data-testid="work-manage-add-work-button"]')).toBeNull();
-		// The rows and the page around them stand — this hid a picker, not a section.
 		expect(container.querySelectorAll('[data-testid="work-row"]').length).toBeGreaterThan(0);
 	});
 
@@ -1378,8 +1099,6 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 		await submitSeasonCreateAndEnterReload(container, world);
 		await reExpandWorks(container);
 
-		// The flicker the naive `length > 0` gate would ship: assert the
-		// sequence directly, mid-window.
 		expect(
 			container.querySelector('[data-testid="work-manage-add-work-select"]'),
 			'a reload with a non-empty library must never make the control vanish and reappear'
@@ -1409,16 +1128,16 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 		await submitSeasonCreateAndEnterReload(container, world);
 		await reExpandWorks(container);
 
-		// Cause 3: both held picker reads settle 500 → `loadManagePickers`'
-		// Promise.all rejects → its catch blanks the lists and clears the flag.
-		// `!loading && length === 0` is now true — which is exactly why the
-		// override may NOT be computed from settle alone: this settle was a
-		// FAILURE, and hiding here would silently invert the catch's deliberate
-		// visible-but-empty choice (+page.svelte, loadManagePickers).
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		await world.releasePickerReads({ fail: true });
-		// No observable success signal exists on this path by design — flush the
-		// settle, then pin that nothing vanished.
 		await new Promise((r) => setTimeout(r, 30));
+		expect(errorSpy.mock.calls.map((call) => call[0])).toEqual(
+			expect.arrayContaining([
+				'repertoire pickers: loading the library works failed',
+				'repertoire pickers: loading the library editions failed'
+			])
+		);
+		errorSpy.mockRestore();
 		expect(
 			container.querySelector('[data-testid="work-manage-add-work-select"]'),
 			'a FAILED load must never hide the control — no picker, no error, nothing anywhere is the bug'
@@ -1426,13 +1145,6 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 	});
 
 	it('FIRST render with the picker load held: the select is ALREADY visible (safe default — deliberately asymmetric with the editions first-render guard), and hides only once the load completes empty', async () => {
-		// The editions control's #288 first-render rule is "never shown yet →
-		// nothing to keep visible → hidden until loaded". Option B inverts the
-		// default for the WORKS control: render-first is the safe state, so the
-		// select shows from first paint exactly as it does today — the sticky
-		// scalar starts visible and only a successfully-confirmed emptiness
-		// takes it away. (This is also the pin against copying the sibling's
-		// absent-entry-means-hidden Record semantics.)
 		const world = installReloadWorld({ seasonEditor: true, eventEditor: true, programItems: [] });
 		world.armPickerHold();
 		setAuthedWithOneCollective();
@@ -1456,24 +1168,6 @@ describe('#311 — the Add Work picker keys hiding off "nothing left to pick onc
 	});
 });
 
-// (*MVOX:Josquin* — #91 review fix-forward: end-to-end management wiring)
-// (*MVOX:Tallis* — #204 RED: picker labels carry the composer)
-// (*MVOX:Tallis* — #204 review fix-forward: nameless work on the wire)
-// (*MVOX:Tallis* — #272 RED: programme select + add link conditionally shown, page wiring)
-// ── #321 review F2 — the repertoire pickers say when their library feed was cut ──
-//
-// The PO's reachability ruling (2026-09-11): both selects are CLOSED SETS over a
-// library read, so a work or edition they do not offer cannot be added at all and
-// the gap reads as "it isn't in the library" — a false absence, not a short list.
-// These two feeds carried the "out of the RED-pinned scope" narrowing the ruling
-// rejected.
-//
-// Driven through the REAL reads (this file's wire router, no module mocks), so the
-// pins cover the whole path: the list read's `count`, `isTruncated`, the page's
-// per-feed flag, the WorksManage bundle, AgendaList's forwarding, and the trailing
-// option. Both selects can be opened whenever they render, so the notice lives
-// INSIDE the option list — the shape the ruling asks for where it is reachable.
-
 describe('#321 review F2 — the agenda repertoire pickers state a truncated library read', () => {
 	const WORK_OPTION = 'work-manage-add-work-partial-option';
 	const PROGRAMME_OPTION = 'work-manage-add-programme-partial-option';
@@ -1493,13 +1187,10 @@ describe('#321 review F2 — the agenda repertoire pickers state a truncated lib
 		await vi.waitFor(() => {
 			expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).not.toBeNull();
 		});
-		// Last in the list, unselectable, and carrying the shared option-list copy.
 		const last = lastOption(container, 'work-manage-add-work-select');
 		expect(last.getAttribute('data-testid')).toBe(WORK_OPTION);
 		expect(last.disabled).toBe(true);
 		expect(last.textContent?.trim()).toBe('[picker_partial_options_notice]');
-		// The works the read DID return are still pickable — a notice is not an
-		// error state.
 		expect(
 			Array.from(
 				(container.querySelector('[data-testid="work-manage-add-work-select"]') as HTMLSelectElement)
@@ -1517,8 +1208,6 @@ describe('#321 review F2 — the agenda repertoire pickers state a truncated lib
 			expect(container.querySelector(`[data-testid="${PROGRAMME_OPTION}"]`)).not.toBeNull();
 		});
 		expect(lastOption(container, 'work-manage-add-programme-select').disabled).toBe(true);
-		// One flag per FEED: a truncated edition read says nothing about the works
-		// list, so a claim there would be false.
 		expect(container.querySelector(`[data-testid="${WORK_OPTION}"]`)).toBeNull();
 	});
 
@@ -1535,7 +1224,5 @@ describe('#321 review F2 — the agenda repertoire pickers state a truncated lib
 	});
 });
 
-// (*MVOX:Tallis* — #288 RED: the programme control survives its load window)
-// (*MVOX:Josquin* — #288 review F1: the ROW read is the second load window)
-// (*MVOX:Tallis* — #311 RED: the Add Work picker renders only when there is something to add)
-// (*MVOX:Josquin* — #321 review F2: the two repertoire pickers state their feeds)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

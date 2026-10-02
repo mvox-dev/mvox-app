@@ -5,6 +5,7 @@ import { focusAfterRender } from '$lib/a11y/focusable';
 import type { AgendaItem } from '$lib/agenda/types';
 import { createAttendancePanelLoad, failedMarksFor } from '$lib/attendance/attendancePanelLoad';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function isPanelReadStale(
@@ -137,7 +138,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 			})
 			.catch((e) => {
 				if (stale()) return;
-				console.error('agenda: loading the season-manage repertoire failed', e);
+				reportProblem({ area: 'agenda', action: 'loading the season-manage repertoire', error: e });
 				ag.panelRepertoire = [];
 				ag.panelRepertoireError = true;
 			})
@@ -157,7 +158,11 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 			})
 			.catch((e) => {
 				if (stale()) return;
-				console.error('agenda: loading the season-manage repertoire sources failed', e);
+				reportProblem({
+					area: 'agenda',
+					action: 'loading the season-manage repertoire sources',
+					error: e
+				});
 				ag.panelWorks = [];
 				ag.panelEditions = [];
 				ag.panelCopies = [];

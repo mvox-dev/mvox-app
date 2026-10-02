@@ -10,7 +10,7 @@ import type { Season } from '$lib/seasons/types';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
 import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
-import { NO_MANAGE_PICKERS, readManagePickers } from '$lib/repertoire/managePickers';
+import { readManagePickers } from '$lib/repertoire/managePickers';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
@@ -207,19 +207,14 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 	}
 
 	function loadManagePickers(cfg: EntuCfg, seasonId: string | null, thisRequest: number) {
-		readManagePickers(cfg, seasonId, { listWorks, listAllEditions, listRepertoireItems })
-			.then((pickers) => {
+		void readManagePickers(cfg, seasonId, { listWorks, listAllEditions, listRepertoireItems }).then(
+			(read) => {
 				if (thisRequest !== seq.requestId) return;
-				Object.assign(ag, pickers);
+				Object.assign(ag, read.pickers);
 				ag.libraryPickersLoading = false;
-				ag.libraryPickersLoadSucceeded = true;
-			})
-			.catch(() => {
-				if (thisRequest !== seq.requestId) return;
-				Object.assign(ag, NO_MANAGE_PICKERS);
-				ag.libraryPickersLoading = false;
-				ag.libraryPickersLoadSucceeded = false;
-			});
+				ag.libraryPickersLoadSucceeded = read.complete;
+			}
+		);
 	}
 
 	function mergePendingRows(byEvent: Record<string, WorkRow[]>): Record<string, WorkRow[]> {

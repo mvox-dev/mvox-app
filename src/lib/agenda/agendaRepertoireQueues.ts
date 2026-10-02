@@ -16,6 +16,7 @@ import {
 	type RepertoireRowStore
 } from '$lib/repertoire/repertoireRowHandlers';
 import { createPendingMarks } from '$lib/repertoire/repertoirePending';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export const PANEL_ADD_WORK_KEY = '__panel_add_work__';
 
@@ -174,7 +175,10 @@ export function createAgendaRepertoireQueues(
 				ag.panelRepertoire = items;
 				ag.panelRepertoireItemsOk = true;
 			})
-			.catch(() => {
+			.catch((e) => {
+				if (isPanelReadStale(seq, thisRequest, thisSwitch, deps.switchGeneration())) return;
+				const action = 're-reading the season-manage repertoire';
+				reportProblem({ area: 'agenda', action, error: e });
 			});
 	}
 

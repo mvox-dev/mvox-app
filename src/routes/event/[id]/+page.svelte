@@ -17,7 +17,7 @@
 	import { listAttendance, attendanceByMemberId } from '$lib/attendance/attendanceData';
 	import { canMarkAttendance, manageRightsFrom } from '$lib/repertoire/repertoireActions';
 	import { manageRightsOrNone } from '$lib/repertoire/manageRights';
-	import { NO_MANAGE_PICKERS, readManagePickers } from '$lib/repertoire/managePickers';
+	import { readManagePickers } from '$lib/repertoire/managePickers';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -224,19 +224,12 @@
 	}
 
 	function loadManagePickers(cfg: EntuCfg, sid: string | null, g: number): void {
-		readManagePickers(cfg, sid)
-			.then((pickers) => {
-				if (g !== routeLoad.generation) return;
-				Object.assign(ev, pickers);
-				ev.libraryPickersLoading = false;
-				ev.libraryPickersLoadSucceeded = true;
-			})
-			.catch(() => {
-				if (g !== routeLoad.generation) return;
-				Object.assign(ev, NO_MANAGE_PICKERS);
-				ev.libraryPickersLoading = false;
-				ev.libraryPickersLoadSucceeded = false;
-			});
+		void readManagePickers(cfg, sid).then((read) => {
+			if (g !== routeLoad.generation) return;
+			Object.assign(ev, read.pickers);
+			ev.libraryPickersLoading = false;
+			ev.libraryPickersLoadSucceeded = read.complete;
+		});
 	}
 
 	function patchDetail(field: EditableEventField, value: string | number): void {

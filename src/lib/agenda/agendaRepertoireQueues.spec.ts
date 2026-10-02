@@ -7,6 +7,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	})
 }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
+vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
 
 import { createAgendaPanelState, createAgendaRepertoireQueues } from './agendaRepertoireQueues';
 import { createAgendaLoadState, createLoadCounters } from './agendaLoad';
@@ -40,7 +42,9 @@ function deferred() {
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
-function setup() {
+const NEVER = () => new Promise<RepertoireItem[]>(() => {});
+
+function setup(listRepertoireItems = vi.fn(NEVER)) {
 	const ag = createAgendaLoadState();
 	ag.currentSeasonId = 'season-1';
 	ag.manageableSeasonId = 'season-1';
@@ -75,7 +79,7 @@ function setup() {
 		},
 		actions,
 		createRepertoireWriteQueue,
-		listRepertoireItems: vi.fn(() => new Promise<RepertoireItem[]>(() => {}))
+		listRepertoireItems
 	});
 	return {
 		ag,
@@ -145,6 +149,18 @@ describe('#605 — the card and the panel write through one queue', () => {
 		expect(t.ag.seasonRepertoire).toEqual([RI_1, RI_2]);
 		expect(t.ag.panelRepertoire).toEqual([RI_1, RI_2]);
 		expect(t.panel.manageError).toBe(true);
+	});
+
+	it('a failed panel re-read after a write is reported to the problem-handler', async () => {
+		const boom = new Error('re-read broke');
+		const t = setup(vi.fn(() => Promise.reject(boom)));
+		t.queues.handlePanelRemoveItem('ri-1');
+		t.write.resolve();
+		await settle();
+		expect(t.ag.panelRepertoire).toEqual([RI_2]);
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'agenda', action: 're-reading the season-manage repertoire', error: boom }]
+		]);
 	});
 
 	it('a card write rejected after the panel switched season is not rolled back', async () => {
