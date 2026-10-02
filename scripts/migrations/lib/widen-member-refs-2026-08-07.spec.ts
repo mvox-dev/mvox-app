@@ -1,3 +1,4 @@
+// The member-reference widening script against an in-memory Entu mock.
 import { describe, expect, it, vi } from 'vitest';
 import { type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -18,26 +19,9 @@ import {
 	type MemberTarget,
 	type EnumerationResult
 } from './widen-member-refs-2026-08-07';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// ════════════════════════════════════════════════════════════════════════════
-// #20 follow-up — proves the built script against an in-memory Entu mock. No
-// agent runs this against a live db; this file only proves the engine
-// before the real dry-run/live invocation. Bentham note D (pre-execution
-// review, non-blocking): a small spec matching the sibling migration libs'
-// precedent (t3-1-singer-provision.spec.ts, t4-10-plan.spec.ts) — covers
-// partial-A⇒no-B (by construction, exercised at the entrypoint not here),
-// count-drift⇒HALT, and same-id-response⇒failed. Extended after Gama's #20
-// 18:11 comment: observed-value ledger recording, baseline-set drift-check
-// (not just count), and the orphan/new-since-baseline classification.
-// ════════════════════════════════════════════════════════════════════════════
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// ── verifyMemberTypeSharing ──────────────────────────────────────────────────
+const cfg = testCfg('testdb');
 
 describe('verifyMemberTypeSharing', () => {
 	function mockTypeEntity(sharing: string | undefined, name = 'member') {
@@ -70,8 +54,6 @@ describe('verifyMemberTypeSharing', () => {
 	});
 });
 
-// ── verifyMemberNamePropDefAbsent ────────────────────────────────────────────
-
 describe('verifyMemberNamePropDefAbsent', () => {
 	it('passes when no member.name prop-def is found', async () => {
 		const mock = vi.fn().mockResolvedValue(json({ entities: [] }));
@@ -83,8 +65,6 @@ describe('verifyMemberNamePropDefAbsent', () => {
 		await expect(verifyMemberNamePropDefAbsent(cfg, mock)).rejects.toThrow(/UNEXPECTEDLY FOUND/);
 	});
 });
-
-// ── verifyPropDefsAbsent ─────────────────────────────────────────────────────
 
 describe('verifyPropDefsAbsent', () => {
 	function mockPropDefs(opts: { personSharing?: string; sectionSharing?: string }) {
@@ -116,8 +96,6 @@ describe('verifyPropDefsAbsent', () => {
 	});
 });
 
-// ── enumerateDomainMembers ───────────────────────────────────────────────────
-
 describe('enumerateDomainMembers', () => {
 	function baselineMember(id: string, opts: { hasPerson?: boolean } = {}) {
 		return {
@@ -141,9 +119,6 @@ describe('enumerateDomainMembers', () => {
 
 	it('HALTs, naming them individually, if any baseline member is no longer domain-tier live', async () => {
 		const members = BASELINE_DOMAIN_MEMBER_IDS.slice(1).map((id) => baselineMember(id)); // drop the first baseline id
-		// pad back up to count so the "shrunk" guard doesn't fire first — simulate a
-		// REPLACEMENT (same count, different composition), the exact case a bare
-		// count check would miss.
 		members.push(baselineMember('member-not-in-baseline'));
 		const mock = vi.fn().mockResolvedValue(json({ count: members.length, entities: members }));
 		await expect(enumerateDomainMembers(cfg, mock)).rejects.toThrow(new RegExp(BASELINE_DOMAIN_MEMBER_IDS[0]));
@@ -180,8 +155,6 @@ describe('enumerateDomainMembers', () => {
 	});
 });
 
-// ── widenPropDefs ─────────────────────────────────────────────────────────────
-
 describe('widenPropDefs', () => {
 	it('sets both prop-defs and read-back-confirms domain', async () => {
 		const mock = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
@@ -204,8 +177,6 @@ describe('widenPropDefs', () => {
 		expect(entries.every((e) => e.status === 'failed')).toBe(true);
 	});
 });
-
-// ── touchSaveDomainMembers / touchSaveCanary — same-id-response⇒failed ───────
 
 describe('touchSaveDomainMembers', () => {
 	const target: MemberTarget = { memberId: 'member-0', sharingPropId: 'sharing-0', sharingValue: 'domain' };
@@ -265,8 +236,6 @@ describe('touchSaveCanary', () => {
 		await expect(touchSaveCanary(cfg, target, mock)).rejects.toThrow(/carries 2 _sharing values/);
 	});
 });
-
-// ── renderPlan / WidenLedger ──────────────────────────────────────────────────
 
 describe('renderPlan', () => {
 	it('carries the explicit prop-def ids, the disambiguated population breakdown, and the observed type-sharing value', () => {

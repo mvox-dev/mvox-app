@@ -1,13 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { exchangeApiKeyForJwt, loadCfg, normalizeBase } from './creds';
+import { json } from '$lib/testing/entuFetchKit';
 
 // T4.10 (#30) — token-exchange spec. The migration runs standalone (not
 // browser-direct), so the local ENTU_API_KEY (an api-key, not a JWT) must be
 // exchanged at `{base}auth` for a JWT. Mocked fetch — zero network.
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 describe('exchangeApiKeyForJwt — api-key → JWT at {base}auth', () => {
 	it('GETs {base}auth with the api-key as Bearer and returns body.token', async () => {

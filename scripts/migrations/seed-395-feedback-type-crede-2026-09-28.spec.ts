@@ -1,52 +1,10 @@
-// mvox-app#395 slice 1/2 (RED, Tallis) — provisioning script for the
-// `feedback` type on crede. NO live run happens in this pipeline; this spec
-// pins the script's whole wire contract against a fake fetch
-// (networkGuard.setup.ts stands behind every spec: nothing here can reach a
-// live db).
-//
-// Contract pinned here, for GREEN to satisfy:
-//
-// - `./seed-395-feedback-type-crede-2026-09-28` is side-effect-free on import
-//   (no main() at module scope — same isMainModule pattern as seed-233-s1)
-//   and exports
-//     runSeed395(cfg, dryRun, fetchImpl, authorizedBy?) →
-//       { memberTypeId, typeId, propDefIds: { screenshot, doodle_layer, description },
-//         plannedWrites, ledger, ledgerPath }
-//   `plannedWrites` is the list of CREATE POSTs the run would issue (dry run)
-//   or did issue (live run), each `{ target, body }` with `body` the exact
-//   JSON array posted to `entity`. It holds ONLY the type-def and its three
-//   prop-defs — never a member record, never a feedback instance.
-//
-// - Identity (name, sharing, inheritsRights, field names/types/descriptions/
-//   ordinals) comes from `feedback` in lib/mvox-schema-extensions.ts; every
-//   `_sharing` is written explicitly (`domain`), never omitted.
-//
-// - Order: meta types → `member` type (the parent MUST exist — fail loud) →
-//   feedback type existence → [create type] → type `_sharing` read-back →
-//   per field: existence → [create] → `_sharing` read-back. Read-backs run on
-//   found entities too (GETs only), and throw on mismatch.
-//
-// - Dry run: when the type is absent, the prop-defs' `_parent` is not yet
-//   known — the planned body carries the placeholder PENDING_TYPE below.
-//
-// - Idempotent: everything already present → plannedWrites [] and zero POSTs,
-//   dry or live.
-//
-// - Live run refuses without a recorded authorizer (#417), before any request.
-//
-// - Ledger: one writeLedger call, #265's schema-ledger posture (sensitive:
-//   false + acknowledgedNonSensitive: true — type/prop-def ids and sharing
-//   metadata only, zero instances). No payload key named `name`.
-//
-// Every request is asserted with toEqual on full URL + method + body.
+// Provisioning the feedback type and its prop-defs on crede.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const LEDGER_PATH = 'scripts/migrations/seed-results/seed-395-feedback-type-crede-fake.json';
 const writeLedgerMock = vi.fn((..._args: unknown[]) => LEDGER_PATH);
 
-// Only writeLedger is replaced — assertLiveRunAuthorized stays REAL, so the
-// live-run gate is exercised against running code (seed-233-s1 precedent).
 vi.mock('./lib/ledger-writer', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./lib/ledger-writer')>();
 	return {
@@ -57,7 +15,7 @@ vi.mock('./lib/ledger-writer', async (importOriginal) => {
 
 import { runSeed395 } from './seed-395-feedback-type-crede-2026-09-28';
 
-const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
+const cfg = testCfg('mvox_crede');
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 const LIVE_AUTH = 'Mihkel, issue body, https://github.com/mvox-dev/mvox-app/issues/395';
 
@@ -80,10 +38,6 @@ const PD_EXISTING: Record<Field, string> = {
 	doodle_layer: 'pd-doodle-existing-1',
 	description: 'pd-description-existing-1'
 };
-
-// ---------------------------------------------------------------------------
-// Expected CREATE bodies — the only four writes this script may ever plan.
-// ---------------------------------------------------------------------------
 
 function expectedTypeBody(): unknown[] {
 	return [
@@ -150,15 +104,7 @@ function expectedPlan(parent: string, fields: readonly Field[] = FIELDS, withTyp
 	];
 }
 
-// ---------------------------------------------------------------------------
-// Fake wire
-// ---------------------------------------------------------------------------
-
 type LoggedRequest = { url: string; method: string; body: unknown };
-
-function json(body: unknown, status = 200): Promise<Response> {
-	return Promise.resolve(new Response(JSON.stringify(body), { status }));
-}
 
 function makeWire(
 	opts: {
@@ -180,7 +126,7 @@ function makeWire(
 	let createdType = false;
 	const created = new Set<Field>();
 
-	const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+	const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		const body = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
@@ -255,8 +201,6 @@ const readbackGet = (id: string) => get(`${BASE}/entity/${id}?props=_sharing`);
 beforeEach(() => {
 	writeLedgerMock.mockClear();
 });
-
-// ---------------------------------------------------------------------------
 
 describe('#395 S1 — dry run on a db without the type', () => {
 	it('plans exactly the type-def and its three prop-defs, with full payloads — ZERO POSTs', async () => {

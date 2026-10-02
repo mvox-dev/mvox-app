@@ -1,13 +1,6 @@
-// mvox-app#445 — REMEDY spec. Mihkel: "go for cleanup" then "resume on
-// 38" (comment 5775480675) — covers every row this duplicate-value shape
-// turns up on. `runRemedyDuplicateRights` takes the target entity/ids as
-// a parameter, so this spec pins its own fixture ids, independent of
-// whatever `TARGET` the script currently points `main()` at.
-// networkGuard.setup.ts stands behind every spec: the whole wire is a
-// fake fetch, every request asserted full-shape with toEqual.
-
+// Remedy for duplicate rights values on crede: assert, delete, read back, recheck.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/remedy-445-fake.json');
 
@@ -21,7 +14,7 @@ vi.mock('../lib/ledger-writer', async (importOriginal) => {
 
 import { runRemedyDuplicateRights, type RemedyTarget } from './remedy-445-duplicate-rights-values-crede-2026-09-22';
 
-const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
+const cfg = testCfg('mvox_crede');
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-fake';
 const NO_DELAY = 0;
@@ -36,17 +29,12 @@ const TARGET: RemedyTarget = {
 };
 const READ_URL = `${BASE}/entity/${TARGET.entityId}?props=_sharing,_inheritrights`;
 
-function json(body: unknown, status = 200): Promise<Response> {
-	return Promise.resolve(new Response(JSON.stringify(body), { status }));
-}
-
 type LoggedRequest = { url: string; method: string };
 
-/** `readSequence` supplies the entity read response for each call to READ_URL, in order — call 1 is step 1's assertion read, call 2 (live only) is the post-delete read-back, call 3 is the delayed recheck. Deletes always succeed unless `deleteFails` names the id. */
 function makeWire(opts: { readSequence: unknown[]; deleteFails?: string }): { fetchImpl: typeof fetch; requests: LoggedRequest[] } {
 	const requests: LoggedRequest[] = [];
 	let readCall = 0;
-	const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+	const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		requests.push({ url, method });

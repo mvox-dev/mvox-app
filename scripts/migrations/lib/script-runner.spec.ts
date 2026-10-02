@@ -1,24 +1,12 @@
+// Script runner env reads: dry-run flag and the live-run authorizer.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { loadCredeCfg, readDryRun } from './script-runner';
 import * as scriptRunnerModule from './script-runner';
+import { json } from '$lib/testing/entuFetchKit';
 
-// mvox-app#417 (RED, Tallis) — scripts read the live-run authorizer from env
-// `AUTHORIZED_BY` via a NEW `readAuthorizedBy()` export, sibling of
-// readDryRun. loadCredeCfg's signature and return are deliberately untouched
-// (its exact-shape toEqual below keeps guarding that). The destructure pins
-// the contract while the export does not exist yet (RED fails test-by-test
-// with "not a function" instead of taking the whole file down at import);
-// GREEN makes it equivalent to a plain named import with zero test edits.
 const { readAuthorizedBy } = scriptRunnerModule as unknown as {
 	readAuthorizedBy: () => string | undefined;
 };
-
-// mvox-app#274 review round 1 (Bentham, RED-274.2) — lib/script-runner.ts
-// shipped with zero tests.
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 describe('readDryRun', () => {
 	const saved: string | undefined = process.env.DRY_RUN;
@@ -86,10 +74,6 @@ describe('loadCredeCfg', () => {
 		await expect(loadCredeCfg(undefined, undefined, undefined, fetchImpl)).rejects.toThrow(/no token/i);
 	});
 
-	// mvox-app#419 — the auth exchange's `accounts` array names the runner
-	// identity per db (`user._id`, the id the rights preflight checks against
-	// each event's _owner/_editor references). loadCredeCfg surfaces it as a
-	// NEW `userId` key; the existing keys stay untouched (exact-shape toEqual).
 	it('succeeds, defaults db to mvox_crede when MVOX_CREDE_DB is unset, and surfaces the runner identity as userId', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
@@ -115,8 +99,6 @@ describe('loadCredeCfg', () => {
 			})
 		);
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
-		// cast: the draft return type predates the `userId` key (RED) — GREEN
-		// widens the return type and makes this a plain property access.
 		expect((cfg as { userId?: string }).userId).toBe('runner-1');
 	});
 
