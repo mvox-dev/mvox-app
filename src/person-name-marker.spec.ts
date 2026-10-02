@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
 
 const FILES = [
-	'src/routes/admin/+page.svelte',
+	'src/lib/admin/AdminRoles.svelte',
 	'src/lib/events/EventFieldEditNotes.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
@@ -177,7 +177,7 @@ describe('#361 — name-bearing sentences sit whole inside a RedactedText', () =
 // EVERY bare name-ish interpolation and demands a marker or a not-a-person token
 // with its reason, per file (`row.name` is a schedule row here, a person elsewhere).
 const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string>>>> = {
-	'src/routes/admin/+page.svelte': {
+	'src/lib/admin/CollectiveNameEditor.svelte': {
 		'nameMarker.name': 'the collective name'
 	},
 	'src/routes/+page.svelte': {
@@ -259,7 +259,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/downloads/+page.svelte': {
 		'row.label.filename': 'a downloaded score file'
 	},
-	'src/routes/links/+page.svelte': {
+	'src/lib/links/LinksRow.svelte': {
 		'row.name': 'a saved link'
 	},
 	'src/lib/roster/RosterSectionTree.svelte': {

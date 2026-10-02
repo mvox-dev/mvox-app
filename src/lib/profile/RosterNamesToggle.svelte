@@ -4,16 +4,18 @@
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { adminStore } from '$lib/nav/adminStore';
-	import { readRosterNamesSetting, updateRosterShowRealNames } from '$lib/collective/rosterNames';
+	import { readRosterNamesSetting } from '$lib/collective/rosterNames';
+	import type * as RosterNames from '$lib/collective/rosterNames';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	interface Props {
 		isOffline: boolean;
 		generation: () => number;
 		activeContext: () => { cfg: EntuCfg; personId: string } | null;
+		updateRosterShowRealNames: typeof RosterNames.updateRosterShowRealNames;
 	}
 
-	let { isOffline, generation, activeContext }: Props = $props();
+	let { isOffline, generation, activeContext, updateRosterShowRealNames }: Props = $props();
 
 	// `rosterShowRealNames` is the server-confirmed value only, never set optimistically.
 	let rosterDbEntityId = $state<string | null>(null);

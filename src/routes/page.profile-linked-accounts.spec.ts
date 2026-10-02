@@ -918,6 +918,8 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () => {
 	const profileSource = [
 		'src/routes/profile/+page.svelte',
+		'src/lib/profile/ProfileChrome.svelte',
+		'src/lib/profile/profileFieldOps.ts',
 		'src/lib/profile/LinkedAccountsSection.svelte'
 	]
 		.map((path) => readFileSync(resolve(process.cwd(), path), 'utf-8'))

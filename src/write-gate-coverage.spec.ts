@@ -1,8 +1,13 @@
-// A .svelte that value-imports a module issuing a non-GET must also read the write gate.
+// A .svelte whose imports reach a module issuing a non-GET must also read the write gate.
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
-import { stripComments } from '$lib/testing/commentRules';
+import { dirname, join, relative, resolve } from 'node:path';
+import {
+	namedBindings,
+	untraceableForms,
+	writesToEntu,
+	writingExports
+} from '$lib/testing/writeReach';
 
 const SRC = resolve(process.cwd(), 'src');
 const GATE_MODULE = '$lib/net/online';
@@ -19,33 +24,50 @@ function walk(dir: string): string[] {
 
 const ALL = walk(SRC);
 const rel = (p: string) => relative(process.cwd(), p);
-// A deliberate pinned text check: a new write module is a seam once written. Comments don't count.
-const WRITE_METHOD = /method:\s*'(POST|DELETE|PUT|PATCH)'/;
-const writesToEntu = (source: string) => WRITE_METHOD.test(stripComments(source));
-
-const DIRECT_SEAMS = ALL.filter(
-	(p) => p.endsWith('.ts') && !p.endsWith('.spec.ts') && p.startsWith(join(SRC, 'lib'))
-)
-	.filter((p) => writesToEntu(readFileSync(p, 'utf-8')))
-	.map((p) => '$lib/' + relative(join(SRC, 'lib'), p).replace(/\.ts$/, '').split(/[\\/]/).join('/'));
-
-// Modules that hand a page its writes without issuing them; one counts as a seam
-// while it value-imports a direct seam.
-const WRITE_RELAYS = ['$lib/events/eventActions', '$lib/roster/rosterActions'];
-const relaySource = (seam: string) =>
-	readFileSync(join(SRC, 'lib', seam.replace(/^\$lib\//, '') + '.ts'), 'utf-8');
-const WRITE_SEAMS = [
-	...DIRECT_SEAMS,
-	...WRITE_RELAYS.filter((relay) =>
-		valueImportSpecifiers(relaySource(relay)).some((s) => DIRECT_SEAMS.includes(s))
+const LIB = join(SRC, 'lib');
+const LIB_MODULES = new Map(
+	ALL.filter((p) => p.endsWith('.ts') && !p.endsWith('.spec.ts') && p.startsWith(LIB)).map(
+		(p) => [p, readFileSync(p, 'utf-8')] as const
 	)
-];
+);
+
+function resolveModule(specifier: string, fromFile: string): string | null {
+	let base: string;
+	if (specifier.startsWith('$lib/')) base = join(LIB, specifier.slice('$lib/'.length));
+	else if (specifier.startsWith('.')) base = resolve(dirname(fromFile), specifier);
+	else return null;
+	base = base.replace(/\.js$/, '');
+	return [base, base + '.ts', join(base, 'index.ts')].find((c) => LIB_MODULES.has(c)) ?? null;
+}
+
+const WRITING = writingExports(LIB_MODULES, resolveModule);
+const WRITE_SEAMS = [...WRITING]
+	.filter(([, names]) => names.size > 0)
+	.map(([p]) => '$lib/' + relative(LIB, p).replace(/\.ts$/, '').split(/[\\/]/).join('/'));
+
+/** The `$lib` imports of a .svelte file that bring in a binding which writes. */
+function writingImports(path: string, source: string): string[] {
+	const out: string[] = [];
+	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
+	for (const [, typeOnly, clause, specifier] of source.matchAll(pattern)) {
+		const module = typeOnly ? null : resolveModule(specifier, path);
+		const names = module ? WRITING.get(module) : undefined;
+		if (!names || names.size === 0) continue;
+		const named = clause.match(/\{([\s\S]*)\}/)?.[1];
+		const viaNamespace = /\*\s+as\s+/.test(clause);
+		const viaDefault = /^\s*[A-Za-z_$][\w$]*\s*(,|$)/.test(clause) && names.has('default');
+		if (viaNamespace || viaDefault || namedBindings(named ?? '').some(([name]) => names.has(name))) {
+			out.push(specifier);
+		}
+	}
+	return out;
+}
 
 /** Every `$lib/...` specifier this file imports VALUES from (a bare `import
  *  type { … } from` contributes nothing). */
 function valueImportSpecifiers(source: string): string[] {
 	const out: string[] = [];
-	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*'([^']+)'/g;
+	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
 	let match: RegExpExecArray | null;
 	while ((match = pattern.exec(source)) !== null) {
 		const [, typeOnlyKeyword, clause, specifier] = match;
@@ -92,6 +114,84 @@ describe('#535 — write-method text inside a comment makes no seam', () => {
 	});
 });
 
+describe('#643 — a write reached through other modules still counts', () => {
+	const planted = (files: Record<string, string>) =>
+		writingExports(new Map(Object.entries(files)), (spec) => spec.replace(/^\.\//, ''));
+
+	it('a page reaching a writer two hops away is counted, and only through the writing export', () => {
+		const writing = planted({
+			writer: "export function save() { return f(url, { method: 'POST' }); }\nexport function read() {}",
+			helper: "import { save, read } from './writer';\nexport const relay = () => save();\nexport const peek = () => read();",
+			barrel: "export { relay, peek } from './helper';"
+		});
+		expect(writing.get('barrel')).toEqual(new Set(['relay']));
+		expect(writing.get('helper')).toEqual(new Set(['relay']));
+		expect(writing.get('writer')).toEqual(new Set(['save']));
+	});
+
+	it('an import cycle ends, and counts a writer only when one is reachable', () => {
+		const cycle = {
+			a: "import { b } from './b';\nexport function a() { return b(); }",
+			b: "import { a } from './a';\nexport function b() { return a(); }"
+		};
+		expect(planted(cycle).get('a')).toEqual(new Set());
+		const fed = planted({
+			...cycle,
+			b: "import { a } from './a';\nimport { c } from './c';\nexport function b() { a(); c(); }",
+			c: "export function c() { return f(u, { method: 'DELETE' }); }"
+		});
+		expect(fed.get('a')).toEqual(new Set(['a']));
+	});
+});
+
+describe('#643 — writeReach follows the forms it was taught, and refuses the rest', () => {
+	const planted = (files: Record<string, string>) =>
+		writingExports(new Map(Object.entries(files)), (spec) => spec.replace(/^\.\//, ''));
+	const writer = 'function save() { return f(u, { method: "PUT" }); }';
+
+	it('a default export and a default import carry the write', () => {
+		const writing = planted({
+			w: `export default ${writer}`,
+			page: "import save from './w';\nexport const relay = () => save();"
+		});
+		expect(writing.get('w')).toEqual(new Set(['default']));
+		expect(writing.get('page')).toEqual(new Set(['relay']));
+		expect(planted({ w: `${writer}\nexport default save;` }).get('w')).toEqual(
+			new Set(['default'])
+		);
+	});
+
+	it('an export list with no semicolon still exports, and double quotes still count', () => {
+		expect(planted({ w: `${writer}\nexport { save }` }).get('w')).toEqual(new Set(['save']));
+		expect(writesToEntu('f(u, { method: "DELETE" })')).toBe(true);
+	});
+
+	it.each([
+		["export * as ns from './w';", 'export * as ns from'],
+		["export { default as save } from './w';", 'export { default } from'],
+		["const w = await import('./w');\nw.save();", 'a whole module from import()'],
+		["import('$lib/w').then(({ save }) => save());", 'import().then'],
+		['export default { save };', 'a default-exported object'],
+		['export default async function () {}', 'anonymous export default']
+	])('the guard catches %s', (source, label) => {
+		expect(untraceableForms(source)).toEqual([label]);
+	});
+
+	it('no file in src/lib or src/routes uses a form writeReach cannot trace', () => {
+		const untraced = ALL.filter(
+			(p) =>
+				/\.(ts|svelte)$/.test(p) &&
+				!p.endsWith('.spec.ts') &&
+				[LIB, join(SRC, 'routes')].some((dir) => p.startsWith(dir))
+		).flatMap((p) =>
+			untraceableForms(readFileSync(p, 'utf-8')).map(
+				(form) => `${rel(p)}: writeReach can't trace this form (${form}): teach it or rewrite`
+			)
+		);
+		expect(untraced).toEqual([]);
+	});
+});
+
 describe('#434 — every write surface reads the write gate', () => {
 	it('the derived write-seam set is non-empty and includes the four routes’ seams', () => {
 		// A check over an empty set passes vacuously, so a refactor that hides the non-GET
@@ -119,13 +219,11 @@ describe('#434 — every write surface reads the write gate', () => {
 		for (const path of ALL.filter((p) => p.endsWith('.svelte'))) {
 			const source = readFileSync(path, 'utf-8');
 			const specifiers = valueImportSpecifiers(source);
-			const seams = specifiers.filter((s) => WRITE_SEAMS.includes(s));
+			const seams = writingImports(path, source);
 			if (seams.length === 0) continue;
 			if (specifiers.includes(GATE_MODULE)) continue;
 			offenders.push({ file: rel(path), seams: [...new Set(seams)].sort() });
 		}
-		// A page that writes nothing but value-imports a read helper from a mixed module lands
-		// here too; the fix is to move that read into its own module, not to widen this check.
 		expect(offenders).toEqual([]);
 	});
 
