@@ -1,15 +1,7 @@
-// #318 RED — entu-rights-mcp parser: extracts the identified rule blocks from
-// the REAL rights model doc, VERBATIM.
-//
-// Contract source: #318 body ("It is a VIEW, never a second home" — rules are
-// read from the repo document; `rights_rule` serves one rule verbatim plus its
-// probe-script and result-file paths) + the settled design on the issue
-// (verbatim enforced as a byte-substring of the raw doc).
-//
-// The grammar is the one src/rights-model-identifiers.spec.ts (the guard spec)
-// already enforces on the doc — this parser is a second CONSUMER of that
-// grammar, never a second definition of the doc's content. The guard spec is
-// NOT modified by this slice (byte-pinned in fences.spec.ts).
+// entu-rights-mcp parser: extracts the rule blocks from the real rights doc, verbatim.
+
+// The grammar is the guard spec's (src/rights-model-identifiers.spec.ts); this is a consumer,
+// never a second definition of the doc's content.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -21,10 +13,8 @@ const DOC_PATH = resolve(
 );
 const doc = readFileSync(DOC_PATH, 'utf-8');
 
-// ER-1..ER-23, then ER-26 (#369) and ER-27 (#372). The gap is not an omission:
-// ER-24/ER-25 are reserved by name on #364 and have not landed, and the ids are
-// opaque and creation-order, so the set is enumerated rather than generated from
-// a count. The guard spec's numbering sweep holds the same reservation.
+// ER-24/ER-25 are retired and never minted; ids are opaque, so the set is enumerated.
+// The guard spec's numbering sweep holds the same gap.
 const ALL_IDS = [...Array.from({ length: 23 }, (_, i) => `ER-${i + 1}`), 'ER-26', 'ER-27'];
 
 describe('parseRightsDoc on the real doc: all 25 rules, ids exact', () => {
@@ -102,7 +92,7 @@ describe('evidence-line parse: file:line refs, probe scripts, result files', () 
 
 	it('ER-13: exactly one source ref, no probe artifacts', () => {
 		expect(rulesById().get('ER-13')?.evidence).toEqual({
-			sourceRefs: ['utils/entity.js:296-327'],
+			sourceRefs: ['utils/entity.js:369-378'],
 			probeScripts: [],
 			resultFiles: []
 		});
