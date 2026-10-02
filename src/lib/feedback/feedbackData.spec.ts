@@ -1,41 +1,18 @@
-// #395 slice 2/2 RED — loadFeedback: read ONE feedback for FeedbackView.
-//
-// CONTRACT (GREEN implements src/lib/feedback/feedbackData.ts):
-//
-//   loadFeedback(cfg, feedbackId, fetchImpl?) → Promise<{
-//     id: string; screenshotUrl: string; strokes: StrokeData; description: string
-//   }>
-//
-//   1. GET entity/{feedbackId}?props=screenshot,doodle_layer,description via
-//      entuFetch — only the three fields; no reference `.string` is ever read
-//      (a reference `.string` bakes PII; `.reference` only, and only for rights).
-//   2. GET property/{screenshotPropertyId} — the signed download url, via the
-//      existing signFileUrl ($lib/repertoire/fileUrls), minted at read time.
-//
-//   strokes = parse(doodle_layer[0].string) (#394 strokes.ts);
-//   description = description[0].string ?? '' — OPTIONAL on the type (review
-//   round F1: an absent one is a screenshot-plus-ink feedback, not a broken
-//   record, and the house pattern for optional text props is `?? ''`).
-//   FAIL LOUDLY: non-2xx read, no screenshot property, missing or corrupt
-//   doodle_layer, or a signing failure → reject.
+// loadFeedback reads one feedback entity for FeedbackView.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { serialize, type StrokeData } from '$lib/strokes/strokes';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import { loadFeedback } from './feedbackData';
 
 const API = 'https://api.entu-test.invalid/';
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const FB_ID = 'feedback-1';
 const PROP_ID = 'screenshot-prop-1';
 const SIGNED = 'https://s3.example.invalid/bucket/screenshot?sig=abc';
 const STROKES: StrokeData = { v: 1, strokes: [{ pen: 'red', w: 0.004, pts: [0.1, 0.2, 0.3, 0.4] }] };
-
-function json(body: unknown, status = 200): Response {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function entityBody(overrides: Record<string, unknown> = {}) {
 	return {
@@ -85,10 +62,6 @@ describe('#395 loadFeedback — reads one feedback', () => {
 		});
 	});
 
-	// REVIEW ROUND (#395, F1): `description` is OPTIONAL on the type
-	// (mvox-schema-extensions.ts `feedback` — no `mandatory` on the field), so a
-	// screenshot-plus-ink-and-no-words feedback is a schema-valid record. It
-	// reads as '' — a throw here made such a submission permanently unviewable.
 	it('an ABSENT description reads as an empty string, it does not reject', async () => {
 		const result = await loadFeedback(cfg, FB_ID, makeFetch(json(entityBody({ description: undefined }))));
 		expect(result).toEqual({ id: FB_ID, screenshotUrl: SIGNED, strokes: STROKES, description: '' });

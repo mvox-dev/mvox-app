@@ -1,50 +1,9 @@
-// #294 RED — `withdrawInvite` (tühista kutse) + the one-live-link invariant.
-//
-// withdraw is a REVOCATION, not tidiness (Gama shaping + Mihkel rulings, issue
-// #294): an unredeemed invite link binds WHOEVER CLICKS IT (#23/#28/#30), so a
-// link sent to a mistyped address is a live credential in a stranger's inbox,
-// and withdraw is the only action that un-arms it. Two properties of the
-// existing sweep (mintSelfLinkInvite steps 1-2, inviteData.ts:393-415) are
-// load-bearing and must survive into the standalone operation:
-//
-//   1. A bound identity is NEVER touched — the sweep filters on `invite`
-//      being present; a joined member carries `uid` and never `invite`, so
-//      withdraw cannot unlink someone who has actually joined.
-//   2. Partial failure IS failure — all-or-report. Multiple placeholders can
-//      coexist (Entu APPENDS: the 2026-09-09 admin-cascade probe's bypass POST
-//      left TWO live placeholders on one person) and the sweep loops; a
-//      surviving placeholder is a live credential the admin has just been told
-//      is dead. If any DELETE fails, the operation reports failure — never a
-//      partial success rendered as done.
-//
-// Contract under test (GREEN implements exactly this, in THIS module — the
-// sole-mint-mechanism exemption already covers it, and the sweep it reuses
-// lives here):
-//
-//   withdrawInvite(cfg: EntuCfg, personId: string, fetchImpl?): Promise<void>
-//   — resolves only when NO entry carrying `invite` survives; rejects loudly
-//     on any read or DELETE failure.
-//
-// Withdrawn == never-invited (DECISION-Mihkel 2026-09-08: "Withdrawn and never
-// invited are the same"): withdraw leaves NO marker behind — the truthful
-// post-state is "no live credential exists", identical to never-invited. This
-// file pins that nothing beyond the placeholder DELETEs is ever written.
-//
-// The second half pins Gama's demanded invariant test for saada uuesti: one
-// person, at most ONE redeemable link, at any moment. entu-api's
-// findStoredInvite takes the FIRST stored entry carrying `invite` WITHOUT
-// comparing it to the token presented at redemption (routes/auth/
-// index.get.js:270-277) — so an un-swept older token stays INDEPENDENTLY
-// redeemable. The resend producer is `mintSelfLinkInvite` (the exact function
-// the 2026-09-09 admin-cascade probe drove live: db-entity `_owner` → HTTP
-// 200), whose sweep-then-mint IS the atomic replace. "Test the invariant, not
-// the button": after a resend, the previously issued link must no longer
-// redeem.
-
+// withdrawInvite revokes an unredeemed invite link; one live link per person.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import * as inviteData from './inviteData';
 import { mintSelfLinkInvite } from './inviteData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type WithdrawInvite = (
 	cfg: EntuCfg,
@@ -52,35 +11,17 @@ type WithdrawInvite = (
 	fetchImpl?: typeof fetch
 ) => Promise<void>;
 
-// Dynamic-shaped access: at RED the export does not exist yet; each test then
-// fails on the call rather than the whole file failing at module link time.
 const withdrawInvite = (inviteData as unknown as { withdrawInvite?: WithdrawInvite })
 	.withdrawInvite;
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-owner' };
+const cfg = testCfg('sampledb', 'jwt-owner');
 const PERSON_ID = 'person-target';
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/**
- * Stateful fake of the Entu person + its entu_user property values:
- *  - GET  entity/{personId}?props=entu_user → current entries, with every
- *    un-redeemed invite MASKED as '***' (the platform masks on every read
- *    after the mint moment — the stored raw token is never readable again)
- *  - DELETE property/{_id}                  → removes that value (or fails,
- *    when the id is listed in failDeleteIds)
- *  - POST entity/{personId}                 → the mint: appends a fresh
- *    invite-carrying value (Entu APPENDS — it never replaces) and returns the
- *    raw token exactly once, in the update response
- */
 interface StoredValue {
 	_id: string;
 	uid?: string;
 	provider?: string;
 	email?: string;
-	/** The raw redeemable token — what findStoredInvite matches on. Masked on every GET. */
 	rawInvite?: string;
 }
 
@@ -121,12 +62,6 @@ function makeEntuStore(initial: StoredValue[], failDeleteIds: string[] = []) {
 	return { fetchImpl, state, ops };
 }
 
-/**
- * entu-api's redemption lookup, simulated faithfully: the FIRST stored value
- * carrying `invite`, with NO comparison against the token the redeemer
- * presents (routes/auth/index.get.js:270-277). Whatever this returns is what
- * any presented link lands on — an older un-swept entry shadows a fresh one.
- */
 function findStoredInvite(values: StoredValue[]): StoredValue | undefined {
 	return values.find((v) => v.rawInvite !== undefined);
 }
@@ -148,8 +83,6 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 		expect(findStoredInvite(state.values)).toBeUndefined();
 		const deletes = ops.filter((o) => o.method === 'DELETE');
 		expect(deletes).toHaveLength(2);
-		// Endpoint discipline: property VALUES die at /property/{_id}, never at
-		// /entity/{_id} — conflating the two 404s and silently pollutes.
 		for (const d of deletes) expect(d.url).toMatch(/\/property\/eu-old-[12]/);
 	});
 
@@ -174,9 +107,6 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 	});
 
 	it('all-or-report: with two placeholders, a failure on the SECOND delete rejects — one delete having succeeded is not success', async () => {
-		// A surviving placeholder is a live credential the admin has just been
-		// told is dead. Rendering this partial outcome as done is the failure
-		// mode the control exists to prevent.
 		const { fetchImpl, state } = makeEntuStore(
 			[
 				{ _id: 'eu-old-1', rawInvite: 'tok-old-1' },
@@ -185,7 +115,6 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 			['eu-old-2']
 		);
 		await expect(withdrawInvite!(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-2|500/);
-		// The un-deleted placeholder is still live — the rejection is the truth.
 		expect(findStoredInvite(state.values)).toBeDefined();
 	});
 
@@ -211,11 +140,6 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 });
 
 describe('the one-live-link invariant — after saada uuesti, the OLD link no longer redeems (Gama, issue #294)', () => {
-	// These pin the invariant on the resend producer itself
-	// (mintSelfLinkInvite — sweep-then-mint, the atomic replace). They are
-	// expected to hold from the sweep already shipped in #193; they stand here
-	// as the demanded, redemption-framed guard so no later "optimisation" can
-	// drop the sweep without failing a test that says WHY it exists.
 
 	it('after a resend, findStoredInvite can only ever land on the FRESH token — the previously issued link is gone from the store', async () => {
 		const { fetchImpl, state } = makeEntuStore([{ _id: 'eu-old', rawInvite: 'tok-old' }]);
@@ -224,7 +148,6 @@ describe('the one-live-link invariant — after saada uuesti, the OLD link no lo
 		expect(redeemable).toBeDefined();
 		expect(redeemable!.rawInvite).toBe(inviteToken);
 		expect(redeemable!.rawInvite).not.toBe('tok-old');
-		// At most one redeemable link, at any moment:
 		expect(state.values.filter((v) => v.rawInvite !== undefined)).toHaveLength(1);
 	});
 
@@ -240,4 +163,3 @@ describe('the one-live-link invariant — after saada uuesti, the OLD link no lo
 });
 
 // (*MVOX:Tallis* — #294 RED: withdraw = sweep-without-mint, all-or-report;
-//  one-live-link invariant pinned at the redemption lookup, not the button)

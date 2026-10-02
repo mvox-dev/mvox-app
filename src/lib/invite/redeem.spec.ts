@@ -4,10 +4,7 @@ import {
 	type InviteExchangeArgs,
 	type InviteExchangeResult
 } from './redeem';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+import { json } from '$lib/testing/entuFetchKit';
 
 const ARGS: InviteExchangeArgs = {
 	sessionToken: 'sess-key-1',

@@ -3,16 +3,11 @@ import { createAgendaLoadState, createLoadCounters, type AgendaLoadDeps } from '
 import { createAgendaWorksLoad } from './agendaWorksLoad';
 import type { Edition, Work } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 const cfg = { db: 'db1', token: 't' } as unknown as Parameters<AgendaLoadDeps['listWorks']>[0];
 
 type Read = { works: Work[]; editions: Edition[]; repertoire: RepertoireItem[] };
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	const promise = new Promise<T>((r) => (resolve = r));
-	return { promise, resolve };
-}
 
 function read(tag: string): Read {
 	return {

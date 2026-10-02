@@ -1,62 +1,10 @@
+// The roster_show_real_names toggle on the database entity: read and admin write.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-// #267 RED — the contract module does not exist yet; GREEN creates it.
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 import { readRosterNamesSetting, updateRosterShowRealNames } from './rosterNames';
 
-// #267 RED — the data seam behind the profile page's admin-only roster-names
-// toggle: the collective-wide `roster_show_real_names` boolean on the
-// DATABASE ENTITY (collective = database, #161; prop-def provisioned live on
-// both dbs by #265 — boolean, `_sharing: domain`, so every member's client
-// can READ it while only the db entity's `_owner`/`_editor` — exactly the set
-// the admin gate checks — can WRITE it; no new rights mechanism).
-//
-// CONTRACT (defined HERE, implemented in GREEN):
-//
-//   src/lib/collective/rosterNames.ts (new)
-//     export type RosterNamesSetting = { dbEntityId: string; showRealNames: boolean };
-//     export async function readRosterNamesSetting(
-//       cfg: EntuCfg,
-//       fetchImpl?: typeof fetch
-//     ): Promise<RosterNamesSetting>;
-//     export async function updateRosterShowRealNames(
-//       cfg: EntuCfg,
-//       dbEntityId: string,
-//       value: boolean,
-//       fetchImpl?: typeof fetch
-//     ): Promise<void>;
-//
-//   readRosterNamesSetting — resolveDatabaseEntityId (the ONE way the app
-//   answers "which entity is this db's collective") then ONE GET
-//   `entity/{dbEntityId}?props=roster_show_real_names`. Value shape:
-//   `entity.roster_show_real_names?.[0]?.boolean ?? false` — the key is
-//   entirely ABSENT from the entity JSON when unset (platform-doc-verified,
-//   entu-www properties docs), so absent → false → the UI's 'profile'
-//   default. The resolved dbEntityId rides along in the answer because the
-//   WRITE needs it. Fail loud (house rule): no visible database entity or a
-//   non-2xx anywhere → throw — a broken read must never silently render as
-//   "profile names".
-//
-//   updateRosterShowRealNames — a thin wrapper (the updateCollectiveName
-//   precedent, collectiveName.ts) around the shared replaceEntityProperty
-//   choreography, ATOMIC since #264. MANDATORY — a bare POST on every toggle
-//   would silently ACCUMULATE duplicate values (Entu POST-appends; all
-//   non-formula props are implicitly multi-valued):
-//     1. GET entity/{dbEntityId}?props=roster_show_real_names → the
-//        pre-existing value id(s);
-//     2. POST entity/{dbEntityId} with exactly ONE entry:
-//        [{ _id: <first existing id>, type: 'roster_show_real_names',
-//           boolean: <value> }] — the `_id` is dropped when no value exists
-//        yet (this collective has never been toggled: bare POST);
-//     3. corrupted EXTRA ids only → DELETE property/{valueId}, strictly
-//        AFTER the POST; the normal ≤1-value path issues ZERO deletes.
-//   Non-2xx anywhere → throw (fail loud, no silent success) — turning that
-//   into the truthful inline error is the profile page's job.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 function callUrls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
 	return fetchImpl.mock.calls.map((c) => String(c[0]));
@@ -65,8 +13,6 @@ function callUrls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
 function callMethods(fetchImpl: ReturnType<typeof vi.fn>): Array<string | undefined> {
 	return fetchImpl.mock.calls.map((c) => (c[1] as RequestInit | undefined)?.method);
 }
-
-// ── readRosterNamesSetting ───────────────────────────────────────────────────
 
 describe('readRosterNamesSetting', () => {
 	it('resolves the database entity id, then GETs roster_show_real_names off it — two GETs, no writes', async () => {
@@ -87,12 +33,10 @@ describe('readRosterNamesSetting', () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		const urls = callUrls(fetchImpl);
-		// 1. the id resolve — the databaseEntity.ts query, db-scoped
 		expect(urls[0]).toContain('/testdb/entity?');
 		expect(urls[0]).toContain('_type.string=database');
 		expect(urls[0]).toContain('props=_id');
 		expect(urls[0]).toContain('limit=1');
-		// 2. the value read — one prop off the resolved entity
 		expect(urls[1]).toContain('/testdb/entity/db-entity-1?props=roster_show_real_names');
 		for (const method of callMethods(fetchImpl)) {
 			expect(method === undefined || method === 'GET').toBe(true);
@@ -149,10 +93,6 @@ describe('readRosterNamesSetting', () => {
 	});
 });
 
-// ── updateRosterShowRealNames ────────────────────────────────────────────────
-
-/** The db entity's aggregated read: ONE pre-existing boolean value — the
- *  normal shape after any earlier toggle. */
 function entityWithValue(): Response {
 	return json({
 		entity: {
@@ -171,20 +111,13 @@ describe('updateRosterShowRealNames', () => {
 
 		await updateRosterShowRealNames(cfg, 'db-entity-1', true, fetchImpl);
 
-		// EXACTLY two calls: lookup + overwrite-POST. A third call would be a
-		// delete the ≤1-value path must never issue.
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		const urls = callUrls(fetchImpl);
 		const methods = callMethods(fetchImpl);
 
-		// 1. the lookup — FIRST: the overwrite entry cannot be built blind
 		expect(urls[0]).toContain('/testdb/entity/db-entity-1?props=roster_show_real_names');
 		expect(methods[0] === undefined || methods[0] === 'GET').toBe(true);
 
-		// 2. the POST — the old value's `_id` rides the entry (Entu's native
-		// overwrite soft-deletes it in the SAME call — a bare POST would
-		// silently ACCUMULATE a duplicate value). FULL body shape (toEqual,
-		// never objectContaining) — exactly ONE entry, no stray keys.
 		expect(urls[1]).toContain('/testdb/entity/db-entity-1');
 		expect(methods[1]).toBe('POST');
 		const postBody = JSON.parse(String((fetchImpl.mock.calls[1][1] as RequestInit).body));

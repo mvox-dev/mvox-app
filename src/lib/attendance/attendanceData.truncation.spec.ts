@@ -1,22 +1,9 @@
-// #321 RED — truncation detection for `listMyAttendance`, the member-LIFETIME
-// attendance read (`member.reference={memberId}&limit=500`, no season
-// boundary) — same reachable-bound class as `listMyRsvps` (research-321 inv:
-// grows with tenure, not with choir size).
-//
-// Contract identical to libraryData.truncation.spec.ts / rsvpData
-// counterpart: `{ items, total, truncated }`, `truncated` = server `count` >
-// RAW entities.length on the SAME single request. The RAW-length rule matters
-// doubly here: this module DROPS half-visible rows (missing `_parent`/status —
-// the #84-review rule), and a dropped row must never read as a truncation.
+// listMyAttendance flags a truncated lifetime read from the server count.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { listMyAttendance } from './attendanceData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 describe('listMyAttendance — count-based truncation detection (#321)', () => {
 	it('count > entities.length → truncated, full shape', async () => {

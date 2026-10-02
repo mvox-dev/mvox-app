@@ -1,5 +1,5 @@
+// Role-management reads and writes, pinned to Entu's rolled-up _owner/_editor wire shape.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	RoleGrantMissingError,
 	RoleLockoutError,
@@ -11,53 +11,9 @@ import {
 	removeAdmin,
 	removeLibrarian
 } from './roleManagement';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #134/S3 RED (rollup revision) — the role-management read/write layer, pinned
-// to Entu's REAL aggregated-rights wire shape.
-//
-// CRITICAL — what `GET entity/{id}?props=_owner,_editor` actually returns is a
-// ROLLUP, not two independent own-value lists:
-//
-//   1. THE FOLD: every `_owner` value is ALSO present in `_editor` under the
-//      SAME `_id` (ownership implies editorship; the rollup materialises it).
-//   2. THE SPLICE: rights inherited from the PARENT entity (org → library via
-//      `_inheritrights: true`, umbrella → org) are spliced into both arrays
-//      with `inherited: true`. Their `_id`s are property values of the PARENT
-//      entity — deleting one from here would revoke rights on the parent.
-//
-// Contract under test:
-//
-//   - `fetchRights(cfg, entityId)` → `{ ownOwners, ownEditors, allOwners }`:
-//     filters out every `inherited: true` entry from the first two, and
-//     ownEditors EXCLUDES entries whose `_id` appears in ownOwners (un-folds the
-//     rollup). `allOwners` keeps the RAW owner list (inherited included) — the
-//     "may this caller WRITE rights here?" set.
-//   - `listAdmins` / `listLibrarians` build on fetchRights →
-//     `{ persons, canManage }`. `persons` is ONE ROW PER PERSON —
-//     `{ id, name, role, valueIds }`, 'owner' outranking 'editor' — because the
-//     route keys its `{#each}` on person id and Svelte 5 throws
-//     `each_key_duplicate` (production too) on a repeated key. Inherited holders
-//     are NEVER listed (they are the parent's business, not this surface's).
-//   - Writes require `_owner` on the entity (not just `_editor`): entu-api 403s
-//     any rights POST/DELETE from a caller outside the entity's aggregated
-//     `private._owner`. The write functions don't pre-check that (the API
-//     answers non-2xx and they surface the status) — `canManage` is the answer
-//     the UI gates its write controls on, and it counts INHERITED owners too,
-//     since the API's check reads the aggregate.
-//   - Grants POST `[{ type: '_editor', reference: personId }]` with replace
-//     semantics on OWN stale values only (POST-BEFORE-DELETE house rule).
-//     Inherited entries and folded owner entries are NEVER "stale dupes".
-//   - Removes DELETE `property/{valueId}` for OWN matching values only,
-//     DEDUPED by `_id` (the folded owner entry appears in both raw arrays —
-//     one DELETE, never two). Inherited entries are NEVER deleted. removeAdmin
-//     refuses to delete the LAST ownOwner (RoleLockoutError) BEFORE any write;
-//     inherited owners do NOT count as remaining owners.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 interface WireRight {
 	_id: string;
@@ -66,11 +22,6 @@ interface WireRight {
 	inherited?: boolean;
 }
 
-/**
- * Build the AGGREGATED rights wire body the way Entu actually answers:
- * inherited entries tagged `inherited: true`, and every `_owner` value
- * (own AND inherited) folded into `_editor` under the SAME `_id`.
- */
 function rollup(opts: {
 	ownOwners?: WireRight[];
 	ownEditors?: WireRight[];
@@ -84,17 +35,14 @@ function rollup(opts: {
 		entity: {
 			_id: 'whatever',
 			_owner: owners,
-			// THE FOLD: owners first (same _id!), then genuine editor values.
 			_editor: [...owners.map((v) => ({ ...v })), ...(opts.ownEditors ?? []), ...inhEditors]
 		}
 	};
 }
 
-// Own values on the entity under management:
 const ANNA_OWNER: WireRight = { _id: 'pv-own-anna', reference: 'p-anna', string: 'Anna Arro' };
 const EMIL_OWNER: WireRight = { _id: 'pv-own-emil', reference: 'p-emil', string: 'Emil Erg' };
 const BELA_EDITOR: WireRight = { _id: 'pv-ed-bela', reference: 'p-bela', string: 'Bela Brauer' };
-// Spliced in from the PARENT entity (foreign property-value _ids):
 const FED_CHIEF_INH: WireRight = { _id: 'pv-PARENT-chief', reference: 'p-chief', string: 'Fed Chief' };
 const FED_CLERK_INH: WireRight = { _id: 'pv-PARENT-clerk', reference: 'p-clerk', string: 'Fed Clerk' };
 
@@ -111,8 +59,6 @@ function deleteUrls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
 		.filter((c) => (c[1] as RequestInit | undefined)?.method === 'DELETE')
 		.map((c) => String(c[0]));
 }
-
-// ── fetchRights — the shared un-folding, inherited-filtering read ───────────────
 
 describe('fetchRights — GET entity/{id}?props=_owner,_editor, un-folds the rollup, drops inherited', () => {
 	it('filters inherited:true out of BOTH lists and excludes folded owner _ids from ownEditors — FULL shape', async () => {
@@ -134,11 +80,6 @@ describe('fetchRights — GET entity/{id}?props=_owner,_editor, un-folds the rol
 		expect(String(url)).toContain('/testdb/entity/org-1?props=_owner,_editor');
 		expect(init?.method ?? 'GET').toBe('GET');
 
-		// FULL-shape toEqual (partial assertions hide bugs): Anna's folded _editor
-		// entry (same _id as her _owner value) is NOT an own editor grant; the
-		// chief and the clerk are the parent's, invisible in the OWN lists — but
-		// the chief IS in allOwners, because entu-api's write check reads the
-		// aggregated `private._owner`, inherited entries included.
 		expect(result).toEqual({
 			ownOwners: [expect.objectContaining({ _id: 'pv-own-anna', reference: 'p-anna' })],
 			ownEditors: [expect.objectContaining({ _id: 'pv-ed-bela', reference: 'p-bela' })],
@@ -179,8 +120,6 @@ describe('fetchRights — GET entity/{id}?props=_owner,_editor, un-folds the rol
 	});
 });
 
-// ── listAdmins — RolePerson[] off fetchRights, inherited never listed ───────────
-
 describe('listAdmins — one rights GET mapped to { persons: {id, name, role, valueIds}[], canManage }', () => {
 	it('owners first, then editors; each row carries its property valueIds; inherited holders are NOT listed', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -197,8 +136,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		const result = await listAdmins(cfg, 'org-1', 'p-anna', fetchImpl);
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
-		// FULL-shape toEqual — an inherited row, a missing valueId, a duplicate
-		// folded row is a bug this must catch.
 		expect(result).toEqual({
 			persons: [
 				{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna'] },
@@ -238,7 +175,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 			{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna', 'pv-ed-anna'] },
 			{ id: 'p-bela', name: 'Bela Brauer', role: 'editor', valueIds: ['pv-ed-bela'] }
 		]);
-		// The row identity the route keys on must be unique, always.
 		const ids = result.persons.map((p) => p.id);
 		expect(new Set(ids).size).toBe(ids.length);
 	});
@@ -268,7 +204,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 
 		const result = await listAdmins(cfg, 'org-1', 'p-bela', fetchImpl);
 		expect(result.canManage).toBe(false);
-		// She still SEES the lists — the read is not gated, only the writes.
 		expect(result.persons.map((p) => p.id)).toEqual(['p-anna', 'p-bela']);
 	});
 
@@ -295,10 +230,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
-	// #146 — a freshly POSTed rights value carries only `reference` (no
-	// `string`), so the row falls back to the raw entity id. The roster
-	// (already loaded for the person-picker native <select>, #209) is passed
-	// through as a second-chance id→name lookup.
 	it('#146: a display-name-less row (id fallback) is resolved against a passed roster, by personId', async () => {
 		const fetchImpl = vi
 			.fn()
@@ -314,13 +245,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
-	// #469 review F1 INVERTS this case. It used to assert that the rights
-	// value's own `string` was never overwritten; the ruling makes the roster
-	// the winner, because `string` is a name Entu baked at grant time and never
-	// refreshes, while the roster carries what the rest of the page has already
-	// resolved — and what the real-names toggle says to show. The disagreement
-	// between the two is still the whole point of the fixture; only the winner
-	// changed.
 	it('#469 F1: a row WITH a display name off the rights value is overwritten by the roster when the two disagree — the roster wins', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER] })));
 		const roster = [
@@ -333,14 +257,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
-	// #469 F1, the other half of the same rule: the roster wins WHERE IT HAS A
-	// ROW, it does not replace unconditionally. Someone can hold rights here
-	// and appear in no roster at all — an archived conductor who keeps her
-	// admin grant, a technical admin who was never a singing member. She keeps
-	// the rights value's own name. The `?? p.name` tail is what makes that fall
-	// through; a bare `byPersonId.get(p.id)` would blank her row instead. The
-	// case below covers the same fall-through when there is no `string` either,
-	// where the tail lands on the id.
 	it('#469 F1: a person WITH a rights-value name but NO roster row keeps that name — the roster wins only where it has a row', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER] })));
 		const roster = [{ memberId: 'm-1', personId: 'p-other', name: 'Someone Else', email: '' }];
@@ -377,8 +293,6 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 	});
 });
 
-// ── addAdmin — grant _editor with replace semantics on OWN values only ──────────
-
 describe('addAdmin — grants _editor on the org (GET → POST → DELETE own stale dupes)', () => {
 	it('person with NO existing grant: GET rights, then POST body EXACTLY [{ type: "_editor", reference: personId }] — no DELETE at all', async () => {
 		const fetchImpl = vi
@@ -394,7 +308,6 @@ describe('addAdmin — grants _editor on the org (GET → POST → DELETE own st
 		const [postUrl, postInit] = fetchImpl.mock.calls[1] as [string, RequestInit];
 		expect(String(postUrl)).toContain('/testdb/entity/org-1');
 		expect(postInit.method).toBe('POST');
-		// FULL-shape toEqual — a stray _owner, _sharing, or second value is a bug.
 		expect(JSON.parse(String(postInit.body))).toEqual([{ type: '_editor', reference: 'p-dora' }]);
 	});
 
@@ -417,17 +330,13 @@ describe('addAdmin — grants _editor on the org (GET → POST → DELETE own st
 
 		await addAdmin(cfg, 'org-1', 'p-dora', fetchImpl);
 
-		// GET, POST, DELETE ×2 — in that order (a DELETE arriving before the POST
-		// would leave the grant EMPTY if the POST then fails).
 		expect(fetchImpl).toHaveBeenCalledTimes(4);
 		expect(callMethods(fetchImpl).slice(1)).toEqual(['POST', 'DELETE', 'DELETE']);
 		const urls = callUrls(fetchImpl);
 		expect(urls[2]).toContain('/testdb/property/pv-ed-dora-1');
 		expect(urls[3]).toContain('/testdb/property/pv-ed-dora-2');
-		// Bela's grant and Anna's _owner value (and its folded twin) stay.
 		expect(urls.join('\n')).not.toContain('pv-ed-bela');
 		expect(urls.join('\n')).not.toContain('pv-own-anna');
-		// Property-value endpoint ONLY — never an entity DELETE.
 		for (const u of urls.slice(2)) expect(u).not.toContain('/entity/');
 	});
 
@@ -446,8 +355,6 @@ describe('addAdmin — grants _editor on the org (GET → POST → DELETE own st
 
 		await addAdmin(cfg, 'org-1', 'p-dora', fetchImpl);
 
-		// GET + POST, nothing else — deleting pv-PARENT-dora would revoke Dora's
-		// rights on the PARENT entity.
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		expect(callMethods(fetchImpl)[1]).toBe('POST');
 		expect(callUrls(fetchImpl).join('\n')).not.toContain('pv-PARENT-dora');
@@ -459,8 +366,6 @@ describe('addAdmin — grants _editor on the org (GET → POST → DELETE own st
 			.mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER], ownEditors: [BELA_EDITOR] })));
 
 		await addAdmin(cfg, 'org-1', 'p-anna', fetchImpl);
-		// A naive replace here would POST an editor value then DELETE pv-own-anna
-		// (the folded entry's _id IS the _owner value) — demoting the owner.
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
@@ -482,8 +387,6 @@ describe('addAdmin — grants _editor on the org (GET → POST → DELETE own st
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 });
-
-// ── removeAdmin — revoke OWN rights values, deduped, lockout-guarded ────────────
 
 describe("removeAdmin — deletes the person's OWN rights values; never inherited, never twice, never the last owner", () => {
 	it('editor-only person: DELETE property/{id} for EVERY matching own _editor value (stale duplicates too) — other people\'s values untouched, never an entity DELETE', async () => {
@@ -530,9 +433,6 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 		await removeAdmin(cfg, 'org-1', 'p-anna', fetchImpl);
 
 		const deletes = deleteUrls(fetchImpl);
-		// pv-own-anna appears in BOTH wire lists (the fold) — deduped to ONE
-		// DELETE. A second DELETE on an already-deleted property is a 404 → the
-		// whole remove would falsely reject after half the work.
 		expect(deletes.filter((u) => u.includes('/property/pv-own-anna'))).toHaveLength(1);
 		expect(deletes.filter((u) => u.includes('/property/pv-ed-anna'))).toHaveLength(1);
 		expect(deletes).toHaveLength(2);
@@ -553,7 +453,6 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 		await expect(removeAdmin(cfg, 'org-1', 'p-chief', fetchImpl)).rejects.toBeInstanceOf(
 			RoleGrantMissingError
 		);
-		// Deleting pv-PARENT-chief would revoke the chief's rights on the PARENT.
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
@@ -564,7 +463,6 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 
 		const attempt = removeAdmin(cfg, 'org-1', 'p-anna', fetchImpl);
 		await expect(attempt).rejects.toBeInstanceOf(RoleLockoutError);
-		// Only the rights GET happened — zero DELETE calls.
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
@@ -581,13 +479,7 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 
-	// #164 — defense in depth, pinned. The UI leg of the fix HIDES the Remove
-	// button on the viewer's own row, but the server-side guard here must stay
-	// exactly as it is: any code path that still reaches removeAdmin for the
-	// last own owner (stale client, direct call, other frontend) is refused
-	// BEFORE any write. This test must keep passing untouched through #164.
 	it('#164 defense in depth — a self-removal that would strip the last own _owner still rejects with RoleLockoutError before any write; with another owner remaining it still proceeds (the self rule is the UI\'s leg, not this layer\'s)', async () => {
-		// Leg 1: viewer removes HERSELF as the last own owner → refused, no write.
 		const lockedFetch = vi
 			.fn()
 			.mockResolvedValue(json(rollup({ ownOwners: [ANNA_OWNER], ownEditors: [BELA_EDITOR] })));
@@ -596,9 +488,6 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 		);
 		expect(lockedFetch).toHaveBeenCalledTimes(1); // rights GET only, zero DELETEs
 
-		// Leg 2: the guard is the LAST-owner rule, not a self rule — this layer
-		// has no viewer identity at all. With Emil's owner value remaining,
-		// removing Anna's own grant still goes through unchanged.
 		const openFetch = vi
 			.fn()
 			.mockResolvedValueOnce(json(rollup({ ownOwners: [ANNA_OWNER, EMIL_OWNER] })))
@@ -632,16 +521,12 @@ describe("removeAdmin — deletes the person's OWN rights values; never inherite
 	});
 });
 
-// ── librarian trio — same rollup mechanics on the LIBRARY entity ────────────────
-
 describe('listLibrarians — the org admins arrive SPLICED IN as inherited (org → library _inheritrights) and are NOT librarians', () => {
 	it('GETs entity/{libraryId}?props=_owner,_editor and lists ONLY own grant holders, with valueIds', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json(
 				rollup({
-					// The library's own values:
 					ownEditors: [{ _id: 'pv-ed-cilla', reference: 'p-cilla', string: 'Cilla Cane' }],
-					// The org's rights, spliced in by _inheritrights — NOT librarians:
 					inheritedOwners: [{ _id: 'pv-ORG-anna', reference: 'p-anna', string: 'Anna Arro' }],
 					inheritedEditors: [{ _id: 'pv-ORG-bela', reference: 'p-bela', string: 'Bela Brauer' }]
 				})
@@ -654,8 +539,6 @@ describe('listLibrarians — the org admins arrive SPLICED IN as inherited (org 
 		expect(callUrls(fetchImpl)[0]).toContain('/testdb/entity/lib-1?props=_owner,_editor');
 		expect(result).toEqual({
 			persons: [{ id: 'p-cilla', name: 'Cilla Cane', role: 'editor', valueIds: ['pv-ed-cilla'] }],
-			// Anna owns the ORG; her ownership arrives here as an INHERITED _owner
-			// (_inheritrights) — not a librarian row, but the API takes her writes.
 			canManage: true
 		});
 	});
@@ -762,9 +645,6 @@ describe('removeLibrarian — revokes the OWN EDITOR grant only', () => {
 			.mockResolvedValueOnce(
 				json(
 					rollup({
-						// Anna owns the library — the rollup folds pv-own-anna-lib into
-						// _editor under the SAME _id. She ALSO holds a genuine separate
-						// editor value; only THAT one is this surface's to revoke.
 						ownOwners: [{ _id: 'pv-own-anna-lib', reference: 'p-anna', string: 'Anna Arro' }],
 						ownEditors: [{ _id: 'pv-ed-anna-lib', reference: 'p-anna', string: 'Anna Arro' }]
 					})
@@ -778,7 +658,6 @@ describe('removeLibrarian — revokes the OWN EDITOR grant only', () => {
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		expect(urls[0]).toContain('/testdb/entity/lib-1?props=_owner,_editor');
 		expect(urls[1]).toContain('/testdb/property/pv-ed-anna-lib');
-		// Deleting pv-own-anna-lib (folded into _editor!) would revoke OWNERSHIP.
 		expect(urls.join('\n')).not.toContain('pv-own-anna-lib');
 	});
 
@@ -812,28 +691,7 @@ describe('removeLibrarian — revokes the OWN EDITOR grant only', () => {
 	});
 });
 
-// ── #161 review fix — non-person rights values (database self-reference) ───────
-//
-// The DATABASE entity (the collective identity since #161) carries an `_owner`
-// value REFERENCING ITSELF (`entity_type: 'database'`, reference = the entity's
-// own `_id`) — Entu's bootstrap wires it that way. That value is NOT an admin:
-//
-//   - `listAdmins` must list PERSONS only — the database self-reference must
-//     never surface as a RolePerson row (the /admin page would render the
-//     collective itself as a removable "admin").
-//   - `removeAdmin`'s lockout guard must count only PERSON owners as remaining
-//     owners: with the self-reference present, removing the last HUMAN owner
-//     must still reject with RoleLockoutError — the self-reference cannot log
-//     in and cannot repair the rights, so counting it leaves the entity
-//     human-ownerless.
-//
-// Wire shape: aggregated rights values carry `entity_type` for the referenced
-// entity. Values WITHOUT `entity_type` (older reads) keep counting as persons —
-// fail-open on absence, filter only on a KNOWN non-person type.
-
 describe('#161 review — database self-reference in _owner is not a person', () => {
-	// The entity under management is the database entity itself; its _owner
-	// holds a reference back to itself.
 	const DB_ID = 'db-entity-1';
 	const SELF_REF_OWNER = {
 		_id: 'pv-own-self',
@@ -854,8 +712,6 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 		entity_type: 'person'
 	};
 
-	/** GET answers the rollup; any DELETE answers 200 (so a buggy impl that
-	 *  reaches the write phase fails on the ASSERTION, not on a mock gap). */
 	function makeRightsRouter(body: unknown): ReturnType<typeof vi.fn> {
 		return vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
 			if (init?.method === 'DELETE') return json({ deleted: true });
@@ -870,8 +726,6 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 
 		const result = await listAdmins(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch);
 
-		// FULL-shape toEqual: a { id: 'db-entity-1', name: 'sampledb' } row is
-		// exactly the bug this pins against.
 		expect(result).toEqual({
 			persons: [
 				{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna'] },
@@ -882,7 +736,6 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 	});
 
 	it('a rights value WITHOUT entity_type still lists as a person (older wire reads carry no entity_type — filter only on a KNOWN non-person type)', async () => {
-		// ANNA_OWNER / BELA_EDITOR (module fixtures) carry no entity_type at all.
 		const fetchImpl = makeRightsRouter(
 			rollup({ ownOwners: [ANNA_OWNER, SELF_REF_OWNER], ownEditors: [BELA_EDITOR] })
 		);
@@ -900,7 +753,6 @@ describe('#161 review — database self-reference in _owner is not a person', ()
 			removeAdmin(cfg, DB_ID, 'p-anna', fetchImpl as unknown as typeof fetch)
 		).rejects.toBeInstanceOf(RoleLockoutError);
 
-		// The guard runs BEFORE any write: only the rights GET happened.
 		expect(deleteUrls(fetchImpl)).toEqual([]);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});

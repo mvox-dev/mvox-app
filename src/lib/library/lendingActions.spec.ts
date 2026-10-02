@@ -2,12 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createLending, returnLending, type CreateLendingPayload } from './lendingActions';
 import { bulkCheckout, type BulkCheckoutPayload, type BulkResult } from './lendingActions';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();

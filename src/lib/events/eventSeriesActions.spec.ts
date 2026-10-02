@@ -1,67 +1,6 @@
-// #304 RED — the event ↔ series reassign/unassign write layer, at the
-// `fetchImpl` seam (same harness family as seasonManage.delete.spec.ts /
-// sectionActions' unassign tests).
-//
-// THE WIRE HAZARD THIS FILE EXISTS FOR: an event's `_parent` holds BOTH its
-// season and its series under ONE property name, told apart only by each
-// value's `entity_type`. Any helper that blanket-replaces `_parent` or pairs
-// "the first existing value" with the new reference (replaceEntityProperty's
-// idiom — written for single-purpose props, its own module doc says so) can
-// overwrite the SEASON: ordering on the wire is not guaranteed. Both writes
-// here must target the SERIES `_parent` VALUE ID exactly, and the season's
-// value id must never appear in any write, either direction.
-//
-// RIGHTS (settled via a dated live probe — #304 SPIKE, seed-results ledger
-// probe-304-parent-rights-gate-live-2026-09-10T05-11-52-413Z.json):
-//   - REASSIGN — the house atomic-overwrite primitive (#264: ONE POST whose
-//     entry carries the old series value's `_id` + the new reference) is
-//     EDITOR-reachable (editor POST with rights on the referenced series
-//     → 200, step B2).
-//   - UNASSIGN — DELETE of the `_parent` value id is OWNER-gated (editor
-//     DELETE → 403 "User not in _owner property", step A; the same editor
-//     deleted a PLAIN property value fine, step A2; the owner deleted the
-//     `_parent` value fine, step A3). The UI half of that asymmetry (option
-//     absent below owner tier + rights-note, per Gama's ruling comment
-//     5613471404) is pinned in page.series-picker.spec.ts; THIS file pins
-//     only the wire shapes.
-//
-// CONTRACT under test (defined HERE, implemented in GREEN):
-//
-//   src/lib/events/eventSeriesActions.ts (new)
-//     export class EventSeriesMissingError extends Error   // name pinned below
-//     export async function reassignEventSeries(
-//       cfg: { db: string; token: string },
-//       eventId: string,
-//       newSeriesId: string,
-//       fetchImpl?: typeof fetch
-//     ): Promise<void>;
-//       GET entity/{eventId}?props=_parent → find the value with
-//       entity_type === 'event_series' →
-//         - one exists → POST entity/{eventId}, body EXACTLY
-//           [{ _id: <that value's id>, type: '_parent', reference: newSeriesId }]
-//           (the atomic overwrite — reparentSection's pairing idiom, FILTERED
-//           by entity_type first, never "first value" blind);
-//         - none exists (standalone event) → POST body EXACTLY
-//           [{ type: '_parent', reference: newSeriesId }] (plain append — the
-//           verified link-event shape, eventConvert.ts:310-329).
-//       ZERO property DELETEs on either path.
-//     export async function unassignEventSeries(
-//       cfg: { db: string; token: string },
-//       eventId: string,
-//       fetchImpl?: typeof fetch
-//     ): Promise<void>;
-//       GET entity/{eventId}?props=_parent → the event_series value(s) →
-//       DELETE /property/{valueId} for each (unassignMemberSection's idiom);
-//       ZERO matches → throw EventSeriesMissingError, ZERO writes. No POST.
-//   Non-2xx anywhere → throw (fail loud, no silent success).
-//
-// NO SILENT COPYING (#304 "What not to do"): neither function ever writes
-// name / duration_minutes / location / description — the parent reference is
-// the ONLY thing on the wire. Pinned explicitly below.
-//
-// Namespace dynamic import + runtime lookup so each test fails readably while
-// the module is absent (seasonManage.delete.spec.ts's posture).
+// Reassign and unassign an event's series without touching its season _parent value.
 import { describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 const cfg = { db: 'sampledb', token: 'jwt' };
 
@@ -80,18 +19,11 @@ async function actions(): Promise<ActionsModule> {
 	return (await import('./eventSeriesActions')) as unknown as ActionsModule;
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// The exact live wire shape the SPIKE's fixture read back: season and series
-// side by side under `_parent`, each value carrying its own `_id`.
 const PARENTS = [
 	{ _id: 'pv-org', reference: 'org1', property_type: '_parent', entity_type: 'organization' },
 	{ _id: 'pv-season', reference: 'season1', property_type: '_parent', entity_type: 'season' },
 	{ _id: 'pv-series', reference: 'series1', property_type: '_parent', entity_type: 'event_series' }
 ];
-/** A standalone event: season parent only, no series value. */
 const PARENTS_STANDALONE = PARENTS.filter((p) => p.entity_type !== 'event_series');
 
 type WireOpts = { failPosts?: boolean; failDeletes?: boolean };
@@ -137,8 +69,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 
 		const bodies = postBodies(stub);
 		expect(bodies).toHaveLength(1);
-		// Full-shape toEqual: exactly ONE entry, pairing pv-series (never
-		// pv-season, never "the first _parent value") with the new reference.
 		expect(bodies[0]).toEqual([{ _id: 'pv-series', type: '_parent', reference: 'series2' }]);
 		expect(deleteUrls(stub)).toEqual([]);
 	});
@@ -161,8 +91,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
 		const bodies = postBodies(stub);
 		expect(bodies).toHaveLength(1);
-		// toEqual pins the ABSENCE of `_id`: an append that carried a stale or
-		// season `_id` would be an overwrite of the wrong value.
 		expect(bodies[0]).toEqual([{ type: '_parent', reference: 'series2' }]);
 		expect(deleteUrls(stub)).toEqual([]);
 	});
@@ -178,7 +106,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 			const writes = calls(stub).filter((c) => c.method !== 'GET');
 			expect(writes.some((c) => c.url.includes('pv-season'))).toBe(false);
 			expect(writes.some((c) => String(c.body ?? '').includes('pv-season'))).toBe(false);
-			// The org parent is equally untouchable.
 			expect(writes.some((c) => c.url.includes('pv-org'))).toBe(false);
 			expect(writes.some((c) => String(c.body ?? '').includes('pv-org'))).toBe(false);
 		}
@@ -201,8 +128,6 @@ describe('#304 unassignEventSeries — DELETE of the series value id alone (the 
 
 		const dels = deleteUrls(stub);
 		expect(dels).toHaveLength(1);
-		// PROPERTY endpoint with the VALUE id — never `entity/` (endpoint-split
-		// discipline), never the season's value id.
 		expect(dels[0]).toContain('/property/pv-series');
 		expect(postBodies(stub)).toEqual([]);
 	});

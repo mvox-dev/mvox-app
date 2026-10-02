@@ -25,6 +25,7 @@ import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+import { json } from '$lib/testing/entuFetchKit';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
@@ -55,12 +56,7 @@ const DB = 'sampledb';
 const PERSON = 'person-1';
 const CFG = { db: DB, token: 'tok-1' };
 
-function json(body: unknown): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function urlOf(input: RequestInfo | URL): string {
 	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -81,10 +77,10 @@ function online() {
 						{ reference: 'series-1', entity_type: 'event_series' }
 					]
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('entity/season-1?')) {
-			return json({ entity: { _id: 'season-1', conductor: [{ reference: 'p-cond' }] } });
+			return json({ entity: { _id: 'season-1', conductor: [{ reference: 'p-cond' }] } }, 200, JSON_HEADERS);
 		}
 		if (url.includes('entity/series-1?')) {
 			return json({
@@ -93,7 +89,7 @@ function online() {
 					duration_minutes: [{ number: 90 }],
 					default_location: [{ string: 'Kaarli kirik' }]
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=profile') && url.includes('_parent.reference=p-cond')) {
 			return json({
@@ -101,9 +97,9 @@ function online() {
 				entities: [
 					{ _id: 'prof-cond', name: [{ string: 'Anna Dirigent' }], _sharing: [{ string: 'domain' }] }
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
-		return json({ count: 0, entities: [] });
+		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
 }
 
@@ -113,12 +109,12 @@ function onlineRealNames() {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = urlOf(input);
 		if (url.includes('_type.string=database')) {
-			return json({ count: 1, entities: [{ _id: 'db-1' }] });
+			return json({ count: 1, entities: [{ _id: 'db-1' }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes('entity/db-1?')) {
 			return json({
 				entity: { _id: 'db-1', roster_show_real_names: [{ _id: 'v-1', boolean: true }] }
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=admin_member_record')) {
 			return json({
@@ -126,10 +122,10 @@ function onlineRealNames() {
 				entities: [
 					{ _id: 'rec-1', person: [{ reference: 'p-cond' }], name: [{ string: 'Anna Päts' }] }
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=profile') && url.includes('_parent.reference=p-cond')) {
-			return json({ count: 0, entities: [] });
+			return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 		}
 		return online()(input);
 	});
@@ -159,7 +155,7 @@ function onlineWorks(
 				entities: [
 					{ _id: 'work-1', name: [{ string: 'Ave Maria' }], composer: [{ string: 'Arvo Pärt' }] }
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=edition&')) {
 			return json({
@@ -179,15 +175,15 @@ function onlineWorks(
 						]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=copy&')) {
-			return json({ count: 0, entities: [] });
+			return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=program_item') && url.includes('_parent.reference=ev-1')) {
-			return json({ count: programme.length, entities: programme });
+			return json({ count: programme.length, entities: programme }, 200, JSON_HEADERS);
 		}
-		return json({ count: 0, entities: [] });
+		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
 }
 
@@ -305,7 +301,7 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 				const res = await online()(input);
 				const body = (await res.json()) as { entity: { event_name: { string: string }[] } };
 				body.entity.event_name = [{ string: 'Thursday rehearsal' }];
-				return json(body);
+				return json(body, 200, JSON_HEADERS);
 			}
 			return online()(input);
 		});

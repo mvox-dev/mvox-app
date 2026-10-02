@@ -8,13 +8,10 @@ import {
 	EventConvertError,
 	type ConvertEventToSeriesInput
 } from './eventConvert';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const BASE = 'https://api.entu-test.invalid/testdb';
-
-function json(body: unknown, status = 200): Promise<Response> {
-	return Promise.resolve(new Response(JSON.stringify(body), { status }));
-}
 
 beforeEach(() => {
 	resetTypeIdCache();
@@ -62,7 +59,7 @@ function makeConvertWire(
 		linkStatus = 200,
 		deleteStatus = 200
 	} = overrides;
-	return vi.fn().mockImplementation((rawUrl: string, init?: RequestInit) => {
+	const respond = (rawUrl: string, init?: RequestInit): Response => {
 		const u = String(rawUrl);
 		const method = init?.method ?? 'GET';
 		if (method === 'GET' && u.includes('_type.string=entity')) {
@@ -74,7 +71,10 @@ function makeConvertWire(
 		if (method === 'POST' && u.includes('/entity/ev-9')) return json({ _id: 'ev-9' }, linkStatus);
 		if (method === 'DELETE' && u.includes('/property/')) return json({ deleted: true }, deleteStatus);
 		throw new Error(`makeConvertWire: unexpected call ${method} ${u}`);
-	});
+	};
+	return vi.fn().mockImplementation((rawUrl: string, init?: RequestInit) =>
+		Promise.resolve(respond(rawUrl, init))
+	);
 }
 
 /** Every call as '<METHOD> <url>', in order — the choreography pin. */
@@ -412,7 +412,7 @@ class FakeEntu {
 		return out;
 	}
 
-	fetch = ((rawUrl: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+	fetch = (async (rawUrl: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = new URL(String(rawUrl));
 		const method = init?.method ?? 'GET';
 		const [, endpoint, targetId] = url.pathname.split('/').filter(Boolean);

@@ -1,50 +1,14 @@
+// The attendance optimistic queue: one write per tap, pending keyed by event and member.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { EventAttendance } from './attendanceData';
-
-// #84 TA.3 — the attendance optimistic queue. Mirrors rsvpChangeQueue
-// EXACTLY, with the pending key changed from eventId to a composite
-// eventId:memberId key: the conductor's panel shows one P/A/L toggle row per
-// member for ONE event, so the unit of "a write in flight" is the member row
-// WITHIN that event — the conductor can switch between events (unlike RSVP,
-// which is per-person with one surface at a time), so the event must be part
-// of the key. Per-tap immediate writes — every request() fires exactly one
-// applyAttendanceChange round-trip; nothing batches.
-//
-// The #15 lesson carries over verbatim: the primary double-tap guard is the UI
-// disabling the member's toggle row while pending (via setPending); the queue's
-// own per-(event,member) guard is a defensive backstop. All callbacks are
-// PER-MEMBER (scoped by eventId) — there is no whole-map operation in this API
-// for a caller to misuse, so one member's failure structurally cannot clobber
-// another member's in-flight state.
-//
-// #77 fix-forward (cross-event bleed, be08583/debe746 root-cause-persists) —
-// callbacks now receive eventId as their first argument so the CALLER (the
-// page) can validate a settling write against whichever event is CURRENTLY
-// open, evaluated fresh at callback-fire time — not against a shared mutable
-// "generation" variable that gets re-synced on every open (which made the
-// comparison always pass). The pending Set is keyed by `${eventId}:${memberId}`
-// composite, not memberId alone — this is what makes reopening the SAME event
-// correctly preserve in-flight pending state (no reset() escape hatch needed)
-// while a DIFFERENT event never blocks on a busy member from a prior event.
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 const { applyAttendanceChangeMock } = vi.hoisted(() => ({ applyAttendanceChangeMock: vi.fn() }));
 vi.mock('./attendanceOptimistic', () => ({ applyAttendanceChange: applyAttendanceChangeMock }));
 
 import { createAttendanceChangeQueue } from './attendanceChangeQueue';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-/** A promise the test controls the settlement of — simulates "the write is still in flight". */
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
+const cfg = testCfg('testdb');
 
 function makeCallbacks() {
 	return {
@@ -84,7 +48,6 @@ describe('createAttendanceChangeQueue — a single tap, start to finish', () => 
 
 		queue.request({ cfg, eventId: 'e1', memberId: 'm1', existing: null, newStatus: 'present' });
 
-		// The write fired synchronously with the tap — nothing waits for a flush/save.
 		expect(applyAttendanceChangeMock).toHaveBeenCalledTimes(1);
 		expect(applyAttendanceChangeMock).toHaveBeenCalledWith(
 			expect.objectContaining({ cfg, eventId: 'e1', memberId: 'm1', existing: null, newStatus: 'present' })
@@ -211,8 +174,6 @@ describe('createAttendanceChangeQueue — two DIFFERENT members tapped concurren
 		});
 		expect(cb.revert).toHaveBeenCalledWith('e1', 'm1', null);
 		expect(cb.revert).not.toHaveBeenCalledWith('e1', 'm2', expect.anything());
-		// m2 must STILL be pending — a whole-map/whole-state operation triggered by
-		// m1's failure would have no way to leave m2 alone; this API structurally can't.
 		expect(cb.setPending).not.toHaveBeenCalledWith('e1', 'm2', false);
 	});
 });
@@ -240,9 +201,6 @@ describe('createAttendanceChangeQueue — composite eventId:memberId key (#77 fi
 		queue.request({ cfg, eventId: 'e1', memberId: 'm1', existing: null, newStatus: 'present' });
 		expect(applyAttendanceChangeMock).toHaveBeenCalledTimes(1);
 
-		// Simulate the panel closing and reopening on the SAME event while the
-		// write above is still in flight — there is no reset() to call anymore;
-		// the queue has no whole-state operation for a caller to misuse.
 		queue.request({ cfg, eventId: 'e1', memberId: 'm1', existing: null, newStatus: 'absent' });
 
 		expect(applyAttendanceChangeMock).toHaveBeenCalledTimes(1); // still just the first write — no duplicate

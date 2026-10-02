@@ -1,26 +1,12 @@
+// The library is found as a child of the database entity; librarian status follows.
 import { describe, expect, it, vi } from 'vitest';
 import { resolveMyLibraryId, resolveLibrarian } from './librarianStore';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #161 RED — collective = database: the library entity is found as a child of
-// the DATABASE entity (`_type.string=library&_parent.reference=<databaseEntityId>`),
-// never via the retired person → member → organization walk (`resolveMyOrgId`;
-// #159 deleted every organization instance, so the old chain answers null and
-// every librarian would read as not-librarian).
-//
-// #161 review fix round 2 — `resolveMyLibraryId` is `(cfg, fetchImpl?)`: the
-// lookup is entirely db-scoped and never read the person. `resolveLibrarian`
-// keeps `(cfg, personId, fetchImpl?)` — personId is what the library's
-// `_owner`/`_editor` lists are matched against there.
-
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const PERSON = 'person-ada';
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
 const LIBRARY = 'lib-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function makeRouter(opts: { owners?: string[]; editors?: string[] } = {}): {
 	fetchImpl: typeof fetch;
@@ -35,7 +21,6 @@ function makeRouter(opts: { owners?: string[]; editors?: string[] } = {}): {
 			return json({ entities: [{ _id: DB_ENTITY }], count: 1 });
 		}
 		if (url.includes('_type.string=library')) {
-			// Only a DATABASE-scoped library lookup finds the library.
 			if (!url.includes(`_parent.reference=${DB_ENTITY}`)) {
 				return json({ entities: [], count: 0 });
 			}
@@ -50,19 +35,14 @@ function makeRouter(opts: { owners?: string[]; editors?: string[] } = {}): {
 				}
 			});
 		}
-		// The retired member/organization walk lands here — empty, never useful.
 		return json({ entities: [], count: 0 });
 	}) as unknown as typeof fetch;
 	return { fetchImpl, urls };
 }
 
 describe('resolveMyLibraryId — library scoped to the DATABASE entity (#161)', () => {
-	// #161 review fix round 2 — arity guard. A dead `personId` in position 2 of 3
-	// meant a caller that correctly dropped it slid `fetchImpl` into the person
-	// slot and silently fell back to the global `fetch`. Pin the shape.
 	it('takes exactly (cfg, fetchImpl?) — no dead personId slot', () => {
 		expect(resolveMyLibraryId.length).toBe(1);
-		// `resolveLibrarian` genuinely needs the person (rights match), so it keeps it.
 		expect(resolveLibrarian.length).toBe(2);
 	});
 

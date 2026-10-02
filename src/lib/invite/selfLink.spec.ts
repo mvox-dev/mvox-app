@@ -2,16 +2,12 @@
 import { readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 import { mintSelfLinkInvite, SelfLinkMintError, INVITE_MINT_TRIGGER } from './inviteData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-me' };
+const cfg = testCfg('sampledb', 'jwt-me');
 const PERSON_ID = 'person-me';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 /** Await a rejection and hand back the typed error — asserting fields needs the instance. */
 async function captureError(p: Promise<unknown>): Promise<SelfLinkMintError> {

@@ -1,15 +1,15 @@
 // createFeedback: type lookup, entity create, screenshot upload, cleanup on any failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { serialize, type StrokeData } from '$lib/strokes/strokes';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import { createFeedback } from './feedbackActions';
 
 const API = 'https://api.entu-test.invalid/';
-const cfg: EntuCfg = { db: 'sampledb', token: 'member-own-jwt' };
+const cfg = testCfg('sampledb', 'member-own-jwt');
 const MEMBER_ID = 'member-42';
 const TYPE_ID = 'type-feedback-1';
 const NEW_ID = 'feedback-new-1';
@@ -40,10 +40,6 @@ const UPLOAD = {
 		'Content-Type': 'image/png'
 	}
 };
-
-function json(body: unknown, status = 200): Response {
-	return new Response(JSON.stringify(body), { status });
-}
 
 type Leg = 'type' | 'create' | 'meta' | 'put' | 'delete';
 type Routes = Partial<Record<Leg, Response | Error>>;

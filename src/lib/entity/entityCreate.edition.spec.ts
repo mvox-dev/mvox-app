@@ -1,69 +1,15 @@
+// createEdition: one type lookup plus one POST entity, with the work as parent.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createEdition } from './entityCreate';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #271 — the librarian adds an edition to a work (#198 one level down).
-// `createEdition` joins the shared entity CREATE write layer (entityCreate.ts)
-// alongside createSeason / createEventSeries / createEvent / createWork, and
-// follows the SAME module contract (see entityCreate.ts header):
-//
-//   - EXACTLY TWO fetches: the resolveTypeId GET (cached per db:typeName) +
-//     ONE `POST entity` to the COLLECTION endpoint (never entity/{id}).
-//   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'edition')
-//     (#10 pinned wire-shape — never `{ string: 'edition' }`).
-//   - THE PARENT IS THE WORK, NOT THE LIBRARY ENTITY. The model is
-//     work → edition → copy, and `listEditions` reads
-//     `_parent.reference=<workId>` with NO ancestor expansion — an edition
-//     parented on the library entity would be invisible to every edition read.
-//     createWork's `libraryEntityId` parent is the WRONG template one level
-//     down: the required parent field here is `workId`, a ONE-element
-//     `_parent` array `[workId]`, one `{ type: '_parent', reference }` prop,
-//     zero lookup fetches. The caller (the /library page) holds the work id
-//     from its own #each loop — this module never looks it up or guesses it.
-//   - #132 critical decision applies here too (issue body: "Per #132 as it
-//     applies there"): NO `_sharing`, NO inherit-rights flag in the create
-//     body — ONLY `_type` + `_parent` + domain props. Rights propagate from
-//     the library entity down through work → edition (per-type policy; do NOT
-//     copy the roster-record explicit-`_sharing` idiom here).
-//   - `name` is REQUIRED (validated BEFORE any fetch — Entu `mandatory` is a
-//     soft UI hint that rejects nothing server-side, this module is the ONLY
-//     enforcement point per its own contract header; a nameless edition
-//     renders as a blank row in the browse tree).
-//   - `publisher` is OPTIONAL — absent OR blank/whitespace-only → the prop is
-//     OMITTED entirely via the optional() helper semantics (the inline form
-//     binds it to $state(''), and the tree already has a publisher-unknown
-//     fallback label; an own '' would be junk on the wire — NEVER send '').
-//     Trimmed when present.
-//   - `edition_type` is DELIBERATELY NOT on this create. v4E marks it
-//     required:true, but Entu 'mandatory' is soft (not server-enforced — team
-//     memory project_entu_mandatory_soft, PO-confirmed on the issue), so the
-//     issue's Shape-section conditional resolves in the NEGATIVE and the field
-//     stays with the out-of-scope private set (edition_type/license/year/cost).
-//     The full-shape body assertions below therefore FAIL if it ever appears.
-//   - Resolves to the NEW entity's `_id`; non-2xx create POST throws with the
-//     status surfaced; a 2xx WITHOUT `_id` throws (apparent-success trap); a
-//     resolveTypeId failure propagates and NO create POST is issued.
-//
-// INTEGRATION NOTE: the fetchImpl seam sits BELOW `entuFetch`/`entuUrl`, so
-// the "transport integration" block exercises the real request layer (URL
-// composition + Authorization header), not a mock of it. The page-route
-// wiring is pinned separately in page.library-create-edition.spec.ts.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/**
- * Routes the two shapes createEdition may issue: the type-resolution GET
- * (`_type.string=entity&name.string=edition`) → the type-def id, anything else
- * → the entity-create POST → `createBody` at `createStatus`.
- */
 function makeFetchMock(
 	opts: {
 		typeIds?: Record<string, string>;
@@ -93,7 +39,6 @@ type WireProp = {
 	datetime?: string;
 };
 
-/** The one call that is not type-resolution: the create POST. */
 function createCall(fetchImpl: ReturnType<typeof makeFetchMock>): [string, RequestInit] {
 	const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
 	const found = calls.filter(([url]) => !String(url).includes('_type.string=entity'));
@@ -109,14 +54,12 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>): WireProp[]
 const byType = (a: WireProp, b: WireProp) =>
 	a.type.localeCompare(b.type) || JSON.stringify(a).localeCompare(JSON.stringify(b));
 
-/** The type-resolution GETs issued (URL strings). */
 function typeResolutionCalls(fetchImpl: ReturnType<typeof makeFetchMock>): string[] {
 	return (fetchImpl.mock.calls as Array<[string]>)
 		.map(([url]) => String(url))
 		.filter((u) => u.includes('_type.string=entity'));
 }
 
-// Minimal VALID input — every required field present, nothing optional.
 const minimalEdition = {
 	name: 'Vocal score (SATB)',
 	workId: 'work-1'
@@ -139,9 +82,6 @@ describe('#271 createEdition — wire shape', () => {
 		const fetchImpl = makeFetchMock({ typeIds: { edition: 'edition-type-4' } });
 		await createEdition(cfg, { ...minimalEdition }, fetchImpl);
 
-		// FULL SET check (toEqual on the sorted list, not arrayContaining) — a body
-		// smuggling an extra prop must fail HERE, not ship silently
-		// (#partial-assertions-hide-bugs).
 		expect([...createCallBody(fetchImpl)].sort(byType)).toEqual(
 			[
 				{ type: '_type', reference: 'edition-type-4' },
@@ -206,7 +146,6 @@ describe('#271 createEdition — wire shape', () => {
 		const [url, init] = createCall(fetchImpl);
 		expect(init.method).toBe('POST');
 		expect(String(url)).toContain('/testdb/entity');
-		// No id path segment after `entity` (query-string is allowed, a path is not).
 		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 	});
@@ -220,7 +159,6 @@ describe('#271 createEdition — wire shape', () => {
 });
 
 describe('#271 createEdition — input hygiene: rejected BEFORE any fetch', () => {
-	/** Every case: run the create, expect the message, expect ZERO fetches. */
 	async function expectRejectedWithoutFetch(
 		run: (f: typeof fetch) => Promise<string>,
 		message: RegExp
@@ -316,7 +254,6 @@ describe('#271 createEdition — transport integration (real entuFetch/entuUrl u
 		await createEdition(cfg, { ...minimalEdition, name: 'E1' }, fetchImpl);
 		await createEdition(cfg, { ...minimalEdition, name: 'E2' }, fetchImpl);
 		expect(typeResolutionCalls(fetchImpl)).toHaveLength(1);
-		// 1 resolution + 2 creates:
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 	});
 });

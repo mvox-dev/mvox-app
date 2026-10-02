@@ -8,16 +8,13 @@ import {
 	resolvePersonParentId,
 	type CreateInviteInput
 } from './inviteData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-admin' };
+const cfg = testCfg('sampledb', 'jwt-admin');
 
 const INPUT: CreateInviteInput = {
 	dbEntityId: 'org-1'
 };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 beforeEach(() => {
 	resetTypeIdCache();

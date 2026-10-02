@@ -1,21 +1,13 @@
-// #255 done-when 6 RED — resolveMembership: the ONE status-UNSCOPED self-lookup
-// that can tell "deactivated" apart from "never a member" (findMyMemberId
-// returns null for both — rsvpData.ts:45). TRI-STATE FAIL-SAFE VERBATIM: a
-// failed lookup resolves 'loading', NEVER 'inactive' — a failed lookup telling
-// an active member she has been removed is the worst available outcome.
+// resolveMembership tells deactivated from never-a-member; a failed lookup stays loading.
 import { describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import { membershipStore, resetMembership, resolveMembership } from './membershipStore';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 describe('resolveMembership — the status-unscoped self-lookup', () => {
 	it('URL: member type + person ref (encoded) + status PROJECTED, and NO status.string FILTER — unscoped is the whole point', async () => {
@@ -25,7 +17,6 @@ describe('resolveMembership — the status-unscoped self-lookup', () => {
 		expect(url).toContain('_type.string=member');
 		expect(url).toContain(`person.reference=${encodeURIComponent('person p')}`);
 		expect(url).toContain('status');
-		// The one deliberate difference from findMyMemberId: no status filter.
 		expect(url).not.toContain('status.string=');
 	});
 
