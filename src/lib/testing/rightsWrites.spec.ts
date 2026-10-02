@@ -65,8 +65,12 @@ describe('#700 — the rights-write rules, each shown by a planted example', () 
 		]);
 	});
 
-	it('a value DELETE in a module that never names a rights property is no rights write', () => {
-		const source = fn('plantClear', "await entuFetch(db, `property/${id}`, token, { method: 'DELETE' });");
+	it('a value DELETE in a module that names a rights property only in text is no rights write', () => {
+		const source = fn(
+			'plantClear',
+			"await entuFetch(db, `property/${id}`, token, { method: 'DELETE' });",
+			'throw new Error(`refused: the person lacks self-_editor`);'
+		);
 		expect(scanRightsWrites(FILE, source).writes).toEqual([]);
 	});
 

@@ -9,7 +9,8 @@ const EXEMPT = [
 	'lib/profile/profileData.ts',
 	'lib/invite/inviteCreate.ts',
 	'lib/sections/sectionActions.ts',
-	'lib/links/linkActions.ts'
+	'lib/links/linkActions.ts',
+	'lib/testing/rightsWrites.ts'
 ];
 
 describe('isSoleCreatePathViolation (guard predicate)', () => {
@@ -83,7 +84,8 @@ describe('T4.7/#27 — the visibility-move modules compose on the sole create pa
 			'lib/profile/profileData.ts',
 			'lib/invite/inviteCreate.ts',
 			'lib/sections/sectionActions.ts',
-			'lib/links/linkActions.ts'
+			'lib/links/linkActions.ts',
+			'lib/testing/rightsWrites.ts'
 		]);
 	});
 });
