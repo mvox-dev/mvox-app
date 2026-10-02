@@ -1,39 +1,4 @@
-// #343 RED — the byte-store POLICY CORE, driven through the public ByteStore
-// interface against an in-memory adapter (default node env — no DOM, no
-// IndexedDB; the persistence layer has its own spec, idbAdapter.spec.ts).
-//
-// The pinned design, from the issue body + Gama's 2026-09-12 ruling
-// (issue comment IC_kwDOTubdKM8AAAABUHDKvg):
-//
-//   - KEY = (db, personId, fileId). One human holds a different person-id per
-//     collective; the partition stops the app serving one identity's bytes to
-//     another. That is a CORRECTNESS boundary, NOT a security boundary
-//     (browser storage is origin-scoped) — and the module head must say so
-//     (source pins below; Gama: "a comment claiming isolation we cannot
-//     enforce is worse than no comment").
-//   - NULL identity (anonymous): accessors THROW — pinned choice (fail
-//     loudly over silent no-op, the house rule). No accessor can construct a
-//     key without an identity.
-//   - CAP is GLOBAL across all partitions; eviction is least-recently-OPENED
-//     across all partitions (a dormant identity's bytes age out on their
-//     own). A get() is an open; a put() counts as the first open. A get()
-//     moves recency through `adapter.touch` — the stamp alone, never a
-//     rewrite of the byte payload (review: the cached open is the hot path).
-//   - clearPartition(db, personId) empties exactly one partition. It is a
-//     bare mechanism here — #334 owns the member-facing control — and it is
-//     NOT wired to any auth path (see storage.spec.ts).
-//   - STALENESS IS STRUCTURAL — no validator field beyond the key: the
-//     replace flow retires the file-property _id itself (probe ledger
-//     scripts/migrations/seed-results/probe-343-file-replace-identity-live-
-//     2026-09-12T07-56-06-582Z.json: delete-then-post mints a NEW _id, and
-//     even a POST carrying the old _id appends a NEW property). NO ETag
-//     logic: the bucket exposes NO headers to CORS fetch (ledger
-//     probe-343-signed-url-headers-live-2026-09-12T08-03-54-345Z.json —
-//     Access-Control-Expose-Headers absent, ETag reads null client-side), so
-//     the module records that as a comment-level statement, never as code.
-//   - The stored record carries an app-computed SHA-256 of the bytes —
-//     #333's hash-pin hook. Compute-and-record only; COMPARISON logic is out
-//     of scope and must not exist here.
+// The byte store's policy core through its public interface, over an in-memory adapter.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -234,10 +199,6 @@ describe('byteStore — GLOBAL cap, least-recently-OPENED eviction', () => {
 	});
 });
 
-// #410 — the retention exemption reaches the PUT-TIME cap pass too, not only
-// the pressure sweep (byteStore.pressure.spec.ts owns the sweep itself). The
-// protected set is an INPUT (composite JSON-triple keys, set via
-// setProtectedKeys); default empty — every fixture above runs unchanged.
 describe('#410 — protected rows are not candidates in the put-time evictUntilFits', () => {
 	/** The #410 contract shape — an intersection until byteStore.ts declares it
 	 *  (same idiom as byteStore.presence.spec.ts's PresenceCapable). */
@@ -284,6 +245,7 @@ describe('#410 — protected rows are not candidates in the put-time evictUntilF
 
 describe('byteStore — the module says what it must, where the reader meets it (source pins)', () => {
 	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
+	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', import.meta.url)), 'utf-8');
 
 	it('states the retention posture: the partition is a correctness boundary and NOT a security boundary', () => {
 		// Gama's exact enforcement phrase family (issue comment
@@ -298,13 +260,14 @@ describe('byteStore — the module says what it must, where the reader meets it 
 	});
 
 	it('records WHY there is no ETag validator (comment-level statement, never code)', () => {
-		// The statement: ETag exists server-side but is unreadable via CORS
-		// fetch (Access-Control-Expose-Headers absent) — probe ledger cited in
-		// this spec's header. Presence of the words, absence of the code:
+		// ETag is unreadable via CORS fetch (Access-Control-Expose-Headers absent):
+		// the words are present, the code absent.
 		expect(source).toMatch(/ETag/);
 		expect(source).toMatch(/CORS|Expose-Headers/i);
 		expect(source).not.toMatch(/headers\.get/i);
+		expect(core).not.toMatch(/headers\.get/i);
 		expect(source).not.toMatch(/['"`]etag['"`]/i);
+		expect(core).not.toMatch(/['"`]etag['"`]/i);
 	});
 
 	it("records the #333 hash-pin hook: the stored sha256 is the app-computed digest of the fetched bytes", () => {
@@ -314,7 +277,9 @@ describe('byteStore — the module says what it must, where the reader meets it 
 
 	it('never touches auth or identity stores — identity arrives as an argument only', () => {
 		expect(source).not.toMatch(/selectedCollective/);
+		expect(core).not.toMatch(/selectedCollective/);
 		expect(source).not.toMatch(/\$lib\/auth/);
+		expect(core).not.toMatch(/\$lib\/auth/);
 	});
 });
 

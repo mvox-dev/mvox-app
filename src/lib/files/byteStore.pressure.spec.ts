@@ -1,46 +1,4 @@
-// #410 RED — "Vahemälu vabastab ise ruumi, kui seade täis saab": the
-// storage-PRESSURE sweep on the byte store. Default node env; the store is
-// the REAL policy core over the in-memory fake adapter, and the pressure
-// signal is an INJECTED estimate() — node/happy-dom have no StorageManager
-// (navigator.storage is undefined here, asserted below), so the seam is an
-// option on createByteStore, exactly like the adapter itself.
-//
-// The pinned #410 contract (issue body + Gama's scope ruling 2026-09-18 (b)):
-//
-//   - PRESSURE IS A NUMBER THE APP READS, NOT A NOTIFICATION IT WAITS FOR:
-//     the browser fires no OS pressure event; the signal is
-//     estimate() → usage/quota. `PRESSURE_RATIO` (0.8) is exported — the
-//     ratio at or above which the sweep evicts — and the sweep runs until
-//     the ratio is strictly below the 0.7 relief target (hysteresis: never
-//     oscillate around one line) OR only protected rows remain.
-//   - `relieve()` on the ByteStore interface:
-//       estimate absent            → { outcome: 'unsupported' }, never throws
-//       estimate present           → { outcome: 'swept', before, after, removed }
-//     where before/after are usage/quota ratios and removed[] lists the
-//     evicted keys ({db, personId, fileId}) oldest-OPENED first. One
-//     listMeta() read feeds the whole sweep (none at all below the pressure
-//     line, review F2) — never list(), never get().
-//   - THE PROTECTED SET IS AN INPUT: setProtectedKeys(ReadonlySet<string>)
-//     of composite JSON-triple keys (JSON.stringify([db, personId, fileId]) —
-//     the adapter's own collision-safe encoding). The store never knows
-//     about agendas; the page builds the set (nextEventFileIds over every
-//     JOINED collective of the signed-in person, ruled (b)). Protected rows
-//     are never candidates — in relieve() OR in the put-time cap pass
-//     (byteStore.spec.ts) — but the partition boundary stands: another
-//     personId's row is NOT protected however identical its fileId.
-//   - TRIGGERS: after every put (the existing evict point), and once at app
-//     open before #409's prefetch (page wiring — page.works-wiring.spec.ts).
-//     A put's own row survives its own after-put sweep (same exception the
-//     cap pass already makes for the incoming write).
-//   - A REAL QuotaExceededError ON PUT: relieve once, retry the put ONCE;
-//     still failing → the error propagates to openFileBytes' existing belt
-//     and the open degrades to 'network-uncached' — nothing thrown, nothing
-//     lost but the cache row (openFileBytes.ts, #343 belt).
-//   - RECENCY IS A RECORD OF USE, NOT DISPLAY (#367's verification): the
-//     sweep reads listMeta() only — zero get(), zero touch, zero stamps
-//     moved. A sweep that touches a stamp it did not evict is a bug.
-//   - #352's manual remove is UNCHANGED and beats retention: clearPartition /
-//     clearAllPartitions delete protected rows too — she asked.
+// The byte store's storage-pressure sweep, driven by an injected estimate() over the fake adapter.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -105,15 +63,6 @@ function pkey(db: string, personId: string, fileId: string): string {
 	return JSON.stringify([db, personId, fileId]);
 }
 
-/**
- * A DYNAMIC estimate() double: origin usage = `otherBytes` (the service
- * worker's shell cache, other origin storage — estimate() answers for the
- * whole origin, not this store alone) + whatever the adapter currently
- * holds. Reflects deletions the way a real browser would, so the sweep's
- * stop condition is observable however the implementation reads it. Computed
- * from the fake's raw rows() view — NOT adapter.listMeta — so the spy counts
- * on the adapter seams stay honest.
- */
 function estimateOver(adapter: FakeAdapter, otherBytes: number, quota: number) {
 	return vi.fn(async () => ({
 		usage: otherBytes + adapter.rows().reduce((sum, r) => sum + r.record.size, 0),
@@ -135,10 +84,6 @@ describe('#410 — the exported pressure line', () => {
 });
 
 describe('#410 — nothing is dropped while there is room', () => {
-	// #410 review F2 — TIGHTENED from "one listMeta read" to ZERO: this sweep
-	// also runs after EVERY put, and reading every row's metadata only to then
-	// delete none is per-download cost paid by a device that is nowhere near
-	// full. Below the line the sweep's whole vocabulary is `estimate()`.
 	it('ratio 0.5 → relieve removes nothing and reads NOTHING: zero listMeta, zero deletes, full-shape result', async () => {
 		// quota 1000: rows 2×50 + 400 other origin bytes → usage 500, ratio 0.5.
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
@@ -195,10 +140,6 @@ describe('#410 — approaching quota: least-recently-OPENED non-protected rows g
 
 describe("#410 — the next event's parts survive EVERY eviction", () => {
 	it('with every candidate removed and the ratio still high, protected rows remain — never a full wipe', async () => {
-		// quota 1000: 5 rows ×50 + 600 other → 0.85. The four OLDEST are
-		// protected; the only candidate is the newest. It goes (0.80, still ≥
-		// the 0.7 target) — then only protected rows remain and the sweep
-		// RETURNS instead of wiping them.
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-2', seededRecord(50, 2000));
 		await adapter.put(C.db, C.personId, 'file-3', seededRecord(50, 3000));
@@ -258,11 +199,6 @@ describe('#410 — retention scope is the PERSON, never the device (Gama ruling 
 
 describe('#410 — trigger: after every put, not only at app open', () => {
 	it('a put over the pressure ratio sweeps as part of the put — and never evicts its own just-written row', async () => {
-		// quota 1000: 3 seeded rows ×50 + 600 other = 750 (no pressure yet).
-		// The put's own 50 lands → 800 = 0.8 ≥ PRESSURE_RATIO → sweep:
-		// -50 → 0.75, -50 → 0.70 (not < 0.7), -50 → 0.65 → stop. All three
-		// dormant rows go; the newcomer — the only remaining candidate on the
-		// way — is the put's OWN row and must survive its own sweep.
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-2', seededRecord(50, 2000));
 		await adapter.put(B.db, B.personId, 'file-3', seededRecord(50, 3000));
@@ -290,10 +226,6 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 	}
 
 	it('first attempt throws quota → the sweep frees the oldest candidate → the retry lands the row', async () => {
-		// quota 1000: dormant row 50 + 800 other → the write that just failed
-		// has a sweep-worthy origin (850 with the incoming row counted). The
-		// dormant row is freed BETWEEN the two put attempts, and there are
-		// exactly TWO attempts — one failure, one retry, never a loop.
 		await adapter.put(A.db, A.personId, 'file-old', seededRecord(50, 1000));
 		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
 		const realPut = adapter.put.bind(adapter);
@@ -318,14 +250,6 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 		expect(adapter.rows().some((r) => r.fileId === 'file-old')).toBe(false);
 	});
 
-	// #410 review F3 — the recovery must NOT be the ratio-gated sweep. A real
-	// QuotaExceededError is the platform saying the device is out of room, and
-	// that outranks whatever estimate() reports: a browser that OVER-reports
-	// quota (so the ratio sits well below PRESSURE_RATIO — here 0.15) is
-	// exactly the one that raises the error early. Gated, the sweep freed
-	// nothing and the single retry was guaranteed to fail identically. Every
-	// other quota fixture in this file sits at ratio 0.85, so the gated path
-	// was never exercised and passed either way.
 	it('estimate reports a LOW ratio (0.15) and the put still throws quota → the dormant row is freed anyway, between the two attempts', async () => {
 		// quota 1000, other-origin 100, one dormant 50-byte row → ratio 0.15,
 		// nowhere near the 0.8 pressure line.
@@ -501,6 +425,7 @@ describe('#410 — recency is a record of USE, not of display (the #367 trap, ap
 
 describe('#410 — source pins: the seam is declared where the next caller meets it', () => {
 	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', String(import.meta.url))), 'utf-8');
+	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', String(import.meta.url))), 'utf-8');
 
 	it('the ByteStore interface declares relieve() and setProtectedKeys()', () => {
 		expect(source).toMatch(/relieve\(\): Promise</);
@@ -508,7 +433,7 @@ describe('#410 — source pins: the seam is declared where the next caller meets
 	});
 
 	it('the default estimate is navigator.storage?.estimate — the injectable seam, not a hard platform dependency', () => {
-		expect(source).toMatch(/navigator\.storage/);
+		expect(core).toMatch(/navigator\.storage/);
 	});
 
 	it('PRESSURE_RATIO is exported from the module source', () => {
