@@ -25,6 +25,7 @@
 		listLibrarians,
 		addLibrarian,
 		removeLibrarian,
+		type RoleKind,
 		type RolePerson
 	} from '$lib/admin/roleManagement';
 	import { listSections, type SectionNode } from '$lib/sections/sectionData';
@@ -74,23 +75,21 @@
 	// one. Every state write after an await is fenced behind thisLoad.
 	let loadSeq = 0;
 
-	async function refreshAdmins(thisLoad: number): Promise<void> {
+	async function refreshRole(kind: RoleKind, thisLoad: number): Promise<void> {
 		if (thisLoad !== loadSeq) return; // the collective moved on before this read
-		if (!cfg || !dbEntityId || !viewerId) return;
+		const entityId = kind === 'admin' ? dbEntityId : libraryId;
+		if (!cfg || !entityId || !viewerId) return;
 		// The roster maps ids to names for rows whose aggregated name has not caught up yet.
-		const listing = await listAdmins(cfg, dbEntityId, viewerId, undefined, roster);
+		const list = kind === 'admin' ? listAdmins : listLibrarians;
+		const listing = await list(cfg, entityId, viewerId, undefined, roster);
 		if (thisLoad !== loadSeq) return; // superseded by a newer selection
-		admins = listing.persons;
-		canManageAdmins = listing.canManage;
-	}
-
-	async function refreshLibrarians(thisLoad: number): Promise<void> {
-		if (thisLoad !== loadSeq) return; // the collective moved on before this read
-		if (!cfg || !libraryId || !viewerId) return;
-		const listing = await listLibrarians(cfg, libraryId, viewerId, undefined, roster);
-		if (thisLoad !== loadSeq) return; // superseded by a newer selection
-		librarians = listing.persons;
-		canManageLibrarians = listing.canManage;
+		if (kind === 'admin') {
+			admins = listing.persons;
+			canManageAdmins = listing.canManage;
+		} else {
+			librarians = listing.persons;
+			canManageLibrarians = listing.canManage;
+		}
 	}
 
 	async function load(target: CollectiveIdentity): Promise<void> {
@@ -178,8 +177,8 @@
 			rosterPartial = rosterRead.truncated;
 			nameMarker = resolvedNameMarker;
 			await Promise.all([
-				refreshAdmins(thisLoad),
-				libraryId ? refreshLibrarians(thisLoad) : Promise.resolve()
+				refreshRole('admin', thisLoad),
+				libraryId ? refreshRole('librarian', thisLoad) : Promise.resolve()
 			]);
 			if (thisLoad !== loadSeq) return; // superseded by a newer selection
 			status = 'ready';
@@ -275,8 +274,7 @@
 				{sectionsError}
 				{isOffline}
 				loadSeq={() => loadSeq}
-				{refreshAdmins}
-				{refreshLibrarians}
+				{refreshRole}
 				writes={{
 					addAdmin: (...a) => addAdmin(...a),
 					removeAdmin: (...a) => removeAdmin(...a),

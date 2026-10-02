@@ -5,7 +5,7 @@
 	import { rosterOrder, type SectionNode } from '$lib/sections/sectionData';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type * as RoleManagement from '$lib/admin/roleManagement';
-	import type { RolePerson } from '$lib/admin/roleManagement';
+	import type { RoleKind, RolePerson } from '$lib/admin/roleManagement';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
@@ -31,8 +31,7 @@
 		sectionsError: boolean;
 		isOffline: boolean;
 		loadSeq: () => number;
-		refreshAdmins: (thisLoad: number) => Promise<void>;
-		refreshLibrarians: (thisLoad: number) => Promise<void>;
+		refreshRole: (kind: RoleKind, thisLoad: number) => Promise<void>;
 		writes: RoleWrites;
 	}
 
@@ -51,8 +50,7 @@
 		sectionsError,
 		isOffline,
 		loadSeq,
-		refreshAdmins,
-		refreshLibrarians,
+		refreshRole,
 		writes
 	}: Props = $props();
 
@@ -109,94 +107,60 @@
 	}
 
 	// Handlers snapshot the sequence; a collective switch mid-write drops their results.
-	async function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
+	async function runRoleWrite(
+		kind: RoleKind,
+		personId: string | null,
+		write: (cfg: EntuCfg, entityId: string, personId: string) => Promise<void>,
+		label: string
+	): Promise<void> {
 		// Before the attempt-start clears, so a refused pick keeps the last real error.
 		if (isOffline) return;
 		// Checked first: disabled on the select is a double-tap guard, not a state signal.
 		if (rolesPending) return;
-		if (!selection.id || !cfg || !dbEntityId) return;
+		const entityId = kind === 'admin' ? dbEntityId : libraryId;
+		if (!personId || !cfg || !entityId) return;
 		const thisLoad = loadSeq();
 		actionError = false;
 		rolesStatus = '';
 		rolesPending = true;
 		try {
-			await writes.addAdmin(cfgFor(cfg.db), dbEntityId, selection.id);
-			await refreshAdmins(thisLoad);
+			await write(cfgFor(cfg.db), entityId, personId);
+			await refreshRole(kind, thisLoad);
 			if (thisLoad !== loadSeq()) return;
 			rolesStatus = m.admin_roles_saved();
 		} catch (e) {
 			if (thisLoad !== loadSeq()) return;
-			console.error('admin roles: add admin failed', e);
+			console.error(label, e);
 			actionError = true;
 		} finally {
 			if (thisLoad === loadSeq()) rolesPending = false;
 		}
 	}
 
-	async function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
-		if (isOffline) return;
-		if (rolesPending) return;
-		if (!selection.id || !cfg || !libraryId) return;
-		const thisLoad = loadSeq();
-		actionError = false;
-		rolesStatus = '';
-		rolesPending = true;
-		try {
-			await writes.addLibrarian(cfgFor(cfg.db), libraryId, selection.id);
-			await refreshLibrarians(thisLoad);
-			if (thisLoad !== loadSeq()) return;
-			rolesStatus = m.admin_roles_saved();
-		} catch (e) {
-			if (thisLoad !== loadSeq()) return;
-			console.error('admin roles: add librarian failed', e);
-			actionError = true;
-		} finally {
-			if (thisLoad === loadSeq()) rolesPending = false;
-		}
+	function onPickAdmin(selection: { id: string | null; label: string }): Promise<void> {
+		return runRoleWrite('admin', selection.id, writes.addAdmin, 'admin roles: add admin failed');
 	}
 
-	async function onRemoveAdmin(personId: string): Promise<void> {
-		if (isOffline) return;
-		if (rolesPending) return;
-		if (!cfg || !dbEntityId) return;
-		const thisLoad = loadSeq();
-		actionError = false;
-		rolesStatus = '';
-		rolesPending = true;
-		try {
-			await writes.removeAdmin(cfgFor(cfg.db), dbEntityId, personId);
-			await refreshAdmins(thisLoad);
-			if (thisLoad !== loadSeq()) return;
-			rolesStatus = m.admin_roles_saved();
-		} catch (e) {
-			if (thisLoad !== loadSeq()) return;
-			console.error('admin roles: remove admin failed', e);
-			actionError = true;
-		} finally {
-			if (thisLoad === loadSeq()) rolesPending = false;
-		}
+	function onPickLibrarian(selection: { id: string | null; label: string }): Promise<void> {
+		return runRoleWrite(
+			'librarian',
+			selection.id,
+			writes.addLibrarian,
+			'admin roles: add librarian failed'
+		);
 	}
 
-	async function onRemoveLibrarian(personId: string): Promise<void> {
-		if (isOffline) return;
-		if (rolesPending) return;
-		if (!cfg || !libraryId) return;
-		const thisLoad = loadSeq();
-		actionError = false;
-		rolesStatus = '';
-		rolesPending = true;
-		try {
-			await writes.removeLibrarian(cfgFor(cfg.db), libraryId, personId);
-			await refreshLibrarians(thisLoad);
-			if (thisLoad !== loadSeq()) return;
-			rolesStatus = m.admin_roles_saved();
-		} catch (e) {
-			if (thisLoad !== loadSeq()) return;
-			console.error('admin roles: remove librarian failed', e);
-			actionError = true;
-		} finally {
-			if (thisLoad === loadSeq()) rolesPending = false;
-		}
+	function onRemoveAdmin(personId: string): Promise<void> {
+		return runRoleWrite('admin', personId, writes.removeAdmin, 'admin roles: remove admin failed');
+	}
+
+	function onRemoveLibrarian(personId: string): Promise<void> {
+		return runRoleWrite(
+			'librarian',
+			personId,
+			writes.removeLibrarian,
+			'admin roles: remove librarian failed'
+		);
 	}
 </script>
 
