@@ -2,7 +2,7 @@
 import { tick } from 'svelte';
 import { m } from '$lib/paraglide/messages.js';
 import { isSectionNotEmpty } from '$lib/sections/sectionErrors';
-import { focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
+import { focusTestIdAfterRender, focusableByTestId, ownsFocus as ownsFocusOf } from '$lib/a11y/focusable';
 import { findSectionNode, removeSectionNode, siblingsOf } from '$lib/sections/sectionTree';
 import { without } from '$lib/collections/immutable';
 import { createRestoreSections } from '$lib/sections/sectionArrangeRestore';
@@ -27,6 +27,10 @@ export function createRemoveOps(deps: ArrangeOpsDeps) {
 			focusableByTestId(`section-remove-${id}`) ??
 			focusableByTestId(`section-toggle-${id}`) ??
 			focusableByTestId(`arrange-row-${id}`);
+		focusClaimingRoving(target, id);
+	}
+
+	function focusClaimingRoving(target: HTMLElement | null, id: string): void {
 		target?.focus();
 		if (target === document.querySelector(`[data-testid="arrange-row-${id}"]`)) {
 			a.rovingHandleId = id;
@@ -58,21 +62,14 @@ export function createRemoveOps(deps: ArrangeOpsDeps) {
 		const target =
 			focusableByTestId(`section-remove-confirm-${id}`) ?? focusableByTestId(`arrange-row-${id}`);
 		if (!target) return;
-		target.focus();
-		if (target === document.querySelector(`[data-testid="arrange-row-${id}"]`)) {
-			a.rovingHandleId = id;
-		}
+		focusClaimingRoving(target, id);
 	}
 
 	async function handleRemoveSection(id: string): Promise<void> {
 		if (structuralWritePending()) return;
 		if (isOffline()) return;
 		const fallbackId = removeFocusFallbackId(id);
-		const active = document.activeElement;
-		const ownsFocus =
-			!active ||
-			active === document.body ||
-			active === document.querySelector(`[data-testid="section-remove-confirm-${id}"]`);
+		const ownsFocus = ownsFocusOf(`section-remove-confirm-${id}`);
 		a.removeError = null;
 		a.removeStatus = '';
 		const name = findSectionNode(roster.sections, id)?.name ?? id;

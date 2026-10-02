@@ -1,84 +1,27 @@
+// The section tree and the roster grouped over it; a section that cannot be placed fails loud.
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { byDisplayOrder } from '$lib/collections/displayOrder';
 import type { RosterRow } from '$lib/roster/rosterData';
-
-// TS.1/#95 — the section READ data layer. RED (this file): every exported function
-// is a STUB that throws 'not implemented' so `sectionData.spec.ts` compiles and
-// FAILS on assertions until GREEN. Types are the real contract.
-//
-// CONTRACT (pinned by sectionData.spec.ts):
-//
-//   - `listSections` queries `section` entities (name, display_order, _parent) and
-//     builds the RECURSIVE tree: a section whose `_parent` contains an
-//     `entity_type: 'section'` entry nests under that parent; org-parented sections
-//     are roots. Sorted at every level by displayOrder (missing display_order →
-//     Infinity, sorts last), ties by name. FAILS LOUD (never silently drops) when a
-//     fetched section cannot be placed in the tree — an unreadable/absent parent or
-//     a parent cycle means we'd otherwise render a roster missing a whole section.
-//   - `groupBySection` is PURE: rows + section tree → flat pre-order group list
-//     (parent, then its subtree, each with `depth` for indentation), members within
-//     a group sorted by name, EVERY section emitted (empty ones too — the structure
-//     is the product), 'Unassigned' (sectionId: null, name: '' — the label is the
-//     UI's to localize) LAST and only when non-empty. `memberCount` is the
-//     recursive roll-up (direct + all descendant sections), matching the schema's
-//     `member_count` formula semantics. F1 code-review fix: a row's `sectionIds`
-//     is an ARRAY — the row is pushed into EVERY group whose id is among her
-//     sectionIds (e.g. a section leader who also sings in the section shows up
-//     in both places), never collapsed onto just one. A row whose `sectionIds`
-//     is undefined / [] / contains no id present in the tree lands in Unassigned
-//     — the member stays VISIBLE (grouping is presentation, not a gate; contrast
-//     rosterData's #28 completeness gate which is upstream of this function).
 
 export interface SectionNode {
 	id: string;
 	name: string;
-	/** UI sort within parent; Number.POSITIVE_INFINITY when absent (sorts last). */
 	displayOrder: number;
-	/** Parent SECTION id; null for top-level (org-parented) sections. */
 	parentId: string | null;
-	/**
-	 * #161 (collective = database, Mihkel ruling 2026-08-16) — the OWNING
-	 * COLLECTIVE id of a top-level section: the `_parent` entry with
-	 * `entity_type === 'database'`. `null` for a sub-section (its `_parent` IS
-	 * the parent section — v4E `parentConstraint: 'exactly_one_of'`, so there is
-	 * no database entry to read) AND for a root whose only non-section parent is
-	 * a LEGACY "organization"-typed entry (that retired entity kind is not a
-	 * collective identity anymore — never fall back to it).
-	 *
-	 * WHY: `parentId` alone loses the collective, exactly as `ActiveMember` used
-	 * to lose it before rosterData.ts:133. The picker's sibling-scoped duplicate
-	 * check needs it to tell top-level roots of DIFFERENT databases apart.
-	 * `listSections` ALWAYS sets this; optional at the type level only so
-	 * pre-#161 fixtures stay type-clean (same convention as `RosterRow.dbEntityId`).
-	 */
+	// The owning database of a root section; null for a sub-section or a legacy organization parent.
 	dbEntityId?: string | null;
-	/**
-	 * #264 (ruling item 5 — the #258 fail-open class): `true` when the raw
-	 * section held anything other than EXACTLY ONE `_parent` value (zero, or
-	 * two-plus — the live Soprano II duplicate). A damaged node must never be
-	 * silently placed by `.find()`'s guess: it surfaces at TOP LEVEL carrying
-	 * this flag, the UI renders an explicit damaged-data marker naming it and
-	 * offers NO arrange affordances, and the rest of the roster still renders.
-	 * ABSENT (not `false`) on clean nodes, so existing full-shape fixture pins
-	 * stay valid.
-	 */
+	// Set when the section holds other than exactly one _parent; absent (not false) on clean nodes.
 	parentDamaged?: boolean;
-	/** Indentation level: 0 for top-level, 1 for sub-sections, 2 for sub-sub, … */
 	depth: number;
-	/** Child sections, sorted by displayOrder (ties by name). */
 	children: SectionNode[];
 }
 
 export interface SectionGroup {
-	/** Section entity id; null identifies the 'Unassigned' group. */
 	sectionId: string | null;
-	/** Section name; '' for Unassigned (the localized label is the UI's job). */
 	name: string;
-	/** Indentation level, carried from SectionNode.depth; 0 for Unassigned. */
 	depth: number;
-	/** Recursive roll-up: direct members + all descendant sections' members. */
 	memberCount: number;
-	/** DIRECT members of this section, sorted by name. */
 	members: RosterRow[];
 }
 
@@ -93,26 +36,11 @@ interface MutableNode extends SectionNode {
 	children: MutableNode[];
 }
 
-/**
- * List the collective's sections as a recursive tree, sorted by display_order.
- * See module header for the pinned contract.
- */
 export async function listSections(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<SectionNode[]> {
-	// #321 class (1) — the collective's section tree. The query is deliberately
-	// db-wide (no `_parent` scoping; sections are created `_sharing: 'public'` for
-	// federation discoverability — see roster/+page.svelte's `visibleSections`
-	// note), and since the collective = database ruling (#161) one db holds ONE
-	// collective, so db-wide is collective-wide here. A section is a voice part or
-	// a subgroup of one: a handful per collective, dozens if a large choir
-	// subdivides deeply. The live dev db holds 16 sections across FOUR legacy orgs,
-	// so reaching 500 would take roughly 125 collectives in a single db. An
-	// explicit, ample bound — this cap is a guard, not a silent prefix. (Contrast
-	// the member reads on the same page — rosterData.ts/memberLifecycle.ts — whose
-	// cardinality IS the membership and its archive, and which therefore report
-	// `truncated` and raise the roster's partial notice.)
+	// Sections are a handful per collective, so the db-wide cap is a guard, not a silent prefix.
 	const res = await entuFetch(
 		cfg.db,
 		'entity?_type.string=section&props=name,display_order,_parent&limit=500',
@@ -124,35 +52,16 @@ export async function listSections(
 	const body = (await res.json()) as { entities?: RawSection[] };
 	const raw = body.entities ?? [];
 
-	// Pass 1 — build a node per fetched section (parentId = the parent SECTION
-	// id, null for database-parented roots; dbEntityId = the database `_parent`, null
-	// for section-parented sub-sections and for a root whose only non-section
-	// parent is a legacy `organization` entry — #161), keyed by id.
 	const nodes = new Map<string, MutableNode>();
 	for (const r of raw) {
 		const name = r.name?.[0]?.string ?? '';
 		const displayOrder = r.display_order?.[0]?.number ?? Number.POSITIVE_INFINITY;
 		const parentValues = r._parent ?? [];
-		// #264 item 5 (ruling — the #258 fail-open class): v4E `parentConstraint:
-		// 'exactly_one_of'` means anything other than EXACTLY ONE `_parent` value
-		// is DAMAGED DATA (zero, or the live Soprano II two-plus duplicate).
-		// NEVER placed by a `.find()` guess — forced to TOP LEVEL (parentId null)
-		// and flagged, so the marker can render it and the rest of the tree still
-		// builds. entity_type does not matter for detection (the live duplicate
-		// was two `database` refs).
+		// Damaged parent data is never placed by a guess: it surfaces at top level, flagged.
 		const parentDamaged = parentValues.length !== 1;
 		const parentId = parentDamaged
 			? null
 			: (parentValues.find((p) => p.entity_type === 'section')?.reference ?? null);
-		// #161 — keep the DATABASE entity, don't discard it (see SectionNode.dbEntityId):
-		// roots of different databases are not siblings, and the picker needs to
-		// know. A legacy `organization` `_parent` is never the collective anymore.
-		// #264 item 5 — computed the SAME WAY regardless of damage: a damaged
-		// node (e.g. the live Soprano II duplicate — two `database` refs) still
-		// belongs to a real collective, and the roster page's org-scoped
-		// `visibleSections` filter (roster/+page.svelte) needs this id to keep
-		// rendering the damaged node for its own viewers rather than filtering it
-		// off screen as a foreign org's section.
 		const dbEntityId = parentValues.find((p) => p.entity_type === 'database')?.reference ?? null;
 		nodes.set(r._id, {
 			id: r._id,
@@ -166,9 +75,6 @@ export async function listSections(
 		});
 	}
 
-	// Pass 2 — every non-null parent ref must resolve within the fetched set.
-	// FAIL LOUD (never silently drop) — an unreadable/absent parent would
-	// otherwise render a roster missing a whole section, naming both ids.
 	for (const node of nodes.values()) {
 		if (node.parentId !== null && !nodes.has(node.parentId)) {
 			throw new Error(
@@ -187,9 +93,7 @@ export async function listSections(
 		}
 	}
 
-	// Pass 4 — assign depth via DFS from the roots; any node never reached is
-	// part of a parent CYCLE (its parent resolves, per pass 2, but the chain
-	// never bottoms out at a root) — completeness guard, fail loud.
+	// A node the walk from the roots never reaches sits in a parent cycle.
 	const visited = new Set<string>();
 	function visit(node: MutableNode, depth: number): void {
 		node.depth = depth;
@@ -205,9 +109,8 @@ export async function listSections(
 		);
 	}
 
-	// Pass 5 — sort every level by displayOrder, ties by name.
 	function sortTree(list: MutableNode[]): void {
-		list.sort((a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name));
+		list.sort(byDisplayOrder);
 		for (const n of list) sortTree(n.children);
 	}
 	sortTree(roots);
@@ -215,20 +118,8 @@ export async function listSections(
 	return roots;
 }
 
-/**
- * PURE: group roster rows by their sectionIds over the section tree. See module
- * header for the pinned contract.
- *
- * F1 code-review fix: `sectionIds` is an array — a member belonging to more than
- * one section is pushed into EVERY one of those groups (not collapsed onto the
- * first, which used to silently drop her from the rest). She lands in Unassigned
- * only when NONE of her sectionIds match a known section (covers both an empty/
- * undefined array and an array whose every id is absent from the tree) — same
- * "stays visible" guarantee as the single-section case this widens.
- */
+// A member of several sections appears in each; Unassigned holds members matching none.
 export function groupBySection(members: RosterRow[], sections: SectionNode[]): SectionGroup[] {
-	// Direct members per section id, and the full set of known section ids (a
-	// member with no sectionIds among them falls to Unassigned).
 	const directBySection = new Map<string, RosterRow[]>();
 	const knownSectionIds = new Set<string>();
 	function collectIds(nodes: SectionNode[]): void {
@@ -252,8 +143,6 @@ export function groupBySection(members: RosterRow[], sections: SectionNode[]): S
 	for (const list of directBySection.values()) list.sort((a, b) => a.name.localeCompare(b.name));
 	unassigned.sort((a, b) => a.name.localeCompare(b.name));
 
-	// Recursive roll-up (post-order) — a section's memberCount is its own
-	// direct members plus every descendant section's.
 	const countOf = new Map<string, number>();
 	function computeCounts(nodes: SectionNode[]): void {
 		for (const n of nodes) {
@@ -265,7 +154,6 @@ export function groupBySection(members: RosterRow[], sections: SectionNode[]): S
 	}
 	computeCounts(sections);
 
-	// Pre-order emission, every section included (empty ones too).
 	const groups: SectionGroup[] = [];
 	function emit(nodes: SectionNode[]): void {
 		for (const n of nodes) {
@@ -294,19 +182,7 @@ export function groupBySection(members: RosterRow[], sections: SectionNode[]): S
 	return groups;
 }
 
-/**
- * #209 — the ROSTER ORDER a native person <select> lists its options in (Gama
- * ruling 3): section (this tree's own order), then position within section,
- * Unassigned last — the SAME order the roster page renders via `groupBySection`.
- * Built ON TOP of `groupBySection` (never re-walks the section tree itself), so
- * every picker site shares the one ordering implementation the roster page
- * already uses.
- *
- * `groupBySection` pushes a multi-section member into EVERY one of her groups
- * (by design — the roster page shows her in each section she belongs to); a
- * person-PICKER needs her exactly once, so this flattens the groups in order
- * and keeps only each row's FIRST appearance (her earliest roster position).
- */
+// The roster's own order for a person picker, each member once at their first position.
 export function rosterOrder(rows: RosterRow[], sections: SectionNode[]): RosterRow[] {
 	const groups = groupBySection(rows, sections);
 	const seen = new Set<string>();
@@ -321,8 +197,4 @@ export function rosterOrder(rows: RosterRow[], sections: SectionNode[]): RosterR
 	return ordered;
 }
 
-// (*MVOX:Tallis* — RED stubs + interface, TS.1/#95)
-// (*MVOX:Palestrina* — GREEN implementation, TS.1/#95)
-// (*MVOX:Palestrina* — F1 code-review fix: multi-section members, TS.1/#95)
-// (*MVOX:Palestrina* — TU.1/#109 review: SectionNode carries its owning org id)
-// (*MVOX:Palestrina* — #209 GREEN: rosterOrder, shared by every native person select)
+// (*MVOX:Josquin*)

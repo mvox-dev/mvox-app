@@ -1,4 +1,5 @@
 // Delete failures that are not "the write blew up, try again", told apart by their `code`.
+import { hasErrorCode } from '$lib/errorCode';
 
 // Separate from seasonManage.ts: the agenda spec mocks that module wholesale.
 const DELETE_FORBIDDEN = 'entity-delete-forbidden';
@@ -65,7 +66,7 @@ export function isDeleteForbidden(reason: unknown): boolean {
 }
 
 export function isCascadePartial(reason: unknown, scope: CascadeScope): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === CASCADE_PARTIAL[scope];
+	return hasErrorCode(reason, CASCADE_PARTIAL[scope]);
 }
 
 export interface DeleteFailure {

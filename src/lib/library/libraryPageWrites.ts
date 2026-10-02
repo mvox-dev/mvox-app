@@ -1,6 +1,7 @@
 // The library page's writes, over state the page owns and hands in as getters.
 import { m } from '$lib/paraglide/messages.js';
 import { cfgFor } from '$lib/entu/cfg';
+import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Collective } from '$lib/collectives/types';
 import type { RouteLoadMachine } from '$lib/loading/routeLoad';
 import { refreshLibraryLendings, resolveWriteLibraryId } from '$lib/library/libraryPageData';
@@ -42,6 +43,17 @@ export interface LibraryWriteContext {
 export function createLibraryWrites(ctx: LibraryWriteContext) {
 	const { lib, fileUploads, routeLoad } = ctx;
 
+	async function requireWriteLibraryId(cfg: EntuCfg, fn: string): Promise<string> {
+		const libraryId = await resolveWriteLibraryId(cfg);
+		if (!libraryId) throw new Error(`${fn}: no library entity under this collective`);
+		return libraryId;
+	}
+
+	async function refreshLendings(cfg: EntuCfg): Promise<void> {
+		const refreshed = await refreshLibraryLendings(cfg);
+		ctx.setLendingsPartial(applyLendings(lib, refreshed));
+	}
+
 	async function submitCreateWork(): Promise<void> {
 		if (ctx.workForm().pending) return;
 		if (ctx.isOffline()) return;
@@ -65,8 +77,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		ctx.workForm().pending = true;
 		try {
 			// The parent is resolved live: a GET inside a write never answers from the cache.
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('submitCreateWork: no library entity under this collective');
+			const libraryId = await requireWriteLibraryId(cfg, 'submitCreateWork');
 			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
 		} catch (e) {
 			console.error('library: create work failed', name, e);
@@ -187,16 +198,14 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		if (!current) return;
 		const cfg = cfgFor(current.db);
 		try {
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('handleInlineCheckout: no library entity under this collective');
+			const libraryId = await requireWriteLibraryId(cfg, 'handleInlineCheckout');
 			await createLending(cfg, libraryId, {
 				copyId,
 				memberId,
 				assignedAt: new Date().toISOString().slice(0, 10)
 			});
 			// Stores without serving: the live answer or a rejection, never pre-write availability.
-			const refreshed = await refreshLibraryLendings(cfg);
-			ctx.setLendingsPartial(applyLendings(lib, refreshed));
+			await refreshLendings(cfg);
 		} catch (e) {
 			console.error('library: inline checkout failed', copyId, e);
 			const errNext = new Map(lib.inlineCheckoutErrors);
@@ -213,8 +222,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const cfg = cfgFor(current.db);
 		try {
 			await returnLending(cfg, lendingId);
-			const refreshed = await refreshLibraryLendings(cfg);
-			ctx.setLendingsPartial(applyLendings(lib, refreshed));
+			await refreshLendings(cfg);
 		} catch (e) {
 			console.error('library: return failed', e);
 			ctx.setReturnError(e instanceof Error ? e.message : 'Return failed');
@@ -230,8 +238,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 		const cfg = cfgFor(current.db);
 		const activeLendings = lib.lendings.filter((l) => l.returnedAt === '');
 		try {
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('handleBulkCheckout: no library entity under this collective');
+			const libraryId = await requireWriteLibraryId(cfg, 'handleBulkCheckout');
 			const result = await bulkCheckout(cfg, libraryId, {
 				editionId: ctx.bulk().editionId,
 				memberIds: [...ctx.bulk().members],
@@ -241,8 +248,7 @@ export function createLibraryWrites(ctx: LibraryWriteContext) {
 			if (result.failed.length > 0) {
 				ctx.bulk().error = `${result.failed.length} checkout(s) failed`;
 			}
-			const refreshed = await refreshLibraryLendings(cfg);
-			ctx.setLendingsPartial(applyLendings(lib, refreshed));
+			await refreshLendings(cfg);
 			ctx.bulk().members = new Set();
 			ctx.bulk().dueDate = '';
 		} catch (e) {

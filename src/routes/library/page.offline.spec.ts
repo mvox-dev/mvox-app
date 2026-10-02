@@ -655,14 +655,16 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 		// `loadLibrarianState` is cache-backed and a GET inside a write may not be, so the three
 		// write paths resolve the parent through the flag-free `resolveWriteLibraryId`.
 		expect(writes).toContain("resolveWriteLibraryId");
-		expect(writes.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(3);
+		expect(writes.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(1);
+		expect(writes.match(/await requireWriteLibraryId\(cfg, /g)?.length ?? 0).toBe(3);
 		for (const source of all) expect(source).not.toMatch(/\$libraryEntityIdStore/);
 	});
 
 	it('the three post-write lending re-reads store without serving (refreshLibraryLendings)', () => {
 		// Post-write lending re-reads: a served copy could show pre-write availability, an uncached
 		// one leaves the stored copy behind. Store-only does neither.
-		expect(writes.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+		expect(writes.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
+		expect(writes.match(/await refreshLendings\(cfg\)/g)?.length ?? 0).toBe(3);
 		for (const source of all) expect(source).not.toMatch(/\blistLendings\(/);
 	});
 });

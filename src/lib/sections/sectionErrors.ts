@@ -1,31 +1,9 @@
-// TS.2/#96 code-review fix (F1) — the ONE unassign failure that means the SERVER
-// HAS ALREADY CONVERGED, told apart from every other failure.
-//
-// `unassignMemberSection` fails loud when the member holds no section `_parent`
-// value for the section being removed (a stale row: a concurrent admin already
-// removed it, or the tab has been open a while). That rejection is NOT a failed
-// write — the server state is exactly what the optimistic UI just moved to. The
-// roster page deliberately never refetches (`loadRoster` runs once, per the
-// slice contract), so reverting on it would pin a membership the server does not
-// have on screen until a manual reload. Every OTHER rejection (network, 4xx/5xx
-// on the lookup GET or the property DELETE) does mean the write never landed and
-// must revert.
-//
-// Lives in its OWN module, not in `sectionActions.ts`: the roster page's
-// integration spec replaces `$lib/sections/sectionActions` wholesale with a
-// `vi.mock` factory, so anything the page imported from there would be
-// `undefined` under test. Importing the discriminator from here keeps ONE
-// source of truth for the code string with no mock-shaped coupling.
+// Section write failures told apart by their `code`; own module because specs mock sectionActions.
+import { hasErrorCode } from '$lib/errorCode';
 
-/** Discriminator carried on the fail-loud "membership already gone" rejection. */
 export const SECTION_PARENT_MISSING = 'section-parent-missing';
 
-/**
- * Thrown by `unassignMemberSection` when the member has no matching section
- * `_parent` value. Message is unchanged from the plain-`Error` original (it
- * names both member and section, and the write-layer spec pins it); the `code`
- * is what lets a caller reconcile FORWARD instead of reverting.
- */
+// The membership is already gone server-side, so the caller reconciles forward, not reverts.
 export class SectionMembershipMissingError extends Error {
 	readonly code = SECTION_PARENT_MISSING;
 
@@ -37,46 +15,14 @@ export class SectionMembershipMissingError extends Error {
 	}
 }
 
-/**
- * True when a rejection reason means the membership was already absent
- * server-side. Duck-typed on `code` rather than `instanceof`: rejection reasons
- * cross a `Promise.allSettled` boundary as `unknown`, and the roster spec's
- * mocked write layer rejects with a plain tagged object.
- */
 export function isSectionMembershipMissing(reason: unknown): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_PARENT_MISSING;
+	return hasErrorCode(reason, SECTION_PARENT_MISSING);
 }
 
-// ── #110 review F3: the section-delete emptiness refusal ────────────────────────
-//
-// `deleteSection` verifies server-side that the section holds NOTHING before it
-// deletes. The page's `canRemove` gate cannot carry that on its own, for two
-// structural reasons:
-//
-//   - `group.memberCount` counts the ROSTER's rows, and the roster is a
-//     deliberately NARROWED set — `loadRoster` queries `status.string=active`
-//     only and `toRosterRow` drops every name-incomplete member (the #28
-//     completeness gate). A section whose only occupants are inactive or
-//     nameless therefore reads "(0)" on screen and offers the remove control.
-//   - the page never refetches, so the tree it gates on is as old as the tab: a
-//     member (or a sub-section) added by anyone else since load is invisible to
-//     it.
-//
-// Entu's delete "soft-deletes all properties across all entities referencing the
-// deleted entity" (entu/www docs, db-mutations "Deletion"), and section
-// membership IS a member `_parent` reference — so a wrongly-permitted delete
-// silently strips those members' section assignment with nothing on screen
-// saying it happened. The refusal is a TAGGED rejection so the caller can say
-// "that section is not empty" instead of the generic write-failed message.
-
-/** Discriminator carried on the fail-loud "section still has children" rejection. */
 const SECTION_NOT_EMPTY = 'section-not-empty';
 
-/**
- * Thrown by `deleteSection` when the server still reports members and/or
- * sub-sections parented to the section. NOTHING has been written when this
- * throws — the DELETE never fires.
- */
+// Entu's delete strips every reference to the section, so a non-empty section is refused
+// server-side: the roster on screen is narrowed and as old as the tab.
 export class SectionNotEmptyError extends Error {
 	readonly code = SECTION_NOT_EMPTY;
 
@@ -92,50 +38,13 @@ export class SectionNotEmptyError extends Error {
 	}
 }
 
-/**
- * True when a rejection reason means the delete was REFUSED because the section
- * still holds members/sub-sections (nothing was written). Duck-typed on `code`
- * for the same reason `isSectionMembershipMissing` is — the roster spec's mocked
- * write layer rejects with a plain tagged object.
- */
 export function isSectionNotEmpty(reason: unknown): boolean {
-	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_NOT_EMPTY;
+	return hasErrorCode(reason, SECTION_NOT_EMPTY);
 }
 
-// ── #253 — the reparent/renumber partial-write evidence ─────────────────────
-//
-// A section indent/unindent is TWO writes (`performReparent`, roster/+page.svelte):
-// `reparentSection` moves the `_parent` reference, then `reorderSections`
-// renumbers the destination sibling group. Either can fail non-2xx, and until
-// now both discarded the response BODY — only the numeric HTTP status
-// survived (sectionActions.ts, every throw at the GET/POST/DELETE steps).
-// Every real occurrence was therefore unverifiable after the fact: no rate-
-// limit text, no rights-refusal reason, no validation message, just a status
-// number in a caught `Error` the page's catch block re-threw as one flat
-// "reorder failed" log line.
-//
-// House precedent for a typed partial-progress error: `SeriesCascadePartialError`
-// (seasons/deleteErrors.ts, deletedCount/totalCount) and `ProfileSaveError`
-// (profile/applyProfileSave.ts, createdProfileId) — both carry HOW FAR a
-// multi-step write got before it stopped. This is that shape for the
-// reparent/renumber pair, plus the status+body evidence #253 asked for.
-//
-// Duck-typed the same way as the other errors here: the roster page's
-// integration spec mocks `$lib/sections/sectionActions` wholesale, so a mocked
-// rejection crosses as a plain tagged object, never `instanceof`-checkable.
-
-/** Discriminator carried on a reparent/renumber write that stopped part-way. */
 export const SECTION_REPARENT_PARTIAL = 'section-reparent-partial';
 
-/**
- * Thrown by `reparentSection` (step `'reparent'`) and `reorderSections`
- * (step `'renumber'`) on any non-2xx. `renumberedCount`/`totalCount` are the
- * renumber loop's progress — sections FULLY renumbered (POST landed AND its
- * old value deleted) versus the sibling-group size; both are `0` for step
- * `'reparent'` (the renumber never began). `status` is the non-2xx HTTP
- * status; `body` is the response text, read defensively (`''` when the body
- * itself cannot be read — a broken stream must not mask the status).
- */
+// renumberedCount counts entities whose POST and cleanup both landed; body is '' when unreadable.
 export class SectionReparentPartialError extends Error {
 	readonly code = SECTION_REPARENT_PARTIAL;
 
@@ -155,41 +64,15 @@ export class SectionReparentPartialError extends Error {
 	}
 }
 
-/**
- * True when a rejection reason is a `SectionReparentPartialError` (or the
- * plain tagged object a mocked write layer rejects with in its place). Duck-
- * typed on `code`, same reason as `isSectionMembershipMissing`/`isSectionNotEmpty`.
- */
 export function isSectionReparentPartial(
 	reason: unknown
 ): reason is SectionReparentPartialError {
-	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_REPARENT_PARTIAL;
+	return hasErrorCode(reason, SECTION_REPARENT_PARTIAL);
 }
 
-// ── #264 — damaged `_parent` data (the fail-loud ≠1-values refusal) ──────────
-//
-// PO ruling on #264 (branch (i), stage-2 item 5): a section holding anything
-// other than EXACTLY ONE `_parent` value is DAMAGED DATA (v4E
-// `parentConstraint: 'exactly_one_of'`). Live precedent: Soprano II on
-// mvox_crede held TWO `_parent` values after a half-landed reparent, and
-// `sectionData.ts`'s `.find()` silently picked one — the #258 fail-open class.
-//
-// `reparentSection` REFUSES to write over damaged state: the atomic
-// overwrite-POST (the entry carrying the old value's `_id`) is only
-// well-defined against exactly one old value, so ≠1 existing values throw
-// this error BEFORE any write goes out (GET only — no POST, no DELETE).
-// The tree builder (`listSections`) marks the damaged node instead of
-// guessing; the roster page renders the damage loudly (see
-// sectionData.damaged.spec.ts + page.roster-damaged-parent.spec.ts).
-
-/** Discriminator carried on the fail-loud "≠1 `_parent` values" refusal. */
 export const SECTION_PARENT_DAMAGED = 'section-parent-damaged';
 
-/**
- * Thrown by `reparentSection` when the section holds anything other than
- * exactly one `_parent` value. NOTHING has been written when this throws —
- * the lookup GET is the only request that went out.
- */
+// Thrown before any write: the overwrite-POST is only well-defined against exactly one value.
 export class SectionParentDamagedError extends Error {
 	readonly code = SECTION_PARENT_DAMAGED;
 
@@ -204,15 +87,8 @@ export class SectionParentDamagedError extends Error {
 	}
 }
 
-/**
- * True when a rejection reason means the section's `_parent` data is damaged
- * (≠1 values; nothing was written). Duck-typed on `code`, same reason as the
- * other helpers here — mocked write layers reject with plain tagged objects.
- */
 export function isSectionParentDamaged(reason: unknown): reason is SectionParentDamagedError {
-	return (reason as { code?: unknown } | null | undefined)?.code === SECTION_PARENT_DAMAGED;
+	return hasErrorCode(reason, SECTION_PARENT_DAMAGED);
 }
 
-// (*MVOX:Palestrina* — F1 code-review fix, TS.2/#96)
-// (*MVOX:Palestrina* — #110 review F3: SectionNotEmptyError)
-// (*MVOX:Palestrina* — GREEN implementation, #253: SectionReparentPartialError)
+// (*MVOX:Josquin*)

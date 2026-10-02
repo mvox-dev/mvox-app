@@ -5,6 +5,15 @@ export function focusableByTestId(testid: string): HTMLElement | null {
 	return el && !(el as HTMLButtonElement).disabled ? el : null;
 }
 
+export function ownsFocus(testid: string): boolean {
+	const active = document.activeElement;
+	return (
+		!active ||
+		active === document.body ||
+		active === document.querySelector(`[data-testid="${testid}"]`)
+	);
+}
+
 export function focusOnMount(node: HTMLElement): void {
 	node.focus();
 }
