@@ -219,10 +219,7 @@
 
 	$effect(() => {
 		void selected;
-		loadForSelected().catch((e) => {
-			console.error('library: load failed', e);
-			status = 'load-error';
-		});
+		void loadForSelected();
 	});
 
 	const librarian = createLibrarianLoad(lib);

@@ -12,7 +12,9 @@ import {
 } from '$lib/library/libraryPageData';
 import { librarianStore, resetLibrarian } from '$lib/library/librarianStore';
 import { without } from '$lib/collections/immutable';
-import type { LibraryState } from '$lib/library/libraryState';
+import type { LibraryState, NodeStatus } from '$lib/library/libraryState';
+import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import type { ListRead } from '$lib/entu/listRead';
 
 export interface LibraryTreeContext {
 	selected: () => Collective | null;
@@ -22,74 +24,90 @@ export interface LibraryTreeContext {
 	markCopiesPartial: (editionId: string, truncated: boolean) => void;
 }
 
-export function createLibraryTreeLoads(ctx: LibraryTreeContext) {
-	const { lib } = ctx;
+type Slot<V> = { get: () => V; set: (value: V) => void };
+
+function slot<K extends keyof LibraryState>(lib: LibraryState, key: K): Slot<LibraryState[K]> {
+	return {
+		get: () => lib[key],
+		set: (value) => {
+			lib[key] = value;
+		}
+	};
+}
+
+interface NodeLoadSpec<T> {
+	label: string;
+	read: (cfg: EntuCfg, id: string) => Promise<ListRead<T>>;
+	markPartial: (id: string, truncated: boolean) => void;
+	status: Slot<Map<string, NodeStatus>>;
+	items: Slot<Map<string, T[]>>;
+	expanded: Slot<Set<string>>;
+}
+
+function createNodeLoad<T>(ctx: LibraryTreeContext, spec: NodeLoadSpec<T>) {
+	const setNodeStatus = (id: string, status: NodeStatus) =>
+		spec.status.set(new Map(spec.status.get()).set(id, status));
 
 	// Fetch only; the node stays expanded across a retry.
-	async function loadEditionsFor(workId: string): Promise<void> {
+	async function load(id: string): Promise<void> {
 		const current = ctx.selected();
 		if (!current) return;
 		const token = getToken();
 		if (!token) return;
-		lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'loading');
+		setNodeStatus(id, 'loading');
 		try {
-			const result = await loadLibraryEditions({ db: current.db, token }, workId);
-			lib.editionsByWork = new Map(lib.editionsByWork).set(workId, result.items);
-			ctx.markEditionsPartial(workId, result.truncated);
-			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'idle');
+			const result = await spec.read({ db: current.db, token }, id);
+			spec.items.set(new Map(spec.items.get()).set(id, result.items));
+			spec.markPartial(id, result.truncated);
+			setNodeStatus(id, 'idle');
 		} catch (e) {
 			// #107 — an expired session on a node read shows the page's session notice.
 			if (isAuthExpiredError(e)) {
 				ctx.setStatus('session-expired');
 				return;
 			}
-			console.error('library: editions load failed', workId, e);
-			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'error');
+			console.error(`library: ${spec.label} load failed`, id, e);
+			setNodeStatus(id, 'error');
 		}
 	}
 
-	function toggleWork(workId: string): void {
-		if (lib.expandedWorks.has(workId)) {
-			lib.expandedWorks = without(lib.expandedWorks, workId);
+	function toggle(id: string): void {
+		if (spec.expanded.get().has(id)) {
+			spec.expanded.set(without(spec.expanded.get(), id));
 			return;
 		}
-		lib.expandedWorks = new Set(lib.expandedWorks).add(workId);
-		if (lib.editionsByWork.has(workId)) return;
-		void loadEditionsFor(workId);
+		spec.expanded.set(new Set(spec.expanded.get()).add(id));
+		if (spec.items.get().has(id)) return;
+		void load(id);
 	}
 
-	async function loadCopiesFor(editionId: string): Promise<void> {
-		const current = ctx.selected();
-		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'loading');
-		try {
-			const result = await loadLibraryCopies({ db: current.db, token }, editionId);
-			lib.copiesByEdition = new Map(lib.copiesByEdition).set(editionId, result.items);
-			ctx.markCopiesPartial(editionId, result.truncated);
-			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'idle');
-		} catch (e) {
-			if (isAuthExpiredError(e)) {
-				ctx.setStatus('session-expired');
-				return;
-			}
-			console.error('library: copies load failed', editionId, e);
-			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'error');
-		}
-	}
+	return { load, toggle };
+}
 
-	function toggleEdition(editionId: string): void {
-		if (lib.expandedEditions.has(editionId)) {
-			lib.expandedEditions = without(lib.expandedEditions, editionId);
-			return;
-		}
-		lib.expandedEditions = new Set(lib.expandedEditions).add(editionId);
-		if (lib.copiesByEdition.has(editionId)) return;
-		void loadCopiesFor(editionId);
-	}
-
-	return { loadEditionsFor, toggleWork, loadCopiesFor, toggleEdition };
+export function createLibraryTreeLoads(ctx: LibraryTreeContext) {
+	const { lib } = ctx;
+	const editions = createNodeLoad(ctx, {
+		label: 'editions',
+		read: (cfg, workId) => loadLibraryEditions(cfg, workId),
+		markPartial: (workId, truncated) => ctx.markEditionsPartial(workId, truncated),
+		status: slot(lib, 'editionNodeStatus'),
+		items: slot(lib, 'editionsByWork'),
+		expanded: slot(lib, 'expandedWorks')
+	});
+	const copies = createNodeLoad(ctx, {
+		label: 'copies',
+		read: (cfg, editionId) => loadLibraryCopies(cfg, editionId),
+		markPartial: (editionId, truncated) => ctx.markCopiesPartial(editionId, truncated),
+		status: slot(lib, 'copyNodeStatus'),
+		items: slot(lib, 'copiesByEdition'),
+		expanded: slot(lib, 'expandedEditions')
+	});
+	return {
+		loadEditionsFor: editions.load,
+		toggleWork: editions.toggle,
+		loadCopiesFor: copies.load,
+		toggleEdition: copies.toggle
+	};
 }
 
 // #72 — every selection goes back to 'loading', and a generation guard drops a stale

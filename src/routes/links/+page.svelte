@@ -87,10 +87,7 @@
 
 	$effect(() => {
 		void selected;
-		loadForSelected().catch((e) => {
-			console.error('links: load failed', e);
-			status = 'load-error';
-		});
+		void loadForSelected();
 	});
 
 	/** Re-reads the list; true only when `rows` now holds a fresh server read, which is what

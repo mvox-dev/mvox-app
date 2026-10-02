@@ -90,6 +90,34 @@ export function parentIdsFor(
 	return ids;
 }
 
+// Callers build the full body themselves; specs pin it exactly, so only the send is shared here.
+export async function postEntity(
+	cfg: EntuCfg,
+	fn: string,
+	props: WireProp[],
+	fetchImpl: typeof fetch
+): Promise<string> {
+	const res = await entuFetch(
+		cfg.db,
+		'entity',
+		cfg.token,
+		{
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(props)
+		},
+		fetchImpl
+	);
+	if (!res.ok) {
+		throw new Error(`${fn}: create failed: HTTP ${res.status}`);
+	}
+	const body = (await res.json()) as { _id?: string };
+	if (!body._id) {
+		throw new Error(`${fn}: create returned 2xx without _id (apparent-success trap)`);
+	}
+	return body._id;
+}
+
 // No `_sharing` and no rights flag: rights come down Entu's inheritance chain (Mihkel 2026-08-13).
 export async function postCreate(
 	cfg: EntuCfg,
