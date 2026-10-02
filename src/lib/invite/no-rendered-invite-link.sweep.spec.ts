@@ -141,7 +141,7 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 				// admin surface — composes in script, egress is the clipboard only
 				'src/lib/components/admin/InviteSurface.svelte :: script-compose',
 				// roster rows — compose in script, {#if} guards gate the copy panel
-				'src/lib/roster/rosterMemberOps.ts :: script-compose',
+				'src/lib/roster/rosterInviteOps.ts :: script-compose',
 				'src/lib/roster/MemberInvite.svelte :: markup-guard',
 				// REDEEM PATH (owner's own hands — see boundary comment above):
 				// the landing page navigates/hrefs the token, never shows it as text
