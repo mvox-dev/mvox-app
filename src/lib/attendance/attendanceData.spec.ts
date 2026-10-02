@@ -12,12 +12,9 @@ import {
 	type EventAttendance,
 	type MyAttendance
 } from './attendanceData';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
@@ -121,8 +118,6 @@ describe('createAttendance', () => {
 });
 
 describe('updateAttendanceStatus', () => {
-	type Call = { url: string; method: string; body?: unknown };
-
 	function makeMockFetch(existing: {
 		statusValueId?: string;
 		parentRef?: string;

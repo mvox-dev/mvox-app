@@ -1,57 +1,15 @@
+// createWork: one type lookup plus one POST entity to the collection endpoint.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createWork } from './entityCreate';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #198 — create works from within the mvox app. `createWork` joins the shared
-// entity CREATE write layer (entityCreate.ts) alongside createSeason /
-// createEventSeries / createEvent, and follows the SAME module contract
-// (see entityCreate.ts header):
-//
-//   - EXACTLY TWO fetches: the resolveTypeId GET (cached per db:typeName) +
-//     ONE `POST entity` to the COLLECTION endpoint (never entity/{id}).
-//   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'work')
-//     (#10 pinned wire-shape — never `{ string: 'work' }`).
-//   - THE PARENT IS THE LIBRARY ENTITY, NOT THE DATABASE ENTITY. v4E parents
-//     `work` under the collective's `library` entity (the library subtree is
-//     scoped to librarian rights — `_editor` on library IS the librarian role),
-//     and the caller (the /library page) already holds that id in
-//     `libraryEntityIdStore` from resolveLibrarian. So the required parent
-//     field is `libraryEntityId` — one `{ type: '_parent', reference }` prop,
-//     zero lookup fetches, the data layer never guesses.
-//   - #132 critical decision applies here too: NO `_sharing`, NO
-//     inherit-rights flag in the create body — ONLY `_type` + `_parent` +
-//     domain props. Rights flow down from the library entity.
-//   - `name` is REQUIRED (validated BEFORE any fetch — Entu `mandatory` is a
-//     soft UI hint that rejects nothing, this module is the only enforcement
-//     point; a nameless work renders as a blank row in the browse tree).
-//   - `composer` is OPTIONAL — absent OR blank/whitespace-only → the prop is
-//     OMITTED entirely (the inline form binds it to $state(''), and the
-//     browse tree already has a composer-unknown fallback label; an own ''
-//     would be junk on the wire). Trimmed when present.
-//   - Resolves to the NEW entity's `_id`; non-2xx create POST throws with the
-//     status surfaced; a 2xx WITHOUT `_id` throws (apparent-success trap); a
-//     resolveTypeId failure propagates and NO create POST is issued.
-//
-// INTEGRATION NOTE: the fetchImpl seam sits BELOW `entuFetch`/`entuUrl`, so
-// the "transport integration" block exercises the real request layer (URL
-// composition + Authorization header), not a mock of it. The page-route
-// wiring is pinned separately in page.library-create-work.spec.ts.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/**
- * Routes the two shapes createWork may issue: the type-resolution GET
- * (`_type.string=entity&name.string=work`) → the type-def id, anything else →
- * the entity-create POST → `createBody` at `createStatus`.
- */
 function makeFetchMock(
 	opts: {
 		typeIds?: Record<string, string>;
@@ -81,7 +39,6 @@ type WireProp = {
 	datetime?: string;
 };
 
-/** The one call that is not type-resolution: the create POST. */
 function createCall(fetchImpl: ReturnType<typeof makeFetchMock>): [string, RequestInit] {
 	const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
 	const found = calls.filter(([url]) => !String(url).includes('_type.string=entity'));
@@ -97,14 +54,12 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>): WireProp[]
 const byType = (a: WireProp, b: WireProp) =>
 	a.type.localeCompare(b.type) || JSON.stringify(a).localeCompare(JSON.stringify(b));
 
-/** The type-resolution GETs issued (URL strings). */
 function typeResolutionCalls(fetchImpl: ReturnType<typeof makeFetchMock>): string[] {
 	return (fetchImpl.mock.calls as Array<[string]>)
 		.map(([url]) => String(url))
 		.filter((u) => u.includes('_type.string=entity'));
 }
 
-// Minimal VALID input — every required field present, nothing optional.
 const minimalWork = {
 	name: 'Spem in alium',
 	libraryEntityId: 'lib-1'
@@ -127,9 +82,6 @@ describe('#198 createWork — wire shape', () => {
 		const fetchImpl = makeFetchMock({ typeIds: { work: 'work-type-7' } });
 		await createWork(cfg, { ...minimalWork }, fetchImpl);
 
-		// FULL SET check (toEqual on the sorted list, not arrayContaining) — a body
-		// smuggling an extra prop must fail HERE, not ship silently
-		// (#partial-assertions-hide-bugs).
 		expect([...createCallBody(fetchImpl)].sort(byType)).toEqual(
 			[
 				{ type: '_type', reference: 'work-type-7' },
@@ -190,7 +142,6 @@ describe('#198 createWork — wire shape', () => {
 		const [url, init] = createCall(fetchImpl);
 		expect(init.method).toBe('POST');
 		expect(String(url)).toContain('/testdb/entity');
-		// No id path segment after `entity` (query-string is allowed, a path is not).
 		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 	});
@@ -202,7 +153,6 @@ describe('#198 createWork — wire shape', () => {
 });
 
 describe('#198 createWork — input hygiene: rejected BEFORE any fetch', () => {
-	/** Every case: run the create, expect the message, expect ZERO fetches. */
 	async function expectRejectedWithoutFetch(
 		run: (f: typeof fetch) => Promise<string>,
 		message: RegExp
@@ -298,7 +248,6 @@ describe('#198 createWork — transport integration (real entuFetch/entuUrl unde
 		await createWork(cfg, { ...minimalWork, name: 'W1' }, fetchImpl);
 		await createWork(cfg, { ...minimalWork, name: 'W2' }, fetchImpl);
 		expect(typeResolutionCalls(fetchImpl)).toHaveLength(1);
-		// 1 resolution + 2 creates:
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 	});
 });

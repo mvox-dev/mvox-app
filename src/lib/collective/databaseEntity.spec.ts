@@ -1,22 +1,10 @@
+// The collective is its database entity, found by one db-scoped type lookup.
 import { describe, expect, it, vi } from 'vitest';
 import { DatabaseEntityLookupError, resolveDatabaseEntityId } from './databaseEntity';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #161 RED — collective = database (Mihkel ruling 2026-08-16, via Henry).
-//
-// The core resolution of "which entity is THIS collective" must return the
-// DATABASE entity id, discovered via `entity?_type.string=database&limit=1`
-// (exactly one per db, guaranteed by entu). The old person → member →
-// `_parent[entity_type=organization]` chain (`resolveMyOrgId`, $lib/org/myOrg)
-// is retired — #159 deleted every organization instance, so that chain can only
-// answer wrong or empty.
-
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // database entity id (live shape)
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 describe('resolveDatabaseEntityId', () => {
 	it('resolves via `_type.string=database&limit=1` and returns the database entity _id — no personId, no member-row walk, no organization query', async () => {
@@ -59,9 +47,6 @@ describe('resolveDatabaseEntityId', () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
-		// Same shape resolveTypeId already uses: without the props filter every
-		// property of the database entity (rights arrays included) rides along on
-		// a lookup that only ever reads `_id`.
 		expect(url).toContain('props=_id');
 	});
 

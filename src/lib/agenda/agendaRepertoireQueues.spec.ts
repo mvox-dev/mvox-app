@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, () => string>, {
@@ -28,16 +29,6 @@ const RI_2: RepertoireItem = { id: 'ri-2', workId: 'work-2', editionId: '', stat
 
 function row(item: RepertoireItem): WorkRow {
 	return { id: item.id, kind: 'repertoire', workId: item.workId, status: 'active' } as WorkRow;
-}
-
-function deferred() {
-	let resolve!: () => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<void>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 const settle = () => new Promise((r) => setTimeout(r, 0));
