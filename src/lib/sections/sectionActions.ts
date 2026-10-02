@@ -1,16 +1,13 @@
 // Section write layer; specs and pages mock this one path, so every part re-exports here.
-import { entuFetch } from '$lib/entu/request';
+import { postEntity } from '$lib/entity/entityCreateShared';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 
 export { assignMemberSection, unassignMemberSection } from './sectionMembership';
 export { reorderSections, deleteSection, reparentSection, renameSection } from './sectionTreeWrites';
 
 export interface CreateSectionInput {
-	/** Section name (required; trimmed before sending). */
 	name: string;
-	/** Parent SECTION id; absent/null = top level (direct child of the collective). */
 	parentId?: string | null;
-	/** The collective's database entity id, which the caller already holds (#161). */
 	dbEntityId?: string | null;
 }
 
@@ -54,23 +51,5 @@ export async function createSection(
 		{ type: '_inheritrights', boolean: true }
 	];
 
-	const createRes = await entuFetch(
-		cfg.db,
-		'entity',
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(props)
-		},
-		fetchImpl
-	);
-	if (!createRes.ok) {
-		throw new Error(`createSection: create failed: HTTP ${createRes.status}`);
-	}
-	const createBody = (await createRes.json()) as { _id?: string };
-	if (!createBody._id) {
-		throw new Error('createSection: create returned 2xx without _id (apparent-success trap)');
-	}
-	return createBody._id;
+	return postEntity(cfg, 'createSection', props, fetchImpl);
 }
