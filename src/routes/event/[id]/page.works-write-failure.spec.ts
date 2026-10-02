@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
-import { json } from '$lib/testing/entuFetchKit';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -594,12 +594,6 @@ describe('#324 — the failure/saved cues do not outlive their event', () => {
 	});
 });
 
-function held() {
-	let release!: () => void;
-	const promise = new Promise<void>((resolve) => (release = resolve));
-	return { promise, release };
-}
-
 function gateOn(method: string, fragment: string, promise: Promise<void>) {
 	return (url: string, m: string) => (m === method && url.includes(fragment) ? promise : undefined);
 }
@@ -614,7 +608,7 @@ function buttons(section: HTMLElement, testid: string): HTMLButtonElement[] {
 
 describe('#551 — event page: a move or remove keeps pending until it settles', () => {
 	it('a move locks every programme row until the reorder settles', async () => {
-		const gate = held();
+		const gate = deferred();
 		installWorld({
 			programItems: programItemsFixture(),
 			gate: gateOn('POST', '/entity/pi-', gate.promise)
@@ -630,14 +624,14 @@ describe('#551 — event page: a move or remove keeps pending until it settles',
 			}
 		});
 
-		gate.release();
+		gate.resolve();
 		await waitFor(() => {
 			expect(buttons(section, 'work-manage-remove').map((b) => b.disabled)).toEqual([false, false]);
 		});
 	});
 
 	it('a works read landing mid-move keeps the moved order and still shows the added row', async () => {
-		const gate = held();
+		const gate = deferred();
 		installWorld({
 			programItems: programItemsFixture(),
 			gate: gateOn('POST', '/entity/pi-', gate.promise)
@@ -657,11 +651,11 @@ describe('#551 — event page: a move or remove keeps pending until it settles',
 			expect(qa(section, 'work-row').length).toBe(3);
 		});
 		expect(names(section)).toEqual(['Locus iste', 'Bogoróditse Djévo', 'Bogoróditse Djévo']);
-		gate.release();
+		gate.resolve();
 	});
 
 	it('a remove rejected after a collective switch leaves the new event’s works alone', async () => {
-		const gate = held();
+		const gate = deferred();
 		installWorld({
 			failWrites: () => true,
 			gate: gateOn('DELETE', '/entity/ri-1', gate.promise)
@@ -680,7 +674,7 @@ describe('#551 — event page: a move or remove keeps pending until it settles',
 		});
 		const next = await worksSection(container, 1);
 
-		gate.release();
+		gate.resolve();
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(names(next)).toEqual(['Nunc dimittis']);
 		expect(manageAlert(next)).toBeNull();

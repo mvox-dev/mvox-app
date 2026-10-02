@@ -1,48 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #269 RED — roster renders real names when the admin setting says so, pinned
-// END-TO-END through the ACTUAL roster route with the REAL producer chain:
-// loadRoster, listSections, the database-entity resolve, the toggle read and
-// the admin_member_record read are all the real modules — ONLY the wire
-// (global fetch) is stubbed. Contract: issue #269 body + release ruling
-// (2026-09-07) + scope ruling ("roster only for now", 2026-09-06). Runs on the
-// post-#268 tree: the baseline INCLUDES the record-editor pencil — the fence
-// is toggle-off vs toggle-on ON THIS TREE, not vs a historical snapshot.
-//
-// Pinned here:
-//   1. RESOLUTION RULE at the widget: `roster-row-name` shows the
-//      admin_member_record name IFF the collective's roster_show_real_names is
-//      true AND that member's record carries a non-empty name; otherwise the
-//      profile name exactly as today. SAME element, SAME class, SAME position
-//      — only the string differs.
-//   2. FALLBACK SILENT AND COMPLETE: mixed rows are indistinguishable — a
-//      record-backed row and a fallback row have identical class lists and
-//      identical DOM shape; no placeholder, no marker, no new user-facing
-//      string anywhere (silent fallback needs no i18n key — under the
-//      paraglide proxy mock any new string would surface as a bracketed key).
-//   3. TOGGLE OFF (default, absent → false): rendering identical to the
-//      toggle-less behavior on THIS tree (pencil included), records present
-//      server-side notwithstanding — and NO admin_member_record request at
-//      all. The explicit negative.
-//   4. SCOPE (#469 rewrote this pin) — the DISPLAYED name obeys the toggle on
-//      every roster surface, the ARCHIVED panel included: Mihkel's #469 word
-//      (2026-09-23, "all places we are showing member names ... must obey the
-//      admin setting") supersedes both the #269 roster-only ruling and the old
-//      "inactive panel stays profile-names in v1" boundary. What stays
-//      profile-named is the profileName SURFACES: SectionPicker's aria label
-//      and the #268 record-editor prefill read `row.profileName`, never the
-//      displayed name (pinned below, unchanged).
-//   5. SORTING follows the DISPLAYED name at the page's sort sites: grouped
-//      per-group order AND the flat list (fixture where real-name order
-//      differs from profile-name order). No search exists on this page.
-//   6. READS under the page's load(): toggle via the database entity
-//      (props=roster_show_real_names), records via ONE bulk narrowed query
-//      (props=person,name — the PO-ruled incidental-exposure fence; the
-//      acceptance list's network check IS these URL pins). Members and admins
-//      issue the SAME narrowed query. Deterministic collective-switch race:
-//      a held stale settle writes nothing.
-//   7. COLLECTIVE-WIDE / second-session semantics: the value is read from the
-//      server per load — no client-side persistence.
+// The roster shows real names when the admin setting says so, end to end.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -56,8 +13,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	})
 }));
 
-// REAL producer chain: rosterData, sectionData, collective/databaseEntity and
-// the toggle read are deliberately NOT mocked. Only the wire is stubbed.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -72,8 +27,7 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
-
-// ── wire fixtures ───────────────────────────────────────────────────────────
+import { json } from '$lib/testing/entuFetchKit';
 
 interface DbWire {
 	dbEntityId: string;
@@ -82,37 +36,13 @@ interface DbWire {
 	profiles: Record<string, { name: string; email?: string }>;
 	toggle: boolean | 'absent';
 	records: Array<{ id: string; person?: string; name?: string }>;
-	/** When set, the admin_member_record response is HELD until this resolves
-	 *  (the deterministic collective-switch race lever). */
 	recordsGate?: Promise<void>;
-	/** #469 review F1 — when set, the Nth (0-based) and every LATER bulk
-	 *  `admin_member_record` read answers 503 instead of the rows. The lever for
-	 *  the mixed-degrade proof: with two independent overlays the first
-	 *  (already-rendered) list keeps its real names while the second falls back
-	 *  to profile names, and the page shows both at once. */
 	bulkRecordsFailFrom?: number;
-	/** #269 review F2 — when set, the PER-PERSON record lookup
-	 *  (`person.reference=…`, loadMemberRecord) answers with THIS list instead of
-	 *  `records`. Lets a test express the live-reachable skew where the roster's
-	 *  bulk read saw a record but the pencil's own lookup no longer does (the
-	 *  record was deleted in between). */
 	lookupRecords?: Array<{ id: string; person?: string; name?: string }>;
-	/** #468 — when set, every member wire row carries this person id as its
-	 *  `_owner`, opening the picker gate. UNSET by default (`ownerIds: []`,
-	 *  picker closed) — this file's DOM-shape-parity tests deliberately render
-	 *  with NO admin controls, and the ownership gate is now independent of
-	 *  `$adminStore`, so a blanket grant would reopen the picker under
-	 *  'not-admin' too. Set only on the one fixture that exercises the picker
-	 *  itself (the #269 scope test). */
 	viewerPersonId?: string;
 }
 
-function jsonRes(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), {
-		status,
-		headers: { 'Content-Type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function wireMember(fx: DbWire, m: { id: string; person: string }) {
 	return {
@@ -127,86 +57,75 @@ function wireMember(fx: DbWire, m: { id: string; person: string }) {
 				entity_type: 'database'
 			}
 		],
-		// #468 — see DbWire.viewerPersonId's doc.
 		_owner: fx.viewerPersonId ? [{ reference: fx.viewerPersonId }] : []
 	};
 }
 
 function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
-	/** #469 review F1 — per-fixture count of BULK records reads served, so
-	 *  `bulkRecordsFailFrom` can fail the second one and later. */
 	const bulkRecordReads = new Map<DbWire, number>();
 	const fetchMock = vi.fn().mockImplementation(async (url: string) => {
 		const u = String(url);
 		const dbMatch = /invalid\/([^/]+)\//.exec(u);
 		const fx = dbMatch ? byDb[dbMatch[1]] : undefined;
-		if (!fx) return jsonRes({ entities: [] });
-		// #454 — the roster's join-state read (listJoinStates) now runs its
-		// visible effect for every reader, not just admins, so this real-chain
-		// fixture needs an answer instead of falling through to the generic
-		// `{ entities: [] }` (unrelated shape, entity vs entities) that used to
-		// read as an unlinked person. Every fixture person is a settled,
-		// already-joined roster member — a `joined` state renders no badge
-		// (JOIN_STATE_LABEL stays silent for it), keeping this #269 fallback
-		// suite's fixture describing only what it means to: name resolution,
-		// not join state. `_viewer` rides along because the producer reads it
-		// as the private-bucket tell (#454); without it this body would be the
-		// WITHHELD shape, which is also badge-less but for a different reason —
-		// and this fixture means "joined", not "unreadable".
+		if (!fx) return json({ entities: [] }, 200, JSON_HEADERS);
 		if (u.includes('props=entu_user')) {
-			return jsonRes({
+			return json({
 				entity: {
 					_viewer: [{ _id: 'gr-1', reference: 'p-self', property_type: '_editor' }],
 					entu_user: [{ _id: 'eu-1', uid: 'u1', provider: 'test' }]
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=admin_member_record')) {
 			if (fx.recordsGate) await fx.recordsGate;
 			if (!u.includes('person.reference=') && fx.bulkRecordsFailFrom !== undefined) {
 				const seen = bulkRecordReads.get(fx) ?? 0;
 				bulkRecordReads.set(fx, seen + 1);
-				if (seen >= fx.bulkRecordsFailFrom) return jsonRes({}, 503);
+				if (seen >= fx.bulkRecordsFailFrom) return json({}, 503, JSON_HEADERS);
 			}
 			const rows =
 				u.includes('person.reference=') && fx.lookupRecords !== undefined
 					? fx.lookupRecords
 					: fx.records;
-			return jsonRes({
+			return json({
 				entities: rows.map((r) => ({
 					_id: r.id,
 					...(r.person !== undefined ? { person: [{ reference: r.person }] } : {}),
 					...(r.name !== undefined ? { name: [{ string: r.name }] } : {})
 				}))
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=member') && u.includes('status.string=archived')) {
-			return jsonRes({ entities: (fx.archived ?? []).map((m) => wireMember(fx, m)) });
+			return json(
+				{ entities: (fx.archived ?? []).map((m) => wireMember(fx, m)) },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (u.includes('_type.string=member')) {
-			return jsonRes({ entities: fx.members.map((m) => wireMember(fx, m)) });
+			return json({ entities: fx.members.map((m) => wireMember(fx, m)) }, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=section')) {
-			return jsonRes({ entities: [], count: 0 });
+			return json({ entities: [], count: 0 }, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=database')) {
-			return jsonRes({ entities: [{ _id: fx.dbEntityId }] });
+			return json({ entities: [{ _id: fx.dbEntityId }] }, 200, JSON_HEADERS);
 		}
 		if (u.includes(`entity/${fx.dbEntityId}`) && u.includes('roster_show_real_names')) {
-			return jsonRes({
+			return json({
 				entity: {
 					_id: fx.dbEntityId,
 					...(fx.toggle === 'absent'
 						? {}
 						: { roster_show_real_names: [{ _id: 'v-toggle', boolean: fx.toggle }] })
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=profile')) {
 			const pm = /_parent\.reference=([^&]+)/.exec(u);
 			const personId = pm ? decodeURIComponent(pm[1]) : '';
 			const p = fx.profiles[personId];
-			return jsonRes({
+			return json({
 				entities: p
 					? [
 							{
@@ -217,19 +136,14 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 							}
 						]
 					: []
-			});
+			}, 200, JSON_HEADERS);
 		}
-		return jsonRes({ entities: [] });
+		return json({ entities: [] }, 200, JSON_HEADERS);
 	});
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
 }
 
-/** sampledb: viewer m1 (profile 'Alice Alto', NO record) + m2 (profile
- *  'Berta Bass', record 'Aaron Aardvark') — displayed order under the toggle
- *  (Aaron, Alice) DIFFERS from profile order (Alice, Berta), so sorting by the
- *  displayed name is observable. An archived m3 carries a record too, so the
- *  inactive panel's profile-name boundary is observable. */
 function sampledbFixture(toggle: boolean | 'absent'): DbWire {
 	return {
 		dbEntityId: 'db-ent-1',
@@ -250,8 +164,6 @@ function sampledbFixture(toggle: boolean | 'absent'): DbWire {
 		]
 	};
 }
-
-// ── harness ─────────────────────────────────────────────────────────────────
 
 const q = (c: HTMLElement, id: string) => c.querySelector(`[data-testid="${id}"]`);
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -299,7 +211,6 @@ function setAuthedWithTwoCollectives() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-// Groups default COLLAPSED — expand Unassigned (fixture members land there).
 async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
@@ -323,8 +234,6 @@ afterEach(() => {
 	resetAdmin();
 });
 
-// ── (1) resolution rule, end-to-end ─────────────────────────────────────────
-
 describe('#269 /roster end-to-end — toggle ON through the real producer chain', () => {
 	it('the record-backed row shows the REAL name, the recordless row shows the profile name — in the SAME roster-row-name span with the SAME class (only the string differs)', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
@@ -335,12 +244,10 @@ describe('#269 /roster end-to-end — toggle ON through the real producer chain'
 		const m1span = rowNameSpan(container, 'm1');
 		expect(m1span.textContent).toBe('Alice Alto');
 
-		// SAME element, SAME class, SAME position — the widget-detail pin.
 		expect(m2span.getAttribute('data-testid')).toBe('roster-row-name');
 		expect(m2span.className).toBe('text-sm text-ink');
 		expect(m1span.className).toBe(m2span.className);
 		expect(m2span.tagName).toBe('SPAN');
-		// Position: the name span is the FIRST rendered element of the row.
 		expect(q(container, 'roster-row-m2')!.firstElementChild).toBe(m2span);
 	});
 
@@ -352,8 +259,6 @@ describe('#269 /roster end-to-end — toggle ON through the real producer chain'
 	});
 });
 
-// ── (2) mixed rows indistinguishable, silent fallback, zero new strings ─────
-
 describe('#269 fallback — SILENT AND COMPLETE', () => {
 	function shapeOf(li: Element, memberId: string): string[] {
 		return [li as Element, ...Array.from(li.querySelectorAll('*'))].map((el) => {
@@ -364,8 +269,6 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 
 	it('a record-backed row and a fallback row have IDENTICAL class lists and DOM shape — only the text differs; no placeholder, no marker, no alert', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
-		// Non-admin render: the rows carry no admin controls, so the shape
-		// comparison is exactly the two members' visible name/email structure.
 		const { container } = await renderRosterAs('not-admin');
 		const m1li = q(container, 'roster-row-m1')!;
 		const m2li = q(container, 'roster-row-m2')!;
@@ -374,9 +277,6 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 		expect(shapeOf(m2li, 'm2')).toEqual(shapeOf(m1li, 'm1'));
 		expect(m2li.className).toBe(m1li.className);
 
-		// Zero new user-facing strings: under the paraglide proxy mock every
-		// message renders as a bracketed key, so a marker/placeholder string
-		// would surface as '[...]' inside the row. Silent fallback needs none.
 		expect(m1li.textContent).not.toContain('[');
 		expect(m2li.textContent).not.toContain('[');
 		expect(m1li.querySelector('[role="alert"]')).toBeNull();
@@ -398,10 +298,6 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 
 	it('a member carrying TWO records falls back to the profile name too — the overlay refuses to guess (matching what the #268 pencil says about her), and the row stays byte-identical to any other fallback row', async () => {
 		const fx = sampledbFixture(true);
-		// The live-reachable damaged shape: the check-then-create is not atomic
-		// across admins, so person-q can end up with two records. #264 house
-		// semantics — surface loudly, refuse to guess — and on the roster row
-		// "refuse to guess" IS the silent profile-name fallback.
 		fx.records = [
 			{ id: 'rec-q1', person: 'person-q', name: 'Aaron Aardvark' },
 			{ id: 'rec-q2', person: 'person-q', name: 'Zed Zither' }
@@ -417,8 +313,6 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 		expect(m2li.querySelector('[role="alert"]')).toBeNull();
 	});
 });
-
-// ── (3) toggle off — the explicit negative, on THIS (post-#268) tree ────────
 
 describe('#269 toggle OFF — identical to the toggle-less behavior on this tree', () => {
 	it('toggle false + records present → profile names everywhere, NO admin_member_record request at all, the toggle itself read from the server — and the #268 pencil still renders (the baseline fence)', async () => {
@@ -436,9 +330,6 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 			)
 		).toHaveLength(1);
 
-		// Post-#268 baseline: toggle-off is fenced against TOGGLE-ON, not against
-		// a historical snapshot — the record-editor activator belongs to both
-		// sides (#302: the whole-card activator replaced the pencil).
 		expect(q(container, 'roster-row-card-m2')).not.toBeNull();
 	});
 
@@ -455,8 +346,6 @@ describe('#269 toggle OFF — identical to the toggle-less behavior on this tree
 		).toHaveLength(1);
 	});
 });
-
-// ── (5) sorting follows the displayed name ──────────────────────────────────
 
 describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 	it('grouped view: rows inside a group come in displayed-name order (Aaron before Alice, though profile order was Alice before Berta)', async () => {
@@ -480,23 +369,13 @@ describe('#269 sorting — the page orders by what the rows DISPLAY', () => {
 	});
 });
 
-// ── (4) scope — roster rows ONLY ────────────────────────────────────────────
-
 describe('#469 scope — profileName surfaces keep the PROFILE name; the archived panel obeys the toggle (supersedes the #269 roster-only ruling)', () => {
-	// #269 review F1, re-anchored by #470: the listbox popup is RETIRED — the
-	// picker is native controls now, and the PROFILE-name scope choice carries
-	// over onto their labels (the [+]'s aria-label and every select's
-	// visually-hidden label; roster_section_picker_label / the new
-	// roster_section_add_label both take {name} = the profile name).
 	it('SectionPicker names the member by her PROFILE name in its control labels even while her row displays the real name (stated choice — section-assignment action, out of the contracted surface; flag for live review)', async () => {
-		// #468 — the reader must own the row for the picker to render at all.
 		const fx = sampledbFixture(true);
 		fx.viewerPersonId = 'person-p';
 		stubWire({ sampledb: fx });
 		const { container } = await renderRosterAs('admin');
-		// The row displays the real name…
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
-		// …while the [+]'s accessible name keeps the profile name.
 		const add = q(container, 'section-picker-add-m2');
 		expect(add, "the [+] renders on m2's row").not.toBeNull();
 		const ariaLabel = add!.getAttribute('aria-label') ?? '';
@@ -504,12 +383,6 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		expect(ariaLabel).not.toContain('Aaron Aardvark');
 	});
 
-	// #269 review F2 — the #268 create-path prefill reads `row.profileName`, never
-	// the DISPLAYED `row.name`. Pinned on the live-reachable skew: the roster's
-	// bulk read saw a record (so the row shows the real name) but the pencil's own
-	// per-person lookup no longer does (the record was deleted in between). Reading
-	// the displayed name there would resurrect a deleted real name into a fresh
-	// create; reading `profileName` is what R4's "prefill from the profile" means.
 	it('the #268 record-editor prefill uses the PROFILE name even when the row displays a real one (record deleted between the roster load and the pencil tap)', async () => {
 		const fx = sampledbFixture(true);
 		fx.lookupRecords = []; // deleted since the roster's bulk read → the create path
@@ -517,20 +390,14 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		const { container } = await renderRosterAs('admin');
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
-		// #302 drive-path edit: the whole-card activator replaced the pencil.
 		await fireEvent.click(q(container, 'roster-row-card-m2')!);
 		await waitFor(() => expect(q(container, 'roster-record-name')).not.toBeNull());
 		expect((q(container, 'roster-record-name') as HTMLInputElement).value).toBe('Berta Bass');
 	});
 
-	// #469 — FLIPPED from the old "inactive panel stays profile-names in v1"
-	// boundary pin: "The same holds for archived members wherever they are
-	// listed" (issue #469 done-when 4). The archived panel reads
-	// `loadInactiveRoster`, which now applies the same overlay.
 	it('the ARCHIVED panel obeys the toggle too (#469, supersedes the v1 profile-only boundary): an archived member with a named record lists under her REAL name', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('admin');
-		// Anchor on the active surface first:
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
@@ -543,35 +410,17 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		expect(q(container, 'inactive-member-row-m3')!.textContent).not.toContain('Carla Cantus');
 	});
 
-	// ── #469 review F1 — ONE overlay for the two lists this page can show ─────
-	//
-	// The page used to run the overlay TWICE whenever the archived panel was
-	// open: `loadRoster` for the active list and `loadInactiveRoster` for the
-	// panel, each resolving the database entity, reading the toggle and pulling
-	// the PII-bearing `admin_member_record?limit=500` for itself. Two costs, and
-	// the worse one is not the reads: the two overlays degraded INDEPENDENTLY,
-	// so one leg's records read failing while the other's succeeded rendered real
-	// names in the active roster directly above profile names in the archived
-	// panel — byte-indistinguishable, per the overlay's own doc, from "she has
-	// no record". Both lists now come from `loadActiveAndArchivedRosters`: all
-	// real names or all profile names, never half of each.
 	it('a records read that fails on the panel-open pass takes BOTH lists back to profile names together — never real names above profile names', async () => {
 		const fx = sampledbFixture(true);
-		// The page-load pass succeeds; the panel-open pass 503s.
 		fx.bulkRecordsFailFrom = 1;
 		stubWire({ sampledb: fx });
 		const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { container } = await renderRosterAs('admin');
-		// Non-vacuous: the first pass really did overlay the active list.
 		expect(rowNameSpan(container, 'm2').textContent).toBe('Aaron Aardvark');
 
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-inactive-list')).not.toBeNull());
 
-		// The archived row degraded to her profile name — and so did the ACTIVE
-		// row above it. Pre-fix the active row still read 'Aaron Aardvark' while
-		// the panel read 'Carla Cantus', one screen, two contradicting answers to
-		// "does this collective show real names".
 		await waitFor(() => {
 			expect(q(container, 'inactive-member-row-m3')!.textContent).toContain('Carla Cantus');
 		});
@@ -598,15 +447,11 @@ describe('#469 scope — profileName surfaces keep the PROFILE name; the archive
 		expect(
 			opened.filter((u) => u.includes('admin_member_record') && !u.includes('person.reference='))
 		).toHaveLength(1);
-		// ...and the ACTIVE list was re-read in that same pass, which is what makes
-		// the two lists one overlay rather than two.
 		expect(
 			opened.filter((u) => u.includes('_type.string=member') && !u.includes('status.string=archived'))
 		).toHaveLength(1);
 	});
 });
-
-// ── (6) the reads: one narrowed bulk query, same for members and admins ─────
 
 describe('#269 network — the acceptance list checks the wire, not just the screen', () => {
 	function recordUrls(fetchMock: ReturnType<typeof vi.fn>): string[] {
@@ -625,9 +470,6 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 		expect(records[0]).toContain('_type.string=admin_member_record');
 		expect(records[0]).toMatch(/props=person,name(&|$)/);
 		expect(records[0]).toContain('limit=500');
-		// email is private on the record — the narrowed query must not carry it
-		// (the profile read's own props=name,email,_sharing is the one legitimate
-		// email projection on this page and is not a record query).
 		expect(records[0]).not.toMatch(/props=[^&]*\b(phone|email|birthdate)\b/);
 
 		for (const u of (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]))) {
@@ -643,15 +485,6 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 
 		cleanup();
 		vi.unstubAllGlobals();
-		// Isolate the second phase as a genuinely SEPARATE page view (a different
-		// member's own session) rather than a continuation of the admin phase's —
-		// the module-singleton stores otherwise still carry the FIRST phase's
-		// already-authenticated/already-selected state into the second render's
-		// mount-time effect run, double-firing `loadForSelected` (once at mount on
-		// the stale-but-valid leftover state, once more when `setAuthedWithOneCollective`
-		// below re-notifies) — an artifact of reusing stores across two renders
-		// inside one `it()`, not a roster-page or `loadRoster` behavior. Matches the
-		// full reset this file's own `afterEach` already does between tests.
 		authStore.set({ status: 'loading' });
 		collectiveState.set({ status: 'loading' });
 		selectedCollectiveDbStore.set(null);
@@ -667,8 +500,6 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 		expect(memberUrls[0]).toBe(adminUrls[0]);
 	});
 });
-
-// ── (7) collective-wide semantics + the switch race ─────────────────────────
 
 describe('#269 per-load server read and the #259 switch discipline', () => {
 	it('the value is read from the server on EVERY load — no client-side persistence: a fresh render after the server flipped the toggle shows the new state (the second-session/collective-wide acceptance)', async () => {
@@ -702,7 +533,6 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 		setAuthedWithTwoCollectives();
 		adminStore.set('admin');
 
-		// The sampledb load reaches its records read and BLOCKS there.
 		await waitFor(() =>
 			expect(
 				(fetchMock.mock.calls as Array<[unknown]>)
@@ -711,15 +541,12 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 			).toBe(true)
 		);
 
-		// Switch mid-flight. The other-choir load (toggle off, nothing held)
-		// completes and renders.
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => expect(q(container, 'section-toggle-unassigned')).not.toBeNull());
 		await fireEvent.click(q(container, 'section-toggle-unassigned')!);
 		await waitFor(() => expect(q(container, 'roster-row-m-bob')).not.toBeNull());
 		expect(rowNameSpan(container, 'm-bob').textContent).toBe('Bob Bass');
 
-		// The stale sampledb settle lands now — and must write NOTHING.
 		releaseRecords();
 		await flush();
 		await tick();
@@ -729,4 +556,4 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #269 RED, route-level: real producer chain, wire-stubbed)
+// (*MVOX:Tallis*)

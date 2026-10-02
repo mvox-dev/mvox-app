@@ -1,48 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #205 RED — whole-field + tab activation on the season manage panel's three
-// in-situ edit fields (name / start_date / end_date).
-//
-// Standing UX rule 4 (Mihkel 2026-09-01): an in-situ edit field's WHOLE field
-// area is the click activator, not just the ✎ glyph. Rule-4 addendum (Mihkel
-// overrule comment on #205): every activator is also TAB-to-activate — a
-// native, Tab-reachable <button>.
-//
-// Reference shape (already live, pinned in page.admin-collective-name.spec.ts
-// and admin/+page.svelte:513-540): ONE native <button type="button"> per field,
-// `min-h-11 w-full`, the pencil AND the value INSIDE the button, an `sr-only`
-// action label, hover pointer cue. Native button semantics give Tab + Enter/
-// Space activation for free — which is why these tests assert on the ELEMENT
-// (tagName, class list, containment), never on handlers: a div+onclick would
-// pass a "does clicking work" probe while silently dropping the keyboard.
-//
-// CONTRACT (defined HERE, implemented in GREEN) — for each
-// field ∈ name | start_date | end_date:
-//   • season-edit-btn-<field>   stays the activator testid, but the element is
-//     now the WHOLE-FIELD button: `w-full min-h-11`, wrapping BOTH the pencil
-//     and the value element. NOT an icon-sized sibling (the pre-#205 shape,
-//     retired along with page.agenda-admin.spec.ts's iconOnly pin on these
-//     three testids).
-//   • season-manage-<field>     stays the value element's testid and now lives
-//     INSIDE the button — clicking the value (anywhere in the field area)
-//     opens season-edit-input-<field>.
-//   • the button carries an `sr-only` action label (reuse the existing
-//     season_manage_edit_<field>_label keys — no new locale strings needed
-//     here) so the accessible name is "<action label> <value>": action stated
-//     for AT, value visible to AT, nothing riding on a title attribute.
-//   • edit semantics UNCHANGED: input pre-filled, Enter saves through
-//     updateSeasonField, Escape cancels, panel survives (already pinned in
-//     page.season-manage.spec.ts — one regression guard here re-runs the save
-//     path through the new activator).
-//
-// Integration posture: real src/routes/+page.svelte (the actual agenda route),
-// real season-manage panel; only the data seams are mocked. Scaffolding
-// inherited from page.season-manage.spec.ts.
+// Whole-field hit areas and tab activation on the season manage panel's edits.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -127,9 +88,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -156,11 +114,10 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
-
-// ── fixtures (same family as page.season-manage.spec.ts) ───────────────────────
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const SEASON_ID = 'season-1';
 
 function isoDate(offsetDays: number): string {
@@ -283,8 +240,6 @@ async function openPanel(container: HTMLElement): Promise<void> {
 
 const FIELDS = ['name', 'start_date', 'end_date'] as const;
 
-// ── whole-field shape: ONE full-width button wrapping pencil AND value ─────────
-
 describe('#205 — season manage panel: whole-field activators (name/start_date/end_date)', () => {
 	for (const field of FIELDS) {
 		it(`${field}: the activator is ONE full-width native <button> that CONTAINS the value — not an icon-sized sibling`, async () => {
@@ -294,8 +249,6 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 			const btn = q(container, `season-edit-btn-${field}`) as HTMLElement;
 			expect(btn, `season-edit-btn-${field} must render in the panel`).not.toBeNull();
 
-			// Native button — Tab reachability + Enter/Space activation for free.
-			// A div+onclick or a span+role=button hand-rolls (and loses) all three.
 			expect(btn.tagName).toBe('BUTTON');
 			expect(
 				btn.getAttribute('tabindex'),
@@ -303,15 +256,10 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 			).not.toBe('-1');
 			expect((btn as HTMLButtonElement).disabled).toBe(false);
 
-			// The whole-field shape (#165 review F3 trap): `min-h-11` alone
-			// collapses the width to the ~12px ✎ glyph — `w-full` is what makes
-			// the FIELD the target.
 			const classes = Array.from(btn.classList);
 			expect(classes, 'the activator must reserve a 44px-tall touch target').toContain('min-h-11');
 			expect(classes, 'the WHOLE field is the target, not the ✎ glyph').toContain('w-full');
 
-			// The value element lives INSIDE the button — containment is the
-			// structural fact that makes "click anywhere in the field" true.
 			const value = q(container, `season-manage-${field}`);
 			expect(value, `season-manage-${field} (the value element) must render`).not.toBeNull();
 			expect(
@@ -327,24 +275,11 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 			const btn = q(container, `season-edit-btn-${field}`) as HTMLElement;
 			expect(btn).not.toBeNull();
 
-			// The action ("edit the name") is stated in an sr-only child — the
-			// admin reference pattern. NOT title-only, NOT aria-label-only-with-
-			// the-value-outside: the button's accessible name must carry both
-			// the action and the value it acts on.
 			const srOnly = btn.querySelector('.sr-only');
 			expect(srOnly, 'the activator must carry an sr-only action label').not.toBeNull();
 			expect((srOnly as HTMLElement).textContent?.trim()).not.toBe('');
 		});
 
-		// #205 review F1 — the `.sr-only`-exists check above structurally CANNOT
-		// see whether the label is ever ANNOUNCED. The first GREEN shipped
-		// `aria-labelledby="season-manage-<field>-value"` ON the button, and
-		// aria-labelledby SUPERSEDES an element's own contents in the accname
-		// algorithm — so the computed name was the bare value ("Season 2026") and
-		// the action verb was silently dropped, a strict regression on the
-		// pre-#205 aria-label. This test resolves the button BY ITS ACCESSIBLE
-		// NAME (testing-library runs the real accname algorithm) so only a name
-		// carrying BOTH halves can pass.
 		it(`${field}: the computed ACCESSIBLE NAME is "<action label> <value>"`, async () => {
 			const container = await renderReady();
 			await openPanel(container);
@@ -360,7 +295,6 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 			expect(value, 'value text').not.toBe('');
 
 			expect(within(container).getByRole('button', { name: `${action} ${value}` })).toBe(btn);
-			// Belt-and-braces on the two attributes that would silently override it.
 			expect(btn.hasAttribute('aria-labelledby'), 'aria-labelledby supersedes contents').toBe(
 				false
 			);
@@ -372,8 +306,6 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 		const container = await renderReady();
 		await openPanel(container);
 
-		// Click lands on the value element itself. Pre-#205 this was a <p>
-		// sibling of the pencil button — the click died there.
 		const value = q(container, 'season-manage-name') as HTMLElement;
 		expect(value.textContent).toContain('Season 2026');
 		await fireEvent.click(value);
@@ -432,7 +364,6 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 				'Autumn splendour'
 			);
 		});
-		// Optimistic local reflect — and the value element is back inside its button.
 		await waitFor(() => {
 			expect(q(container, 'season-manage-name')?.textContent).toContain('Autumn splendour');
 		});
@@ -443,14 +374,6 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 		).toBe(true);
 	});
 
-	// #205 review round 3 F3 — `w-full` is only half the promise. Both date
-	// activators sit in flex ITEMS inside `<div class="flex gap-4">`, and a flex
-	// item defaults to `flex: 0 1 auto` — content-sized — so `w-full` resolved
-	// against whatever width the formatted date happened to need. The name
-	// activator above spanned the panel while its two dates shrink-wrapped, and
-	// the two dates disagreed with EACH OTHER whenever their values differed in
-	// length. The `w-full` class assertion above structurally cannot see this:
-	// it is the containing COLUMN, not the button, that collapses.
 	for (const field of ['start_date', 'end_date'] as const) {
 		it(`${field}: the activator's COLUMN claims flex basis — a w-full button inside an auto-width flex item is still content-sized`, async () => {
 			const container = await renderReady();
@@ -482,11 +405,9 @@ describe('#205 — season manage panel: whole-field activators (name/start_date/
 		expect(startCol.parentElement, 'siblings in one flex row').toBe(endCol.parentElement);
 		const basis = (el: HTMLElement) =>
 			Array.from(el.classList).filter((c) => c.startsWith('flex-'));
-		// Non-empty on BOTH sides first — two classless columns "agree" vacuously,
-		// which is exactly the broken shape this test exists to reject.
 		expect(basis(startCol).length).toBeGreaterThan(0);
 		expect(basis(endCol)).toEqual(basis(startCol));
 	});
 });
 
-// (*MVOX:Tallis* — #205 RED; review round-3 date-column width cases *MVOX:Josquin*)
+// (*MVOX:Tallis*)

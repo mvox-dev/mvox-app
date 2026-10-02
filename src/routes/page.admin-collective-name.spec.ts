@@ -4,7 +4,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '$lib/testing/entuFetchKit';
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
@@ -80,7 +80,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-const CFG = { db: 'sampledb', token: 'jwt-admin' };
+const CFG = testCfg('sampledb', 'jwt-admin');
 
 const MARKER = { markerId: 'marker-1', name: 'Koor Sampledb' };
 

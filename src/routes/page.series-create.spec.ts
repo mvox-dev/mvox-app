@@ -1,182 +1,11 @@
 // @vitest-environment happy-dom
-//
-// #132/T5 RED — EVENT SERIES creation + the bulk occurrence generator, on the
-// ACTUAL agenda route (integration: real +page.svelte, real season-manage
-// panel, real generateEventDates; only the DATA seams are mocked — same
-// harness family as page.event-create.spec.ts / page.season-manage.spec.ts).
-// $lib/events/recurrence is deliberately NOT mocked: the live preview below IS
-// the integration test that the page calls the real calculator.
-//
-// WHY (#132): T1 gave us `createEventSeries` + `createEvent`, T3 gave the
-// panel its [+ Series] stub. T5 wires the stub into an inline form (design
-// sketch D): the series template fields, a recurrence schedule, a LIVE
-// preview of the occurrences it would generate, and a serial bulk-create of
-// those occurrences on submit.
-//
-// RECONCILING THE SKETCH WITH THE WIRE (pinned here, GREEN must follow):
-// v4E marks `event_type`, `interval_days`, `start_time`, `start_date`,
-// `end_date`, `duration_minutes` REQUIRED on event_series, and T1's
-// `createEventSeries` enforces exactly that — so the sketch's "optional
-// recurrence section" cannot mean those fields are omittable. The schedule
-// fields are therefore ALWAYS collected (they ARE the series template).
-// #240 — GENERATION IS ALWAYS ON. The `series-create-generate` checkbox is
-// GONE (control, state, and the `series_create_generate_label` key in all
-// four locales): submit creates the series, then POSTs each generated
-// occurrence individually, in SERIAL, ascending — there is NO series-only
-// submit path any more, and creating a series without events is deliberately
-// impossible (Mihkel: "Event generation should be always on and responsive").
-// Because the sketch lists no event-type field but the wire requires one,
-// `series-create-type` is a text input PRE-FILLED 'rehearsal' (the
-// workflow's own default for generated occurrences).
-//
-// Pinned wiring contract:
-//
-//   DATA
-//     - series submit calls `createEventSeries(cfg, input)` (T1) — the ONE
-//       series-create seam. dbEntityId from `resolveDatabaseEntityId(cfg, personId)`; the
-//       panel's season id rides in `extraParentIds: [seasonId]`. NO `_sharing`
-//       / inherit-rights anywhere in the UI layer (the #132 design decision —
-//       the create body is entirely T1's business).
-//     - repeat → intervalDays mapping: daily → 1, weekly → 7, biweekly → 14.
-//     - startDate/endDate are the FIRST and LAST OCCURRENCE (entityCreate.ts's
-//       own contract for the two fields) — `generateEventDates`' first/last
-//       date, NEVER the from/until search range: the weekday is not stored on
-//       the series (only interval_days + start_time), so start_date is the
-//       only place a later reader can recover which day the cadence lands on,
-//       and a Monday series stamped with a Tuesday `from` describes a
-//       schedule it never had (review F1). #240 — the OFF-path "from/until go
-//       through verbatim" wire shape no longer exists; a submit whose series
-//       input carries the raw range instead of the occurrence bounds is a
-//       regression. startTime = the time field; durationMinutes = the
-//       duration field. Blank optional location/description → the input
-//       carries NO value for them (T1 drops blanks; the page must not invent
-//       '').
-//     - bulk generation (#240 — EVERY submit): after `createEventSeries` resolves,
-//       ONE `createEvent(cfg, input)` per date from the REAL
-//       `generateEventDates`, IN ASCENDING ORDER, STRICTLY SERIAL (never two
-//       in flight — Entu rate/ordering). Each occurrence sets ONLY:
-//       dbEntityId, seriesId (the id the series create just resolved),
-//       extraParentIds: [seasonId], eventType, startDatetime. Name /
-//       duration / location / description are NOT set — they inherit from
-//       the series via the read-side merge (listEvents/loadEventDetail).
-//     - startDatetime per occurrence: the generated calendar date at the
-//       form's time, TALLINN wall clock → UTC instant (the TE.4 convention
-//       T4 pinned: 19:00 EEST = 16:00Z before the 2026-10-25 fall-back,
-//       19:00 EET = 17:00Z after).
-//     - validation runs BEFORE ANY write — a refused submit must not leave a
-//       half-made series behind.
-//     - bulk success → form closes, panel series list re-reads AND
-//       `loadFullAgenda` re-invokes (the generated occurrences must land on
-//       the agenda).
-//     - bulk partial failure: creation STOPS at the first failed occurrence
-//       (no further createEvent calls), `series-create-error` reports it with
-//       counts (params `created` / `total`), the form stays OPEN. Events
-//       1..N-1 are not rolled back — nothing here may DELETE.
-//     - progress: while the bulk loop runs, `series-create-progress`
-//       (role="status") announces the position (params `current` / `total`).
-//
-//   TESTIDS
-//     season-manage-add-series    T3's stub button INSIDE the panel — T5 makes
-//                                 it open the form. Rights-gated by the panel
-//                                 itself (no gear for non-editors, fail-closed).
-//     series-create-form          the inline form (same route — no goto)
-//     series-create-name          text input — the series/template name
-//     series-create-type          event_type text input, PRE-FILLED 'rehearsal'
-//     series-create-duration      number input (minutes)
-//     series-create-location      text input → defaultLocation (optional)
-//     series-create-description   TEXTAREA → defaultDescription (optional)
-//     series-create-repeat        <select> weekly | biweekly | daily, in that
-//                                 order, 'weekly' pre-selected (no '' option —
-//                                 the wire needs an interval either way)
-//     series-create-day           <select> '' placeholder + days in MONDAY-
-//                                 FIRST display order 1,2,3,4,5,6,0 (#207
-//                                 rule 6). VALUES stay JS getDay numbers
-//                                 (0 = Sunday … 6 = Saturday) — display
-//                                 order only
-//     series-create-time          #207 rule 5: TimeSelect composite on a
-//                                 wrapper under this testid —
-//                                 series-create-time-hour / -minute native
-//                                 selects (24h default, 5-min steps by
-//                                 construction; -ampm only in AM/PM
-//                                 preference mode) → start_time 'HH:MM'
-//                                 (wire shape unchanged)
-//     series-create-from          <input type="date">, PRE-FILLED with the
-//                                 panel season's start date
-//     series-create-until         <input type="date">, PRE-FILLED with the
-//                                 panel season's end date
-//     series-create-generate     #240 — RETIRED. Generation is always on; the
-//                                 checkbox must NOT render (asserted absent).
-//     series-create-preview       the live preview container — renders IFF
-//                                 time/from/until are set (plus a day when the
-//                                 pattern uses one); updates as params change
-//                                 ($derived). #240 — NO generate gate: a
-//                                 complete recurrence previews immediately
-//     series-create-date-<YYYY-MM-DD>  #215 — ONE CHIP PER CANDIDATE DATE
-//                                 (generateEventDates WITHOUT skipDates): a
-//                                 native <button type="button"> whose text is
-//                                 the ISO date verbatim (#207 rule 7),
-//                                 aria-pressed={!skipped}. Tapping toggles the
-//                                 date in/out of `seriesCreateSkipDates` —
-//                                 skipped chips STAY RENDERED, struck + muted
-//                                 (line-through + text-ink-2), aria-pressed
-//                                 "false". 44x44 floor (min-h-11 min-w-11).
-//                                 The toggle IS the skip mechanism: there is
-//                                 NO separate skip input / Add / removable
-//                                 chip UI any more (#215 supersedes #200
-//                                 wholesale; the four series_create_skip_*
-//                                 message keys leave all four locales).
-//     series-create-month-<YYYY-MM>  #215 — display-only <h4> month heading
-//                                 grouping the chips; localized month name
-//                                 (Intl, app locale), never a toggle. The
-//                                 grid WRAPS — no inner scroll region: no
-//                                 max-h-* / overflow-y-auto class anywhere
-//                                 on or under series-create-preview.
-//     series-create-show-next     #241 — the grid renders at most 50 chips at
-//                                 a time; this native <button type="button">
-//                                 below the grid reveals the NEXT 50
-//                                 (cumulative). Label =
-//                                 series_create_show_next_label with the
-//                                 ACTUAL next-batch size as {count} (the
-//                                 pre-skip GRID set drives it). Absent once
-//                                 everything is shown, or when 50 or fewer
-//                                 dates exist.
-//     series-create-show-all      #241 — native <button type="button"> after
-//                                 show-next: reveals the remainder in ONE
-//                                 step. Label = series_create_show_all_label
-//                                 with {count} = the FULL skip-applied total
-//                                 the count line already computes
-//                                 (seriesCreatePreviewDates.length — ONE
-//                                 source, never recounted). Absent once
-//                                 everything is shown.
-//     series-create-progress      role="status" — bulk progress indicator
-//     series-create-submit        fires the write(s)
-//     series-create-cancel        closes the form; nothing written
-//     series-create-error         inline error, role="alert" (validation
-//                                 refusal OR write failure)
-//
-//   MESSAGE KEYS (Comenius supplies copy; param NAMES are pinned here)
-//     series_create_name_required / series_create_time_required /
-//     series_create_duration_required / series_create_day_required
-//     series_create_progress {current, total}
-//     series_create_bulk_failed {created, total}
-//     series_create_preview_count_one / series_create_preview_count_other
-//       {count} — the live count line; the ALL-TOGGLED-OFF state reads the
-//       0 form of the _other key ("Luuakse 0 sündmust"), NEVER
-//       series_create_no_dates (that key keeps meaning "the recurrence
-//       generated nothing" — Gama ruling, #215)
-//     series_create_show_next_label / series_create_show_all_label {count}
-//       #241 — the reveal controls' labels; {count} is a REAL param in BOTH
-//       (the 50 cap is never baked into the copy)
+// Event series creation and the occurrence generator on the agenda page.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-// #215 locale-key scan (source scan, no rendering — the ux-polish precedent).
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
-// Params (progress/failure counts) are surfaced as JSON so their NAMES and
-// VALUES are assertable without pinning any human wording.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -228,8 +57,6 @@ const {
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-// T1's write layer — the ONLY create seams this page may use. NOTE:
-// $lib/events/recurrence is NOT in this mock list — on purpose (see header).
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: vi.fn(),
 	createEventSeries: createEventSeriesMock,
@@ -253,11 +80,8 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// $env/dynamic/public is unavailable outside a SvelteKit request context under
-// happy-dom; stubbing the base url keeps every real module in play.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Supplementary page data, irrelevant here — mocked so no real fetch fires.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -275,9 +99,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -306,18 +127,13 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
-
-// ── fixtures ────────────────────────────────────────────────────────────────────
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const SEASON_ID = 'season-1';
 const NEW_SERIES_ID = 'series-new-1';
 
-/** ISO calendar date `offsetDays` from now — keeps the gating fixtures
- *  time-bomb-free (the panel needs a season that is CURRENT at run time). The
- *  recurrence cases below then SET from/until to fixed 2026 dates explicitly,
- *  so the generated occurrences stay deterministic. */
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
 }
@@ -349,7 +165,6 @@ function agendaResult(opts: { editor?: boolean } = {}) {
 	});
 }
 
-/** The panel's existing lists (T3 shapes) — present so the panel renders. */
 function seriesFixture() {
 	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
 }
@@ -358,8 +173,6 @@ function standaloneFixture() {
 	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
 }
 
-/** Lets anything already queued — a late reply or a stray next write that
- *  WOULD have landed — run before asserting that it did not. */
 function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -420,8 +233,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── helpers ─────────────────────────────────────────────────────────────────────
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
@@ -435,8 +246,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open the season-manage panel (#261: expand the season card — routed
- *  through the ONE shared helper), then the [+ Series] form. */
 async function openSeriesForm(container: HTMLElement): Promise<void> {
 	await openSeasonCardPanel(container);
 	await waitFor(() => {
@@ -460,10 +269,6 @@ async function submit(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 }
 
-/** The template fields a valid submit needs beyond the prefills: name,
- *  duration, time — plus fixed from/until so recurrence math is
- *  deterministic. #240 — a valid WEEKLY submit also needs a day
- *  (enableMondayGeneration); day-less callers are the refusal cases. */
 async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-name', 'Monday rehearsals');
 	await fill(container, 'series-create-duration', '90');
@@ -472,61 +277,38 @@ async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-until', '2026-09-21');
 }
 
-/** Pick Mondays (#240 — generation is ALWAYS ON, there is no checkbox to
- *  tick any more; the name survives so ~10 call sites read unchanged). With
- *  fillValidTemplate's range that yields exactly 3 occurrences: Sep 7,
- *  Sep 14, Sep 21 (all EEST, +3). */
 async function enableMondayGeneration(container: HTMLElement): Promise<void> {
 	await selectValue(container, 'series-create-day', '1');
 }
 
-/** Wait for a SUCCESSFUL submit's whole run to finish, not just its first
- *  await. #240 made every submit generate, so `createEventSeries` resolving is
- *  now the START of the run: the serial `createEvent` loop and the trailing
- *  `loadForSelected({ keepSeasonManage: true })` still follow it. A test that
- *  returns at the `createEventSeries` (or Nth `createEvent`) assertion lets
- *  that tail run AFTER `afterEach` has reset the mocks — `loadFullAgenda()`
- *  then returns undefined and the page's `.then(...)` rejects UNHANDLED,
- *  failing the whole vitest run while every test still reports green. The
- *  form unmounting is the run's own last observable step, so awaiting it
- *  brackets the tail inside the test. */
 async function settleSeriesRun(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'series-create-form')).toBeNull();
 	});
 }
 
-/** #215 — every rendered candidate-date CHIP, in document order, skipped or
- *  not (a skipped chip stays in the DOM, merely struck + aria-pressed
- *  "false"). While a stopped run is resumable the chips are the REMAINDER
- *  (review F3's contract carries over unchanged). */
 function previewDates(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('[data-testid^="series-create-date-"]')].map(
 		(el) => el.getAttribute('data-testid')?.replace('series-create-date-', '') ?? ''
 	);
 }
 
-/** The chip for one candidate date. */
 function dateChip(container: HTMLElement, iso: string): HTMLButtonElement | null {
 	return container.querySelector(`[data-testid="series-create-date-${iso}"]`);
 }
 
-/** Tap a candidate-date chip — the ONLY skip mechanism since #215. */
 async function toggleDate(container: HTMLElement, iso: string): Promise<void> {
 	const chip = dateChip(container, iso);
 	expect(chip, `chip series-create-date-${iso} must be rendered`).not.toBeNull();
 	await fireEvent.click(chip as HTMLButtonElement);
 }
 
-/** The candidate dates currently ACTIVE (aria-pressed "true"), in order. */
 function activeDates(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('[data-testid^="series-create-date-"]')]
 		.filter((el) => el.getAttribute('aria-pressed') === 'true')
 		.map((el) => el.getAttribute('data-testid')?.replace('series-create-date-', '') ?? '');
 }
 
-/** Month headings + chips in DOCUMENT ORDER, as testid suffixes — pins that
- *  each chip sits under ITS month's heading, not just that both exist. */
 function gridSequence(container: HTMLElement): string[] {
 	return [
 		...container.querySelectorAll(
@@ -535,7 +317,6 @@ function gridSequence(container: HTMLElement): string[] {
 	].map((el) => el.getAttribute('data-testid') ?? '');
 }
 
-/** The input object the page handed createEventSeries on its most recent call. */
 function lastSeriesInput(): CreateEventSeriesInput {
 	const calls = createEventSeriesMock.mock.calls;
 	expect(calls.length).toBeGreaterThan(0);
@@ -547,8 +328,6 @@ function eventInput(callIndex: number): CreateEventInput {
 	return createEventMock.mock.calls[callIndex][1] as CreateEventInput;
 }
 
-// ── the entry point: T3's [+ Series] stub becomes a live form ───────────────────
-
 describe('season panel — the [+ Series] entry point', () => {
 	it('season editor: clicking season-manage-add-series opens series-create-form INLINE (no goto); merely opening writes nothing and shows no preview (the recurrence is incomplete, not gated — #240)', async () => {
 		const container = await renderReady();
@@ -557,11 +336,8 @@ describe('season panel — the [+ Series] entry point', () => {
 		expect(gotoMock).not.toHaveBeenCalled();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
-		// No day/time yet → nothing determinate to preview. This is the ONLY
-		// reason no preview shows: there is no generate gate any more.
 		expect(q(container, 'series-create-preview')).toBeNull();
 
-		// #240 — the generate checkbox is gone from the form entirely.
 		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
@@ -589,8 +365,6 @@ describe('season panel — the [+ Series] entry point', () => {
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
 });
-
-// ── the form's fields (design sketch D) ─────────────────────────────────────────
 
 describe('season panel — the series form carries every sketch-D field', () => {
 	it('name (text), type (#199: canonical select, PRE-SELECTED rehearsal — see page.event-type-picker.spec.ts for the full picker contract), duration (number), location (text), description (TEXTAREA), repeat/day (selects), time, from/until (dates) — NO generate checkbox (#240: generation is always on) and NO skip picker (#215: the chips are the skip mechanism)', async () => {
@@ -626,11 +400,6 @@ describe('season panel — the series form carries every sketch-D field', () => 
 
 		const day = q(container, 'series-create-day') as HTMLSelectElement;
 		expect(day.tagName).toBe('SELECT');
-		// #207 rule 6 — MONDAY-FIRST display order: options reordered to
-		// 1,2,3,4,5,6,0 (placeholder stays first). VALUES untouched — they are
-		// JS getDay() numbers consumed by generateEventDates, and the Monday
-		// preview specs below (day '1' -> Mondays) pin that the semantics
-		// survive the reorder.
 		expect([...day.querySelectorAll('option')].map((o) => o.value)).toEqual([
 			'',
 			'1',
@@ -643,11 +412,6 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		]);
 		expect(day.value).toBe('');
 
-		// #207 rule 5 — the time field is no longer a native <input type="time">
-		// (whose rendering follows browser locale): it is the TimeSelect
-		// composite under the SAME surface testid. 24h by default; 5-minute
-		// resolution BY CONSTRUCTION of the minute options (the step=300
-		// addendum — no step attribute exists on a select).
 		const timeWrapper = q(container, 'series-create-time') as HTMLElement;
 		expect(timeWrapper).not.toBeNull();
 		expect(timeWrapper.tagName).not.toBe('INPUT');
@@ -655,20 +419,14 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		const timeMinute = q(container, 'series-create-time-minute') as HTMLSelectElement;
 		expect(timeHour.tagName).toBe('SELECT');
 		expect(timeMinute.tagName).toBe('SELECT');
-		// Empty draft: placeholder selected, the full 24h / 5-minute pick lists behind it.
 		expect(timeHour.value).toBe('');
 		expect(timeMinute.value).toBe('');
 		expect(optionValues(timeHour).filter((v) => v !== '')).toEqual(HOURS_24);
 		expect(optionValues(timeMinute).filter((v) => v !== '')).toEqual(MINUTES_5);
-		// 24h default mode: no AM/PM select.
 		expect(q(container, 'series-create-time-ampm')).toBeNull();
 		expect((q(container, 'series-create-from') as HTMLInputElement).type).toBe('date');
 		expect((q(container, 'series-create-until') as HTMLInputElement).type).toBe('date');
-		// #240 — the generate checkbox is RETIRED: generation is always on, so
-		// the control (and any replacement toggle for it) must not exist.
 		expect(q(container, 'series-create-generate')).toBeNull();
-		// #215 — the skip picker is GONE: the preview's date chips are the skip
-		// mechanism now. No input, no Add, no removable chip list, no heading.
 		expect(q(container, 'series-create-skip-date')).toBeNull();
 		expect(q(container, 'series-create-skip-add')).toBeNull();
 		expect(q(container, 'series-create-skip-list')).toBeNull();
@@ -684,8 +442,6 @@ describe('season panel — the series form carries every sketch-D field', () => 
 		expect((q(container, 'series-create-until') as HTMLInputElement).value).toBe(SEASON_END);
 	});
 });
-
-// ── the live preview: the REAL generateEventDates, on the real page ─────────────
 
 describe('season panel — the recurrence preview is live and real', () => {
 	it('day/time/from/until set → series-create-preview lists EXACTLY the generated dates (real generateEventDates: 13 Mondays for Sep 1 – Dec 1 2026) — and previewing writes NOTHING', async () => {
@@ -714,8 +470,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'2026-11-23',
 			'2026-11-30'
 		]);
-		// #215 — three months, three headings, every chip under ITS month's
-		// heading: the FULL document-order sequence, not a mere co-existence.
 		expect(gridSequence(container)).toEqual([
 			'series-create-month-2026-09',
 			'series-create-date-2026-09-07',
@@ -734,7 +488,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'series-create-date-2026-11-23',
 			'series-create-date-2026-11-30'
 		]);
-		// Fresh preview: every candidate is ACTIVE.
 		expect(activeDates(container)).toEqual(previewDates(container));
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
@@ -779,7 +532,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		await waitFor(() => {
 			expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('false');
 		});
-		// The skipped date does NOT leave the grid — greyed/struck, still there.
 		expect(previewDates(container)).toEqual([
 			'2026-09-07',
 			'2026-09-14',
@@ -793,7 +545,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		expect(skippedClasses).toContain('text-ink-2');
 		expect(skipped.textContent?.trim()).toBe('2026-09-14');
 
-		// Tap again: restored — pressed, unstruck.
 		await toggleDate(container, '2026-09-14');
 		await waitFor(() => {
 			expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('true');
@@ -827,12 +578,8 @@ describe('season panel — the recurrence preview is live and real', () => {
 		const heading = q(container, 'series-create-month-2026-09') as HTMLElement;
 		expect(heading).not.toBeNull();
 		expect(heading.tagName).toBe('H4');
-		// Display only — not a control of any kind.
 		expect(heading.closest('button')).toBeNull();
 		const monthText = heading.textContent?.trim() ?? '';
-		// Localized month name via Intl (the app locale) — content is
-		// Comenius/Intl business, but it must EXIST and must not be the raw
-		// machine form the testid already carries.
 		expect(monthText).not.toBe('');
 		expect(monthText).not.toMatch(/^\d{4}-\d{2}$/);
 	});
@@ -847,10 +594,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		await fill(container, 'series-create-until', '2026-11-29');
 		await selectValue(container, 'series-create-repeat', 'daily');
 
-		// #241 revises #215's "stays flat" ruling on the CHIP COUNT only: 90
-		// dates exist (the count line below says so) but only the first 50
-		// draw. November has no shown date yet, so its heading must not render
-		// (a month heading renders IFF at least one of its dates is shown).
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(50); // of 90 = 30 + 31 + 29
 		});
@@ -863,7 +606,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 			].map((el) => el.getAttribute('data-testid'))
 		).toEqual(['series-create-month-2026-09', 'series-create-month-2026-10']);
 
-		// show-all reveals the remainder in one step: all 90, three headings.
 		await fireEvent.click(q(container, 'series-create-show-all') as HTMLElement);
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(90);
@@ -880,10 +622,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'series-create-month-2026-11'
 		]);
 
-		// Gama ruling (1) SURVIVES #241 (its point 7): NO inner scroll region
-		// inside the form — the fully revealed grid wraps and grows the page.
-		// Scan the preview container AND every descendant for the scroll-trap
-		// classes the old list carried (max-h-32 overflow-y-auto).
 		const preview = q(container, 'series-create-preview') as HTMLElement;
 		const scrollTrap = /^(max-h-|overflow-y-auto$|overflow-auto$|overflow-scroll$|overflow-y-scroll$)/;
 		for (const el of [preview, ...preview.querySelectorAll('*')]) {
@@ -902,8 +640,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		await fillTime(container, 'series-create-time', '19:00');
 		await fill(container, 'series-create-from', '2026-09-01');
 		await fill(container, 'series-create-until', '2026-09-30');
-		// The recurrence becomes complete on this very input — nothing else is
-		// clicked between here and the preview appearing.
 		await selectValue(container, 'series-create-day', '1');
 
 		await waitFor(() => {
@@ -915,7 +651,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 			'2026-09-21',
 			'2026-09-28'
 		]);
-		// No gate control exists to take it down again.
 		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
@@ -930,19 +665,6 @@ describe('season panel — the recurrence preview is live and real', () => {
 		expect(q(container, 'series-create-preview')).toBeNull();
 	});
 });
-
-// ── the series template wire — submit ALWAYS generates (#240) ──────────────────
-//
-// The old "submit WITHOUT generation creates the series only" describe died
-// WITH the OFF branch (#240): no state of the form produces a series-only
-// write any more. The wire pins that block carried — full createEventSeries
-// shape, blank optionals, the AM/PM 24h wire, the biweekly mapping, the
-// failed-write handling — live on here, re-homed onto the ONLY submit path
-// left, the generating one. Deleted outright, with the branch they covered:
-//   - the OFF full flow ("from/until verbatim as startDate/endDate — and NO
-//     createEvent") — that wire shape is asserted ABSENT below;
-//   - "…and daily → 1" — the DAILY describe's own submit case already pins
-//     the mapping on the generating path.
 
 describe('season panel — submit ALWAYS generates (#240): the series wire, full shape', () => {
 	it('full flow: createEventSeries(cfg, {…}) ONCE, FULL shape — org from resolveDatabaseEntityId, season in extraParentIds, weekly → intervalDays 7, startDate/endDate = FIRST/LAST OCCURRENCE — and the occurrences ALWAYS follow (no series-only outcome exists); form closes, panel stays open, series list re-reads', async () => {
@@ -959,10 +681,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 		await waitFor(() => {
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		// FULL param shape (partial assertions hide bugs). startDate is the
-		// first MONDAY (2026-09-07), endDate the last — NEVER the raw
-		// 2026-09-01/2026-09-21 range: the retired OFF path's verbatim-range
-		// wire shape must not reach createEventSeries in any form state.
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, {
 			name: 'Monday rehearsals',
 			dbEntityId: ORG_EFK,
@@ -977,8 +695,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 			defaultDescription: 'Bring the black folder'
 		});
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(CFG);
-		// #240 — generation is unconditional: the occurrences follow the series
-		// on EVERY successful submit.
 		await waitFor(() => {
 			expect(createEventMock).toHaveBeenCalledTimes(3);
 		});
@@ -1009,10 +725,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 	});
 
 	it('#207 AM/PM preference (integration): the store flips the surface to 12h selects — and submit STILL sends the 24h HH:MM wire string', async () => {
-		// The preference is display-only: stored/submitted shapes never change.
-		// Runtime-resolved dynamic import (variable specifier keeps vite's
-		// import-analysis from failing the WHOLE file while the module is
-		// #207/GREEN's to create — only this test rides on it).
 		const timeFormatModulePath = '$lib/preferences/timeFormat';
 		const { timeFormatStore } = (await import(/* @vite-ignore */ timeFormatModulePath)) as
 			typeof import('$lib/preferences/timeFormat');
@@ -1028,7 +740,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 			expect(optionValues(q(container, 'series-create-time-hour')).filter((v) => v !== '')).toEqual(
 				Array.from({ length: 12 }, (_, i) => String(i + 1))
 			);
-			// 7:05 PM → the canonical '19:05'.
 			await fireEvent.change(q(container, 'series-create-time-hour') as HTMLElement, {
 				target: { value: '7' }
 			});
@@ -1045,11 +756,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 			await waitFor(() => {
 				expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 			});
-			// FULL param shape (partial assertions hide bugs): the wire carries
-			// 24h 'HH:MM' regardless of the display preference. The two untouched
-			// optionals are asserted blank/absent the way the optionals spec does.
-			// #240 — startDate/endDate are the occurrence bounds (Mondays), not
-			// the raw range.
 			const { defaultLocation, defaultDescription, ...rest } = lastSeriesInput();
 			expect(rest).toEqual({
 				name: 'Evening rehearsals',
@@ -1108,8 +814,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 	});
 });
 
-// ── bulk submit (#240 — every submit): series first, then one event per date, serial ──
-
 describe('season panel — submit bulk-creates the occurrences (generation always on, #240)', () => {
 	it('creates the series FIRST, then ONE createEvent per generated date, ascending: each occurrence sets ONLY org/series/season parents + eventType + startDatetime (Tallinn wall clock → UTC instant); name/duration/location/description INHERIT — never copied', async () => {
 		const container = await renderReady();
@@ -1123,14 +827,10 @@ describe('season panel — submit bulk-creates the occurrences (generation alway
 			expect(createEventMock).toHaveBeenCalledTimes(3);
 		});
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
-		// The series create resolved BEFORE the first occurrence went out — the
-		// occurrences need its id as their parent.
 		expect(createEventSeriesMock.mock.invocationCallOrder[0]).toBeLessThan(
 			createEventMock.mock.invocationCallOrder[0]
 		);
 
-		// 19:00 Europe/Tallinn in September 2026 is EEST (UTC+3) → 16:00Z — the
-		// same TE.4 wall-clock convention T4 pinned for single-event creates.
 		expect(createEventMock.mock.calls.map((c) => (c[1] as CreateEventInput).startDatetime)).toEqual(
 			['2026-09-07T16:00:00.000Z', '2026-09-14T16:00:00.000Z', '2026-09-21T16:00:00.000Z']
 		);
@@ -1141,9 +841,6 @@ describe('season panel — submit bulk-creates the occurrences (generation alway
 			expect(input.seriesId).toBe(NEW_SERIES_ID);
 			expect(input.extraParentIds).toEqual([SEASON_ID]);
 			expect(input.eventType).toBe('rehearsal');
-			// The inheritable quartet arrives BLANK/ABSENT — the series supplies
-			// them at read time; a frozen copy would defeat the inheritance the
-			// generator exists for ('' is fine: T1 drops blanks).
 			expect(input.name ?? '').toBe('');
 			expect(input.durationMinutes ?? undefined).toBeUndefined();
 			expect(input.location ?? '').toBe('');
@@ -1163,7 +860,6 @@ describe('season panel — submit bulk-creates the occurrences (generation alway
 		await waitFor(() => {
 			expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		});
-		// FULL param shape (partial assertions hide bugs).
 		expect(createEventSeriesMock).toHaveBeenCalledWith(CFG, {
 			name: 'Monday rehearsals',
 			dbEntityId: ORG_EFK,
@@ -1172,9 +868,6 @@ describe('season panel — submit bulk-creates the occurrences (generation alway
 			intervalDays: 7,
 			startTime: '19:00',
 			durationMinutes: 90,
-			// 2026-09-01 is a TUESDAY — a Monday series must never claim it as its
-			// first occurrence. The weekday is recoverable from nothing else on the
-			// series (interval_days + start_time carry no day).
 			startDate: '2026-09-07',
 			endDate: '2026-09-21'
 		});
@@ -1281,8 +974,6 @@ describe('season panel — submit bulk-creates the occurrences (generation alway
 	});
 });
 
-// ── progress + partial failure ──────────────────────────────────────────────────
-
 describe('season panel — bulk creation reports progress and survives partial failure', () => {
 	it('series-create-progress (role="status") tracks the loop: current 1 of 3 while the first POST is in flight, advancing as each resolves, gone when the run completes', async () => {
 		const resolvers: Array<(id: string) => void> = [];
@@ -1341,7 +1032,6 @@ describe('season panel — bulk creation reports progress and survives partial f
 			expect(q(container, 'series-create-error')).not.toBeNull();
 		});
 		await flush();
-		// Stopped AT the failure — the 3rd occurrence was never attempted.
 		expect(createEventMock).toHaveBeenCalledTimes(2);
 		const error = q(container, 'series-create-error') as HTMLElement;
 		expect(error.getAttribute('role')).toBe('alert');
@@ -1349,13 +1039,9 @@ describe('season panel — bulk creation reports progress and survives partial f
 		expect(error.textContent).toContain('"created":1');
 		expect(error.textContent).toContain('"total":3');
 		expect(q(container, 'series-create-form')).not.toBeNull();
-		// The series itself was created and STAYS created — no rollback delete
-		// exists in this app, and re-submitting is the operator's call.
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 	});
 });
-
-// ── validation: refused BEFORE any write ────────────────────────────────────────
 
 describe('season panel — series create REFUSES an incomplete form before it writes', () => {
 	it('blank NAME: series-create-error names it, createEventSeries never runs, the form stays open', async () => {
@@ -1376,15 +1062,6 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		expect(q(container, 'series-create-form')).not.toBeNull();
 	});
 
-	// #199 superseded this pair: `series-create-type` is now the canonical
-	// <select> (CANONICAL_EVENT_TYPES, no '' option, no free text), so it can
-	// no longer be cleared to blank or typed into. Both the "cleared type is
-	// refused" refusal and the "typed type rides through verbatim" pin are
-	// replaced by page.event-type-picker.spec.ts's coverage of the picker
-	// itself (exactly the 8 canonical options; a PICKED type — e.g. 'concert'
-	// — stores its canonical key onto the series and every generated
-	// occurrence).
-
 	it('review F4 — a refusal is wired to ITS OWN box: aria-invalid + aria-describedby point at the error, and only that field carries them', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
@@ -1399,10 +1076,6 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		const name = q(container, 'series-create-name') as HTMLInputElement;
 		expect(name.getAttribute('aria-invalid')).toBe('true');
 		expect(name.getAttribute('aria-describedby')).toBe('series-create-error');
-		// The boxes that were NOT refused stay clean — one message, one owner.
-		// #207 review F2 — the time composite is checked on its real CONTROLS:
-		// the aria-invalid/describedby wiring lives on the <select>s, not on the
-		// role="group" wrapper (where a screen reader would never announce it).
 		for (const testid of [
 			'series-create-type',
 			'series-create-duration',
@@ -1414,7 +1087,6 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 			expect(el.getAttribute('aria-describedby')).toBeNull();
 		}
 
-		// Editing the refused field clears both the message and its wiring.
 		await fill(container, 'series-create-name', 'Monday rehearsals');
 		await waitFor(() => {
 			expect(q(container, 'series-create-error')).toBeNull();
@@ -1495,8 +1167,6 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		await openSeriesForm(container);
 		await fill(container, 'series-create-duration', '90');
 		await fillTime(container, 'series-create-time', '19:00');
-		// #240 — a valid submit always generates, so the day must be picked for
-		// the SECOND submit to write; the FIRST still refuses on the name.
 		await selectValue(container, 'series-create-day', '1');
 		await submit(container);
 		await waitFor(() => {
@@ -1512,20 +1182,6 @@ describe('season panel — series create REFUSES an incomplete form before it wr
 		await settleSeriesRun(container);
 	});
 });
-
-// ── review fixes (#132/T5 YELLOW) ───────────────────────────────────────────────
-//
-// Five defects Bentham's review found in the GREEN implementation, each pinned
-// here so it cannot come back:
-//   1. daily + generate was unreachable — the day requirement gated a field
-//      `generateEventDates` ignores for 'daily'.
-//   2. a stopped bulk run offered only a full re-submit, duplicating the series
-//      and every occurrence that had already landed.
-//   3. from/until were never validated client-side — a blank/inverted range
-//      reached the wire and came back as the generic "try again".
-//   4. cancel/Escape mid-run unmounted the form while the loop kept POSTing.
-//   5. the preview had no count and an empty occurrence set closed the form as
-//      a silent success.
 
 describe('season panel — DAILY generation needs no day of week', () => {
 	it('daily HIDES the inert day select and previews immediately: generateEventDates ignores dayOfWeek for daily, so demanding one would gate generation behind a field with no effect', async () => {
@@ -1711,20 +1367,15 @@ describe('season panel — the preview counts, scrolls, and refuses an empty set
 		await waitFor(() => {
 			expect(activeDates(container)).toEqual([]);
 		});
-		// The explanation is the count line itself — the 0 form, exactly.
 		expect(q(container, 'series-create-preview-count')?.textContent?.trim()).toBe(
 			'series_create_preview_count_other {"count":0}'
 		);
-		// series_create_no_dates keeps meaning "the RECURRENCE generated
-		// nothing" — it must NOT appear for an all-toggled-off set.
 		expect(container.textContent).not.toContain('series_create_no_dates');
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(true);
-		// Nothing was written by any of that.
 		await flush();
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
 
-		// One back on → submit lives again.
 		await toggleDate(container, '2026-09-14');
 		await waitFor(() => {
 			expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
@@ -1833,13 +1484,11 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 		await waitFor(() => {
 			expect(listEventSeriesForSeasonMock.mock.calls.length).toBeGreaterThan(seriesReadsBefore);
 		});
-		// And the operator is told what a re-submit will do.
 		const resume = q(container, 'series-create-resume') as HTMLElement;
 		expect(resume).not.toBeNull();
 		expect(resume.textContent).toContain('series_create_resume_notice');
 		expect(resume.textContent).toContain('"remaining":2');
 		expect(resume.textContent).toContain('"total":3');
-		// …and the full-set count is gone, so no two contradictory numbers.
 		expect(q(container, 'series-create-preview-count')).toBeNull();
 	});
 
@@ -1852,7 +1501,6 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 		await openSeriesForm(container);
 		await fillValidTemplate(container);
 		await enableMondayGeneration(container);
-		// Before the run: the full occurrence set.
 		await waitFor(() => {
 			expect(previewDates(container)).toEqual(['2026-09-07', '2026-09-14', '2026-09-21']);
 		});
@@ -1862,7 +1510,6 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			expect(q(container, 'series-create-error')).not.toBeNull();
 		});
 
-		// After the stop: exactly what a re-submit will create — 2026-09-07 landed.
 		await waitFor(() => {
 			expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
 		});
@@ -1891,22 +1538,15 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			'series-create-description',
 			'series-create-repeat',
 			'series-create-day',
-			// #207 — series-create-time is now the TimeSelect composite; the
-			// disabled prop must reach its native selects.
 			'series-create-time-hour',
 			'series-create-time-minute',
 			'series-create-from',
 			'series-create-until'
-			// #215 — the skip picker is gone; the date CHIPS going inert while
-			// locked is pinned in the '#215 — LOCKED' case below.
 		]) {
 			expect(
 				(q(container, testid) as HTMLInputElement | HTMLButtonElement | null)?.disabled
 			).toBe(true);
 		}
-		// Submit stays live (finish the run) and so does Cancel — #240 retired
-		// the generate checkbox, so Cancel is the ONLY close-out that abandons a
-		// stopped run without writing the rest.
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
 	});
@@ -1932,8 +1572,6 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
-		// 1 ok + 1 failed, then the failed one and the last one — never a replay
-		// of the occurrence that already succeeded.
 		expect(createEventMock).toHaveBeenCalledTimes(4);
 		expect(
 			createEventMock.mock.calls.slice(2).map((c) => (c[1] as CreateEventInput).startDatetime)
@@ -1943,34 +1581,7 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 		}
 	});
 
-	// (#240 — the "turning generation OFF after a stopped run closes out
-	// without writing a SECOND series" case is GONE with the checkbox: the OFF
-	// close-out path no longer exists. Abandoning a stopped run is Cancel's
-	// job, pinned by the #138 'Cancel after the round trip' case below.)
 });
-
-// ── #138 — a stopped run survives the COLLECTIVE ROUND TRIP ────────────────────
-//
-// The gap the #138 fix's own review found: keying the resume record by db was
-// not enough, because `closeSeriesCreateForm` still cleared "the currently
-// selected db" and DURING a switch `selected` has already moved to the db being
-// switched TO. Returning to the collective that owns a stopped run therefore
-// deleted exactly that db's entry — the only direction the feature exists for —
-// and the suite could not see it: every existing resume case above stays inside
-// ONE collective. These pin the round trip itself.
-//
-// Contract pinned here:
-//   - a run stopped in A (by a failed occurrence OR by the switch itself) is
-//     still recorded when the viewer comes back to A;
-//   - coming back RE-OPENS the panel + form from the run's own snapshot, so the
-//     "N remaining of M" notice, the remainder-scoped preview rows, Submit and
-//     Cancel are all on screen — a lock with no visible cause and no exit is not
-//     an acceptable terminal state;
-//   - a re-submit after the round trip FINISHES the run: no second
-//     `createEventSeries`, and no re-POST of an occurrence that already landed;
-//   - B is untouched throughout — its own entry points stay live and it can
-//     create its own series while A's run is outstanding;
-//   - Cancel is still the documented way to abandon the run, and it unlocks A.
 
 describe('#138 — a stopped series run survives a collective round trip', () => {
 	function setAuthedWithTwoCollectives(): void {
@@ -2001,7 +1612,6 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		return container;
 	}
 
-	/** Three Mondays in org-a; occurrence #2 fails, so the run STOPS owing two. */
 	async function stopRunInOrgA(container: HTMLElement): Promise<void> {
 		createEventMock.mockImplementation(async () => {
 			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
@@ -2032,18 +1642,13 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		await leaveOrgA(container);
 		selectedCollectiveDbStore.set('org-a');
 
-		// No gear click: the return itself must put the run back on screen — while
-		// the record is outstanding every entry point INCLUDING [+ Series] is
-		// refused, so a viewer who had to click her way back could not get here.
 		await waitFor(() => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 		const resume = q(container, 'series-create-resume') as HTMLElement;
 		expect(resume.textContent).toContain('"remaining":2');
 		expect(resume.textContent).toContain('"total":3');
-		// The rows describe the same set as the notice — the remainder.
 		expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
-		// …and the exits are reachable again.
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
 
@@ -2061,7 +1666,6 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 			expect((call[1] as CreateEventInput).seriesId).toBe(NEW_SERIES_ID);
 			expect(call[0]).toEqual({ db: 'org-a', token: 'jwt-abc' });
 		}
-		// The finished run is forgotten, so org-a's entry points are live again.
 		await waitFor(() => {
 			expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
 		});
@@ -2084,13 +1688,10 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 			expect(resolvers.length).toBe(1);
 		});
 
-		// The viewer leaves while occurrence #1 is still on the wire.
 		await leaveOrgA(container);
 		resolvers[0]('ev-new-1');
 		await flush();
-		// #137's contract holds: the loop stops rather than POSTing into org-a.
 		expect(createEventMock).toHaveBeenCalledTimes(1);
-		// …and org-b is a clean slate meanwhile.
 		expect(q(container, 'series-create-resume')).toBeNull();
 
 		selectedCollectiveDbStore.set('org-a');
@@ -2118,9 +1719,6 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		await stopRunInOrgA(container);
 
 		await leaveOrgA(container);
-		// `openSeriesForm` clicks the gear and then [+ Series] — a click on a
-		// disabled button is a no-op, so reaching the form at all proves org-b's
-		// entry points were never blocked by org-a's outstanding run.
 		await openSeriesForm(container);
 		expect(q(container, 'series-create-resume')).toBeNull();
 
@@ -2135,7 +1733,6 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(2);
 		expect(createEventSeriesMock.mock.calls[1][0]).toEqual({ db: 'org-b', token: 'jwt-abc' });
 
-		// And org-a's own record survived org-b's clean series create untouched.
 		selectedCollectiveDbStore.set('org-a');
 		await waitFor(() => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
@@ -2157,7 +1754,6 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
 		expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
-		// Re-opening is a genuinely blank form, not the abandoned run.
 		await fireEvent.click(q(container, 'season-manage-add-series') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).not.toBeNull();
@@ -2166,18 +1762,9 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		expect((q(container, 'series-create-name') as HTMLInputElement).value).toBe('');
 	});
 
-	// #138 review 2 — the restore guard was keyed to the GLOBAL submitting flag
-	// while the resume records are keyed by db, so a run still on the wire in the
-	// collective the viewer just LEFT swallowed the arriving collective's own
-	// restore. `restoreSeriesCreateRun` has exactly one call site (the agenda
-	// load's success handler), so the skipped restore is never re-attempted: the
-	// arriving db's surviving record keeps every create entry point refused with
-	// no form on screen and no copy explaining it — the dead end the flag's own
-	// doc says cannot happen. It self-heals only on a further collective switch.
 	it('a run still IN FLIGHT in the collective just left does not swallow the arriving one’s restore', async () => {
 		const container = await renderTwoReady();
 
-		// org-b acquires its OWN stopped run (occurrence 2 of 3 fails)…
 		selectedCollectiveDbStore.set('org-b');
 		await waitFor(() => {
 			expect(q(container, 'season-card-expand')).not.toBeNull();
@@ -2185,14 +1772,11 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		await stopRunInOrgA(container); // db-agnostic: it runs in whatever is selected
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 
-		// …and the viewer moves back to org-a, whose entry points are free (the
-		// outstanding record belongs to org-b).
 		selectedCollectiveDbStore.set('org-a');
 		await waitFor(() => {
 			expect(q(container, 'season-manage-panel')).toBeNull();
 		});
 
-		// org-a starts a bulk run of its own; the first occurrence POST hangs.
 		const resolvers: Array<(id: string) => void> = [];
 		createEventMock.mockImplementation(
 			() =>
@@ -2208,16 +1792,11 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 			expect(resolvers.length).toBe(1);
 		});
 
-		// She switches to org-b WHILE org-a's POST is still on the wire. org-b's
-		// agenda load resolves first — this is the load that used to skip the
-		// restore because SOME db was submitting.
 		selectedCollectiveDbStore.set('org-b');
 		await waitFor(() => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 
-		// org-a's POST lands afterwards: it records what org-a still owes and
-		// releases the submitting flag — and touches nothing org-b is showing.
 		resolvers[0]('ev-a-1');
 		await flush();
 		expect(q(container, 'series-create-resume')).not.toBeNull();
@@ -2225,14 +1804,12 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 		expect((q(container, 'series-create-submit') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'series-create-cancel') as HTMLButtonElement).disabled).toBe(false);
 
-		// The lock therefore has its visible exit back: Cancel frees org-b.
 		await fireEvent.click(q(container, 'series-create-cancel') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'series-create-form')).toBeNull();
 		});
 		expect((q(container, 'season-manage-add-series') as HTMLButtonElement).disabled).toBe(false);
 
-		// …while org-a's own record survived the whole exchange untouched.
 		selectedCollectiveDbStore.set('org-a');
 		await waitFor(() => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
@@ -2243,21 +1820,9 @@ describe('#138 — a stopped series run survives a collective round trip', () =>
 	});
 });
 
-// ── #277 review F2 — the form belongs to the SEASON it was opened in ───────────
-//
-// #277 gave every manageable season its own collapsed entry, and clicking
-// another season's entry switches the panel. The series form lives INSIDE that
-// panel but is gated on the page-level `seriesCreateOpen` alone, and
-// `seriesCreateSeasonId` is captured at OPEN and read at SUBMIT — the exact
-// shape #132/T6 review F3 fixed for the COLLECTIVE switch (`loadForSelected`
-// calls `closeSeriesCreateForm()` right after `resetSeasonManage()`), one scope
-// down. Second half: a switch performs the teardown `closeSeasonManagePanel`
-// REFUSES while a run is unfinished, so it must refuse too — and the entries
-// must SAY so rather than no-op.
 describe('#277 review F2 — a season switch takes the series form with the panel', () => {
 	const SEASON_B_ID = 'season-2';
 
-	/** Two not-lapsed seasons, the viewer editor on both — two entries. */
 	function twoSeasonResult() {
 		return fullAgendaResult({
 			seasons: [
@@ -2298,8 +1863,6 @@ describe('#277 review F2 — a season switch takes the series form with the pane
 		});
 		expect(q(container, 'series-create-form')).toBeNull();
 
-		// The entry point is back (it renders only while no form is open), and the
-		// form it opens is B's: B's date prefills, B's season on the wire.
 		await waitFor(() => {
 			expect(q(container, 'season-manage-add-series')).not.toBeNull();
 		});
@@ -2322,7 +1885,6 @@ describe('#277 review F2 — a season switch takes the series form with the pane
 
 	it('a STOPPED run refuses the switch: B’s entry is DISABLED, the panel stays A’s with its resume notice, and the run’s record survives to be finished', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
-		// The stop recipe: occurrence #2 of 3 fails → resumable, owing two.
 		createEventMock.mockImplementation(async () => {
 			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
 			return `ev-new-${createEventMock.mock.calls.length}`;
@@ -2336,7 +1898,6 @@ describe('#277 review F2 — a season switch takes the series form with the pane
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 
-		// The switch target says it is refused, and clicking it changes nothing.
 		const bEntry = expandFor(container, 'Season 2027') as HTMLButtonElement;
 		expect(bEntry.disabled).toBe(true);
 		await fireEvent.click(bEntry);
@@ -2344,8 +1905,6 @@ describe('#277 review F2 — a season switch takes the series form with the pane
 
 		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe('Season 2026');
 		expect(q(container, 'series-create-resume')).not.toBeNull();
-		// The record is still A's to finish: the resumed submit creates NO second
-		// series and re-POSTs nothing that landed.
 		createEventMock.mockImplementation(
 			async () => `ev-resumed-${createEventMock.mock.calls.length}`
 		);
@@ -2380,22 +1939,8 @@ describe('#277 review F2 — a season switch takes the series form with the pane
 	});
 });
 
-// ── #215 — the toggleable date grid replaces the skip-dates input ──────────────
-//
-// Mihkel 2026-09-02: "responsive preview where dates are toggled directly."
-// The preview lists EVERY candidate date as a native toggle chip; tapping a
-// date toggles it skipped (greyed/struck, still visible) <-> active. The
-// separate skip input / [Add] / removable chip list — and with them #200's
-// heading — are GONE, and the four series_create_skip_* message keys leave
-// all four locales. #200 is superseded wholesale (already closed).
-//
-// Chip mechanics, month grouping, wrap-not-scroll, and the live count are
-// pinned in the preview/count describes above; this block pins the LOCKED
-// behaviour and that the old UI (and its copy) is really gone.
 describe('#215 — chips while LOCKED, and the retired skip UI', () => {
 	it('LOCKED (resumable run): the REMAINDER renders as chips — disabled, still pressed — and clicking one changes NOTHING (the skip set is frozen with the rest of the form)', async () => {
-		// The review-F5 stop recipe: occurrence #2 fails → the run is resumable
-		// and `seriesCreateLocked` engages.
 		createEventMock.mockImplementation(async () => {
 			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
 			return `ev-new-${createEventMock.mock.calls.length}`;
@@ -2409,7 +1954,6 @@ describe('#215 — chips while LOCKED, and the retired skip UI', () => {
 			expect(q(container, 'series-create-resume')).not.toBeNull();
 		});
 
-		// Review F3's contract carries over: the rows are the REMAINDER.
 		await waitFor(() => {
 			expect(previewDates(container)).toEqual(['2026-09-14', '2026-09-21']);
 		});
@@ -2419,8 +1963,6 @@ describe('#215 — chips while LOCKED, and the retired skip UI', () => {
 			expect(chip.getAttribute('aria-pressed')).toBe('true');
 		}
 
-		// A click on the inert chip must not move the skip set: aria-pressed,
-		// the count line and the resume notice all stand exactly as they were.
 		await fireEvent.click(dateChip(container, '2026-09-14') as HTMLButtonElement);
 		await flush();
 		expect(dateChip(container, '2026-09-14')?.getAttribute('aria-pressed')).toBe('true');
@@ -2436,7 +1978,6 @@ describe('#215 — chips while LOCKED, and the retired skip UI', () => {
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(3);
 		});
-		// Toggle one — even a non-empty skip set must not resurrect the chips.
 		await toggleDate(container, '2026-09-14');
 
 		expect(q(container, 'series-create-skip-date')).toBeNull();
@@ -2447,12 +1988,6 @@ describe('#215 — chips while LOCKED, and the retired skip UI', () => {
 	});
 });
 
-// ── #215 — the four series_create_skip_* keys leave all four locales ────────────
-//
-// Source scan, no rendering (the page.ux-polish-i18n.spec.ts precedent): the
-// retired UI's copy must go WITH the UI — a dead key in four locales is
-// translator work nothing renders — while the preview keys the grid still
-// leans on must stay, non-empty, everywhere.
 describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	const RETIRED_KEYS = [
@@ -2488,9 +2023,6 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 		}
 	});
 
-	// #240 — the generate checkbox's label goes WITH the checkbox: its sole
-	// consumer is deleted, and a dead key in four locales is translator work
-	// nothing renders (the same discipline as the retired skip keys above).
 	it.each(LOCALES)('%s: series_create_generate_label is ABSENT (#240 — the checkbox is retired)', (locale) => {
 		const file = messageFile(locale);
 		expect(
@@ -2500,28 +2032,7 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 	});
 });
 
-// ── #239 — visible labels on every field + fieldset grouping ────────────────────
-//
-// From live pilot testing (Mihkel + Joosep, 2026-09-04): nine of the form's
-// controls carried only an aria-label (with a placeholder doing the visible
-// work — and a <select> has no placeholder, so Joosep met two EMPTY unlabeled
-// boxes and had to guess "Ma eeldan, et siin on kellaaeg…"). Every control now
-// gets a VISIBLE <label> that IS its accessible name, and the form is grouped
-// into four native <fieldset>/<legend> sections (PO-ruled membership — note
-// group 4 is the PREVIEW group: #240 already deleted the generate control the
-// issue's original table anchored it on).
-//
-// Naming contract (the #205 review F1 trap, generalized): when a control gains
-// a visible label the old aria-label GOES — two authored names on one control
-// drift apart. So these tests assert the COMPUTED accessible name (accname
-// precedence: aria-labelledby > aria-label > associated <label>), not
-// aria-label truthiness, AND that no aria-label remains on the control.
-// Placeholders may stay (they are descriptive — #208's ruling) but are
-// deliberately NOT consulted by the computation below: a control whose only
-// name is its placeholder computes '' here, which is exactly the bug.
 describe('#239 — every control carries a visible label that IS its accessible name', () => {
-	/** The visible label element that names `el`: a `label[for]` match when the
-	 *  control has an id, else a wrapping <label> ancestor. */
 	function labelElementOf(container: HTMLElement, el: HTMLElement): HTMLLabelElement | null {
 		const id = el.getAttribute('id');
 		if (id) {
@@ -2531,17 +2042,12 @@ describe('#239 — every control carries a visible label that IS its accessible 
 		return el.closest('label');
 	}
 
-	/** A label's naming text: its subtree text MINUS any embedded controls (a
-	 *  wrapping label names the control with its OTHER text, never the
-	 *  control's own options/value — the accname embedded-control rule). */
 	function labelText(label: HTMLElement): string {
 		const clone = label.cloneNode(true) as HTMLElement;
 		for (const embedded of clone.querySelectorAll('input, select, textarea')) embedded.remove();
 		return clone.textContent?.replace(/\s+/g, ' ').trim() ?? '';
 	}
 
-	/** The slice of the accname algorithm these pins need, in precedence order:
-	 *  aria-labelledby > aria-label > associated <label>. NO placeholder step. */
 	function computedName(container: HTMLElement, el: HTMLElement): string {
 		const labelledby = el.getAttribute('aria-labelledby');
 		if (labelledby) {
@@ -2557,7 +2063,6 @@ describe('#239 — every control carries a visible label that IS its accessible 
 		return label ? labelText(label) : '';
 	}
 
-	/** Visible = actually on screen for Joosep: rendered text, not hidden away. */
 	function expectVisibleText(el: HTMLElement, what: string): void {
 		expect(el.hasAttribute('hidden'), `${what} must not be [hidden]`).toBe(false);
 		expect(el.getAttribute('aria-hidden'), `${what} must not be aria-hidden`).not.toBe('true');
@@ -2567,9 +2072,6 @@ describe('#239 — every control carries a visible label that IS its accessible 
 		).not.toContain('sr-only');
 	}
 
-	// The nine labelable controls — eight were aria-only in the pilot; type
-	// already had a visible label (it stays, but sheds its now-redundant
-	// aria-label like the rest).
 	const FIELD_LABEL_KEYS: ReadonlyArray<readonly [testid: string, key: string]> = [
 		['series-create-name', 'series_create_name_label'],
 		['series-create-type', 'series_create_type_label'],
@@ -2585,13 +2087,11 @@ describe('#239 — every control carries a visible label that IS its accessible 
 	it('all nine labelable controls: a visible <label> (for= or wrapping) computes as the accessible name, and the old aria-label is GONE — never a placeholder as the only name', async () => {
 		const container = await renderReady();
 		await openSeriesForm(container);
-		// Default repeat is weekly, so the day select is on screen.
 
 		for (const [testid, key] of FIELD_LABEL_KEYS) {
 			const control = q(container, testid) as HTMLElement;
 			expect(control, testid).not.toBeNull();
 
-			// No double-authoring: the name must COME FROM the label element.
 			expect(
 				control.getAttribute('aria-label'),
 				`${testid}: aria-label must be dropped once the visible label names it`
@@ -2601,9 +2101,6 @@ describe('#239 — every control carries a visible label that IS its accessible 
 			expect(label, `${testid}: needs a label[for] or wrapping <label>`).not.toBeNull();
 			expectVisibleText(label as HTMLElement, `${testid}'s label`);
 
-			// The lenient message mock renders every key as its own name, so the
-			// EXISTING i18n key (all four locales already carry it) is pinned as
-			// the label text — no new field-label copy.
 			expect(
 				computedName(container, control),
 				`${testid}: computed accessible name must be the visible label's text`
@@ -2619,8 +2116,6 @@ describe('#239 — every control carries a visible label that IS its accessible 
 		expect(group).not.toBeNull();
 		expect(group.getAttribute('role')).toBe('group');
 
-		// A div is not labelable by <label for> — the visible text is wired in
-		// with aria-labelledby. Same no-double-authoring rule as the fields.
 		expect(
 			group.getAttribute('aria-label'),
 			'the group must be named by its visible label, not an aria-label'
@@ -2632,8 +2127,6 @@ describe('#239 — every control carries a visible label that IS its accessible 
 		expectVisibleText(nameEl as HTMLElement, "the time group's label");
 		expect(computedName(container, group)).toBe('series_create_time_label');
 
-		// The per-select aria-labels name the PARTS (hour/minute), not the
-		// whole — they stay (TimeSelect.spec.ts owns their exact contract).
 		for (const part of ['series-create-time-hour', 'series-create-time-minute']) {
 			const sel = q(container, part) as HTMLSelectElement;
 			expect(sel, part).not.toBeNull();
@@ -2649,12 +2142,6 @@ describe('#239 — the form is grouped into four native fieldsets with visible l
 		return [...form.querySelectorAll<HTMLFieldSetElement>('fieldset')];
 	}
 
-	// PO-ruled grouping (2026-09-04) — supersedes the issue's original table
-	// for group 4, whose anchor (the generate control) #240 deleted:
-	//   1 general:  name, type, description
-	//   2 location: location, duration
-	//   3 schedule: repeat, day, time, from, until
-	//   4 preview:  the preview block and submit — nothing left to toggle
 	const GROUP_LEGEND_KEYS = [
 		'series_create_group_general_label',
 		'series_create_group_location_label',
@@ -2674,8 +2161,6 @@ describe('#239 — the form is grouped into four native fieldsets with visible l
 				fieldset.parentElement?.closest('fieldset'),
 				`fieldset ${i} must not nest inside another`
 			).toBeNull();
-			// Native rendering only draws a legend into the group border when it
-			// is the fieldset's FIRST element — the semantically correct idiom.
 			const legend = fieldset.firstElementChild as HTMLElement | null;
 			expect(legend?.tagName, `fieldset ${i} must LEAD with its <legend>`).toBe('LEGEND');
 			expect((legend as HTMLElement).textContent?.trim()).toBe(GROUP_LEGEND_KEYS[i]);
@@ -2739,7 +2224,6 @@ describe('#239 — the form is grouped into four native fieldsets with visible l
 		expect((q(container, 'series-create-submit') as HTMLElement).closest('fieldset')).toBe(
 			previewFieldset
 		);
-		// #240's retirement holds through the regrouping.
 		expect(q(container, 'series-create-generate')).toBeNull();
 	});
 
@@ -2765,12 +2249,6 @@ describe('#239 — the form is grouped into four native fieldsets with visible l
 	});
 });
 
-// ── #239 — the four group-legend keys land in all four locales ─────────────────
-//
-// Source scan (the ux-polish precedent). The et/en copy is a PO ruling
-// (Mihkel, 2026-09-04) and is pinned VERBATIM; lv/uk are natural translations,
-// pinned present + non-empty. The field-label keys the visible labels REUSE
-// must stay everywhere — reuse, not re-authoring.
 describe('#239 — locale files: group keys verbatim (et/en), present everywhere; field keys stay', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	const GROUP_KEYS = [
@@ -2829,46 +2307,7 @@ describe('#239 — locale files: group keys verbatim (et/en), present everywhere
 	});
 });
 
-// ── #241 — the preview caps at 50 chips: show next 50 / show all N ─────────────
-//
-// From live pilot testing (Mihkel, 2026-09-04): "Limit generated events to 50
-// and provide controls at the end: show next 50 / show all 233 events". A
-// DISPLAY cap on the preview grid, not a generation cap: every generated
-// occurrence is still created on submit — only the number of chips DRAWN at
-// once is limited. This revises #215's "a 90-date daily season stays flat"
-// ruling on the chip count only; the wrap-not-scroll rule survives (#241
-// point 7 — the grid still grows the page, it just starts short).
-//
-// Pinned contract:
-//   - at most 50 chips render initially, in the existing chronological order,
-//     month groupings intact: a month heading renders IFF at least one of its
-//     dates is currently shown (a month may be partially shown, under its ONE
-//     heading — never forked across the reveal boundary).
-//   - series-create-show-next reveals the NEXT 50, CUMULATIVE; its {count} is
-//     the ACTUAL next-batch size (min(50, hidden)), driven by the GRID
-//     (pre-skip) set. series-create-show-all reveals the remainder in ONE
-//     step; its {count} is the FULL total the count line already computes
-//     (seriesCreatePreviewDates.length, skip-applied — ONE source, never
-//     recounted) — EXCEPT while a stopped run is resumable, where the count
-//     line is suppressed and the grid is the remainder, so show-all counts
-//     the remainder too and agrees with the resume notice (review F1). Both
-//     native buttons, below the grid, next-then-all; both
-//     leave once everything is shown, and never render for a ≤50 set.
-//   - the count line keeps reporting the FULL (skip-applied) total, never the
-//     visible count.
-//   - revealing is a VIEW operation: skip toggles survive it, late-revealed
-//     chips arrive with their kept state, and toggling a chip never resets
-//     (or extends) the reveal — the CANDIDATE set is untouched by skips.
-//   - the reveal RESETS to the first 50 whenever the GENERATED set changes —
-//     including a time-only edit that keeps the set the SAME LENGTH (the
-//     issue names repeat/day/time/from/until; a bare $state counter, or a
-//     reset keyed off the set's LENGTH, fails exactly here).
-//   - submit is unaffected: ALL generated occurrences are created regardless
-//     of how many chips are on screen.
 describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N', () => {
-	/** Every calendar day from `from` to `until` INCLUSIVE, as ISO dates — a
-	 *  UTC-stepped walk, matching generateEventDates' calendar stepping (no
-	 *  DST wobble across the 2026-10-25 fall-back). */
 	function dailyIsoDates(from: string, until: string): string[] {
 		const dates: string[] = [];
 		const cursor = new Date(`${from}T00:00:00Z`);
@@ -2880,9 +2319,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		return dates;
 	}
 
-	/** The month-grouped document-order testid sequence `gridSequence` must
-	 *  yield for EXACTLY these shown dates: each month's heading once, before
-	 *  its first shown chip. */
 	function expectedSequence(isoDates: string[]): string[] {
 		const seq: string[] = [];
 		let month = '';
@@ -2908,8 +2344,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		return q(container, 'series-create-preview-count')?.textContent ?? '';
 	}
 
-	/** Open the form on a DAILY season over the given range — daily needs no
-	 *  day pick, so the preview appears as soon as time/from/until are set. */
 	async function renderDaily(from: string, until: string): Promise<HTMLElement> {
 		const container = await renderReady();
 		await openSeriesForm(container);
@@ -2920,8 +2354,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		return container;
 	}
 
-	/** The big case: 153 daily occurrences over five months (Sep 30 + Oct 31 +
-	 *  Nov 30 + Dec 31 + Jan 31) — three reveal steps' worth. */
 	const FULL_153 = dailyIsoDates('2026-09-01', '2027-01-31');
 
 	it('a 153-date daily season renders EXACTLY the first 50 chips (Sep + Oct 1–20, TWO headings), the count line reads the FULL 153, and two NATIVE keyboard-reachable buttons follow the grid: show-next {"count":50}, then show-all {"count":153} — and nothing is written', async () => {
@@ -2931,10 +2363,7 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			expect(previewDates(container)).toHaveLength(50);
 		});
 		expect(previewDates(container)).toEqual(FULL_153.slice(0, 50));
-		// Month grouping intact under the cap: the FULL document-order
-		// sequence — Sep's heading + 30 chips, Oct's heading + its first 20.
 		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153.slice(0, 50)));
-		// The count line NEVER tracks the visible count (#241 point 3).
 		expect(countLine(container)).toContain('"count":153');
 
 		const next = showNextButton(container);
@@ -2945,17 +2374,11 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			expect(btn.tagName).toBe('BUTTON');
 			expect(btn.getAttribute('type')).toBe('button');
 			expect(btn.disabled).toBe(false);
-			// Native buttons are keyboard-reachable by construction — pinned
-			// against a tabindex="-1" (or non-button re-implementation) later.
 			expect(btn.tabIndex).toBeGreaterThanOrEqual(0);
 		}
-		// {count} is a REAL param in both labels: show-next carries the actual
-		// next-batch size, show-all the full total (the count line's number).
 		expect(next?.textContent?.trim()).toBe('series_create_show_next_label {"count":50}');
 		expect(all?.textContent?.trim()).toBe('series_create_show_all_label {"count":153}');
 
-		// "controls at the end" — both buttons FOLLOW the last rendered chip,
-		// show-next before show-all.
 		const lastChip = dateChip(container, '2026-10-20') as HTMLElement;
 		expect(
 			lastChip.compareDocumentPosition(next as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -2967,7 +2390,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			'show-all must come after show-next'
 		).not.toBe(0);
 
-		// Previewing (capped or not) still writes NOTHING.
 		expect(createEventSeriesMock).not.toHaveBeenCalled();
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
@@ -2982,9 +2404,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(100);
 		});
-		// The first 50 STAYED (cumulative, order preserved) and October — the
-		// month straddling the first boundary — completed under its single
-		// heading: the full sequence proves no month heading forked.
 		expect(previewDates(container)).toEqual(FULL_153.slice(0, 100));
 		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153.slice(0, 100)));
 		expect(
@@ -2996,7 +2415,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(150);
 		});
-		// Only 3 remain hidden: show-next says so; show-all keeps the total.
 		expect(showNextButton(container)?.textContent?.trim()).toBe(
 			'series_create_show_next_label {"count":3}'
 		);
@@ -3010,7 +2428,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		});
 		expect(previewDates(container)).toEqual(FULL_153);
 		expect(gridSequence(container)).toEqual(expectedSequence(FULL_153));
-		// Everything is shown — both controls disappear (#241 point 2).
 		expect(showNextButton(container)).toBeNull();
 		expect(showAllButton(container)).toBeNull();
 	});
@@ -3048,8 +2465,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			expect(previewDates(container)).toHaveLength(50);
 		});
 		expect(countLine(container)).toContain('"count":90');
-		// 40 hidden (grid set), 90 total (skip-applied set) — same number for
-		// now, the toggle below splits them.
 		expect(showNextButton(container)?.textContent?.trim()).toBe(
 			'series_create_show_next_label {"count":40}'
 		);
@@ -3057,9 +2472,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			'series_create_show_all_label {"count":90}'
 		);
 
-		// Toggle a VISIBLE chip off: the count drops to 89 — but the cap and
-		// the reveal stand exactly where they were (a skip does not change the
-		// CANDIDATE set, so it must not reset — or extend — the view).
 		await toggleDate(container, '2026-09-05');
 		await waitFor(() => {
 			expect(countLine(container)).toContain('"count":89');
@@ -3067,9 +2479,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		expect(previewDates(container)).toHaveLength(50);
 		expect(previewDates(container)).toEqual(dailyIsoDates('2026-09-01', '2026-10-20'));
 		expect(dateChip(container, '2026-09-05')?.getAttribute('aria-pressed')).toBe('false');
-		// The two sets diverge here: show-all's N follows the count line's
-		// skip-applied total (ONE source — issue point 2); show-next's batch
-		// follows the pre-skip GRID (40 chips are still hidden either way).
 		expect(showAllButton(container)?.textContent?.trim()).toBe(
 			'series_create_show_all_label {"count":89}'
 		);
@@ -3081,14 +2490,11 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(90);
 		});
-		// The skip SURVIVED the reveal; late-revealed chips arrive ACTIVE.
 		expect(dateChip(container, '2026-09-05')?.getAttribute('aria-pressed')).toBe('false');
 		expect(dateChip(container, '2026-11-20')?.getAttribute('aria-pressed')).toBe('true');
 		expect(activeDates(container)).toHaveLength(89);
 		expect(countLine(container)).toContain('"count":89');
 
-		// Skip-toggling works on a LATE-REVEALED chip too — and still does not
-		// collapse the reveal back to 50.
 		await toggleDate(container, '2026-11-20');
 		await waitFor(() => {
 			expect(dateChip(container, '2026-11-20')?.getAttribute('aria-pressed')).toBe('false');
@@ -3100,7 +2506,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 	});
 
 	it('review F1 — under a RESUMABLE stopped run show-all counts the REMAINDER, not the re-generated full set: a 153-date run that stops after 20 shows "show all 133" over a button that reveals exactly those 133 — the same number the resume notice carries', async () => {
-		// Stop the run on the 21st occurrence: 20 landed, 133 remain.
 		createEventMock.mockImplementation(async () => {
 			if (createEventMock.mock.calls.length === 21) throw new Error('boom');
 			return `ev-new-${createEventMock.mock.calls.length}`;
@@ -3124,17 +2529,13 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 
 		const REMAINING_133 = dailyIsoDates('2026-09-21', '2027-01-31');
 		expect(REMAINING_133).toHaveLength(133);
-		// The grid switched to the remainder — still capped at the first 50.
 		await waitFor(() => {
 			expect(previewDates(container)).toEqual(REMAINING_133.slice(0, 50));
 		});
-		// The count line is gone; the resume notice is the number that applies.
 		expect(q(container, 'series-create-preview-count')).toBeNull();
 		expect(q(container, 'series-create-resume')?.textContent).toContain('"remaining":133');
 		expect(q(container, 'series-create-resume')?.textContent).toContain('"total":153');
 
-		// show-all must agree with the resume notice, NOT with the 153-date
-		// candidate set the restored form fields still generate.
 		expect(showAllButton(container)?.textContent?.trim()).toBe(
 			'series_create_show_all_label {"count":133}'
 		);
@@ -3142,7 +2543,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			'series_create_show_next_label {"count":50}'
 		);
 
-		// …and clicking it reveals exactly that many chips.
 		await fireEvent.click(showAllButton(container) as HTMLElement);
 		await waitFor(() => {
 			expect(previewDates(container)).toHaveLength(133);
@@ -3188,8 +2588,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 			expect(previewDates(container)).toHaveLength(153);
 		});
 
-		// The generated set CHANGES (every occurrence datetime moves to 20:00)
-		// while its LENGTH — and every calendar day — stays identical.
 		await fillTime(container, 'series-create-time', '20:00');
 
 		await waitFor(() => {
@@ -3220,15 +2618,10 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 
 		expect(createEventSeriesMock).toHaveBeenCalledTimes(1);
 		const input = lastSeriesInput();
-		// First/last OCCURRENCE of the FULL set — the cap must not leak into
-		// the series bounds any more than into the occurrence loop.
 		expect(input.startDate).toBe('2026-09-01');
 		expect(input.endDate).toBe('2026-10-30');
 
 		expect(createEventMock).toHaveBeenCalledTimes(60);
-		// Full shape, all 60, ascending — Tallinn wall clock → UTC instant
-		// (19:00 EEST = 16:00Z through 2026-10-24, EET = 17:00Z from the
-		// 2026-10-25 fall-back on).
 		const expectedInstants = dailyIsoDates('2026-09-01', '2026-10-30').map(
 			(iso) => `${iso}T${iso >= '2026-10-25' ? '17' : '16'}:00:00.000Z`
 		);
@@ -3238,12 +2631,6 @@ describe('#241 — the preview caps at 50 chips, with show-next-50 / show-all-N'
 	});
 });
 
-// ── #241 — the two show-more keys, four locales, {count} parameterised ─────────
-//
-// Source scan, no rendering (the locale-scan precedent above). PO-ruled et/en
-// copy is VERBATIM — the Estonian partitive ("järgmisi … sündmust" / "kõiki …
-// sündmust") is deliberate. {count} is a real parameter in BOTH keys in EVERY
-// locale: the 50 cap lives in code, never in copy.
 describe('#241 — locale files: series_create_show_next_label / series_create_show_all_label', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	const REVEAL_KEYS = ['series_create_show_next_label', 'series_create_show_all_label'] as const;
@@ -3282,36 +2669,5 @@ describe('#241 — locale files: series_create_show_next_label / series_create_s
 	});
 });
 
-// (*MVOX:Tallis* — #241 RED: 50-chip preview cap — cumulative show-next-50 /
-// one-step show-all-N native controls with {count}-parameterised labels
-// (next-batch size vs. skip-applied full total), the count line always at the
-// full total, view-only reveal (skips survive, toggles never collapse it),
-// set-identity reset to the first 50 on any regenerate, uncapped submit)
-
-// (*MVOX:Tallis* — #239 RED: visible <label> per control computing as the
-// accessible name (aria-labels retired with it), the time group named by a
-// visible aria-labelledby target, four native fieldset/legend groups per the
-// PO ruling — general/location/schedule/preview — with the four legend keys
-// verbatim et/en in all four locales)
-
-// (*MVOX:Tallis* — #240 RED: generate-events checkbox retired — generation
-// always on, preview unconditional on a complete recurrence, the series-only
-// OFF submit path and its verbatim-range wire shape deleted, the label key
-// leaves all four locales)
-
-// (*MVOX:Tallis* — #215 RED: toggleable date-chip grid replaces the skip-dates
-// input — native aria-pressed chips, month-grouped wrap-not-scroll grid, live
-// count with the 0-form submit gate, locked-run inert chips, skip UI + its
-// four locale keys retired)
-
-// (*MVOX:Palestrina* — #132/T5 review fixes: daily-generation reachability,
-// range validation, empty-recurrence refusal, mid-run dismissal guard, preview
-// count/scroll, resumable partial bulk run)
-
-// (*MVOX:Palestrina* — #132/T5 review 2nd pass: start_date/end_date = first/last
-// OCCURRENCE, required event_type, resume-scoped preview rows, per-field
-// aria-invalid/describedby, template+recurrence locked while resumable)
-
-// (*MVOX:Tallis* — #132/T5 RED: [+ Series] inline form, live recurrence preview
-// over the REAL generateEventDates, serial bulk generator with progress +
-// partial-failure reporting, createEventSeries/createEvent wiring)
+// (*MVOX:Tallis*)
+// (*MVOX:Palestrina*)

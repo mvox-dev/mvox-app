@@ -3,7 +3,7 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred } from '$lib/testing/entuFetchKit';
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
@@ -146,7 +146,7 @@ import {
 } from '$lib/collectives/store';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const SEASON_ID = 'season-1';
 const SEASON_B_ID = 'season-2';
 

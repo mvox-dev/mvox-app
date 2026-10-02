@@ -151,11 +151,12 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 let fakeByteStore: FakeByteStore;
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const SEASON_ID = 'season-1';
 
 function isoDate(offsetDays: number): string {

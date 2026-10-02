@@ -1,45 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #256 RED — the Lingikogu (link collection) page surface: src/routes/links/+page.svelte.
-//
-// Contract (operative scope = Gama's 2026-09-09 sign-off + 2026-09-10
-// forward-marker close on issue #256):
-//
-//   1. A collective's links are listed in a STABLE ORDER members can read —
-//      the page renders rows in the order the data module returns (which
-//      sorts by display_order; see linkData.spec.ts), each as a REAL anchor:
-//      href = the stored string VERBATIM (no scheme-guessing anywhere),
-//      target="_blank", rel carrying BOTH noopener and noreferrer.
-//   2. Admins (adminStore 'admin' — editor-or-owner tier on the DATABASE
-//      entity, exactly the tier the type's `parent_right _editor` creators
-//      rule names) can add, edit, reorder and remove. Members cannot: the
-//      controls are ABSENT from the DOM, not disabled — the codebase-wide
-//      idiom (roster record editor, library edition files, event convert).
-//   3. A link with no description renders WITHOUT an empty line — the
-//      description NODE is absent, not an empty element.
-//   4. URLs NORMALISED at payload-build time (#374 + #375, superseding the
-//      #256 as-given ruling on the SAVE path only): schemeless gets https://
-//      prepended; a url whose host is the page's own host is trimmed to a
-//      relative path. Silent — the bound inputs are NOT mutated and nothing
-//      rendered tells the person. Name and url stay required non-empty on
-//      what was TYPED (no create/update call fires on an empty one — the
-//      check runs before the helper); description optional. Display stays
-//      verbatim (pin 1) — the transform lives at the page save layer,
-//      normalizeUrl.spec.ts pins the pure contract.
-//   5. Reorder = NATIVE move up / move down buttons per row (native controls
-//      only is standing law; no drag-drop). Boundary controls (up on first,
-//      down on last) are disabled — a boundary tap never fires a write.
-//
-// Testids are 'links-*' throughout — NEVER bare 'link' (the OAuth
-// account-linking decoy, blast finding).
-//
-// Seams mocked at the module boundary (linkData/linkActions) — the wire-level
-// integration (REAL data module driven from this page, entuFetch mocked) is
-// page.links-wire.spec.ts's job.
+// The /links page: the link collection list and its controls.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — key + params echoed; structural assertions only.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -85,9 +48,6 @@ vi.mock('$lib/links/linkActions', () => ({
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-// #374/#375 — the page reads its OWN host from $app/state at save time
-// (ssr=false; precedent: profile/+page.svelte + page.session-expired.spec.ts).
-// The stub host is dev.mvox.eu — the own-surface trim compares against it.
 const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
@@ -101,8 +61,9 @@ import {
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function rows(): LinkRow[] {
 	return [
@@ -113,7 +74,6 @@ function rows(): LinkRow[] {
 			description: 'Crede recordings',
 			displayOrder: 1
 		},
-		// NO scheme, NO description — the verbatim-url and no-empty-line pins.
 		{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 2 },
 		{
 			id: 'l-site',
@@ -188,8 +148,6 @@ async function renderReady(tier: 'admin' | 'not-admin') {
 	return utils;
 }
 
-// ── the readable list (member view) ─────────────────────────────────────────
-
 describe('#256 — the list members read: stable order, real anchors, urls verbatim', () => {
 	it('renders every link as a row inside links-list, in the order the data module returns (the stable display_order order)', async () => {
 		const { container } = await renderReady('not-admin');
@@ -222,7 +180,6 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 		expect(
 			rec.querySelector('[data-testid="links-row-description"]')?.textContent?.trim()
 		).toBe('Crede recordings');
-		// The no-description row: the NODE is absent, not empty.
 		expect(scores.querySelector('[data-testid="links-row-description"]')).toBeNull();
 		expect(
 			site.querySelector('[data-testid="links-row-description"]')?.textContent?.trim()
@@ -247,8 +204,6 @@ describe('#256 — the list members read: stable order, real anchors, urls verba
 		consoleError.mockRestore();
 	});
 });
-
-// ── tier gating: absent, not disabled ───────────────────────────────────────
 
 describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, not disabled', () => {
 	it('member tier: no add form, no per-row edit/remove/move controls, and links-list contains NO button element at all', async () => {
@@ -296,13 +251,9 @@ describe('#256 — members cannot mutate: admin controls ABSENT from the DOM, no
 	});
 });
 
-// ── add ─────────────────────────────────────────────────────────────────────
-
 describe('#374/#375 — add: url normalised at payload-build time, silently', () => {
 	it('a schemeless url goes to createLink with https:// prepended (#374), displayOrder = max existing + 1, then refreshes — and the form renders NO hint about the change', async () => {
 		const { container } = await renderReady('admin');
-		// The silent pin: whatever the normaliser does, the rendered form text
-		// stays exactly what it was (input VALUES are not part of textContent).
 		const formTextBefore = q(container, 'links-add-form')!.textContent;
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Uus link' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
@@ -316,8 +267,6 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 		});
 		const [cfgArg, inputArg] = createLinkMock.mock.calls[0];
 		expect(cfgArg).toEqual(CFG);
-		// FULL-shape toEqual — the PAYLOAD carries the prepended url; no
-		// description (none typed); displayOrder appends at the end.
 		expect(inputArg).toEqual({
 			name: 'Uus link',
 			url: 'https://crede.ee/salvestused',
@@ -354,9 +303,6 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 			description: null,
 			displayOrder: 4
 		});
-		// Normalise at PAYLOAD-BUILD time only — the draft still shows exactly
-		// what was typed while the write is in flight (the draft-survives pin
-		// in page.links-save-states-wire.spec.ts depends on this).
 		expect((q(container, 'links-add-url') as HTMLInputElement).value).toBe(
 			'https://dev.mvox.eu/salvestused?x=1#y'
 		);
@@ -387,18 +333,14 @@ describe('#374/#375 — add: url normalised at payload-build time, silently', ()
 
 	it('empty url → NO create call; empty name → NO create call (non-empty stays the ONLY validation, run on what was TYPED, before the normaliser)', async () => {
 		const { container } = await renderReady('admin');
-		// name only, url empty
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'A' } });
 		await fireEvent.click(q(container, 'links-add-submit')!);
-		// url only, name cleared
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: '   ' } });
 		await fireEvent.input(q(container, 'links-add-url')!, { target: { value: 'https://a.ee' } });
 		await fireEvent.click(q(container, 'links-add-submit')!);
 		expect(createLinkMock).not.toHaveBeenCalled();
 	});
 });
-
-// ── edit ────────────────────────────────────────────────────────────────────
 
 describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-build time', () => {
 	it('opens the row prefilled, submits updateLink with the full field set — the typed schemeless url goes with https:// prepended (#374), an emptied description goes as null', async () => {
@@ -421,9 +363,6 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 		});
 		expect(updateLinkMock.mock.calls[0][0]).toEqual(CFG);
 		expect(updateLinkMock.mock.calls[0][1]).toBe('l-scores');
-		// The PAYLOAD carries the prepended url; description stays absent
-		// (null). The stored rows still render verbatim — display is pin 1's
-		// job, untouched by #374/#375.
 		expect(updateLinkMock.mock.calls[0][2]).toEqual({
 			name: 'Scores',
 			url: 'https://f.io/abc',
@@ -455,7 +394,6 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 			url: '/salvestused?x=1#y',
 			description: null
 		});
-		// Payload-build only — the in-situ draft still shows what was typed.
 		expect((q(container, 'links-edit-url') as HTMLInputElement).value).toBe(
 			'https://dev.mvox.eu/salvestused?x=1#y'
 		);
@@ -466,10 +404,6 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 	});
 
 	it('a row whose stored url is ALREADY relative re-saves with that SAME url when only the name changes — no https:// glued onto it', async () => {
-		// #375 stores own-host links as '/salvestused'. Reopening that row
-		// prefills editUrl with the stored relative path; a name-only edit
-		// must send it back untouched. Prepending would write
-		// 'https:///salvestused' — a dead link to a host named `salvestused`.
 		listLinksMock.mockResolvedValue([
 			{
 				id: 'l-own',
@@ -508,8 +442,6 @@ describe('#374/#375 — edit: whole-field, prefilled, url normalised at payload-
 	});
 });
 
-// ── remove ──────────────────────────────────────────────────────────────────
-
 describe('#256 — remove', () => {
 	it('the row control calls deleteLink with THAT row id and refreshes the list', async () => {
 		const { container } = await renderReady('admin');
@@ -525,8 +457,6 @@ describe('#256 — remove', () => {
 		});
 	});
 });
-
-// ── reorder ─────────────────────────────────────────────────────────────────
 
 describe('#256 — reorder: native move up / move down per row, persisted via reorderLinks', () => {
 	it('move-down on the middle row calls reorderLinks with the FULL new id order', async () => {
@@ -576,19 +506,6 @@ describe('#256 — reorder: native move up / move down per row, persisted via re
 		});
 	});
 });
-
-// ── #335 — visible styling ──────────────────────────────────────────────────
-// Every form control on this page shipped with NO class at all (reported live
-// by Mihkel from a phone: bare labels, invisible inputs, buttons as plain
-// text — preflight strips the browser border/background and app.css's base
-// rule only sets font-size). src/unclassed-controls.spec.ts owns PRESENCE
-// (some class on every control, codebase-wide); these pins own VISIBILITY on
-// this page: each control's class must contain 'border' — a substring, not an
-// exact string, so GREEN picks the exact idiom within the roster reference
-// (`rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50`).
-// links-add-submit already carries layout-only `self-start` (which passes the
-// presence guard) — it is asserted here like the other seven, NOT
-// special-cased: its fix adds real styling alongside the existing self-start.
 
 describe('#335 — Links page controls are VISIBLE: every input and button carries a border class', () => {
 	function expectBorder(container: HTMLElement, testid: string) {
@@ -642,4 +559,4 @@ describe('#335 — Links page controls are VISIBLE: every input and button carri
 	});
 });
 
-// (*MVOX:Tallis* — #256 RED; #335 visible-styling pins)
+// (*MVOX:Tallis*)

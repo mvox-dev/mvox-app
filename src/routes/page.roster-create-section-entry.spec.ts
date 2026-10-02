@@ -1,72 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #124 RED (F1 + F2) — a PAGE-LEVEL "+ New section" entry point on the ACTUAL
-// /roster route (integration: real page component, real SectionPicker, real
-// groupBySection; only the fetch/write seams are mocked — same harness as
-// page.roster-create-section-org.spec.ts).
-//
-// WHY (TU.6 gate walk, #114 check 1 → SPIKE root cause, 2026-08-12): section
-// creation "does nothing" in live NOT because the writes are broken — the
-// deployed bundle carries the TU.1 code and the exact createSection wire shape
-// succeeds against the live dev/test collective — but because the ONLY entry
-// point is buried three levels deep inside a member row's picker dropdown:
-//
-//   - MIS-TAP: "(Unassigned)" and "+ New section…" are adjacent 24px rows with
-//     identical styling; a tap one row high on an already-unassigned member is
-//     `pick(null)` → `if (before.length === 0) return` → picker closes, nothing
-//     written, nothing said. Exactly the reported symptom.
-//   - OFF-SCREEN FORM: 16 live sections make the dropdown ~440px tall;
-//     "+ New section…" is the LAST row, and tapping it swaps the list for a
-//     ~110px form anchored back at the trigger — off-viewport on a phone.
-//   - INVISIBLE SUCCESS: a new section is inserted with displayOrder=Infinity
-//     (sorts LAST) while the member moves OUT of the group under the user's
-//     thumb — even a successful create shows nothing at the point of gaze.
-//
-// The fix this file pins: a DEDICATED, page-level create affordance that does
-// not depend on any member row, any picker, or any expansion state — plus an
-// announced (role="status") success so a create is never silent. The
-// member-picker path stays as-is (its own specs keep pinning it); this is an
-// ADDITIONAL, primary entry point.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS
-//     roster-new-section          page-level "+ New section" control: grouped
-//                                 view, ADMIN-ONLY, rendered ABOVE the groups
-//                                 (document order before roster-groups), NOT
-//                                 inside any member row, reachable with every
-//                                 section still COLLAPSED (default state)
-//     roster-new-section-form     the form it opens (no picker involved)
-//     roster-new-section-name     name input, AUTO-FOCUSED on open
-//     roster-new-section-parent   parent <select>; '' = "(top level)" default;
-//                                 options are the VIEWER'S OWN org's sections
-//                                 ONLY (the whole-db tree holds four test orgs'
-//                                 roots — a foreign org's section must not be
-//                                 offered as a parent)
-//     roster-new-section-submit   fires createSection(cfg, { name, parentId,
-//                                 dbEntityId: <the VIEWER's own org id> }) — dbEntityId
-//                                 from the authenticated person (resolveDatabaseEntityId
-//                                 or her own roster row), NEVER a limit=1 guess
-//     roster-new-section-cancel   closes the form; nothing written
-//     roster-new-section-error    inline validation error (duplicate/empty),
-//                                 sibling-scoped + own-org-scoped exactly like
-//                                 the picker form (a GLOBAL check was the
-//                                 original live bug — TU.1 finding #10 B)
-//     roster-section-create-status  role="status" live region; a successful
-//                                 create lands a non-empty announcement in it
-//                                 (the "invisible success" half of the finding)
-//
-//   BEHAVIOR
-//     - submit resolves → the new section's group (section-group-<newId>)
-//       appears in the roster, titled with the typed name; a sub-section
-//       renders NESTED inside its parent's group. LOCAL insertion — neither
-//       loadRoster nor listSections is refetched.
-//     - the page-level create assigns NO member (there is no member context) —
-//       assignMemberSection must not fire.
+// The page-level new-section entry on /roster.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -90,9 +26,6 @@ const {
 	deleteMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -105,9 +38,6 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reorderSections: reorderMock,
 	deleteSection: deleteMock
 }));
-// The viewer's-own-org seam — mocked so EITHER legitimate derivation (a
-// resolveDatabaseEntityId fetch, or reading the authenticated person's own roster row)
-// lands on the same org in these tests.
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
@@ -128,8 +58,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── live-shaped fixtures (real entity ids, 2026-08-12 probe) ──────────────────
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
@@ -137,8 +66,6 @@ const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
 const EFK_ALTO = '69c7f8748489bfcb0e81b0cd';
 const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 
-/** Live shape: the whole-db tree — EFK's roots AND another org's flat
- *  "Soprano II" (the name that must NOT block an EFK create). */
 function liveShapedTree(): SectionNode[] {
 	return [
 		{
@@ -171,7 +98,6 @@ function liveShapedTree(): SectionNode[] {
 	];
 }
 
-/** The VIEWER (authenticated personId 'person-p') is Pete, an EFK member. */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -193,7 +119,7 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -252,9 +178,6 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-// #155/S4 — the page-level "+ New section" control moved EXCLUSIVELY into
-// Arrange mode (was rendered regardless of viewMode). Every test below that
-// wants `roster-new-section` first switches into it via this helper.
 async function renderArrangeReady(admin: AdminState = 'admin') {
 	const container = await renderReady(admin);
 	const arrangeChip = q(container, 'roster-view-chip-arrange') as HTMLElement | null;
@@ -284,23 +207,12 @@ async function submit(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
 }
 
-// ── F1: the entry point exists at PAGE level, not buried in a picker ────────────
-//
-// #155/S4 — this control RELOCATED into Arrange mode exclusively (was
-// page-level, rendered regardless of viewMode). Every test below opens
-// Arrange first via `renderArrangeReady`; the structural pin is now "outside
-// the arrange row list, admin-only, reachable from the arrange chip" rather
-// than "above roster-groups" (roster-groups doesn't render in Arrange mode
-// at all).
-
 describe('/roster — the "+ New section" control lives in Arrange mode (finding F1, structural, relocated #155/S4)', () => {
 	it('admin, Arrange mode: roster-new-section renders inside the arrange screen, outside the row list and outside any member row — and merely rendering writes nothing', async () => {
 		const container = await renderArrangeReady();
 
 		const control = q(container, 'roster-new-section');
 		expect(control).not.toBeNull();
-		// NOT buried: no member-row ancestor, no picker involved, not one of the
-		// per-row arrange controls either.
 		expect(control!.closest('[data-testid^="roster-row-"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="section-picker-menu-"]')).toBeNull();
 		const list = q(container, 'roster-arrange-list') as HTMLElement;
@@ -355,8 +267,6 @@ describe('/roster — the "+ New section" control lives in Arrange mode (finding
 	});
 });
 
-// ── F1: end-to-end — type name, submit, section APPEARS (and is announced) ──────
-
 describe('/roster — page-level create: type name, submit, the section appears in the arrange list', () => {
 	it("top-level create: createSection(cfg, { name, parentId: null, dbEntityId: <viewer's org> }) fires ONCE; the new row renders TITLED with the name; success is ANNOUNCED (role=status non-empty); NO member assigned; NO refetch", async () => {
 		const container = await renderArrangeReady();
@@ -368,25 +278,18 @@ describe('/roster — page-level create: type name, submit, the section appears 
 		await waitFor(() => {
 			expect(createSectionMock).toHaveBeenCalledTimes(1);
 		});
-		// The viewer's OWN org — from the authenticated person, never a limit=1
-		// guess, never "whichever roster row sorted first" (see the F3 spec).
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Tenor 2',
 			parentId: null,
 			dbEntityId: ORG_EFK
 		});
 
-		// VISIBLE result: the arrange row is on screen, named.
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-new-1')).not.toBeNull();
 		});
-		// #205 — the section NAME is rendered by the rename activator beside the
-		// row; the row states the "<name> (<count>)" pair as its accessible name.
 		expect(q(container, 'arrange-rename-sec-new-1')?.textContent).toContain('Tenor 2');
 		expect(q(container, 'arrange-row-sec-new-1')?.getAttribute('aria-label')).toBe('Tenor 2 (0)');
 
-		// ANNOUNCED result — the "invisible success" half of the finding: a
-		// role="status" live region carries a non-empty announcement.
 		const status = q(container, 'roster-section-create-status');
 		expect(status).not.toBeNull();
 		expect(status?.getAttribute('role')).toBe('status');
@@ -394,9 +297,7 @@ describe('/roster — page-level create: type name, submit, the section appears 
 			expect(status?.textContent?.trim()).not.toBe('');
 		});
 
-		// Page-level create has no member context — nobody is assigned.
 		expect(assignMock).not.toHaveBeenCalled();
-		// LOCAL insertion, not reload-the-world.
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 		expect(listSectionsMock).toHaveBeenCalledTimes(1);
 	});
@@ -432,8 +333,6 @@ describe('/roster — page-level create: type name, submit, the section appears 
 		});
 	});
 });
-
-// ── F2: sub-section creation under a parent section ─────────────────────────────
 
 describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 	it("parent select offers ONLY the viewer's own org's sections — EFK's roots yes, Sireen's 'Soprano II' NO (a foreign org's section must not be offered as a parent)", async () => {
@@ -477,5 +376,5 @@ describe('/roster — page-level create of a SUB-SECTION (finding F2)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #124 RED, F1+F2: page-level section-create entry point)
-// (*MVOX:Palestrina* — #155/S4: relocated into Arrange mode exclusively)
+// (*MVOX:Tallis*)
+// (*MVOX:Palestrina*)
