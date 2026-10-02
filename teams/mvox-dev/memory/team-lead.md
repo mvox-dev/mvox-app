@@ -2,7 +2,26 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-31 checkpoint 2026-10-01 17:48Z, idle seam]
+### [NEXT SESSION — MVOX-31 checkpoint 2026-10-02 05:47Z, Run 500 done]
+
+**State:** main cc27564, tree clean. Mihkel (2026-10-01): refactoring rounds before features. No source file over 500; 400 register = 6 files (memberLifecycle.ts 471 largest).
+
+**Landed since the last checkpoint:** consolidation-700 w1 e6c88f7 (#625-#630), w2 7ce9511 (#623 #624 #631-#633) · attribution-only rule 5abaea8 · Run 500 b1 a6bfd5e (#634 #635 #649 #652), b2 56bab05 (#641 #646 #648), b3 97aa11b (#636 #656 #651 #644), b4 74d2c96 (#639 #643 #650 + writeReach.ts fence), b5 965b82f (#642 #647 #654 #653), b6 cc27564 (#645 #638 #640 #637). Closed no-change: #655, D2.
+
+**In flight:** Finn's consolidation run for the 500 step → ~/workspace/scratchpad/consolidation-500.md → relay to Gama → Gama files merges + the 400 step.
+
+**Rules this session:** commits/PR bodies carry ONLY (*MVOX:Name*) (no Co-authored-by/email/session link; Mihkel). Gates: FOREGROUND, `ulimit -c 0` (vitest core dumps), split by path, ALL 510 spec files incl. scripts/. write-gate fence now follows imports (writeReach.ts); untraceable forms fail a guard.
+
+**Queue after refactor:** #611 (brief-611.md) → #615 pen → #616 → #617/#618/#619. #580's D3 prompt text with Mihkel. Mihkel live checks: #612 capture pixels/scroll, datalist Enter.
+
+**Nits for next touch:** EventConvertForm.svelte:294 indent; linkedIdentities.ts:40 stale path comment. josquin.md over 100 lines: next Josquin prunes it.
+
+**Team at seam:** perotin up; finn on consolidation-500; spawn josquin/bentham per branch.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-31 checkpoint 2026-10-01 17:48Z, idle seam]
 
 **State:** main d716a6f, tree clean, no branch open. Mihkel (16:30Z): refactoring before new features.
 
@@ -15,19 +34,6 @@
 **How this session worked:** research-pack per batch → brief-<N>.md → fresh Josquin per branch → Bentham review → /mvox-merge. Briefs/digests in ~/workspace/scratchpad/ (brief-common-1000.md = shared rules). Gates FOREGROUND, split suite by path (>600s). Comment rules force trims on every touched file. Findings log: ~/workspace/scratchpad/findings-mvox-29.md.
 
 **Team at seam:** bentham, perotin up; respawn finn/josquin on demand. Held probe moved to ~/workspace/scratchpad/held/ (Gama told).
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-30 seam 2026-10-01 01:36Z, end of wave 3]
-
-**Where things stand:** epic #524 (file-size ladder + consolidation). Step 1500 done (#525–#529); the consolidation run for 1500 filed #539–#562. Merged: W0 (#553 #555 #562), W1 (#540–#543), W2 (#544–#547 #549), #565 #566, W3 (#539 #548 #550–#552 #554). Briefs and research for all of it are in ~/workspace/scratchpad (brief-*.md, research-*.md, consolidation-1500.md); the findings log is findings-mvox-29.md.
-
-**Next:** W4 = #560 (create-form keys; WAITING on Gama: Escape/Enter per control or on the wrapper) and #561 (agenda opens parts in the part viewer). Then W5 = #556 (step to 1000), then #557–#559 (the agenda page 1300, SeasonManagePanel, agendaLoad 1003). #568 (the comment/line-cap checks see untracked files) is filed but not `ready`. The tdd-slice-pipeline template fails the comment rules, so clean it before using the pipeline again.
-
-**How the team runs now (in common-prompt + memory):** hand work. Fresh Josquin per issue or wave from a brief; Finn per research task; Bentham released at wave end; Pérotin only for live data; Comenius on demand for translations. Board labels: ready → in research → researched → prepped (brief on file) → in process. Rules: one folder per area, the size ladder, no loose text pins, the comment rules (+ top line, tiny files included).
-
-**Team at seam:** nobody standing; spawn per task. Untracked to leave: scratchpad/, probes/probe-crede-rsvp-tally-nameless-diagnosis-2026-09-19.ts.
 
 (*MVOX:Palestrina*)
 
