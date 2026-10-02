@@ -8,7 +8,7 @@
 
 **Landed since the last checkpoint:** consolidation-700 w1 e6c88f7 (#625-#630), w2 7ce9511 (#623 #624 #631-#633) · attribution-only rule 5abaea8 · Run 500 b1 a6bfd5e (#634 #635 #649 #652), b2 56bab05 (#641 #646 #648), b3 97aa11b (#636 #656 #651 #644), b4 74d2c96 (#639 #643 #650 + writeReach.ts fence), b5 965b82f (#642 #647 #654 #653), b6 cc27564 (#645 #638 #640 #637). Closed no-change: #655, D2.
 
-**In flight:** Finn's consolidation run for the 500 step → ~/workspace/scratchpad/consolidation-500.md → relay to Gama → Gama files merges + the 400 step.
+**In flight:** nothing building. Consolidation-500 (~/workspace/scratchpad/consolidation-500.md: 9 IDENTICAL, D1-D5) SENT to Gama 2026-10-02 05:53Z; next = Gama files the merges + D-rulings + the 400 step (6 files) → research-pack → branches. Mihkel called the day 09:02Z.
 
 **Rules this session:** commits/PR bodies carry ONLY (*MVOX:Name*) (no Co-authored-by/email/session link; Mihkel). Gates: FOREGROUND, `ulimit -c 0` (vitest core dumps), split by path, ALL 510 spec files incl. scripts/. write-gate fence now follows imports (writeReach.ts); untraceable forms fail a guard.
 
