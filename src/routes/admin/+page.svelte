@@ -11,6 +11,7 @@
 	} from '$lib/collectives/store';
 	import {
 		resolveCollectiveNameMarker,
+		updateCollectiveName,
 		type CollectiveNameMarker
 	} from '$lib/collectives/collectiveName';
 	import { resolveAdmin } from '$lib/nav/adminStore';
@@ -243,6 +244,7 @@
 				{cfg}
 				{isOffline}
 				loadSeq={() => loadSeq}
+				updateCollectiveName={(...a) => updateCollectiveName(...a)}
 			/>
 
 			{#if isOffline}

@@ -3,7 +3,8 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { renameCollectiveInStore } from '$lib/collectives/store';
-	import { updateCollectiveName, type CollectiveNameMarker } from '$lib/collectives/collectiveName';
+	import type * as CollectiveName from '$lib/collectives/collectiveName';
+	import type { CollectiveNameMarker } from '$lib/collectives/collectiveName';
 	import { focusAfterRender, focusOnMount } from '$lib/a11y/focusable';
 	import EditActivator from '$lib/components/EditActivator.svelte';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
@@ -14,6 +15,7 @@
 		cfg: EntuCfg | null;
 		isOffline: boolean;
 		loadSeq: () => number;
+		updateCollectiveName: typeof CollectiveName.updateCollectiveName;
 	}
 
 	let {
@@ -21,7 +23,8 @@
 		nameHeldOffline = $bindable(),
 		cfg,
 		isOffline,
-		loadSeq
+		loadSeq,
+		updateCollectiveName
 	}: Props = $props();
 
 	let editingName = $state(false);

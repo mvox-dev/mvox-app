@@ -26,6 +26,7 @@
 	import { writesAvailable } from '$lib/net/online';
 	import { mintSelfLinkInvite, SelfLinkMintError } from '$lib/invite/inviteData';
 	import { listAllEditions } from '$lib/library/libraryData';
+	import { updateRosterShowRealNames } from '$lib/collective/rosterNames';
 	import ProfileChrome from '$lib/profile/ProfileChrome.svelte';
 	import RosterNamesToggle from '$lib/profile/RosterNamesToggle.svelte';
 	import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
@@ -205,6 +206,7 @@
 			{isOffline}
 			generation={() => routeLoad.generation}
 			{activeContext}
+			updateRosterShowRealNames={(...a) => updateRosterShowRealNames(...a)}
 		/>
 
 		<!-- #257 — above the `status` gate: a live region announces only changes, and inside
