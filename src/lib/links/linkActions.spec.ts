@@ -301,6 +301,21 @@ describe('updateLink — whole-field edit via the atomic overwrite (#256 done-wh
 		]);
 	});
 
+	it('two name values: the POST pairs the first, and the second is deleted only after it', async () => {
+		const fetchImpl = makeUpdateFetchMock({
+			name: [{ _id: 'pv-name' }, { _id: 'pv-name-2' }],
+			url: [{ _id: 'pv-url' }]
+		});
+		await updateLink(cfg, 'l-1', { name: 'A', url: 'x', description: null }, fetchImpl);
+		const calls = callsOf(fetchImpl);
+		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST', 'DELETE']);
+		expect(calls[1].body).toEqual([
+			{ _id: 'pv-name', type: 'name', string: 'A' },
+			{ _id: 'pv-url', type: 'url', string: 'x' }
+		]);
+		expect(calls[2].url).toContain('/testdb/property/pv-name-2');
+	});
+
 	it('empty name or empty url throws WITHOUT any fetch', async () => {
 		for (const fields of [
 			{ name: '', url: 'x', description: null },
