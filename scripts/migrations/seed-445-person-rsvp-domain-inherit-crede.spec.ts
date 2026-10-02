@@ -1,21 +1,9 @@
-// mvox-app#445 — every `person` and every `rsvp` entity on crede gets
-// `_sharing: domain` and `_inheritrights: true`. Pins the engine's
-// contract — see the header comment in
-// seed-445-person-rsvp-domain-inherit-crede.ts for the docs quoted and the
-// DELETE-then-POST replace-semantics rationale.
-//
-// networkGuard.setup.ts stands behind every spec: nothing here can reach a
-// live db; the whole wire is a fake fetch and every request asserted
-// full-shape with toEqual (partial assertions hide bugs —
-// feedback_partial_assertions_hide_bugs).
-
+// Every crede person and rsvp gets _sharing domain and _inheritrights true.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/seed-445-fake.json');
 
-// Only `writeLedger` is replaced; `assertLiveRunAuthorized` stays the real
-// export so the gate is exercised against running code, not assumed.
 vi.mock('./lib/ledger-writer', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./lib/ledger-writer')>();
 	return {
@@ -25,6 +13,7 @@ vi.mock('./lib/ledger-writer', async (importOriginal) => {
 });
 
 import { runSeed445 } from './seed-445-person-rsvp-domain-inherit-crede';
+import { json } from '$lib/testing/entuFetchKit';
 
 type CredeRunnerCfg = EntuCfg & { userId: string };
 
@@ -32,7 +21,6 @@ const RUNNER_ID = 'runner-person-1';
 const cfg: CredeRunnerCfg = { db: 'mvox_crede', token: 'jwt', userId: RUNNER_ID };
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/445#issuecomment-fake';
-/** #445 (team-lead, 2nd round) — the postRunRecheck delay, made instant for every spec run. */
 const NO_DELAY = 0;
 const noSleep = async (): Promise<void> => {};
 
@@ -64,10 +52,6 @@ type CensusEntity = {
 	_parent?: string;
 };
 
-function json(body: unknown, status = 200): Promise<Response> {
-	return Promise.resolve(new Response(JSON.stringify(body), { status }));
-}
-
 type LoggedRequest = { url: string; method: string; body: unknown };
 
 function toCensusEntity(e: CensusEntity, includeParent: boolean): unknown {
@@ -94,9 +78,7 @@ interface WireOptions {
 	personPropDefs?: Array<{ name: string; sharing?: string }>;
 	rsvpPropDefs?: Array<{ name: string; sharing?: string }>;
 	readbackOverrides?: Record<string, { sharing?: string; inheritCount?: number; sharingCount?: number }>;
-	/** #445 (team-lead, 2nd round) — overrides applied ONLY from the SECOND call to `entity/{id}?props=_sharing,_inheritrights` onward for a given id (the in-loop read-back is the first; the delayed postRunRecheck is the second) — the tool to reproduce "passed read-back, reverted moments later." Also covers the self-heal re-read (3rd round): the 2nd call is answered by this override, and so is the 3rd (postRunRecheck) unless it differs. */
 	recheckOverrides?: Record<string, { sharing?: string; inheritCount?: number; sharingCount?: number }>;
-	/** #445 — controls the diagnostic `GET /property/{id}` probe response, keyed by the property id the POST response returned. */
 	propertyProbeOverrides?: Record<string, { status?: number; body?: unknown }>;
 }
 
@@ -111,7 +93,7 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 		state.set(e._id, { sharing: e._sharing?.[0]?.string, inherit: e._inheritrights?.[0]?.boolean });
 	}
 
-	const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+	const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		const parsedBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
@@ -168,9 +150,6 @@ function makeWire(opts: WireOptions = {}): { fetchImpl: typeof fetch; requests: 
 			readbackCallCounts.set(id, callNumber);
 			const override = callNumber >= 2 && opts.recheckOverrides?.[id] ? opts.recheckOverrides[id] : opts.readbackOverrides?.[id];
 			const entry = state.get(id) ?? {};
-			// 'in' checks, not `??`: an override explicitly setting `sharing:
-			// undefined` (the "reverted to absent" shape) must NOT fall
-			// through to the unchanged state value.
 			const sharingStr = override && 'sharing' in override ? override.sharing : entry.sharing;
 			const inheritCount = override && 'inheritCount' in override ? override.inheritCount : entry.inherit !== undefined ? 1 : 0;
 			const sharingCount = override && 'sharingCount' in override ? override.sharingCount : sharingStr !== undefined ? 1 : 0;
@@ -246,10 +225,6 @@ describe('runSeed445 — census + schema-metadata reads', () => {
 
 describe('runSeed445 — classification', () => {
 	it('classifies alreadyDomain/needsSharing (with fromTier breakdown) and alreadyInherit/needsInherit', async () => {
-		// All four rsvps share ONE parent person ('pe-1', itself already
-		// compliant so it never enters the write plan) — this exercises the
-		// fromTier breakdown across private/public/absent WITHOUT tripping
-		// the moving-set scope fence (which is exercised on its own below).
 		const persons: CensusEntity[] = [{ _id: 'pe-1', _sharing: [{ _id: 's0', string: 'domain' }], _inheritrights: [{ _id: 'i0', boolean: true }], _owner: [RUNNER_ID] }];
 		const rsvps: CensusEntity[] = [
 			{ _id: 'rs-domain-inherit', _sharing: [{ _id: 's1', string: 'domain' }], _inheritrights: [{ _id: 'i1', boolean: true }], _owner: [RUNNER_ID], _parent: 'pe-1' },
@@ -381,8 +356,6 @@ describe('runSeed445 — live write', () => {
 			{ url: `${BASE}/entity/pe-w1`, method: 'POST', body: [{ type: '_sharing', string: 'domain' }] },
 			{ url: `${BASE}/entity/pe-w1`, method: 'POST', body: [{ type: '_inheritrights', boolean: true }] },
 			{ url: `${BASE}/entity/pe-w1?props=_sharing,_inheritrights`, method: 'GET', body: null },
-			// #445 (team-lead, 2nd round) — the post-run delayed recheck reads
-			// the same written row a second time, same URL shape.
 			{ url: `${BASE}/entity/pe-w1?props=_sharing,_inheritrights`, method: 'GET', body: null }
 		]);
 
@@ -401,18 +374,12 @@ describe('runSeed445 — live write', () => {
 	it('the delayed recheck catches a row that PASSED its own read-back and reverted moments later — the exact live shape (6a9c3d37...292)', async () => {
 		const { fetchImpl } = makeWire({
 			persons: [{ _id: 'pe-reverts', _owner: [RUNNER_ID] }],
-			// recheckOverrides apply from the SECOND read-back call onward —
-			// the in-loop read-back (call 1) sees the write succeed; the
-			// delayed postRunRecheck (call 2) sees it gone, same as the live
-			// anomaly on 6a9c3d37...292.
 			recheckOverrides: { 'pe-reverts': { sharing: undefined, inheritCount: 0 } }
 		});
 		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
 
-		// the write itself succeeded — the in-loop read-back was clean
 		expect(result.counts.person.written).toBe(1);
 		expect(result.counts.person.failed).toBe(0);
-		// but the delayed recheck caught the reversion, dated by this run
 		expect(result.postRunRecheck).toEqual([{ id: 'pe-reverts', status: 200, _sharing: [], _inheritrights: [], stillCorrect: false }]);
 	});
 
@@ -430,11 +397,7 @@ describe('runSeed445 — hidden pre-existing value self-heal (#445, 3rd round: 6
 	it('a duplicate found at read-back self-heals: deletes THIS RUN\'S own posted id, converges to the hidden pre-existing value, classifies pre-existing-hidden, no duplicate left', async () => {
 		const { fetchImpl, requests } = makeWire({
 			persons: [{ _id: 'pe-hidden', _owner: [RUNNER_ID] }],
-			// call 1 (in-loop read-back): _sharing shows TWO values — this
-			// run's own fresh POST landed beside a hidden pre-existing one.
 			readbackOverrides: { 'pe-hidden': { sharingCount: 2 } },
-			// call 2+ (self-heal re-read, then postRunRecheck): back to one
-			// correct value, as if the self-heal delete converged it.
 			recheckOverrides: { 'pe-hidden': { sharingCount: 1, sharing: 'domain' } }
 		});
 		const result = await runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep);
@@ -443,7 +406,6 @@ describe('runSeed445 — hidden pre-existing value self-heal (#445, 3rd round: 6
 		expect(result.counts.person.failed).toBe(0);
 		expect(result.counts.person.preExistingHidden).toBe(1);
 
-		// the self-heal DELETE targets the id THIS RUN'S OWN POST returned
 		expect(requests).toContainEqual({ url: `${BASE}/property/p-pe-hidden-_sharing-new`, method: 'DELETE', body: null });
 
 		const payload = writeLedgerMock.mock.calls.at(-1)?.[0]?.payload;
@@ -455,8 +417,6 @@ describe('runSeed445 — hidden pre-existing value self-heal (#445, 3rd round: 6
 		const { fetchImpl } = makeWire({
 			persons: [{ _id: 'pe-wrong-hidden', _owner: [RUNNER_ID] }],
 			readbackOverrides: { 'pe-wrong-hidden': { sharingCount: 2 } },
-			// after self-heal, the remaining value is present but WRONG
-			// (private, not domain) — must abort, not accept it.
 			recheckOverrides: { 'pe-wrong-hidden': { sharingCount: 1, sharing: 'private' } }
 		});
 		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);
@@ -471,7 +431,6 @@ describe('runSeed445 — hidden pre-existing value self-heal (#445, 3rd round: 6
 		const { fetchImpl } = makeWire({
 			persons: [{ _id: 'pe-still-multi', _owner: [RUNNER_ID] }],
 			readbackOverrides: { 'pe-still-multi': { sharingCount: 2 } },
-			// after self-heal, still two values (a THIRD one existed) — abort.
 			recheckOverrides: { 'pe-still-multi': { sharingCount: 2, sharing: 'domain' } }
 		});
 		await expect(runSeed445(cfg, false, fetchImpl, LIVE_AUTH, NO_DELAY, noSleep)).rejects.toThrow(/READ-BACK _sharing mismatch/);

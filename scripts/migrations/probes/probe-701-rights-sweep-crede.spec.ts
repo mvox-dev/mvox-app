@@ -2,7 +2,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { RIGHTS_WRITES_REGISTER } from '$lib/testing/rightsWrites';
 import { stripComments } from '$lib/testing/commentRules';
 import { firstMutationIndex } from '../lib/mutation-markers';
@@ -17,8 +16,9 @@ import {
 	type RawEntity,
 	type SweepReport
 } from './probe-701-rights-sweep-crede';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
+const cfg = testCfg('mvox_crede');
 const PLANTED = 'Jaan Tamm';
 
 const ref = (reference: string, inherited = false) => ({ reference, inherited, string: PLANTED });

@@ -1,60 +1,9 @@
-// mvox-app#233 S1 (RED, Tallis) — `event_name` prop-def on the EXISTING
-// canonical `event` type, crede ONLY.
-//
-// The estate ruling (Mihkel 2026-09-18, folded into the #233 body): steps run
-// on crede and nothing else — the per-collective twin-script pattern ENDS
-// here. ONE script per step. This spec pins that script's whole wire
-// contract against a fake fetch (networkGuard.setup.ts stands behind every
-// spec: nothing here can reach a live db).
-//
-// Contract pinned here, for GREEN to satisfy:
-//
-// - The script module `./seed-233-s1-event-name-propdef-crede` is
-//   side-effect-free on import (no main() at module scope — importing it from
-//   this spec must not attempt loadCredeCfg or any fetch; the network guard
-//   turns such an attempt into a loud suite failure) and exports
-//   `runSeed233S1(cfg, dryRun, fetchImpl, authorizedBy?)` returning
-//   `{ typeId, propDefId, outcome, sharing, ordinal, ledgerPath }`.
-//
-// - SHARING + ORDINAL ARE NOT KNOWN from any committed artefact (no ledger
-//   records the live crede event type's `name` prop-def posture, and the
-//   historical v4E schema.ts has no ordinal field at all). So the script MUST
-//   read the live `name` prop-def FIRST and derive: event_name's `_sharing`
-//   MIRRORS event.name's, and its ordinal sits ADJACENT — pinned rule:
-//   name's ordinal + 1. Nothing hardcoded, nothing omit-and-inherited
-//   (the #265 inherit-from-parent trap).
-//
-// - The prop-def's identity (name, wire type, descriptions) is SOURCED from
-//   the schema of record — `event_name: PropertyAdditionDef` in
-//   lib/mvox-schema-extensions.ts, mirroring roster_show_real_names's shape
-//   (`event` is canonical v4E with no MvoxEntityDef entry, so the id_code
-//   inline-array pattern does not apply). The def leaves sharing/ordinal
-//   UNSET and records the mirror rule in its notes; the script must not
-//   inline any of it.
-//
-// - Every live step on the real-personal-data pilot commits a result ledger
-//   through #402's committed-allowlist writer: `sensitive: true` routes the
-//   instance file to gitignored crede-instance/, and `committed.allow` builds
-//   the tracked twin by allowlist. Ledger keys never collide with
-//   DEFAULT_REDACT_FIELDS — `name` is a member, so rows are keyed by
-//   typeId/propDefId/outcome/sharing/ordinal/dryRun, never `name`.
-//
-// Wire fixture values are arbitrary ids; URLs are full-shape (the .env.test
-// PUBLIC_ENTU_API_BASE host) and every request is asserted with toEqual —
-// no objectContaining, no partial shapes (partial assertions hide bugs).
+// The event_name prop-def on crede's event type.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const writeLedgerMock = vi.fn(() => 'scripts/migrations/seed-results/crede-instance/seed-233-s1-fake.json');
 
-// mvox-app#417 (review round 1, Bentham) — ONLY `writeLedger` is replaced;
-// everything else in the module, `assertLiveRunAuthorized` above all, is the
-// REAL export. seed-233 is the one crede-mutating script whose preflight
-// lives inside an exported engine rather than at module top level, so this
-// spec is the only place the gate can actually be exercised against running
-// code — mocking it to a no-op here both hid that and let the spec pin a
-// production-impossible shape (dryRun:false with authorizedBy:undefined,
-// which the real writeLedger throws on).
 vi.mock('./lib/ledger-writer', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('./lib/ledger-writer')>();
 	return {
@@ -66,13 +15,11 @@ vi.mock('./lib/ledger-writer', async (importOriginal) => {
 import { runSeed233S1 } from './seed-233-s1-event-name-propdef-crede';
 import { event_name } from './lib/mvox-schema-extensions';
 
-const cfg: EntuCfg = { db: 'mvox_crede', token: 'jwt' };
+const cfg = testCfg('mvox_crede');
 const BASE = 'https://api.entu-test.invalid/mvox_crede';
 
-/** #417 canonical authorizer shape: name, channel, issue-comment URL — never an email. */
 const LIVE_AUTH = 'Mihkel, team console, https://github.com/mvox-dev/mvox-app/issues/233#issuecomment-4171';
 
-// Fixture ids — meta types, the event type, its existing `name` prop-def.
 const META_ENTITY = 'meta-entity-1';
 const META_PROPERTY = 'meta-property-1';
 const TYPE_EVENT = 'type-event-1';
@@ -80,34 +27,22 @@ const PD_NAME = 'pd-name-1';
 const PD_EVENT_NAME_NEW = 'pd-event-name-new-1';
 const PD_EVENT_NAME_EXISTING = 'pd-event-name-existing-1';
 
-// The live posture the fake db reports for event.name — the ONLY source the
-// script may derive event_name's sharing/ordinal from.
 const LIVE_NAME_SHARING = 'domain';
 const LIVE_NAME_ORDINAL = 40;
 const DERIVED_ORDINAL = LIVE_NAME_ORDINAL + 1; // pinned adjacency rule
 
-// ---------------------------------------------------------------------------
-// Fake wire: routes each request the script may issue by full URL + method.
-// ---------------------------------------------------------------------------
-
 type LoggedRequest = { url: string; method: string; body: unknown };
-
-function json(body: unknown, status = 200): Promise<Response> {
-	return Promise.resolve(new Response(JSON.stringify(body), { status }));
-}
 
 function makeWire(
 	overrides: {
-		/** event_name prop-def already present live (idempotence case). */
 		eventNamePropDefExists?: boolean;
-		/** What the post-create read-back reports for _sharing. */
 		readbackSharing?: string;
 	} = {}
 ): { fetchImpl: typeof fetch; requests: LoggedRequest[] } {
 	const { eventNamePropDefExists = false, readbackSharing = LIVE_NAME_SHARING } = overrides;
 	const requests: LoggedRequest[] = [];
 
-	const fetchImpl = vi.fn((input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+	const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		requests.push({
@@ -166,7 +101,6 @@ function makeWire(
 	return { fetchImpl, requests };
 }
 
-/** Collect every object key anywhere in a parsed tree (ledger hygiene walk). */
 function collectKeys(value: unknown, into: Set<string> = new Set()): Set<string> {
 	if (Array.isArray(value)) {
 		for (const v of value) collectKeys(v, into);
@@ -179,10 +113,6 @@ function collectKeys(value: unknown, into: Set<string> = new Set()): Set<string>
 	return into;
 }
 
-// The full CREATE body the live run must POST — every value either a resolved
-// id, the LIVE-READ posture, or sourced from the schema-of-record def. Full
-// shape: no `mandatory` (not required), no `table`/`search`, and `plural`
-// stays absent (defaults false on the platform).
 function expectedCreateBody(): unknown[] {
 	return [
 		{ type: '_type', reference: META_PROPERTY },
@@ -196,9 +126,6 @@ function expectedCreateBody(): unknown[] {
 	];
 }
 
-// The GET sequence every scenario starts with: meta types, event type, then
-// the live `name` prop-def read (sharing/ordinal source), then ensurePropDef's
-// idempotence check for `event_name`.
 function expectedLeadingGets(): LoggedRequest[] {
 	return [
 		{
@@ -239,11 +166,8 @@ describe('#233 S1 — seed-233-s1-event-name-propdef-crede (dry-run)', () => {
 
 		const result = await runSeed233S1(cfg, true, fetchImpl);
 
-		// Full request sequence, full shape: the five GETs and nothing else.
 		expect(requests).toEqual(expectedLeadingGets());
 
-		// The would-create report carries the sharing/ordinal READ LIVE — not
-		// hardcoded, not omitted: mirror event.name's sharing, ordinal adjacent.
 		expect(result).toEqual({
 			typeId: TYPE_EVENT,
 			propDefId: null,
@@ -253,15 +177,12 @@ describe('#233 S1 — seed-233-s1-event-name-propdef-crede (dry-run)', () => {
 			ledgerPath: 'scripts/migrations/seed-results/crede-instance/seed-233-s1-fake.json'
 		});
 
-		// A dry run still writes its ledger (dryRun: true, nothing mutated).
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
 		expect(writeLedgerMock).toHaveBeenCalledWith({
 			scriptName: 'seed-233-s1-event-name-propdef-crede',
 			dryRun: true,
 			db: 'mvox_crede',
 			sensitive: true,
-			// #417: a dry run passes no authorizer and needs none — the writer
-			// records the fixed sentinel for it.
 			authorizedBy: undefined,
 			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
 			payload: {
@@ -285,8 +206,6 @@ describe('#233 S1 — live run', () => {
 		expect(requests).toEqual([
 			...expectedLeadingGets(),
 			{ url: `${BASE}/entity`, method: 'POST', body: expectedCreateBody() },
-			// assertPropDefSharing's read-back — a create landing is not proof it
-			// landed AS WRITTEN (#265 inherit-from-parent trap).
 			{ url: `${BASE}/entity/${PD_EVENT_NAME_NEW}?props=_sharing`, method: 'GET', body: null }
 		]);
 
@@ -306,11 +225,6 @@ describe('#233 S1 — live run', () => {
 		await expect(runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH)).rejects.toThrow(/READ-BACK MISMATCH/);
 	});
 
-	// mvox-app#417 (review round 1, Bentham) — the ONLY place seed-233's gate
-	// can be proven: its preflight lives inside runSeed233S1, not at module
-	// top level, so the source-level fence (liveRunAuthorization.guard.spec.ts)
-	// can see the call but not that it actually stops the run. The real
-	// assertLiveRunAuthorized is in play here (only writeLedger is mocked).
 	it('a live run with NO recorded authorizer is refused before anything is written — not one request, not one POST', async () => {
 		const { fetchImpl, requests } = makeWire();
 
@@ -347,8 +261,6 @@ describe('#233 S1 — idempotence', () => {
 
 		expect(requests).toEqual([
 			...expectedLeadingGets(),
-			// Read-back still runs on the found prop-def — its live sharing must
-			// still match the mirror rule; no POST anywhere.
 			{
 				url: `${BASE}/entity/${PD_EVENT_NAME_EXISTING}?props=_sharing`,
 				method: 'GET',
@@ -375,18 +287,11 @@ describe('#233 S1 — ledger through the #402 committed-allowlist writer', () =>
 		await runSeed233S1(cfg, false, fetchImpl, LIVE_AUTH);
 
 		expect(writeLedgerMock).toHaveBeenCalledTimes(1);
-		// Pinned full shape — #402's landed API: sensitive:true routes the
-		// instance file to gitignored crede-instance/; `committed.allow` builds
-		// the tracked twin by allowlist, and naming any DEFAULT_REDACT_FIELDS
-		// member in it would throw inside the real writer.
 		expect(writeLedgerMock).toHaveBeenCalledWith({
 			scriptName: 'seed-233-s1-event-name-propdef-crede',
 			dryRun: false,
 			db: 'mvox_crede',
 			sensitive: true,
-			// #417: the live run's authorizer, threaded from the caller — the
-			// real writeLedger throws on dryRun:false + authorizedBy:undefined,
-			// so that pair can never be a shape this spec pins.
 			authorizedBy: LIVE_AUTH,
 			committed: { allow: ['typeId', 'propDefId', 'outcome', 'sharing', 'ordinal', 'dryRun'] },
 			payload: {
@@ -399,9 +304,6 @@ describe('#233 S1 — ledger through the #402 committed-allowlist writer', () =>
 			}
 		});
 
-		// Hygiene walk: `name` is a DEFAULT_REDACT_FIELDS member — a payload key
-		// literally named `name` renders [REDACTED] in the instance file and is
-		// refused by the committed allowlist. No key anywhere may carry it.
 		const call = writeLedgerMock.mock.calls[0]?.[0] as { payload: Record<string, unknown> };
 		expect(collectKeys(call.payload).has('name')).toBe(false);
 	});
@@ -416,9 +318,6 @@ describe('#233 S1 — schema of record sources the script', () => {
 		expect(event_name.property.type).toBe('string');
 		expect(event_name.commissionedBy).toBe('mvox-app#233');
 
-		// Sharing and ordinal are NOT known from any committed artefact — the
-		// def leaves them unset and records the rule; the script derives them
-		// live at S1 (mirror event.name, ordinal adjacent).
 		expect(event_name.property.sharing).toBeUndefined();
 		expect(event_name.property.ordinal).toBeUndefined();
 		expect(event_name.notes.some((n) => n.includes('mirrors event.name'))).toBe(true);

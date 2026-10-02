@@ -1,61 +1,21 @@
+// grantSelfEditor: pre-read, grant and read back a person's own _editor right.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { grantSelfEditor } from './grant-self-editor';
-
-// ════════════════════════════════════════════════════════════════════════════
-// #371 RED — grantSelfEditor, the bulk-provisioning primitive.
-//
-// Wire shape is the invite path's post-create grant, byte-for-byte
-// (src/lib/invite/inviteData.ts:255-265): POST entity/{personId}, body
-// [{type:'_editor', reference: personId}]. Check-first + refuse-on-different-
-// tier discipline mirrors the remedy-369 script (scripts/migrations/probes/
-// remedy-369-crede-self-editor-grant-2026-09-15.ts): direct self-`_editor`
-// already present -> SKIP (its 'skip-already-fixed'); any OTHER direct
-// self-tier -> never write ('skip-different-tier' — here a loud THROW, since a
-// bulk seed proceeding past it would silently strand the person). ER-6/ER-9:
-// one active direct tier per reference per entity; a new grant retires the old
-// one with no error and no notice — the downgrade trap test 5 pins.
-//
-// The done-when's read-back proof (#369 class — payload said yes, rights said
-// no) is IN the primitive: after a 2xx write it re-READs `_editor` and asserts
-// the DIRECT self grant, never trusting the write's echo (remedy-369's
-// "Independent read-back" step).
-//
-// INTEGRATION NOTE: this is a migrations-lib primitive — there is no page
-// route to render on. Its integration surface is the Entu wire, and these
-// tests drive the REAL producer chain (grantSelfEditor -> entuFetch ->
-// entuUrl -> ENTU_API_BASE): only bare `fetch` is faked, so the byte-pinned
-// URLs and Authorization/Accept header merge below prove the real composition
-// code, not a mock of it. No live calls anywhere (networkGuard enforces).
-// ════════════════════════════════════════════════════════════════════════════
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const BASE = 'https://api.entu-test.invalid/testdb';
 const PERSON = 'person-1';
 const ADMIN = 'admin-9';
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 
-// The five-tier pre-read URL (fresh read at call time, remedy-369 step 1) and
-// the read-back URL (step 4). Pinned exactly — the primitive owns this shape.
 const PRE_READ_URL = `${BASE}/entity/${PERSON}?props=_owner,_editor,_viewer,_expander,_noaccess`;
 const READ_BACK_URL = `${BASE}/entity/${PERSON}?props=_editor`;
 
 const GET_HEADERS = { Authorization: 'Bearer jwt', Accept: 'application/json' };
 const POST_HEADERS = { ...GET_HEADERS, 'Content-Type': 'application/json' };
 
-interface Call {
-	url: string;
-	method: string;
-	headers: unknown;
-	body: string | undefined;
-}
-
-function json(body: unknown, status = 200): Response {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** Queue-driven fake fetch: records every call full-shape, throws on overrun. */
 function seqFetch(responses: Response[]): { impl: typeof fetch; calls: Call[] } {
 	const calls: Call[] = [];
 	const impl = (async (url: URL | RequestInfo, init?: RequestInit) => {
@@ -74,13 +34,10 @@ function seqFetch(responses: Response[]): { impl: typeof fetch; calls: Call[] } 
 
 type RightsEntry = { reference: string; inherited?: boolean };
 
-/** Rights-read body in the live wire shape ({ entity: { _owner: [...], ... } }). */
 function rights(props: Record<string, RightsEntry[]>): Response {
 	return json({ entity: props });
 }
 
-/** Clean pre-read fixture: admin holds the create-time direct _owner (that is
- * exactly the #371 defect state — the person themselves holds nothing). */
 function cleanPreRead(): Response {
 	return rights({ _owner: [{ reference: ADMIN, inherited: false }] });
 }
@@ -104,7 +61,6 @@ describe('grantSelfEditor — happy path', () => {
 				url: `${BASE}/entity/${PERSON}`,
 				method: 'POST',
 				headers: POST_HEADERS,
-				// Byte-identical to inviteData.ts:262 — JSON.stringify([{type:'_editor',reference:personId}])
 				body: '[{"type":"_editor","reference":"person-1"}]'
 			},
 			{ url: READ_BACK_URL, method: 'GET', headers: GET_HEADERS, body: undefined }
@@ -188,7 +144,6 @@ describe('grantSelfEditor — check-first (the remedy-369 discipline)', () => {
 			action: 'skip-already-granted',
 			personId: PERSON
 		});
-		// One call total: the pre-read. No POST, no read-back.
 		expect(calls.map((c) => c.method)).toEqual(['GET']);
 	});
 

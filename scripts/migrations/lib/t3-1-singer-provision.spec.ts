@@ -1,3 +1,4 @@
+// Singer provisioning against an in-memory Entu mock.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -9,18 +10,9 @@ import {
 	EXPECTED_PUBLIC_PERSON_COUNT,
 	type SingerTarget
 } from './t3-1-singer-provision';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// ════════════════════════════════════════════════════════════════════════════
-// T3.1 (#17) singer provisioning — proves the built script against an in-memory
-// Entu mock. No agent runs this against a live db; this file only proves
-// the engine before the real dry-run/live invocation.
-// ════════════════════════════════════════════════════════════════════════════
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 function makePerson(i: number, opts: { sharing?: string; noName?: boolean } = {}) {
 	return {
@@ -33,8 +25,6 @@ function makePerson(i: number, opts: { sharing?: string; noName?: boolean } = {}
 beforeEach(() => {
 	resetTypeIdCache();
 });
-
-// ── enumerateSingerTargets ───────────────────────────────────────────────────
 
 describe('enumerateSingerTargets', () => {
 	type MockOpts = {
@@ -125,8 +115,6 @@ describe('enumerateSingerTargets', () => {
 	});
 });
 
-// ── provisionDomainProfiles (Bundle 1) ───────────────────────────────────────
-
 describe('provisionDomainProfiles', () => {
 	const target: SingerTarget = { personId: 'p1', name: 'Singer One', memberId: 'm1', memberSharingPropId: 'sp1' };
 
@@ -157,7 +145,6 @@ describe('provisionDomainProfiles', () => {
 				return Promise.resolve(json({ _id: entMatch[1] }));
 			}
 			if (method === 'GET' && entMatch) {
-				// saveProfileFields' lookup GET (name/email value-ids) — fresh shell, no values yet.
 				return Promise.resolve(json({ entity: { _id: entMatch[1] } }));
 			}
 			if (method === 'GET' && url.includes('_type.string=profile')) {
@@ -197,8 +184,6 @@ describe('provisionDomainProfiles', () => {
 		expect(entries[0]).toEqual(expect.objectContaining({ personId: 'p1', status: 'failed', phase: 'verify' }));
 	});
 });
-
-// ── convertMemberTiers (Bundle 2) ────────────────────────────────────────────
 
 describe('convertMemberTiers', () => {
 	const target: SingerTarget = { personId: 'p1', name: 'Singer One', memberId: 'm1', memberSharingPropId: 'sp1' };
@@ -242,8 +227,6 @@ describe('convertMemberTiers', () => {
 	});
 });
 
-// ── renderPlan (pure) ────────────────────────────────────────────────────────
-
 describe('renderPlan', () => {
 	it('mentions both bundles, every target, and zero writes issued', () => {
 		const targets: SingerTarget[] = [{ personId: 'p1', name: 'Singer One', memberId: 'm1', memberSharingPropId: 'sp1' }];
@@ -256,8 +239,6 @@ describe('renderPlan', () => {
 		expect(out).toContain('Writes issued this run: 0');
 	});
 });
-
-// ── ProvisionLedger ──────────────────────────────────────────────────────────
 
 describe('ProvisionLedger', () => {
 	it('hasFailures is true if ANY profile or tier entry is not the success status', () => {

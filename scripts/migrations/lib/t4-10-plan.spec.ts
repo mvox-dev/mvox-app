@@ -1,3 +1,4 @@
+// The profile migration planner: what moves where, per person.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -11,45 +12,20 @@ import {
 	type MigrationGroup,
 	type TargetPerson
 } from './t4-10-plan';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// ════════════════════════════════════════════════════════════════════════════
-// T4.10 migration (#30) — RED. The engine in `t4-10-plan.ts` is a stub throwing
-// 'not implemented', so every assertion below FAILS until GREEN. Specs mirror the
-// repo idiom (profileData.spec.ts): inject `fetchImpl = vi.fn()` routing by URL
-// substring + `init.method`; a `json(body,status)` helper wrapping `new Response`;
-// assert on the request WIRE, never by spying siblings. Zero network — all mocked.
-//
-// NO agent runs this against a live db; this file only proves the built script.
-// ════════════════════════════════════════════════════════════════════════════
+const cfg = testCfg('testdb');
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-// The 3 real persons (RECON A §1). db-root/PO is private (both fields); Mihkel's
-// OAuth person is domain (both fields); Test User is domain (name only).
 const PO = '69bcfd8e9c031ab8e6ce8079';
 const OAUTH = '6a2fc05e4cd971291c5d5ddc';
 const TESTUSER = '6a097dcc90c8df7a1cc7d6dd';
 
-// #30 exclusion — PO (db-root) is excluded from the migration entirely (see
-// `enumerateTargets` describe block below), so it is no longer a fixture that
-// `buildPlan` needs to receive in practice. The private→domain name-promotion +
-// email-tier-preservation logic the engine RETAINS is still real for any future
-// private-tier person, so its coverage moves to a synthetic id — not PO — to avoid
-// implying PO still flows through the pipeline.
 const SYNTHETIC_PRIVATE = 'synthetic-private-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 beforeEach(() => {
 	resetTypeIdCache();
 });
 
-// ── A tiny in-memory Entu, faithful enough that the REAL imported data layer
-// (createProfile/saveProfileFields/listMyProfiles) drives the happy path end-to-end.
-// Routes by method + URL. Optional `fail` injects a single-operation failure so the
-// per-record engine's fail-loud branches can be exercised in isolation.
 type PersonValues = { name?: Array<{ _id: string; string: string }>; email?: Array<{ _id: string; string: string }> };
 type LiveMockOpts = {
 	persons: Record<string, PersonValues>;
@@ -64,7 +40,6 @@ type LiveMockOpts = {
 };
 
 function makeLiveMock(opts: LiveMockOpts) {
-	// Deep-clone the seed so a DELETE mutating the person store can't leak across tests.
 	const persons: Record<string, PersonValues> = JSON.parse(JSON.stringify(opts.persons));
 	const profiles: Array<{ _id: string; _parent: string; _sharing: string; name?: string; email?: string }> = [];
 	let seq = 0;
@@ -81,12 +56,10 @@ function makeLiveMock(opts: LiveMockOpts) {
 	return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 		const method = (init?.method ?? 'GET').toUpperCase();
 
-		// resolveTypeId(cfg,'profile') — the funnel marker.
 		if (method === 'GET' && url.includes('_type.string=entity')) {
 			return Promise.resolve(json({ entities: [{ _id: 'profile-type-id' }] }));
 		}
 
-		// listMyProfiles — read the created profiles under a parent (verify-profile read-back).
 		if (method === 'GET' && url.includes('_type.string=profile')) {
 			const parent = parseParent(url);
 			const ents = profiles
@@ -100,7 +73,6 @@ function makeLiveMock(opts: LiveMockOpts) {
 			return Promise.resolve(json({ entities: ents }));
 		}
 
-		// DELETE property/{id} — remove the value from its person (unless a failure is injected).
 		const propId = parseSeg(url, 'property');
 		if (method === 'DELETE' && propId) {
 			if (fail.delete) return Promise.resolve(json({}, fail.delete));
@@ -115,7 +87,6 @@ function makeLiveMock(opts: LiveMockOpts) {
 
 		const entId = parseSeg(url, 'entity');
 
-		// POST entity/{id} — saveProfileFields writing name/email into the profile shell.
 		if (method === 'POST' && entId) {
 			if (fail.valuePost) return Promise.resolve(json({}, fail.valuePost));
 			const prof = profiles.find((p) => p._id === entId);
@@ -129,7 +100,6 @@ function makeLiveMock(opts: LiveMockOpts) {
 			return Promise.resolve(json({ _id: entId }));
 		}
 
-		// POST entity (no id) — createProfile shell create.
 		if (method === 'POST' && /\/entity(\?|$)/.test(url)) {
 			if (fail.create) return Promise.resolve(json({}, fail.create));
 			if (fail.createNoId) return Promise.resolve(json({})); // 200, no _id
@@ -143,7 +113,6 @@ function makeLiveMock(opts: LiveMockOpts) {
 			return Promise.resolve(json({ _id: id }));
 		}
 
-		// GET entity/{id}?props=name,email — a person (delete-lookup / person read-back) or a profile shell (saveProfileFields lookup).
 		if (method === 'GET' && entId) {
 			if (persons[entId]) return Promise.resolve(json({ entity: { _id: entId, ...persons[entId] } }));
 			const prof = profiles.find((p) => p._id === entId);
@@ -157,16 +126,7 @@ function makeLiveMock(opts: LiveMockOpts) {
 const deleteCalls = (m: ReturnType<typeof vi.fn>) =>
 	(m.mock.calls as Array<[string, RequestInit?]>).filter(([, init]) => (init?.method ?? '').toUpperCase() === 'DELETE');
 
-// ════════════════════════════════════════════════════════════════════════════
-// buildPlan — PURE. The 3 known persons → exactly 4 groups (name→domain always;
-// email→source tier; same-tier fields share one profile).
-// ════════════════════════════════════════════════════════════════════════════
-
 describe('buildPlan — pure grouping into profile creates', () => {
-	// PO is intentionally NOT a fixture here (#30 exclusion — see enumerateTargets
-	// below); the private-tier split/promotion logic is exercised via a synthetic
-	// private person instead, since it stays live engine behavior for any future
-	// private-tier person even though PO himself never reaches buildPlan.
 	const targets: TargetPerson[] = [
 		{ personId: SYNTHETIC_PRIVATE, name: 'Mihkel Putrinš', email: 'mitselek@gmail.com', sourceTier: 'private' },
 		{ personId: OAUTH, name: 'Mihkel Putrinš', email: 'mihkel.putrinsh@gmail.com', sourceTier: 'domain' },
@@ -226,12 +186,7 @@ describe('buildPlan — pure grouping into profile creates', () => {
 	});
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// enumerateTargets — synthetic-exclusion + one-page guard + drift tripwire.
-// ════════════════════════════════════════════════════════════════════════════
-
 describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => {
-	// A census page: 128 public-tier synthetic singers + the 3 real persons.
 	function censusPage(reals: Array<{ _id: string; sharing: string; name?: string; email?: string }>) {
 		const synthetic = Array.from({ length: 128 }, (_, i) => ({
 			_id: `synthetic-${i}`,
@@ -275,16 +230,6 @@ describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => 
 			expect.objectContaining({ personId: TESTUSER, sourceTier: 'domain', name: 'Test User' })
 		);
 	});
-
-	// ── #30 exclusion mechanism invariants ────────────────────────────────────────
-	// PO (db-root/PO, `69bcfd8e9c031ab8e6ce8079`) is EXCLUDED from the migration by
-	// design (private, structurally different from real members) — but the selector
-	// is `_sharing !== 'public'`, not EXPECTED_TARGET_IDS (a drift tripwire only), so
-	// PO still passes the selector and must be filtered separately, BEFORE the drift
-	// check (else shrinking EXPECTED_TARGET_IDS alone would make the drift guard HALT
-	// the whole run on PO as "unexpected"). Hard-coding the PO id here rather than
-	// importing a not-yet-existent EXCLUDED_TARGET_IDS — RED must fail on the
-	// assertions, not on a missing export.
 
 	it('does NOT weaken the drift tripwire into "ignore anything unexpected": an unexpected 4th non-public person (neither expected nor excluded) still HALTs', async () => {
 		const UNEXPECTED = '6bffffff00000000000000f';
@@ -339,10 +284,6 @@ describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => 
 	});
 
 	it('HALTs (zero writes) when a real person carries MULTIPLE name values — copy-one/delete-all would silently destroy the rest', async () => {
-		// OAUTH (not PO) carries the violation: PO is excluded from migration BEFORE
-		// this guard runs (#30 exclusion, filtered out of `reals` pre-drift-check), so a
-		// multi-valued PO would never reach it — the guard must still catch a genuinely
-		// in-scope person. PO stays present+single-valued here as ordinary census noise.
 		const page = {
 			entities: [
 				{ _id: PO, _sharing: [{ string: 'private' }], name: [{ string: 'Mihkel Putrinš' }], email: [{ string: 'mitselek@gmail.com' }] },
@@ -356,11 +297,6 @@ describe('enumerateTargets — synthetic-exclusion + guards (READ-ONLY)', () => 
 		expect(deleteCalls(mock)).toEqual([]);
 	});
 });
-
-// ════════════════════════════════════════════════════════════════════════════
-// migrateOneGroup — the per-record move engine. Create-before-delete + dual
-// read-back; ledger (never throws for a per-record failure).
-// ════════════════════════════════════════════════════════════════════════════
 
 describe('migrateOneGroup — happy path (move, per record)', () => {
 	const group: MigrationGroup = {
@@ -479,8 +415,6 @@ describe('migrateOneGroup — fail-loud, per record, no silent success', () => {
 	});
 });
 
-// ── The createProfile funnel — structural proof the create runs through the
-// imported sole-path helper, NOT a hand-rolled POST (a resolveTypeId GET precedes it).
 describe('migrateOneGroup — funnels every create through createProfile (no hand-rolled create)', () => {
 	it('a resolveTypeId GET (_type.string=entity & name.string=profile) precedes the create POST', async () => {
 		const mock = makeLiveMock({ persons: { [TESTUSER]: { name: [{ _id: 'val-name-tu', string: 'Test User' }] } } });
@@ -493,7 +427,6 @@ describe('migrateOneGroup — funnels every create through createProfile (no han
 	});
 });
 
-// ── deletePersonField — delete-only (must NOT reuse saveProfileFields, which re-adds).
 describe('deletePersonField — deletes person values without re-adding them', () => {
 	it('DELETEs each value id then issues NO POST back to the person (delete-only)', async () => {
 		const mock = makeLiveMock({ persons: { [OAUTH]: { name: [{ _id: 'val-name-oauth', string: 'Mihkel Putrinš' }] } } });
@@ -521,10 +454,6 @@ describe('deletePersonField — deletes person values without re-adding them', (
 	});
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// renderPlan — the dry-run surface. PURE: describes the moves, writes NOTHING.
-// ════════════════════════════════════════════════════════════════════════════
-
 describe('renderPlan — dry-run describes the plan and masks email, writing nothing', () => {
 	const groups: MigrationGroup[] = [
 		{ personId: PO, tier: 'domain', fields: { name: 'Mihkel Putrinš' }, ownerIds: [PO] },
@@ -543,10 +472,6 @@ describe('renderPlan — dry-run describes the plan and masks email, writing not
 		expect(out).not.toContain('mitselek@gmail.com');
 	});
 });
-
-// ════════════════════════════════════════════════════════════════════════════
-// MigrationLedger — per-record reporting; NO aggregate "done" masks a failure.
-// ════════════════════════════════════════════════════════════════════════════
 
 describe('MigrationLedger — loud per-record reporting, non-zero on any non-moved', () => {
 	const moved: LedgerEntry = { personId: OAUTH, field: 'name', sourceTier: 'domain', targetTier: 'domain', profileId: 'new-prof-1', status: 'moved' };
@@ -589,4 +514,4 @@ describe('MigrationLedger — loud per-record reporting, non-zero on any non-mov
 	});
 });
 
-// (*MVOX:Byrd* — RED)
+// (*MVOX:Byrd*)
