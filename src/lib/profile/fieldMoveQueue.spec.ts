@@ -1,12 +1,7 @@
+// The visibility-move queue reports only what the server confirmed.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { FieldMoveInput, FieldMoveResult, DuplicateRepairInput } from './fieldMove';
-
-// T4.7/#27 — the honest-round-trip orchestrator for visibility MOVES. Mock
-// applyFieldMove / applyDuplicateRepair at their boundary; FieldMoveError is defined
-// INSIDE the mock so the queue's error handling matches the instances these tests
-// reject with (the profileEditQueue.spec technique). RED: the queue's methods are
-// stubs throwing 'not implemented', so these fail until GREEN.
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 const h = vi.hoisted(() => {
 	class FieldMoveError extends Error {
@@ -29,17 +24,7 @@ vi.mock('./fieldMove', () => ({
 
 import { createFieldMoveQueue } from './fieldMoveQueue';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
+const cfg = testCfg('testdb');
 
 function makeCallbacks() {
 	return {
@@ -52,7 +37,6 @@ function makeCallbacks() {
 	};
 }
 
-/** Register ONE controllable move: capture its onPhase callback and control its promise. */
 function installMove() {
 	const d = deferred<FieldMoveResult>();
 	let onPhase: ((phase: 'created' | 'deleted', id: string) => void) | undefined;
@@ -96,8 +80,6 @@ beforeEach(() => {
 	h.applyFieldMoveMock.mockReset();
 	h.applyDuplicateRepairMock.mockReset();
 });
-
-// ── Honest two-phase round trip — no icon settles without a SERVER confirmation ──
 
 describe('createFieldMoveQueue — honest two-phase round trip', () => {
 	it('on dispatch: the target icon goes in-transport; NOTHING is confirmed yet', () => {
@@ -143,8 +125,6 @@ describe('createFieldMoveQueue — honest two-phase round trip', () => {
 	});
 });
 
-// ── Single-flight — provably clobber-proof (a move touches TWO entities) ─────────
-
 describe('createFieldMoveQueue — single-flight guard', () => {
 	it('a second move while one is in flight is a no-op — only ONE applyFieldMove fires', () => {
 		installMove();
@@ -184,8 +164,6 @@ describe('createFieldMoveQueue — single-flight guard', () => {
 	});
 });
 
-// ── Fail-loud — a rejected move surfaces (phase-tagged) and never wedges the lock ─
-
 describe('createFieldMoveQueue — fail-loud, never stuck', () => {
 	it('a delete-phase failure calls onMoveFailed with the phase-tagged error, clears the source transport, and frees the lock', async () => {
 		const mv = installMove();
@@ -201,17 +179,13 @@ describe('createFieldMoveQueue — fail-loud, never stuck', () => {
 		expect(err).toBeInstanceOf(h.FieldMoveError);
 		expect(err.phase).toBe('delete'); // a live-duplicate → the AC3 privacy-repair banner
 		expect(cb.onMoveConfirmed).not.toHaveBeenCalled();
-		// The in-transport src spinner is cleared (never left spinning).
 		expect(cb.setTransport).toHaveBeenCalledWith('name', 'domain', false);
 
-		// The lock is freed — a fresh move fires.
 		installMove();
 		queue.move(moveReq({ field: 'email' }));
 		expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(2);
 	});
 });
-
-// ── Generation guard — a stale settle no-ops the UI but STILL frees the lock ─────
 
 describe('createFieldMoveQueue — generation guard on the settle', () => {
 	it('a SUCCESS settling after the generation changed does NOT onMoveConfirmed — but frees the lock for a fresh move', async () => {
@@ -267,8 +241,6 @@ describe('createFieldMoveQueue — generation guard on the settle', () => {
 	});
 });
 
-// ── Repair round trip — completes the delete, server-confirmed, fail-loud ────────
-
 describe('createFieldMoveQueue — duplicate repair round trip', () => {
 	it('dispatches applyDuplicateRepair and only confirms AFTER it resolves (no premature clear)', async () => {
 		const d = deferred<{ field: 'name' | 'email'; clearedIds: string[] }>();
@@ -295,7 +267,6 @@ describe('createFieldMoveQueue — duplicate repair round trip', () => {
 		await vi.waitFor(() => expect(cb.onRepairFailed).toHaveBeenCalledWith('name', expect.any(Error)));
 		expect(cb.onRepairConfirmed).not.toHaveBeenCalled();
 
-		// Lock freed — a follow-up move can fire.
 		installMove();
 		queue.move(moveReq());
 		expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1);

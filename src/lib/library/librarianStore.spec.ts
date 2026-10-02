@@ -7,18 +7,11 @@ import {
 	resolveLibrarian,
 	resolveMyLibraryId
 } from './librarianStore';
+import { json } from '$lib/testing/entuFetchKit';
 
 const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
-
-function json(body: unknown, status = 200) {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
 
 function databaseBody(dbEntityId: string | null) {
 	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };

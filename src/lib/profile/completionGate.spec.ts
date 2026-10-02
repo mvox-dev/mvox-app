@@ -1,16 +1,7 @@
+// The profile completion gate: domain-name completeness and the two-case split.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from './profileData';
-
-// T4.8/#28 RED — the completion-gate DECISION logic, tested as extracted pure/async
-// utilities (the load-bearing gate-completeness + two-case separation), not brittle
-// DOM. RED: hasDomainName / resolveGate / assertDomainNamePersisted are stubs that
-// throw 'not implemented', so every assertion below FAILS until GREEN fills them.
-//
-// `hasDomainName` is pure — driven with MyProfile[] literals, no mock. `resolveGate`
-// and `assertDomainNamePersisted` re-read via listMyProfiles, so it is mocked at the
-// module boundary (real profilesByLevel kept via importActual, so GREEN exercises the
-// real by-level indexer).
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const { listMyProfilesMock } = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
 vi.mock('./profileData', async (importActual) => {
@@ -26,7 +17,7 @@ import {
 	DomainNameInconsistencyError
 } from './completionGate';
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-abc' };
+const cfg = testCfg('sampledb', 'jwt-abc');
 
 function profile(sharing: MyProfile['_sharing'], name: string, email = ''): MyProfile {
 	return { _id: `p-${sharing}`, name, email, _sharing: sharing };
@@ -53,9 +44,6 @@ describe('hasDomainName — the SSOT predicate (name on the domain-visibility en
 	});
 
 	it('a PUBLIC-only name does NOT satisfy the gate — must read the domain entity, never resolveField', () => {
-		// A public-tier name is domain-READABLE (written to both buckets), so a
-		// resolveField-based gate would wrongly PASS this. The gate must check the
-		// entity whose OWN _sharing === 'domain', which is absent here.
 		expect(hasDomainName([profile('public', 'Ann')])).toBe('incomplete');
 	});
 

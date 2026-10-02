@@ -1,5 +1,5 @@
+// The repertoire read layer; it never writes.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	listRepertoireItems,
 	listProgramItems,
@@ -9,27 +9,10 @@ import {
 	type ProgramItem,
 	type EventWorks
 } from './repertoireData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #90 TR.2 RED — the repertoire READ data layer. Read-only throughout: no
-// entuFetch(..., { method: 'POST' | 'DELETE' }) anywhere in the module under
-// test. Schema anchors (entu/research schema.ts):
-//   repertoire_item — child of season; props: name (formula from work), work
-//     (ref, required), edition (ref, optional pinned edition), status
-//     ('learning | active | retired | dropped; default `active`').
-//   program_item — child of event; props: name (formula via edition→work),
-//     edition (ref, required), ordinal (number, required, concert position),
-//     notes (text).
-// Source hierarchy (#90): an event WITH program_items uses those (ordinal
-// order); an event WITHOUT falls back to the season's repertoire_items,
-// filtered to active/learning — retired/dropped never reach a member's view.
+const cfg = testCfg('testdb');
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** Route-by-URL mock: first matching pattern wins; unmatched URLs 404 loudly. */
 function fetchByUrl(routes: Array<[RegExp, unknown]>) {
 	return vi.fn().mockImplementation((url: string | URL | Request) => {
 		const s = String(url);
@@ -39,8 +22,6 @@ function fetchByUrl(routes: Array<[RegExp, unknown]>) {
 		return Promise.resolve(json({ error: `unrouted: ${s}` }, 404));
 	});
 }
-
-// ── listRepertoireItems ─────────────────────────────────────────────────────
 
 describe('listRepertoireItems', () => {
 	it('maps season repertoire_item entities into RepertoireItem[] (work ref, edition ref, status, name)', async () => {
@@ -55,7 +36,6 @@ describe('listRepertoireItems', () => {
 						status: [{ string: 'learning' }]
 					},
 					{
-						// no pinned edition, no status — status defaults to 'active' per schema
 						_id: 'ri-2',
 						name: [{ string: 'Mass in B minor' }],
 						work: [{ reference: 'work-2' }]
@@ -105,14 +85,11 @@ describe('listRepertoireItems', () => {
 	});
 });
 
-// ── listProgramItems ────────────────────────────────────────────────────────
-
 describe('listProgramItems', () => {
 	it('maps event program_item entities into ProgramItem[] sorted by ordinal', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
-					// deliberately OUT of ordinal order — the layer sorts, callers must not
 					{
 						_id: 'pi-3',
 						name: [{ string: 'Nunc dimittis' }],
@@ -162,8 +139,6 @@ describe('listProgramItems', () => {
 		await expect(listProgramItems(cfg, 'event-1', fetchImpl)).rejects.toThrow(/500/);
 	});
 });
-
-// ── resolveEventWorks — the source hierarchy ────────────────────────────────
 
 const programEntities = [
 	{
@@ -222,7 +197,6 @@ describe('resolveEventWorks — source hierarchy', () => {
 				{ id: 'pi-2', editionId: 'ed-2', ordinal: 2, notes: '', name: 'Mass in B minor' }
 			]
 		});
-		// The whole point of the hierarchy: a programmed event does NOT hit repertoire.
 		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
 		expect(urls.some((u) => u.includes('_type.string=repertoire_item'))).toBe(false);
 	});
@@ -266,11 +240,6 @@ describe('resolveEventWorks — source hierarchy', () => {
 		await expect(resolveEventWorks(cfg, 'event-1', 'season-1', fetchImpl)).rejects.toThrow(/500/);
 	});
 });
-
-// ── resolveEventWorksBatch — the whole agenda in one pass ──────────────────
-// The agenda renders every event at once. Resolving them one at a time re-read
-// the SAME season repertoire once per unprogrammed event (an N+1 against an
-// identical list), so the page calls the batch instead.
 
 describe('resolveEventWorksBatch', () => {
 	it('reads the season repertoire AT MOST ONCE across many unprogrammed events', async () => {
@@ -349,12 +318,6 @@ describe('resolveEventWorksBatch', () => {
 	});
 });
 
-// ── manage read mode (#91 review finding 3) ─────────────────────────────────
-// The member-facing active/learning filter made the status toggle ONE-WAY: set
-// a work to retired and its row (and with it the only toggle that could bring
-// it back) vanished, while pickableWorks refuses to re-offer a work that
-// already HAS a repertoire_item. A rights-holder reads the list unfiltered.
-
 describe('resolveEventWorks — includeInactive (management read)', () => {
 	function fallbackFetch() {
 		return fetchByUrl([
@@ -409,4 +372,3 @@ describe('resolveEventWorks — includeInactive (management read)', () => {
 
 // (*MVOX:Tallis* — RED spec)
 // (*MVOX:Josquin* — review fix-forward: batch resolver; edition metadata now
-// comes from libraryData's bulk reads, file signing from fileUrls.ts)

@@ -1,35 +1,5 @@
-// #321 RED — the DETECTION layer for "lists say when they are partial",
-// library reads (works / editions / copies / lendings — the one collection
-// family a real choir actually drives past `limit=500`, per the issue body).
-//
-// CONTRACT PINNED HERE (issue #321 + both Gama comments):
-//
-//   Every display-list reader in this module parses the server's `count` off
-//   the SAME list response it already makes (the `listChildIds` precedent,
-//   seasonManage.ts:399-440 — no second request) and returns
-//
-//       { items: <mapped rows>, total: number, truncated: boolean }
-//
-//   where
-//     - `total`     = the server's `count` when present, else the RAW
-//                     `entities.length` (a mock/legacy body without `count`
-//                     reads as complete, never as truncated);
-//     - `truncated` = count > RAW entities.length — the count of the wire
-//                     array BEFORE any client-side dropping/mapping, so a
-//                     malformed row dropped by #258 never fabricates a
-//                     truncation;
-//     - `entities.length === limit` is NEVER the signal — probe-proven
-//       false positive (an at-cap collection with nothing beyond), see
-//       scripts/migrations/probes/probe-321-list-count-semantics-live-2026-09-11T00-39-06-327Z.json.
-//
-//   The query strings themselves DO NOT change (no cap raises, no `skip=` —
-//   out of scope per the issue fence) and each read stays ONE request.
-//
-// The notice surface these facts feed is pinned in
-// page.library-partial-notice.spec.ts; four-locale copy in
-// page.partial-notice-i18n.spec.ts.
+// Library reads say when a list is partial, from the server count.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import {
 	listWorks,
 	listEditions,
@@ -38,17 +8,11 @@ import {
 	listAllCopies,
 	listLendings
 } from './libraryData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** The pinned result shape (structural — GREEN owns the exported type name). */
 type ListRead<T> = { items: T[]; total: number; truncated: boolean };
-
-// ── listWorks ──────────────────────────────────────────────────────────────
 
 describe('listWorks — count-based truncation detection (#321)', () => {
 	it('a response with count > entities.length is truncated: { items, total, truncated: true }', async () => {
@@ -70,8 +34,6 @@ describe('listWorks — count-based truncation detection (#321)', () => {
 			total: 612,
 			truncated: true
 		});
-		// Detection rides the SAME request — never a second count query, and the
-		// query string itself is unchanged (limit stays 500; no skip=).
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=work');
@@ -100,8 +62,6 @@ describe('listWorks — count-based truncation detection (#321)', () => {
 	});
 
 	it('THE FALSE-POSITIVE PIN: count === entities.length === limit (500) is NOT truncated', async () => {
-		// Probe-proven: `entities.length === limit` cannot distinguish truncation
-		// from an at-cap collection. Only count > length may flag partial.
 		const entities = Array.from({ length: 500 }, (_, i) => ({
 			_id: `w-${i}`,
 			name: [{ string: `Work ${i}` }]
@@ -124,8 +84,6 @@ describe('listWorks — count-based truncation detection (#321)', () => {
 		});
 	});
 });
-
-// ── listEditions (per-work) / listAllEditions (flat librarian picker) ──────
 
 describe('listEditions — truncation detection (#321)', () => {
 	it('truncated per-work edition read: full shape', async () => {
@@ -196,8 +154,6 @@ describe('listAllEditions — truncation detection (#321)', () => {
 	});
 });
 
-// ── listCopies (per-edition) / listAllCopies (flat) ────────────────────────
-
 describe('listCopies — truncation detection (#321)', () => {
 	it('truncated per-edition copy read: full shape', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -248,8 +204,6 @@ describe('listAllCopies — truncation detection (#321)', () => {
 	});
 });
 
-// ── listLendings — the collective-lifetime log (grows with every checkout ever) ──
-
 describe('listLendings — truncation detection (#321)', () => {
 	it('truncated lending read: full shape', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -283,9 +237,6 @@ describe('listLendings — truncation detection (#321)', () => {
 	});
 
 	it('a #258-malformed row dropped client-side does NOT fabricate a truncation: count compares against the RAW wire array', async () => {
-		// 2 rows on the wire, count 2 — complete. One row is corrupt (no member
-		// ref) and gets dropped by the #258 guard, so items has 1. If truncation
-		// compared count against items.length this would be a false "partial".
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({

@@ -1,17 +1,12 @@
+// workRows joins repertoire refs to the work, edition and copy data a member reads.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Work, Edition, Copy } from '$lib/library/libraryData';
 import type { EventWorks } from './repertoireData';
 import type { WorkRow } from './types';
 import { buildWorkRows, collectSources, loadWorksByEventId } from './workRows';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #90 TR.2 — the JOIN the branch was missing: repertoireData resolves WHICH
-// items an event shows (refs only); everything a member reads (work name,
-// composer, edition name, links, PDF file id, borrowability) lives on the
-// work/edition/copy entities. Without this module nothing anywhere produced a
-// WorkRow, so the agenda's Works element could never render for a real user.
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 
 const works: Work[] = [
 	{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' },
@@ -46,8 +41,6 @@ const copies: Copy[] = [
 ];
 
 const sources = collectSources(works, editions, copies);
-
-// ── buildWorkRows — the program branch (edition-first) ──────────────────────
 
 describe('buildWorkRows — program items', () => {
 	const eventWorks: EventWorks = {
@@ -130,8 +123,6 @@ describe('buildWorkRows — program items', () => {
 	});
 });
 
-// ── buildWorkRows — the repertoire branch (work-first) ──────────────────────
-
 describe('buildWorkRows — repertoire items', () => {
 	it('joins the work directly, keeps the status badge, and carries no ordinal or notes', () => {
 		const rows = buildWorkRows(
@@ -192,12 +183,6 @@ describe('buildWorkRows — repertoire items', () => {
 	});
 });
 
-// ── external_link scheme filter (#90 review) ────────────────────────────────
-// `edition.external_link` is free text typed by anyone with editor rights on
-// the edition, and RepertoireElement binds it straight into an href — Svelte
-// does not sanitize href bindings. Filtering in the producer (not the template)
-// means every future WorkRow consumer inherits it.
-
 describe('buildWorkRows — external link scheme filter', () => {
 	const hostileEditions: Edition[] = [
 		{
@@ -247,12 +232,6 @@ describe('buildWorkRows — external link scheme filter', () => {
 	});
 });
 
-// ── loadWorksByEventId — the page's entry point ─────────────────────────────
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
 describe('loadWorksByEventId', () => {
 	it('makes NO fetch at all for an empty event list', async () => {
 		const fetchImpl = vi.fn();
@@ -260,12 +239,6 @@ describe('loadWorksByEventId', () => {
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	// #331 — the edition read's `truncated` is COMPUTED here (listAllEditions
-	// derives it from the wire `count`) and must ride each row rather than be
-	// discarded: this read is what feeds a reader's `row.editionName`, and its
-	// '' is rendered as "No pinned edition" — a positive claim of absence a
-	// truncated read cannot back. `editionCount` above the returned entities
-	// marks the edition read partial; absent = complete.
 	function wireFetch(options: { editionCount?: number } = {}) {
 		return vi.fn().mockImplementation((url: string | URL | Request) => {
 			const s = String(url);
@@ -357,19 +330,12 @@ describe('loadWorksByEventId', () => {
 					externalLinks: ['https://imslp.org/wiki/Spem_in_alium'],
 					canBorrow: true,
 					notes: '',
-					// #331 — a COMPLETE edition read says so on the row: the absence
-					// of the flag and "the read was complete" must be the same claim.
 					truncated: false
 				}
 			]
 		});
 	});
 
-	// #331 RED — `editionsRead.truncated` was computed one line above the join
-	// and thrown away; the row it should have ridden is the ONLY thing a
-	// rights-less reader's RepertoireElement ever receives, so the discard is
-	// what made the reader's unknown branch unreachable. Full literal, not
-	// objectContaining: the field must LAND, next to the '' it reinterprets.
 	it('threads the edition read\'s truncation onto every row it labels — a truncated read must not silently blank `editionName`', async () => {
 		const byEvent = await loadWorksByEventId(cfg, ['e1'], 'season-1', wireFetch({ editionCount: 4000 }));
 		expect(byEvent).toEqual<Record<string, WorkRow[]>>({

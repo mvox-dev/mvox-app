@@ -1,9 +1,6 @@
+// applyProfileSave picks create or update and checks the saved name is readable.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-
-// T4.6/#26 — the create-vs-update dispatcher. Mock the data layer at its boundary
-// (createOwnProfile / saveProfileFields); ProfileSaveError comes from the module
-// under test itself. RED: applyProfileSave is a stub throwing 'not implemented'.
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const { createOwnProfileMock, saveProfileFieldsMock, assertDomainNamePersistedMock } = vi.hoisted(() => ({
 	createOwnProfileMock: vi.fn(),
@@ -14,17 +11,13 @@ vi.mock('./profileData', () => ({
 	createOwnProfile: createOwnProfileMock,
 	saveProfileFields: saveProfileFieldsMock
 }));
-// T4.8/#28 — Case 2 write-path post-condition. applyProfileSave (GREEN) calls this
-// after a DOMAIN name-save reports success; it re-reads and throws on a success-but-
-// nameless inconsistency. Mocked here at the module boundary. Inert in RED (the
-// current applyProfileSave does not import it yet) → the existing tests stay green.
 vi.mock('./completionGate', () => ({
 	assertDomainNamePersisted: assertDomainNamePersistedMock
 }));
 
 import { applyProfileSave, ProfileSaveError } from './applyProfileSave';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const fields = { name: 'Ada', email: 'ada@example.com' };
 
 beforeEach(() => {
@@ -42,7 +35,6 @@ describe('applyProfileSave — first save into a level (existingId === null)', (
 		const res = await applyProfileSave({ cfg, personId: 'person-p', level: 'public', existingId: null, fields });
 
 		expect(createOwnProfileMock).toHaveBeenCalledTimes(1);
-		// self-create funnel: (cfg, personId, level, ...) — never an ownerIds argument
 		const [cfgArg, personArg, levelArg] = createOwnProfileMock.mock.calls[0];
 		expect(cfgArg).toEqual(cfg);
 		expect(personArg).toBe('person-p');
@@ -85,8 +77,6 @@ describe('applyProfileSave — first save into a level (existingId === null)', (
 		const err = await applyProfileSave({ cfg, personId: 'person-p', level: 'public', existingId: null, fields }).catch(
 			(e) => e
 		);
-		// It must actually reach the create step (distinguishes real behaviour from a
-		// stub that throws before dispatching) and surface THAT error, not a partial one.
 		expect(createOwnProfileMock).toHaveBeenCalledTimes(1);
 		expect((err as Error).message).toMatch(/403/);
 		expect((err as ProfileSaveError).createdProfileId).toBeUndefined();
@@ -134,7 +124,6 @@ describe('applyProfileSave — T4.8/#28 Case 2 domain-name post-condition (write
 		});
 
 		expect(res).toEqual({ profileId: 'dp-1' });
-		// The post-condition fired against the member's own person (cfg + personId).
 		expect(assertDomainNamePersistedMock).toHaveBeenCalledTimes(1);
 		expect(assertDomainNamePersistedMock.mock.calls[0][0]).toEqual(cfg);
 		expect(assertDomainNamePersistedMock.mock.calls[0][1]).toBe('person-p');
@@ -153,9 +142,6 @@ describe('applyProfileSave — T4.8/#28 Case 2 domain-name post-condition (write
 	});
 
 	it('FIRST-SAVE + post-condition read-back FAILS (transient blip) → throws ProfileSaveError CARRYING the created id, so a retry updates the shell (no duplicate domain profile)', async () => {
-		// The shell was already created AND the name genuinely persisted; only the
-		// read-back transiently failed. The created id must survive so the queue records
-		// it and a retry UPDATES the shell rather than re-entering the create branch.
 		createOwnProfileMock.mockResolvedValue('dp-1');
 		saveProfileFieldsMock.mockResolvedValue(undefined);
 		assertDomainNamePersistedMock.mockRejectedValue(new Error('listMyProfiles failed: 503'));

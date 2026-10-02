@@ -1,20 +1,4 @@
-// #434 slice 4/6 RED — the library's data entry points, and the defaults of the
-// shared readers under them.
-//
-// CONTRACT (see src/routes/library/page.offline.spec.ts's header for the whole
-// slice):
-//   - libraryData's listWorks / listLendings / listEditions / listCopies /
-//     resolveBorrowerNames stay SHARED, so their DEFAULT is uncached: nothing
-//     stored, and offline a rejection even when a stored copy of the same key
-//     exists.
-//   - loadLibraryListing(cfg, fetchImpl) -> { works, lendings, borrowerNames },
-//     loadLibraryEditions(cfg, workId, fetchImpl), loadLibraryCopies(cfg,
-//     editionId, fetchImpl) — CACHED_READ: stored online, served offline with
-//     the SAME result, the served copy's readAt on `servedFromCache`.
-//   - refreshLibraryLendings(cfg, fetchImpl) -> { lendings, borrowerNames } —
-//     CACHED_READ_STORE_ONLY: online it stores exactly what the listing's
-//     lending read stores (so a later offline listing shows the post-write
-//     availability); offline it REJECTS and never touches `servedFromCache`.
+// The library page's data entry points and the defaults of the shared readers under them.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -40,6 +24,7 @@ import {
 	loadLibrarianPickers,
 	resolveWriteLibraryId
 } from './libraryPageData';
+import { json } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -47,12 +32,7 @@ const CFG = { db: DB, token: 'tok-1' };
 const DB_ENTITY = 'db-entity-1';
 const LIBRARY = 'lib-1';
 
-function json(body: unknown): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function urlOf(input: RequestInfo | URL): string {
 	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -65,8 +45,6 @@ interface LendingRow {
 	returnedAt?: string;
 }
 
-/** An online Entu whose lending log is `lendings` (changed between calls to
- *  model a write landing). The borrower m-2 -> p-2 is named "Liisa Laulja". */
 function online(lendings: LendingRow[]) {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = urlOf(input);
@@ -74,7 +52,7 @@ function online(lendings: LendingRow[]) {
 			return json({
 				count: 1,
 				entities: [{ _id: 'w-1', name: [{ string: 'Messa di Gloria' }], composer: [{ string: 'Puccini' }] }]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=lending&')) {
 			return json({
@@ -86,34 +64,39 @@ function online(lendings: LendingRow[]) {
 					assigned_at: [{ date: '2026-09-01' }],
 					...(l.returnedAt ? { returned_at: [{ date: l.returnedAt }] } : {})
 				}))
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('entity/m-2?props=person')) {
-			return json({ entity: { _id: 'm-2', person: [{ reference: 'p-2' }] } });
+			return json({ entity: { _id: 'm-2', person: [{ reference: 'p-2' }] } }, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=profile') && url.includes('_parent.reference=p-2')) {
 			return json({
 				count: 1,
 				entities: [{ _id: 'prof-2', name: [{ string: 'Liisa Laulja' }], _sharing: [{ string: 'domain' }] }]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=edition&') && url.includes('_parent.reference=w-1')) {
-			return json({ count: 1, entities: [{ _id: 'e-1', name: [{ string: 'Carus 2019' }] }] });
+			return json(
+				{ count: 1, entities: [{ _id: 'e-1', name: [{ string: 'Carus 2019' }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (url.includes('_type.string=copy&') && url.includes('_parent.reference=e-1')) {
-			return json({ count: 1, entities: [{ _id: 'c-1', copy_number: [{ number: 3 }] }] });
+			return json(
+				{ count: 1, entities: [{ _id: 'c-1', copy_number: [{ number: 3 }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
-		// #434 slice 4 review round 2 — the librarian resolution (database entity
-		// -> library list -> the library's rights) and the panel's own three
-		// collective-wide feeds behind it.
 		if (url.includes('_type.string=database')) {
-			return json({ count: 1, entities: [{ _id: DB_ENTITY }] });
+			return json({ count: 1, entities: [{ _id: DB_ENTITY }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=library&')) {
-			return json({ count: 1, entities: [{ _id: LIBRARY }] });
+			return json({ count: 1, entities: [{ _id: LIBRARY }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${LIBRARY}?props=_owner,_editor`)) {
-			return json({ entity: { _id: LIBRARY, _owner: [{ reference: PERSON }] } });
+			return json({ entity: { _id: LIBRARY, _owner: [{ reference: PERSON }] } }, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=edition&props=')) {
 			return json({
@@ -125,7 +108,7 @@ function online(lendings: LendingRow[]) {
 						_parent: [{ reference: 'w-1', entity_type: 'work' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=copy&props=')) {
 			return json({
@@ -137,12 +120,16 @@ function online(lendings: LendingRow[]) {
 						_parent: [{ reference: 'e-1', entity_type: 'edition' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=member&status.string=active')) {
-			return json({ count: 1, entities: [{ _id: 'm-2', person: [{ reference: 'p-2' }] }] });
+			return json(
+				{ count: 1, entities: [{ _id: 'm-2', person: [{ reference: 'p-2' }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
-		return json({ count: 0, entities: [] });
+		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
 }
 
@@ -225,7 +212,6 @@ describe('#434 slice 4 — refreshLibraryLendings stores without serving', () =>
 		await loadLibraryListing(CFG, online(LENT));
 		await flushReadCache();
 
-		// The write (a return) lands; the page re-reads the lendings.
 		const fresh = await refreshLibraryLendings(CFG, online(RETURNED));
 		expect(fresh.lendings.items[0].returnedAt).toBe('2026-09-28');
 		await flushReadCache();
@@ -269,11 +255,6 @@ describe('#434 slice 4 review round 2, finding 1 — the librarian panel feeds a
 	});
 
 	it('the librarian STATE and its pickers restore together — the panel never resolves to a half-load', async () => {
-		// The shape the page depends on: `loadLibrarianState` answering
-		// 'librarian' offline is only useful if the three feeds gated behind that
-		// answer resolve too. Round 1 cached the state and left the feeds
-		// uncached, so the page's catch set `librarianStore` to 'error' — the red
-		// alert the round set out to remove, one step later.
 		expect(await loadLibrarianState(CFG, PERSON, online(LENT))).toEqual({
 			state: 'librarian',
 			libraryId: LIBRARY
@@ -305,9 +286,7 @@ describe('#434 slice 4 review round 2, finding 2 — the WRITE parent is never c
 		});
 		await flushReadCache();
 
-		// The panel still restores (finding 1) ...
 		expect((await loadLibrarianState(CFG, PERSON, offline())).libraryId).toBe(LIBRARY);
-		// ... and the id a lending POST would be parented under does NOT.
 		await expect(resolveWriteLibraryId(CFG, offline())).rejects.toThrow('Failed to fetch');
 	});
 
@@ -321,5 +300,5 @@ describe('#434 slice 4 review round 2, finding 2 — the WRITE parent is never c
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 4/6 RED)
-// (*MVOX:Josquin* — #434 slice 4 review round 2, findings 1 and 2)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

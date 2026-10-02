@@ -1,10 +1,10 @@
 // The link write layer: create, whole-field update, renumber and delete, at the fetch seam.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { createLink, deleteLink, reorderLinks, updateLink } from './linkActions';
 import { renumberDisplayOrder } from '$lib/sections/sectionTreeWrites';
 import { SectionReparentPartialError } from '$lib/sections/sectionErrors';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
 function partialShape(err: unknown) {
 	const e = err as SectionReparentPartialError;
@@ -17,19 +17,9 @@ function partialShape(err: unknown) {
 	};
 }
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const TYPE_ID = 'type-link-1';
 const DB_ENTITY = 'db-ent-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-interface Call {
-	url: string;
-	method: string;
-	body: unknown;
-}
 
 function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
 	return (fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>).map(([u, init]) => ({
