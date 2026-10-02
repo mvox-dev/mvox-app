@@ -2,9 +2,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { adminStore, resetAdmin, resolveAdmin } from './adminStore';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg = { db: 'sampledb', token: 'test-token' };
+const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 

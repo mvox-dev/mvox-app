@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { resolveAdmin as resolveAdminActual, type AdminState } from './adminStore';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type ResolveAdminPreResolved = (
 	cfg: EntuCfg,
@@ -12,7 +12,7 @@ type ResolveAdminPreResolved = (
 ) => Promise<AdminState>;
 const resolveAdmin = resolveAdminActual as ResolveAdminPreResolved;
 
-const cfg = { db: 'sampledb', token: 'test-token' };
+const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 

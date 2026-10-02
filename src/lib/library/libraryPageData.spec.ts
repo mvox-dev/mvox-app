@@ -24,11 +24,11 @@ import {
 	loadLibrarianPickers,
 	resolveWriteLibraryId
 } from './libraryPageData';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
-const CFG = { db: DB, token: 'tok-1' };
+const CFG = testCfg(DB, 'tok-1');
 const DB_ENTITY = 'db-entity-1';
 const LIBRARY = 'lib-1';
 

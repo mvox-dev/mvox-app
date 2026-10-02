@@ -8,8 +8,9 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from './agendaLoad';
 import type { AgendaLoadDeps } from './agendaLoad';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-1' };
+const CFG = testCfg('sampledb', 'jwt-1');
 const ITEM: RepertoireItem = {
 	id: 'ri-1',
 	workId: 'work-1',

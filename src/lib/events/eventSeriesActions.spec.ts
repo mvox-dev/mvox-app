@@ -1,8 +1,8 @@
 // Reassign and unassign an event's series without touching its season _parent value.
 import { describe, expect, it, vi } from 'vitest';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 
 type ActionsModule = {
 	reassignEventSeries: (

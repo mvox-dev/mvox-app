@@ -18,6 +18,7 @@ import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQue
 import { attendanceByMemberId } from '$lib/attendance/attendanceData';
 import { createWriteTokens } from '$lib/net/writeTokens';
 import { setToken, clearAll } from '$lib/auth/storage';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ITEM: AgendaItem = {
 	id: 'ev1',
@@ -86,7 +87,7 @@ describe('agenda attendance panel load', () => {
 		loader.openAttendancePanel(ITEM);
 		await settle();
 
-		const cfg = { db: 'sampledb', token: 'jwt-abc' };
+		const cfg = testCfg('sampledb', 'jwt-abc');
 		queue.request({ cfg, eventId: ITEM.id, memberId: 'm1', existing: old, newStatus: 'present' });
 		loader.closeAttendancePanel();
 		loader.openAttendancePanel(ITEM);
@@ -107,7 +108,7 @@ describe('agenda attendance panel load', () => {
 		loader.openAttendancePanel(ITEM);
 		await settle();
 
-		const cfg = { db: 'sampledb', token: 'jwt-abc' };
+		const cfg = testCfg('sampledb', 'jwt-abc');
 		queue.request({ cfg, eventId: ITEM.id, memberId: 'm1', existing: null, newStatus: 'present' });
 		await settle();
 		expect(ag.attendanceMap).toEqual({ m1: { attendanceId: 'att-1', status: 'present' } });

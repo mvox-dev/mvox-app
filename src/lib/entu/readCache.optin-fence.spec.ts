@@ -10,10 +10,11 @@ import { authStore } from '$lib/auth/session';
 import { CACHED_READ } from './request';
 import { flushReadCache, readCacheEntryCount, setReadCacheFactory } from './readCache';
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
-const CFG = { db: DB, token: 'tok-1' };
+const CFG = testCfg(DB, 'tok-1');
 
 function online() {
 	return vi.fn(async () =>

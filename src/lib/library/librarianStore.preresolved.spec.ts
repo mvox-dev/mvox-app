@@ -6,7 +6,7 @@ import {
 	type LibrarianResult
 } from './librarianStore';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type ResolveMyLibraryIdPreResolved = (
 	cfg: EntuCfg,
@@ -22,7 +22,7 @@ type ResolveLibrarianPreResolved = (
 const resolveMyLibraryId = resolveMyLibraryIdActual as ResolveMyLibraryIdPreResolved;
 const resolveLibrarian = resolveLibrarianActual as ResolveLibrarianPreResolved;
 
-const cfg = { db: 'sampledb', token: 'test-token' };
+const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 const LIBRARY_ID = 'lib-entity-1';

@@ -500,7 +500,7 @@ function seededWire(): FakeEntu {
 	return wire;
 }
 
-const icfg: EntuCfg = { db: 'polytest', token: 'jwt' };
+const icfg = testCfg('polytest');
 
 const conversionInput: ConvertEventToSeriesInput = {
 	eventId: 'ev-9',

@@ -1,11 +1,11 @@
 // The shared overwrite and removal helpers: wire shape, order of writes, and failure outcomes.
 import { describe, expect, it, vi } from 'vitest';
 import { replaceEntityProperty, clearEntityProperty, overwriteEntityValues } from './replaceProperty';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-const cfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 
 function urls(fetchImpl: ReturnType<typeof vi.fn>): string[] {
 	return fetchImpl.mock.calls.map((c) => String(c[0]));

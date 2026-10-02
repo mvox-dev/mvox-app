@@ -25,7 +25,7 @@ import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
@@ -54,7 +54,7 @@ const AGENDA_SOURCE = () =>
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
-const CFG = { db: DB, token: 'tok-1' };
+const CFG = testCfg(DB, 'tok-1');
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 

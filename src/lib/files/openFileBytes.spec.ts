@@ -1,33 +1,4 @@
-// #343 RED — openFileBytes: the read-through seam between the click handlers
-// and the byte store. Default node env; the store is the in-memory fake
-// (its own contract lives in byteStore.spec.ts), signFileUrl is module-mocked
-// (its wire contract lives in fileUrls.spec.ts), the byte GET rides an
-// explicit fetchImpl (the house seam — networkGuard forbids the default).
-//
-// Pinned contract:
-//   - HIT: no signing, no network — stored bytes come back as a `blob:` URL.
-//   - MISS: signFileUrl at CALL time (the 60s rule), fetch the bytes, compute
-//     SHA-256 (the #333 hash-pin hook — crypto.subtle, recorded as stored
-//     metadata; NO comparison logic), put under the identity ARGUMENT, return
-//     a `blob:` URL. The signed URL is used once and never persisted.
-//   - IDENTITY AT REQUEST-ISSUE: the identity is an explicit parameter
-//     captured by the caller in the click handler. A fetch issued under A
-//     that settles after the app switched to B stores under A, NEVER B — this
-//     module has no access to "current" identity at settle time by
-//     construction (source pin below). The consumer-side half (late tab
-//     navigation suppressed) is pinned in the page wiring specs.
-//   - OBJECT-URL DISPOSAL (review): a live `blob:` URL pins a full copy of
-//     the score in page memory, so every open revokes the URL the previous
-//     open of that SAME fileId returned (one live blob per distinct file, not
-//     per click), and every open hands back a `release()` for the caller that
-//     decides not to pass the URL on.
-//   - PASSTHROUGH FRESHNESS (third review round): the paths that hand back a
-//     signed URL instead of a blob hand back one still inside its 60s window —
-//     an open that burned the window on a stalled fetch re-signs first.
-//   - STALENESS IS STRUCTURAL: a replaced file arrives as a NEW file-property
-//     _id (probe ledger scripts/migrations/seed-results/
-//     probe-343-file-replace-identity-live-2026-09-12T07-56-06-582Z.json), so
-//     a new fileId is simply a different key — fresh fetch, old row untouched.
+// openFileBytes: the read-through seam between click handlers and the byte store.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,8 +9,9 @@ vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 import { openFileBytes } from './openFileBytes';
 import { BYTE_STORE_CAP_BYTES } from './byteStore';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 const A = { db: 'sampledb', personId: 'person-a' };
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37]); // "%PDF-1.7"
@@ -142,21 +114,15 @@ describe('openFileBytes — read-through', () => {
 		fetchImpl.mockClear();
 		fetchImpl.mockResolvedValue(pdfResponse());
 
-		// The entity read now carries a new file _id (the replace shape).
 		await openFileBytes(CFG, A, 'file-new', store, fetchImpl as unknown as typeof fetch);
 
 		expect(signFileUrlMock).toHaveBeenCalledTimes(2);
 		expect(signFileUrlMock.mock.calls[1].slice(0, 2)).toEqual([CFG, 'file-new']);
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('signed-new');
-		// Both rows exist under their own keys; nobody validated or touched the old one.
 		expect(store.heldFor(A.db, A.personId).sort()).toEqual(['file-new', 'file-old']);
 	});
 });
 
-// #343 review — every open mints a `blob:` URL, and a live object URL pins a
-// full copy of the score in page memory. The module head states the policy;
-// this suite is what holds it. Each test uses its own fileIds: the
-// one-live-url-per-fileId latch is module state and outlives a single `it`.
 describe('openFileBytes — object-URL disposal', () => {
 	let revokeSpy: ReturnType<typeof vi.spyOn>;
 
@@ -206,8 +172,6 @@ describe('openFileBytes — object-URL disposal', () => {
 
 		const first = await openFileBytes(CFG, A, 'file-latch', store, fetchImpl as unknown as typeof fetch);
 		const second = await openFileBytes(CFG, A, 'file-latch', store, fetchImpl as unknown as typeof fetch);
-		// Late, redundant release of the one already superseded (revokes again —
-		// revoking twice is a no-op — and must NOT clear `second`'s latch).
 		first.release();
 		revokeSpy.mockClear();
 
@@ -236,8 +200,6 @@ describe('openFileBytes — identity discipline', () => {
 		const fetchImpl = vi.fn().mockReturnValue(new Promise<Response>((r) => (releaseFetch = r)));
 
 		const inFlight = openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
-		// The app has meanwhile switched to another identity. This module can
-		// not see that — and must not be able to (source pin below).
 		releaseFetch(pdfResponse());
 		await inFlight;
 
@@ -254,7 +216,6 @@ describe('openFileBytes — identity discipline', () => {
 		);
 		expect(source).not.toMatch(/selectedCollective/);
 		expect(source).not.toMatch(/authStore|\$lib\/auth/);
-		// No ETag logic here either (comment-level statement lives in byteStore.ts).
 		expect(source).not.toMatch(/headers\.get\(\s*['"`]etag/i);
 	});
 });
@@ -273,10 +234,6 @@ describe('openFileBytes — failure surfaces (rendered by the pages, raised here
 	});
 });
 
-// #343 fix-round — Gama's 1(b) ruling: the byte fetch rejecting no longer
-// closes the door. It falls back to the signed URL already in hand (the
-// exact pre-#343 path, not CORS-subject), reported as a distinct `reason` so
-// nothing downstream mistakes a fallback for a cache hit.
 describe('openFileBytes — fetch-reject fallback (#343 fix-round, Gama 1(b))', () => {
 	it('a rejecting byte fetch resolves with the SIGNED URL itself, reason "fallback-navigation" — nothing stored, no throw', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
@@ -302,9 +259,6 @@ describe('openFileBytes — fetch-reject fallback (#343 fix-round, Gama 1(b))', 
 	});
 });
 
-// #343 fix-round — finding 2 + Gama's preference: decide from content-length
-// BEFORE buffering, so an over-cap file never pays the buffer→Blob memory
-// cost just to be refused.
 describe('openFileBytes — cap decided before buffering (#343 fix-round, finding 2)', () => {
 	it('content-length over the cap: no arrayBuffer() call, nothing stored, the SIGNED URL is handed back, reason "network-uncached" — distinguishable from a fetch-reject fallback', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
@@ -351,11 +305,6 @@ describe('openFileBytes — cap decided before buffering (#343 fix-round, findin
 	});
 });
 
-// #343 second review round — the rule is that the cache INFRASTRUCTURE, not
-// just cache policy, can never gate an open. Each `it` below is a way the
-// cache side can fail on a device that could otherwise open the file fine;
-// none of them may reach the page handlers' `.catch` (which closes the tab and
-// raises the error surface).
 describe('openFileBytes — the cache is never a gate (#343 second review round)', () => {
 	it('a store READ that rejects (blocked site data, absent indexedDB, VersionError) degrades to a MISS — signs, fetches, and still opens', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
@@ -387,8 +336,6 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 	it('NON-SECURE ORIGIN: crypto.subtle absent, so the digest cannot be computed — the bytes already in hand still deliver as a blob, reason "network-uncached", nothing stored', async () => {
 		signFileUrlMock.mockResolvedValue(SIGNED_URL);
 		const fetchImpl = vi.fn().mockResolvedValue(pdfResponse());
-		// What a plain-http LAN/tailnet origin looks like: SubtleCrypto is
-		// secure-context-only, so `crypto.subtle` is undefined there.
 		vi.stubGlobal('crypto', {});
 
 		try {
@@ -416,13 +363,6 @@ describe('openFileBytes — the cache is never a gate (#343 second review round)
 	});
 });
 
-// #343 third review round, finding 2 — the three paths that hand the caller a
-// signed URL instead of a blob may only hand over one that is still inside its
-// 60s window. `fetch` has no default timeout, so a stalled rehearsal-hall
-// connection can reject after MINUTES; handing over the expired URL then makes
-// the open RESOLVE (the caller's error surface never fires) onto S3's raw
-// AccessDenied XML. The clock is driven explicitly here — a controlled
-// Date.now, not real elapsed time, so the pin is deterministic.
 describe('openFileBytes — passthrough freshness (#343 third round, finding 2)', () => {
 	const FRESH_URL = 'https://s3.example/signed-RESIGNED?X-Amz-Expires=60';
 	let clock: number;
