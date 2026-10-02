@@ -101,6 +101,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
@@ -133,7 +134,7 @@ function rowsB(): RosterRow[] {
 	];
 }
 
-const CFG_A = { db: 'sampledb', token: 'jwt-abc' };
+const CFG_A = testCfg('sampledb', 'jwt-abc');
 
 function setAuthedWithTwoCollectives() {
 	setToken('jwt-abc');

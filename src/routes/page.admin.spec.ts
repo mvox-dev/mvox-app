@@ -1,42 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #134/S3 RED — the /admin role-management surface. Contract:
-//
-// - no available collective → no-collective state, zero data calls
-// - access gate: `resolveAdmin` (adminStore) answers per-person on HER OWN org —
-//   'not-admin' → no-access block, NO role data is fetched; 'error' → load-error
-//   + retry (a network failure is NEVER presented as "not admin" — house rule)
-// - ready → two managed lists:
-//     - Administrators: `listAdmins(cfg, dbEntityId)` — dbEntityId from `resolveDatabaseEntityId`
-//       (the person's own member `_parent`; never an `organization&limit=1`
-//       guess, which live-returns the umbrella federation)
-//     - Librarians: `listLibrarians(cfg, libraryId)` — libraryId from
-//       `resolveLibrarian`'s result (the existing library-entity resolution;
-//       no new lookup invented). libraryId null → no-library state, list
-//       fetch skipped
-// - adding: one NATIVE <select> per section (#209, PO standing rule 1 — the
-//   Autocomplete combobox is retired), fed from the roster (loadRoster) in
-//   ROSTER ORDER (section, then position within section — Gama ruling 3, the
-//   same order the roster page shows via listSections + groupBySection) —
-//   people already holding the section's role are EXCLUDED from the options;
-//   the first option is a `disabled selected hidden` prompt (value '');
-//   changing the select to a person id calls addAdmin/addLibrarian, the list
-//   refetches, and the select resets to the prompt; when NOBODY is left to
-//   add the select stays MOUNTED but disabled, its prompt text swapped to
-//   `picker_everyone_added` (Gama ruling 2 — never hidden, never inert-enabled)
-// - removing: a remove button per entry → removeAdmin/removeLibrarian + refetch;
-//   the LAST 'owner' entry's button is DISABLED (lockout prevention, UI leg —
-//   the data layer's RoleLockoutError is the enforcement leg); a LIBRARY owner's
-//   button is DISABLED too (removeLibrarian is 'editor-only' scope and would
-//   reject before any write — a guaranteed dead click); a rejected remove
-//   surfaces a generic localized action error (raw message stays out of the
-//   DOM), the entry stays listed
-// - write gate: the listing's `canManage` (viewer holds an `_owner` value on the
-//   entity, inherited included) decides whether the WRITE controls exist at all.
-//   `resolveAdmin` says 'admin' for a mere org `_editor`, but entu-api 403s
-//   every rights write from a non-owner — so an org editor sees the lists
-//   read-only: no person select, every Remove disabled, a localized explanation
-// - navigation: NAV_ENTRIES carries an admin-only /admin entry
+// The /admin role-management page.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,15 +14,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_roles_admins_title: () => 'Administrators',
 		admin_roles_librarians_title: () => 'Librarians',
 		admin_roles_add_admin_label: () => 'Add an administrator',
-		// #209 Gama ruling 1 — the EXISTING keys, reworded to add-prompts (a
-		// native select's first option is a prompt, not a search hint).
 		admin_roles_add_admin_placeholder: () => 'Add administrator…',
 		admin_roles_add_librarian_label: () => 'Add a librarian',
 		admin_roles_add_librarian_placeholder: () => 'Add librarian…',
-		// #209 Gama ruling 2 — ONE shared key for the exhausted-options state.
 		picker_everyone_added: () => 'Everyone is already added',
-		// #209 review F1/F2 — the OTHER empties (an empty roster) and the
-		// degraded-order note, so neither can be rendered as "everyone added".
 		picker_no_members: () => 'No members to add',
 		picker_order_fallback: () => 'Sorted by name — section order unavailable',
 		picker_partial_members_notice: () => 'Not every member is listed here',
@@ -67,26 +25,15 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
 		admin_roles_no_library: () => 'No library entity is visible in this collective.',
 		admin_roles_action_error: () => 'Role change failed.',
-		// #325 — pending-guard cues (saving notice + saved announcement).
 		admin_roles_saving: () => 'Saving…',
 		admin_roles_saved: () => 'Saved.',
 		admin_roles_read_only: () => 'Only an owner of this collective can change these roles.',
 		admin_roles_remove_self_hint: () => 'Cannot remove your own rights.',
-		// Deliberately NOT the English words: the row badge must render the
-		// localized label, never the raw `RolePerson.role` enum. An assertion on
-		// 'owner'/'editor' would pass against `{person.role}` and prove nothing.
 		admin_roles_role_owner: () => 'omanik',
 		admin_roles_role_editor: () => 'toimetaja',
-		// #165 scaffolding — this file has no opinion on the collective-name
-		// surface (see loadOk()'s comment); it still renders on every ready page.
 		admin_collective_name_edit_aria_label: () => 'Edit collective name',
 		admin_collective_name_save_error: () => "Couldn't save.",
 		nav_admin: () => 'Admin',
-		// #140/S3 — the merged /admin page now also renders InviteSurface
-		// (src/lib/components/admin/InviteSurface.svelte); this file doesn't
-		// exercise the invite flow itself (that's page.navshell-merge.spec.ts +
-		// page.admin-invite.spec.ts), but the component still renders its own
-		// heading/labels and needs every key it can reach in its default states.
 		admin_invite_title: () => 'Invite a new member',
 		admin_invite_no_collective: () => 'Select a collective before creating invites.',
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
@@ -105,11 +52,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
 		admin_invite_create_another: () => 'Create another invite',
-		// #301 — the embedded InviteSurface now also resolves an owner-tier +
-		// uninvited-list prerequisite pair on every mount; this file has no
-		// opinion on that feature (pinned in page.admin-invite-person-select.spec.ts)
-		// and keeps it inert via `loadOk()` below, but every key the component
-		// can reach in ANY of its states still needs a stub here.
 		admin_invite_person_label: () => 'Who are you inviting?',
 		admin_invite_person_new: () => 'A new person',
 		admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
@@ -120,9 +62,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-// Mock every data seam at its module boundary. Error classes are defined
-// INSIDE the hoisted block so `instanceof` checks in the page match the
-// instances these tests reject with.
 const h = vi.hoisted(() => {
 	class RoleLockoutError extends Error {
 		readonly code = 'role-lockout';
@@ -138,9 +77,6 @@ const h = vi.hoisted(() => {
 			this.name = 'RoleGrantMissingError';
 		}
 	}
-	// #140/S3 — InviteSurface's own error class, mirrored here so the embedded
-	// component's `instanceof` checks match (see page.admin-invite.spec.ts /
-	// page.navshell-merge.spec.ts for the same pattern).
 	class InviteCreateError extends Error {
 		readonly phase: string;
 		readonly reason: string;
@@ -164,31 +100,15 @@ const h = vi.hoisted(() => {
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
-		// #301 — the embedded InviteSurface's owner-tier gate. Defaulted to
-		// 'error' HERE (not reset per-test — every test in this file wants the
-		// same inert answer) so the new person-select feature never renders:
-		// this file's contract is role management, not #301 (see
-		// page.admin-invite-person-select.spec.ts for that one).
 		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
-		// #209 — the section tree behind ROSTER ORDER (Gama ruling 3): the same
-		// listSections read the roster page orders by. [] = every person
-		// Unassigned, so roster order degrades to the roster's own (name) order.
 		listSectionsMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
-		// #301 — InviteSurface's uninvited-list read. Defaulted here (not
-		// reset per-test), same reasoning as resolveOwnerTierMock above.
 		listJoinStatesMock: vi.fn().mockResolvedValue({}),
-		// #165 — the admin page's `load()` now also resolves the collective-name
-		// marker on every ready-path render (same house-rule failure handling as
-		// its sibling resolutions). Mocked here purely as scaffolding so THIS
-		// file's pre-existing coverage keeps exercising its own contract
-		// unaffected — the #165 behavior itself is pinned in
-		// page.admin-collective-name.spec.ts.
 		resolveCollectiveNameMarkerMock: vi.fn(),
 		updateCollectiveNameMock: vi.fn()
 	};
@@ -211,7 +131,6 @@ vi.mock('$lib/nav/adminStore', () => ({
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-// #301 — InviteSurface's uninvited-list seam.
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listJoinStates: h.listJoinStatesMock
 }));
@@ -221,29 +140,20 @@ vi.mock('$lib/collective/databaseEntity', () => ({
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
 }));
-// #209 — only the NETWORK read is stubbed; groupBySection (the pure roster-order
-// helper the roster page already uses) stays real so the pickers' option order
-// is computed by the same code path the roster page renders with.
 vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
 	listSections: h.listSectionsMock
 }));
-// #165 — scaffolding only (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
 }));
-// #140/S3 — the merged page also mounts InviteSurface; mock its data seam at
-// the same boundary page.admin-invite.spec.ts / page.navshell-merge.spec.ts use.
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
 	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
-// Sever the $env chain the collectives store pulls in (discover → marker →
-// entu-config) and the store's `goto` import — same discipline as
-// page.admin-invite.spec.ts.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
@@ -258,13 +168,10 @@ import {
 } from '$lib/collectives/store';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
-const CFG = { db: 'sampledb', token: 'jwt-admin' };
+const CFG = testCfg('sampledb', 'jwt-admin');
 
-// RolePerson rows as listAdmins/listLibrarians answer them — ONE ROW PER PERSON,
-// carrying EVERY backing rights property value id (see roleManagement.spec.ts,
-// rollup contract). The route keys its {#each} on `id`, so a repeated id would
-// take the whole page down with Svelte's `each_key_duplicate`.
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
 const BELA = {
 	id: 'p-bela',
@@ -285,16 +192,10 @@ const DORA_ADMIN = {
 	valueIds: ['pv-ed-dora']
 };
 
-/**
- * The `{ persons, canManage }` shape listAdmins/listLibrarians resolve with.
- * `RolePerson` is imported for real (type-only — erased, so the vi.mock above
- * still stands) so these fixtures cannot drift from the data layer's contract.
- */
 function listing(persons: RolePerson[], canManage = true) {
 	return { persons, canManage };
 }
 
-// The person source for BOTH person selects (#209): the roster (personId + name).
 const ROSTER = [
 	{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
 	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' },
@@ -325,17 +226,10 @@ function loadOk() {
 	h.addLibrarianMock.mockResolvedValue(undefined);
 	h.removeAdminMock.mockResolvedValue(undefined);
 	h.removeLibrarianMock.mockResolvedValue(undefined);
-	// #140/S3 — InviteSurface's own prerequisite resolution, so the embedded
-	// component settles into 'ready' instead of hanging mid-load.
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	// #165 scaffolding — this file has no opinion on the collective-name
-	// surface; a benign resolution keeps its OWN tests' `load()` reaching
-	// 'ready' the same as before this dependency existed.
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
-	// #301 — inert by construction: 'error' tier renders neither the select nor
-	// the owner note (this file's own contract is unaffected either way).
 	h.resolveOwnerTierMock.mockResolvedValue('error');
 	h.listJoinStatesMock.mockResolvedValue({});
 }
@@ -344,7 +238,6 @@ function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
 	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
 }
 
-/** The section container, asserted present. */
 function section(container: HTMLElement, testid: string): HTMLElement {
 	const el = q<HTMLElement>(container, testid);
 	expect(el, `expected [data-testid="${testid}"] to be rendered`).not.toBeNull();
@@ -360,8 +253,6 @@ async function renderReady() {
 	return rendered;
 }
 
-/** #209 — the section's NATIVE person <select> (rule 1: no custom widget),
- *  asserted present and a real <select>. */
 function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement {
 	const select = q<HTMLSelectElement>(sectionEl, testid);
 	expect(select, `expected the section to hold a native [data-testid="${testid}"]`).not.toBeNull();
@@ -369,13 +260,10 @@ function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement
 	return select!;
 }
 
-/** Every option's value, in DOM order — index 0 is the '' prompt. */
 function optionValues(select: HTMLSelectElement): string[] {
 	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
 }
 
-/** The prompt option (first, value ''), pinned `disabled selected hidden` so it
- *  can never be committed as a value (Gama ruling 1). */
 function promptOption(select: HTMLSelectElement): HTMLOptionElement {
 	const prompt = select.querySelector('option') as HTMLOptionElement;
 	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
@@ -385,7 +273,6 @@ function promptOption(select: HTMLSelectElement): HTMLOptionElement {
 	return prompt;
 }
 
-/** Pick a person the way a native select is driven: change to their id. */
 async function pickPerson(select: HTMLSelectElement, personId: string): Promise<void> {
 	await fireEvent.change(select, { target: { value: personId } });
 }
@@ -421,8 +308,6 @@ afterEach(() => {
 	urlCollectiveDbStore.set(null);
 });
 
-// ── access gate ─────────────────────────────────────────────────────────────────
-
 describe('/admin — access gate', () => {
 	it('without an available collective shows the no-collective state and issues ZERO data calls', async () => {
 		const { container } = render(Page);
@@ -449,11 +334,6 @@ describe('/admin — access gate', () => {
 		expect(h.listAdminsMock).not.toHaveBeenCalled();
 		expect(h.listLibrariansMock).not.toHaveBeenCalled();
 
-		// The gate ran per-person on the selected collective's cfg — the same
-		// person-scoped resolution the nav uses, never an org guess.
-		// #173 — the page now resolves the database entity ONCE, itself, and
-		// threads it in as resolveAdmin's 4th (pre-resolved-dbEntityId) param,
-		// so resolveAdmin's OWN internal resolution never runs.
 		expect(h.resolveAdminMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
@@ -473,7 +353,6 @@ describe('/admin — access gate', () => {
 		});
 		expect(q(container, 'admin-roles-no-access')).toBeNull();
 
-		// Retry is real: with the backend recovered, the same button reaches ready.
 		h.resolveAdminMock.mockResolvedValue('admin');
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
@@ -483,8 +362,6 @@ describe('/admin — access gate', () => {
 		});
 	});
 });
-
-// ── ready — the two managed lists ───────────────────────────────────────────────
 
 describe('/admin — role lists', () => {
 	it('renders the admin + librarian lists off listAdmins(cfg, dbEntityId) / listLibrarians(cfg, libraryId) — org from resolveDatabaseEntityId, library from resolveLibrarian (the EXISTING resolutions, no new lookups)', async () => {
@@ -506,19 +383,12 @@ describe('/admin — role lists', () => {
 		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
-		// #173 — the page threads its own single resolution into resolveLibrarian's
-		// 4th (pre-resolved-dbEntityId) param too, so resolveLibrarian's internal
-		// resolution never runs.
 		expect(h.resolveLibrarianMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
 			undefined,
 			'org-1'
 		);
-		// The VIEWER rides along: her own `_owner` membership on each entity is
-		// what decides whether the write controls may be offered at all. The
-		// roster rides along too (#146) — the id→name lookup for rows whose
-		// display name hasn't caught up in Entu's aggregated read yet.
 		expect(h.listAdminsMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'org-1',
@@ -546,7 +416,6 @@ describe('/admin — role lists', () => {
 		expect(container.querySelectorAll('[data-testid="admin-entry-p-anna"]')).toHaveLength(1);
 		const entries = container.querySelectorAll('[data-testid^="admin-entry-"]');
 		expect(entries).toHaveLength(2);
-		// Anna reports the outranking role, not one row per rights value.
 		expect(q(container, 'admin-entry-p-anna')!.textContent).toContain('omanik');
 	});
 
@@ -559,7 +428,6 @@ describe('/admin — role lists', () => {
 		expect(q(container, 'admin-entry-p-anna')!.textContent).toContain('(omanik)');
 		expect(q(container, 'admin-entry-p-bela')!.textContent).toContain('(toimetaja)');
 		expect(q(container, 'librarian-entry-p-cilla')!.textContent).toContain('(toimetaja)');
-		// The wire enum must not reach the DOM anywhere on the page.
 		expect(container.textContent).not.toContain('(owner)');
 		expect(container.textContent).not.toContain('(editor)');
 	});
@@ -586,12 +454,10 @@ describe('/admin — role lists', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-load-error')).not.toBeNull();
 		});
-		// The failure must not masquerade as the legitimate "no library" answer.
 		expect(q(container, 'admin-roles-no-library')).toBeNull();
 		expect(container.textContent).not.toContain('No library entity is visible');
 		expect(h.listLibrariansMock).not.toHaveBeenCalled();
 
-		// Retry is real: with the library read recovered, the same button reaches ready.
 		h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
@@ -602,8 +468,6 @@ describe('/admin — role lists', () => {
 		});
 	});
 });
-
-// ── adding via the native person <select> (#209, PO standing rule 1) ────────────
 
 describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('the admin select is a NATIVE <select data-testid="admin-add-admin-select"> named by admin_roles_add_admin_label, prompt option first (value "", disabled selected hidden, the reworded add-prompt), then roster people MINUS current admins — value = person id, text = display name', async () => {
@@ -616,18 +480,12 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		const admins = section(container, 'admin-roles-admins');
 		const select = personSelect(admins, 'admin-add-admin-select');
 
-		// Accessible name from the EXISTING label key (Gama ruling 1 — no new keys).
 		expect(select.getAttribute('aria-label')).toBe('Add an administrator');
 
-		// The prompt is the reworded add-prompt, never committable, and selected
-		// at rest (the select's value is '').
 		const prompt = promptOption(select);
 		expect(prompt.textContent?.trim()).toBe('Add administrator…');
 		expect(select.value).toBe('');
 
-		// FULL option array (partial assertions hide bugs): already-admins Anna
-		// and Bela are NOT offered again; Cilla (a librarian, not an admin) and
-		// Dora are — in roster order (no sections here → the roster's own order).
 		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora']);
 		const texts = Array.from(select.querySelectorAll('option')).map((o) =>
 			o.textContent?.trim()
@@ -656,12 +514,10 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 				'p-dora'
 			);
 		});
-		// The list is REFETCHED (server truth), not hand-patched only.
 		await waitFor(() => {
 			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-dora')).not.toBeNull();
 		});
-		// …and the select is back at the prompt, ready for the next add.
 		await waitFor(() => {
 			expect(personSelect(admins, 'admin-add-admin-select').value).toBe('');
 		});
@@ -692,8 +548,6 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		expect(select.getAttribute('aria-label')).toBe('Add a librarian');
 		expect(promptOption(select).textContent?.trim()).toBe('Add librarian…');
 
-		// Cilla already IS a librarian → excluded HERE (though offered in the
-		// admin list); Anna and Bela are admins but not librarians → offered.
 		expect(optionValues(select)).toEqual(['', 'p-anna', 'p-bela', 'p-dora']);
 
 		await pickPerson(select, 'p-dora');
@@ -713,12 +567,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('option order is ROSTER order — section (listSections tree order), then position within section — NOT alphabetical (Gama ruling 3)', async () => {
 		selectSampledb();
 		loadOk();
-		// Nobody granted yet → every roster person is an option; the ORDER is
-		// what this test pins.
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
-		// loadRoster answers NAME order (its own contract). Sections put Cilla +
-		// Dora in Sopran (first) and Anna in Tenor (second); Bela is unassigned
-		// → LAST (the roster page's Unassigned group).
 		h.loadRosterMock.mockReset().mockResolvedValue(
 			toListRead([
 				{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
@@ -736,15 +585,12 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		const admins = section(container, 'admin-roles-admins');
 		const select = personSelect(admins, 'admin-add-admin-select');
 
-		// Sopran (Cilla, Dora — by position within the section), Tenor (Anna),
-		// then the Unassigned tail (Bela). Alphabetical would put Anna first.
 		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora', 'p-anna', 'p-bela']);
 	});
 
 	it('EVERYONE already granted: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added — never hidden, never an inert enabled select (Gama ruling 2)', async () => {
 		selectSampledb();
 		loadOk();
-		// All four roster people are already admins…
 		h.listAdminsMock
 			.mockReset()
 			.mockResolvedValue(listing([ANNA, BELA, CILLA, DORA_ADMIN]));
@@ -757,8 +603,6 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		expect(optionValues(select)).toEqual(['']);
 		expect(promptOption(select).textContent?.trim()).toBe('Everyone is already added');
 
-		// …while the librarian select (Cilla alone granted) stays live with its
-		// normal prompt — the state is PER select, not page-wide.
 		const librarians = section(container, 'admin-roles-librarians');
 		const libSelect = personSelect(librarians, 'admin-add-librarian-select');
 		expect(libSelect.disabled).toBe(false);
@@ -766,20 +610,14 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	});
 });
 
-// ── the section read is an ORDERING input, not a role input (#209 review F2) ────
-
 describe('/admin — a failed section read costs the pickers their order, not the page', () => {
 	it('listSections rejects: the page still reaches READY (lists, remove buttons, invite section intact), both selects still offer the whole roster in name order, and each says its order degraded', async () => {
 		selectSampledb();
 		loadOk();
-		// `listSections` throws on any non-2xx AND on its own data conditions (an
-		// unplaceable parent, a parent cycle) — none of which say anything about
-		// who may administer this collective.
 		h.listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
 
 		const { container } = await renderReady();
 
-		// The role surface is untouched: rows, remove buttons, no load-error.
 		expect(q(container, 'admin-roles-load-error')).toBeNull();
 		expect(q(container, 'admin-entry-p-anna')).not.toBeNull();
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-bela')).not.toBeNull();
@@ -787,7 +625,6 @@ describe('/admin — a failed section read costs the pickers their order, not th
 		const admins = section(container, 'admin-roles-admins');
 		const select = personSelect(admins, 'admin-add-admin-select');
 		expect(select.disabled).toBe(false);
-		// The roster's OWN (name) order — Cilla, Dora are the two not yet admins.
 		expect(optionValues(select)).toEqual(['', 'p-cilla', 'p-dora']);
 		expect(promptOption(select).textContent?.trim()).toBe('Add administrator…');
 		await waitFor(() => {
@@ -815,12 +652,6 @@ describe('/admin — a failed section read costs the pickers their order, not th
 });
 
 describe('/admin — #321 review F2: a truncated roster makes a member ungrantable, so the selects say so', () => {
-	// The PO's ruling (2026-09-11) names this case: a person select fed by the
-	// roster is closed by construction, so a truncated read makes that member
-	// UNGRANTABLE with nothing on screen saying why. The notice sits beside each
-	// select rather than inside its option list, because the select goes
-	// `disabled` when the options run out and the "everyone is already added"
-	// prompt it then shows is the truncation's most misleading face.
 	function truncatedRoster() {
 		h.loadRosterMock.mockReset().mockResolvedValue({
 			items: ROSTER,
@@ -843,7 +674,6 @@ describe('/admin — #321 review F2: a truncated roster makes a member ungrantab
 			expect(q(container, testid)!.getAttribute('role')).toBe('status');
 			expect(q(container, testid)!.className).not.toMatch(/sr-only|hidden/);
 		}
-		// Each notice sits with ITS OWN select, not once for the page.
 		expect(
 			section(container, 'admin-roles-admins').querySelector(
 				'[data-testid="admin-add-admin-partial-notice"]'
@@ -867,8 +697,6 @@ describe('/admin — #321 review F2: a truncated roster makes a member ungrantab
 		expect(q(container, 'admin-add-librarian-partial-notice')).toBeNull();
 	});
 });
-
-// ── removing ────────────────────────────────────────────────────────────────────
 
 describe('/admin — removing people', () => {
 	it('each admin entry carries a remove button; activating it calls removeAdmin(cfg, dbEntityId, personId) and the list refetches', async () => {
@@ -966,11 +794,7 @@ describe('/admin — removing people', () => {
 	});
 });
 
-// ── #147 self-lockout: an admin/librarian can never remove HER OWN rights ───────
-
 describe('/admin — self-lockout guard (#147)', () => {
-	// selectSampledb() gives the viewer personId 'admin-p' — a row carrying
-	// that same id is HER OWN grant.
 	const SELF_EDITOR = {
 		id: 'admin-p',
 		name: 'Admin Person',
@@ -984,24 +808,16 @@ describe('/admin — self-lockout guard (#147)', () => {
 		valueIds: ['pv-own-self']
 	};
 
-	// #164 revision — the contract HARDENS: a disabled button was still a
-	// rendered control Mihkel read as clickable ("Eemalda Mihkel Putrinš" next
-	// to his own row). The self row now renders NO Remove button at all — same
-	// resolution #148 chose for the library-owner row.
 	it("an admin holding only _editor gets NO remove button on HER OWN row (#164 — not rendered, not merely disabled), even though canManage is true and she isn't the last owner", async () => {
 		selectSampledb();
 		loadOk();
 		const EMIL = { id: 'p-emil', name: 'Emil Erg', role: 'owner' as const, valueIds: ['pv-own-emil'] };
-		// Two owners (Anna, Emil) so neither is the "last owner" — isolates the
-		// self-lockout guard from the pre-existing last-owner guard.
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, EMIL, SELF_EDITOR]));
 
 		const { container } = await renderReady();
 
-		// Her row still renders (name + badge) — only the control is gone.
 		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
 		expect(q(container, 'admin-remove-admin-p')).toBeNull();
-		// Anna's and Emil's rows are untouched by the guard — different people.
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-emil')!.disabled).toBe(false);
 	});
@@ -1013,8 +829,6 @@ describe('/admin — self-lockout guard (#147)', () => {
 
 		const { container } = await renderReady();
 
-		// Two owners → isLastOwner is false for both, but the self row still
-		// offers no control.
 		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
 		expect(q(container, 'admin-remove-admin-p')).toBeNull();
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-anna')!.disabled).toBe(false);
@@ -1045,11 +859,6 @@ describe('/admin — self-lockout guard (#147)', () => {
 		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
 	});
 
-	// The guard is only half the fix: a self row with no button and no stated
-	// reason is the bug report we'd get next ("where did my Remove go?"). The
-	// reason has to be rendered text, like the last-owner hint next to it —
-	// under #164 the button is gone entirely, so this hint is the ONLY place
-	// the rule is explained.
 	it('renders the self-lockout reason as VISIBLE text under the admin list even though the own row carries no button', async () => {
 		selectSampledb();
 		loadOk();
@@ -1060,7 +869,6 @@ describe('/admin — self-lockout guard (#147)', () => {
 		const hint = q(container, 'admin-roles-admins-self-hint');
 		expect(hint, 'expected a visible self-lockout hint in the admins section').not.toBeNull();
 		expect(hint!.textContent).toContain('Cannot remove your own rights.');
-		// It lives inside the admins section, next to the row it explains.
 		expect(
 			q(section(container, 'admin-roles-admins'), 'admin-roles-admins-self-hint')
 		).not.toBeNull();
@@ -1104,17 +912,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	});
 });
 
-// ── #164 — the viewer's OWN admin row renders NO Remove button ──────────────────
-//
-// Mihkel's report (2026-08-21), live /admin, two owners (db-root + himself):
-// his own row showed an active "Eemalda Mihkel Putrinš" button whose click
-// only then ran into the guard. A disabled control was not enough — the own
-// row must offer NO Remove control at all (the same shape #148 settled on for
-// the library-owner row). The server-side lockout guard in roleManagement.ts
-// stays untouched as defense in depth (pinned in roleManagement.spec.ts).
-
 describe('/admin — #164 self Remove button is NOT rendered on the own row', () => {
-	// selectSampledb() gives the viewer personId 'admin-p'.
 	const SELF_OWNER = {
 		id: 'admin-p',
 		name: 'Mihkel Putrinš',
@@ -1136,18 +934,14 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 		const { container } = await renderReady();
 		const admins = section(container, 'admin-roles-admins');
 
-		// The own row itself still renders — person, localized badge.
 		const selfRow = q(admins, 'admin-entry-admin-p');
 		expect(selfRow, 'expected the viewer\'s own admin row to render').not.toBeNull();
 		expect(selfRow!.textContent).toContain('Mihkel Putrinš');
 		expect(selfRow!.textContent).toContain('(omanik)');
 
-		// #164 core: NO Remove control inside the own row — not disabled, ABSENT.
 		expect(q(admins, 'admin-remove-admin-p')).toBeNull();
 		expect(selfRow!.querySelector('button')).toBeNull();
 
-		// The other owner's button is rendered AND enabled (two owners → not the
-		// last-owner case).
 		const removeDbRoot = q<HTMLButtonElement>(admins, 'admin-remove-p-dbroot');
 		expect(removeDbRoot, 'expected the other owner\'s Remove button').not.toBeNull();
 		expect(removeDbRoot!.disabled).toBe(false);
@@ -1177,7 +971,6 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-bela')).toBeNull();
 		});
-		// The own row survives the refetch — still buttonless.
 		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
 		expect(q(container, 'admin-remove-admin-p')).toBeNull();
 	});
@@ -1191,7 +984,6 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 
 		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
 		expect(q(container, 'admin-remove-admin-p')).toBeNull();
-		// Bela (editor, not self) keeps a working control.
 		expect(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!.disabled).toBe(false);
 	});
 
@@ -1206,8 +998,6 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	});
 });
 
-// ── the write gate: 'admin' access ≠ permission to write rights ─────────────────
-
 describe('/admin — write gate (canManage)', () => {
 	it("an org EDITOR (resolveAdmin 'admin', but no _owner value → canManage false) gets the lists READ-ONLY: no combobox, every Remove disabled, a localized explanation — the API would 403 every one of those writes", async () => {
 		selectSampledb();
@@ -1217,13 +1007,10 @@ describe('/admin — write gate (canManage)', () => {
 
 		const { container } = await renderReady();
 
-		// The lists themselves stay visible — reading is not what the API refuses.
 		expect(q(container, 'admin-entry-p-anna')).not.toBeNull();
 		expect(q(container, 'admin-entry-p-bela')).not.toBeNull();
 		expect(q(container, 'librarian-entry-p-cilla')).not.toBeNull();
 
-		// Zero enabled write controls anywhere on the page — the person selects
-		// are not rendered at all for a read-only tier (same gating as before).
 		const admins = section(container, 'admin-roles-admins');
 		const librarians = section(container, 'admin-roles-librarians');
 		expect(q(admins, 'admin-add-admin-select')).toBeNull();
@@ -1266,12 +1053,7 @@ describe('/admin — write gate (canManage)', () => {
 	});
 });
 
-// ── library owners: listed, but not revocable from here ─────────────────────────
-
 describe('/admin — a library OWNER row', () => {
-	// #148 — a disabled Remove button plus an explanatory note was confusing;
-	// the fix drops the control entirely for an owner row. The role badge
-	// (rendered via roleLabel, asserted separately) already says why.
 	it("renders NO Remove button at all — removeLibrarian is 'editor-only' scope and would reject before any write (a dead click); the role badge alone explains the row", async () => {
 		selectSampledb();
 		loadOk();
@@ -1290,12 +1072,9 @@ describe('/admin — a library OWNER row', () => {
 		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
 		expect(q(container, 'admin-roles-action-error')).toBeNull();
 
-		// A librarian (editor) in the same list is still revocable.
 		expect(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!.disabled).toBe(false);
 	});
 });
-
-// ── collective switch mid-load ──────────────────────────────────────────────────
 
 describe('/admin — a collective switch that lands mid-load', () => {
 	it('a slow EARLIER load never clobbers the newer collective: rows, the org acted on, and canManage all come from the collective now selected', async () => {
@@ -1311,11 +1090,6 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		urlCollectiveDbStore.set(null);
 		selectedCollectiveDbStore.set('alpha');
 
-		// Alpha clears its access gate immediately, then STALLS on the parallel
-		// resolutions — precisely the window a switch lands in. Selecting a
-		// collective is an in-place store update (`selectCollective` goto's the
-		// SAME pathname and the root layout has no `{#key}`), so this component
-		// is never remounted and alpha's continuation runs against beta's state.
 		let releaseAlpha!: () => void;
 		const alphaGate = new Promise<void>((resolve) => {
 			releaseAlpha = resolve;
@@ -1343,7 +1117,6 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		h.listLibrariansMock.mockImplementation(() => Promise.resolve(listing([], false)));
 
 		const { container } = render(Page);
-		// Alpha is genuinely in flight and parked at the gate before we switch.
 		await waitFor(() => {
 			expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 				expect.objectContaining({ db: 'alpha' })
@@ -1355,8 +1128,6 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			expect(q(container, 'admin-entry-p-emil')).not.toBeNull();
 		});
 
-		// Now the superseded load resolves. Flush every microtask AND the Svelte
-		// render queue, so a missing guard would visibly repaint alpha's data.
 		releaseAlpha();
 		await new Promise((resolve) => setTimeout(resolve, 0));
 		await tick();
@@ -1364,21 +1135,11 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		expect(q(container, 'admin-entry-p-emil')).not.toBeNull();
 		expect(q(container, 'admin-entry-p-anna')).toBeNull();
 		expect(q(container, 'admin-entry-p-bela')).toBeNull();
-		// beta's canManage:false must survive too — alpha's true would hand a
-		// non-owner write controls that entu-api 403s.
 		expect(q(container, 'admin-roles-admins-read-only')).not.toBeNull();
 		expect(q(section(container, 'admin-roles-admins'), 'admin-add-admin-select')).toBeNull();
-		// The stale load never got to read alpha's org through beta's cfg.
-		// Asserted on the RECORDED org-id argument rather than a matcher tuple:
-		// `not.toHaveBeenCalledWith(...)` passes vacuously the moment the arity
-		// drifts (and `expect.anything()` never matches the literal `undefined`
-		// this call site passes for `fetchImpl`), so it would read as coverage
-		// while checking nothing.
 		expect(h.listAdminsMock.mock.calls.map((c: unknown[]) => c[1])).not.toContain('org-alpha');
 	});
 });
-
-// ── navigation integration ──────────────────────────────────────────────────────
 
 describe('/admin — navigation entry', () => {
 	it('NAV_ENTRIES carries an admin-only /admin entry (visible ⇔ ctx.isAdmin, same gate as /admin/invite)', () => {
@@ -1390,5 +1151,4 @@ describe('/admin — navigation entry', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #134/S3 RED)
-// (*MVOX:Tallis* — #164 RED: self Remove button not rendered on the own row)
+// (*MVOX:Tallis*)

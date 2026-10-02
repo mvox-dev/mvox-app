@@ -2,7 +2,7 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { json } from '$lib/testing/entuFetchKit';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -188,12 +188,6 @@ function setAuthed() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function held() {
-	let release!: () => void;
-	const promise = new Promise<void>((resolve) => (release = resolve));
-	return { promise, release };
-}
-
 function gateOn(method: string, fragment: string, promise: Promise<void>) {
 	return (url: string, m: string) => (m === method && url.includes(fragment) ? promise : undefined);
 }
@@ -231,7 +225,7 @@ afterEach(() => {
 
 describe('#551 — agenda: a move or remove keeps pending until it settles', () => {
 	it('a works read landing mid-move keeps the moved order and still shows the added row', async () => {
-		const gate = held();
+		const gate = deferred();
 		installWorld({
 			dbs: {
 				sampledb: {
@@ -256,11 +250,11 @@ describe('#551 — agenda: a move or remove keeps pending until it settles', () 
 		await waitFor(() => {
 			expect(names(container)).toEqual(['Nunc dimittis', 'Spem in alium', 'Locus iste']);
 		});
-		gate.release();
+		gate.resolve();
 	});
 
 	it('a remove rejected after a collective switch leaves the new collective’s works alone', async () => {
-		const gate = held();
+		const gate = deferred();
 		installWorld({
 			dbs: {
 				sampledb: { repertoireItems: [repertoireItem('ri-1', 'Spem in alium', 'work-1')], programItems: [] },
@@ -285,7 +279,7 @@ describe('#551 — agenda: a move or remove keeps pending until it settles', () 
 		await expandWorks(container, 1);
 		expect(names(container)).toEqual(['Nunc dimittis']);
 
-		gate.release();
+		gate.resolve();
 		await new Promise((resolve) => setTimeout(resolve, 50));
 		expect(names(container)).toEqual(['Nunc dimittis']);
 		expect(qa(container, 'repertoire-manage-error')).toEqual([]);

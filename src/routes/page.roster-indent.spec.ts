@@ -1,90 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #155/S3 RED — INDENT/UNINDENT in arrange mode (integration, on the ACTUAL
-// /roster page route). S1 shipped the compact arrange shell, S2 made every row
-// the reorder control (drag + touch + keyboard). This file pins the NESTING
-// half GH#155 describes:
-//
-//   "Indent (→) / unindent (←) buttons on every row, always visible"
-//   "Indent nests under the immediate previous sibling"
-//   "Unindent promotes one level (to the grandparent — or the org, at top)"
-//   "Keyboard: ArrowRight indents, ArrowLeft unindents, while grabbed"
-//
-// Same integration discipline as page.roster-arrange-reorder.spec.ts (#155/S2):
-// the REAL page renders, `groupBySection`/the section tree run real, only the
-// fetch seams and the sectionActions WRITE seam are mocked. The write goes
-// through a NEW data function — `reparentSection(cfg, sectionId, newParentId)`
-// (sectionActions.ts; its replace-semantics wire shape is pinned separately in
-// sectionActions.reparent.spec.ts) — because indent/unindent changes the
-// section's `_parent` REFERENCE, not its `display_order`.
-//
-// REVIEW FIX (#155/S3 finding F2) — the original RED pinned "`reorderSections`
-// is NEVER called by these moves". That was wrong, and the assertion is
-// relaxed below. `reparentSection` moves `_parent` and NOTHING else, so the
-// moved section arrives in its new sibling group carrying the `display_order`
-// it held in the OLD one; `listSections` sorts every level by `displayOrder`
-// (sectionData.ts pass 5), so the position the UI optimistically shows does not
-// survive a reload — indent Alto (order 2) under Soprano ▸ [Soprano 1 = 1,
-// Soprano 2 = 2] renders "last child" and reloads as [Soprano 1, Alto,
-// Soprano 2]. The contract is therefore: a reparent is `reparentSection` THEN
-// ONE `reorderSections` over the DESTINATION sibling group, in its new order.
-// The SOURCE group is left alone — extraction leaves a gap, and a gap sorts
-// exactly like a dense run.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS — `arrange-indent-<sectionId>` and `arrange-unindent-<sectionId>`:
-//   one pair per arrange row, `type="button"`, ALWAYS RENDERED (not only
-//   during a grab). Accessible names via `roster_section_indent` /
-//   `roster_section_unindent` (aria-label — the buttons are icon-shaped;
-//   the lenient message mock below returns the KEY, real copy is Comenius's).
-//
-//   GUARDS (drive the `disabled` attribute, and refuse the keyboard move):
-//     indent   — disabled when the section has NO PREVIOUS SIBLING (nothing
-//                to nest under; nesting under a FOLLOWING sibling would
-//                reorder, not indent).
-//     unindent — disabled when the section is TOP-LEVEL (its parent is the
-//                org; there is no level to promote to).
-//
-//   INDENT = nest under the immediate previous sibling, as its LAST child:
-//     ONE reparentSection(cfg, id, prevSiblingId) call, the local tree
-//     re-homes immediately (data-depth bumps, the indent padding class
-//     changes, member roll-ups recalculate — the previous sibling's "(n)"
-//     absorbs the moved subtree), and the move is announced
-//     (`roster_section_indented`).
-//
-//   UNINDENT = promote one level: ONE reparentSection(cfg, id, newParentId)
-//     call where newParentId is the GRANDPARENT section id — or the
-//     ORGANIZATION id (the page already holds `currentDbEntityId`, #124) when the
-//     parent is top-level. The promoted section lands AFTER its former
-//     parent's subtree among its new siblings. Announced with
-//     `roster_section_unindented` (to a section) / `roster_section_unindented_top`
-//     (to top level).
-//
-//   KEYBOARD — while a row is GRABBED (#152 machine, unchanged): ArrowRight
-//     commits an indent, ArrowLeft commits an unindent — IMMEDIATELY, through
-//     the same reparentSection seam (unlike Up/Down, which stay provisional
-//     until drop: a reparent changes the sibling GROUP itself, so the
-//     grab's own restore-order snapshot no longer describes anything — the
-//     grab therefore ENDS with the commit, and the live region says
-//     "indented"/"unindented", never "cancelled"). The same guards apply:
-//     a refused move (no previous sibling / already top-level) writes
-//     nothing and KEEPS the grab (same posture as the Up/Down clamp).
-//
-//   IN-FLIGHT — a reparent write in flight disables EVERY indent/unindent
-//     button (reuses `reorderPending`, the same guard that flips
-//     draggable="false" — one outstanding structural write at a time).
-//
-//   FAILURE — a failed reparent reconciles against the server exactly like a
-//     failed reorder (#98 AC-8): console.error, refetch via listSections,
-//     render what the server holds.
+// Indent and unindent in the roster's arrange mode, on the real page.
 import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
-// #253: params are ECHOED (key + JSON) so a test can assert what a message was
-// — and was NOT — handed: the partial-failure banner must not receive the
-// renumber depth (k of N belongs in the typed error, not on screen).
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -118,9 +36,6 @@ const {
 	deleteMock: vi.fn(),
 	reparentMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -150,12 +65,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── fixtures ────────────────────────────────────────────────────────────────
-// Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor — the #98/#152/S2 shape, WITH
-// `dbEntityId` on the top-level nodes and the rows: the unindent-to-top-level write
-// needs the page to know the collective org id (`currentDbEntityId`, #124), and the
-// #124/F3 org filter only keeps top-level roots whose dbEntityId matches it.
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const ORG = 'org-1';
 
@@ -188,8 +98,6 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-/** Soprano ▸ [Soprano 1 ▸ [Soprano 1a]]; Alto — a depth-2 leaf, so an unindent
- *  whose new parent is a SECTION (the grandparent), not the org, is exercisable. */
 function fixtureTreeDeep(): SectionNode[] {
 	return [
 		{
@@ -226,29 +134,10 @@ function fixtureRowsDeep(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
-
-// ── #253 pin 1 — the refetch mock tells the TRUTH ───────────────────────────
-//
-// The original listSectionsMock returned one static fixtureTree() no matter
-// what had been written first, so the failure-reconcile tests could only prove
-// the refetch FIRES — a reconcile that rendered a lie would have passed
-// identically (and did: the 'reparent lands, renumber fails' test asserted the
-// section back at depth 0, enshrining a REVERT the real server never performs).
-// PO ruling on #253: conditioning this mock on prior writes is a first-class
-// deliverable — it is what makes every remaining assertion about the reconciled
-// DOM an assertion about server truth instead of about a fixture.
-//
-// `landedReparents` records every reparentSection call the mock RESOLVED; the
-// listSections mock re-derives the tree from those landed moves. A rejected
-// reparent records nothing → the original tree comes back, exactly like the
-// real server.
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 let landedReparents: Array<{ id: string; newParentId: string }>;
 
-/** displayOrder-then-name — sectionData pass 5's level order, which is what the
- *  real listSections would hand back for a landed `_parent` move whose
- *  renumber never ran (the moved node keeps its OLD number). */
 function sortLevel(nodes: SectionNode[]): SectionNode[] {
 	return [...nodes].sort(
 		(a, b) => a.displayOrder - b.displayOrder || a.name.localeCompare(b.name)
@@ -259,9 +148,6 @@ function withDepth(node: SectionNode, depth: number): SectionNode {
 	return { ...node, depth, children: node.children.map((c) => withDepth(c, depth + 1)) };
 }
 
-/** fixtureTree() with every LANDED `_parent` move applied — and nothing else:
- *  displayOrder stays whatever the section held before (the renumber is a
- *  separate write; when it failed, the server never saw a new number). */
 function treeWithLandedMoves(moves: Array<{ id: string; newParentId: string }>): SectionNode[] {
 	let roots = fixtureTree();
 	for (const mv of moves) {
@@ -321,11 +207,6 @@ function setAuthedWithOneCollective() {
 
 beforeEach(() => {
 	landedReparents = [];
-	// Fresh objects per call — a reconcile REFETCH after a failed write must get
-	// a tree the optimistic patch can't have mutated. #253: the tree ANSWERS
-	// FROM THE LANDED WRITES (see treeWithLandedMoves above) — a reparent the
-	// mock resolved is visible in the next listSections, one it rejected is not,
-	// exactly like the real server.
 	loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRows())));
 	listSectionsMock.mockImplementation(() => Promise.resolve(treeWithLandedMoves(landedReparents)));
 	assignMock.mockResolvedValue(undefined);
@@ -360,9 +241,6 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 }
 
 async function renderInArrangeMode(): Promise<HTMLElement> {
-	// #253 — each render starts from the pristine server: a couple of tests
-	// render TWICE (button path, then keyboard path, same fixture both times),
-	// so moves landed under the previous render must not leak into this one.
 	landedReparents.length = 0;
 	setAuthedWithOneCollective();
 	adminStore.set('admin');
@@ -377,7 +255,6 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Document-order arrange-row testids — the on-screen order. */
 function rowOrder(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('[data-testid^="arrange-row-"]')].map(
 		(el) => el.getAttribute('data-testid') ?? ''
@@ -404,8 +281,6 @@ function statusText(container: HTMLElement): string {
 	return q(container, 'roster-reorder-status')?.textContent ?? '';
 }
 
-// ── the buttons: present, always visible, guard-driven disabled ──────────────
-
 describe('/roster — arrange rows carry indent/unindent buttons (#155/S3)', () => {
 	it('every arrange row has an arrange-indent-* and arrange-unindent-* button (type="button"), named via roster_section_indent/roster_section_unindent — with NO grab active', async () => {
 		const container = await renderInArrangeMode();
@@ -415,12 +290,9 @@ describe('/roster — arrange rows carry indent/unindent buttons (#155/S3)', () 
 			const un = unindentBtn(container, id);
 			expect(ind.getAttribute('type'), `indent ${id}`).toBe('button');
 			expect(un.getAttribute('type'), `unindent ${id}`).toBe('button');
-			// Lenient message mock returns the KEY — real copy is Comenius's.
 			expect(ind.getAttribute('aria-label'), `indent ${id}`).toContain('roster_section_indent');
 			expect(un.getAttribute('aria-label'), `unindent ${id}`).toContain('roster_section_unindent');
 		}
-		// "Always visible" — no row is grabbed, no drag is live, and the buttons
-		// are already on screen (the presence assertions above ran grab-free).
 		for (const id of ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor']) {
 			expect(row(container, id).getAttribute('data-grabbed')).toBeNull();
 		}
@@ -429,24 +301,18 @@ describe('/roster — arrange rows carry indent/unindent buttons (#155/S3)', () 
 	it('guards: indent disabled without a PREVIOUS SIBLING; unindent disabled at TOP LEVEL', async () => {
 		const container = await renderInArrangeMode();
 
-		// Soprano — first top-level: nothing to nest under, nothing to promote to.
 		expect(indentBtn(container, 'sec-sop').disabled).toBe(true);
 		expect(unindentBtn(container, 'sec-sop').disabled).toBe(true);
-		// Soprano 1 — first child: no previous sibling, but promotable to top.
 		expect(indentBtn(container, 'sec-sop1').disabled).toBe(true);
 		expect(unindentBtn(container, 'sec-sop1').disabled).toBe(false);
-		// Soprano 2 — has a previous sibling AND a parent to promote from.
 		expect(indentBtn(container, 'sec-sop2').disabled).toBe(false);
 		expect(unindentBtn(container, 'sec-sop2').disabled).toBe(false);
-		// Alto / Tenor — nestable under their previous siblings, already top-level.
 		expect(indentBtn(container, 'sec-alto').disabled).toBe(false);
 		expect(unindentBtn(container, 'sec-alto').disabled).toBe(true);
 		expect(indentBtn(container, 'sec-tenor').disabled).toBe(false);
 		expect(unindentBtn(container, 'sec-tenor').disabled).toBe(true);
 	});
 });
-
-// ── containment: the buttons live OUTSIDE the row's role="button" subtree ─────
 
 describe('/roster — the nesting buttons are SIBLINGS of the arrange row, not children of it (#155/S3 review R2/F1)', () => {
 	const ALL_IDS = ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor'];
@@ -461,7 +327,6 @@ describe('/roster — the nesting buttons are SIBLINGS of the arrange row, not c
 				r.querySelector('button, a[href], input, select, textarea, [tabindex], [contenteditable]'),
 				`focusable descendant inside row ${id}`
 			).toBeNull();
-			// …and the buttons are still there, one DOM level out.
 			expect(
 				indentBtn(container, id).closest('[data-testid^="arrange-row-"]'),
 				`indent button for ${id} escaped the row subtree`
@@ -478,28 +343,16 @@ describe('/roster — the nesting buttons are SIBLINGS of the arrange row, not c
 
 		for (const id of ALL_IDS) {
 			const r = row(container, id);
-			// A `textContent` assertion structurally CANNOT catch this: the
-			// buttons carry only an `aria-hidden` SVG, so the text stayed exactly
-			// "Soprano (3)" the whole time their `aria-label`s were being appended
-			// to the row's computed name by accname step 2F. The containment fix
-			// is what keeps them out; nothing left INSIDE the row may contribute a
-			// name of its own (aria-labelledby, then aria-label, then title).
 			expect(
 				r.querySelector('[aria-label], [title], [aria-labelledby]'),
 				`name-contributing descendant inside row ${id}`
 			).toBeNull();
 		}
-		// #205 — the NAME's home is the rename activator beside the row, and review
-		// F1 (round 2) moved the "(n)" roll-up out to its own span after it, so the
-		// row states the "<name> (<count>)" pair in its own `aria-label` and renders
-		// nothing visible itself. The pair is what must never be broken up.
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (3)');
 		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('');
 		expect((q(container, 'arrange-count-sec-sop')?.textContent ?? '').trim()).toBe('(3)');
 	});
 });
-
-// ── indent behavior ───────────────────────────────────────────────────────────
 
 describe('/roster — INDENT nests under the immediate previous sibling (#155/S3)', () => {
 	it('indent Alto → ONE reparentSection(cfg, "sec-alto", "sec-sop") call; Alto re-renders as Soprano\'s LAST child (depth 1, indent class), Soprano\'s roll-up absorbs Bea → "Soprano (4)", and the DESTINATION sibling group is renumbered so the position survives a reload', async () => {
@@ -511,16 +364,11 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 			expect(reparentMock).toHaveBeenCalledTimes(1);
 		});
 		expect(reparentMock).toHaveBeenCalledWith(CFG, 'sec-alto', 'sec-sop');
-		// Review F2 — Alto keeps display_order 2 from its old (top-level) group,
-		// which would sort it BETWEEN Soprano 1 and Soprano 2 on the next
-		// listSections. The renumber over Soprano's children is what makes "last
-		// child" true on the server too.
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
 		expect(reorderMock).toHaveBeenCalledWith(CFG, ['sec-sop1', 'sec-sop2', 'sec-alto']);
 
-		// LAST child: Alto lands after Soprano 2, not wedged in as first child.
 		await waitFor(() => {
 			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
 		});
@@ -532,12 +380,8 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 			'arrange-row-sec-tenor'
 		]);
 		expect(row(container, 'sec-alto').className).toContain('pl-4');
-		// The tree RECALCULATED — the same groupBySection roll-up the headers use.
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (4)');
-		// The button tap must not leak into the row's grab state machine
-		// (the row's own role=button click handler sits right underneath).
 		expect(row(container, 'sec-alto').getAttribute('data-grabbed')).toBeNull();
-		// It was announced.
 		expect(statusText(container)).toContain('roster_section_indented');
 	});
 
@@ -551,7 +395,6 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 
 		expect(unindentBtn(container, 'sec-alto').disabled).toBe(false);
 		expect(indentBtn(container, 'sec-tenor').disabled).toBe(false);
-		// Alto is now Soprano's LAST child — its previous sibling is Soprano 2.
 		await fireEvent.click(indentBtn(container, 'sec-alto'));
 		await waitFor(() => {
 			expect(reparentMock).toHaveBeenCalledTimes(2);
@@ -559,8 +402,6 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 		expect(reparentMock).toHaveBeenLastCalledWith(CFG, 'sec-alto', 'sec-sop2');
 	});
 });
-
-// ── unindent behavior ─────────────────────────────────────────────────────────
 
 describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 	it('unindent Soprano 1 (top-level parent) → ONE reparentSection(cfg, "sec-sop1", "<org id>") call — the ORGANIZATION becomes the parent; it lands AFTER Soprano\'s subtree at depth 0, and Soprano\'s roll-up drops Eva → "Soprano (2)"', async () => {
@@ -572,9 +413,6 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 			expect(reparentMock).toHaveBeenCalledTimes(1);
 		});
 		expect(reparentMock).toHaveBeenCalledWith(CFG, 'sec-sop1', ORG);
-		// Review F2 — promoted with display_order 1 (its rank among Soprano's
-		// children), which would sort it FIRST at top level, not "after its former
-		// parent". The destination group here is the VISIBLE top level.
 		await waitFor(() => {
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
@@ -588,7 +426,6 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 		await waitFor(() => {
 			expect(row(container, 'sec-sop1').getAttribute('data-depth')).toBe('0');
 		});
-		// AFTER the former parent's subtree — not before Soprano, not still inside it.
 		expect(rowOrder(container)).toEqual([
 			'arrange-row-sec-sop',
 			'arrange-row-sec-sop2',
@@ -598,8 +435,6 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 		]);
 		expect(row(container, 'sec-sop1').className).toContain('pl-0');
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (2)');
-		// Promoted to TOP LEVEL — announced with the top-level wording, and the
-		// section now refuses to unindent any further.
 		expect(statusText(container)).toContain('roster_section_unindented_top');
 		expect(unindentBtn(container, 'sec-sop1').disabled).toBe(true);
 	});
@@ -630,8 +465,6 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 	});
 });
 
-// ── keyboard: ArrowRight/ArrowLeft while grabbed ─────────────────────────────
-
 describe('/roster — keyboard ArrowRight indents / ArrowLeft unindents while grabbed (#155/S3)', () => {
 	it('grab Alto, ArrowRight → the SAME single reparentSection(cfg, "sec-alto", "sec-sop") write the button makes; the commit is announced ("indented", NEVER "cancelled") and the grab ENDS', async () => {
 		const container = await renderInArrangeMode();
@@ -649,10 +482,7 @@ describe('/roster — keyboard ArrowRight indents / ArrowLeft unindents while gr
 		await waitFor(() => {
 			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
 		});
-		// The reparent changed Alto's sibling GROUP — the grab's restore snapshot
-		// describes nothing anymore, so the grab ends with the commit …
 		expect(row(container, 'sec-alto').getAttribute('data-grabbed')).toBeNull();
-		// … and the live region reports the indent, not a cancellation.
 		expect(statusText(container)).toContain('roster_section_indented');
 		expect(statusText(container)).not.toContain('roster_section_move_cancelled');
 	});
@@ -679,7 +509,6 @@ describe('/roster — keyboard ArrowRight indents / ArrowLeft unindents while gr
 
 	it('ArrowRight with NO previous sibling is refused: nothing written, the grab STAYS (same posture as the Up/Down clamp) — and the guard is the same one disabling the button', async () => {
 		const container = await renderInArrangeMode();
-		// Soprano is first among its siblings — its indent button says so too.
 		expect(indentBtn(container, 'sec-sop').disabled).toBe(true);
 		const target = row(container, 'sec-sop');
 		target.focus();
@@ -714,7 +543,6 @@ describe('/roster — keyboard ArrowRight indents / ArrowLeft unindents while gr
 
 	it('idle (ungrabbed) ArrowRight/ArrowLeft write nothing and move nothing — the nesting keys only act on a held row', async () => {
 		const container = await renderInArrangeMode();
-		// RED anchor: the buttons exist even while nothing is grabbed.
 		expect(indentBtn(container, 'sec-alto')).not.toBeNull();
 		const before = rowOrder(container);
 		const target = row(container, 'sec-alto');
@@ -728,8 +556,6 @@ describe('/roster — keyboard ArrowRight indents / ArrowLeft unindents while gr
 		expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('0');
 	});
 });
-
-// ── in-flight guard + failure reconcile ──────────────────────────────────────
 
 describe('/roster — reparent writes share the one-outstanding-write guard and the reconcile-on-failure contract (#155/S3)', () => {
 	it('while a reparent is in flight EVERY indent/unindent button is disabled; they re-enable (per their own guards) once it lands', async () => {
@@ -753,13 +579,10 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 			expect(indentBtn(container, id).disabled, `indent ${id} during flight`).toBe(true);
 			expect(unindentBtn(container, id).disabled, `unindent ${id} during flight`).toBe(true);
 		}
-		// A second structural move while one is outstanding is refused.
 		await fireEvent.click(indentBtn(container, 'sec-tenor'));
 		expect(reparentMock).toHaveBeenCalledTimes(1);
 
 		release();
-		// Tenor's previous sibling is now Soprano (Alto nested under it) — its
-		// indent guard passes again once the write lands.
 		await waitFor(() => {
 			expect(indentBtn(container, 'sec-tenor').disabled).toBe(false);
 		});
@@ -794,12 +617,6 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 	});
 
 	it('a reparent that LANDS but whose sibling RENUMBER fails reconciles to the TRUTH — the section renders AT ITS NEW PARENT AND DEPTH (the move happened), and the banner SAYS the move happened (#253)', async () => {
-		// The pre-#253 version of this test asserted sec-alto back at depth 0 —
-		// but only because the static listSections mock ANSWERED with the
-		// original tree. The real server holds the landed `_parent` move, so the
-		// reconcile renders Alto UNDER Soprano (keeping its old displayOrder 2,
-		// which sorts it between Soprano 1 and Soprano 2 — pass-5 name
-		// tie-break). Asserting a revert enshrined the lie #253 is about.
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const container = await renderInArrangeMode();
 		const listCallsBefore = listSectionsMock.mock.calls.length;
@@ -821,8 +638,6 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 		await waitFor(() => {
 			expect(listSectionsMock.mock.calls.length).toBeGreaterThan(listCallsBefore);
 		});
-		// THE TRUTH, not a revert: the `_parent` move landed, so the reconciled
-		// DOM shows Alto nested under Soprano.
 		await waitFor(() => {
 			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
 		});
@@ -833,8 +648,6 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 			'arrange-row-sec-sop2',
 			'arrange-row-sec-tenor'
 		]);
-		// And the banner tells the same truth — the LANDED-move copy (#253 pin 4b),
-		// not the "order couldn't be saved" copy that implies nothing changed.
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-error')).not.toBeNull();
 		});
@@ -845,29 +658,6 @@ describe('/roster — reparent writes share the one-outstanding-write guard and 
 		consoleSpy.mockRestore();
 	});
 });
-
-// ── #253/#264 — the two truthful banner states + the pinned refusals ────────
-//
-// PO ruling (issue #253, Gama 2026-09-05): TWO user-facing states, not three.
-//   (a) NOTHING landed (the reparent itself failed)      → today's copy stays.
-//   (b) the move LANDED, the ordering did not            → NEW copy that says
-//       the section DID move (that is what decides what the user does next).
-//
-// #264 (PO ruling, branch (i)) makes state (a) HONEST at last: the data layer
-// now reparents via ONE atomic overwrite-POST (the old `_parent` value id
-// rides the POST body; sectionActions.reparent.spec.ts pins the wire). A
-// rejected reparent therefore means NOTHING landed — the revert these tests
-// pin is now the truth, not a hopeful guess. The pre-#264 inner half-landing
-// (POST committed, owner-gated DELETE 403'd, section left with TWO parents)
-// NO LONGER EXISTS to lie about: a `step: 'reparent'` rejection can only be
-// produced by a POST that the server refused whole. State (b) — reparent
-// landed, renumber failed — remains real and keeps its truthful pin above
-// (the `:792` test), unchanged.
-//
-// The renumber depth (k of N) is DIAGNOSIS — it lives in the typed error and
-// reaches console.error, never the banner. And two refusals, pinned as tests:
-// NO retry (the write sequence is not idempotent) and NO automatic unwind (a
-// reverse write against a system that just failed a write).
 
 describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the evidence captured (#253)', () => {
 	const partialEvidence = {
@@ -899,13 +689,10 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
 		expect(banner).toContain('roster_section_reorder_failed');
 		expect(banner).not.toContain('roster_section_reparent_partial');
-		// Nothing landed → the conditioned refetch answers the ORIGINAL tree.
 		await waitFor(() => {
 			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('0');
 		});
 		expect(reorderMock).not.toHaveBeenCalled();
-		// The captured status AND body are readable post-hoc — the evidence
-		// object itself reaches console.error, not only a swallowed message.
 		expect(
 			consoleSpy.mock.calls.some((args) =>
 				args.some(
@@ -934,13 +721,9 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 			);
 		});
 		const banner = q(container, 'section-reorder-error')?.textContent ?? '';
-		// The message mock echoes every param it is handed (key + JSON), so a
-		// banner that received the renumber progress would show it here. It
-		// must not: k/N is diagnosis, not user guidance (PO ruling).
 		expect(banner).not.toContain('renumbered');
 		expect(banner).not.toContain('total');
 		expect(banner).not.toMatch(/1\s*(of|\/)\s*3/);
-		// The full evidence — status AND body — is post-hoc readable.
 		expect(
 			consoleSpy.mock.calls.some((args) =>
 				args.some(
@@ -953,13 +736,6 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 		consoleSpy.mockRestore();
 	});
 
-	// #253 review F1 — the banner follows the PHASE, not the rejection's shape.
-	// `reorderSections` reaches this catch UNTYPED whenever the failure happens
-	// below the status check: `entuFetch` propagates a fetch rejection verbatim
-	// (offline / DNS / connection reset — one of the issue's own leading
-	// candidate causes), `await res.json()` throws a SyntaxError on a malformed
-	// body, and a 401 rejects with AuthExpiredError. In every one of those the
-	// `_parent` move HAS landed, so the truthful-move copy must still win.
 	for (const [label, rejection] of [
 		['a network rejection propagated verbatim by entuFetch', new TypeError('Failed to fetch')],
 		['a SyntaxError from a malformed response body', new SyntaxError('Unexpected token < in JSON')],
@@ -980,17 +756,12 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 					'roster_section_reparent_partial'
 				);
 			});
-			// The mismatch #253 criterion 2 forbids: never "the order couldn't be
-			// saved" over a screen that shows the move.
 			expect(q(container, 'section-reorder-error')?.textContent ?? '').not.toContain(
 				'roster_section_reorder_failed'
 			);
-			// …and the screen DOES show the move — the refetch answers from the
-			// landed reparent, so Alto sits under Soprano at depth 1.
 			await waitFor(() => {
 				expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
 			});
-			// The reparent went out exactly once; no unwind write followed.
 			expect(reparentMock.mock.calls).toEqual([[CFG, 'sec-alto', 'sec-sop']]);
 			expect(consoleSpy.mock.calls.some((args) => args.some((a) => a === rejection))).toBe(true);
 			consoleSpy.mockRestore();
@@ -1027,21 +798,14 @@ describe('/roster — a failed reparent reports WHAT ACTUALLY LANDED, with the e
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-error')).not.toBeNull();
 		});
-		// Let the failure path fully settle before counting writes.
 		await waitFor(() => {
 			expect(row(container, 'sec-alto').getAttribute('data-depth')).toBe('1');
 		});
-		// ONE forward reparent — no retry of a non-idempotent POST/DELETE
-		// choreography, and no compensating write back to the org: the landed
-		// move STAYS and the banner tells the truth about it.
 		expect(reparentMock.mock.calls).toEqual([[CFG, 'sec-alto', 'sec-sop']]);
-		// ONE renumber attempt — not re-issued either.
 		expect(reorderMock.mock.calls).toEqual([[CFG, ['sec-sop1', 'sec-sop2', 'sec-alto']]]);
 		consoleSpy.mockRestore();
 	});
 });
-
-// ── review fixes (#155/S3) ───────────────────────────────────────────────────
 
 describe('/roster — the indent/unindent buttons are keyboard-operable in their OWN right (#155/S3 review F1)', () => {
 	it('Enter/Space on a focused indent button does NOT drive the row\'s grab machine, and does NOT preventDefault (so the browser\'s native button activation survives)', async () => {
@@ -1052,18 +816,12 @@ describe('/roster — the indent/unindent buttons are keyboard-operable in their
 		for (const key of ['Enter', ' ']) {
 			const ev = createEvent.keyDown(btn, { key, bubbles: true, cancelable: true });
 			await fireEvent(btn, ev);
-			// The row's own handler must not have swallowed it: a preventDefault
-			// here is what suppressed the button's native activation, so the
-			// control a keyboard user pressed grabbed the row instead of indenting.
 			expect(ev.defaultPrevented, `defaultPrevented for ${key}`).toBe(false);
 		}
 
 		expect(row(container, 'sec-alto').getAttribute('data-grabbed')).toBeNull();
 		expect(row(container, 'sec-alto').getAttribute('aria-grabbed')).toBe('false');
 		expect(statusText(container)).not.toContain('roster_section_grabbed');
-		// happy-dom does not run a button's default activation behaviour, so the
-		// activation itself is asserted through the click the browser would
-		// synthesize — one reparent, still no grab.
 		await fireEvent.click(btn);
 		await waitFor(() => {
 			expect(reparentMock).toHaveBeenCalledTimes(1);
@@ -1090,10 +848,6 @@ describe('/roster — the indent/unindent buttons are keyboard-operable in their
 });
 
 describe('/roster — an unindent with no resolvable organization fails LOUDLY (#155/S3 review F3)', () => {
-	/** Same tree as `fixtureTree`, with NO `dbEntityId` anywhere — the permissive
-	 *  "org unknown to this reader" state `visibleSections` deliberately keeps
-	 *  rendering (an unauthenticated/limited reader, or a pre-#124-shaped
-	 *  response). Every row is org-less too, so `currentDbEntityId` is null as well. */
 	function fixtureTreeNoOrg(): SectionNode[] {
 		return [
 			{
@@ -1124,7 +878,6 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 		listSectionsMock.mockImplementation(() => Promise.resolve(fixtureTreeNoOrg()));
 		loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRowsNoOrg())));
 		const container = await renderInArrangeMode();
-		// The button is live — `canUnindent` only asks whether there IS a parent.
 		expect(unindentBtn(container, 'sec-sop1').disabled).toBe(false);
 
 		await fireEvent.click(unindentBtn(container, 'sec-sop1'));
@@ -1140,18 +893,6 @@ describe('/roster — an unindent with no resolvable organization fails LOUDLY (
 	});
 });
 
-// ── #156: the nesting buttons are POINTER-ONLY, and the row is their keyboard ──
-
-// Mihkel's ruling, recorded in `.claude/workflows/roving-tabindex-pipeline.js`
-// ("EXCLUDED: buttons with tabindex=-1 that are mouse/touch only (like
-// indent/unindent per Mihkel ruling)") and re-affirmed by #156 review checklist
-// item 10. Nothing in the source pinned it before — this block does, so an edit
-// that quietly restores or removes the two tab stops fails here rather than in
-// a later a11y sweep.
-//
-// The exclusion is only defensible because the row-grab machine above offers
-// the SAME two writes from the keyboard. That equivalence is asserted directly
-// (same seam, same arguments), not assumed.
 describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the row grab as their keyboard equivalent (#156, checklist item 10)', () => {
 	const ALL_IDS = ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor'];
 
@@ -1173,7 +914,6 @@ describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the
 	});
 
 	it('the row-grab keyboard path produces the IDENTICAL write to the indent button — this is what makes dropping the tab stop safe (WCAG 2.1.1)', async () => {
-		// Button path.
 		const byButton = await renderInArrangeMode();
 		await fireEvent.click(indentBtn(byButton, 'sec-alto'));
 		await waitFor(() => expect(reparentMock).toHaveBeenCalledTimes(1));
@@ -1182,7 +922,6 @@ describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the
 		cleanup();
 		reparentMock.mockClear();
 
-		// Keyboard path: focus the row, Space to grab, ArrowRight to indent.
 		const byKeyboard = await renderInArrangeMode();
 		const target = row(byKeyboard, 'sec-alto');
 		target.focus();
@@ -1227,56 +966,18 @@ describe('/roster — indent/unindent are pointer-only (tabindex="-1"), with the
 	});
 });
 
-// ── #252 — findable and tappable: touch target, applicability, distinctness ──
-//
-// From live pilot testing (Joosep, roster screenshot 2026-09-05, GH#252): the
-// indent/unindent pair rendered as 12×12px mirror-image triangles (`h-3 w-3`)
-// in ~20px of tap target (`p-1`), in the muted `text-ink-2` tone, with an
-// inapplicable direction presenting as a tappable-looking control at
-// `disabled:opacity-30`. The app's own icon-button standard — RE-CONFIRMED BY
-// GREP before these pins were written, because the issue's claim had been
-// flagged unverifiable — is `min-h-11 min-w-11` (44px): the season trashcans
-// (+page.svelte :5893/:6201/:6767/:6899/:7264/:7628), the wizard skip control
-// (:6585), the close button (:5936) and the library controls
-// (library/+page.svelte:834+) all carry it; on THIS page the drag grip keeps
-// the height half (`min-h-11 w-4`, :3258) and the rename activator keeps
-// `min-h-11 flex-1` (:3295). The nesting pair is the outlier.
-//
-// These pins assert the #252 CONTRACT structurally and deliberately leave the
-// MECHANISM to GREEN (which must state its choices, per the issue):
-//   - the hit-area tokens are pinned; the glyph inside may stay small;
-//   - the inapplicable-direction treatment (invisible-but-space-holding vs
-//     disabled-restyled) is GREEN's call — pinned only as "no opacity-30
-//     ghost, not interactive, slot still holds the row's box";
-//   - the distinguishability treatment is GREEN's call — pinned only as "the
-//     two controls differ by more than a reflection/rotation of one glyph";
-//   - the replacement tone is GREEN's call — pinned only as "not the muted
-//     `text-ink-2`" (#238 finding: a control the user must locate must not be
-//     the quietest thing on the row).
-// The keyboard path is OUT OF SCOPE by issue fiat (#252 item 5): the
-// tabindex="-1" pins above (Mihkel's ruling) and the row-grab Arrow parity
-// block stay byte-identical. The testids `arrange-indent-{id}` /
-// `arrange-unindent-{id}` stay on whatever element occupies each direction's
-// slot — that is what makes the space-reservation contract assertable.
-
 const TOUCH_TOKENS = ['min-h-11', 'min-w-11'];
 
-/** Class-token helpers — Tailwind classes are whitespace-separated tokens;
- *  substring matching would confuse `text-ink` with `text-ink-2`. */
 function classTokens(el: Element): string[] {
 	return (el.getAttribute('class') ?? '').split(/\s+/).filter(Boolean);
 }
 function hasBareToken(el: Element, token: string): boolean {
 	return classTokens(el).includes(token);
 }
-/** TOKEN bare OR behind any variant prefix — `disabled:opacity-30` is still
- *  the opacity-30 ghost. */
 function hasTokenAnyVariant(el: Element, token: string): boolean {
 	return classTokens(el).some((c) => c === token || c.endsWith(`:${token}`));
 }
 
-/** fixtureTree() applicability matrix — the same one the guard test above pins
- *  via `.disabled`: Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor. */
 const APPLICABLE_252: Array<{ dir: 'indent' | 'unindent'; id: string }> = [
 	{ dir: 'indent', id: 'sec-sop2' },
 	{ dir: 'indent', id: 'sec-alto' },
@@ -1301,11 +1002,6 @@ function slot252(
 	return q(container, `arrange-${dir}-${id}`);
 }
 
-/** "Yields its interactivity" WITHOUT pinning how: any reasonable mechanism
- *  satisfies this — hidden from the a11y tree, invisible (space-preserving),
- *  pointer-inert, or disabled. What the slot may NOT be is a live control for
- *  an action that cannot be taken. (`hidden`/display:none is deliberately NOT
- *  accepted — it collapses the box and forfeits the reserved space.) */
 function isNonInteractive252(el: HTMLElement): boolean {
 	return (
 		el.getAttribute('aria-hidden') === 'true' ||
@@ -1387,9 +1083,6 @@ describe('/roster — only applicable actions present as tappable; an inapplicab
 		});
 		expect(reparentMock).toHaveBeenCalledWith(CFG, 'sec-sop1', ORG);
 
-		// Soprano 1 is now top-level → unindent no longer applies. The slot must
-		// survive the flip (space reserved), yield its interactivity, and not
-		// fall back to the opacity-30 ghost.
 		await waitFor(() => {
 			const el = slot252(container, 'unindent', 'sec-sop1');
 			expect(el, 'the unindent slot survives the applicability flip').not.toBeNull();
@@ -1407,9 +1100,6 @@ describe('/roster — only applicable actions present as tappable; an inapplicab
 });
 
 describe('/roster — the two directions are distinguishable at a glance (#252)', () => {
-	/** Every coordinate pair in a path's `d`. Sufficient for the M/L/Z triangle
-	 *  glyphs under test; a richer glyph that defeats this parser is by
-	 *  construction "more than a mirrored triangle" and passes on other axes. */
 	function pathPoints(d: string): Array<[number, number]> {
 		const nums = (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
 		const pts: Array<[number, number]> = [];
@@ -1436,9 +1126,6 @@ describe('/roster — the two directions are distinguishable at a glance (#252)'
 		expect(a).not.toBeNull();
 		expect(b).not.toBeNull();
 
-		// ANY of these axes distinguishes the pair without pinning WHICH one
-		// GREEN picks: differing visible text, differing class treatment on the
-		// control or its glyph, or genuinely different glyph geometry.
 		const textDistinguishes = (a.textContent ?? '').trim() !== (b.textContent ?? '').trim();
 		const classDistinguishes =
 			(a.getAttribute('class') ?? '') !== (b.getAttribute('class') ?? '') ||
@@ -1460,8 +1147,6 @@ describe('/roster — the two directions are distinguishable at a glance (#252)'
 			];
 			glyphDistinguishes = !transforms.some((t) => normalizePts(t) === pb);
 		} else {
-			// Different path counts, or multi-path glyphs that are not
-			// byte-identical, count as distinct geometry.
 			glyphDistinguishes =
 				aPaths.length !== bPaths.length || aPaths.join('|') !== bPaths.join('|');
 		}
@@ -1487,7 +1172,5 @@ describe("/roster — the controls carry the app's normal control tone, not the 
 	});
 });
 
-// (*MVOX:Tallis* — #155/S3 RED)
-// (*MVOX:Byrd* — #155/S3 review fixes F1/F2/F3)
-// (*MVOX:Tallis* — #253 RED: conditioned listSections mock + two-state banner + refusal pins)
-// (*MVOX:Tallis* — #252 RED: touch-target, reserved-space, distinguishability + tone pins)
+// (*MVOX:Tallis*)
+// (*MVOX:Byrd*)

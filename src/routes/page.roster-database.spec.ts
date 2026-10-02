@@ -2,7 +2,7 @@
 // /roster on database-parented data, through the real data modules.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { json } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
@@ -44,7 +44,7 @@ import {
 } from '$lib/collectives/store';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function wireRouter(path: string): Response {
 	if (path.includes('_type.string=member') && path.includes('status.string=active')) {

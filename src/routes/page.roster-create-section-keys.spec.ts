@@ -57,6 +57,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
@@ -118,7 +119,7 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');

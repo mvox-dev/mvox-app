@@ -1,65 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #155/S2 RED — REORDER inside arrange mode (integration, on the ACTUAL
-// /roster page route). S1 (page.roster-arrange.spec.ts) shipped the compact
-// read-only shell; this file pins the reorder half GH#155 describes:
-//
-//   "Whole row is the drag target (no separate handle needed)"
-//   "Parent drag moves the entire subtree"
-//   "Keyboard: Space/Enter grab, Up/Down move, Escape cancel"
-//   "Subtree collapses [visually groups] with parent during drag"
-//
-// Same integration discipline as page.roster-reorder.spec.ts (#98/#152): the
-// REAL page renders, `groupBySection`/the section tree run real, only the
-// fetch seams and the sectionActions WRITE seam are mocked. Reorder in
-// arrange mode reuses the EXACT SAME write path (`performReorder` →
-// `reorderSections`) and announcement region (`roster-reorder-status`) the
-// collapsed-header drag/keyboard reorder already has full coverage for
-// (#98/#99/#110/#152) — this file does not re-prove that infrastructure, only
-// that arrange-mode ROWS now drive it, whole-row draggable, with no separate
-// handle, and that a parent's SUBTREE moves and is visually grouped with it.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS — `arrange-row-<sectionId>` (from S1) IS now the drag target AND
-//   the keyboard control — no `section-drag-handle-*` inside
-//   `roster-arrange-list`. Review F4 added ONE more: `arrange-grip-<sectionId>`,
-//   the narrow decorative bar at the head of each row that owns the TOUCH
-//   pickup (and only that) so the row can keep `touch-action: pan-y` and the
-//   list can still be scrolled by a finger.
-//
-//   ATTRIBUTES on each arrange-row-<id>:
-//     draggable="true" (or "false" while `reorderPending`)
-//     role="button", roving tabindex (one row at "0")
-//     aria-label="<name> (<count>)" — #205 moved the section NAME's home into
-//       the rename activator BESIDE the row (that containment is what makes
-//       "tap the name" open the editor), and #205 review F1 (round 2) moved
-//       the "(n)" roll-up out too, to a `arrange-count-<id>` span AFTER the
-//       activator so the row still reads "≡ ✎ Soprano (3)" left-to-right. The
-//       row itself therefore renders NO visible text; the explicit label
-//       restores the full "Soprano (3)" review F1 was defending and satisfies
-//       WCAG 2.5.3 vacuously (nothing visible inside it to have to contain).
-//     aria-grabbed="true" while native-dragged OR keyboard-grabbed
-//     data-grabbed="true" ONLY on the row currently held (drag or grab)
-//     data-grabbed-subtree="true" on every DESCENDANT row of the held one
-//       (S2 point 3: subtree rows visually grouped with the grabbed parent)
-//
-//   DRAG: dragstart on a row, dragover+drop on a SIBLING row → ONE
-//   reorderSections(cfg, siblingIds) call, same "target's original slot"
-//   semantics as the collapsed-header drag (#98). A non-sibling drop (e.g. a
-//   child row dropped on an unrelated top-level row) does nothing. Dropping a
-//   PARENT moves its children rows along with it in the rendered order.
-//
-//   KEYBOARD: Space/Enter grabs (announces "Grabbed X", data-grabbed appears);
-//   ArrowDown/ArrowUp move the grabbed row (and its subtree) one sibling slot,
-//   PROVISIONALLY (announces "moved", nothing written yet), clamped at
-//   either end; Space/Enter again DROPS — commits through reorderSections
-//   (announces "Dropped X"); Escape cancels — restores pre-grab order,
-//   announces cancellation, writes nothing.
+// Reorder inside the roster's arrange mode, on the real page.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -74,9 +17,6 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, 
 		reorderMock: vi.fn(),
 		deleteMock: vi.fn()
 	}));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -105,11 +45,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── fixtures ────────────────────────────────────────────────────────────────
-// Soprano ▸ [Soprano 1, Soprano 2]; Alto; Tenor — same shape as #98/#152's own
-// fixture (three top-level siblings, one with two children) so a downward /
-// upward move and a subtree move are all exercisable.
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 function fixtureTree(): SectionNode[] {
 	return [
@@ -139,7 +75,7 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-const CFG = { db: 'sampledb', token: 'jwt-abc' };
+const CFG = testCfg('sampledb', 'jwt-abc');
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -200,7 +136,6 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Document-order arrange-row testids — the on-screen order. */
 function rowOrder(container: HTMLElement): string[] {
 	return [...container.querySelectorAll('[data-testid^="arrange-row-"]')].map(
 		(el) => el.getAttribute('data-testid') ?? ''
@@ -211,31 +146,18 @@ function row(container: HTMLElement, id: string): HTMLElement {
 	return q(container, `arrange-row-${id}`) as HTMLElement;
 }
 
-/** #205 review F3 — the DROP zone is the row's layout wrapper (`data-drop-row`),
- *  not the `arrange-row-*` element: the rename activator is a SIBLING of the row
- *  and covers the name column, so the drop target has to span both to match what
- *  the user sees as "the row". The drag SOURCE and the keyboard control stay on
- *  `arrange-row-*`. */
 function dropZone(container: HTMLElement, id: string): HTMLElement {
 	const el = container.querySelector<HTMLElement>(`[data-drop-row="${id}"]`);
 	expect(el, `drop zone for ${id}`).not.toBeNull();
 	return el as HTMLElement;
 }
 
-/** The "(n)" member roll-up. #205 review F1 (round 2) — its own element, a
- *  SIBLING that reads AFTER the rename activator, so the row's visible order is
- *  grip → ✎ name → count, the order it had before the whole-field retrofit. */
 function count(container: HTMLElement, id: string): HTMLElement {
 	const el = q(container, `arrange-count-${id}`);
 	expect(el, `count for ${id}`).not.toBeNull();
 	return el as HTMLElement;
 }
 
-/** What the rename activator + the count span VISIBLY read as together — the
- *  label the row's `aria-label` must mirror (WCAG 2.5.3). `.sr-only` children are
- *  the activator's action verb, not part of the visible label, so they are
- *  stripped. Read in DOM ORDER off the drop-row wrapper, so a re-ordering of the
- *  two (the F1 round-2 regression: "(3) … ✎ Soprano") fails here. */
 function visibleRowLabel(container: HTMLElement, id: string): string {
 	const zone = dropZone(container, id).cloneNode(true) as HTMLElement;
 	zone.querySelectorAll('.sr-only').forEach((el) => el.remove());
@@ -244,7 +166,6 @@ function visibleRowLabel(container: HTMLElement, id: string): string {
 	).trim();
 	const roll = (zone.querySelector(`[data-testid="arrange-count-${id}"]`)?.textContent ?? '')
 		.trim();
-	// DOM order of the two, so "name then count" is what actually gets asserted.
 	const order = [...zone.querySelectorAll('[data-testid]')]
 		.map((el) => el.getAttribute('data-testid') ?? '')
 		.filter((t) => t === `arrange-rename-${id}` || t === `arrange-count-${id}`);
@@ -255,7 +176,6 @@ function visibleRowLabel(container: HTMLElement, id: string): string {
 	return `${name} ${roll}`.replace(/\s+/g, ' ').trim();
 }
 
-/** Minimal DataTransfer stand-in — happy-dom has no native one. */
 function makeDataTransfer() {
 	const data: Record<string, string> = {};
 	return {
@@ -277,15 +197,7 @@ async function dragAndDrop(container: HTMLElement, fromId: string, toId: string)
 	await fireEvent.drop(to, { dataTransfer });
 }
 
-// ── whole-row is the drag target, no separate handle ─────────────────────────
-
 describe('/roster — arrange rows ARE the drag target (#155/S2): no separate handle', () => {
-	// #155/S2 review F1 / #205 review F2 — the accessible name must carry BOTH the
-	// section name and the "(n)" member roll-up. S2 got that from the row's own
-	// contents; #205 moved the NAME into the rename activator beside the row and
-	// F1 (round 2) moved the count out after it, so the row states the pair in an
-	// `aria-label` and renders nothing visible itself. What must never come back
-	// is a label that DROPS the roll-up (WCAG 2.5.3).
 	it('every arrange row is draggable, is labelled with the section name AND member count, and NO section-drag-handle-* exists inside the arrange list', async () => {
 		const container = await renderInArrangeMode();
 
@@ -293,14 +205,11 @@ describe('/roster — arrange rows ARE the drag target (#155/S2): no separate ha
 			const el = row(container, id);
 			expect(el, `row ${id}`).not.toBeNull();
 			expect(el.getAttribute('draggable')).toBe('true');
-			// The row carries no visible text of its own any more (F1 round 2), so the
-			// label mirrors what the activator + count span read as, in that order.
 			expect(el.textContent?.replace(/\s+/g, ' ').trim(), `row ${id}`).toBe('');
 			expect(el.getAttribute('aria-label'), `row ${id} aria-label`).toBe(
 				visibleRowLabel(container, id)
 			);
 		}
-		// Soprano's roll-up is 3 (Ada direct + Eva in Soprano 1 + Selma in Soprano 2).
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (3)');
 		expect(count(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('(3)');
 
@@ -320,8 +229,6 @@ describe('/roster — arrange rows ARE the drag target (#155/S2): no separate ha
 		}
 	});
 });
-
-// ── native drag/drop reorder ──────────────────────────────────────────────────
 
 describe('/roster — arrange-mode drag/drop reorders through the SAME write seam (#155/S2)', () => {
 	it('downward drag: Soprano dropped onto Tenor takes Tenor\'s slot → reorderSections(cfg, ["sec-alto","sec-tenor","sec-sop"]); the row order re-renders, INCLUDING Soprano\'s subtree moving with it', async () => {
@@ -406,8 +313,6 @@ describe('/roster — arrange-mode drag/drop reorders through the SAME write sea
 	});
 });
 
-// ── visual feedback: data-grabbed + subtree grouping ──────────────────────────
-
 describe('/roster — data-grabbed + subtree visual grouping (#155/S2 point 3)', () => {
 	it('a live native drag on Soprano marks its row data-grabbed="true" and BOTH children data-grabbed-subtree="true"; siblings get neither', async () => {
 		const container = await renderInArrangeMode();
@@ -444,15 +349,6 @@ describe('/roster — data-grabbed + subtree visual grouping (#155/S2 point 3)',
 	});
 });
 
-// ── #155/S2 review F2: drop-slot indicator + a distinct held-subtree tint ─────
-
-/** Direct children of the arrange list, in document order — rows AND the dashed
- *  drop indicator, so a hint's SLOT (which side of which row) is assertable.
- *
- *  #155/S3 review R2/F1 — a row's slot is now a plain layout wrapper holding the
- *  row plus its indent/unindent buttons as SIBLINGS (the buttons must not be
- *  nested inside the row's `role="button"` subtree). The wrapper carries no
- *  testid of its own, so a slot is named by the `arrange-row-*` it contains. */
 function listSlots(container: HTMLElement): string[] {
 	const list = q(container, 'roster-arrange-list') as HTMLElement;
 	return [...list.children].map(
@@ -463,9 +359,6 @@ function listSlots(container: HTMLElement): string[] {
 	);
 }
 
-/** Alto ▸ —; Soprano ▸ [Soprano 1, Soprano 2]; Tenor — the parent-with-children
- *  sits in the MIDDLE, so a DOWNWARD drag onto it can prove the hint lands
- *  after its whole subtree rather than wedged between it and its children. */
 function fixtureTreeAltFirst(): SectionNode[] {
 	return [
 		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, depth: 0, children: [] },
@@ -557,15 +450,9 @@ describe('/roster — arrange-mode drop indicator (#155/S2 review F2)', () => {
 		await fireEvent.dragStart(row(container, 'sec-sop'), { dataTransfer });
 		await fireEvent.dragOver(row(container, 'sec-alto'), { dataTransfer });
 
-		// The drop tint paints the whole visual row — the `data-drop-row` wrapper,
-		// which is also what now owns `ondragover`/`ondrop` (#205 review F3).
 		await waitFor(() => {
 			expect(dropZone(container, 'sec-alto').className).toContain('bg-ink-5');
 		});
-		// #205 review F2 (round 2) — the SUBTREE tint paints the whole visual row
-		// too. Left on `arrange-row-*` it covered the grip alone, so the held
-		// subtree and the drop target were no longer comparable shapes — the exact
-		// asymmetry this test exists to catch, one element over.
 		expect(dropZone(container, 'sec-sop1').className).toContain('bg-indigo-soft');
 		expect(row(container, 'sec-sop1').className).not.toContain('bg-indigo-soft');
 		expect(dropZone(container, 'sec-sop1').className).not.toContain('bg-ink-5');
@@ -578,9 +465,6 @@ describe('/roster — arrange-mode drop indicator (#155/S2 review F2)', () => {
 
 		await fireEvent.dragStart(row(container, 'sec-sop'), { dataTransfer });
 
-		// #205 review F2 (round 2): on `arrange-row-*` the dashed "this is what you
-		// picked up" outline enclosed "≡" and visibly EXCLUDED "Soprano" — the one
-		// thing that identifies the row being held.
 		await waitFor(() => {
 			expect(dropZone(container, 'sec-sop').className).toContain('outline-dashed');
 		});
@@ -591,8 +475,6 @@ describe('/roster — arrange-mode drop indicator (#155/S2 review F2)', () => {
 		).toBe(true);
 	});
 });
-
-// ── keyboard: grab / move / drop / cancel, transferred from #152 ─────────────
 
 describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, transferred from #152)', () => {
 	it('Space grabs the focused row: data-grabbed appears, aria-grabbed flips true, and "Grabbed X" is announced', async () => {
@@ -606,8 +488,6 @@ describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, t
 			expect(target.getAttribute('data-grabbed')).toBe('true');
 		});
 		expect(target.getAttribute('aria-grabbed')).toBe('true');
-		// Lenient message mock returns the KEY, not real copy (real wording is
-		// Comenius's) — "Grabbed {name}" is `roster_section_grabbed`.
 		expect(q(container, 'roster-reorder-status')?.textContent).toContain('roster_section_grabbed');
 	});
 
@@ -620,7 +500,6 @@ describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, t
 
 		await fireEvent.keyDown(target, { key: 'ArrowDown' });
 
-		// Provisional: Soprano (+ its two children) now sits after Alto, nothing written yet.
 		await waitFor(() => {
 			expect(rowOrder(container)).toEqual([
 				'arrange-row-sec-alto',
@@ -633,7 +512,6 @@ describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, t
 		expect(reorderMock).not.toHaveBeenCalled();
 		expect(q(container, 'roster-reorder-status')?.textContent).toBeTruthy();
 
-		// Focus followed the moved row — re-fetch it before dropping.
 		target = row(container, 'sec-sop');
 		await fireEvent.keyDown(target, { key: 'Enter' });
 
@@ -677,7 +555,6 @@ describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, t
 		await fireEvent.keyDown(target, { key: ' ' });
 		await waitFor(() => expect(target.getAttribute('data-grabbed')).toBe('true'));
 
-		// Soprano is already first among its siblings — ArrowUp must no-op.
 		await fireEvent.keyDown(row(container, 'sec-sop'), { key: 'ArrowUp' });
 		await waitFor(() => {
 			expect(rowOrder(container)[0]).toBe('arrange-row-sec-sop');
@@ -701,8 +578,6 @@ describe('/roster — keyboard grab/move/drop/cancel on arrange rows (#155/S2, t
 		expect(reorderMock).not.toHaveBeenCalled();
 	});
 });
-
-// ── reuse: reorderPending in-flight guard ─────────────────────────────────────
 
 describe('/roster — an in-flight arrange-mode reorder blocks a second one (reuses reorderPending)', () => {
 	it('a second drop while the first write is outstanding is refused; rows visibly disable (draggable="false")', async () => {
@@ -732,9 +607,6 @@ describe('/roster — an in-flight arrange-mode reorder blocks a second one (reu
 		});
 	});
 
-	// #155/S2 review F3 — the in-flight refusal must not wash the list out. The
-	// collapsed view's `opacity-30` lived on the ≡ glyph; on a whole row it made
-	// every section name and count unreadable for the length of the write.
 	it('the in-flight state does not dim the rows — names and counts stay legible', async () => {
 		reorderMock.mockImplementation(() => new Promise<void>(() => {}));
 		const container = await renderInArrangeMode();
@@ -749,9 +621,6 @@ describe('/roster — an in-flight arrange-mode reorder blocks a second one (reu
 			expect(row(container, id).className, `row ${id}`).toContain('cursor-default');
 		}
 		expect(visibleRowLabel(container, 'sec-tenor')).toBe('Tenor (1)');
-		// #205 — the NAME's home is the rename activator beside the row, which is
-		// DISABLED for the length of the write. The refusal must dim the glyph, not
-		// the name (F3 again, one element over).
 		expect(
 			(q(container, 'arrange-rename-sec-tenor') as HTMLElement).className,
 			'rename activator'
@@ -759,13 +628,7 @@ describe('/roster — an in-flight arrange-mode reorder blocks a second one (reu
 	});
 });
 
-// ── touch: long-press the grip, drag, release ────────────────────────────────
-
 describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review F4/F5)', () => {
-	// happy-dom has no layout, so `elementFromPoint` always returns null. Stub it
-	// with an explicit y → row map: what these pin is the hit-testing LOGIC over
-	// arrange rows (`sectionIdUnderPointer` learned an `arrange-row-` branch and a
-	// second prefix to strip), not browser geometry.
 	function stubHitTest(container: HTMLElement, yToId: Record<number, string>) {
 		return vi
 			.spyOn(document, 'elementFromPoint')
@@ -782,8 +645,6 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 		return el as HTMLElement;
 	}
 
-	/** Long-press the row's grip until it visibly picks up (no fake timers — the
-	 *  affordance IS the readiness signal a finger gets). */
 	async function pickUp(container: HTMLElement, id: string, y: number): Promise<HTMLElement> {
 		const g = grip(container, id);
 		await fireEvent.pointerDown(g, { ...TOUCH, clientX: 10, clientY: y });
@@ -793,10 +654,6 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 		return g;
 	}
 
-	// #155/S2 review F4 — the touch pickup is ZONED to the grip precisely so the
-	// rest of the row can still scroll the page. `touch-action` is latched when a
-	// gesture starts, so this split is the only thing that can give the scroll
-	// back: no runtime toggle would arrive in time.
 	it('only the narrow grip suppresses touch panning — the row itself stays `pan-y`, so a swipe that starts on a section name still scrolls', async () => {
 		const container = await renderInArrangeMode();
 
@@ -812,8 +669,6 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 		expect(grip(container, 'sec-sop').textContent?.trim()).toBe('');
 		expect(grip(container, 'sec-sop').getAttribute('aria-hidden')).toBe('true');
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (3)');
-		// F1 (round 2) — the grip is the row's ONLY child now, so the row is text-free
-		// and the visible "Soprano (3)" is assembled by its two siblings.
 		expect(row(container, 'sec-sop').textContent?.replace(/\s+/g, ' ').trim()).toBe('');
 		expect(visibleRowLabel(container, 'sec-sop')).toBe('Soprano (3)');
 	});
@@ -823,14 +678,10 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 		stubHitTest(container, { 10: 'sec-sop', 90: 'sec-tenor' });
 
 		const g = await pickUp(container, 'sec-sop', 10);
-		// The held row's whole subtree travels with it — the same grouping the
-		// keyboard grab and the native drag paint.
 		expect(row(container, 'sec-sop1').getAttribute('data-grabbed-subtree')).toBe('true');
 		expect(row(container, 'sec-sop2').getAttribute('data-grabbed-subtree')).toBe('true');
 
 		await fireEvent.pointerMove(g, { ...TOUCH, clientX: 10, clientY: 90 });
-		// A touch drag gets no browser-drawn drag image, so the target affordance
-		// has to be ours.
 		await waitFor(() => {
 			expect(dropZone(container, 'sec-tenor').className).toContain('bg-ink-5');
 		});
@@ -858,7 +709,6 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 
 		const g = grip(container, 'sec-sop');
 		await fireEvent.pointerDown(g, { ...TOUCH, clientX: 10, clientY: 10 });
-		// Finger travels immediately — that gesture is a scroll, not a pickup.
 		await fireEvent.pointerMove(g, { ...TOUCH, clientX: 10, clientY: 90 });
 		await new Promise((resolve) => setTimeout(resolve, 500));
 		await fireEvent.pointerUp(g, { ...TOUCH, clientX: 10, clientY: 90 });
@@ -909,4 +759,4 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 	});
 });
 
-// (*MVOX:Tallis* — #155/S2 RED)
+// (*MVOX:Tallis*)
