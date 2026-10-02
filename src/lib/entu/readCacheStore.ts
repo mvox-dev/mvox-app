@@ -1,5 +1,7 @@
 // The read cache's IndexedDB store: connection, entries, and the byte budget.
 
+import { compositeKey, reqToPromise } from '$lib/files/idb';
+
 export const READ_CACHE_DB_NAME = 'mvox-read-cache';
 // A version bump drops and recreates both stores; no version has shipped real data.
 const DB_VERSION = 3;
@@ -24,22 +26,10 @@ export interface ReadCacheEntry {
 	bytes: number;
 }
 
-// A JSON triple, not a delimited string: no part controls its shape enough to avoid a separator.
-function compositeKey(db: string, personId: string, pathAndQuery: string): string {
-	return JSON.stringify([db, personId, pathAndQuery]);
-}
-
 const textEncoder = new TextEncoder();
 
 export function encodedByteLength(text: string): number {
 	return textEncoder.encode(text).length;
-}
-
-function reqToPromise<T>(req: IDBRequest<T>): Promise<T> {
-	return new Promise((resolve, reject) => {
-		req.onsuccess = () => resolve(req.result);
-		req.onerror = () => reject(req.error);
-	});
 }
 
 function openDb(factory: IDBFactory): Promise<IDBDatabase> {
