@@ -19,16 +19,31 @@ export interface RouteLoadContext<TSelected> {
 	isCurrent: () => boolean;
 }
 
-export interface RouteLoadMachineOptions<TSelected extends { db: string }> {
+// A page with a gate also shows 'no-access'; ROUTE_LOAD_STATUSES stays the shared base.
+export type GatedRouteLoadStatus = RouteLoadStatus | 'no-access';
+
+interface BaseRouteLoadOptions<TSelected extends { db: string }> {
 	name: string;
 	selected: () => TSelected | null;
-	// The machine never writes 'ready': the page's load body does, where it fits.
-	setStatus: (status: RouteLoadStatus) => void;
 	// Runs first; `isSwitch` is true on the first load and whenever the db changes (#255).
 	reset?: (info: { isSwitch: boolean; selected: TSelected | null }) => void;
 	onNoCollective?: () => void;
 	onNoToken?: () => void;
 	load: (ctx: RouteLoadContext<TSelected>) => Promise<void>;
+}
+
+export interface RouteLoadMachineOptions<TSelected extends { db: string }>
+	extends BaseRouteLoadOptions<TSelected> {
+	// The machine never writes 'ready': the page's load body does, where it fits.
+	setStatus: (status: RouteLoadStatus) => void;
+	gate?: never;
+}
+
+export interface GatedRouteLoadMachineOptions<TSelected extends { db: string }>
+	extends BaseRouteLoadOptions<TSelected> {
+	setStatus: (status: GatedRouteLoadStatus) => void;
+	// Runs after 'loading', before the body; false shows 'no-access'.
+	gate: (ctx: RouteLoadContext<TSelected>) => Promise<boolean>;
 }
 
 export interface RouteLoadMachine {
@@ -39,7 +54,13 @@ export interface RouteLoadMachine {
 }
 
 export function createRouteLoadMachine<TSelected extends { db: string }>(
+	opts: GatedRouteLoadMachineOptions<TSelected>
+): RouteLoadMachine;
+export function createRouteLoadMachine<TSelected extends { db: string }>(
 	opts: RouteLoadMachineOptions<TSelected>
+): RouteLoadMachine;
+export function createRouteLoadMachine<TSelected extends { db: string }>(
+	opts: RouteLoadMachineOptions<TSelected> | GatedRouteLoadMachineOptions<TSelected>
 ): RouteLoadMachine {
 	let generation = 0;
 	let hasLoadedOnce = false;
@@ -73,7 +94,16 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 
 		opts.setStatus('loading');
 		const cfg = { db: current.db, token };
-		await opts.load({ cfg, selected: current, g, isCurrent: () => isCurrent(g) });
+		const ctx = { cfg, selected: current, g, isCurrent: () => isCurrent(g) };
+		if (opts.gate) {
+			const pass = await opts.gate(ctx);
+			if (!isCurrent(g)) return;
+			if (!pass) {
+				opts.setStatus('no-access');
+				return;
+			}
+		}
+		await opts.load(ctx);
 	}
 
 	// One catch for the hooks and status writes as well as the body, so no page needs its own.
