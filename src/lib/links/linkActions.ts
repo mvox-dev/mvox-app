@@ -1,5 +1,6 @@
 // Link collection writes (#256); linkActions.spec.ts pins the full contract.
 import { entuFetch } from '$lib/entu/request';
+import { overwriteEntityValues, type OverwriteEntry } from '$lib/entu/replaceProperty';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { postEntity } from '$lib/entity/entityCreateShared';
 
@@ -116,34 +117,17 @@ export async function updateLink(
 	const existingUrl = body.entity?.url ?? [];
 	const existingDescription = body.entity?.description ?? [];
 
-	const entries: Array<{ _id?: string; type: string; string: string }> = [
-		existingName[0]
-			? { _id: existingName[0]._id, type: 'name', string: name }
-			: { type: 'name', string: name },
-		existingUrl[0]
-			? { _id: existingUrl[0]._id, type: 'url', string: fields.url }
-			: { type: 'url', string: fields.url }
+	const entries: OverwriteEntry[] = [
+		{ value: { type: 'name', string: name }, existing: existingName },
+		{ value: { type: 'url', string: fields.url }, existing: existingUrl }
 	];
 	if (fields.description) {
-		entries.push(
-			existingDescription[0]
-				? { _id: existingDescription[0]._id, type: 'description', string: fields.description }
-				: { type: 'description', string: fields.description }
-		);
+		entries.push({
+			value: { type: 'description', string: fields.description },
+			existing: existingDescription
+		});
 	}
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${linkId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(entries)
-		},
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`updateLink POST failed: HTTP ${postRes.status}`);
+	await overwriteEntityValues(cfg, linkId, entries, fetchImpl, 'updateLink');
 
 	// A cleared description is deleted by property id, strictly after the POST.
 	if (!fields.description && existingDescription[0]) {

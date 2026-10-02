@@ -1,29 +1,6 @@
-// #165 review F5 — the shared "replace a single-valued Entu property"
-// choreography, extracted from eventFieldEdit.ts / collectiveName.ts. Both
-// callers keep their own specs pinning the wire shape AT the caller boundary;
-// this file pins the rule itself, once, at the place it now lives.
-//
-// #264 RED — the rule goes ATOMIC (PO ruling, branch (i)). Entu's native
-// overwrite: a POST entry carrying the OLD property value's `_id` alongside
-// the new value fields replaces that exact value in the SAME setEntity call
-// (entu-www docs, "Overwriting a Property Value"; entu-api entity.js —
-// `_id` → oldPIds → soft-deleted). The old GET → POST-new → DELETE-old
-// choreography left a half-landing window (POST lands, DELETE fails →
-// phantom duplicate); the atomic overwrite closes it, and every caller of
-// this helper inherits the fix.
-//
-// The pinned choreography is now:
-//   1. GET entity/{entityId}?props={prop} — the existing value id(s). Still
-//      first: the overwrite entry cannot be built blind.
-//   2. POST entity/{entityId}:
-//      - ≥1 existing → body EXACTLY [{ _id: <first existing id>, ...value }]
-//      - none existing → body EXACTLY [value]
-//   3. EXTRA stale ids (corrupted multi-value state only) → DELETE
-//      /property/{id} each, strictly AFTER the POST — a failure leaves a
-//      recoverable duplicate, never an empty property. The NORMAL path
-//      (zero or one existing value) issues ZERO deletes.
+// The shared overwrite and removal helpers: wire shape, order of writes, and failure outcomes.
 import { describe, expect, it, vi } from 'vitest';
-import { replaceEntityProperty, clearEntityProperty } from './replaceProperty';
+import { replaceEntityProperty, clearEntityProperty, overwriteEntityValues } from './replaceProperty';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
@@ -169,6 +146,120 @@ describe('replaceEntityProperty — atomic overwrite (#264)', () => {
 		await expect(
 			replaceEntityProperty(cfg, 'e-1', { type: 'name', string: 'Uus' }, fetchImpl, 'updateCollectiveName')
 		).rejects.toThrow(/updateCollectiveName lookup failed: 500/);
+	});
+});
+
+describe('replaceEntityProperty — options (#698)', () => {
+	it('a string fifth argument still works as the label', async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(oneExisting()).mockResolvedValueOnce(json({}, 500));
+		await expect(
+			replaceEntityProperty(cfg, 'e-1', { type: 'name', string: 'Uus' }, fetchImpl, 'renameSection')
+		).rejects.toThrow(/renameSection POST failed: 500/);
+	});
+
+	it('`fail` builds the thrown error from the failing step and response, body readable', async () => {
+		const fetchImpl = vi
+			.fn()
+			.mockResolvedValueOnce(oneExisting())
+			.mockResolvedValueOnce(new Response('rate limited', { status: 429 }));
+		const fail = vi.fn(async (step: string, res: Response) => new Error(`${step}:${res.status}:${await res.text()}`));
+
+		await expect(
+			replaceEntityProperty(cfg, 'e-1', { type: 'name', string: 'Uus' }, fetchImpl, { fail })
+		).rejects.toThrow('post:429:rate limited');
+		expect(fail).toHaveBeenCalledTimes(1);
+	});
+
+	it('`fail` also covers the lookup and the extras sweep', async () => {
+		const lookupFail = vi.fn().mockResolvedValueOnce(json({}, 404));
+		await expect(
+			replaceEntityProperty(cfg, 'e-1', { type: 'name', string: 'Uus' }, lookupFail, {
+				fail: (step, res) => new Error(`${step}:${res.status}`)
+			})
+		).rejects.toThrow('lookup:404');
+
+		const sweepFail = vi
+			.fn()
+			.mockResolvedValueOnce(twoExisting())
+			.mockResolvedValueOnce(json({}))
+			.mockResolvedValueOnce(json({}, 403));
+		await expect(
+			replaceEntityProperty(cfg, 'e-1', { type: 'name', string: 'Uus' }, sweepFail, {
+				fail: (step, res) => new Error(`${step}:${res.status}`)
+			})
+		).rejects.toThrow('delete:403');
+	});
+});
+
+describe('overwriteEntityValues — several properties, caller-supplied existing values (#698)', () => {
+	it('ONE POST pairs each entry with the first of its own existing ids; no lookup, no deletes on the normal path', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}));
+
+		await overwriteEntityValues(
+			cfg,
+			'e-1',
+			[
+				{ value: { type: 'status', string: 'going' }, existing: [{ _id: 's-old' }] },
+				{ value: { type: 'going_ref', reference: 'ev-1' }, existing: [{ _id: 'maybe-old' }] },
+				{ value: { type: 'url', string: 'x' }, existing: [] }
+			],
+			fetchImpl
+		);
+
+		expect(urls(fetchImpl)).toEqual(['https://api.entu-test.invalid/testdb/entity/e-1']);
+		expect(postBody(fetchImpl, 0)).toEqual([
+			{ _id: 's-old', type: 'status', string: 'going' },
+			{ _id: 'maybe-old', type: 'going_ref', reference: 'ev-1' },
+			{ type: 'url', string: 'x' }
+		]);
+	});
+
+	it('extras of every entry are swept after the POST, in entry order', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(json({}));
+
+		await overwriteEntityValues(
+			cfg,
+			'e-1',
+			[
+				{ value: { type: 'status', string: 'going' }, existing: [{ _id: 's1' }, { _id: 's2' }] },
+				{ value: { type: 'going_ref', reference: 'ev-1' }, existing: [{ _id: 'r1' }, { _id: 'r2' }, { _id: 'r3' }] }
+			],
+			fetchImpl
+		);
+
+		expect(methods(fetchImpl)).toEqual(['POST', 'DELETE', 'DELETE', 'DELETE']);
+		expect(urls(fetchImpl).slice(1)).toEqual([
+			'https://api.entu-test.invalid/testdb/property/s2',
+			'https://api.entu-test.invalid/testdb/property/r2',
+			'https://api.entu-test.invalid/testdb/property/r3'
+		]);
+	});
+
+	it('a failed POST throws with the label and deletes nothing', async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(json({}, 500));
+		await expect(
+			overwriteEntityValues(
+				cfg,
+				'e-1',
+				[{ value: { type: 'status', string: 'going' }, existing: [{ _id: 's1' }, { _id: 's2' }] }],
+				fetchImpl,
+				'updateRsvpStatus'
+			)
+		).rejects.toThrow(/updateRsvpStatus POST failed: 500/);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it('`fail` builds the thrown error for a failed sweep delete', async () => {
+		const fetchImpl = vi.fn().mockResolvedValueOnce(json({})).mockResolvedValueOnce(json({}, 403));
+		await expect(
+			overwriteEntityValues(
+				cfg,
+				'e-1',
+				[{ value: { type: 'status', string: 'going' }, existing: [{ _id: 's1' }, { _id: 's2' }] }],
+				fetchImpl,
+				{ fail: (step, res) => new Error(`${step}:${res.status}`) }
+			)
+		).rejects.toThrow('delete:403');
 	});
 });
 

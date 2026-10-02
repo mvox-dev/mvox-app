@@ -1,6 +1,6 @@
 // Section tree writes: renumber, delete, reparent and rename.
 import { entuFetch } from '$lib/entu/request';
-import { replaceEntityProperty } from '$lib/entu/replaceProperty';
+import { overwriteEntityValues, replaceEntityProperty } from '$lib/entu/replaceProperty';
 import {
 	SectionNotEmptyError,
 	SectionParentDamagedError,
@@ -18,10 +18,6 @@ async function bodyTextOf(res: Response): Promise<string> {
 	}
 }
 
-interface DisplayOrderValue {
-	_id: string;
-}
-
 // One sibling list, 1-based. The POST pairs the first old value's `_id`, so a failed POST
 // leaves the old number; extra duplicates go only after it lands. Stops at the first failure.
 export async function renumberDisplayOrder(
@@ -31,60 +27,10 @@ export async function renumberDisplayOrder(
 ): Promise<void> {
 	const total = orderedIds.length;
 	for (let i = 0; i < total; i++) {
-		const id = orderedIds[i];
-		const number = i + 1;
-
-		const getRes = await entuFetch(cfg.db, `entity/${id}?props=display_order`, cfg.token, {}, fetchImpl);
-		if (!getRes.ok) {
-			throw new SectionReparentPartialError(
-				'renumber',
-				i,
-				total,
-				getRes.status,
-				await bodyTextOf(getRes)
-			);
-		}
-		const body = (await getRes.json()) as { entity?: { display_order?: DisplayOrderValue[] } };
-		const existing = body.entity?.display_order ?? [];
-		const [oldValue, ...extras] = existing;
-
-		const entry = oldValue
-			? { _id: oldValue._id, type: 'display_order', number }
-			: { type: 'display_order', number };
-
-		const postRes = await entuFetch(
-			cfg.db,
-			`entity/${id}`,
-			cfg.token,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify([entry])
-			},
-			fetchImpl
-		);
-		if (!postRes.ok) {
-			throw new SectionReparentPartialError(
-				'renumber',
-				i,
-				total,
-				postRes.status,
-				await bodyTextOf(postRes)
-			);
-		}
-
-		for (const value of extras) {
-			const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-			if (!delRes.ok) {
-				throw new SectionReparentPartialError(
-					'renumber',
-					i,
-					total,
-					delRes.status,
-					await bodyTextOf(delRes)
-				);
-			}
-		}
+		await replaceEntityProperty(cfg, orderedIds[i], { type: 'display_order', number: i + 1 }, fetchImpl, {
+			fail: async (_step, res) =>
+				new SectionReparentPartialError('renumber', i, total, res.status, await bodyTextOf(res))
+		});
 	}
 }
 
@@ -150,20 +96,16 @@ export async function reparentSection(
 		throw new SectionParentDamagedError(sectionId, existing.length);
 	}
 
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${sectionId}`,
-		cfg.token,
+	await overwriteEntityValues(
+		cfg,
+		sectionId,
+		[{ value: { type: '_parent', reference: newParentId }, existing }],
+		fetchImpl,
 		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([{ _id: existing[0]._id, type: '_parent', reference: newParentId }])
-		},
-		fetchImpl
+			fail: async (_step, res) =>
+				new SectionReparentPartialError('reparent', 0, 0, res.status, await bodyTextOf(res))
+		}
 	);
-	if (!postRes.ok) {
-		throw new SectionReparentPartialError('reparent', 0, 0, postRes.status, await bodyTextOf(postRes));
-	}
 }
 
 // Atomic overwrite of `name`; extra duplicate values are deleted only after the POST lands.
