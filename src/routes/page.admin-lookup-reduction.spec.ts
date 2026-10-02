@@ -1,31 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #173 RED — the /admin page load resolves the database entity ONCE, not three
-// times (integration: real admin/+page.svelte + REAL resolveAdmin and
-// resolveLibrarian; only the wire and the non-#173 data seams are mocked —
-// same harness family as page.admin-database.spec.ts).
-//
-// TODAY (the debt this spec pins away): one load runs `resolveDatabaseEntityId`
-// THREE times — the page's own direct call, one inside `resolveAdmin`, one
-// inside `resolveLibrarian` -> `resolveMyLibraryId`. The id is db-scoped and
-// constant for the load, so two of those are pure redundant round-trips.
-//
-// Pinned wiring contract (GREEN must implement):
-//   - ONE `resolveDatabaseEntityId` call per admin page load. The page resolves
-//     the id once and threads it into `resolveAdmin` and `resolveLibrarian`
-//     via their pre-resolved-dbEntityId params (pinned in
-//     adminStore.preresolved.spec.ts / librarianStore.preresolved.spec.ts).
-//   - Same data, fewer fetches: the page still reaches ready, still hands the
-//     database entity id to `listAdmins`, and the rights/library reads still
-//     happen (they are the ONLY wire traffic the resolution seams produce).
-//
-// resolveAdmin / resolveLibrarian run REAL here — mocking them would let GREEN
-// "pass" without actually removing their internal lookups from the page path.
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -37,15 +14,9 @@ const h = vi.hoisted(() => ({
 	listLibrariansMock: vi.fn(),
 	addLibrarianMock: vi.fn(),
 	removeLibrarianMock: vi.fn(),
-	// #173 — THE counted seam. A spy, not a stub of behavior: every code path
-	// that wants the database entity id must come through here.
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
-	// picker ordering, so [] (every person Unassigned) keeps it out of the way
-	// (mocked at the sectionData boundary, not routed through entuFetchMock's
-	// strict #173 router).
 	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
@@ -65,16 +36,10 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
 		removeLibrarian: h.removeLibrarianMock
 	};
 });
-// NOTE: adminStore and librarianStore are NOT mocked — their real
-// resolveAdmin/resolveLibrarian run so their internal database-entity
-// resolutions are COUNTED (they import the seam lazily; vi.mock intercepts
-// dynamic imports too).
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock };
 });
-// The wire: serves ONLY the reads the resolution seams legitimately need
-// (rights on the database entity, library search). Anything else rejects loud.
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: h.entuFetchMock };
@@ -142,24 +107,17 @@ function selectSampledb() {
 
 beforeEach(() => {
 	h.resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
-	// Routed wire — the real resolveAdmin / resolveLibrarian downstream reads.
 	h.entuFetchMock.mockImplementation((_db: string, path: string) => {
 		if (path.startsWith(`entity/${DB_ENTITY}?props=_owner`)) {
-			// Rights read on the database entity: the viewer IS an owner.
 			return Promise.resolve(
 				json({ entity: { _id: DB_ENTITY, _owner: [{ reference: VIEWER }], _editor: [] } })
 			);
 		}
 		if (path.includes('_type.string=library')) {
-			// Factual "no library in this collective" — refreshLibrarians is skipped.
+			// Factual "no library in this collective": refreshRole('librarian') is skipped.
 			return Promise.resolve(json({ entities: [] }));
 		}
 		if (path.includes('props=entu_user')) {
-			// #301 — the embedded InviteSurface's own uninvited-list read
-			// (listJoinStates, one GET per roster person). Anna already JOINED
-			// (a `uid` entry) — this file has no opinion on the person-select
-			// feature, so this keeps her out of the uninvited list and the
-			// select stays absent, same rendered surface as before #301.
 			return Promise.resolve(
 				json({
 					entity: {
@@ -210,29 +168,15 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 	it('reaches ready with resolveDatabaseEntityId called exactly ONCE', async () => {
 		await renderReady();
 
-		// THE #173 assertion. Today this is 3 (page direct + resolveAdmin +
-		// resolveLibrarian); the target is 1 — resolve once, thread the id.
 		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('same data, fewer fetches — the id still reaches listAdmins and the rights/library reads still happen', async () => {
 		await renderReady();
 
-		// The reduction must not un-wire the page: the database entity id is
-		// still what keys the admin role list…
 		expect(h.listAdminsMock).toHaveBeenCalled();
 		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
-		// …and the resolution seams' REAL downstream reads still ran: one rights
-		// read on the database entity + one library search, exactly as before.
-		// #301 adds TWO more, each its OWN legitimate seam, not a #173
-		// regression: the embedded InviteSurface's owner-tier gate re-reads the
-		// SAME rights property (resolveAdmin and resolveOwnerTier are two
-		// independent callers over the same read, per adminStore.ts — #173 only
-		// pins `resolveDatabaseEntityId` to one call, never rights reads), and
-		// its uninvited-list read is one GET per roster person (ROSTER has 1).
-		// No OTHER wire traffic (a leftover redundant lookup would have
-		// rejected loudly in the router above and failed renderReady).
 		const paths = h.entuFetchMock.mock.calls.map((c) => String(c[1]));
 		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(2);
 		expect(paths.filter((p) => p.includes('_type.string=library'))).toHaveLength(1);
@@ -240,5 +184,3 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 		expect(paths).toHaveLength(4);
 	});
 });
-
-// (*MVOX:Tallis* — #173 RED)
