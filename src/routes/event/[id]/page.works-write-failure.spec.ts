@@ -4,6 +4,7 @@ import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -33,10 +34,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();

@@ -5,6 +5,7 @@
 // instead of passing silently. Only the global fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -57,10 +58,6 @@ import {
 	isWriteDisabled,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 // The viewer (`p-viewer`) is `_owner` on the event and `_editor` on the season, so every

@@ -2,6 +2,7 @@
 // The event page's attendance panel load: merge with local marks, failed marks, cancel on close.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -107,16 +108,6 @@ const ROSTER = [
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
 ];
 const ROSTER_READ = { items: ROSTER, total: ROSTER.length, truncated: false };
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
 
 function renderPage() {
 	vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ entities: [] }))));

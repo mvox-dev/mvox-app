@@ -5,6 +5,7 @@
 // and the write's memberId. Real page and data layer; only the wire fetch is stubbed.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 // Pin "now" before the fixture event (2026-09-01) so the event is UPCOMING —
 // only Date is faked, timers stay real so waitFor keeps polling.
@@ -44,10 +45,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 

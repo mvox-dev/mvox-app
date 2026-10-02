@@ -5,6 +5,7 @@
 // answers, none on a fileless row. The wire, works read, signing and byte store are stubbed.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -61,14 +62,6 @@ function installPresence(impl?: PresenceQuery) {
 	return spy;
 }
 
-function deferred<T>() {
-	let resolveIt!: (value: T) => void;
-	const promise = new Promise<T>((r) => {
-		resolveIt = r;
-	});
-	return { promise, resolve: resolveIt };
-}
-
 const IDENTITY = { db: 'sampledb', personId: 'person-p' };
 
 function pdfData() {
@@ -77,10 +70,6 @@ function pdfData() {
 		filetype: 'application/pdf',
 		sha256: 'sha-fixture'
 	};
-}
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
 }
 
 function isoAt(offsetDays: number): string {

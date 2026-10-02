@@ -2,6 +2,7 @@
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
+import { json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -39,10 +40,6 @@ import {
 } from '$lib/collectives/store';
 
 const NEW_VENUE = 'Ürgoru laululava — sissepääs B!';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {

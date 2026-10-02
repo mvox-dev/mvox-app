@@ -4,6 +4,7 @@
 // sends nothing; back online they write again. Only the wire fetch is stubbed.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 // Pin "now" before the fixture event (2026-09-01) so the event is UPCOMING —
 // only Date is faked, timers stay real so waitFor keeps polling.
@@ -51,10 +52,6 @@ import {
 	expectVisibleReason,
 	nonGetCalls
 } from '$lib/testing/networkSignal';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 

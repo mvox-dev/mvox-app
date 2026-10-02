@@ -2,6 +2,7 @@
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -39,10 +40,6 @@ import {
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
 function eventEntity() {
 	return {
 		_id: 'ev1',
@@ -67,16 +64,6 @@ function seasonEntity() {
 }
 
 const MY_RSVP_ROW = { _id: 'rsvp-77', event: [{ reference: 'ev1' }], status: [{ string: 'going' }] };
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
 
 type WireOpts = {
 	updatePost?: 'ok' | 'fail' | 'hold';

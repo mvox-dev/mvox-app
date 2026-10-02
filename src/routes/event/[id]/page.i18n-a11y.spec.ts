@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+import { json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -53,10 +54,6 @@ function readSource(relPath: string): string {
 
 function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
-}
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
 }
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {

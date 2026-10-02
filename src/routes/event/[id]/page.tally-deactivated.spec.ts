@@ -1,32 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #255 (D) RED — the going-tally fold-in, DATE-GATED (Gama's pre-build
-// question, refined 15:31; folds under done-when 2). `loadTally` today counts
-// a raw filter over ALL rsvp rows for the event — not roster-joined — and
-// feeds the capacity line, so a deactivated member's old "yes" inflates a
-// count the conductor plans around. Pinned here, BOTH directions:
-//
-//   (i)  FUTURE event — counts join against the ACTIVE roster: her 'going'
-//        drops out (attendanceSummary precedent; join is CLIENT-side — a
-//        two-hop server join is impossible on Entu single-hop reads).
-//   (ii) PAST event — the tally stays AS RECORDED, raw and unjoined: she said
-//        yes, she very likely sang; dropping her would rewrite a historical
-//        number on the basis of present membership (the same wrong as showing
-//        a rate). BOUNDARY, deliberate: pastness is event START (startAt <
-//        now, the page's own :669 rule) — an event in progress counts as past
-//        and keeps the raw tally.
-//
-// STALE-CLOSURE PIN (Bentham pre-branch finding): the gate must be evaluated
-// for THE EVENT THE TALLY WAS REQUESTED FOR, at request time — the page's
-// per-event form (isPastDetail / a value captured at call time), NEVER the
-// live `isPast` $derived read inside an async continuation. The capture test
-// below moves the CLOCK past the event's start while the tally read is in
-// flight: a resolution-time pastness read sees "past" and serves the raw
-// count; a call-time capture sees "future" and joins. Only the join passes.
-//
-// Her rsvp ROW is never deleted either way (deleteRsvp must stay uncalled).
+// The going tally counts deactivated members only for events before they left.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -78,18 +54,12 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/rsvp/rsvpData')>()),
 	findMyMemberId: findMyMemberIdMock,
-	// #329 — the event page's own-answer read moved to the scoped
-	// `findMyRsvpForEvent`; `listMyRsvps` stays mocked (default `[]`) only
-	// because it is still imported by other modules this spec pulls in
-	// transitively, not because this page calls it any more.
 	listMyRsvps: listMyRsvpsMock,
 	findMyRsvpForEvent: findMyRsvpForEventMock,
 	createRsvp: vi.fn(),
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: deleteRsvpMock
 }));
-// Whichever active-members read GREEN joins through — the ids-only query or
-// the name-resolving roster — both answer the same active set here.
 vi.mock('$lib/roster/rosterData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/rosterData')>()),
 	loadRoster: loadRosterMock,
@@ -116,13 +86,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// ── wire fixtures (the event read stays REAL — only rsvp/roster/attendance
-//    module reads are mocked) ─────────────────────────────────────────────────
-
 function eventEntity(startDatetime: string, over: Partial<Record<string, unknown>> = {}) {
 	return {
 		_id: 'ev1',
@@ -132,8 +95,6 @@ function eventEntity(startDatetime: string, over: Partial<Record<string, unknown
 		duration_minutes: [{ _id: 'val-dur-1', number: 180 }],
 		location: [{ _id: 'val-loc-1', string: 'Rehearsal Hall' }],
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
-		// #363 — the tally renders for every viewer regardless of rights; `_editor`
-		// here is incidental fixture shape, not what makes the tally appear.
 		_editor: [{ reference: 'p-viewer' }],
 		_parent: [{ reference: 'org1', entity_type: 'organization' }],
 		...over
@@ -148,8 +109,6 @@ function readWireStub(event: Record<string, unknown>) {
 	});
 }
 
-// Active roster: the viewer (m-viewer) and one other singer (m-active).
-// m-gone is DEACTIVATED — present only in the rsvp rows.
 const ACTIVE_ROSTER = [
 	{ memberId: 'm-viewer', personId: 'p-viewer', name: 'Vera Viewer', email: 'v@example.com' },
 	{ memberId: 'm-active', personId: 'p-active', name: 'Alice Alto', email: 'a@example.com' }
@@ -250,8 +209,6 @@ describe('(D) going-tally — FUTURE event joins against the active roster', () 
 
 describe('(D) going-tally — PAST event keeps the recorded raw tally', () => {
 	it('an event whose START has passed (even one still in progress — the stated boundary) counts her recorded yes: going=2', async () => {
-		// Started 30 minutes ago, runs 180 — in progress RIGHT NOW, past by the
-		// page's own start-instant rule (:669). Raw tally, as recorded.
 		const { container } = renderPage(eventEntity('2026-08-20T09:30:00.000Z'));
 		expect(await tallyGoing(container)).toContain('"count":2');
 		expect(deleteRsvpMock).not.toHaveBeenCalled();
@@ -260,7 +217,6 @@ describe('(D) going-tally — PAST event keeps the recorded raw tally', () => {
 
 describe('(D) stale-closure pin — the gate is captured for the REQUESTED event at request time', () => {
 	it('an event that is FUTURE at tally-request time but PAST by resolution time still gets the JOINED count (resolution-time pastness reads are the trap)', async () => {
-		// Event starts 60s from "now".
 		let resolveRows!: (rows: typeof RSVP_ROWS) => void;
 		listAllRsvpsForEventMock.mockReturnValue(
 			new Promise((res) => {
@@ -269,31 +225,16 @@ describe('(D) stale-closure pin — the gate is captured for the REQUESTED event
 		);
 		const { container } = renderPage(eventEntity('2026-08-20T10:01:00.000Z'));
 		await waitFor(() => expect(listAllRsvpsForEventMock).toHaveBeenCalled());
-		// The clock passes the event's start WHILE the read is in flight.
 		vi.setSystemTime(new Date('2026-08-20T10:10:00.000Z'));
 		resolveRows(RSVP_ROWS);
-		// Call-time capture → still treated as future → joined. A live/late
-		// pastness read would serve the raw 2 here.
 		expect(await tallyGoing(container)).toContain('"count":1');
 	});
 });
 
-// (E adjacent) #372 + its review F1 changed what a deactivated viewer sees on a
-// FUTURE event. She used to get a disabled control (still showing her old
-// answer) plus the hint. She cannot write an rsvp at all — the entity requires a
-// `member` reference (rsvpData.ts createRsvp) and her member row is no longer
-// active — and deactivation does NOT revoke the self-`_editor` grant every
-// mvox-minted person carries (memberLifecycle flips only the member `status`),
-// so reading the grant would hand her an ENABLED control whose every tap throws.
-// The confirmed non-member branch is therefore asked FIRST, and she gets the
-// hint in the control's PLACE: no dead buttons, no invitation to a write that
-// can never land. The trade this makes explicit: her stale prior answer is no
-// longer displayed back to her.
 describe('(E adjacent) a deactivated viewer gets the hint in place of the control', () => {
 	it('future event: no control renders at all — the non-member hint stands in for it', async () => {
 		findMyMemberIdMock.mockResolvedValue(null); // status-scoped read drops her
 		findMyRsvpForEventMock.mockResolvedValue({ rsvpId: 'r-my', status: 'going' });
-		// Plain-member view: no _editor list — no tally, just her own control.
 		const { container } = renderPage(
 			eventEntity('2026-09-01T16:00:00.000Z', { _editor: undefined })
 		);
