@@ -25,6 +25,7 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { json } from '$lib/testing/entuFetchKit';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065'; // the database entity — THE collective
 const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
@@ -86,28 +87,23 @@ function fixtureRows(): RosterRow[] {
 
 const calls: Array<{ url: string; method: string; body: string | null }> = [];
 
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
+
 function stubFetch(): void {
-	const fetchMock = vi.fn().mockImplementation((url: string | URL, init?: RequestInit) => {
+	const fetchMock = vi.fn().mockImplementation(async (url: string | URL, init?: RequestInit) => {
 		const u = String(url);
 		const method = init?.method ?? 'GET';
 		calls.push({ url: u, method, body: typeof init?.body === 'string' ? init.body : null });
-		const json = (payload: unknown, status = 200) =>
-			Promise.resolve(
-				new Response(JSON.stringify(payload), {
-					status,
-					headers: { 'Content-Type': 'application/json' }
-				})
-			);
 		if (u.includes('_type.string=entity') && u.includes('name.string=section')) {
-			return json({ entities: [{ _id: TYPE_SECTION }], count: 1 });
+			return json({ entities: [{ _id: TYPE_SECTION }], count: 1 }, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=section')) {
-			return json(liveSectionsWire());
+			return json(liveSectionsWire(), 200, JSON_HEADERS);
 		}
 		if (method === 'POST' && /\/entity$/.test(u.split('?')[0])) {
-			return json({ _id: NEW_SECTION_ID });
+			return json({ _id: NEW_SECTION_ID }, 200, JSON_HEADERS);
 		}
-		return json({ entities: [], count: 0 });
+		return json({ entities: [], count: 0 }, 200, JSON_HEADERS);
 	});
 	vi.stubGlobal('fetch', fetchMock);
 }

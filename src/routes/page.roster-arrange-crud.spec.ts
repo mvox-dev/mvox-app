@@ -3,6 +3,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
@@ -385,16 +386,6 @@ describe('/roster — Collapsed and Expanded views carry NO section-management c
 	});
 });
 
-function deferred(): { promise: Promise<void>; settle: () => void; reject: (e: unknown) => void } {
-	let settle!: () => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<void>((res, rej) => {
-		settle = () => res();
-		reject = rej;
-	});
-	return { promise, settle, reject };
-}
-
 describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 review F1)', () => {
 	it('while a DELETE is in flight, rename/indent/unindent on every OTHER row are disabled and the rows are undraggable', async () => {
 		const gate = deferred();
@@ -414,7 +405,7 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 		expect((q(container, 'arrange-unindent-sec-sop1') as HTMLButtonElement).disabled).toBe(true);
 		expect(q(container, 'arrange-row-sec-alto')?.getAttribute('draggable')).toBe('false');
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect((q(container, 'arrange-rename-sec-alto') as HTMLButtonElement).disabled).toBe(false);
 		});
@@ -438,7 +429,7 @@ describe('/roster — arrange-mode structural writes are SINGLE-FLIGHT (#155/S4 
 		expect((q(container, 'arrange-rename-sec-sop') as HTMLButtonElement).disabled).toBe(true);
 		expect((q(container, 'section-remove-sec-bass') as HTMLButtonElement).disabled).toBe(true);
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect(q(container, 'section-reorder-pending')).toBeNull();
 		});
@@ -597,7 +588,7 @@ describe('/roster — arrange-mode CRUD keeps the keyboard contract (#155/S4 rev
 			expect(confirm.disabled).toBe(true);
 		});
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
 		});
@@ -804,7 +795,7 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 		await fireEvent.click(q(container, 'section-remove-confirm-sec-bass') as HTMLElement);
 		expect(deleteMock).toHaveBeenCalledTimes(1);
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
 		});
@@ -838,7 +829,7 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			'the rest-state ✕ must never render while the write is running'
 		).toBeNull();
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
 		});
@@ -866,7 +857,7 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			);
 		});
 
-		gate.settle();
+		gate.resolve();
 		await waitFor(() => {
 			expect(q(container, 'arrange-row-sec-bass')).toBeNull();
 		});

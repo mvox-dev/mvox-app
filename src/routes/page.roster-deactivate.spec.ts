@@ -1,24 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #255 RED — the roster page's DEACTIVATE flow (done-when 1/4/5/7) at the
-// route level, so GREEN cannot satisfy the unit layer without wiring the
-// feature into the actual page:
-//
-//   (A) admin-only control on another member's row, NEVER on the viewer's own
-//       row (a member cannot deactivate herself — done-when 7), two-step
-//       confirm reusing the page's existing destructive idiom (arm → confirm/
-//       cancel — the section-remove shape, #110 F4), REFUSAL while the person
-//       holds a manageable grant, with copy that names the remedy (Gama
-//       binding: who holds what role and where to remove it — never a bare
-//       "cannot deactivate"), and fail-CLOSED when the rights read itself
-//       fails.
-//   (B) the INACTIVE surface (done-when 4): out of the roster's normal flow
-//       (hidden until its own toggle), shows each inactive member's SECTION
-//       assignment (adopted binding — it explains the section ghost-blocker),
-//       reinstates with ONE action and NO invitation.
-//
-// Data mechanics (atomic overwrite (#264), status-only write, _parent untouched)
-// are pinned in memberLifecycle.spec.ts; this file pins the page wiring.
+// The roster page's deactivate flow, end to end.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -56,9 +37,6 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	loadMemberRecordMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: deactivateMemberMock,
@@ -68,16 +46,11 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: listDeactivateBlockersMock
 }));
-// Reinstate must NOT mint anything — the whole point of done-when 4 is
-// "without a fresh invitation". Mocked so a wrong implementation is caught as
-// a call, not a network error.
 vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
 	createInvite: createInviteMock,
 	mintSelfLinkInvite: mintSelfLinkInviteMock
 }));
-// The refusal read needs a library id when the collective has one; stubbed so
-// no live lookup runs from a unit test, whichever resolution path GREEN picks.
 vi.mock('$lib/library/librarianStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/library/librarianStore')>()),
 	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
@@ -90,8 +63,6 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// #302 — opening a card runs the editor's record lookup; resolve it so the
-// editor (and the deactivate controls now inside it) can mount.
 vi.mock('$lib/roster/memberRecord', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
 	loadMemberRecord: loadMemberRecordMock
@@ -109,6 +80,7 @@ import {
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -126,8 +98,6 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-// m1 is the VIEWER's own membership (personId matches the selected collective's
-// person); m2 is another member — the only legitimate deactivate target here.
 const rosterTwo = [
 	{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'db-1' },
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
@@ -150,14 +120,6 @@ beforeEach(() => {
 	deactivateMemberMock.mockResolvedValue(undefined);
 	reinstateMemberMock.mockResolvedValue(undefined);
 	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
-	// #469 review F1 — /roster reads BOTH member lists through the ONE-PASS
-	// producer `loadActiveAndArchivedRosters` (one real-names overlay for the two
-	// lists it can have on screen at once), not `loadRoster` + `loadInactiveRoster`
-	// side by side. This double COMPOSES the two per-half mocks the tests here
-	// already drive, so each half is still steered and counted exactly as before:
-	// `loadInactiveRosterMock` IS the archived half's read. The real producer
-	// reports truncation per half (its own raw read OR'd with the overlay's); a
-	// double has no overlay, so each half simply keeps its own flag.
 	loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => {
 		const [active, inactive] = await Promise.all([
 			loadRosterMock(cfg),
@@ -166,7 +128,6 @@ beforeEach(() => {
 		return { active, inactive };
 	});
 	listInactiveMembersMock.mockResolvedValue(toListRead([]));
-	// Restored per-test: the fail-closed case below makes it REJECT.
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
@@ -182,8 +143,6 @@ afterEach(() => {
 	resetAdmin();
 });
 
-// Groups default COLLAPSED (TU.2/#110 finding #9) — expand Unassigned (where
-// every fixture member lands, sections tree empty) to get rows on screen.
 async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
@@ -202,11 +161,6 @@ async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	return utils;
 }
 
-// #302 drive-path step (Gama's on-issue ruling): the deactivate controls
-// render inside the OPENED record editor, so reaching them takes an
-// open-the-card step first. Reaching a control is navigation — changed on
-// purpose by #302; every behaviour assertion below is untouched. Idempotent:
-// re-opening an already-open editor is skipped so mid-test re-drives are safe.
 async function openCard(container: HTMLElement, memberId: string) {
 	const li = container.querySelector(`[data-testid="roster-row-${memberId}"]`);
 	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
@@ -232,9 +186,6 @@ describe('(A) deactivate — admin-only, never self (done-when 7)', () => {
 
 	it("the viewer's OWN row never carries a deactivate control — self-deactivation is impossible at the UI", async () => {
 		const { container } = await renderRosterAs('admin');
-		// #302 drive-path edit: the OWN card opens (the editor keeps no self-row
-		// exclusion) — and the deactivate control is still absent INSIDE it. The
-		// self-row asymmetry does not merge into the shared container.
 		await openCard(container, 'm1');
 		expect(container.querySelector('[data-testid="member-deactivate-m1"]')).toBeNull();
 	});
@@ -305,15 +256,8 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		// The Proxy message mock stringifies params, so the collective name only
-		// appears if GREEN actually passes it into the refusal copy.
 		expect(refused.textContent).toContain('Sampledb');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
-		// #286 done-when 5 — the refusal does NOT disarm: the pair stays ARMED
-		// beside the alert (blockers listed; the admin cancels out or retries
-		// after removing the grant). Pre-#286 the refusal branch nulled the arm
-		// id in the same breath it set the refusal, so the alert stood against a
-		// disarmed row — the exact done-when-4 lie, on EVERY refusal.
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
@@ -329,23 +273,13 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 		);
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalled());
-		// settle any pending microtasks — the write must still not have fired
 		await new Promise((r) => setTimeout(r, 0));
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
-		// #286 done-when 5 — a failed check leaves the pair ARMED beside its
-		// alert, never a silently disarmed rest state.
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
-	// #255 review r3 F1 — the id fed to the rights read used to be
-	// `row.dbEntityId ?? currentDbEntityId ?? ''`, and that empty string is not a
-	// harmless default: `listAdmins` builds `entity/${id}?props=_owner,_editor`,
-	// so '' turns it into entu-api's entity LIST route — 200, an `entities` array,
-	// no `entity` key — the rights parse reads nothing, and the blocker list comes
-	// back EMPTY. Fail-OPEN dressed as "no blockers", on the single check the
-	// refuse-don't-strip design rests on. An unresolvable id is a FAILED check.
 	it('FAIL-CLOSED: a roster with no resolvable database entity id NEVER deactivates', async () => {
 		loadRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [] },
@@ -364,22 +298,14 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// Refused BEFORE any read went out, not after one came back empty.
 		expect(resolveMyLibraryId).not.toHaveBeenCalled();
 		expect(listDeactivateBlockersMock).not.toHaveBeenCalled();
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
-		// #286 done-when 5 — the early bail-out is a FAILURE path like any other:
-		// the pair stays armed beside the alert.
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
-	// #255 review round 2 F1 — the LIBRARY lookup is part of the same fail-closed
-	// chain. `resolveMyLibraryId` throws on a non-2xx library list and reserves
-	// `null` for the factual "no library under this collective"; swallowing the
-	// throw into `null` would make `listDeactivateBlockers` skip the librarian
-	// read and let the deactivate through past an unverified librarian grant.
 	it('FAIL-CLOSED: when the LIBRARY lookup rejects, deactivate does NOT proceed and the row alerts', async () => {
 		vi.mocked(resolveMyLibraryId).mockRejectedValue(
 			new LibraryLookupError('library lookup failed: HTTP 500', 500)
@@ -397,17 +323,13 @@ describe('(A) refusal while a manageable grant is held — names the remedy (Gam
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// Never reached the rights read, never reached the write.
 		expect(listDeactivateBlockersMock).not.toHaveBeenCalled();
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
-		// #286 done-when 5 — the pair stays armed beside the alert.
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-cancel-m2"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
-	// The one factual emptiness `resolveMyLibraryId` may assert still skips the
-	// librarian read — a collective with no library has no librarian grant.
 	it('a genuine null library id still proceeds — no library is a FACT, not a failure', async () => {
 		vi.mocked(resolveMyLibraryId).mockResolvedValue(null);
 		const { container } = await renderRosterAs('admin');
@@ -477,19 +399,11 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		expect(reinstateMemberMock.mock.calls[0][1]).toBe('m9');
 		expect(createInviteMock).not.toHaveBeenCalled();
 		expect(mintSelfLinkInviteMock).not.toHaveBeenCalled();
-		// She is back in the active reads — the page re-reads rather than patching.
 		await waitFor(() =>
 			expect(loadRosterMock.mock.calls.length).toBeGreaterThan(rosterLoadsBefore)
 		);
 	});
 
-	// #255 review round 2 F2 / #264 — `reinstateMember` is an atomic overwrite
-	// (#264): two concurrent runs both GET the same status value id, the first
-	// POST's atomic overwrite consumes it, and the second POST still carries
-	// that now-stale `_id` — it returns 200 and silently leaves the member
-	// holding TWO `status` values, with nothing shown. The in-flight guard
-	// (the deactivate path already has one) is the ONLY protection here — the
-	// wire no longer complains.
 	it('a second tap while the reinstate is in flight is refused — one write, no false failure alert', async () => {
 		let release: () => void = () => {};
 		reinstateMemberMock.mockImplementation(
@@ -509,21 +423,15 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		await fireEvent.click(button);
 		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
 		expect(button.disabled).toBe(true);
-		// Second tap, straight at the handler — the guard, not just the attribute.
 		await fireEvent.click(button);
 		button.click();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(reinstateMemberMock).toHaveBeenCalledTimes(1);
 		release();
 		await new Promise((r) => setTimeout(r, 0));
-		// No failure copy: nothing failed.
 		expect(container.querySelector('[data-testid="member-reinstate-failed-m9"]')).toBeNull();
 	});
 
-	// #255 review r3 F2(a) — the panel is the one surface `loadForSelected` does
-	// not re-derive, so a switch used to leave the PREVIOUS collective's inactive
-	// members on screen under the new roster, each with a live Reinstate button
-	// aimed at a member id belonging to the collective the admin just left.
 	it('switching collectives clears the panel — one collective\'s inactive members never render under another\'s roster', async () => {
 		listSectionsMock.mockResolvedValue([altoSection]);
 		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
@@ -554,30 +462,20 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		);
 
 		selectedCollectiveDbStore.set('other-choir');
-		// The whole panel unmounts while the new roster is in flight, so wait for it
-		// to come BACK before judging it — an assertion during the load would pass
-		// against the unresolved fix too.
 		await waitFor(() => {
 			const toggle = container.querySelector('[data-testid="roster-inactive-toggle"]');
 			expect(toggle).not.toBeNull();
-			// CLOSED, not merely emptied: the panel was opened against a roster that
-			// is no longer on screen, so it has to be reopened against this one.
 			expect(toggle!.getAttribute('aria-expanded')).toBe('false');
 		});
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
 		expect(container.querySelector('[data-testid="roster-inactive-list"]')).toBeNull();
 	});
 
-	// #255 review r3 F2(b) — `handleReinstate` already reloads the panel after its
-	// write; `handleDeactivateConfirm` refreshed only the ACTIVE roster, so the
-	// two lifecycle paths disagreed and the member who had just left the active
-	// list was missing from the open panel she now belongs in.
 	it('a deactivate with the panel OPEN refreshes the panel too — she belongs in it now', async () => {
 		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 		const { container } = await renderRosterAs('admin');
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
-		// From the write onward she is in the inactive read.
 		loadInactiveRosterMock.mockResolvedValue(toListRead([
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
 		]));
@@ -591,7 +489,6 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="inactive-member-row-m2"]')).not.toBeNull()
 		);
-		// The refresh is a REFRESH, not a switch — the panel stays open through it.
 		expect(
 			container.querySelector('[data-testid="roster-inactive-toggle"]')?.getAttribute('aria-expanded')
 		).toBe('true');
@@ -627,11 +524,6 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 	});
 });
 
-// #255 review F2 — fail-CLOSED was already pinned above; these pin fail-LOUD.
-// Every failure path used to end at `console.error` alone, so the admin saw the
-// control disarm itself over an unchanged row and nothing else — a silent
-// no-op. The page's own idiom (`removeError`, #110 F1/F3) is a role="alert"
-// naming the target and saying the old state still stands.
 describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () => {
 	it('a rejected RIGHTS READ surfaces a role=alert on that row (not just a console line)', async () => {
 		listDeactivateBlockersMock.mockRejectedValue(new Error('rights read failed'));
@@ -648,11 +540,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// #388 — the alert names NO member (Mihkel 2026-09-27: a capture marker
-		// cannot blank part of a sentence). The proxy renders `[key]` with no
-		// JSON when called without params; the only other text is #487's
-		// EntuRef to the MEMBER entity (the stuck record is the membership) —
-		// shortEntuId('m2') = 'm2'.
 		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_member_deactivate_failed]m2');
 		expect(alert.textContent).not.toContain('Berta Bass');
 		const links = alert.querySelectorAll('a');
@@ -661,8 +548,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		expect(links[0].getAttribute('href')).toBe('https://entu.app/sampledb/m2');
 		expect(links[0].getAttribute('title')).toBe('m2');
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
-		// #286 done-when 5 — the alert stands NEXT TO the still-armed pair,
-		// re-enabled for direct retry; the rest-state trigger never returned.
 		const confirmAfter = container.querySelector<HTMLButtonElement>(
 			'[data-testid="member-deactivate-confirm-m2"]'
 		);
@@ -686,8 +571,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
 		);
 		expect(loadRosterMock.mock.calls.length).toBe(rosterLoadsBefore);
-		// #286 done-when 5 — the failed write leaves the pair ARMED and
-		// re-enabled beside the error, for direct retry (the #273 lifecycle).
 		const confirmAfter = container.querySelector<HTMLButtonElement>(
 			'[data-testid="member-deactivate-confirm-m2"]'
 		);
@@ -697,11 +580,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 	});
 
-	// #286 REWORK — this test used to click the plain trigger post-failure to
-	// clear the alert. Under the stays-armed lifecycle (done-when 5) that
-	// trigger no longer exists post-failure: the pair sits armed next to the
-	// error. The alert is still about the tap, not the row — so leaving the
-	// lifecycle (explicit cancel) clears it, and a FRESH arm starts clean.
 	it('cancel-then-rearm after a failure: cancel disarms AND clears the alert; a fresh arm starts with no stale alert', async () => {
 		deactivateMemberMock.mockRejectedValue(new Error('403'));
 		const { container } = await renderRosterAs('admin');
@@ -714,9 +592,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
 		);
-		// Post-flight cancel: disarms AND clears the alert (done-when 4 — no
-		// alert may stand against a disarmed row). Under the stays-armed
-		// lifecycle the cancel is still on screen next to the error.
 		const cancel = container.querySelector('[data-testid="member-deactivate-cancel-m2"]');
 		expect(cancel, 'the pair must still be armed beside the failure alert').not.toBeNull();
 		await fireEvent.click(cancel!);
@@ -725,7 +600,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		);
 		expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).toBeNull();
-		// Re-arm: a clean pair, no stale alert riding along.
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -764,8 +638,6 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// #388 — names NO member; carries the EntuRef to the MEMBER entity
-		// (shortEntuId('m9') = 'm9') right after the sentence.
 		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_member_reinstate_failed]m9');
 		expect(alert.textContent).not.toContain('Gone Girl');
 		const links = alert.querySelectorAll('a');
@@ -773,62 +645,11 @@ describe('(A/B) fail-LOUD — no lifecycle failure is allowed to be silent', () 
 		expect(links[0].textContent?.trim()).toBe('m9');
 		expect(links[0].getAttribute('href')).toBe('https://entu.app/sampledb/m9');
 		expect(links[0].getAttribute('title')).toBe('m9');
-		// She is still inactive — the row stays exactly where it was.
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).not.toBeNull();
 	});
 });
 
-// ── #286 RED — the armed deactivate pair stays HONEST through the in-flight
-// chain (the #273 arm-state lifecycle, on this page's OTHER armed pair) ──
-//
-// Premise on record (issue #286 + pre-build research, drift-checked against
-// roster/+page.svelte at branch base):
-//
-//   - `pendingDeactivateId` stays SET through the whole async chain (two
-//     awaited reads — resolveMyLibraryId, listDeactivateBlockers — then the
-//     write), so the pair stays MOUNTED in flight... carrying no `disabled`
-//     and no `aria-busy`: a live cancel sits under the admin's finger while
-//     the deactivation lands. Cancel mid-flight disarms the UI and the write
-//     lands anyway — the #253/#264 lying-affordance shape.
-//   - WIDER than the issue's cancel-race framing (research finding): the
-//     refusal branch nulls `pendingDeactivateId` in the same synchronous
-//     block that sets `deactivateRefusal`, and the failure catch nulls it
-//     before setting `deactivateActionError` — while both alerts render
-//     purely by memberId match, never checking arm state. So done-when 4
-//     ("an error or refusal cannot surface against a row the admin has
-//     disarmed") is violated today on EVERY refusal and EVERY failure, not
-//     only via a cancel race. The reworked refusal/fail-closed/fail-loud
-//     specs above pin the stays-armed half; this block pins the in-flight
-//     half and the cancel semantics.
-//   - The binding invariant is `deactivatePending` ITSELF — deliberately NOT
-//     `structuralWritePending` (deactivation is not a section-structural
-//     write; the page's own `reinstatePending`-gated member-reinstate button
-//     is the precedent for a lifecycle write carrying its own flag).
-//   - SECOND VECTOR (research-found, same lie, this control's surface):
-//     `pendingDeactivateId` is a SINGLE slot, and `armDeactivate` is
-//     unguarded — arming a DIFFERENT row mid-flight steals the slot and
-//     orphans the in-flight row's UI. Pinned below: no second row can be
-//     armed while a deactivation is in flight.
-//   - Labels UNCHANGED during pending — no new i18n keys (the agenda model
-//     disables in place, it does not swap copy).
-//   - SCOPE-FENCE ANSWER (the issue asks whether a THIRD armed pair exists):
-//     none — the section-remove pair (#273) and this one are the only two;
-//     the record-editor and section-create cancels are direct-write forms (a
-//     different class) and inline rename is a different UI shape.
-//
-// Timing proofs are deterministic (house method): release-controlled mocks,
-// held at BOTH suspension kinds — the blocker read and the write.
 describe('(A) #286 — the armed pair through the in-flight deactivate: mounted, disabled, aria-busy; cancel inert; one write; one arm slot', () => {
-	function deferred<T = void>() {
-		let resolve!: (v: T) => void;
-		let reject!: (e: unknown) => void;
-		const promise = new Promise<T>((res, rej) => {
-			resolve = res;
-			reject = rej;
-		});
-		return { promise, resolve, reject };
-	}
-
 	it('while the BLOCKER READ is in flight the pair stays mounted — both halves disabled, confirm aria-busy, labels unchanged', async () => {
 		const gate = deferred<{ role: string }[]>();
 		listDeactivateBlockersMock.mockImplementation(() => gate.promise);
@@ -841,7 +662,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalledTimes(1));
 
-		// Suspended INSIDE the read — the whole chain is one in-flight state.
 		const confirm = await waitFor(() => {
 			const el = container.querySelector<HTMLButtonElement>(
 				'[data-testid="member-deactivate-confirm-m2"]'
@@ -856,13 +676,10 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		);
 		expect(cancel, 'cancel must stay mounted through the chain').not.toBeNull();
 		expect(cancel!.disabled).toBe(true);
-		// No new i18n keys: the pending face keeps the SAME labels (the Proxy
-		// message mock renders key names, so these pin the keys themselves).
 		expect(confirm.textContent).toContain('roster_member_deactivate_confirm');
 		expect(cancel!.textContent).toContain('roster_member_deactivate_cancel');
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 
-		// Release with no blockers: the chain completes honestly.
 		gate.resolve([]);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
 	});
@@ -894,15 +711,11 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 				.disabled
 		).toBe(true);
 
-		// Double-tap (the #273 spec shape): attribute AND guard — a second tap
-		// on the still-mounted confirm writes nothing more.
 		await fireEvent.click(confirm);
 		confirm.click();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
 
-		// SUCCESS is the ONE outcome that disarms: from the write onward she is
-		// out of the active reads — refetch, row gone, pair gone with it.
 		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		gate.resolve();
 		await waitFor(() =>
@@ -927,8 +740,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(listDeactivateBlockersMock).toHaveBeenCalledTimes(1));
 
-		// The "cancel that does not cancel" (#253/#264 shape): mid-read, cancel
-		// must do NOTHING — attribute and guard both.
 		const cancel = container.querySelector<HTMLButtonElement>(
 			'[data-testid="member-deactivate-cancel-m2"]'
 		)!;
@@ -945,7 +756,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 			'the rest-state trigger must never render while the chain is running'
 		).toBeNull();
 
-		// Release: the chain proceeds to the write — the tap changed nothing.
 		gate.resolve([]);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
 	});
@@ -975,8 +785,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		).not.toBeNull();
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 
-		// Release: the write LANDS and the UI says so — refetch, she is gone.
-		// Nothing about the mid-flight cancel tap changed the outcome.
 		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		gate.resolve();
 		await waitFor(() =>
@@ -988,21 +796,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		expect(deactivateMemberMock).toHaveBeenCalledTimes(1);
 	});
 
-	// #302 GUARD-DELETION CHECK (not a collective-switch test, so outside the
-	// on-issue ruling's letter — done anyway because its drive path gained an
-	// `openCard(container, 'm3')` that CLOSES m2's editor, materially changing
-	// what the frozen assertions below run against). Guard pinned: the #286
-	// single-arm-slot pair — `disabled={deactivatePending}` on
-	// `member-deactivate-{memberId}` (roster/+page.svelte:4066) AND the
-	// `if (deactivatePending) return;` first line of `armDeactivate` (:1010).
-	// [GREEN 2026-09-10 (review F2): deleting EITHER alone leaves the test
-	// green — each covers the other, exactly as the drive-path comment below
-	// claims ("a disabled attr alone does not stop a direct click", and the
-	// attribute alone stops `fireEvent`). Deleting BOTH — `disabled={false}`
-	// plus the `armDeactivate` early return commented out — made this test FAIL
-	// ("no second row may arm while a deactivation is in flight": m3's confirm
-	// button rendered where null was expected, at the steal assertion below). Restored — test
-	// PASSES. The added `openCard` steps still reach the guarded behaviour.]
 	it('a SECOND row cannot be armed mid-flight — the single arm slot is never stolen from the in-flight row', async () => {
 		loadRosterMock.mockResolvedValue(toListRead([
 			...rosterTwo,
@@ -1011,8 +804,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
 		const { container } = await renderRosterAs('admin');
-		// #302 drive-path edit: readiness was a wait on m3's row-level trigger,
-		// which no longer renders on a collapsed row — wait on m3's card instead.
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-row-card-m3"]')).not.toBeNull()
 		);
@@ -1024,15 +815,7 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
 
-		// #302 drive-path edit: reaching m3's trigger means opening m3's editor —
-		// which closes m2's (one editor at a time). The frozen assertions below
-		// therefore ALSO pin that an in-flight armed pair stays MOUNTED when its
-		// editor closes: destructive in-flight UI never silently unmounts. (See
-		// the armed-pair-exception note in page.roster-card-interaction.spec.ts.)
 		await openCard(container, 'm3');
-		// Arming m3 while m2's write is in flight would repoint the single
-		// `pendingDeactivateId` slot and ORPHAN m2's in-flight UI. Attribute
-		// and guard both — a disabled attr alone does not stop a direct click.
 		const trigger3 = container.querySelector<HTMLButtonElement>(
 			'[data-testid="member-deactivate-m3"]'
 		)!;
@@ -1070,8 +853,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-refused-m2"]')).not.toBeNull()
 		);
-		// Blockers listed, pair armed and re-enabled: the admin cancels out, or
-		// removes the grant elsewhere and retries through the SAME confirm.
 		const confirm = await waitFor(() => {
 			const el = container.querySelector<HTMLButtonElement>(
 				'[data-testid="member-deactivate-confirm-m2"]'
@@ -1088,8 +869,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 		expect(deactivateMemberMock).not.toHaveBeenCalled();
 
-		// Post-flight cancel: disarm AND clear — no refusal may stand against a
-		// disarmed row (done-when 4, by construction not by luck).
 		await fireEvent.click(cancel);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-m2"]')).not.toBeNull()
@@ -1115,8 +894,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="member-deactivate-failed-m2"]')).not.toBeNull()
 		);
-		// The #273 retry convention: armed id cleared ONLY on success — the pair
-		// sits re-enabled next to the error, aria-busy gone, trigger never back.
 		const confirm = await waitFor(() => {
 			const el = container.querySelector<HTMLButtonElement>(
 				'[data-testid="member-deactivate-confirm-m2"]'
@@ -1132,8 +909,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 		).toBe(false);
 		expect(container.querySelector('[data-testid="member-deactivate-m2"]')).toBeNull();
 
-		// Direct retry — the SAME still-armed confirm, no re-arming dance. The
-		// retry's own start clears the stale failure alert.
 		deactivateMemberMock.mockResolvedValue(undefined);
 		loadRosterMock.mockResolvedValue(toListRead([rosterTwo[0]]));
 		await fireEvent.click(confirm);
@@ -1146,34 +921,6 @@ describe('(A) #286 — the armed pair through the in-flight deactivate: mounted,
 	});
 });
 
-// #259 RED — filed from #255's round-4 review. The three inactive-panel
-// loads (panel open, post-deactivate refresh, post-reinstate refresh) each
-// await `loadInactiveRoster(cfg)` with cfg captured EARLIER and assign
-// `inactiveRows` with no check that the selected collective is still the one
-// the load was started for. The #255 switch-reset (pinned above by 'switching
-// collectives clears the panel' — a POST-settle switch, a different case)
-// closes and empties the panel; then the stale promise settles and silently
-// repopulates `inactiveRows` while the panel is CLOSED, so the next open on
-// the NEW collective renders the OLD collective's members — each with a live
-// Reinstate button aimed at a member id that does not exist here.
-//
-// The race tests are deterministic (house method for timing proofs): the
-// loadInactiveRoster mock is release-controlled (same shape as the 'second
-// tap while the reinstate is in flight' test above), so the ordering is
-// hold → switch → settle-stale → reopen, and the failure trips on the
-// panel-content assertion — never on a timeout.
-//
-// The NON-race test is the trap detector: `loadForSelected()` bumps the
-// route-load machine's generation unconditionally, and both lifecycle
-// handlers call it BEFORE their panel reload — so a guard generation captured
-// at function ENTRY is already stale by the vulnerable await and would
-// silently skip the reload on EVERY ordinary deactivate/reinstate with the
-// panel open (a broken normal path, worse than the race). The
-// ordinary-reinstate refresh below and the existing 'a deactivate with the
-// panel OPEN refreshes the panel too' above fail under exactly that
-// mis-capture; the guard must be captured AFTER each handler's own
-// loadForSelected() call (entry-capture is only correct in toggleInactive,
-// which never self-refreshes).
 describe('(B) #259 — in-flight inactive-panel loads must not outlive a collective switch', () => {
 	type InactiveRow = {
 		memberId: string;
@@ -1184,8 +931,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		dbEntityId: string;
 	};
 
-	// Collective A's (sampledb's) inactive member — the rows a stale settle
-	// tries to smuggle under collective B's roster.
 	const goneGirl: InactiveRow = {
 		memberId: 'm9',
 		personId: 'pp-9',
@@ -1214,17 +959,11 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		selectedCollectiveDbStore.set('sampledb');
 	}
 
-	// Every loadInactiveRoster call is HELD until the test releases it — the
-	// deterministic race construction needs the settle order in the test's
-	// hands, call by call.
 	function holdInactiveLoads(): Array<(rows: InactiveRow[]) => void> {
 		const settlers: Array<(rows: InactiveRow[]) => void> = [];
 		loadInactiveRosterMock.mockImplementation(
 			() =>
 				new Promise<{ items: InactiveRow[]; total: number; truncated: boolean }>((resolve) => {
-					// #321 — the producer resolves a ListRead now. The tests below still
-					// hand the settler a plain row array (the race they construct is about
-					// settle ORDER, not about truncation), so the wrap happens here.
 					settlers.push((rows: InactiveRow[]) => resolve(toListRead(rows)));
 				})
 		);
@@ -1243,8 +982,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 
 	async function switchToOtherChoir(container: HTMLElement) {
 		selectedCollectiveDbStore.set('other-choir');
-		// Wait for the NEW collective's roster to be on screen with the panel
-		// reset (#255 r3 F2: switch closes it) before settling anything stale.
 		await waitFor(() => {
 			const toggle = container.querySelector('[data-testid="roster-inactive-toggle"]');
 			expect(toggle).not.toBeNull();
@@ -1258,26 +995,18 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		const settlers = holdInactiveLoads();
 		const { container } = await renderTwoCollectiveRoster();
 
-		// Start collective A's panel load and leave it in flight.
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 
-		// Switch mid-flight; the #255 reset closes and empties the panel.
 		await switchToOtherChoir(container);
 
-		// The STALE promise settles with A's rows — a guarded site discards it.
 		settlers[0]!([goneGirl]);
 		await flush();
 
-		// Reopen on B with B's OWN load still in flight: the template renders
-		// whatever `inactiveRows` holds right now. Pre-fix the stale settle
-		// repopulated it, so A's member renders here with a live Reinstate
-		// button aimed at an id that does not exist in this collective.
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
 
-		// B's genuine load lands empty — the panel shows B's own truth.
 		settlers[1]!([]);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
@@ -1285,29 +1014,14 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
 	});
 
-	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, per
-	// relocated switch-guard test): after the drive-path edit below, delete the
-	// guard this test pins — the post-deactivate panel reload's settle guard,
-	// `if (!routeLoad.isCurrent(g)) return;` on the `loadInactiveRoster` await
-	// inside `handleDeactivateConfirm` (roster/+page.svelte:1187) — confirm
-	// THIS test FAILS, restore, confirm it passes. A frozen assertion proves
-	// nobody weakened the claim; only this check proves the open-editor step
-	// didn't detach the test from the guard (opening the editor could bump the
-	// sequence the test was written to exercise).
-	// [GREEN 2026-09-10 (review F2): guard commented out — this test FAILED at
-	// the reopen-on-B assertion (`inactive-member-row-m2` rendered on B where
-	// null was expected, at the reopen-on-B assertion below). Restored — test PASSES. The
-	// `openCard(container, 'm2')` drive-path edit still reaches the guard.]
 	it('a POST-DEACTIVATE panel reload that settles after a switch writes NOTHING', async () => {
 		const settlers = holdInactiveLoads();
 		const { container } = await renderTwoCollectiveRoster();
-		// Rows live in the collapsed Unassigned group — expand to reach m2.
 		await fireEvent.click(container.querySelector('[data-testid="section-toggle-unassigned"]')!);
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-row-m2"]')).not.toBeNull()
 		);
 
-		// Panel open and idle on A (its own load settles empty, cleanly).
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		settlers[0]!([]);
@@ -1315,8 +1029,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
 		);
 
-		// Deactivate m2 with the panel open — the write lands, the roster
-		// refetches, and the panel reload (the vulnerable await) goes in flight.
 		await openCard(container, 'm2'); // #302 drive-path edit
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
 		await waitFor(() =>
@@ -1325,14 +1037,12 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
 
-		// Switch mid-flight, then settle the stale reload with A's view of her.
 		await switchToOtherChoir(container);
 		settlers[1]!([
 			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
 		]);
 		await flush();
 
-		// Reopen on B: A's freshly-deactivated member must NOT be here.
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(3));
 		expect(container.querySelector('[data-testid="inactive-member-row-m2"]')).toBeNull();
@@ -1347,7 +1057,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		const settlers = holdInactiveLoads();
 		const { container } = await renderTwoCollectiveRoster();
 
-		// Panel open on A, showing her inactive member.
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
 		settlers[0]!([goneGirl]);
@@ -1355,17 +1064,14 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 			expect(container.querySelector('[data-testid="member-reinstate-m9"]')).not.toBeNull()
 		);
 
-		// Reinstate her — the write lands and the panel reload goes in flight.
 		await fireEvent.click(container.querySelector('[data-testid="member-reinstate-m9"]')!);
 		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
 
-		// Switch mid-flight, then settle the stale reload with A's rows.
 		await switchToOtherChoir(container);
 		settlers[1]!([goneGirl]);
 		await flush();
 
-		// Reopen on B: A's rows must not have been smuggled in.
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(3));
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
@@ -1376,14 +1082,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		);
 	});
 
-	// TRAP DETECTOR — must stay green through the fix. `handleReinstate` calls
-	// `await loadForSelected()` (which bumps the generation) BEFORE its panel
-	// reload, so a guard generation captured at function ENTRY reads stale on
-	// every ORDINARY reinstate and silently skips this refresh: her row would
-	// stay in the open panel after she went active. Together with the existing
-	// 'a deactivate with the panel OPEN refreshes the panel too' (the
-	// deactivate-side mirror, above), this pins the correct capture point:
-	// AFTER each handler's own loadForSelected() call.
 	it('NON-RACE: an ordinary reinstate with the panel open still refreshes it — she leaves the panel', async () => {
 		loadInactiveRosterMock.mockResolvedValue(toListRead([goneGirl]));
 		const { container } = render(Page);
@@ -1397,13 +1095,10 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 			expect(container.querySelector('[data-testid="member-reinstate-m9"]')).not.toBeNull()
 		);
 
-		// From the write onward she is back in the ACTIVE reads only.
 		loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 		await fireEvent.click(container.querySelector('[data-testid="member-reinstate-m9"]')!);
 		await waitFor(() => expect(reinstateMemberMock).toHaveBeenCalledTimes(1));
 
-		// The panel REFRESHES (row gone, empty copy in) and STAYS OPEN — a
-		// mis-captured guard would skip the reload and leave her row standing.
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull()
 		);
@@ -1416,18 +1111,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 	});
 });
 
-// ── #388 RED — capture redaction on /roster outside the record editor ──
-//
-// (1) The inactive-members row's name renders inside the shared display
-//     marker (RedactedText → REDACT_ATTR), and the marker holds exactly the
-//     name — a wrapper around the whole row cannot pass.
-// (2) AC3: with data-redacting on <html>, a sweep of every rendered TEXT node
-//     on /roster (active rows, the inactive panel, optionally an open editor)
-//     finds each fixture member name and email ONLY inside marked elements.
-//     The list of UNMARKED occurrences must be empty; the list of values the
-//     sweep found must be the full fixture set actually rendered, so the sweep
-//     cannot pass vacuously. Attribute channels (SectionPicker's aria-label /
-//     title) are outside the marker by definition — redact.ts lists them.
 describe('#388 — capture redaction: inactive row name marked; no unexplained real name or contact value with the toggle engaged', () => {
 	const inactiveGone = [
 		{
@@ -1510,8 +1193,6 @@ describe('#388 — capture redaction: inactive row name marked; no unexplained r
 		expect(document.documentElement.hasAttribute(REDACT_TOGGLE_ATTR)).toBe(true);
 		const { unmarked, found } = sweep(document.body);
 		expect(unmarked).toEqual([]);
-		// Non-vacuous: every active name/email and the inactive name rendered
-		// (the inactive row shows no email today).
 		expect(found).toEqual(
 			['Alice Alto', 'Berta Bass', 'Gone Girl', 'alice@example.com', 'berta@example.com'].sort()
 		);
@@ -1519,8 +1200,4 @@ describe('#388 — capture redaction: inactive row name marked; no unexplained r
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Josquin* — fail-LOUD regression block, #255 review F2)
-// (*MVOX:Tallis* — #259 in-flight-guard RED block)
-// (*MVOX:Tallis* — #286 in-flight armed-pair RED block + stays-armed reworks)
-// (*MVOX:Tallis* — #388 RED: failure alerts name no member + EntuRef to the
-//  member; inactive row name marked; AC3 data-redacting sweep)
+// (*MVOX:Josquin*)

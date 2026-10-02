@@ -1,52 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #299 RED — the section CREATE paths have no collective-switch guard at all,
-// and the page-create form's retained parent id is a cross-collective
-// reference. TWO DISTINCT DEFECT CLASSES, deliberately not conflated:
-//
-//   CLASS B — SYNCHRONOUS (no race, no held promise — the sharpest bug on the
-//   issue): `pageCreateParentId` survives a collective switch. Its <select>
-//   rebuilds its options from B's collective-scoped tree, so no option matches
-//   the retained value and the select DISPLAYS its first option — "top
-//   level" — while the variable still holds A's section id. `submitPageCreate`
-//   reads the VARIABLE, not the DOM: the admin reads "top level", submits, and
-//   the section is parented into a collective they are not looking at. The pin
-//   is therefore on the SUBMITTED PARENT (what `createSection` received), never
-//   on the variable — a fix that resets state but still submits wrong must
-//   fail it.
-//
-//   CLASS A — ASYNCHRONOUS: `handleCreate` and `submitPageCreate` capture no
-//   generation and call no isCurrent() anywhere — unlike every other write
-//   handler in the file, there is NO guard to be incomplete. A create confirmed
-//   on collective A, settling after a switch to B, mutates B's section tree
-//   (`sections = insertSectionNode(...)`) and writes error/status/form state
-//   unconditionally. This is a state leak across collectives, not a stale
-//   banner — the pins assert the TREE (and the follow-on writes), not just
-//   messages.
-//
-// PO rulings folded in (issue #299 comment thread, read in full):
-//   - ALL THREE page-create form vars clear on a collective switch
-//     (`pageCreateParentId` because it is a cross-collective reference;
-//     `pageCreateOpen`/`pageCreateName` because once the parent id must go,
-//     keeping them would hand the user an open, named, parentless form they
-//     never created — losing a draft on an explicit context switch is
-//     expected, a half-form pointing at the wrong tree is not).
-//   - `renameStatus`, `removeStatus` and `pageCreateStatus` all clear on a
-//     collective switch, making all four status regions behave identically
-//     (`reorderStatus`/`recordStatus` already do). The reason is that a status
-//     region carries no collective context: a sentence about collective A,
-//     rendered inside B, reads as a statement about B. Each handler clears its
-//     own region at entry, so every same-collective write remains a genuine
-//     '' → text change — that entry-clear discipline is untouched here.
-//
-// House method for the timing pins (#259's deterministic race construction,
-// worked example: page.roster-pending-collective-switch.spec.ts): the WRITE
-// mock itself is release-controlled — hold → switch → settle. Every assertion
-// reads rendered DOM or mock call records, never component internals.
+// Section create paths drop a parent id kept across a collective switch.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
-// Lenient message mock — key + params echoed; structural assertions only.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -96,7 +53,6 @@ const {
 	createInviteMock: vi.fn(),
 	mintSelfLinkInviteMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -146,8 +102,6 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── two collectives, two disjoint fixtures ──────────────────────────────────
-
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
 
@@ -166,12 +120,6 @@ function treeB(): SectionNode[] {
 	];
 }
 
-// Every member UNASSIGNED: rows live under the Unassigned group's toggle, and
-// each row renders its SectionPicker (the inline create entry `handleCreate`
-// is reached through). All personIds differ from both viewers'.
-// #468 — each collective's rows carry ITS OWN reader's person id in
-// `ownerIds` (person-p for sampledb, person-q for other-choir) so the picker
-// gate stays open regardless of which collective is selected.
 function rowsA(): RosterRow[] {
 	return [
 		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A, ownerIds: ['person-p'] },
@@ -239,19 +187,6 @@ afterEach(() => {
 	resetAdmin();
 });
 
-// ── house helpers (fixtures/switch drivers: page.roster-pending-collective-
-//    switch.spec.ts; deferred: page.roster-deactivate.spec.ts) ───────────────
-
-function deferred<T = void>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
@@ -286,7 +221,6 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 
 async function switchToOtherChoirArrange(container: HTMLElement) {
 	selectedCollectiveDbStore.set('other-choir');
-	// Collective B's tree is on screen before anything stale settles.
 	await waitFor(() => {
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 	});
@@ -309,20 +243,16 @@ async function renderGroupsRoster(): Promise<HTMLElement> {
 
 async function switchToOtherChoirGroups(container: HTMLElement) {
 	selectedCollectiveDbStore.set('other-choir');
-	// B's own tree replaces A's before anything stale settles …
 	await waitFor(() => {
 		expect(q(container, 'section-toggle-sec-b1')).not.toBeNull();
 	});
 	expect(q(container, 'section-toggle-sec-sop')).toBeNull();
-	// … and the switch collapsed the groups: reopen Unassigned to reach Bob.
 	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'roster-row-m-bob')).not.toBeNull();
 	});
 }
 
-// Opens the page-level "+ New section" form (arrange mode, admin) and types a
-// name into it. Parent selection, submit and switch are each test's own moves.
 async function openPageCreateForm(container: HTMLElement, name: string) {
 	await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
 	await waitFor(() => {
@@ -333,12 +263,6 @@ async function openPageCreateForm(container: HTMLElement, name: string) {
 	});
 }
 
-// #470 — the picker's inline create form (the `handleCreate` UI entry) is
-// RETIRED, and with it the stale-settle / late-clobber cases that could only be
-// driven through it (the page-level create's switch guards are pinned by the
-// CLASS A/B suites above and below). The `sectionWriteError` reset pin
-// survives — that banner now belongs to the native pickers' ASSIGN path, so it
-// is driven through the #470 controls: [+] → blank select → a section.
 async function failedAssign(container: HTMLElement, memberId: string, sectionId: string) {
 	await fireEvent.click(q(container, `section-picker-add-${memberId}`) as HTMLElement);
 	await waitFor(() => {
@@ -349,36 +273,23 @@ async function failedAssign(container: HTMLElement, memberId: string, sectionId:
 	});
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/roster — #299 CLASS B: the retained page-create parent id (synchronous — no race required)', () => {
 	it("LYING PARENT: submitting after a collective switch must never send the PREVIOUS collective's section id as parentId — the select displays 'top level' while the variable still holds A's node", async () => {
 		const container = await renderInArrangeMode();
 
-		// Open the form on A, name it, and pick a REAL parent from A's tree.
 		await openPageCreateForm(container, 'Chorus');
 		const parentSelect = q(container, 'roster-new-section-parent') as HTMLSelectElement;
 		await fireEvent.change(parentSelect, { target: { value: 'sec-sop' } });
 		expect(parentSelect.value).toBe('sec-sop');
 
-		// Switch with the form open. Pre-fix nothing clears the form or the
-		// retained parent id; the select's options are rebuilt from B's tree, so
-		// the DOM shows "top level" while the variable still says sec-sop.
 		await switchToOtherChoirArrange(container);
 
-		// Submit whatever the UI still offers. Post-fix the switch closes the
-		// form (see the ruling pin below) and no submit control exists — in that
-		// world nothing is sent, which also satisfies this pin.
 		const submit = q(container, 'roster-new-section-submit');
 		if (submit) {
 			await fireEvent.click(submit);
 			await flush();
 		}
 
-		// THE pin: assert what `createSection` actually RECEIVED — never merely
-		// that the variable was reset. A fix that resets state but still submits
-		// A's id must fail here; a fix that keeps the form open but genuinely
-		// submits a B-valid parent (or top level) passes.
 		for (const call of createMock.mock.calls) {
 			const input = call[1] as { name: string; parentId: string | null };
 			expect(
@@ -389,13 +300,6 @@ describe('/roster — #299 CLASS B: the retained page-create parent id (synchron
 	});
 
 	it('the open create form does not survive the switch — pageCreateOpen, pageCreateName and pageCreateParentId all clear together (PO ruling)', async () => {
-		// The ruling (issue #299, Gama): `pageCreateParentId` is a
-		// cross-collective reference and MUST go; once it goes,
-		// `pageCreateOpen`/`pageCreateName` go with it — keeping them would
-		// produce an open, named, parentless form the user never created, a
-		// worse intermediate state than a closed one. Losing a draft on an
-		// explicit context switch is expected; being handed a half-form pointing
-		// at the wrong tree is not.
 		const container = await renderInArrangeMode();
 
 		await openPageCreateForm(container, 'Draft name');
@@ -409,7 +313,6 @@ describe('/roster — #299 CLASS B: the retained page-create parent id (synchron
 			q(container, 'roster-new-section-form'),
 			"the form opened on A must not still be open on B — its typed name and retained parent belong to a tree that is no longer on screen"
 		).toBeNull();
-		// The affordance itself is intact: B offers a fresh "+ New section".
 		expect(q(container, 'roster-new-section')).not.toBeNull();
 	});
 });
@@ -420,7 +323,6 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 		createMock.mockImplementationOnce(() => gate.promise);
 		const container = await renderInArrangeMode();
 
-		// Start the create on A (top level) and HOLD the write.
 		await openPageCreateForm(container, 'Chorus');
 		await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
 		await waitFor(() => {
@@ -429,10 +331,6 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 
 		await switchToOtherChoirArrange(container);
 
-		// A's create is confirmed AFTER the switch. Pre-fix, `sections =
-		// insertSectionNode(...)` runs against B's tree unconditionally — the
-		// node even picks up B's org id (`currentDbEntityId` is read at settle
-		// time), so it renders straight into B's arrange list.
 		gate.resolve('sec-created');
 		await flush();
 
@@ -442,8 +340,6 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 		).toBeNull();
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 		expect(q(container, 'arrange-row-sec-b2')).not.toBeNull();
-		// A status region carries no collective context — a sentence about A,
-		// rendered inside B, reads as a statement about B.
 		expect(createStatusText(container)).toBe('');
 	});
 
@@ -460,10 +356,6 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 
 		await switchToOtherChoirArrange(container);
 
-		// The write fails after the switch. Pre-fix the catch writes
-		// `pageCreateError` unconditionally AND the form (never reset) is still
-		// open on B — so B shows a loud creation-failure alert for an attempt
-		// made on a different collective.
 		gate.reject(new Error('boom'));
 		await flush();
 
@@ -477,21 +369,16 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 
 describe('/roster — #299/#470: sectionWriteError clears on a collective switch', () => {
 	it('an assign failure from a previous visit must not still be on screen after leaving and returning', async () => {
-		// #299 done-when: `sectionWriteError` cleared on switch. The banner's
-		// producer moved with #470 — a failed ASSIGN through the native blank
-		// picker sets it now (the picker create path is retired).
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		assignMock.mockRejectedValueOnce(new Error('boom-a'));
 		const container = await renderGroupsRoster();
 
-		// A genuine, same-collective failure on A: Ada's banner renders. Correct.
 		await failedAssign(container, 'm-ada', 'sec-sop');
 		await waitFor(() => {
 			expect(q(container, 'section-write-error-m-ada')).not.toBeNull();
 		});
 		consoleSpy.mockRestore();
 
-		// Leave for B, come back to A.
 		await switchToOtherChoirGroups(container);
 		selectedCollectiveDbStore.set('sampledb');
 		await waitFor(() => {
@@ -502,8 +389,6 @@ describe('/roster — #299/#470: sectionWriteError clears on a collective switch
 			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
 		});
 
-		// Pre-fix `sectionWriteError` is absent from the route-load reset, so the
-		// stale banner from the PREVIOUS visit re-renders as if it just happened.
 		expect(
 			q(container, 'section-write-error-m-ada'),
 			'an assign failure from a previous visit to this collective must not resurface after a round-trip switch'
@@ -512,20 +397,7 @@ describe('/roster — #299/#470: sectionWriteError clears on a collective switch
 });
 
 describe('/roster — #299/#470 F3: a section write that SETTLES after the switch touches nothing of the new collective', () => {
-	// The three #470 handlers (handleAssign/handleUnassign/handleMove) captured
-	// no `routeLoad.generation`, unlike every other async writer on the page.
-	// `sectionWriteError` is a SINGLE slot shared by every member, so a stale
-	// settle from collective A does not merely write a banner nobody can see on
-	// B — it OVERWRITES the banner B's own failed write just put on screen, and
-	// the user watching B sees her genuine failure alert vanish on its own.
-	// That is what these pins read: B's own banner, before and after the late
-	// settle. (The row patches are not observable here — member ids are
-	// db-scoped, so `patchMemberSectionIds`/`dropBack` aimed at A's ids no-op
-	// against B's rows; the guard covers them for the same reason it covers
-	// this, and `submitPageCreate`'s pins above are the same idiom.)
 
-	/** A genuine, same-collective failure on B: Bob's banner, which must survive
-	 *  anything collective A settles afterwards. */
 	async function failBobOnB(container: HTMLElement) {
 		assignMock.mockRejectedValueOnce(new Error('boom-b'));
 		await failedAssign(container, 'm-bob', 'sec-b1');
@@ -534,8 +406,6 @@ describe('/roster — #299/#470 F3: a section write that SETTLES after the switc
 		});
 	}
 
-	/** Collective A with Ada already in Soprano (her held select is the entry to
-	 *  the unassign and move paths). */
 	async function renderWithAdaInSoprano(): Promise<HTMLElement> {
 		loadRosterMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(
@@ -615,8 +485,6 @@ describe('/roster — #299/#470 F3: a section write that SETTLES after the switc
 	it("MOVE: a refused move from collective A, settling on B, must not wipe B's own failure banner", async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const gate = deferred();
-		// The move's FIRST write (Gama's order: add the new section, then drop the
-		// old one) — held, then refused after the switch.
 		assignMock.mockImplementationOnce(() => gate.promise);
 		const container = await renderWithAdaInSoprano();
 
@@ -639,20 +507,12 @@ describe('/roster — #299/#470 F3: a section write that SETTLES after the switc
 			"A's late move failure must not take B's own banner off the screen"
 		).not.toBeNull();
 		expect(q(container, 'section-write-error-m-ada')).toBeNull();
-		// The old membership's DELETE never fired: the add never landed.
 		expect(unassignMock).not.toHaveBeenCalled();
 		consoleSpy.mockRestore();
 	});
 });
 
 describe('/roster — #299 status regions clear on a collective switch (PO amendment)', () => {
-	// One shape, three regions. The reason is the same each time: a status
-	// region carries no collective context, so a sentence about collective A,
-	// rendered inside B, reads as a statement about B. With these three joining
-	// `reorderStatus`/`recordStatus`, all four regions behave identically and
-	// the per-region exception (whose reasoning lived only in a review thread)
-	// is gone. Handler-entry clears are untouched: every same-collective write
-	// remains a genuine '' → text change.
 
 	it("pageCreateStatus: A's create announcement is not still in the region after switching to B", async () => {
 		const container = await renderInArrangeMode();
@@ -719,15 +579,6 @@ describe('/roster — #299 status regions clear on a collective switch (PO amend
 
 describe("/roster — #299 handleRemoveSection's terminal failure writes", () => {
 	it("a wrong-collective removal-failure banner cannot appear: A's remove rejecting after the switch renders no section-remove-error on B", async () => {
-		// DEFENSIVE PIN, stated honestly: at HEAD the terminal `removeError`/
-		// `failedRemoveId` writes carry no generation check of their own — they
-		// are shielded only by the early returns inside the catch's refetch
-		// reconcile (both of which happen to sit upstream on every stale path).
-		// That protection is positional accident, not stated intent; #299's
-		// done-when adds the explicit re-check beside the writes (reusing the
-		// `g` captured at entry). This pin may already hold at HEAD — it exists
-		// so the protection survives the restructure and can never regress to
-		// a banner about A's section rendering on B.
 		const gate = deferred();
 		deleteMock.mockImplementation(() => gate.promise);
 		const container = await renderInArrangeMode();
@@ -750,20 +601,11 @@ describe("/roster — #299 handleRemoveSection's terminal failure writes", () =>
 			q(container, 'section-remove-error'),
 			"a removal that failed on collective A must not put a failure alert on collective B's screen"
 		).toBeNull();
-		// …and neither reconcile branch touched B's tree.
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 		expect(q(container, 'arrange-row-sec-b2')).not.toBeNull();
 		expect(q(container, 'arrange-row-sec-tenor')).toBeNull();
 	});
 });
 
-// (*MVOX:Tallis* — #299 RED, house deterministic-race method per #259/#287;
-//  the Class B lying-parent pin asserts the SUBMITTED parent, per the PO
-//  amendment on the issue; harness/fixtures/switch drivers from
-//  page.roster-pending-collective-switch.spec.ts)
-// (*MVOX:Tallis* — #470: the picker-create (handleCreate) stale-settle cases
-//  died with the picker's create entry; the sectionWriteError reset pin is
-//  re-driven through the native pickers' assign path)
-// (*MVOX:Palestrina* — #470 review F3: the three native-picker handlers get the
-//  stale-settle pins the page-create path already had, read off the banner B's
-//  own failed write owns)
+// (*MVOX:Tallis*)
+// (*MVOX:Palestrina*)

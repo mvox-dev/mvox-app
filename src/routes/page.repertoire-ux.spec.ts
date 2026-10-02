@@ -1,27 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #111 TU.3 RED — INTEGRATION half of the repertoire UX corrections (#108
-// findings 2–4): the same three contracts RepertoireElement.ux.spec.ts pins at
-// unit level, asserted on the REAL agenda route (+page.svelte) with only the
-// agenda loader mocked and the network stubbed at `fetch` — the harness of
-// page.repertoire-manage-wiring.spec.ts. Unit specs alone once shipped 1047
-// green tests around controls that were unreachable in the running app; these
-// exist so GREEN cannot fix the component without the page actually rendering
-// the fixed surface.
-//
-//   Finding #2 — dividers between work rows in the expanded works view
-//     (divide-y on the list, never per-row borders — happy-dom applies no
-//     real CSS, so the Tailwind class list is the testable surface).
-//   Finding #3 — status chip + picker unified: NO separate chip in the header
-//     when the management row (status picker + Remove, one row, bottom of the
-//     panel) is on screen.
-//   Finding #4 — "Add to programme" stays a native <select>, full-width below
-//     the sm (640px) breakpoint so its widest "Work — Edition" option can no
-//     longer overflow a phone-width agenda row; sm:w-auto keeps the existing
-//     inline dropdown on desktop.
+// The repertoire element's UX contracts on the real agenda page.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -86,10 +68,6 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
 const REPERTOIRE_ITEMS = [
 	{
 		_id: 'ri-1',
@@ -106,8 +84,6 @@ const REPERTOIRE_ITEMS = [
 	}
 ];
 
-/** person-p holds `_editor` on BOTH the season and the event, so every
- *  surface under test (status row, Remove, "Add to programme") renders. */
 function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [
@@ -164,8 +140,6 @@ function installWorld() {
 	return fetchMock;
 }
 
-/** Open the agenda row's Works disclosure and wait for the management row —
- *  the surface all three findings live on. */
 async function renderExpandedAsEditor() {
 	installWorld();
 	setAuthedWithOneCollective();
@@ -210,9 +184,7 @@ describe('+page — repertoire UX corrections on the real agenda route (#111)', 
 
 	it('an editor gets ONE status/actions row per panel — status buttons + Remove at the bottom, no separate header chip (finding 3)', async () => {
 		const { container } = await renderExpandedAsEditor();
-		// No chip anywhere on the editor surface …
 		expect(container.querySelector('[data-testid="work-status-badge"]')).toBeNull();
-		// … because the bottom row is the single status surface, Remove beside it.
 		for (const li of container.querySelectorAll('[data-testid="work-row"]')) {
 			const statusButton = li.querySelector('[data-testid="work-status-active"]');
 			const remove = li.querySelector('[data-testid="work-manage-remove"]');

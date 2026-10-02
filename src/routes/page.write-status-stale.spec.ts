@@ -2,6 +2,7 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -148,16 +149,6 @@ function setWorld() {
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set('sampledb');
 	completionGateStore.set('complete');
-}
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 function q(container: HTMLElement, selector: string): HTMLElement | null {

@@ -1,17 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #35 — profile edit v2 page tests. Targets the v2 surface: one field editor
-// per field, autosave-driven saves, save feedback on the active visibility
-// button.
-//
-// AMENDED for #205 (standing UX rule 4): the fields are whole-field
-// display-then-edit now — `profile-<field>-edit` (a native button wrapping the
-// value) activates `profile-<field>` (the input). Everything here that types
-// goes through `openEditor`; value reads in display state go through
-// `displayValue`. The activation contract itself is pinned in
-// page.profile-whole-field.spec.ts.
+// The profile page: one editor per field, autosaved, with save feedback.
 import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -23,7 +14,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_load_retry: () => 'Retry',
 		profile_field_name_label: () => 'Name',
 		profile_field_email_label: () => 'Email',
-		// #205 — whole-field display-then-edit activators (sr-only action labels).
 		profile_name_edit_label: () => 'Edit name',
 		profile_email_edit_label: () => 'Edit email',
 		profile_level_public_label: () => 'Public',
@@ -46,8 +36,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_visibility_leak: (p: { level: string }) => `Still readable at ${p.level}`,
 		profile_visibility_conflict: (p: { field: string }) =>
 			`Your ${p.field} has different values at more than one level.`,
-		// #131 — browse-then-confirm conflict resolution: first tap previews a
-		// conflicting tier's value, second tap on the SAME tier resolves it.
 		profile_visibility_confirm_preview: (p: { level: string }) => `Tap again to keep ${p.level}`,
 		profile_visibility_preview_note: () => 'Tap again to keep this version.',
 		profile_move_error: () =>
@@ -67,18 +55,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_sign_out: () => 'Sign out',
 		profile_signed_in_as: (p: { account: string; provider: string }) =>
 			`Signed in as ${p.account} via ${p.provider}`,
-		// #123 — LanguageSelector (now rendered as app chrome on this page) reads
-		// this key for its aria-label.
 		profile_language_label: () => 'Language',
-		// #207 rule 5 — the AM/PM preference control, app chrome like the
-		// language selector above (see page.profile-time-format.spec.ts for the
-		// dedicated feature tests).
 		profile_time_format_label: () => 'Time format',
 		profile_time_format_24h: () => '24-hour',
 		profile_time_format_ampm: () => 'AM/PM',
 		profile_time_format_hint: () => 'Applies on this device.',
-		// #193 — linked accounts section, always rendered once status is 'ready'
-		// (see page.profile-linked-accounts.spec.ts for the dedicated feature tests).
 		profile_linked_accounts_title: (p: { collective: string }) =>
 			`Sign-ins that work for ${p.collective}`,
 		profile_link_another: () => 'Link another account',
@@ -95,11 +76,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_link_success: (p: { collective: string }) =>
 			`That sign-in now works for ${p.collective}.`,
 		profile_link_cancel: () => 'Cancel',
-		// #218 — provider display names resolve through Paraglide (single source
-		// in $lib/auth/providers). AUTH_PROVIDERS binds `label` to these message
-		// functions AT MODULE LOAD, so a missing key here would make the page
-		// render throw. Bare nouns per Gama's #218 ruling, which is why the
-		// 'Signed in as … via Google' assertions below keep their exact text.
 		auth_provider_smart_id: () => 'Smart-ID',
 		auth_provider_mobile_id: () => 'Mobile-ID',
 		auth_provider_id_card: () => 'ID-card',
@@ -122,13 +98,9 @@ const h = vi.hoisted(() => {
 		ProfileSaveError,
 		listMyProfilesMock: vi.fn(),
 		applyProfileSaveMock: vi.fn(),
-		// #131 — the browse-then-confirm resolve-write primitive.
 		applyConflictResolutionMock: vi.fn()
 	};
 });
-// #131 — mock ONLY the new applyConflictResolution primitive; keep every other
-// fieldMove export real (planLoadedDuplicateRepairs drives the existing,
-// unmocked repair-banner tests below — must not be replaced wholesale).
 vi.mock('$lib/profile/fieldMove', async () => {
 	const actual = await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
 	return { ...actual, applyConflictResolution: h.applyConflictResolutionMock };
@@ -163,8 +135,6 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 	ProfileSaveError: h.ProfileSaveError
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-// #193 — the profile page reads `?link_error` / `?linked` off `page.url` (the
-// return leg of the provider-link round trip). Default: a clean /profile URL.
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -180,16 +150,6 @@ import {
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
 function selectSampledb() {
 	setToken('jwt-member');
 	collectiveState.set({
@@ -203,26 +163,16 @@ function selectSampledb() {
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 
-// ── #205 — display-then-edit helpers ────────────────────────────────────────
-// The profile fields are whole-field activators now (standing UX rule 4): the
-// raw input only mounts after activating `profile-<field>-edit`. Ready
-// sentinels therefore wait on the ProfileField WRAPPER, and every test that
-// types must open the editor first. The full activation contract is pinned in
-// page.profile-whole-field.spec.ts — these helpers just keep this file on it.
-
-/** Wait until the profile surface is loaded (display state). */
 async function waitReady(container: HTMLElement): Promise<void> {
 	await waitFor(() =>
 		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
 	);
 }
 
-/** The display-state value element's text for a field (trimmed). */
 function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
 	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
 }
 
-/** Activate a field's whole-field button; answers the revealed input. */
 async function openEditor(
 	container: HTMLElement,
 	field: 'name' | 'email'
@@ -324,9 +274,6 @@ describe('/profile v2 — render + seed', () => {
 		expect(identity?.textContent).toBe('Signed in as Mihkel via Smart-ID');
 	});
 
-	// #361 review F3 — with no email on the account the line above prints a real
-	// NAME in element content. Both spellings of the line carry the marker, so a
-	// screenshot blanks it; without this the wrap can be dropped silently.
 	it.each([
 		[
 			'with an email',
@@ -404,13 +351,9 @@ describe('/profile v2 — autosave on visibility change', () => {
 		const { container } = render(Page);
 		await waitReady(container);
 
-		// Edit the name (makes it dirty). #205 — the tier toolbar must stay
-		// mounted and live WHILE the editor is open (only the display/input
-		// area swaps), so this click sequence still exercises save-before-move.
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 
-		// Click the public visibility button for name — should fire autosave first.
 		const pubBtn = q(
 			container,
 			'[data-testid="profile-vis-name-public"]'
@@ -440,7 +383,6 @@ describe('/profile v2 — save feedback on active button', () => {
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
-		// The active button (domain) should show saving feedback.
 		await waitFor(() => {
 			const domBtn = q(
 				container,
@@ -453,9 +395,7 @@ describe('/profile v2 — save feedback on active button', () => {
 			).not.toBeNull();
 		});
 
-		// Resolve the save — button returns to normal.
 		d.resolve({ profileId: 'prof-dom' });
-		// Also mock the re-read for refreshCompletionGate.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada M.', email: '', _sharing: 'domain' }
 		]);
@@ -485,7 +425,6 @@ describe('/profile v2 — save failure shows per-field error', () => {
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-name-error"]')).not.toBeNull()
 		);
-		// Draft preserved (retryable) — the closed editor's display keeps it.
 		expect(displayValue(container, 'name')).toBe('Ada');
 	});
 });
@@ -523,7 +462,6 @@ describe('/profile v2 — name-private guard', () => {
 
 	it('name-private guard on the save path throws (never silent)', async () => {
 		selectSampledb();
-		// Contrive an impossible state: name sitting at the private level.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' }
 		]);
@@ -533,8 +471,6 @@ describe('/profile v2 — name-private guard', () => {
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 
-		// Blurring triggers the autosave blur, which calls onAutosave — the guard throws.
-		// fireEvent.blur is async (wraps in act), so the throw surfaces as a rejected promise.
 		await expect(fireEvent.blur(nameInput)).rejects.toThrow('name-private guard');
 	});
 
@@ -546,7 +482,6 @@ describe('/profile v2 — name-private guard', () => {
 		const { container } = render(Page);
 		await waitReady(container);
 
-		// The private button is disabled so a click won't fire onmove.
 		const privBtn = q(
 			container,
 			'[data-testid="profile-vis-name-private"]'
@@ -558,7 +493,6 @@ describe('/profile v2 — name-private guard', () => {
 describe('/profile v2 — sibling value pinned (privacy leak prevention)', () => {
 	it('a name autosave while email lives at a different level pins sibling to the target entity value', async () => {
 		selectSampledb();
-		// name at domain, email at private — different levels.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' },
 			{ _id: 'prof-priv', name: '', email: 'secret@x.io', _sharing: 'private' }
@@ -567,16 +501,12 @@ describe('/profile v2 — sibling value pinned (privacy leak prevention)', () =>
 		const { container } = render(Page);
 		await waitReady(container);
 
-		// Edit name and blur to trigger autosave.
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
 		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
 		const arg = h.applyProfileSaveMock.mock.calls[0][0];
-		// The save targets the domain entity. Its sibling (email) should be the
-		// domain entity's confirmed email (''), NOT the private entity's email
-		// ('secret@x.io'). Using the unified draft email would leak the private email.
 		expect(arg).toMatchObject({
 			level: 'domain',
 			existingId: 'prof-dom',
@@ -638,12 +568,10 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 		const { container } = render(Page);
 		await waitReady(container);
 
-		// Edit and blur to start a save.
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
-		// While save is in flight, the visibility buttons should be disabled.
 		await waitFor(() => {
 			const pubBtn = q(
 				container,
@@ -652,7 +580,6 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 			expect(pubBtn.disabled).toBe(true);
 		});
 
-		// Resolve the save.
 		d.resolve({ profileId: 'prof-dom' });
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada M.', email: 'ada@x.io', _sharing: 'domain' }
@@ -719,16 +646,6 @@ describe('/profile v2 — distinct-value conflict', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #131 — browse-then-confirm conflict resolution. A field with DIFFERENT
-// values at ≥2 tiers currently disables every visibility button — no way to
-// resolve. New UX: conflict-tier buttons become clickable. First tap PREVIEWS
-// that tier's value (input shows it + a "tap again" hint); a second tap on
-// the SAME button RESOLVES — every other holder is synced to the previewed
-// value via applyConflictResolution. No modal — the two-tap pattern IS the
-// confirmation. Tapping a DIFFERENT conflict button while previewing SWITCHES
-// the preview instead of resolving.
-// ---------------------------------------------------------------------------
 describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () => {
 	it('AC1: a conflicting tier\'s visibility button is NOT disabled (previously always disabled)', async () => {
 		selectSampledb();
@@ -744,10 +661,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	});
 
 	it('AC2: first tap on a conflicting tier previews its value + shows the "tap again" hint', async () => {
-		// Preview is pure synchronous UI state (no debounce involved) — real
-		// timers so a not-yet-implemented click's waitFor fails on its own
-		// ~1s default instead of hanging on fake-timer-blocked retries to
-		// vitest's 5s test timeout (see tallis.md GOTCHA, hit 2026-08-10 on #73).
 		vi.useRealTimers();
 		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
@@ -756,7 +669,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		]);
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
-		// Before any tap, the display shows the narrow-wins active value.
 		expect(displayValue(container, 'name')).toBe('Ann');
 
 		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
@@ -767,7 +679,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).not.toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 		});
-		// Previewing is NOT resolving — no write yet.
 		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 
@@ -778,13 +689,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
-		// After resolution, the profiles are re-read; both now hold the same
-		// value — a same-value duplicate, not a distinct-value conflict, so the
-		// conflict note clears (the existing collapse-to-one-entity repair path
-		// picks it up from here — real, unmocked planLoadedDuplicateRepairs).
-		// Queued up front (not after the resolve click) — the reload now fires
-		// off a tick()-scheduled microtask rather than a setTimeout(0) macrotask,
-		// so it can land before any post-click synchronous test setup would.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
@@ -804,7 +708,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		expect(h.applyConflictResolutionMock.mock.calls[0][0]).toMatchObject({
 			field: 'name',
 			value: 'Annie',
-			// Only the OTHER holder (domain) needs syncing — public already holds 'Annie'.
 			sync: [{ id: 'prof-dom', sibling: '' }]
 		});
 
@@ -817,11 +720,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	it('AC4: tapping a DIFFERENT conflicting tier during preview switches the preview (no resolve)', async () => {
 		vi.useRealTimers(); // see AC2 comment
 		selectSampledb();
-		// Three-way conflict: private is narrowest/active (an already-existing,
-		// pre-#131 impossible-to-CREATE-but-legal-to-HOLD state — same precedent
-		// as the "name-private guard" describe block above); domain + public are
-		// both 'conflict' buttons, neither guarded, so switching between them
-		// alone exercises AC4 without touching the always-disabled private button.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-pri', name: 'Ann', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
@@ -843,10 +741,8 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		await waitFor(() => {
 			expect(displayValue(container, 'name')).toBe('A. Smith');
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
-			// The domain preview marker is gone — the preview state moved, it didn't accumulate.
 			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).toBeNull();
 		});
-		// Switching previews is never a confirm.
 		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 
@@ -861,8 +757,6 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).toBeNull();
 		expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
 		expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).toBeNull();
-		// The plain inactive/movable public button behaves as before — enabled,
-		// no conflict styling hooks.
 		const pubBtn = q(container, '[data-testid="profile-vis-name-public"]') as HTMLButtonElement;
 		expect(pubBtn.disabled).toBe(false);
 		expect(q(container, '[data-testid="profile-vis-name-public-conflict"]')).toBeNull();
@@ -889,30 +783,15 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		await fireEvent.keyDown(pubBtn, { key: 'Escape' });
 
 		await waitFor(() => {
-			// previewLevel back to null: input reverts to the narrow-wins active
-			// value, the preview marker/hint are gone, and the conflict note
-			// (not the preview note) shows again.
 			expect(displayValue(container, 'name')).toBe('Ann');
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
 		});
-		// Escape is a pure dismiss — no write.
 		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #156 — roving tabindex on the per-field visibility tier group (ProfileField).
-// TOOLBAR semantics: arrows MOVE focus only. Activation here is destructive on
-// a second tap (a conflict tier resolves in its own favour — browse-then-
-// confirm), so an arrow that also selected would resolve conflicts by accident.
-//
-// The tricky part, and the reason this is pinned rather than read off the
-// source: the stop must fall back to the first ENABLED tier. The NAME field's
-// private tier is permanently disabled, and a disabled button cannot hold
-// focus — a stop parked there would strand the whole group from the keyboard.
-// ---------------------------------------------------------------------------
 describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 	async function renderProfile(): Promise<HTMLElement> {
 		selectSampledb();
@@ -950,9 +829,6 @@ describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 	it('NAME: the stop is never the permanently-disabled private tier — it falls back to the first ENABLED one', async () => {
 		const container = await renderProfile();
 		const [priv, domain, pub] = tiers(container, 'name');
-		// The name field can never go private, and the CURRENTLY ACTIVE tier is
-		// also disabled (you cannot move a field to where it already is) — so
-		// `public` is the only enabled tier here.
 		expect(priv.disabled, 'the name field cannot go private').toBe(true);
 		expect(domain.disabled, 'the active tier is not a move target').toBe(true);
 		expect(pub.disabled).toBe(false);
@@ -967,8 +843,6 @@ describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 		pub.focus();
 		expect(document.activeElement).toBe(pub);
 
-		// `public` is the only enabled member, so the wrap lands back on itself
-		// rather than on either disabled tier.
 		await fireEvent.keyDown(pub, { key: 'ArrowRight' });
 		expect(document.activeElement).toBe(pub);
 		await fireEvent.keyDown(pub, { key: 'ArrowLeft' });
@@ -980,7 +854,6 @@ describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 	it('EMAIL: arrows move between the ENABLED tiers and WRAP, skipping the disabled active tier', async () => {
 		const container = await renderProfile();
 		const [priv, domain, pub] = tiers(container, 'email');
-		// Email CAN go private; the active (domain) tier is the disabled one.
 		expect(priv.disabled).toBe(false);
 		expect(domain.disabled).toBe(true);
 		expect(pub.disabled).toBe(false);

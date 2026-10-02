@@ -1,27 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #125 RED — INTEGRATION half of the repertoire status/edition UX rework
-// (SPIKE findings F4/F5a/F5b): the same contracts
-// RepertoireElement.status-edition.spec.ts pins at unit level, asserted on the
-// REAL agenda route (+page.svelte) with only the agenda loader mocked and the
-// network stubbed at `fetch` — the harness of
-// page.repertoire-manage-wiring.spec.ts. Unit specs alone once shipped 1047
-// green tests around controls that were unreachable in the running app; these
-// exist so GREEN cannot fix the component without the page actually wiring the
-// new controls to the real write layer.
-//
-//   F4  — `works-expanded` loses its pl-4: work titles sit near the event
-//         row's left edge.
-//   F5a — four inline status buttons (no <select>); clicking one drives the
-//         REAL optimistic path: `data-status` on the row flips (the
-//         render-owned surface — a control's value is tautological under
-//         fireEvent) and the Entu wire sees the status POST.
-//   F5b — one unified edition picker (no [Pin] button); changing it drives
-//         pinEdition on the wire with no confirm step. A work with no
-//         editions gets no picker on the page either.
+// The repertoire status and edition controls on the real agenda page.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -86,12 +68,6 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// ri-1 (Spem, work-1) has TWO editions to pick between; ri-2 (Old warhorse,
-// work-2) has NONE — the picker-hidden case on the real page.
 const REPERTOIRE_ITEMS = [
 	{
 		_id: 'ri-1',
@@ -108,9 +84,6 @@ const REPERTOIRE_ITEMS = [
 	}
 ];
 
-/** person-p holds `_editor` on BOTH the season and the event, so every
- *  management surface under test renders. Write routes answer like the
- *  wiring spec's world so the GET → POST → DELETE replace flow completes. */
 function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [
@@ -176,7 +149,6 @@ function installWorld() {
 	return fetchMock;
 }
 
-/** Open the agenda row's Works disclosure and wait for the management row. */
 async function renderExpandedAsEditor() {
 	const fetchMock = installWorld();
 	setAuthedWithOneCollective();
@@ -191,7 +163,6 @@ async function renderExpandedAsEditor() {
 	return { ...rendered, fetchMock };
 }
 
-/** The <li> rendering the named work. */
 function workRowOf(container: HTMLElement, workName: string): HTMLElement {
 	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
 		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
@@ -241,7 +212,6 @@ describe('+page — repertoire status/edition UX on the real agenda route (#125)
 			expect(btn, `work-status-${status}`).not.toBeNull();
 			expect((btn as HTMLElement).tagName).toBe('BUTTON');
 		}
-		// Current status distinguished, and [Remove] shares the row.
 		expect(
 			manageRow!.querySelector('[data-testid="work-status-active"]')!.getAttribute('aria-pressed')
 		).toBe('true');
@@ -256,11 +226,9 @@ describe('+page — repertoire status/edition UX on the real agenda route (#125)
 		const li = workRowOf(container, 'Spem in alium');
 		expect(li.getAttribute('data-status')).toBe('active');
 		await fireEvent.click(li.querySelector('[data-testid="work-status-retired"]')!);
-		// Optimistic render — the row's own attribute, never a control's value.
 		await vi.waitFor(() => {
 			expect(workRowOf(container, 'Spem in alium').getAttribute('data-status')).toBe('retired');
 		});
-		// And the Entu wire actually saw the status write for ri-1.
 		await vi.waitFor(() => {
 			const posts = postsTo(fetchMock, 'entity/ri-1');
 			expect(
