@@ -181,10 +181,7 @@
 
 	$effect(() => {
 		void selected;
-		loadForSelected().catch((e) => {
-			console.error('roster: load failed', e);
-			status = 'load-error';
-		});
+		void loadForSelected();
 	});
 
 	const currentDbEntityId = $derived(

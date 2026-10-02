@@ -188,10 +188,7 @@
 
 	$effect(() => {
 		void selected;
-		loadForSelected().catch((e) => {
-			console.error('profile: load failed', e);
-			status = 'load-error';
-		});
+		void loadForSelected();
 	});
 </script>
 
