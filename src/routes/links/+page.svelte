@@ -1,24 +1,5 @@
+<!-- /links: the collective's link list; admins add, edit, reorder and remove links. -->
 <script lang="ts">
-	// #256 GREEN — Lingikogu (link collection) page surface. NEW page: uses the
-	// EXTRACTED createRouteLoadMachine ($lib/loading/routeLoad — the machine
-	// roster/library/profile share), not a hand-rolled in-file counter (see
-	// page.links-collective-switch.spec.ts's structural pin).
-	//
-	// Contract (Gama's 2026-09-09 sign-off + 2026-09-10 forward-marker close on
-	// #256; full pin set in page.links.spec.ts / page.links-wire.spec.ts /
-	// page.links-collective-switch.spec.ts):
-	//   - Members read the list in the STABLE order listLinks returns
-	//     (display_order ascending, missing last — see linkData.ts). Every row
-	//     is a REAL anchor: href verbatim, target=_blank, rel="noopener noreferrer".
-	//   - Admins (adminStore 'admin' — editor-or-owner tier on the DATABASE
-	//     entity, exactly the tier `link`'s creators rule names) can add, edit,
-	//     reorder and remove. Members cannot: the controls are ABSENT from the
-	//     DOM, not disabled (the codebase-wide idiom).
-	//   - A link with no description renders NO description node at all.
-	//   - Reorder = native move up / move down buttons per row (native controls
-	//     only is standing law; no drag-drop); boundary controls are disabled.
-	//   - Edit = whole-field in-situ (standing rule): the row's static view is
-	//     replaced by its own input fields, never a separate modal.
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
@@ -28,9 +9,9 @@
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
-	// #434 slice 6 review F1 — the write gate. Every write on this page (create,
-	// update, delete, reorder) is disabled and refused while there is no usable
-	// signal, with one sentence saying why; nothing is queued.
+	import LinksAddForm from '$lib/links/LinksAddForm.svelte';
+	import LinksRow from '$lib/links/LinksRow.svelte';
+	// Every write here is refused while there is no usable signal; nothing is queued.
 	import { writesAvailable } from '$lib/net/online';
 
 	const selected = $derived($selectedCollectiveIdentityStore);
@@ -40,48 +21,26 @@
 	let status = $state<RouteLoadStatus>('loading');
 	let rows = $state<LinkRow[]>([]);
 
-	// The cfg the page's writes fire against — set once loadForSelected has a
-	// real token+db (mirrors roster's `currentCfg`: plain module-scope state,
-	// not `$state`, since writes read it at tap time and it never itself needs
-	// to drive a render).
+	// Plain, not $state: writes read it at tap time and it never drives a render.
 	let currentCfg: { db: string; token: string } | null = null;
 
-	// Add-form draft.
 	let addName = $state('');
 	let addUrl = $state('');
 	let addDescription = $state('');
 
-	// Whole-field in-situ edit — which row (by id) is open, and its draft.
 	let editingId = $state<string | null>(null);
 	let editName = $state('');
 	let editUrl = $state('');
 	let editDescription = $state('');
 
-	// #323 — reorder save-state (the arrows write immediately, so this IS
-	// auto-save; reference pattern #267, docs/qa/autosave-field-inventory.md).
-	// `reorderPending` is a WRITE guard, distinct from the boundary
-	// `disabled={i===0}` checks: while true it disables BOTH arrows of EVERY
-	// row (not just the row being moved), and `move()` re-checks it itself
-	// (not just the DOM `disabled` attribute) so a dispatched click during
-	// flight is a genuine no-op, not just visually blocked.
+	// A write guard: while true it disables both arrows of every row, and move() re-checks it,
+	// so a dispatched click during flight is a no-op, not only visually blocked.
 	let reorderPending = $state(false);
-	// Persistent role="status" node, present from first render, same node
-	// every announcement (#267 shape) — cleared at the START of every attempt
-	// so a stale "saved" never overlaps a new write, and left EMPTY on
-	// failure (the alert carries that state instead).
 	let reorderStatus = $state('');
-	// Non-null only while the alert is showing; cleared at attempt start so a
-	// retry doesn't sit under a stale banner. Two failure shapes, because the
-	// message differs (#323 review F2): 'confirmed' — the post-failure re-read
-	// landed, so the screen really does show what the server holds;
-	// 'stale' — the re-read ALSO failed, so the screen is the pre-write order
-	// and nothing may claim it is authoritative.
+	// 'confirmed': the post-failure re-read landed; 'stale': it failed too, so the screen
+	// still shows the pre-write order and must not claim to be the server's.
 	let reorderError = $state<'confirmed' | 'stale' | null>(null);
-	// #323 adjacent (Gama's ruling) — createLink/updateLink/deleteLink
-	// failures surface as role="alert" too, FAILURE ONLY: explicit-submit
-	// forms get no saved cue (success is self-evident — the draft clears /
-	// the form closes / the row goes). One slot is enough: the three forms
-	// never write concurrently on this page.
+	// One slot is enough: the three forms never write concurrently on this page.
 	let writeError = $state<'create' | 'update' | 'remove' | null>(null);
 
 	function resetDrafts(): void {
@@ -97,12 +56,7 @@
 		writeError = null;
 	}
 
-	// #256 pin 6 — the shared route-load machine owns the Status union, the
-	// generation guard and the loadForSelected sequencing (reset →
-	// no-collective → token check → 'loading' → this page's fetch body →
-	// 4-branch error classification). `reset` drops any typed draft and any
-	// open edit form — neither belongs to the collective being switched away
-	// from (the #299 cross-collective-draft bug class).
+	// `reset` drops any typed draft and open edit form: neither belongs to the next collective.
 	const routeLoad = createRouteLoadMachine({
 		name: 'links',
 		selected: () => selected,
@@ -132,9 +86,6 @@
 	}
 
 	$effect(() => {
-		// Depend on `selected`; run the async load out-of-band so a rejection
-		// can never escape as an unhandled rejection from the effect
-		// (loadForSelected already fails loud into `status`).
 		void selected;
 		loadForSelected().catch((e) => {
 			console.error('links: load failed', e);
@@ -142,16 +93,8 @@
 		});
 	});
 
-	/** Re-read the list against `cfg`; drops the result if a collective switch
-	 *  has moved `selected` (or the route-load generation `g` the calling write
-	 *  was started under) on since the write that triggered this refresh.
-	 *
-	 *  Returns TRUE only when `rows` now holds a fresh server read. Callers use
-	 *  that to decide what they are allowed to claim on screen: the reorder
-	 *  failure alert says "showing the order the server holds", and that is a
-	 *  lie unless this returned true (#323 review F2 — listLinks can reject on
-	 *  its own, and the reorder that just failed may have left the server
-	 *  half-renumbered, so the untouched `rows` are NOT the server's order). */
+	/** Re-reads the list; true only when `rows` now holds a fresh server read, which is what
+	 *  lets the reorder alert claim to show the order the server holds. */
 	async function refreshRows(cfg: { db: string; token: string }, g: number): Promise<boolean> {
 		try {
 			const list = await listLinks(cfg);
@@ -165,36 +108,20 @@
 		}
 	}
 
-	// #323 review F1 — EVERY write on this page captures `routeLoad.generation`
-	// before it fires and re-checks it after each await, returning early on BOTH
-	// settle paths when it has moved. `routeLoad.generation` bumps once per
-	// loadForSelected, i.e. once per genuine collective switch (the identity
-	// store de-dupes equal identities), so the check fires only when the user
-	// really has moved on. Without it a write started in collective A settles
-	// after the switch to B and paints A's outcome — "Link order saved.", a
-	// failure alert, a cleared draft, a closed edit form — onto B's page, the
-	// #299 cross-collective-draft class the routeLoad `reset` exists to kill.
-	// The check goes BEFORE any state write, including the draft/form clears:
-	// by then B's own draft may already be typed. `reorderPending = false` in
-	// move()'s `finally` stays UNGUARDED so the guard can never wedge the
-	// arrows. Reference: #267, src/routes/profile/+page.svelte (rosterStatus).
-
+	// Every write captures `routeLoad.generation` before it fires and returns early on both
+	// settle paths once it has moved, before any state write: a write started in one collective
+	// must not paint its outcome onto the next. move()'s `finally` stays unguarded.
 	async function submitAdd(): Promise<void> {
-		// #434 slice 6 review F1 — offline: nothing is written and nothing is
-		// queued. BEFORE the attempt-start `writeError` clear below, so a refused
-		// submit cannot wipe the alert from the attempt that really did fail.
+		// Before the attempt-start clear, so a refused submit keeps the last real failure.
 		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
 		const name = addName.trim();
-		// Non-empty is the ONLY validation — nothing checks what a url looks
-		// like (#256 ruling).
+		// Non-empty is the only validation (#256 ruling).
 		if (!name || !/\S/.test(addUrl)) return;
 		const description = addDescription.trim() ? addDescription : null;
 		const maxOrder = rows.reduce((max, r) => Math.max(max, r.displayOrder ?? 0), 0);
 		const g = routeLoad.generation;
-		// Attempt-start clear (#267 shape): a fresh submit owns the alert slot —
-		// a previous failure must not outlive the retry that fixed it.
 		writeError = null;
 		try {
 			await createLink(cfg, {
@@ -211,15 +138,13 @@
 		} catch (e) {
 			if (g !== routeLoad.generation) return;
 			console.error('links: create failed', e);
-			// Failure surfacing only (Gama's ruling) — the draft is left exactly
-			// as typed so the retry has something to resubmit.
+			// The draft is left as typed so the retry has something to resubmit.
 			writeError = 'create';
 		}
 	}
 
 	function startEdit(row: LinkRow): void {
-		// The Edit button is disabled offline; this is the backstop for a tap that
-		// beat the re-render (same shape as the event page's pencils).
+		// Backstop for a tap that beat the offline re-render.
 		if (isOffline) return;
 		editingId = row.id;
 		editName = row.name;
@@ -235,9 +160,7 @@
 	}
 
 	async function saveEdit(id: string): Promise<void> {
-		// Offline: refuse before the `writeError` clear, and WITHOUT closing the
-		// form — the typed draft is the admin's work (review F2's rule, same
-		// reasoning).
+		// Offline: refuse before the `writeError` clear, and keep the form open on its draft.
 		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
@@ -254,8 +177,6 @@
 		} catch (e) {
 			if (g !== routeLoad.generation) return;
 			console.error('links: update failed', e);
-			// The in-situ form stays open with its draft — cancelEdit() above
-			// only runs on the success path.
 			writeError = 'update';
 		}
 	}
@@ -273,19 +194,14 @@
 		} catch (e) {
 			if (g !== routeLoad.generation) return;
 			console.error('links: remove failed', e);
-			// The row stays for retry — no optimistic removal happened above.
 			writeError = 'remove';
 		}
 	}
 
 	async function move(from: number, to: number): Promise<void> {
-		// #323 write guard — one outstanding reorder write at a time. Checked
-		// here (not just via the `disabled` attribute at the render site)
-		// because `fireEvent`/a stray dispatched click bypasses `disabled`; the
-		// handler itself has to refuse the second tap.
+		// Checked here too: a dispatched click bypasses `disabled`.
 		if (reorderPending) return;
-		// Offline: before the attempt-start clears AND before `reorderPending`
-		// flips, so a refused move leaves the arrows exactly as they were.
+		// Before the attempt-start clears, so a refused move leaves the arrows as they were.
 		if (isOffline) return;
 		if (!currentCfg) return;
 		const cfg = currentCfg;
@@ -294,8 +210,6 @@
 		const [movedId] = newOrder.splice(from, 1);
 		newOrder.splice(to, 0, movedId);
 		reorderPending = true;
-		// Attempt-start clear: a stale "saved" or a stale alert must not sit
-		// through a new write.
 		reorderError = null;
 		reorderStatus = '';
 		try {
@@ -307,26 +221,8 @@
 		} catch (e) {
 			if (g !== routeLoad.generation) return;
 			console.error('links: reorder failed', e);
-			// reorderLinks (linkActions.ts) renumbers per-id SEQUENTIALLY and can
-			// throw mid-loop, leaving the server half-applied — a partial success
-			// distinct from both the pre-write order and the user's intent. Only
-			// a genuine re-read can say what actually landed, so the restore here
-			// is refreshRows, never a revert to a locally-held order: reverting
-			// would show something the server never confirmed, and #267's
-			// "restore to the pre-write capture" reference doesn't apply to a
-			// write whose failure mode is a partial server mutation rather than
-			// an atomic all-or-nothing one. Awaited BEFORE the alert flips on:
-			// the alert and the re-enabled controls land in the DOM together, one
-			// state transition, not a window where the alert is visible but a
-			// retry tap still gets swallowed by the pending guard.
-			//
-			// refreshRows REPORTS whether it actually re-read (#323 review F2):
-			// its own listLinks call can reject too — a dropped network fails
-			// both the renumber and the re-read — and then `rows` still holds the
-			// PRE-WRITE order while the server sits half-renumbered. Claiming
-			// "showing the order the server holds" there is false, so the alert
-			// switches to the _stale wording, which only tells the user to
-			// reload.
+			// The renumber is sequential and can fail half-applied, so only a re-read can say what
+			// landed; awaited before the alert, so the alert and the re-enabled arrows land together.
 			const reread = await refreshRows(cfg, g);
 			if (g !== routeLoad.generation) return;
 			reorderError = reread ? 'confirmed' : 'stale';
@@ -351,17 +247,8 @@
 	<h1 class="font-display text-2xl">{m.links_title()}</h1>
 
 	{#if admin === 'admin'}
-		<!-- #323 — reorder save-state, reference pattern #267
-		     (docs/qa/autosave-field-inventory.md). #267's own node is sr-only;
-		     this one is DELIBERATELY also visible (stated choice, not the
-		     reference default): the row jump on a successful move is the only
-		     on-screen feedback otherwise, and it looks identical to a move that
-		     silently failed to persist before this fix — a sighted user needs
-		     the same confirmation the aria-live announcement gives a screen
-		     reader. Present from first render (persistent node, #267 shape) so
-		     the SAME node's text-change is what fires aria-live, not a
-		     freshly-mounted one; cleared at attempt start; admin-gated (only
-		     admins can ever trigger a reorder). -->
+		<!-- Visible, not sr-only, by choice: a saved move otherwise looks identical to one that
+		     failed to persist. Present from first render, so its text change fires aria-live. -->
 		<div
 			data-testid="links-reorder-status"
 			role="status"
@@ -373,25 +260,13 @@
 	{/if}
 
 	{#if reorderError}
-		<!-- #323 — truthful failure: the mid-loop-throw shape means the server
-		     can be half-renumbered, so `move()`'s catch has already re-read the
-		     list by the time this renders; the arrows are re-enabled for retry
-		     (reorderPending is already false in `finally`). The wording follows
-		     what the re-read actually achieved (review F2): 'confirmed' — the
-		     list was re-read, the screen IS the server's order; 'stale' — the
-		     re-read failed too, so the message claims nothing about the screen
-		     and asks for a reload instead. -->
 		<p data-testid="links-reorder-error" role="alert" class="text-sm text-red-700">
 			{reorderError === 'stale' ? m.links_reorder_failed_stale() : m.links_reorder_failed()}
 		</p>
 	{/if}
 
 	{#if writeError}
-		<!-- #323 adjacent (Gama's 2026-09-11 ruling) — createLink/updateLink/
-		     deleteLink failures surface here too, FAILURE ONLY: no saved cue for
-		     these explicit-submit forms, success is self-evident (draft clears /
-		     form closes / row disappears). One slot for all three — they never
-		     write concurrently on this page. -->
+		<!-- Failure only: for explicit-submit forms success is self-evident. -->
 		<p data-testid="links-write-error" role="alert" class="text-sm text-red-700">
 			{writeError === 'create'
 				? m.links_create_failed()
@@ -401,10 +276,7 @@
 		</p>
 	{/if}
 
-	<!-- #434 slice 6 review F1 — ONE visible reason for every write control on
-	     this page (add, per-row edit/remove, the reorder arrows): each is
-	     disabled while there is no signal; this says why once. Admin-gated,
-	     because a member sees no write control to explain. -->
+	<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
 	{#if admin === 'admin' && isOffline}
 		<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
 			{m.write_unavailable_no_signal()}
@@ -412,50 +284,13 @@
 	{/if}
 
 	{#if admin === 'admin'}
-		<form
-			data-testid="links-add-form"
-			class="flex flex-col gap-2"
-			onsubmit={(e) => {
-				e.preventDefault();
-				void submitAdd();
-			}}
-		>
-			<label class="flex flex-col gap-1 text-sm">
-				{m.links_add_name_label()}
-				<input
-					data-testid="links-add-name"
-					type="text"
-					bind:value={addName}
-					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-				/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				{m.links_add_url_label()}
-				<input
-					data-testid="links-add-url"
-					type="text"
-					bind:value={addUrl}
-					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-				/>
-			</label>
-			<label class="flex flex-col gap-1 text-sm">
-				{m.links_add_description_label()}
-				<input
-					data-testid="links-add-description"
-					type="text"
-					bind:value={addDescription}
-					class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-				/>
-			</label>
-			<button
-				type="submit"
-				data-testid="links-add-submit"
-				disabled={isOffline}
-				class="self-start rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
-			>
-				{m.links_add_submit()}
-			</button>
-		</form>
+		<LinksAddForm
+			bind:addName
+			bind:addUrl
+			bind:addDescription
+			{isOffline}
+			onsubmit={() => void submitAdd()}
+		/>
 	{/if}
 
 	{#if status === 'no-collective'}
@@ -481,112 +316,24 @@
 	{:else}
 		<ul data-testid="links-list" class="flex flex-col gap-2">
 			{#each rows as row, i (row.id)}
-				<li data-testid="links-row" class="flex flex-col gap-1 border-b border-ink-5 py-2">
-					{#if editingId === row.id}
-						<label class="flex flex-col gap-1 text-sm">
-							{m.links_add_name_label()}
-							<input
-								data-testid="links-edit-name"
-								type="text"
-								bind:value={editName}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-sm">
-							{m.links_add_url_label()}
-							<input
-								data-testid="links-edit-url"
-								type="text"
-								bind:value={editUrl}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<label class="flex flex-col gap-1 text-sm">
-							{m.links_add_description_label()}
-							<input
-								data-testid="links-edit-description"
-								type="text"
-								bind:value={editDescription}
-								class="rounded-md border border-ink px-2 py-1 text-base disabled:opacity-50"
-							/>
-						</label>
-						<div class="flex gap-2">
-							<button
-								type="button"
-								data-testid="links-edit-save"
-								disabled={isOffline}
-								onclick={() => saveEdit(row.id)}
-								class="rounded-md border border-ink px-2 py-1 text-xs disabled:opacity-50"
-							>
-								{m.links_save()}
-							</button>
-							<button
-								type="button"
-								data-testid="links-edit-cancel"
-								onclick={cancelEdit}
-								class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-							>
-								{m.links_cancel()}
-							</button>
-						</div>
-					{:else}
-						<a
-							data-testid="links-row-url"
-							href={row.url}
-							target="_blank"
-							rel="noopener noreferrer"
-						>
-							<span data-testid="links-row-name">{row.name}</span>
-						</a>
-						{#if row.description}
-							<p data-testid="links-row-description" class="text-sm text-ink-70">
-								{row.description}
-							</p>
-						{/if}
-						{#if admin === 'admin'}
-							<div class="flex gap-2">
-								<button
-									type="button"
-									data-testid="links-move-up"
-									disabled={i === 0 || reorderPending || isOffline}
-									aria-label={m.links_move_up()}
-									onclick={() => moveUp(i)}
-									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-								>
-									↑
-								</button>
-								<button
-									type="button"
-									data-testid="links-move-down"
-									disabled={i === rows.length - 1 || reorderPending || isOffline}
-									aria-label={m.links_move_down()}
-									onclick={() => moveDown(i)}
-									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-								>
-									↓
-								</button>
-								<button
-									type="button"
-									data-testid="links-edit"
-									disabled={isOffline}
-									onclick={() => startEdit(row)}
-									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-								>
-									{m.links_edit()}
-								</button>
-								<button
-									type="button"
-									data-testid="links-remove"
-									disabled={isOffline}
-									onclick={() => handleRemove(row.id)}
-									class="rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-								>
-									{m.links_remove()}
-								</button>
-							</div>
-						{/if}
-					{/if}
-				</li>
+				<LinksRow
+					{row}
+					index={i}
+					rowCount={rows.length}
+					isAdmin={admin === 'admin'}
+					{isOffline}
+					{reorderPending}
+					editing={editingId === row.id}
+					bind:editName
+					bind:editUrl
+					bind:editDescription
+					onsave={(id) => void saveEdit(id)}
+					oncancel={cancelEdit}
+					onmoveup={moveUp}
+					onmovedown={moveDown}
+					onedit={startEdit}
+					onremove={(id) => void handleRemove(id)}
+				/>
 			{/each}
 		</ul>
 	{/if}

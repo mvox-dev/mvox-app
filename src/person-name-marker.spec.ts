@@ -259,7 +259,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/downloads/+page.svelte': {
 		'row.label.filename': 'a downloaded score file'
 	},
-	'src/routes/links/+page.svelte': {
+	'src/lib/links/LinksRow.svelte': {
 		'row.name': 'a saved link'
 	},
 	'src/lib/roster/RosterSectionTree.svelte': {

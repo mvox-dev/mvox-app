@@ -12,8 +12,7 @@ export const LINE_CAP_EXCEPTIONS: readonly string[] = [
 	'src/lib/library/libraryData.ts',
 	'src/lib/sections/sectionActions.ts',
 	'src/routes/+page.svelte',
-	'src/routes/library/+page.svelte',
-	'src/routes/links/+page.svelte'
+	'src/routes/library/+page.svelte'
 ];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
@@ -30,7 +29,6 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/sections/sectionActions.ts',
 	'src/routes/+page.svelte',
 	'src/routes/library/+page.svelte',
-	'src/routes/links/+page.svelte',
 	'src/routes/part/[fileId]/+page.svelte'
 ];
 
