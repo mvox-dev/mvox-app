@@ -6,20 +6,20 @@
 >
 > **Known deltas since the verification pass (mvox-side design, not Entu mechanics):**
 > - The **contact-subset-on-`person`-prop-defs design is SUPERSEDED** (slice 4, mvox-app#21): self-description now lives in member-owned `profile` entities; `name`/`email`/`notes` prop-defs are removed from `person`. See the inline marker at "What this changes" below.
-> - **Auto-provisioning is off in fact, not only by construction**: the `add_user` value was deleted from the polyphony db entity (T4.1, mvox-app#22). §5's "auto-provisioned person" example is historical; invite-created persons receive `_editor: self` explicitly (`src/lib/invite/inviteData.ts`, T4.5). Note the open T4.9 gate item on the `add_user` tension (mvox-app#29).
-> - **One mechanics addition pinned after this doc's pass** (cited per this doc's own discipline): entu-api copies a parent's `_sharing` onto a new child at create **when the payload omits `_sharing`** (`utils/entity.js:296-327`, source-pinned 2026-08-06) — a create-time server-side default, distinct from the read-time `_inheritrights` cascade. Full treatment: wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility).
+> - **Auto-provisioning is off in fact, not only by construction**: the `add_user` value was deleted from the polyphony db entity (T4.1, mvox-app#22). §5's "auto-provisioned person" example is historical; invite-created persons receive `_editor: self` explicitly (`src/lib/invite/inviteCreate.ts`, T4.5). Note the open T4.9 gate item on the `add_user` tension (mvox-app#29).
+> - **One mechanics addition pinned after this doc's pass** (cited per this doc's own discipline): entu-api copies a parent's `_sharing` onto a new child at create **when the payload omits `_sharing`** (`utils/entity.js:369-378`, `inheritParentProperties`, entu-api `31a7319`; source-pinned 2026-08-06 at `82cb25b` as `:296-327`) — a create-time server-side default, distinct from the read-time `_inheritrights` cascade. Full treatment: wiki [Runbook — Entu visibility](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility).
 > - Canonical v4E is **no longer the reference schema** (Mihkel, 2026-08-06: schema freedom toward our own v5E) — schema-shape statements herein describe Entu mechanics, not a sync target.
 
 > **ER-13** — Entity CREATE copies a parent's `_sharing` onto a new child when the payload omits `_sharing`; a child created under a `domain` parent that does not set its own `_sharing` explicitly therefore silently becomes `domain`, not `private` by default.
-> Evidence: `utils/entity.js:296-327` (source-pinned 2026-08-06).
+> Evidence: `utils/entity.js:369-378`, `inheritParentProperties` (entu-api `31a7319`; source-pinned 2026-08-06 at `82cb25b` as `:296-327`).
 
 **Status:** VERIFIED GROUND. Every claim below carries a `file:line` reference read directly from `entu-api` source (`~/projects/entu-api`) during the 2026-08-05 verification pass (Q1/Q1b) and the 2026-07-19 bucket review. Nothing here is inferred, and nothing is carried from a repo doc — repo docs are convenience summaries, not authority for Entu mechanics.
 
 **Scope:** the rights, sharing, and cross-database visibility mechanics that the mvox single-collective design rests on. This is the reference; when it and any older doc disagree, this wins.
 
 **Supersedes wholesale** (do not reconcile piecemeal — treat as replaced):
-- `docs/migration/v4e-divergence-2026-05-19.md` §5.2 ("per-property sharing not a first-class Entu concept" — **wrong**, see §3)
-- The INFERENCE section of `docs/migration/findings/entu-property-bucket-visibility-2026-07-19.md` (the "0 of 21 prop-defs have sharing" claim and the stale-bucket explanation built on it — **wrong**; the SOURCE-VERIFIED and LIVE-MEASURED sections of that doc stand)
+- `mvox_v4e_web docs/migration/v4e-divergence-2026-05-19.md` §5.2 ("per-property sharing not a first-class Entu concept" — **wrong**, see §3)
+- The INFERENCE section of `mvox_v4e_web docs/migration/findings/entu-property-bucket-visibility-2026-07-19.md` (the "0 of 21 prop-defs have sharing" claim and the stale-bucket explanation built on it — **wrong**; the SOURCE-VERIFIED and LIVE-MEASURED sections of that doc stand)
 - Any "no entity-to-entity grants" claim stated as a source-enforced rule (see §6 for the accurate version)
 
 **Provenance key:** [P] = read directly by Palestrina this pass · [F] = read directly from source by Finn this pass (auth chain) · [PE] = live-probe verified by Pérotin (2026-09-08 addition, §7) — observed wire behavior against live Entu, not a source `file:line` read; narrower confidence than [P]/[F], flagged as such at point of use.
@@ -200,7 +200,7 @@ Probe artifacts: `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe8
 
 ### 7.2 Entity CREATE auto-grants the creating caller `_owner` — ONE direct document, aggregating as all four tiers
 
-Not covered by §1-§6 (those describe read-time bucket exposure; this is a create-time grant-assignment fact). Observed: a fresh entity created via `inviteData.ts`'s `createInvite()` — whose payload sends the CALLER no explicit rights at all (only `_editor: self` to the newly-created person) — nonetheless shows the creating caller holding `_owner`/`_editor`/`_viewer`/`_expander` all as **direct** (non-inherited) grants immediately after create, reproduced on two independent runs.
+Not covered by §1-§6 (those describe read-time bucket exposure; this is a create-time grant-assignment fact). Observed: a fresh entity created via `inviteCreate.ts`'s `createInvite()` — whose payload sends the CALLER no explicit rights at all (only `_editor: self` to the newly-created person) — nonetheless shows the creating caller holding `_owner`/`_editor`/`_viewer`/`_expander` all as **direct** (non-inherited) grants immediately after create, reproduced on two independent runs.
 
 **Corrected 2026-09-09** (Nunes found the apparent conflict with §7.3's one-direct-tier-per-reference rule; settled by observation, not left as an open question): this is **ONE `_owner` property document**, not four separate ones — `_owner` folds into `_editor`/`_expander`/`_viewer` at read time (§3's cap logic, the same fold that makes an owner grant show up as "editor" everywhere else in this doc), so the SAME document's `_id` appears in all four aggregated arrays. Confirmed directly: created a bare entity, read `_owner`/`_editor`/`_viewer`/`_expander` raw, deduped every row referencing the creating caller by `_id` — exactly one distinct document, `property_type: "_owner"`, present in all four arrays. §7.3's rule is not contradicted; create-time auto-grant was never four documents to begin with.
 

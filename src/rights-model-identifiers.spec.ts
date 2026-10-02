@@ -992,6 +992,11 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 	// and ER-14 are repinned from the post-edit bytes; EDITED_ER3 and
 	// CORRECTED_ER9 carry the same conversion. Only the citation tokens moved —
 	// no rule text. Same caveat: the pins prove no drift SINCE this edit.
+	//
+	// #704 maintenance (PO issue #704): ER-13's Evidence line moves from
+	// `entity.js:296-327` (the 2026-08-06 pin at 82cb25b) to `:369-378` on
+	// entu-api 31a7319. ER-13 is repinned from the post-edit bytes; only the
+	// citation moved — no rule text.
 	const UNTOUCHED_SHA256: Record<string, string> = {
 		'ER-2': '01cecca21a2ac74eedd7e04a0c3ff94a14f55c8d2d3ef5951016d769c4edf9dc',
 		'ER-3': sha256(EDITED_ER3),
@@ -1003,7 +1008,7 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		'ER-10': sha256(EDITED_ER10),
 		'ER-11': 'b2ee2bb1fdd1e2ef1527f81795d5b44450af6916f1b8b148b5485641846de4af',
 		'ER-12': sha256(CORRECTED_ER12),
-		'ER-13': '348e4b0811f6e66d5024874c32bb202c6a8cc1cff0af4718a65af2363a3e2dd5',
+		'ER-13': 'd89a7815e35b6feb7de8492949bc0398af471fefb8543cd54ce9c9fb207dabcb',
 		'ER-14': '1a861e6093591c71e985783eb614215347f5804f8f8897edaff33a19147fe4e0',
 		'ER-15': '00b855448d2750eed3be8df26576c9aadd4106f315930fe77c3cd11367fe67eb',
 		'ER-16': '874ee3f28195c10f2da3ff44fe32e8c8e4da8298f8829e79df21a12bda5af12f',
@@ -1463,7 +1468,13 @@ describe('#322/#330: outside the sanctioned blocks, the document is byte-identic
 	// blocks (repinned in section 13) and in the §7.1–§7.3 "Probe artifacts" /
 	// "Live-confirmed" prose lines. Only the cited path tokens change. Re-derived
 	// from post-#422 bytes; #330's caveat rides on unchanged.
-	const DOC_MINUS_TARGETS_SHA256 = '0e5aa637a15887ff6bcd3169e69d5721fd57dc5a76254405d48e1fd77769c792';
+	//
+	// #704 maintenance (PO issue #704): references only — `inviteData.ts` →
+	// `inviteCreate.ts` (header delta, §7.2 prose), the header delta's
+	// `entity.js` range (as ER-13, repinned in section 13), and the two
+	// superseded `docs/migration/*` paths qualified with their repo
+	// (mvox_v4e_web). Re-derived from post-#704 bytes; #330's caveat rides on.
+	const DOC_MINUS_TARGETS_SHA256 = '9105883b938441a2746a537f743e4817689f14b8d19b1f2e9fe2a287d6798db9';
 
 	const docExcludingBlocks = (ids: string[]): string => {
 		const drop = new Set<number>();

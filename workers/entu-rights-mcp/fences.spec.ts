@@ -10,21 +10,21 @@ const sha256 = (path: string): string =>
 	createHash('sha256').update(readFileSync(resolve(ROOT, path))).digest('hex');
 
 describe('the doc and its guard spec are byte-identical to HEAD — this slice reads them, never edits them', () => {
-	// Repinned for #369, #372, #411 and #422 (PO-ruled doc edits). A pin proves no
+	// Repinned for #369, #372, #411, #422 and #704 (PO-ruled doc edits). A pin proves no
 	// drift since that edit, never that the edit was right.
 	it('docs/architecture/entu-rights-and-visibility-model.md is unchanged', () => {
 		expect(
 			sha256('docs/architecture/entu-rights-and-visibility-model.md'),
 			'#318 builds a VIEW over the doc; a doc edit belongs to its own commissioned slice. Repin only behind a PO-ruled doc edit (sha256 of the file at the sanctioned state).'
-		).toBe('3af6e98a064f3b1bcc17ce9bf2a8d96344fc19d828cadd8504d0f15807024dd7');
+		).toBe('1e0cb9d35faeb2b84df8c27e47999adef76897e142d27be2626194a5126778cf');
 	});
 
-	// Repinned for #422 and #397, with the doc above.
+	// Repinned for #422, #397 and #704, with the doc above.
 	it('src/rights-model-identifiers.spec.ts (the guard spec) is unchanged', () => {
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('2b1c0dccf4024d2c16a6a20518a67f31af19a7a722c43391e91493795447c9cb');
+		).toBe('d2c8ee9dce45064e0024fee7d6da87b238101350c97a8d3b35a93c7f53227085');
 	});
 });
 
