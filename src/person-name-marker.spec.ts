@@ -183,8 +183,11 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/+page.svelte': {
 		'selected.name': 'the selected collective'
 	},
-	'src/lib/agenda/SeasonManagePanel.svelte': {
+	'src/lib/agenda/SeasonCardHeader.svelte': {
 		'ms.name': 'a season',
+		seasonManageDeleteName: 'the season being deleted'
+	},
+	'src/lib/agenda/SeasonManagePanel.svelte': {
 		seasonManageDeleteName: 'the season being deleted'
 	},
 	'src/lib/agenda/SeasonManageFields.svelte': {
@@ -193,7 +196,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/SeasonManageSeries.svelte': {
 		'series.name': 'an event series'
 	},
-	'src/lib/agenda/EventCreateForm.svelte': {
+	'src/lib/agenda/EventCreateFormFields.svelte': {
 		'eventCreateSeriesDefaults.name': 'the series the event is created in'
 	},
 	'src/lib/events/EventFieldEditTitle.svelte': {
@@ -240,7 +243,7 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/lib/agenda/AgendaMonthView.svelte': {
 		'item.name': 'the event name'
 	},
-	'src/lib/agenda/RepertoireElement.svelte': {
+	'src/lib/agenda/RepertoireWorkRow.svelte': {
 		'row.workName': 'a repertoire work'
 	},
 	'src/lib/roster/MemberDeactivate.svelte': {

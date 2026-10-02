@@ -5,16 +5,12 @@
 	import FormError from '$lib/components/FormError.svelte';
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import Field from '$lib/components/Field.svelte';
 	import FormActions from '$lib/components/FormActions.svelte';
-	import { fieldErrorAttrs } from '$lib/a11y/formErrors';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
-	import { focusOnMount } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
-	import TimeSelect from '$lib/components/TimeSelect.svelte';
 	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
-	import { CANONICAL_EVENT_TYPES, eventTypeLabel } from '$lib/events/eventTypeLabels';
+	import EventCreateFormFields from '$lib/agenda/EventCreateFormFields.svelte';
 	import { createEvent, type CreateEventInput } from '$lib/entity/entityCreate';
 	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
 	import {
@@ -126,12 +122,6 @@
 	let eventCreateConductors = $state<Array<{ id: string; name: string }>>([]);
 	let eventCreateError = $state<(() => string) | null>(null);
 	let eventCreateErrorField = $state<EventCreateErrorField>(null);
-	const datetimeErrorAttrs = $derived(
-		fieldErrorAttrs(eventCreateErrorField, 'datetime', 'event-create-error')
-	);
-	const endErrorAttrs = $derived(
-		fieldErrorAttrs(eventCreateErrorField, 'end', 'event-create-error')
-	);
 	let eventCreateLoadId = 0;
 
 	function setEventCreateError(msg: () => string, field: EventCreateErrorField): void {
@@ -350,233 +340,28 @@
 			{m.write_unavailable_no_signal()}
 		</p>
 	{/if}
-	<Field label={m.event_create_type_label()} labelTestid="event-create-type-label">
-		{#snippet children(control)}
-			<select
-				data-testid="event-create-type"
-				{...fieldErrorAttrs(eventCreateErrorField, 'type', 'event-create-error')}
-				value={eventCreateType}
-				onchange={(e) => {
-					eventCreateType = (e.currentTarget as HTMLSelectElement).value;
-					clearEventCreateError();
-				}}
-				disabled={control.disabled}
-				class={control.class}
-			>
-				<option value="">{m.event_create_type_placeholder()}</option>
-				{#each CANONICAL_EVENT_TYPES as type (type)}
-					<option value={type}>{eventTypeLabel(type)}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
-
-	<Field label={m.event_create_season_label()}>
-		{#snippet children(control)}
-			<select
-				data-testid="event-create-season"
-				{...fieldErrorAttrs(eventCreateErrorField, 'season', 'event-create-error')}
-				value={eventCreateSeasonId}
-				onchange={(e) =>
-					handleEventCreateSeasonChange((e.currentTarget as HTMLSelectElement).value)}
-				disabled={control.disabled}
-				class={control.class}
-			>
-				<option value="">{m.event_create_season_placeholder()}</option>
-				{#each seasons as season (season.id)}
-					<option value={season.id}>{season.name}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
-
-	<Field label={m.event_create_series_label()} disabled={eventCreateSeasonId === ''}>
-		{#snippet children(control)}
-			<select
-				data-testid="event-create-series"
-				value={eventCreateSeriesId}
-				onchange={(e) =>
-					handleEventCreateSeriesChange((e.currentTarget as HTMLSelectElement).value)}
-				disabled={control.disabled}
-				class={control.class}
-			>
-				<option value="">{m.event_create_series_none()}</option>
-				{#each eventCreateSeriesOptions as series (series.id)}
-					<option value={series.id}>{series.name}</option>
-				{/each}
-			</select>
-		{/snippet}
-	</Field>
-
-	{#if eventCreateSeriesId === ''}
-		<p data-testid="event-create-series-hint" class="text-xs text-ink-2">
-			{m.event_create_series_hint()}
-		</p>
-	{/if}
-
-	<Field label={m.event_create_name_label()}>
-		{#snippet children(control)}
-			<input
-				type="text"
-				data-testid="event-create-name"
-				use:focusOnMount
-				{...fieldErrorAttrs(eventCreateErrorField, 'name', 'event-create-error')}
-				placeholder={m.event_create_name_placeholder()}
-				value={eventCreateName}
-				oninput={(e) => {
-					eventCreateName = (e.currentTarget as HTMLInputElement).value;
-					clearEventCreateError();
-				}}
-				disabled={control.disabled}
-				class={control.class}
-			/>
-		{/snippet}
-	</Field>
-	{#if eventCreateSeriesDefaults?.name}
-		<p data-testid="event-create-name-inherited" class="text-xs text-ink-2">
-			{m.event_create_inherited_from_series({ value: eventCreateSeriesDefaults.name })}
-		</p>
-	{/if}
-
-	<div class="flex flex-col gap-0.5">
-		<span id="event-create-start-label" class="text-xs text-ink-2">
-			{m.event_create_start_label()}
-		</span>
-		<div
-			data-testid="event-create-datetime"
-			role="group"
-			aria-labelledby="event-create-start-label"
-			class="flex flex-wrap gap-2"
-		>
-			<input
-				type="date"
-				data-testid="event-create-datetime-date"
-				aria-label={m.time_select_date_label()}
-				{...datetimeErrorAttrs}
-				value={eventCreateDate}
-				oninput={(e) => {
-					eventCreateDate = (e.currentTarget as HTMLInputElement).value;
-					if (!eventCreateEndTouched) eventCreateEndDate = eventCreateDate;
-					clearEventCreateError();
-				}}
-				class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-			/>
-			<TimeSelect
-				prefix="event-create-datetime"
-				value={eventCreateTime}
-				invalid={datetimeErrorAttrs['aria-invalid']}
-				describedBy={datetimeErrorAttrs['aria-describedby']}
-				onchange={(v) => {
-					eventCreateTime = v;
-					clearEventCreateError();
-				}}
-			/>
-		</div>
-	</div>
-
-	<div class="flex flex-col gap-0.5">
-		<span id="event-create-end-label" class="text-xs text-ink-2">
-			{m.event_create_end_label()}
-		</span>
-		<div
-			data-testid="event-create-end"
-			role="group"
-			aria-labelledby="event-create-end-label"
-			class="flex flex-wrap gap-2"
-		>
-			<input
-				type="date"
-				data-testid="event-create-end-date"
-				aria-label={m.time_select_date_label()}
-				{...endErrorAttrs}
-				value={eventCreateEndDate}
-				oninput={(e) => {
-					eventCreateEndDate = (e.currentTarget as HTMLInputElement).value;
-					eventCreateEndTouched = true;
-					clearEventCreateError();
-				}}
-				class="min-w-0 flex-1 border border-ink-5 bg-paper px-1.5 py-1 text-ink"
-			/>
-			<TimeSelect
-				prefix="event-create-end"
-				value={eventCreateEndTime}
-				invalid={endErrorAttrs['aria-invalid']}
-				describedBy={endErrorAttrs['aria-describedby']}
-				onchange={(v) => {
-					eventCreateEndTime = v;
-					clearEventCreateError();
-				}}
-			/>
-		</div>
-	</div>
-	{#if eventCreateSeriesDefaults && eventCreateSeriesDefaults.durationMinutes !== null}
-		<p data-testid="event-create-duration-inherited" class="text-xs text-ink-2">
-			{m.event_create_inherited_from_series({
-				value: m.agenda_duration_min({
-					minutes: eventCreateSeriesDefaults.durationMinutes
-				})
-			})}
-		</p>
-	{/if}
-
-	<Field label={m.event_create_capacity_label()}>
-		{#snippet children(control)}
-			<input
-				type="number"
-				data-testid="event-create-capacity"
-				placeholder={m.event_create_capacity_placeholder()}
-				value={eventCreateCapacity}
-				oninput={(e) =>
-					(eventCreateCapacity = (e.currentTarget as HTMLInputElement).value)}
-				disabled={control.disabled}
-				class={control.class}
-			/>
-		{/snippet}
-	</Field>
-
-	<Field label={m.event_create_location_label()}>
-		{#snippet children(control)}
-			<input
-				type="text"
-				data-testid="event-create-location"
-				list={locationSuggestionsId}
-				placeholder={m.event_create_location_placeholder()}
-				value={eventCreateLocation}
-				oninput={(e) =>
-					(eventCreateLocation = (e.currentTarget as HTMLInputElement).value)}
-				disabled={control.disabled}
-				class={control.class}
-			/>
-		{/snippet}
-	</Field>
-	{#if eventCreateSeriesDefaults?.defaultLocation}
-		<p data-testid="event-create-location-inherited" class="text-xs text-ink-2">
-			{m.event_create_inherited_from_series({
-				value: eventCreateSeriesDefaults.defaultLocation
-			})}
-		</p>
-	{/if}
-
-	<Field label={m.event_create_description_label()}>
-		{#snippet children(control)}
-			<textarea
-				data-testid="event-create-description"
-				placeholder={m.event_create_description_placeholder()}
-				value={eventCreateDescription}
-				oninput={(e) =>
-					(eventCreateDescription = (e.currentTarget as HTMLTextAreaElement).value)}
-				disabled={control.disabled}
-				class={control.class}
-			></textarea>
-		{/snippet}
-	</Field>
-	{#if eventCreateSeriesDefaults?.defaultDescription}
-		<p data-testid="event-create-description-inherited" class="text-xs text-ink-2">
-			{m.event_create_inherited_from_series({
-				value: eventCreateSeriesDefaults.defaultDescription
-			})}
-		</p>
-	{/if}
+	<EventCreateFormFields
+		{seasons}
+		{locationSuggestionsId}
+		{eventCreateErrorField}
+		{eventCreateSeasonId}
+		{eventCreateSeriesId}
+		{eventCreateSeriesOptions}
+		{eventCreateSeriesDefaults}
+		bind:eventCreateType
+		bind:eventCreateName
+		bind:eventCreateDate
+		bind:eventCreateTime
+		bind:eventCreateEndDate
+		bind:eventCreateEndTime
+		bind:eventCreateEndTouched
+		bind:eventCreateLocation
+		bind:eventCreateDescription
+		bind:eventCreateCapacity
+		{clearEventCreateError}
+		{handleEventCreateSeasonChange}
+		{handleEventCreateSeriesChange}
+	/>
 
 	<ConductorChips
 		bind:conductors={eventCreateConductors}

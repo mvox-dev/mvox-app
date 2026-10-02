@@ -214,15 +214,23 @@ function readSource(relPath: string): string {
 
 // 1 — i18n: every repertoire surface renders via Paraglide keys only
 describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces', () => {
-	it('RepertoireElement.svelte contains no bare text nodes outside m.* calls', () => {
-		expect(bareTextNodes(readSource('src/lib/agenda/RepertoireElement.svelte'))).toEqual([]);
+	const ELEMENT_FILES = [
+		'src/lib/agenda/RepertoireElement.svelte',
+		'src/lib/agenda/RepertoireWorkRow.svelte'
+	];
+
+	it.each(ELEMENT_FILES)('%s contains no bare text nodes outside m.* calls', (file) => {
+		expect(bareTextNodes(readSource(file))).toEqual([]);
 	});
 
-	it('RepertoireElement.svelte has no hardcoded aria-label string literals (labels must come from m.*)', () => {
-		const source = readSource('src/lib/agenda/RepertoireElement.svelte');
-		const hardcoded = source.match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
-		expect(hardcoded).toEqual([]);
-	});
+	it.each(ELEMENT_FILES)(
+		'%s has no hardcoded aria-label string literals (labels must come from m.*)',
+		(file) => {
+			const source = readSource(file);
+			const hardcoded = source.match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
+			expect(hardcoded).toEqual([]);
+		}
+	);
 
 	it.each(['src/lib/library/WorkRow.svelte', 'src/routes/library/+page.svelte'])(
 		'%s has no hardcoded aria-label string literals (the library repertoire badge)',
