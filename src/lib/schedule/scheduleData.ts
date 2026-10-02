@@ -1,20 +1,9 @@
+// schedule_item data layer under an event: sorted by datetime, then name; no ordinal (#246).
 import { entuFetch } from '$lib/entu/request';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
-// The row shape + its ONE sort rule live in their own dependency-free module
-// (see scheduleSort.ts's header) — re-exported here so every EXISTING
-// `from '$lib/schedule/scheduleData'` import (this module's own spec, the
-// event-detail page) is unaffected. AgendaList.svelte imports straight from
-// scheduleSort.ts instead, to avoid dragging entuFetch's $env chain into its
-// component-level test.
 import { compareScheduleItems, type ScheduleItem } from './scheduleSort';
 export { compareScheduleItems, type ScheduleItem };
-
-// #262 GREEN — the schedule_item data layer: read, bulk read, create, edit,
-// remove. Child of event (1 → 0..N); props `name` (string) + `datetime`
-// (datetime), both required. Sort by `datetime` ascending, `name` tie-break —
-// deliberately NO ordinal anywhere (adjudicated on #246). Rights/sharing
-// program_item-identical: parent-event `_editor` writes, `_sharing: domain`.
 
 type ScheduleItemRaw = {
 	_id: string;
@@ -22,20 +11,11 @@ type ScheduleItemRaw = {
 	datetime?: Array<{ datetime: string }>;
 };
 
-/**
- * Read one event's schedule items — `_type.string=schedule_item` (NEVER a raw
- * type id: per-db type-def ids differ), sorted `datetime` asc, `name`
- * tie-break. Mirrors listProgramItems (repertoireData.ts:89-111).
- */
 export async function listScheduleItems(
 	cfg: EntuCfg,
 	eventId: string,
 	fetchImpl: typeof fetch = fetch
 ): Promise<ScheduleItem[]> {
-	// #321 class (1) — ONE event's schedule, `_parent`-scoped to that event: a
-	// single evening's timeline (call, warm-up, break, curtain), tens of rows at
-	// the very most. Same scope and same bound as `listProgramItems`, which this
-	// mirrors. limit=500 is an explicit, ample bound.
 	const res = await entuFetch(
 		cfg.db,
 		`entity?_type.string=schedule_item&_parent.reference=${encodeURIComponent(eventId)}&props=name,datetime&limit=500`,
@@ -53,11 +33,6 @@ export async function listScheduleItems(
 	return rows.sort(compareScheduleItems);
 }
 
-/**
- * The agenda's bulk read (mirror loadWorksByEventId): one GET per event id —
- * the platform has no multi-parent query — assembled into a per-event record,
- * each list sorted. Empty input short-circuits with NO fetch.
- */
 export async function listScheduleItemsByEventId(
 	cfg: EntuCfg,
 	eventIds: string[],
@@ -78,13 +53,6 @@ export interface CreateScheduleItemInput {
 	datetime: string;
 }
 
-/**
- * Create a schedule_item under an event. Explicit `_sharing: domain` is
- * MANDATORY — createProgramItem precedent (repertoireActions.ts:188-205):
- * parent events are NOT uniformly domain-shared, so relying on create-time
- * inherit can land a public schedule_item whose domain-tier prop-defs then
- * drop out of ordinary reads.
- */
 export async function createScheduleItem(
 	cfg: EntuCfg,
 	input: CreateScheduleItemInput,
@@ -95,8 +63,7 @@ export async function createScheduleItem(
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: input.eventId },
 		{ type: 'name', string: input.name },
-		{ type: 'datetime', datetime: input.datetime },
-		{ type: '_sharing', string: 'domain' }
+		{ type: 'datetime', datetime: input.datetime }
 	];
 	const res = await entuFetch(
 		cfg.db,
@@ -110,12 +77,6 @@ export async function createScheduleItem(
 	return body._id;
 }
 
-/**
- * Edit one field via the replaceEntityProperty choreography (GET existing
- * id(s) → ONE POST pairing the first old `_id` with the new value; corrupted
- * extras only are swept after the POST; the normal ≤1-value path issues zero
- * deletes).
- */
 export async function updateScheduleItemField(
 	cfg: EntuCfg,
 	itemId: string,
@@ -127,7 +88,6 @@ export async function updateScheduleItemField(
 	await replaceEntityProperty(cfg, itemId, wireValue, fetchImpl, 'updateScheduleItemField');
 }
 
-/** Remove a schedule_item entity ("Remove" — the two-step confirm idiom). */
 export async function removeScheduleItem(
 	cfg: EntuCfg,
 	itemId: string,

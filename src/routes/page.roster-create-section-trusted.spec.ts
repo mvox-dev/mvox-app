@@ -1,34 +1,14 @@
+// /roster section create end to end with real taps: body, parent, the new row appears.
 // @vitest-environment happy-dom
-//
-// #124 gate #114 F1/F2 — section creation END-TO-END under REAL tap timing, on
-// the live wire shape. RE-DRIVEN through the page-level `roster-new-section`
-// entry (#470: the picker's inline create form is RETIRED — "drop the new
-// section creation" — so the trusted-tap + real-write-layer coverage moves to
-// the only creation path left). Integration: actual /roster route, REAL
-// sectionData (listSections parses a live-shaped wire payload) and REAL
-// sectionActions (createSection hits the stubbed fetch seam, so the WIRE SHAPE
-// of the write is asserted, not a mock's call log). Only `loadRoster` and
-// global fetch are stubbed.
-//
-// The trusted-tap half: a real tap's window leg arrives AFTER Svelte's
-// microtask flush (a synthetic fireEvent never checkpoints mid-bubble), which
-// is exactly the sequencing that once dismissed the picker's create form
-// mid-open (#124 F1). The page-level entry swaps a button for a form on tap
-// too, so it inherits the same regression class — `trustedClick` reproduces
-// the trusted sequencing faithfully.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
 
 const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-// sectionData and sectionActions are NOT mocked — the REAL read parses the
-// live-shaped wire and the REAL write hits the fetch stub below.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -45,9 +25,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── live wire fixture (verbatim shape + real ids, 2026-08-12 spike probe;
-//    reparented to the single DATABASE entity per #161) ─────────────────────────
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065'; // the database entity — THE collective
 const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
@@ -86,8 +63,6 @@ function liveSectionsWire(): unknown {
 	};
 }
 
-/** The viewer ('person-p') has her own row — `currentDbEntityId` reads HER org
- *  off it, never a `limit=1` guess. */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -109,8 +84,6 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-// ── fetch stub: live-shaped reads + recorded writes ─────────────────────────────
-
 const calls: Array<{ url: string; method: string; body: string | null }> = [];
 
 function stubFetch(): void {
@@ -125,15 +98,12 @@ function stubFetch(): void {
 					headers: { 'Content-Type': 'application/json' }
 				})
 			);
-		// resolveTypeId's type-definition lookup (`name.string=section`).
 		if (u.includes('_type.string=entity') && u.includes('name.string=section')) {
 			return json({ entities: [{ _id: TYPE_SECTION }], count: 1 });
 		}
-		// listSections' unscoped section read.
 		if (u.includes('_type.string=section')) {
 			return json(liveSectionsWire());
 		}
-		// createSection's entity POST (`POST {base}/{db}/entity`, no id segment).
 		if (method === 'POST' && /\/entity$/.test(u.split('?')[0])) {
 			return json({ _id: NEW_SECTION_ID });
 		}
@@ -186,7 +156,6 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
-	// #155/S4 — the page-level create entry lives in Arrange mode.
 	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'roster-arrange-list')).not.toBeNull();
@@ -194,13 +163,6 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/**
- * Dispatch a click with TRUSTED-EVENT event-loop semantics — the component's
- * own handlers first, then a microtask checkpoint (Svelte's flush), and only
- * then the window-level listeners, carrying the ORIGINAL target (which the
- * flush may have unmounted). This is how a real browser sequences a hardware
- * tap; synthetic dispatch runs the whole path with no checkpoint.
- */
 async function trustedClick(el: HTMLElement): Promise<void> {
 	const stopAtDocument = (e: Event) => e.stopPropagation();
 	document.addEventListener('click', stopAtDocument);
@@ -215,7 +177,6 @@ async function trustedClick(el: HTMLElement): Promise<void> {
 	await Promise.resolve();
 }
 
-/** Walk to the open page-level form via trusted taps — the live gate's own path. */
 async function openCreateForm(container: HTMLElement): Promise<void> {
 	await trustedClick(q(container, 'roster-new-section') as HTMLElement);
 	await waitFor(() => {
@@ -223,17 +184,14 @@ async function openCreateForm(container: HTMLElement): Promise<void> {
 	});
 }
 
-/** Every recorded POST body to the bare `/entity` create endpoint, parsed. */
 function createPosts(): unknown[] {
 	return calls
 		.filter((c) => c.method === 'POST' && /\/entity$/.test(c.url.split('?')[0]))
 		.map((c) => JSON.parse(c.body ?? 'null'));
 }
 
-// ── F1: creation works END-TO-END on the live shape (type name, submit, appears) ─
-
 describe('/roster #124 F1 — section creation end-to-end: real tap timing, real write layer, live-shaped tree (re-driven through roster-new-section per #470)', () => {
-	it('the admin opens the arrange entry, types a name, submits: ONE create POST goes out with the full pinned body — _type as a reference, _parent = HER org (never an org-lookup guess), name, explicit public _sharing', async () => {
+	it('the admin opens the arrange entry, types a name, submits: ONE create POST goes out with the full pinned body — _type as a reference, _parent = HER org (never an org-lookup guess), name, no rights fields (#699)', async () => {
 		const container = await renderArrangeReady();
 
 		await openCreateForm(container);
@@ -245,17 +203,11 @@ describe('/roster #124 F1 — section creation end-to-end: real tap timing, real
 		await waitFor(() => {
 			expect(createPosts()).toHaveLength(1);
 		});
-		// Full-shape equality — a partial match here is how wire bugs shipped
-		// before (#partial-assertions-hide-bugs).
 		expect(createPosts()[0]).toEqual([
 			{ type: '_type', reference: TYPE_SECTION },
 			{ type: '_parent', reference: ORG_EFK },
-			{ type: 'name', string: 'Tenor' },
-			{ type: '_sharing', string: 'public' },
-			{ type: '_inheritrights', boolean: true }
+			{ type: 'name', string: 'Tenor' }
 		]);
-		// The page knows the org — the data layer must never fall back to the
-		// `_type.string=organization&limit=1` guess (umbrella-federation trap).
 		expect(calls.some((c) => c.url.includes('_type.string=organization'))).toBe(false);
 	});
 
@@ -278,12 +230,9 @@ describe('/roster #124 F1 — section creation end-to-end: real tap timing, real
 		await waitFor(() => {
 			expect(status?.textContent?.trim()).not.toBe('');
 		});
-		// No refetch — the appearance is local-state insertion (pinned contract).
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 	});
 });
-
-// ── F2: SUB-SECTION creation under a parent works on the live shape ─────────────
 
 describe('/roster #124 F2 — sub-section creation under a parent section (re-driven through roster-new-section per #470)', () => {
 	it('name + parent "Soprano" submitted through real tap timing: the create POST carries _parent = the SOPRANO SECTION id, and the new arrange row renders at data-depth 1', async () => {
@@ -305,9 +254,7 @@ describe('/roster #124 F2 — sub-section creation under a parent section (re-dr
 		expect(createPosts()[0]).toEqual([
 			{ type: '_type', reference: TYPE_SECTION },
 			{ type: '_parent', reference: EFK_SOPRANO },
-			{ type: 'name', string: 'Soprano II' },
-			{ type: '_sharing', string: 'public' },
-			{ type: '_inheritrights', boolean: true }
+			{ type: 'name', string: 'Soprano II' }
 		]);
 
 		await waitFor(() => {
@@ -318,6 +265,4 @@ describe('/roster #124 F2 — sub-section creation under a parent section (re-dr
 });
 
 // (*MVOX:Tallis* — #124 RED, gate #114 F1/F2: the create path end-to-end under
-//  trusted-event timing, real write layer, live shape)
 // (*MVOX:Tallis* — #470: re-driven through the page-level roster-new-section
-//  entry; the picker create path is retired)

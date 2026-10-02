@@ -1,3 +1,4 @@
+// repertoire_item and program_item creates, atomic updates, and deletes.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { Work } from '$lib/library/libraryData';
@@ -20,38 +21,6 @@ import {
 	type ManageRightsState
 } from './repertoireActions';
 
-// #91 TR.3 RED — repertoire/programme management: the rights-based WRITE layer
-// on top of TR.2's read surfaces. Mirrors attendanceData.ts' per-tap write
-// mechanics, with the structural anchors pinned by #91 + schema.ts:
-//
-//   - `repertoire_item` is a CHILD OF SEASON (`_parent` = seasonId); props:
-//     work (ref, required), edition (ref, optional pinned edition), status
-//     ('learning | active | retired | dropped', default 'active'). NO
-//     sentinels — unlike rsvp/attendance, status here has no `<status>_ref`
-//     companion prop.
-//   - `program_item` is a CHILD OF EVENT (`_parent` = eventId); props: edition
-//     (ref, required), ordinal (NUMBER, concert position — sent as
-//     `{ number: n }`, never `{ string: ... }`), notes (text, not written here).
-//   - `_type` sent as a resolved REFERENCE, never a string (#10 pinned
-//     wire-shape); type names 'repertoire_item' / 'program_item'.
-//   - `_sharing` (#133 audit): repertoire_item sends NO explicit `_sharing`
-//     (inherited from the uniformly-domain season parent). program_item KEEPS
-//     an explicit `_sharing: domain` — its parent (event) is not uniformly
-//     domain, so the tier must be pinned rather than inherited.
-//   - UPDATE = the shared ATOMIC overwrite (#264 PO ruling, branch (i)):
-//     `replaceEntityProperty` — GET current value-id(s), then ONE POST whose
-//     entry pairs the FIRST existing id with the new value (Entu's native
-//     overwrite; `setEntity` soft-deletes the old value in the SAME call). NO
-//     DELETE round-trip remains on the normal (≤1-value) path — superseding
-//     the #91 review F5 POST-before-DELETE choreography, which had a separate
-//     DELETE step to order.
-//   - per-tap immediate writes — NOT batch. Each control tap is one round-trip;
-//     there is no "save all" payload shape anywhere in this module's API.
-//   - rights: management controls render iff the current person holds `_editor`
-//     (or `_owner`) on the season (repertoire) / event (programme) — read off
-//     the entity's own rights props, same pattern as librarianStore. No new
-//     seat wiring.
-
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
@@ -62,10 +31,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-// ── createRepertoireItem ──────────────────────────────────────────────────────
-
 describe('createRepertoireItem', () => {
-	/** Type-resolution GET (`_type.string=entity`) + entity-create POST. */
 	function makeFetchMock(resolvedTypeId = 'repertoire-item-type-id') {
 		return vi.fn().mockImplementation((url: string) => {
 			if (url.includes('_type.string=entity')) {
@@ -92,9 +58,6 @@ describe('createRepertoireItem', () => {
 		await createRepertoireItem(cfg, { seasonId: 'season-s', workId: 'work-w', status: 'active' }, fetchImpl);
 		const body = createCallBody(fetchImpl);
 
-		// FULL SET check (toEqual on the sorted list, not arrayContaining) — a body
-		// smuggling an extra prop (an edition, a personId, a stray sentinel) must
-		// fail here, not ship silently (#partial-assertions-hide-bugs).
 		const sorted = [...body].sort((a, b) => a.type.localeCompare(b.type));
 		expect(sorted).toEqual(
 			[
@@ -150,14 +113,6 @@ describe('createRepertoireItem', () => {
 		).rejects.toThrow(/403/);
 	});
 });
-
-// ── updateRepertoireStatus ────────────────────────────────────────────────────
-// #264 RED (PO ruling, branch (i), item 6 audit-convert): ATOMIC overwrite —
-// GET current status value-ids → ONE POST whose entry carries the OLD value's
-// `_id` (Entu's native overwrite; setEntity soft-deletes it in the same call).
-// NO sentinels here (unlike attendance) — status is a bare string prop. No
-// DELETE round-trip remains on the normal (≤1-value) path; corrupted EXTRA
-// values are swept at /property/{id} strictly AFTER the POST.
 
 describe('updateRepertoireStatus', () => {
 	type Call = { url: string; method: string; body?: unknown };
@@ -249,12 +204,6 @@ describe('updateRepertoireStatus', () => {
 	});
 });
 
-// ── pinEdition ────────────────────────────────────────────────────────────────
-// Sets repertoire_item.edition (the pinned edition, #91 "Pin edition" control).
-// Same ATOMIC overwrite shape as updateRepertoireStatus (#264): `edition` is a
-// reference prop and a bare POST appends, so the old value's `_id` rides the
-// POST entry — a re-pin can no longer half-land as TWO edition refs.
-
 describe('pinEdition', () => {
 	type Call = { url: string; method: string; body?: unknown };
 
@@ -299,8 +248,6 @@ describe('pinEdition', () => {
 		const postCalls = calls.filter((c) => c.method === 'POST');
 		expect(postCalls).toHaveLength(1);
 		expect(postCalls[0].body).toEqual([{ _id: 'ev-old', type: 'edition', reference: 'edition-new' }]);
-		// The overwrite replaced the old ref in the same call — a separate
-		// delete would reopen the two-refs half-landing window.
 		expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(0);
 		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
@@ -310,10 +257,6 @@ describe('pinEdition', () => {
 		await expect(pinEdition(cfg, 'rep-item-1', 'edition-new', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── deleteRepertoireItem ──────────────────────────────────────────────────────
-// #91 "Remove" — deletes the repertoire_item entity. The work stays in the
-// library (nothing here may touch the work entity).
 
 describe('deleteRepertoireItem', () => {
 	it('sends DELETE {db}/entity/{itemId} — entity endpoint, not property', async () => {
@@ -332,8 +275,6 @@ describe('deleteRepertoireItem', () => {
 		await expect(deleteRepertoireItem(cfg, 'rep-item-xyz', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── createProgramItem ─────────────────────────────────────────────────────────
 
 describe('createProgramItem', () => {
 	function makeFetchMock(resolvedTypeId = 'program-item-type-id') {
@@ -357,7 +298,7 @@ describe('createProgramItem', () => {
 		}>;
 	}
 
-	it('POST body FULL SHAPE: _type ref + _parent=event + edition ref + ordinal NUMBER + _sharing:domain — and nothing else', async () => {
+	it('POST body FULL SHAPE: _type ref + _parent=event + edition ref + ordinal NUMBER — and nothing else (no rights fields, #699)', async () => {
 		const fetchImpl = makeFetchMock('prog-type-42');
 		await createProgramItem(cfg, { eventId: 'event-e', editionId: 'edition-x', ordinal: 3 }, fetchImpl);
 		const body = createCallBody(fetchImpl);
@@ -368,8 +309,7 @@ describe('createProgramItem', () => {
 				{ type: '_type', reference: 'prog-type-42' },
 				{ type: '_parent', reference: 'event-e' },
 				{ type: 'edition', reference: 'edition-x' },
-				{ type: 'ordinal', number: 3 },
-				{ type: '_sharing', string: 'domain' }
+				{ type: 'ordinal', number: 3 }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});
@@ -424,10 +364,6 @@ describe('createProgramItem', () => {
 		).rejects.toThrow(/403/);
 	});
 });
-
-// ── updateProgramItemOrdinal ──────────────────────────────────────────────────
-// #91 reorder: up/down buttons set program_item.ordinal. Same ATOMIC overwrite
-// shape as updateRepertoireStatus (#264), with a number prop.
 
 describe('updateProgramItemOrdinal', () => {
 	type Call = { url: string; method: string; body?: unknown };
@@ -485,11 +421,6 @@ describe('updateProgramItemOrdinal', () => {
 	});
 });
 
-// ── deleteProgramItem ─────────────────────────────────────────────────────────
-// #91 "Remove from tonight" — deletes the program_item entity. Once the LAST
-// one is gone the event falls back to season repertoire (TR.2's hierarchy);
-// nothing for this function to special-case.
-
 describe('deleteProgramItem', () => {
 	it('sends DELETE {db}/entity/{itemId} — entity endpoint, not property', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}));
@@ -508,22 +439,6 @@ describe('deleteProgramItem', () => {
 	});
 });
 
-// ── resolveManageRights ───────────────────────────────────────────────────────
-// #91 rights determination: "the management controls render if the current user
-// has `_editor` on the season (for repertoire) or `_editor` on the event (for
-// programme). Check via the entity's `_editor` property (same pattern as
-// adminStore/librarianStore)." One generic resolver — the caller passes the
-// season id or the event id; there is no repertoire-specific seat wiring.
-//
-// Rights-bucket mechanics (verified from Entu source, memory): `_owner`/`_editor`
-// props live in the PRIVATE bucket — a caller WITHOUT a rights grant reads the
-// entity (domain `_sharing`) but simply does not see the rights props at all.
-// Absence IS the clean negative signal; a fetch/HTTP failure is NOT (it must
-// surface as 'error', never collapse into 'not-editor').
-
-// #91 review F1 — the agenda's actual path: the season and event list reads
-// already carry `_owner`/`_editor`, so rights are pure computation on data the
-// page holds. resolveManageRights stays for genuine single-entity callers.
 describe('manageRightsFrom', () => {
 	it("person in editors → 'editor'", () => {
 		expect(manageRightsFrom([], ['me'], 'me')).toBe('editor');
@@ -607,11 +522,6 @@ describe('resolveManageRights', () => {
 	});
 });
 
-// ── pickableWorks ─────────────────────────────────────────────────────────────
-// #91 "Add work" picker: shows library works NOT already in the current season's
-// repertoire. Pure — no fetch: the caller already holds listWorks' result and
-// the season's listRepertoireItems' result; this is the set difference.
-
 describe('pickableWorks', () => {
 	const works: Work[] = [
 		{ id: 'work-a', name: 'Aeternum', composer: 'Pärt' },
@@ -658,13 +568,6 @@ describe('pickableWorks', () => {
 	});
 });
 
-// ── planProgramMove + reorderProgramItems (#91 review finding 2) ─────────────
-// `updateProgramItemOrdinal` alone cannot reorder anything: it writes ONE side
-// of the swap, leaving the moved item tied with its neighbour. listProgramItems
-// sorts with `(a, b) => a.ordinal - b.ordinal`, a no-op for equal keys, so the
-// move visibly does nothing and repeated moves pile up duplicates. Every move
-// writes BOTH sides.
-
 describe('planProgramMove', () => {
 	const programme = [
 		{ id: 'pi-a', ordinal: 0 },
@@ -701,14 +604,10 @@ describe('planProgramMove', () => {
 	});
 
 	it('DUPLICATE ordinals (Entu `mandatory` is a soft hint) renumber cleanly instead of swapping to a no-op', () => {
-		// Both default to 0 — a bare swap would write 0 and 0 and change nothing.
 		const tied = [
 			{ id: 'pi-x', ordinal: 0 },
 			{ id: 'pi-y', ordinal: 0 }
 		];
-		// pi-y is already sitting at 0, so only the DISPLACED item needs a write —
-		// but it does get one, which is the whole point: after the move the two
-		// ordinals are distinct and the next read sorts deterministically.
 		const plan = planProgramMove(tied, 'pi-y', 'up');
 		expect(plan).toEqual([{ id: 'pi-x', ordinal: 1 }]);
 		const after = new Map(tied.map((entry) => [entry.id, entry.ordinal]));
@@ -744,9 +643,6 @@ describe('reorderProgramItems', () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string | URL | Request, init?: RequestInit) => {
 			const s = String(url);
 			if (!init || init.method === undefined) {
-				// the pre-write lookup of existing ordinal value ids — the clean
-				// entity id (query string stripped), since #264 reads this `_id`
-				// back INTO the write, not just as a DELETE target.
 				const itemId = s.split('/').pop()?.split('?')[0];
 				return Promise.resolve(json({ entity: { ordinal: [{ _id: `val-${itemId}` }] } }));
 			}
@@ -793,19 +689,6 @@ describe('reorderProgramItems', () => {
 	});
 });
 
-// ── createRepertoireWriteQueue ────────────────────────────────────────────────
-// #91: "Per-tap immediate write (same pattern as Attendance)." The optimistic-
-// and-reconcile queue, generalized: repertoire management has FIVE heterogeneous
-// write kinds (create/status/pin/delete/ordinal), so the queue takes the write
-// as a thunk and guards per KEY (the repertoire_item / program_item id, or a
-// caller-chosen key like `add:<workId>` for creates where no item id exists yet).
-//
-// The #15 lesson carries over verbatim: the primary double-tap guard is the UI
-// disabling the control while its key is pending (via setPending); the queue's
-// own per-key guard is a defensive backstop. All callbacks are PER-KEY — there
-// is no whole-map operation in this API for a caller to misuse, so one item's
-// failure structurally cannot clobber another item's in-flight state.
-
 describe('createRepertoireWriteQueue', () => {
 	function makeCallbacks() {
 		return {
@@ -815,7 +698,6 @@ describe('createRepertoireWriteQueue', () => {
 		};
 	}
 
-	/** A write thunk whose settlement the test controls. */
 	function deferred() {
 		let resolve!: () => void;
 		let reject!: (e: unknown) => void;
@@ -894,12 +776,6 @@ describe('createRepertoireWriteQueue', () => {
 		expect(callbacks.reconcile).not.toHaveBeenCalled();
 	});
 
-	// ── optimistic-and-reconcile (#91 review finding 5) ──────────────────────
-	// A pending FLAG is not optimism: with only setPending/reconcile/revert, a
-	// tap disabled the control and the row changed nothing until a full refetch.
-	// The local mutation and its inverse ride along with the request, because
-	// the five write kinds share no value shape to hand the queue instead.
-
 	it('applies the optimistic mutation SYNCHRONOUSLY, before the write is fired', () => {
 		const callbacks = makeCallbacks();
 		const queue = createRepertoireWriteQueue(callbacks);
@@ -977,7 +853,6 @@ describe('createRepertoireWriteQueue', () => {
 		queue.request('rep-item-alive', () => inFlight.promise);
 		failing.reject(new Error('500'));
 		await vi.waitFor(() => expect(callbacks.revert).toHaveBeenCalledWith('rep-item-fail'));
-		// The other key's in-flight state is untouched by the failure.
 		expect(queue.isPending('rep-item-alive')).toBe(true);
 		expect(callbacks.revert).toHaveBeenCalledTimes(1);
 		expect(callbacks.setPending).not.toHaveBeenCalledWith('rep-item-alive', false);

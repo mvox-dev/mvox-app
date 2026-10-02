@@ -1,28 +1,7 @@
+// createSection: one create POST, top-level under the database entity or under a section.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createSection } from './sectionActions';
-
-// TS.3/#97 RED — `createSection`, the section CREATE write layer. The export is
-// a STUB that throws 'not implemented', so every assertion below FAILS until
-// GREEN.
-//
-// Contract under test (see sectionActions.ts module header):
-//
-//   - ONE entity create: `POST entity` (the COLLECTION endpoint, never
-//     entity/{id} — that would append props onto an existing entity).
-//   - `_type` resolved to a REFERENCE via resolveTypeId(cfg, 'section') (#10
-//     pinned wire-shape; the resolution GET is `_type.string=entity&
-//     name.string=section`, cached per db).
-//   - parentId present → `_parent` = that section id; NO lookup happens.
-//   - parentId absent/null → "(top level)": `_parent` = the DATABASE entity
-//     (`entity?_type.string=database&limit=1` — #161, collective = database);
-//     FAILS LOUD naming the db when no database entity is readable — v4E pins
-//     `parentConstraint: 'exactly_one_of'`, a parentless section is not a
-//     thing.
-//   - `_sharing: 'public'` explicit at create (v4E section sharing — federation
-//     discoverability; never rely on inherit).
-//   - name trimmed; empty/whitespace name throws with ZERO fetches.
-//   - resolves to the NEW section's `_id` from the create response.
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -34,12 +13,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/**
- * Routes the three GET/POST shapes createSection may issue:
- *   type-resolution GET (`_type.string=entity`) → the section type-def id,
- *   database-resolution GET (`_type.string=database`) → the sole database entity,
- *   anything else → the entity-create POST → `{ _id: newId }`.
- */
 function makeFetchMock(
 	opts: { typeId?: string; dbEntities?: Array<{ _id: string }>; newId?: string; createStatus?: number } = {}
 ) {
@@ -60,7 +33,6 @@ function makeFetchMock(
 	});
 }
 
-/** The one call that is neither type- nor database-resolution: the create POST. */
 function createCall(fetchImpl: ReturnType<typeof makeFetchMock>): [string, RequestInit] {
 	const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
 	const found = calls.filter(
@@ -77,21 +49,16 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>) {
 }
 
 describe('createSection — top level (parentId absent): child of the resolved database entity', () => {
-	it('POST body FULL SHAPE: _type ref (resolved) + _parent=org + name string + _sharing:public + _inheritrights:true (#264 item 6) — and NOTHING else (no display_order, no voice, no current_section)', async () => {
+	it('POST body FULL SHAPE: _type ref (resolved) + _parent=org + name string — and NOTHING else (no rights fields #699, no display_order, no voice, no current_section)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		await createSection(cfg, { name: 'Tenor' }, fetchImpl);
 
-		// FULL SET check (toEqual on the sorted list, not arrayContaining) — a body
-		// smuggling an extra prop must fail HERE, not ship silently
-		// (#partial-assertions-hide-bugs).
 		const sorted = [...createCallBody(fetchImpl)].sort((a, b) => a.type.localeCompare(b.type));
 		expect(sorted).toEqual(
 			[
 				{ type: '_type', reference: 'section-type-42' },
 				{ type: '_parent', reference: 'org-1' },
-				{ type: 'name', string: 'Tenor' },
-				{ type: '_sharing', string: 'public' },
-				{ type: '_inheritrights', boolean: true }
+				{ type: 'name', string: 'Tenor' }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});
@@ -102,7 +69,6 @@ describe('createSection — top level (parentId absent): child of the resolved d
 		const [url, init] = createCall(fetchImpl);
 		expect(init.method).toBe('POST');
 		expect(String(url)).toContain('/testdb/entity');
-		// No id path segment after `entity` (query-string is allowed, a path is not).
 		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
 	});
 
@@ -128,12 +94,15 @@ describe('createSection — top level (parentId absent): child of the resolved d
 });
 
 describe('createSection — parentId present: sub-section, no database-entity lookup involved', () => {
-	it('`_parent` = the given SECTION id, and NO database-resolution GET is issued at all', async () => {
-		const fetchImpl = makeFetchMock();
+	it('FULL body: `_parent` = the given SECTION id, no rights fields, and NO database-resolution GET', async () => {
+		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		await createSection(cfg, { name: 'Soprano 2', parentId: 'sec-sop' }, fetchImpl);
 
-		const body = createCallBody(fetchImpl);
-		expect(body.find((p) => p.type === '_parent')).toEqual({ type: '_parent', reference: 'sec-sop' });
+		expect(createCallBody(fetchImpl)).toEqual([
+			{ type: '_type', reference: 'section-type-42' },
+			{ type: '_parent', reference: 'sec-sop' },
+			{ type: 'name', string: 'Soprano 2' }
+		]);
 		const dbCalls = (fetchImpl.mock.calls as Array<[string]>).filter(([url]) =>
 			String(url).includes('_type.string=database')
 		);
@@ -155,8 +124,6 @@ describe('createSection — name hygiene and failure surfacing', () => {
 		'empty/whitespace-only name (%j) throws NAMING the problem, WITHOUT any fetch — the data layer must never create a nameless section',
 		async (name) => {
 			const fetchImpl = makeFetchMock();
-			// The message must say what is wrong (a bare throw would also let the
-			// RED stub pass) — pin that it mentions the name.
 			await expect(createSection(cfg, { name }, fetchImpl)).rejects.toThrow(/name/i);
 			expect(fetchImpl).not.toHaveBeenCalled();
 		}

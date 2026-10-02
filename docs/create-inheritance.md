@@ -40,11 +40,11 @@ All five share one cause: a parent without `_inheritrights: true` at create time
 
 - Docs (`entu-www`: `overview/entities/index.md:35,75`, `overview/properties/index.md:102`) say only that a child inherits when it has `_inheritrights: true`. They say nothing of a create-time auto-fill. The auto-fill is source-only (`entity.js:354-385`).
 - The `entu-www` examples (`examples/index.md:51,181`) tell users to set the flag explicitly on children.
-- Stale citation: the issue and `sectionActions.create-inheritrights.spec.ts` cite `entity.js:296-325`. On origin/main that range is the `_parent` write-access check; the auto-fill is at `entity.js:354-385`. Cascade check cited as `aggregate.js:166-183` is now `aggregate.js:194`.
+- Stale citation: the issue and the since-deleted `sectionActions.create-inheritrights.spec.ts` cited `entity.js:296-325`. On origin/main that range is the `_parent` write-access check; the auto-fill is at `entity.js:354-385`. Cascade check cited as `aggregate.js:166-183` is now `aggregate.js:194`.
 - The auto-fill triggers on ANY parent being `true`, not all; the spec comment says "at least one", which matches.
 
-## Gap versus sections
+## Creates that set the flag themselves
 
-`createSection` pins an explicit `_inheritrights: true` (#264 item 6, `sectionActions.create-inheritrights.spec.ts`) so it does not depend on the auto-fill. The five `postCreate` types above do not.
+None. Since #699 no create sends `_sharing` or `_inheritrights`: `createSection`, `createLink`, `createMemberRecord`, `createAttendance`, `createScheduleItem`, `createProgramItem`, `createFeedback` and `createInvite` (person and member) leave both to Entu, like the five `postCreate` types above. A parent whose rights or `_sharing` are wrong is corrected in Entu, not by the app. Writes where the right is the feature itself stay: the profile visibility level, role grants on /admin, the invite's self-edit grant.
 
 (*MVOX:Finn*)

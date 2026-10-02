@@ -41,14 +41,10 @@ export async function createSection(
 		parentRef = dbEntityId;
 	}
 
-	// `public` is a deliberate widen for federation discoverability (#133); inheriting would give
-	// `domain`. `_inheritrights` states the cascade the create relied on (#264 item 6): keep both.
-	const props: Array<{ type: string; reference?: string; string?: string; boolean?: boolean }> = [
+	const props: Array<{ type: string; reference?: string; string?: string }> = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: parentRef },
-		{ type: 'name', string: name },
-		{ type: '_sharing', string: 'public' },
-		{ type: '_inheritrights', boolean: true }
+		{ type: 'name', string: name }
 	];
 
 	return postEntity(cfg, 'createSection', props, fetchImpl);

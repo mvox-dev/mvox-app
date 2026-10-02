@@ -592,8 +592,7 @@ describe('+page — programme management wiring (#91 TR.3)', () => {
 			{ type: '_type', reference: 'type-1' },
 			{ type: '_parent', reference: 'ev-1' },
 			{ type: 'edition', reference: 'ed-1' },
-			{ type: 'ordinal', number: 0 },
-			{ type: '_sharing', string: 'domain' }
+			{ type: 'ordinal', number: 0 }
 		]);
 	});
 

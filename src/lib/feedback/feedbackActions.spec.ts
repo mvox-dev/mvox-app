@@ -1,49 +1,4 @@
-// #395 slice 2/2 RED — createFeedback: the ONE create path for a `feedback`.
-//
-// CONTRACT (GREEN implements src/lib/feedback/feedbackActions.ts):
-//
-//   createFeedback(cfg, memberId, { screenshot, strokes, description, pagePath }, fetchImpl?)
-//     → Promise<string>  (the new feedback entity's id)
-//
-//   Created with the MEMBER'S OWN key (CreatorRule kind 'self',
-//   mvox-schema-extensions.ts) — cfg.token is the member's own token; nothing
-//   else is used. Requests, in this exact order:
-//
-//   1. GET  entity?_type.string=entity&name.string=feedback&props=_id&limit=1
-//      — resolveTypeId(cfg, 'feedback'): `_type` goes as a REFERENCE to the
-//      type id, never a string (memory: create needs _type as a reference).
-//   2. POST entity — the create, body EXACTLY (toEqual, order included):
-//        _type        reference = the resolved type id
-//        _parent      reference = memberId
-//        _sharing     string 'domain'  — EXPLICIT (#395 body, Gama 2026-09-28):
-//                     a type's _sharing is a ceiling, not a default (ER-1); a
-//                     child copies its parent only when the parent is
-//                     non-private (ER-13), so a feedback under a still-private
-//                     member would otherwise stay private. As #265 does.
-//        name         string `${pagePath} ${YYYY-MM-DD}` (UTC submission date)
-//                     — NAME RULING (#395 body, Gama 2026-09-29): page path +
-//                     submission date, never a member name or description text.
-//                     No prop-def; the type stays at three fields.
-//        description  string = the description — OPTIONAL on the type, so an
-//                     EMPTY one is omitted entirely (review round F3)
-//        doodle_layer string = serialize(strokes) (#394 format, strokes.ts)
-//      No `_inheritrights` (inheritance left natural, Mihkel #390).
-//   3. POST entity/{newId} — the screenshot's file metadata, the two-step
-//      upload of src/lib/library/editionFiles.ts (generalize that helper to
-//      take the property name — do not copy it): body
-//      [{ type: 'screenshot', filename: 'screenshot.png', filesize, filetype }]
-//      Response envelope: the LIVE-captured flat `properties` array (see
-//      editionFiles.ts ENVELOPE), each entry carrying its `upload` object.
-//   4. PUT  upload.url — through fetchImpl DIRECTLY (not entuFetch: no
-//      Authorization/Accept on a signed URL), headers EXACTLY upload.headers,
-//      body the screenshot Blob.
-//
-//   FAIL LOUDLY: any failed step rejects — no partial success reported as
-//   success. A failed PUT also DELETEs the phantom screenshot property
-//   (files/index.md recovery, as editionFiles.ts does) and still rejects.
-//   Review round F2: that holds for the DATABASE as well as the promise —
-//   every failure after the entity POST landed also DELETEs the new feedback
-//   entity, so no screenshot-less (hence unviewable) record survives.
+// createFeedback: type lookup, entity create, screenshot upload, cleanup on any failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
@@ -168,7 +123,7 @@ describe('#395 createFeedback — the happy path issues exactly the expected req
 		]);
 	});
 
-	it('the create POST body is EXACTLY _type ref + _parent member + explicit _sharing domain + name + description + serialized doodle_layer', async () => {
+	it('the create POST body is EXACTLY _type ref + _parent member + name (no rights fields, #699) + description + serialized doodle_layer', async () => {
 		const fetchImpl = makeFetch();
 		await createFeedback(cfg, MEMBER_ID, input(), fetchImpl);
 
@@ -176,7 +131,6 @@ describe('#395 createFeedback — the happy path issues exactly the expected req
 		expect(JSON.parse(String(createInit?.body))).toEqual([
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: MEMBER_ID },
-			{ type: '_sharing', string: 'domain' },
 			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
 			{ type: 'description', string: DESCRIPTION },
 			{ type: 'doodle_layer', string: serialize(STROKES) }
@@ -264,11 +218,6 @@ describe('#395 createFeedback — any failed step rejects (fail loudly, no parti
 	});
 });
 
-// REVIEW ROUND (#395, F2): fail-loudly covers the DATABASE too. Once the entity
-// POST has landed, every later failure rolls the create back — a feedback with
-// no screenshot is exactly what loadFeedback rejects, so leaving one behind is
-// a permanently unviewable record nothing cleans up, and the member's retry
-// adds a second one under the same member.
 describe('#395 createFeedback — a failure after the create DELETEs the half-built entity', () => {
 	function entityDeletes(fetchImpl: ReturnType<typeof makeFetch>): string[] {
 		return fetchImpl.mock.calls
@@ -311,9 +260,6 @@ describe('#395 createFeedback — a failure after the create DELETEs the half-bu
 	});
 });
 
-// REVIEW ROUND (#395, F3): `description` is OPTIONAL on the type, so no words
-// means NO property — never an empty value. That absent-property shape is what
-// loadFeedback reads as ''.
 describe('#395 createFeedback — an empty description is OMITTED, not posted empty', () => {
 	it('the create body carries no `description` entry at all', async () => {
 		const fetchImpl = makeFetch();
@@ -321,7 +267,6 @@ describe('#395 createFeedback — an empty description is OMITTED, not posted em
 		expect(JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))).toEqual([
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: MEMBER_ID },
-			{ type: '_sharing', string: 'domain' },
 			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
 			{ type: 'doodle_layer', string: serialize(STROKES) }
 		]);

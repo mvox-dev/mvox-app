@@ -1,66 +1,7 @@
+// entityCreate: season/event/series create bodies, full shape, never a rights field (#132).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createEvent, createEventSeries, createSeason } from './entityCreate';
-
-// #132/T1 — the shared entity CREATE write layer for event management:
-// `createSeason`, `createEventSeries`, `createEvent`.
-//
-// Contract under test (see entityCreate.ts module header):
-//
-//   - EXACTLY TWO fetches per create: the resolveTypeId GET (cached) + ONE
-//     `POST entity` (COLLECTION endpoint, never entity/{id}).
-//   - `_type` as a resolved REFERENCE (#10 pinned wire-shape), `_parent` =
-//     `[dbEntityId, ...extraParentIds]`, ONE prop PER id — zero lookup fetches, the
-//     data layer never guesses an org/season. The ORG IS ITS OWN REQUIRED
-//     FIELD (#132 review F4: v4E marks it `required, parentCard: '1'` on all
-//     three types, and a flat id list made it forgettable), and on createEvent
-//     THE SERIES PARENT IS ITS OWN FIELD TOO (`seriesId`, #132 review F2: it is
-//     the parent whose presence decides whether a blank `name` is legal, and an
-//     anonymous entry in a flat list is invisible to that check). A series
-//     occurrence therefore carries BOTH its season parent (what listEvents
-//     selects on, in `extraParentIds`) and its series parent (what the
-//     inheritance merge follows, in `seriesId`).
-//   - CRITICAL (#132, Mihkel 2026-08-13): NO `_sharing`, NO `_inheritrights`
-//     anywhere in the create body — rights/visibility are TRUSTED to Entu's
-//     `_inheritrights` chain from the organization. This is a DELIBERATE
-//     deviation from createSection (which pins `_sharing: 'public'` as a
-//     v4E per-type policy) — pinned here BOTH by the full-shape toEqual on
-//     every body (#partial-assertions-hide-bugs) AND by explicit absence
-//     probes, so a future "helpful" copy-paste of the old pattern fails loud.
-//   - Field-typed wire values: start_date/end_date → { date }, start_datetime
-//     → { datetime }, duration_minutes/capacity/interval_days → { number },
-//     conductor → { reference } one entry per ref, everything else → { string }.
-//   - EVERY v4E-required property is enforced BEFORE any fetch (#132 review
-//     F1/F2/F3 — Entu `mandatory` is a soft UI hint that rejects nothing, so
-//     this module is the only enforcement point): season name/start_date/
-//     end_date; series name/event_type/interval_days/start_time/
-//     duration_minutes/start_date/end_date; event start_datetime (+ event_type,
-//     stricter than v4E because every reader takes the event's OWN
-//     event_type.string and the series merge is deliberately not extended to it
-//     (#194/#202) — an omitted type is not inherited, it is an event with no
-//     type badge anywhere; and event.name whenever no `seriesId` is given —
-//     nothing to inherit from means a permanently nameless entity, #132 F2).
-//   - Only genuinely INHERITABLE-or-optional props may be omitted: event.name
-//     (v4E 'inherited from series.name if not set' — WITH a series parent),
-//     event.location/description, the two series default_* fields, conductor,
-//     capacity, duration_minutes. Those absent OR BLANK → prop OMITTED entirely
-//     (an empty own-value on an event would shadow the series default in the
-//     read-side `??` inheritance merge, and the T4/T5 forms hand us '' for every
-//     untouched field). The same normalization on the NUMBER optionals: only a
-//     FINITE number is sent, so 0 survives while undefined/null/NaN drop the
-//     prop (a blank number input hands the form null or NaN, both typed
-//     `number`, and JSON.stringify(NaN) is `null` on the wire — #132 F1).
-//   - Resolves to the created entity's `_id`; 2xx WITHOUT `_id` throws (the
-//     apparent-success trap); non-2xx POST throws with status surfaced;
-//     resolveTypeId failure propagates with NO create POST issued.
-//
-// INTEGRATION NOTE — T1 is infra with NO page entry point yet: the agenda /
-// season-management wiring that calls these functions lands in #132 T2/T4/T6
-// (each with its own page.*.spec.ts route test, per house rule). What this
-// spec DOES integrate is the real transport layer: the fetchImpl seam sits
-// BELOW `entuFetch`/`entuUrl`, so the URL composition (base + db segment +
-// endpoint) and the Authorization header asserted in the "transport
-// integration" block exercise $lib/entu/request for real, not a mock of it.
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -72,12 +13,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/**
- * Routes the two shapes any of the three creates may issue:
- *   type-resolution GET (`_type.string=entity&name.string=<type>`) → the
- *     type-def id for that name (from `typeIds`, default `type-<name>`),
- *   anything else → the entity-create POST → `createBody` at `createStatus`.
- */
 function makeFetchMock(
 	opts: {
 		typeIds?: Record<string, string>;
@@ -107,7 +42,6 @@ type WireProp = {
 	datetime?: string;
 };
 
-/** The one call that is not type-resolution: the create POST. */
 function createCall(fetchImpl: ReturnType<typeof makeFetchMock>): [string, RequestInit] {
 	const calls = fetchImpl.mock.calls as Array<[string, RequestInit]>;
 	const found = calls.filter(([url]) => !String(url).includes('_type.string=entity'));
@@ -123,16 +57,12 @@ function createCallBody(fetchImpl: ReturnType<typeof makeFetchMock>): WireProp[]
 const byType = (a: WireProp, b: WireProp) =>
 	a.type.localeCompare(b.type) || JSON.stringify(a).localeCompare(JSON.stringify(b));
 
-/** The type-resolution GETs issued (URL strings). */
 function typeResolutionCalls(fetchImpl: ReturnType<typeof makeFetchMock>): string[] {
 	return (fetchImpl.mock.calls as Array<[string]>)
 		.map(([url]) => String(url))
 		.filter((u) => u.includes('_type.string=entity'));
 }
 
-// Minimal VALID inputs — every v4E-required field present, nothing optional.
-// Reused by the shared cross-create blocks so a new required field breaks them
-// once, here, instead of silently weakening a dozen assertions.
 const minimalSeason = {
 	name: 'S',
 	dbEntityId: 'org-1',
@@ -157,10 +87,6 @@ const minimalEvent = {
 	eventType: 'concert',
 	startDatetime: '2026-09-07T16:00:00.000Z'
 };
-
-// ---------------------------------------------------------------------------
-// createSeason
-// ---------------------------------------------------------------------------
 
 describe('createSeason — wire shape', () => {
 	it('resolves the `season` type (ONE resolution GET carrying name.string=season) and POSTs `_type` as that REFERENCE — never a string', async () => {
@@ -197,9 +123,6 @@ describe('createSeason — wire shape', () => {
 			fetchImpl
 		);
 
-		// FULL SET check (toEqual on the sorted list, not arrayContaining) — a body
-		// smuggling an extra prop (_sharing above all) must fail HERE, not ship
-		// silently (#partial-assertions-hide-bugs).
 		expect([...createCallBody(fetchImpl)].sort(byType)).toEqual(
 			[
 				{ type: '_type', reference: 'season-type-9' },
@@ -249,7 +172,6 @@ describe('createSeason — wire shape', () => {
 		const [url, init] = createCall(fetchImpl);
 		expect(init.method).toBe('POST');
 		expect(String(url)).toContain('/testdb/entity');
-		// No id path segment after `entity` (query-string is allowed, a path is not).
 		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 	});
@@ -261,10 +183,6 @@ describe('createSeason — wire shape', () => {
 		);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// createEventSeries
-// ---------------------------------------------------------------------------
 
 describe('createEventSeries — wire shape', () => {
 	const full = {
@@ -377,10 +295,6 @@ describe('createEventSeries — wire shape', () => {
 		);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// createEvent
-// ---------------------------------------------------------------------------
 
 describe('createEvent — wire shape', () => {
 	it('resolves the `event` type; minimal body is EXACTLY _type ref + _parent refs + event_name string (#420 — never bare `name`) + event_type string + start_datetime { datetime }', async () => {
@@ -519,7 +433,6 @@ describe('createEvent — wire shape', () => {
 		const blank = makeFetchMock({ typeIds: { event: 'event-type-3' } });
 		await createEvent(cfg, { ...minimalEvent, seriesId: 'series-42', name: '   ' }, blank);
 		expect(createCallBody(blank).filter((p) => p.type === 'event_name')).toEqual([]);
-		// #420 — bare `name` is retired from event creates in EVERY case, blank or not.
 		expect(createCallBody(blank).filter((p) => p.type === 'name')).toEqual([]);
 	});
 
@@ -561,7 +474,6 @@ describe('createEvent — wire shape', () => {
 		const nanBody = createCallBody(nan);
 		expect(nanBody.filter((p) => p.type === 'capacity')).toEqual([]);
 		expect(nanBody.filter((p) => p.type === 'duration_minutes')).toEqual([]);
-		// The wire text itself must not contain a null-valued number prop.
 		expect(String(createCall(nan)[1].body)).not.toContain('"number":null');
 
 		const nulls = makeFetchMock({ typeIds: { event: 'event-type-3' } });
@@ -602,12 +514,7 @@ describe('createEvent — wire shape', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// Input hygiene — rejected BEFORE any fetch (createSection's pattern)
-// ---------------------------------------------------------------------------
-
 describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY fetch is issued', () => {
-	/** Every case: run the create, expect the message, expect ZERO fetches. */
 	async function expectRejectedWithoutFetch(
 		run: (f: typeof fetch) => Promise<string>,
 		message: RegExp
@@ -667,7 +574,6 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 			(f) => createEventSeries(cfg, { ...minimalSeries, endDate: '' }, f),
 			/endDate must not be empty/
 		);
-		// number inputs bound to $state('') arrive as undefined / NaN, never as ''
 		await expectRejectedWithoutFetch(
 			(f) =>
 				createEventSeries(
@@ -729,7 +635,6 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 			(f) => createEvent(cfg, { ...minimalEvent, name: '   ' }, f),
 			/name must not be empty/
 		);
-		// A BLANK seriesId is no series at all — same rejection, not a loophole.
 		await expectRejectedWithoutFetch(
 			(f) => createEvent(cfg, { ...minimalEvent, name: '', seriesId: '  ' }, f),
 			/name must not be empty/
@@ -786,14 +691,6 @@ describe('input hygiene — a missing/blank v4E-REQUIRED field throws before ANY
 	});
 });
 
-// ---------------------------------------------------------------------------
-// The #132 critical design decision, probed explicitly across all three
-// ---------------------------------------------------------------------------
-
-// Already enforced by every full-shape toEqual above; these direct absence
-// probes exist so the DECISION has a named, greppable pin — a regression that
-// copy-pastes createSection's `_sharing: 'public'` (or "hardens" the create
-// with `_inheritrights`) fails a test whose title says exactly why.
 describe('#132 critical: NO _sharing and NO _inheritrights on ANY create — rights are trusted to Entu `_inheritrights` propagation from the organization', () => {
 	const runs: Array<[string, (fetchImpl: typeof fetch) => Promise<string>]> = [
 		[
@@ -837,17 +734,11 @@ describe('#132 critical: NO _sharing and NO _inheritrights on ANY create — rig
 			const body = createCallBody(fetchImpl);
 			expect(body.filter((p) => p.type === '_sharing')).toEqual([]);
 			expect(body.filter((p) => p.type === '_inheritrights')).toEqual([]);
-			// And only the two prop KINDS a create may carry beyond domain props
-			// (`_parent` may repeat — one entry per parent id):
 			const systemProps = new Set(body.filter((p) => p.type.startsWith('_')).map((p) => p.type));
 			expect([...systemProps].sort()).toEqual(['_parent', '_type']);
 		}
 	);
 });
-
-// ---------------------------------------------------------------------------
-// Failure surfacing — shared error contract across all three
-// ---------------------------------------------------------------------------
 
 describe('failure surfacing (all three creates)', () => {
 	const runs: Array<[string, string, (fetchImpl: typeof fetch) => Promise<string>]> = [
@@ -887,11 +778,6 @@ describe('failure surfacing (all three creates)', () => {
 	);
 });
 
-// ---------------------------------------------------------------------------
-// Transport integration — the fetchImpl seam sits BELOW the real
-// entuFetch/entuUrl, so these pin the actual request layer (see header note)
-// ---------------------------------------------------------------------------
-
 describe('transport integration — real entuFetch/entuUrl underneath the seam', () => {
 	it('the create POST goes through entuUrl (base + db segment) and entuFetch attaches the Bearer token + JSON content type', async () => {
 		const fetchImpl = makeFetchMock();
@@ -908,7 +794,6 @@ describe('transport integration — real entuFetch/entuUrl underneath the seam',
 		await createEvent(cfg, { ...minimalEvent, name: 'E1' }, fetchImpl);
 		await createEvent(cfg, { ...minimalEvent, name: 'E2' }, fetchImpl);
 		expect(typeResolutionCalls(fetchImpl)).toHaveLength(1);
-		// 1 resolution + 2 creates:
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 	});
 });

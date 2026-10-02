@@ -1,39 +1,7 @@
+// createSection with a caller-supplied database entity as the top-level parent.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { createSection } from './sectionActions';
-
-// TU.1/#109 RED — finding #10, root cause A: the TOP-LEVEL PARENT ORG.
-//
-// LIVE-VERIFIED (2026-08-12, the dev/test collective): the
-// `_type.string=organization&limit=1` org fallback in `createSection` rests on a
-// FALSE premise ("the dev/test collective's extra org entities are unreadable
-// to non-admin callers"). In truth all SIX
-// organization entities are `_sharing: domain` — every authenticated member
-// reads all six, and `limit=1` returns the FIRST by id:
-//
-//     69c7f8718489bfcb0e81b05a  "Eesti Kammerkooride Liit"   ← the UMBRELLA FEDERATION
-//     69c7f8718489bfcb0e81b065  "Eesti Filharmoonia Kammerkoor" ← the actual collective
-//     … + 4 more (Sireen, Meeskooride Liit, RAM, TAM)
-//
-// So every top-level section create was parented under the umbrella federation
-// — the WRONG org — and is refused outright (Entu parent-rights) for any caller
-// without write rights on the umbrella. That is finding #10's "new section
-// creation doesn't work in live environment".
-//
-// Contract under test (GREEN must implement — see CreateSectionInput.dbEntityId):
-//
-//   - `dbEntityId` PRESENT, no parentId → `_parent` = dbEntityId; ZERO org-lookup fetches
-//     (the caller — the roster page — already knows the collective org from the
-//     member's own `_parent`; the data layer must not guess).
-//   - `dbEntityId` ABSENT, no parentId → the legacy sole-org resolution stays, BUT a
-//     MULTI-ORG db (search response `count` > 1) FAILS LOUD naming the db and
-//     creates NOTHING — never silently parents under whichever org the API
-//     happened to return first.
-//   - `dbEntityId` ABSENT, exactly one readable org (count 1 / count absent with one
-//     entity) → that org, unchanged legacy behavior (sectionActions.create.spec.ts
-//     keeps passing).
-//   - parentId present → sub-section; dbEntityId is irrelevant and no org lookup
-//     happens (already pinned by sectionActions.create.spec.ts).
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
@@ -45,9 +13,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/** Live-shaped router: type-resolution GET, org-search GET (multi-org by
- *  default — umbrella FIRST, exactly as the live dev/test collective returned
- *  them), and the entity-create POST. */
 function makeFetchMock(
 	opts: {
 		typeId?: string;
@@ -57,7 +22,6 @@ function makeFetchMock(
 ) {
 	const {
 		typeId = 'section-type-42',
-		// Live shape: limit=1 truncates the list but `count` still says 6.
 		orgResponse = { entities: [{ _id: 'org-umbrella' }], count: 6 },
 		newId = 'sec-new-1'
 	} = opts;
@@ -102,7 +66,7 @@ describe('createSection — caller-supplied dbEntityId is the top-level parent (
 		});
 	});
 
-	it('dbEntityId present: FULL create body is exactly _type ref + _parent=dbEntityId + name + _sharing:public + _inheritrights:true (#264 item 6) — nothing else (#partial-assertions-hide-bugs)', async () => {
+	it('dbEntityId present: FULL create body is exactly _type ref + _parent=dbEntityId + name, no rights fields (#699) — nothing else (#partial-assertions-hide-bugs)', async () => {
 		const fetchImpl = makeFetchMock({ typeId: 'section-type-42' });
 		const id = await createSection(cfg, { name: 'Tenor', dbEntityId: 'org-efk' }, fetchImpl);
 		expect(id).toBe('sec-new-1');
@@ -115,21 +79,11 @@ describe('createSection — caller-supplied dbEntityId is the top-level parent (
 			[
 				{ type: '_type', reference: 'section-type-42' },
 				{ type: '_parent', reference: 'org-efk' },
-				{ type: 'name', string: 'Tenor' },
-				{ type: '_sharing', string: 'public' },
-				{ type: '_inheritrights', boolean: true }
+				{ type: 'name', string: 'Tenor' }
 			].sort((a, b) => a.type.localeCompare(b.type))
 		);
 	});
 });
-
-// #161 (collective = database, Mihkel ruling 2026-08-16) — the no-dbEntityId
-// MULTI-ORG-db legacy-fallback describe block that used to live here is
-// RETIRED: `createSection`'s no-dbEntityId path no longer searches for an
-// organization entity at all (organization instances no longer exist, #159) —
-// it resolves the DATABASE entity instead. That behavior (including its own
-// fail-loud-when-unreadable case) is pinned by
-// sectionActions.create-database.spec.ts now.
 
 // (*MVOX:Tallis* — TU.1/#109 RED, finding #10 root cause A: wrong top-level parent org)
 // (*MVOX:Palestrina* — #161 GREEN: legacy no-dbEntityId multi-org fallback describe block retired)

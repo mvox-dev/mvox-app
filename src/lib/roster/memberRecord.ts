@@ -99,11 +99,9 @@ export async function createMemberRecord(
 ): Promise<string> {
 	const typeId = await resolveTypeId(cfg, 'admin_member_record', fetchImpl);
 
-	// Property tiers are schema prop-defs (#265); the record states only its own `_sharing`.
 	const props: Array<{ type: string; reference?: string; string?: string; datetime?: string }> = [
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: input.dbEntityId },
-		{ type: '_sharing', string: 'domain' },
 		{ type: 'person', reference: input.personId },
 		{ type: 'name', string: input.name }
 	];

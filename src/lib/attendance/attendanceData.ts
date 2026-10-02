@@ -37,8 +37,6 @@ export interface RsvpForEvent {
 	status: RsvpStatus;
 }
 
-// Explicit `_sharing: domain`: an event can be public, and a public parent's copy would hide the
-// domain-tier member and status props from the attendance reads.
 export async function createAttendance(
 	cfg: EntuCfg,
 	input: CreateAttendanceInput,
@@ -50,8 +48,7 @@ export async function createAttendance(
 		{ type: '_parent', reference: input.eventId },
 		{ type: 'member', reference: input.memberId },
 		{ type: 'status', string: input.status },
-		{ type: `${input.status}_ref`, reference: input.eventId },
-		{ type: '_sharing', string: 'domain' }
+		{ type: `${input.status}_ref`, reference: input.eventId }
 	];
 	const res = await entuFetch(
 		cfg.db,
