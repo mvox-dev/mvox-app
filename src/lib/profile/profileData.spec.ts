@@ -23,14 +23,8 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-// ── Type-level contract (T4.4 AC1 — "cannot be called without"; verified by
-// `pnpm check`, NOT by vitest — esbuild strips types at test-run time, so these
-// only fail the CI type-check, exactly as the issue asks for) ──────────────────
-//
-// If any line below starts reporting "Unused '@ts-expect-error' directive" under
-// `pnpm check`, the type contract has regressed (a field became optional, or
-// `_inheritrights` widened from the literal `false` to `boolean`) — THAT report
-// is the RED signal for this block, not a vitest assertion.
+// Checked by `pnpm check`, not vitest: an "Unused '@ts-expect-error'" report below means the
+// type contract regressed.
 
 describe('CreateProfileInput — non-omittable contract', () => {
 	it('documents the compile-time proofs below; the real assertions are the `@ts-expect-error` directives in this file, checked by `pnpm check`', () => {
@@ -66,12 +60,7 @@ const _validShape: CreateProfileInput = {
 };
 void _validShape;
 
-// ── Runtime defense-in-depth (T4.4 AC1 — for callers who bypass TS: `as any`,
-// data reconstructed from JSON, a `.js` caller with no type checking at all) ───
-// Each test asserts on the REJECTION MESSAGE, not just "it throws" — the stub
-// throws unconditionally ("not implemented"), so a bare `.rejects.toThrow()`
-// would pass vacuously for the wrong reason. Matching a message naming the
-// violated field only passes once GREEN adds the actual guard.
+// Each test matches the message naming the violated field, so a throw for another reason fails.
 
 describe('createProfile — runtime guard (defense-in-depth against non-TS callers)', () => {
 	it('rejects when _inheritrights is not exactly false, even if a caller bypasses the type system', async () => {
@@ -212,16 +201,7 @@ describe('createProfile — fails loudly, never a silent success', () => {
 	});
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// T4.6/#26 — profile EDIT data layer (createOwnProfile / listMyProfiles /
-// profilesByLevel / saveProfileFields). RED: the impls are stubs throwing
-// 'not implemented', so these fail on assertions until Josquin's GREEN.
-// ════════════════════════════════════════════════════════════════════════════
-
-// ── createOwnProfile — the member self-create wrapper (AC1/AC3) ─────────────────
-// It must funnel through createProfile: same wire shape, member-owned (NO ownerIds
-// — Entu auto-adds the caller as _owner). Asserted on the wire, not by spying the
-// sibling, so the "goes through the T4.4 path" guarantee is verified end-to-end.
+// Asserted on the wire, not by spying the sibling: the self-create goes through createProfile.
 
 describe('createOwnProfile — member self-create funnels through createProfile', () => {
 	/** Type-resolution GET (`_type.string=entity&name.string=profile`) + entity-create POST. */
@@ -362,136 +342,156 @@ describe('profilesByLevel — pure index by visibility level', () => {
 	});
 });
 
-// ── saveProfileFields — replace name/email on an EXISTING entity (re-edit path) ──
-// POST entity/{id} only ADDS, so a real value CHANGE is GET current value-ids →
-// DELETE each stale value → POST the new value (the updateRsvpStatus pattern). It
-// must NEVER send _type/_parent/_inheritrights/_sharing (not a create; keeps the
-// sole-create-path guard's literal out of its wire).
+describe('saveProfileFields — overwrite-first per field, never a create', () => {
+	type Values = Array<{ _id: string; string: string }>;
+	type Call = { url: string; method: string; body: unknown };
 
-describe('saveProfileFields — property-swap update, never a create', () => {
-	/** Route by method + url: GET the entity, DELETE property/{id}, POST entity/{id}. */
+	// GET answers only the projected prop, as Entu does.
 	function makeFetchMock(
-		existingValues: { name?: Array<{ _id: string; string: string }>; email?: Array<{ _id: string; string: string }> } = {}
+		existing: { name?: Values; email?: Values } = {},
+		fail: { method?: string; status?: number } = {}
 	) {
 		return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			const method = (init?.method ?? 'GET').toUpperCase();
+			if (method === fail.method) return Promise.resolve(json({}, fail.status));
 			if (method === 'GET') {
-				return Promise.resolve(json({ entity: { _id: 'prof-1', ...existingValues } }));
+				const prop = new URL(url, 'https://x.test').searchParams.get('props') as 'name' | 'email';
+				return Promise.resolve(json({ entity: { _id: 'prof-1', [prop]: existing[prop] } }));
 			}
 			return Promise.resolve(json({ _id: 'prof-1' }));
 		});
 	}
 
-	function bodyOfPostToEntity(fetchImpl: ReturnType<typeof vi.fn>) {
-		const calls = fetchImpl.mock.calls as Array<[string, RequestInit?]>;
-		const post = calls.find(
-			([url, init]) => (init?.method ?? '').toUpperCase() === 'POST' && /entity\/prof-1(\?|$)/.test(url)
-		);
-		expect(post).toBeDefined();
-		return JSON.parse(String(post![1]!.body)) as Array<{ type: string; string?: string; reference?: string }>;
+	function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
+		return (fetchImpl.mock.calls as Array<[string, RequestInit?]>).map(([url, init]) => ({
+			url: String(url),
+			method: (init?.method ?? 'GET').toUpperCase(),
+			body: init?.body ? JSON.parse(String(init.body)) : undefined
+		}));
 	}
 
-	it('GETs the entity projecting name,email before writing', async () => {
+	it('GETs each field on its own, before that field is written', async () => {
 		const fetchImpl = makeFetchMock();
 		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl);
-		const getCall = (fetchImpl.mock.calls as Array<[string, RequestInit?]>).find(
-			([url, init]) => (init?.method ?? 'GET').toUpperCase() === 'GET'
-		);
-		expect(getCall).toBeDefined();
-		expect(String(getCall![0])).toContain('entity/prof-1');
-		expect(String(getCall![0])).toContain('props=name,email');
+		expect(callsOf(fetchImpl).map((c) => [c.method, c.url.replace(/^.*\/testdb\//, '')])).toEqual([
+			['GET', 'entity/prof-1?props=name'],
+			['POST', 'entity/prof-1'],
+			['GET', 'entity/prof-1?props=email'],
+			['POST', 'entity/prof-1']
+		]);
 	});
 
-	it('on a FRESH shell (GET returns no values) issues NO DELETE and one POST adding name+email', async () => {
-		const fetchImpl = makeFetchMock({}); // no existing values
+	it('on a FRESH shell (no values) issues NO DELETE and one bare POST per field', async () => {
+		const fetchImpl = makeFetchMock({});
 		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl);
-
-		const deletes = (fetchImpl.mock.calls as Array<[string, RequestInit?]>).filter(
-			([, init]) => (init?.method ?? '').toUpperCase() === 'DELETE'
-		);
-		expect(deletes).toHaveLength(0);
-
-		const body = bodyOfPostToEntity(fetchImpl);
-		expect(body).toEqual(
-			expect.arrayContaining([
-				{ type: 'name', string: 'Ada' },
-				{ type: 'email', string: 'ada@x.io' }
-			])
-		);
+		const calls = callsOf(fetchImpl);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+		expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+			[{ type: 'name', string: 'Ada' }],
+			[{ type: 'email', string: 'ada@x.io' }]
+		]);
 	});
 
-	it('on an EXISTING entity DELETEs each stale name/email value before POSTing the new ones', async () => {
+	it('on an EXISTING entity overwrites each old value by its _id, with NO DELETE', async () => {
 		const fetchImpl = makeFetchMock({
 			name: [{ _id: 'val-name-old', string: 'Old' }],
 			email: [{ _id: 'val-email-old', string: 'old@x.io' }]
 		});
 		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl);
-
-		const deleteUrls = (fetchImpl.mock.calls as Array<[string, RequestInit?]>)
-			.filter(([, init]) => (init?.method ?? '').toUpperCase() === 'DELETE')
-			.map(([url]) => String(url));
-		expect(deleteUrls).toEqual(
-			expect.arrayContaining([expect.stringContaining('property/val-name-old'), expect.stringContaining('property/val-email-old')])
-		);
-		expect(deleteUrls).toHaveLength(2);
+		const calls = callsOf(fetchImpl);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+		expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+			[{ _id: 'val-name-old', type: 'name', string: 'Ada' }],
+			[{ _id: 'val-email-old', type: 'email', string: 'ada@x.io' }]
+		]);
 	});
 
-	it('omits an empty-string field from the POST', async () => {
-		const fetchImpl = makeFetchMock();
+	it('a failed POST keeps the old value: nothing is deleted before or after it', async () => {
+		const fetchImpl = makeFetchMock(
+			{
+				name: [{ _id: 'val-name-old', string: 'Old' }],
+				email: [{ _id: 'val-email-old', string: 'old@x.io' }]
+			},
+			{ method: 'POST', status: 500 }
+		);
+		await expect(
+			saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)
+		).rejects.toThrow(/saveProfileFields.*500/);
+		const calls = callsOf(fetchImpl);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+		expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+			[{ _id: 'val-name-old', type: 'name', string: 'Ada' }]
+		]);
+	});
+
+	it('an empty field is cleared: its values are DELETEd by id and it is never POSTed', async () => {
+		const fetchImpl = makeFetchMock({
+			name: [{ _id: 'val-name-old', string: 'Old' }],
+			email: [{ _id: 'val-email-old', string: 'old@x.io' }]
+		});
 		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: '' }, fetchImpl);
-		const body = bodyOfPostToEntity(fetchImpl);
-		expect(body.some((p) => p.type === 'name')).toBe(true);
-		expect(body.some((p) => p.type === 'email')).toBe(false);
+		const calls = callsOf(fetchImpl);
+		expect(calls.slice(2).map((c) => [c.method, c.url.replace(/^.*\/testdb\//, '')])).toEqual([
+			['GET', 'entity/prof-1?props=email'],
+			['DELETE', 'property/val-email-old']
+		]);
+		expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+			[{ _id: 'val-name-old', type: 'name', string: 'Ada' }]
+		]);
+	});
+
+	it('an empty field with no value writes nothing for it', async () => {
+		const fetchImpl = makeFetchMock({});
+		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: '' }, fetchImpl);
+		const calls = callsOf(fetchImpl);
+		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
+		expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([
+			[{ type: 'name', string: 'Ada' }]
+		]);
 	});
 
 	it('NEVER sends _type/_parent/_inheritrights/_sharing — it edits fields, it does not create', async () => {
 		const fetchImpl = makeFetchMock({ name: [{ _id: 'val-name-old', string: 'Old' }] });
 		await saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl);
-		const body = bodyOfPostToEntity(fetchImpl);
+		const posted = callsOf(fetchImpl)
+			.filter((c) => c.method === 'POST')
+			.flatMap((c) => c.body as Array<{ type: string }>);
 		for (const forbidden of ['_type', '_parent', '_inheritrights', '_sharing']) {
-			expect(body.some((p) => p.type === forbidden)).toBe(false);
+			expect(posted.some((p) => p.type === forbidden)).toBe(false);
 		}
 	});
 
 	it('fails loud when the entity GET is non-2xx', async () => {
-		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-			const method = (init?.method ?? 'GET').toUpperCase();
-			if (method === 'GET') return Promise.resolve(json({}, 404));
-			return Promise.resolve(json({ _id: 'prof-1' }));
-		});
-		await expect(saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)).rejects.toThrow(/404/);
+		const fetchImpl = makeFetchMock({}, { method: 'GET', status: 404 });
+		await expect(
+			saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)
+		).rejects.toThrow(/404/);
 	});
 
-	it('fails loud when a property DELETE is non-2xx', async () => {
-		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-			const method = (init?.method ?? 'GET').toUpperCase();
-			if (method === 'GET') {
-				return Promise.resolve(json({ entity: { _id: 'prof-1', name: [{ _id: 'val-name-old', string: 'Old' }] } }));
-			}
-			if (method === 'DELETE') return Promise.resolve(json({}, 500));
-			return Promise.resolve(json({ _id: 'prof-1' }));
-		});
-		await expect(saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)).rejects.toThrow(/500/);
+	it('fails loud when a duplicate-value DELETE after the overwrite is non-2xx', async () => {
+		const fetchImpl = makeFetchMock(
+			{
+				name: [
+					{ _id: 'val-name-old', string: 'Old' },
+					{ _id: 'val-name-dup', string: 'Dup' }
+				]
+			},
+			{ method: 'DELETE', status: 500 }
+		);
+		await expect(
+			saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)
+		).rejects.toThrow(/500/);
 	});
 
 	it('fails loud when the POST is non-2xx', async () => {
-		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
-			const method = (init?.method ?? 'GET').toUpperCase();
-			if (method === 'GET') return Promise.resolve(json({ entity: { _id: 'prof-1' } }));
-			if (method === 'POST') return Promise.resolve(json({}, 403));
-			return Promise.resolve(json({ _id: 'prof-1' }));
-		});
-		await expect(saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)).rejects.toThrow(/403/);
+		const fetchImpl = makeFetchMock({}, { method: 'POST', status: 403 });
+		await expect(
+			saveProfileFields(cfg, 'prof-1', { name: 'Ada', email: 'ada@x.io' }, fetchImpl)
+		).rejects.toThrow(/403/);
 	});
 });
 
-// ════════════════════════════════════════════════════════════════════════════
-// T4.7/#27 — narrower-wins READ resolver (AC2). Pure. RED: `resolveField` is a stub
-// throwing 'not implemented', so these fail on assertions until GREEN. `private` is
-// NARROWER than `domain` is NARROWER than `public` — the narrowest non-empty holder
-// wins the render, and EVERY non-empty holder is returned (never collapsed) so the
-// caller can detect an interrupted-move duplicate.
-// ════════════════════════════════════════════════════════════════════════════
+// Narrowest non-empty holder wins; every holder is returned so a half-done move shows.
 
 describe('resolveField — narrower-wins resolution (AC2)', () => {
 	const pub = (name: string, email = ''): MyProfile => ({ _id: 'prof-pub', name, email, _sharing: 'public' });
