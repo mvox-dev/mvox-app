@@ -7,7 +7,7 @@ Sources: app = `mvox-app` origin/main; api = `entu-api` origin/main (31a7319, 20
 - `postCreate` sends `_type`, `_parent`(s) and domain props only: no `_sharing`, no `_inheritrights` (`src/lib/entity/entityCreateShared.ts:121-150`).
 - Entu fills the flag at create: `inheritParentProperties` (api `utils/entity.js:354-385`, called from `setEntity` on create, `entity.js:63`). It writes `_inheritrights: true` when the payload has none AND at least one `_parent` holds `_inheritrights: true` at that moment (`entity.js:380`, reads `parent.private._inheritrights[0].boolean`).
 - Rights only cascade when the child holds a strict `true` (`aggregate.js:194`). Absent and false behave the same. A child without it is also skipped on every later parent-rights change (`aggregate.js:507-518`), so the gap does not self-heal.
-- Child without the flag: no inherited rights; only its own direct grants (the creator's `_owner`, auto-granted) plus `_sharing` (copied from parent the same way, `entity.js:370-378`) apply. [unverified: no live read]
+- Child without the flag: no inherited rights; only its own direct grants (the creator's `_owner`, auto-granted: ER-5 in `docs/architecture/entu-rights-and-visibility-model.md`) plus `_sharing` (copied from parent the same way, `entity.js:370-378`) apply. [unverified: no live read]
 
 ## Types created through `postCreate`
 

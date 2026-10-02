@@ -240,10 +240,9 @@ also sets `_sharing: domain` explicitly on each feedback
 instance at create time, as `admin_member_record` does on #265 — otherwise a
 feedback under a member still sitting at its own default `private` tier
 would silently stay private too (PO ruling, Gama, #395 body, 2026-09-28).
-Intended, not yet provisioned: the `feedback` type-def exists on no Entu
-database as of this writing — this slice adds the definition and the
-provisioning script only; the live crede run (separately authorized) is where
-`assertPropDefSharing` reads the tier back.
+Provisioned on crede 2026-09-29 by
+`scripts/migrations/seed-395-feedback-type-crede-2026-09-28.ts`; the tier
+read-back is `scripts/migrations/seed-results/readback-395-feedback-type-crede-2026-09-29.json`.
 
 **`name`**: each instance carries a `name` value with no prop-def — page
 path + UTC submission date, never a member name or description text; the
