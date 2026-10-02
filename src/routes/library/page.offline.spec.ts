@@ -597,7 +597,11 @@ describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel 
 });
 
 describe('#434 slice 4 — the page is wired through its own entry points', () => {
-	const page = readFileSync(resolve(process.cwd(), 'src/routes/library/+page.svelte'), 'utf-8');
+	const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
+	const page = read('src/routes/library/+page.svelte');
+	const loads = read('src/lib/library/libraryPageLoads.ts');
+	const writes = read('src/lib/library/libraryPageWrites.ts');
+	const all = [page, loads, writes];
 
 	it('renders the ONE shared as-of line, never a copy of it', () => {
 		expect(page).toContain("import AsOfLine from '$lib/components/offline/AsOfLine.svelte'");
@@ -607,53 +611,59 @@ describe('#434 slice 4 — the page is wired through its own entry points', () =
 
 	it('loads through libraryPageData, not the shared readers directly', () => {
 		expect(page).toContain("from '$lib/library/libraryPageData'");
+		expect(loads).toContain("from '$lib/library/libraryPageData'");
 		expect(page).toContain('loadLibraryListing(');
-		expect(page).toContain('loadLibraryEditions(');
-		expect(page).toContain('loadLibraryCopies(');
-		expect(page).not.toMatch(/\blistWorks\(/);
-		expect(page).not.toMatch(/\blistEditions\(/);
-		expect(page).not.toMatch(/\blistCopies\(/);
+		expect(loads).toContain('loadLibraryEditions(');
+		expect(loads).toContain('loadLibraryCopies(');
+		for (const source of all) {
+			expect(source).not.toMatch(/\blistWorks\(/);
+			expect(source).not.toMatch(/\blistEditions\(/);
+			expect(source).not.toMatch(/\blistCopies\(/);
+		}
 	});
 
 	it('the librarian state and the my-loans chain load through libraryPageData too', () => {
 		// A red `librarian-load-error` beside a restored listing, or a vanishing my-loans section,
 		// is a reader the page reached past its own entry points.
-		expect(page).toContain('loadLibrarianState(');
+		expect(loads).toContain('loadLibrarianState(');
 		expect(page).toContain('loadMyMemberId(');
 		expect(page).toContain('loadMyLoanCopyNames(');
 		expect(page).toContain('loadMyLoanCopyChains(');
-		expect(page).not.toMatch(/\bresolveLibrarian\(/);
-		expect(page).not.toMatch(/\bfindMyMemberId\(/);
-		expect(page).not.toMatch(/\bresolveCopyNames\(/);
-		expect(page).not.toMatch(/\bresolveCopyChains\(/);
+		for (const source of all) {
+			expect(source).not.toMatch(/\bresolveLibrarian\(/);
+			expect(source).not.toMatch(/\bfindMyMemberId\(/);
+			expect(source).not.toMatch(/\bresolveCopyNames\(/);
+			expect(source).not.toMatch(/\bresolveCopyChains\(/);
+		}
 	});
 
 	it('the librarian panel feeds load through libraryPageData too (review round 2, finding 1)', () => {
-		// A cache-backed `loadLibrarianState` whose three gated feeds are still
-		// the bare shared readers is the same red alert one step later.
-		expect(page).toContain('loadLibrarianPickers(');
-		expect(page).toContain('loadLibrarianMemberNames(');
-		expect(page).not.toMatch(/\blistAllEditions\(/);
-		expect(page).not.toMatch(/\blistAllCopies\(/);
-		expect(page).not.toMatch(/\blistActiveMembers\(/);
-		expect(page).not.toMatch(/\bresolveBorrowerNames\(/);
+		expect(loads).toContain('loadLibrarianPickers(');
+		expect(loads).toContain('loadLibrarianMemberNames(');
+		for (const source of all) {
+			expect(source).not.toMatch(/\blistAllEditions\(/);
+			expect(source).not.toMatch(/\blistAllCopies\(/);
+			expect(source).not.toMatch(/\blistActiveMembers\(/);
+			expect(source).not.toMatch(/\bresolveBorrowerNames\(/);
+		}
 		// One path serves the mount effect and the retry.
-		expect(page.match(/loadLibrarianPickers\(/g)?.length ?? 0).toBe(1);
+		const pickerCalls = all.map((source) => source.match(/loadLibrarianPickers\(/g)?.length ?? 0);
+		expect(pickerCalls).toEqual([0, 1, 0]);
 	});
 
 	it('every write resolves its own `_parent` LIVE (review round 2, finding 2)', () => {
 		// `loadLibrarianState` is cache-backed and a GET inside a write may not be, so the three
 		// write paths resolve the parent through the flag-free `resolveWriteLibraryId`.
-		expect(page).toContain("resolveWriteLibraryId");
-		expect(page.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(3);
-		expect(page).not.toMatch(/\$libraryEntityIdStore/);
+		expect(writes).toContain("resolveWriteLibraryId");
+		expect(writes.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(3);
+		for (const source of all) expect(source).not.toMatch(/\$libraryEntityIdStore/);
 	});
 
 	it('the three post-write lending re-reads store without serving (refreshLibraryLendings)', () => {
 		// Post-write lending re-reads: a served copy could show pre-write availability, an uncached
 		// one leaves the stored copy behind. Store-only does neither.
-		expect(page.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
-		expect(page).not.toMatch(/\blistLendings\(/);
+		expect(writes.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(3);
+		for (const source of all) expect(source).not.toMatch(/\blistLendings\(/);
 	});
 });
 
