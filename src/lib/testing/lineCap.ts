@@ -10,16 +10,12 @@ export const LINE_CAP_EXCEPTIONS: readonly string[] = [
 	'src/lib/files/byteStore.ts',
 	'src/lib/invite/inviteData.ts',
 	'src/lib/library/libraryData.ts',
-	'src/lib/roster/rosterData.ts',
-	'src/lib/roster/rosterMemberOps.ts',
 	'src/lib/sections/sectionActions.ts',
-	'src/lib/sections/sectionArrangeOps.ts',
 	'src/routes/+page.svelte',
 	'src/routes/admin/+page.svelte',
 	'src/routes/library/+page.svelte',
 	'src/routes/links/+page.svelte',
-	'src/routes/profile/+page.svelte',
-	'src/routes/roster/+page.svelte'
+	'src/routes/profile/+page.svelte'
 ];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
@@ -33,17 +29,13 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/invite/inviteData.ts',
 	'src/lib/library/libraryData.ts',
 	'src/lib/roster/memberLifecycle.ts',
-	'src/lib/roster/rosterData.ts',
-	'src/lib/roster/rosterMemberOps.ts',
 	'src/lib/sections/sectionActions.ts',
-	'src/lib/sections/sectionArrangeOps.ts',
 	'src/routes/+page.svelte',
 	'src/routes/admin/+page.svelte',
 	'src/routes/library/+page.svelte',
 	'src/routes/links/+page.svelte',
 	'src/routes/part/[fileId]/+page.svelte',
-	'src/routes/profile/+page.svelte',
-	'src/routes/roster/+page.svelte'
+	'src/routes/profile/+page.svelte'
 ];
 
 const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];
