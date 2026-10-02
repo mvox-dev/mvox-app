@@ -1,38 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #327 RED (event-page integration) — the attendance saved cue on the WRITE
-// path, host page 2 of 2 (the event-detail page's own "Take attendance"
-// panel — the SAME AttendanceSurface the agenda mounts, fed by this page's
-// own attendanceQueue instance).
-//
-// INTEGRATION posture: the REAL +page.svelte, the REAL attendanceChangeQueue,
-// the REAL AttendanceSurface; the load-bearing reads (loadEventDetail /
-// loadRoster / listAttendance / listAllRsvpsForEvent) and the write dispatch
-// (applyAttendanceChange) are module-mocked — the same seam family as
-// page.attendance-panel.spec.ts on the agenda side, so the queue orchestration
-// and the page's isCurrentAttendanceWrite/generation discipline stay real.
-// A catch-all fetch stub keeps stray platform reads harmless.
-//
-// Pins (the #326 event-page sibling's, per-(event,member)):
-//   1. READ PATH SILENT — loading a panel over records saved earlier
-//      announces nothing; the persistent per-row role="status" region
-//      pre-exists the announcement (the #267 rule).
-//   2. A settled write announces saved on THIS page's panel, on the row that
-//      reconciled and no other.
-//   3. PENDING BYTE-PRESERVED — the PO-ruled silent disable stays (aria-busy
-//      + aria-disabled, no saved text), and the tally line carries the
-//      visible unconfirmed marking while the write is in flight (the RED
-//      stated choice, see AttendanceSurface.saved-cue.spec.ts).
-//   4. FAILURE BYTE-PRESERVED — revert + per-row role=alert, no saved cue.
-//   5. HOLD → SWITCH → SETTLE — a write that settles after a collective
-//      switch never paints the cue onto the reloaded page: the page's
-//      existing generation discipline extends to the cue.
+// The attendance saved cue on the event page's write path.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
-// Lenient message mock — every key renders `[key]`/`[key {params}]`;
-// assertions pin KEYS, the copy is Comenius's (locale-file pins live in
-// src/lib/i18n/attendanceSavedKeys.spec.ts).
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
 		get:
@@ -82,8 +53,6 @@ vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 	listAttendance: listAttendanceMock,
 	listAllRsvpsForEvent: listAllRsvpsForEventMock
 }));
-// The write dispatch — the queue around it stays REAL (same seam as the
-// agenda-side sibling spec).
 vi.mock('$lib/attendance/attendanceOptimistic', () => ({
 	applyAttendanceChange: applyAttendanceChangeMock
 }));
@@ -112,16 +81,10 @@ import {
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
 
-/** ISO instant `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
 }
 
-/** A PAST event the viewer conducts — the attendance section renders and the
- *  Take-attendance button is hers.
- *  #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
- *  seat: person-p gains `_editor` on the event so the saved-cue flows this
- *  file pins stay reachable. The seat stays too (conductor display data). */
 function pastConductedDetail(): EventDetail {
 	return {
 		id: 'ev1',
@@ -165,20 +128,6 @@ function setAuthed(dbs: string[] = ['sampledb']) {
 	selectedCollectiveDbStore.set(dbs[0]);
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
 function setFixtures(
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
 ) {
@@ -189,8 +138,6 @@ function setFixtures(
 }
 
 function renderPage(dbs?: string[]) {
-	// Stray platform reads (type-id resolution, series options, …) land here
-	// and resolve harmlessly empty — the load-bearing reads are module-mocked.
 	vi.stubGlobal('fetch', vi.fn(async () => json({ entities: [] })));
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
@@ -241,14 +188,10 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)',
 		const { container } = renderPage();
 		await openPanel(container);
 
-		// The per-row region pre-exists the announcement (a live region must be
-		// mounted BEFORE its text changes to be announced) …
 		const region = q(container, 'attendance-saved-status-m1');
 		expect(region).not.toBeNull();
 		expect(region?.getAttribute('role')).toBe('status');
 		expect(region?.getAttribute('aria-live')).toBe('polite');
-		// …and a read never fills it: this record was saved long before this
-		// panel opened.
 		expect(rowSavedText(container, 'm1')).toBe('');
 		expect(container.textContent).not.toContain('[attendance_saved]');
 	});
@@ -297,8 +240,6 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)',
 		}
 		expect(rowSavedText(container, 'm1')).toBe('');
 		expect(container.textContent).not.toContain('[attendance_saved]');
-		// The panel's tally now counts m1's optimistic present — and says so,
-		// visibly, on the tally line itself.
 		const marker = container.querySelector(
 			'[data-testid="attendance-tally"] [data-testid="attendance-tally-unconfirmed"]'
 		);
@@ -340,7 +281,6 @@ describe('/event/[id] — the cue does not leak across a collective switch (#327
 		const { container } = renderPage(['sampledb', 'other-choir']);
 		await openPanel(container);
 
-		// The write starts under sampledb…
 		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
 		await waitFor(() => {
 			expect(
@@ -348,17 +288,12 @@ describe('/event/[id] — the cue does not leak across a collective switch (#327
 			).toBe('true');
 		});
 
-		// …the conductor switches collectives (the page reloads ev1 under the
-		// new db — the mocks serve the same fixtures for both)…
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => {
 			expect(q(container, 'take-attendance-btn')).not.toBeNull();
 		});
-		// …and reopens the panel there.
 		await openPanel(container);
 
-		// Only NOW the old write settles successfully. The saved cue must not
-		// appear: it would describe a write from the collective she left.
 		held.resolve({ attendanceId: 'att-new-1' });
 		await flushMicrotasks();
 
@@ -367,4 +302,4 @@ describe('/event/[id] — the cue does not leak across a collective switch (#327
 	});
 });
 
-// (*MVOX:Tallis* — #327 RED)
+// (*MVOX:Tallis*)

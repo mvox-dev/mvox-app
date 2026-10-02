@@ -5,6 +5,7 @@
 // `truncated` ride in workRows.ts turns this red.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 // Pin "now" before the fixture event (2026-09-01) — only Date is faked.
 const NOW = new Date('2026-08-20T10:00:00.000Z');
@@ -44,10 +45,6 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 

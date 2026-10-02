@@ -1,27 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #356 RED (event-page integration) — 'Take attendance' on the event view is
-// gated on EVENT RIGHTS (canMarkAttendance: manageRightsFrom(detail.ownerIds,
-// detail.editorIds, personId) === 'editor'), NOT on the conductor seat.
-//
-// Before #356 the page's gate was `detail.conductorIds.includes(personId)`
-// (isConductorForEvent) — it decided the button, the panel-open guard AND
-// whether the attendance section renders at all on a record-less past event.
-// All three now follow the rights rule:
-//   • an event EDITOR with NO seat sees the button, opens the panel, records;
-//   • an event OWNER with no seat sees it too (ownership subsumes editing);
-//   • a SEAT-ONLY conductor on a record-less past event gets NO section, no
-//     button, no empty panel — the seat is display data (conductor names),
-//     not a write grant.
-//
-// INTEGRATION posture: the REAL +page.svelte; the load-bearing reads
-// (loadEventDetail / loadRoster / listAttendance / listAllRsvpsForEvent) and
-// the write dispatch (applyAttendanceChange) are module-mocked — the same seam
-// family as page.attendance-saved-cue.spec.ts on this route. loadEventDetail's
-// producer contract (event `_owner`/`_editor` → ownerIds/editorIds) is pinned
-// in eventDetail's own specs and driven over the wire in page.spec.ts.
+// 'Take attendance' on the event page is gated on the event's rights.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -100,12 +81,10 @@ import {
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
 
-/** ISO instant `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
 }
 
-/** A PAST event; the caller pins exactly who holds what on it. */
 function pastDetail(over: Partial<EventDetail> = {}): EventDetail {
 	return {
 		id: 'ev1',
@@ -150,10 +129,6 @@ function setAuthed() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
 function setFixtures(
 	detail: EventDetail,
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
@@ -165,8 +140,6 @@ function setFixtures(
 }
 
 function renderPage() {
-	// Stray platform reads (type-id resolution, series options, …) land here
-	// and resolve harmlessly empty — the load-bearing reads are module-mocked.
 	vi.stubGlobal('fetch', vi.fn(async () => json({ entities: [] })));
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
@@ -195,8 +168,6 @@ afterEach(() => {
 
 describe('/event/[id] — the marking gate is EVENT RIGHTS, not the seat (#356)', () => {
 	it('an event EDITOR with NO conductor seat sees Take attendance, opens the panel, and records', async () => {
-		// person-p holds `_editor` on the event; the seat belongs to someone
-		// else entirely. Before #356 she had no affordance here at all.
 		setFixtures(
 			pastDetail({
 				editorIds: ['person-p'],
@@ -215,7 +186,6 @@ describe('/event/[id] — the marking gate is EVENT RIGHTS, not the seat (#356)'
 			expect(q(container, 'attendance-row-m1')).not.toBeNull();
 		});
 
-		// …and she can RECORD: the write dispatch fires for this event.
 		applyAttendanceChangeMock.mockResolvedValue({ attendanceId: 'att-new-1' });
 		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
 		await waitFor(() => {
@@ -235,16 +205,12 @@ describe('/event/[id] — the marking gate is EVENT RIGHTS, not the seat (#356)'
 	});
 
 	it('a SEAT-ONLY conductor on a record-less past event gets NO section, no button, no empty panel (#356 retires the seat as a gate)', async () => {
-		// The exact fixture that used to admit her: the seat, nothing recorded,
-		// no rights. The section only existed to give HER button somewhere to
-		// live — without the write grant there is nothing to show.
 		setFixtures(
 			pastDetail({ conductorIds: ['person-p'], conductorNames: ['Vera Viewer'] }),
 			[]
 		);
 		const { container } = renderPage();
 
-		// Settle: the detail rendered before the absences are asserted.
 		await waitFor(() => {
 			expect(q(container, 'event-detail-name')?.textContent).toContain('Tuesday Rehearsal');
 		});
@@ -268,4 +234,4 @@ describe('/event/[id] — the marking gate is EVENT RIGHTS, not the seat (#356)'
 	});
 });
 
-// (*MVOX:Tallis* — #356 RED)
+// (*MVOX:Tallis*)

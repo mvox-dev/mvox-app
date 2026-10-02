@@ -1,21 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (event-page integration) — attendance marking is gated
-// while offline, on the REAL /event/[id] page (harness:
-// page.attendance-rights-gate.spec.ts — reads and the write dispatch
-// applyAttendanceChange module-mocked, stray reads answered empty).
-//
-// CONTRACT: an event editor opens the panel; the signal ($lib/net/online)
-// goes offline —
-//   • every attendance-toggle-* is write-disabled (aria-disabled="true" or
-//     disabled);
-//   • [data-testid="attendance-write-unavailable"] =
-//     m.write_unavailable_no_signal() is visible inside attendance-panel;
-//   • a toggle click dispatches nothing (applyAttendanceChange never called)
-//     and issues no fetch;
-//   • back online: toggles enabled, sentence gone, a click records again.
+// Attendance marking on the event page is gated while offline.
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -102,12 +89,10 @@ import {
 } from '$lib/testing/networkSignal';
 import type { EventDetail } from '$lib/events/eventDetail';
 
-/** ISO instant `offsetDays` from now — keeps the fixtures time-bomb-free. */
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
 }
 
-/** A PAST event; the caller pins exactly who holds what on it. */
 function pastDetail(over: Partial<EventDetail> = {}): EventDetail {
 	return {
 		id: 'ev1',
@@ -152,10 +137,6 @@ function setAuthed() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
 function setFixtures(
 	detail: EventDetail,
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
@@ -167,8 +148,6 @@ function setFixtures(
 }
 
 function renderPage() {
-	// Stray platform reads (type-id resolution, series options, …) land here
-	// and resolve harmlessly empty — the load-bearing reads are module-mocked.
 	vi.stubGlobal('fetch', vi.fn(async () => json({ entities: [] })));
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
@@ -194,7 +173,6 @@ afterEach(() => {
 	authStore.set({ status: 'loading' });
 	collectiveState.set({ status: 'loading' });
 });
-
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -265,4 +243,4 @@ describe('/event/[id] — attendance while offline (#434 slice 6)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)
