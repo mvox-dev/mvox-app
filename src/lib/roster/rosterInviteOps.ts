@@ -7,6 +7,7 @@ import { isAuthExpiredError } from '$lib/entu/request';
 import { buildInviteUrl } from '$lib/invite/invite-links';
 import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
 import { bareJoinStates } from '$lib/roster/joinStateView';
+import { withEntry } from '$lib/collections/immutable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
 
 export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
@@ -19,7 +20,13 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		roster.joinStates = { ...roster.joinStates, ...bareJoinStates(updated) };
 	}
 
-	async function handleMintInvite(row: RosterRow): Promise<void> {
+	async function runInviteOp<T>(
+		row: RosterRow,
+		errorKey: 'inviteErrorByMemberId' | 'withdrawErrorByMemberId',
+		label: string,
+		write: (cfg: EntuCfg) => Promise<T>,
+		onDone: (result: T) => void
+	): Promise<void> {
 		if (isOffline()) return;
 		if (mo.inviteActionPending) return;
 		const cfg = deps.cfg();
@@ -27,16 +34,10 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		mo.inviteActionPending = true;
 		const g = generation();
 		try {
-			const { inviteToken } = await actions.mintSelfLinkInvite(cfg, row.personId);
+			const result = await write(cfg);
 			if (!isCurrent(g)) return;
-			const { [row.memberId]: _dropped, ...restErrors } = mo.inviteErrorByMemberId;
-			mo.inviteErrorByMemberId = restErrors;
-			mo.inviteLinkByMemberId = {
-				...mo.inviteLinkByMemberId,
-				[row.memberId]: buildInviteUrl(window.location.origin, inviteToken)
-			};
-			mo.copiedByMemberId = { ...mo.copiedByMemberId, [row.memberId]: false };
-			mo.copyFailedByMemberId = { ...mo.copyFailedByMemberId, [row.memberId]: false };
+			mo[errorKey] = withEntry(mo[errorKey], row.memberId, null);
+			onDone(result);
 			await refreshJoinState(cfg, row.personId, g);
 		} catch (e) {
 			if (!isCurrent(g)) return;
@@ -44,39 +45,41 @@ export function createInviteOps<Halves>(deps: MemberOpsDeps<Halves>) {
 				deps.sessionExpired();
 				return;
 			}
-			console.error('roster: invite mint failed', row.memberId, e);
-			mo.inviteErrorByMemberId = { ...mo.inviteErrorByMemberId, [row.memberId]: true };
+			console.error(label, row.memberId, e);
+			mo[errorKey] = withEntry(mo[errorKey], row.memberId, true);
 		} finally {
 			if (isCurrent(g)) mo.inviteActionPending = false;
 		}
 	}
 
-	async function handleWithdrawInvite(row: RosterRow): Promise<void> {
-		if (isOffline()) return;
-		if (mo.inviteActionPending) return;
-		const cfg = deps.cfg();
-		if (!cfg) return;
-		mo.inviteActionPending = true;
-		const g = generation();
-		try {
-			await actions.withdrawInvite(cfg, row.personId);
-			if (!isCurrent(g)) return;
-			const { [row.memberId]: _droppedW, ...restWithdrawErrors } = mo.withdrawErrorByMemberId;
-			mo.withdrawErrorByMemberId = restWithdrawErrors;
-			const { [row.memberId]: _droppedLink, ...restLinks } = mo.inviteLinkByMemberId;
-			mo.inviteLinkByMemberId = restLinks;
-			await refreshJoinState(cfg, row.personId, g);
-		} catch (e) {
-			if (!isCurrent(g)) return;
-			if (isAuthExpiredError(e)) {
-				deps.sessionExpired();
-				return;
+	function handleMintInvite(row: RosterRow): Promise<void> {
+		return runInviteOp(
+			row,
+			'inviteErrorByMemberId',
+			'roster: invite mint failed',
+			(cfg) => actions.mintSelfLinkInvite(cfg, row.personId),
+			({ inviteToken }) => {
+				mo.inviteLinkByMemberId = withEntry(
+					mo.inviteLinkByMemberId,
+					row.memberId,
+					buildInviteUrl(window.location.origin, inviteToken)
+				);
+				mo.copiedByMemberId = { ...mo.copiedByMemberId, [row.memberId]: false };
+				mo.copyFailedByMemberId = { ...mo.copyFailedByMemberId, [row.memberId]: false };
 			}
-			console.error('roster: withdraw failed', row.memberId, e);
-			mo.withdrawErrorByMemberId = { ...mo.withdrawErrorByMemberId, [row.memberId]: true };
-		} finally {
-			if (isCurrent(g)) mo.inviteActionPending = false;
-		}
+		);
+	}
+
+	function handleWithdrawInvite(row: RosterRow): Promise<void> {
+		return runInviteOp(
+			row,
+			'withdrawErrorByMemberId',
+			'roster: withdraw failed',
+			(cfg) => actions.withdrawInvite(cfg, row.personId),
+			() => {
+				mo.inviteLinkByMemberId = withEntry(mo.inviteLinkByMemberId, row.memberId, null);
+			}
+		);
 	}
 
 	async function copyInviteLink(memberId: string): Promise<void> {

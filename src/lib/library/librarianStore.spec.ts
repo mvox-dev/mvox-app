@@ -1,4 +1,4 @@
-// src/lib/library/librarianStore.spec.ts
+// Specs for resolveLibrarian and the librarian store.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import {
@@ -7,15 +7,6 @@ import {
 	resolveLibrarian,
 	resolveMyLibraryId
 } from './librarianStore';
-
-// #161 (collective = database, Mihkel ruling 2026-08-16) — `resolveLibrarian`
-// derives the library entity from the DATABASE entity (mirroring the #161
-// `resolveAdmin` fix) instead of the retired person -> active member row ->
-// organization `_parent` walk (#159 deleted every organization instance, so
-// that chain could only ever answer wrong or empty). The routed mock below
-// stands in for THREE calls: the database-entity lookup
-// (`resolveDatabaseEntityId`), the database-scoped library list
-// (`resolveMyLibraryId`), and the library GET by id (rights read).
 
 const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
@@ -29,12 +20,10 @@ function json(body: unknown, status = 200) {
 	} as unknown as Response;
 }
 
-/** The database entity lookup response. */
 function databaseBody(dbEntityId: string | null) {
 	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }
 
-/** Routed mock: database-entity lookup, then database-scoped library list, then library GET by id. */
 function mockFetch(opts: {
 	database?: unknown;
 	databaseStatus?: number;
@@ -55,7 +44,6 @@ function mockFetch(opts: {
 				json(opts.libraryByOrg ?? { entities: [] }, opts.libraryByOrgStatus ?? 200)
 			);
 		}
-		// entity/<id>?props=_owner,_editor
 		const id = u.split('/entity/')[1]?.split('?')[0] ?? '';
 		return Promise.resolve(
 			json({ entity: opts.libraryById?.[id] ?? undefined }, opts.libraryByIdStatus ?? 200)
@@ -89,10 +77,6 @@ describe('resolveMyLibraryId', () => {
 		expect(await resolveMyLibraryId(cfg, fetchImpl)).toBeNull();
 	});
 
-	// #143 review F4 — a failed read must NEVER be answerable as `null`: that is
-	// the same value the genuine "this collective has no library" case returns,
-	// and `admin/+page.svelte` branches on `state === 'error'` precisely to keep
-	// a transient 500 from rendering as the factual claim "no library here".
 	it('THROWS on HTTP failure of the library lookup (never null — null is the "no library" FACT)', async () => {
 		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrgStatus: 500 });
 		await expect(resolveMyLibraryId(cfg, fetchImpl)).rejects.toThrow(/HTTP 500/);
@@ -156,10 +140,7 @@ describe('resolveLibrarian', () => {
 		expect(result).toEqual({ state: 'not-librarian', libraryId: null });
 	});
 
-	// #143 review F4 — the regression this pins: a non-2xx on the library LIST
-	// used to come back as `not-librarian` (via a `null` libraryId), which
-	// `admin/+page.svelte` renders as "this collective has no library" — no
-	// error, no retry, `refreshLibrarians` skipped — for a real librarian.
+	// A 500 used to read as not-librarian: no error, no retry, refreshRole('librarian') skipped.
 	it('returns error (NOT not-librarian) on HTTP failure of the database-scoped library list', async () => {
 		const fetchImpl = mockFetch({ database: databaseBody(DB_ENTITY), libraryByOrgStatus: 500 });
 		const result = await resolveLibrarian(cfg, personId, fetchImpl);
@@ -191,8 +172,6 @@ describe('librarianStore', () => {
 		expect(get(librarianStore)).toBe('loading');
 	});
 
-	// #434 slice 4 review round 2, finding 2 — `libraryEntityIdStore` is gone;
-	// see the store module's note. `resetLibrarian` is now only the state.
 	it('resetLibrarian sets to loading', () => {
 		librarianStore.set('librarian');
 		resetLibrarian();

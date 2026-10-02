@@ -1,5 +1,6 @@
 // Section tree writes: renumber, delete, reparent and rename.
 import { entuFetch } from '$lib/entu/request';
+import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import {
 	SectionNotEmptyError,
 	SectionParentDamagedError,
@@ -175,29 +176,11 @@ export async function renameSection(
 		throw new Error('renameSection: name must not be empty');
 	}
 
-	const getRes = await entuFetch(cfg.db, `entity/${sectionId}?props=name`, cfg.token, {}, fetchImpl);
-	if (!getRes.ok) throw new Error(`renameSection lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as { entity?: { name?: Array<{ _id: string }> } };
-	const existing = body.entity?.name ?? [];
-	const [oldValue, ...extras] = existing;
-
-	const entry = oldValue ? { _id: oldValue._id, type: 'name', string: trimmed } : { type: 'name', string: trimmed };
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${sectionId}`,
-		cfg.token,
-		{
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify([entry])
-		},
-		fetchImpl
+	await replaceEntityProperty(
+		cfg,
+		sectionId,
+		{ type: 'name', string: trimmed },
+		fetchImpl,
+		'renameSection'
 	);
-	if (!postRes.ok) throw new Error(`renameSection POST failed: ${postRes.status}`);
-
-	for (const value of extras) {
-		const delRes = await entuFetch(cfg.db, `property/${value._id}`, cfg.token, { method: 'DELETE' }, fetchImpl);
-		if (!delRes.ok) throw new Error(`renameSection delete failed: ${delRes.status}`);
-	}
 }
