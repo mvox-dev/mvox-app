@@ -2,6 +2,7 @@
 import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { postEntity } from '$lib/entity/entityCreateShared';
+import { clearEntityProperty, replaceEntityProperty } from '$lib/entu/replaceProperty';
 
 export interface CreateProfileInput {
 	personId: string;
@@ -139,54 +140,22 @@ export function resolveField(ps: MyProfile[], field: 'name' | 'email'): FieldRes
 	};
 }
 
-// POST only adds values, so a change is delete-then-add; never creates, never sends rights fields.
+// Overwrite-first per field, so a failed write keeps the old value; never sends rights fields.
 export async function saveProfileFields(
 	cfg: EntuCfg,
 	profileId: string,
 	fields: { name: string; email: string },
 	fetchImpl: typeof fetch = fetch
 ): Promise<void> {
-	const getRes = await entuFetch(
-		cfg.db,
-		`entity/${profileId}?props=name,email`,
-		cfg.token,
-		{},
-		fetchImpl
-	);
-	if (!getRes.ok) throw new Error(`saveProfileFields lookup failed: ${getRes.status}`);
-	const body = (await getRes.json()) as {
-		entity?: {
-			name?: Array<{ _id: string }>;
-			email?: Array<{ _id: string }>;
-		};
-	};
-	const entity = body.entity ?? {};
-
-	const toDelete = [...(entity.name ?? []), ...(entity.email ?? [])];
-	for (const value of toDelete) {
-		const delRes = await entuFetch(
-			cfg.db,
-			`property/${value._id}`,
-			cfg.token,
-			{ method: 'DELETE' },
-			fetchImpl
-		);
-		if (!delRes.ok) throw new Error(`saveProfileFields delete failed: ${delRes.status}`);
+	for (const field of ['name', 'email'] as const) {
+		const value = fields[field];
+		if (value === '') {
+			await clearEntityProperty(cfg, profileId, field, fetchImpl, 'saveProfileFields');
+		} else {
+			const entry = { type: field, string: value };
+			await replaceEntityProperty(cfg, profileId, entry, fetchImpl, 'saveProfileFields');
+		}
 	}
-
-	const props: Array<{ type: string; string: string }> = [];
-	if (fields.name !== '') props.push({ type: 'name', string: fields.name });
-	if (fields.email !== '') props.push({ type: 'email', string: fields.email });
-	if (props.length === 0) return;
-
-	const postRes = await entuFetch(
-		cfg.db,
-		`entity/${profileId}`,
-		cfg.token,
-		{ method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(props) },
-		fetchImpl
-	);
-	if (!postRes.ok) throw new Error(`saveProfileFields save failed: ${postRes.status}`);
 }
 
 // (*MVOX:Josquin*)

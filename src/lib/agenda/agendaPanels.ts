@@ -7,6 +7,15 @@ import { createAttendancePanelLoad, failedMarksFor } from '$lib/attendance/atten
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
+export function isPanelReadStale(
+	seq: LoadCounters,
+	thisRequest: number,
+	thisSwitch: number,
+	switchNow: number
+): boolean {
+	return thisRequest !== seq.requestId || thisSwitch !== switchNow;
+}
+
 export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
 	const {
 		listAttendance,
@@ -108,6 +117,8 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 	function loadPanelRepertoire(cfg: EntuCfg, seasonId: string): void {
 		const thisRequest = seq.requestId;
 		const thisSwitch = deps.seasonManageSwitchGeneration();
+		const stale = () =>
+			isPanelReadStale(seq, thisRequest, thisSwitch, deps.seasonManageSwitchGeneration());
 		seq.panelRepertoireSeasonId = seasonId;
 		ag.panelRepertoireError = false;
 		ag.panelRepertoireLoading = true;
@@ -120,24 +131,24 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 		};
 		listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				ag.panelRepertoire = items;
 				ag.panelRepertoireItemsOk = true;
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				console.error('agenda: loading the season-manage repertoire failed', e);
 				ag.panelRepertoire = [];
 				ag.panelRepertoireError = true;
 			})
 			.finally(() => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				itemsSettled = true;
 				maybeStopLoading();
 			});
 		Promise.all([listWorks(cfg), listAllEditions(cfg), listAllCopies(cfg)])
 			.then(([worksRead, editionsRead, copiesRead]) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				ag.panelWorks = worksRead.items;
 				ag.panelEditions = editionsRead.items;
 				ag.panelCopies = copiesRead.items;
@@ -145,7 +156,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				ag.panelWorksSourcesOk = true;
 			})
 			.catch((e) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				console.error('agenda: loading the season-manage repertoire sources failed', e);
 				ag.panelWorks = [];
 				ag.panelEditions = [];
@@ -154,7 +165,7 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				ag.panelRepertoireError = true;
 			})
 			.finally(() => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.seasonManageSwitchGeneration()) return;
+				if (stale()) return;
 				sourcesSettled = true;
 				maybeStopLoading();
 			});

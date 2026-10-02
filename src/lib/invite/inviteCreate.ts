@@ -3,6 +3,7 @@ import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { resolveDatabaseEntityId, DatabaseEntityLookupError } from '$lib/collective/databaseEntity';
 import { INVITE_MINT_TRIGGER } from './inviteConstants';
+import { inviteOf } from './inviteOf';
 
 // Fail loud: partial failures name the orphaned person and are never rolled back,
 // since a compensating delete can itself fail and hide the true state.
@@ -159,9 +160,10 @@ export async function createInvite(
 	const personId = personBody._id;
 
 	// The create response is the only read of the token; every later GET masks it as '***'.
-	const inviteToken = (personBody.properties ?? []).find(
-		(p) => p.type === 'entu_user' && typeof p.invite === 'string' && p.invite.length > 0
-	)?.invite;
+	const inviteToken = (personBody.properties ?? [])
+		.filter((p) => p.type === 'entu_user')
+		.map(inviteOf)
+		.find((token) => token !== undefined);
 	if (!inviteToken) {
 		throw new InviteCreateError(
 			`person ${personId} was created but the create response carried no invite token — API contract drift; do not retry blindly, inspect the person entity`,

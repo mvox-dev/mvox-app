@@ -5,6 +5,7 @@ import { cfgFor } from '$lib/entu/cfg';
 import { selectedCollectiveIdentityStore, sameCollectiveIdentity } from '$lib/collectives/store';
 import { ADD_PROGRAMME_KEY, ADD_WORK_KEY } from '$lib/agenda/RepertoireElement.svelte';
 import type { AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
+import { isPanelReadStale } from '$lib/agenda/agendaPanels';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { RepertoireStatus } from '$lib/repertoire/types';
 import type * as RepertoireActions from '$lib/repertoire/repertoireActions';
@@ -169,7 +170,7 @@ export function createAgendaRepertoireQueues(
 		deps
 			.listRepertoireItems(cfg, seasonId)
 			.then((items) => {
-				if (thisRequest !== seq.requestId || thisSwitch !== deps.switchGeneration()) return;
+				if (isPanelReadStale(seq, thisRequest, thisSwitch, deps.switchGeneration())) return;
 				ag.panelRepertoire = items;
 				ag.panelRepertoireItemsOk = true;
 			})

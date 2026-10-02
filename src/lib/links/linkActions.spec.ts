@@ -1,63 +1,21 @@
+// The link write layer: create, whole-field update, renumber and delete, at the fetch seam.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { createLink, deleteLink, reorderLinks, updateLink } from './linkActions';
+import { renumberDisplayOrder } from '$lib/sections/sectionTreeWrites';
+import { SectionReparentPartialError } from '$lib/sections/sectionErrors';
 
-// #256 RED — Lingikogu (link collection) WRITE layer, modeled on
-// sectionActions.ts (the verified closest pattern):
-//
-// CREATE (mirrors createSection, adapted to the #256 ruling):
-//   - `_type` sent as a resolved REFERENCE via resolveTypeId(cfg, 'link')
-//     (#10 pinned wire-shape — never `{ string: 'link' }`).
-//   - `_parent` = the collective's DATABASE entity (#161): `dbEntityId` given →
-//     used VERBATIM, ZERO lookup fetches; absent → resolveDatabaseEntityId
-//     (`_type.string=database&limit=1`), none readable → fail loud naming db.
-//   - `name` trimmed, required non-empty (throws WITHOUT any fetch).
-//   - `url` required non-empty (a non-whitespace char), otherwise sent
-//     VERBATIM — no trim, no normalising, NO scheme-guessing (#256 ruling:
-//     "URLs are stored as given. No normalising, no scheme-guessing, no
-//     validation beyond non-empty").
-//   - `description` written only when it is a non-empty string — an absent or
-//     empty description writes NO description property at all.
-//   - `display_order` written when `displayOrder` is a number (the page passes
-//     max existing + 1 so a new link lands at the end of the stable order).
-//   - `_sharing: 'domain'` EXPLICIT at create time — every entity owns its
-//     `_sharing` at create; the type-def's `domain` does NOT propagate. Unlike
-//     createSection's deliberate widen to 'public' (federation
-//     discoverability), the #256 ruling is members-only visibility, which IS
-//     the parent database's domain tier — so 'domain', stated explicitly.
-//   - `_inheritrights: true` EXPLICIT (same #264-item-6 discipline as
-//     createSection; the type-def is live with _inheritrights: true).
-//   - Full create body is EXACTLY: _type + _parent + name + url
-//     (+ description) (+ display_order) + _sharing + _inheritrights, in that
-//     order. Throws on non-2xx; 2xx without _id is the apparent-success trap.
-//
-// UPDATE (whole-field edit — mirrors renameSection's atomic overwrite):
-//   - `updateLink(cfg, linkId, { name, url, description })`:
-//     GET `entity/{linkId}?props=name,url,description` → ONE POST
-//     `entity/{linkId}` whose entries pair each field's FIRST existing value
-//     `_id` with the new value (bare entry when the field had no value).
-//   - `description: null` with an existing value → the description value id
-//     goes to `DELETE /property/{id}` strictly AFTER the POST (the documented
-//     user-facing removal — property-VALUE endpoint, never /entity/). The
-//     POST then carries NO description entry. `description: null` with no
-//     existing value → no delete, no entry.
-//   - name/url validation identical to create (name trimmed non-empty, url
-//     non-empty verbatim); violations throw WITHOUT any fetch.
-//
-// REORDER (exactly reorderSections' atomic-overwrite renumber):
-//   - `reorderLinks(cfg, orderedIds)` renumbers display_order on EVERY id to
-//     its 1-BASED position: per link GET `entity/{id}?props=display_order` →
-//     ONE POST `[{ _id: <old value id>, type: 'display_order', number: n }]`
-//     (bare entry when no existing value); EXTRA stale ids (corrupted 2+
-//     state only) deleted at `/property/{id}` strictly AFTER the POST. NO
-//     DELETE on the clean path. `orderedIds: []` → zero fetches. Non-2xx
-//     throws with the status surfaced and the loop STOPS.
-//
-// DELETE:
-//   - `deleteLink(cfg, linkId)` issues exactly ONE `DELETE entity/{linkId}` —
-//     the ENTITY side of the endpoint split (a /property/ DELETE here would
-//     404 and leave the link standing). Throws on non-2xx.
+function partialShape(err: unknown) {
+	const e = err as SectionReparentPartialError;
+	return {
+		step: e.step,
+		renumberedCount: e.renumberedCount,
+		totalCount: e.totalCount,
+		status: e.status,
+		body: e.body
+	};
+}
 
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 const TYPE_ID = 'type-link-1';
@@ -431,16 +389,61 @@ describe('reorderLinks — the atomic-overwrite renumber, exactly reorderSection
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	it('a non-2xx POST throws with the status surfaced and the loop STOPS — later links are never touched', async () => {
+	it('renumbers through the shared renumberDisplayOrder', () => {
+		expect(reorderLinks).toBe(renumberDisplayOrder);
+	});
+
+	it('a non-2xx POST throws the partial error with count, status and body, and the loop STOPS — later links are never touched', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
 			const u = String(url);
-			if (init?.method === 'POST') return Promise.resolve(json({ error: 'nope' }, 500));
+			if (init?.method === 'POST') {
+				if (u.includes('/entity/l-b')) return Promise.resolve(new Response('nope', { status: 500 }));
+				return Promise.resolve(json({}));
+			}
 			const id = u.match(/\/entity\/([^/?]+)/)?.[1] ?? '';
 			return Promise.resolve(json({ entity: { display_order: [{ _id: `pv-${id}` }] } }));
 		});
-		await expect(reorderLinks(cfg, ['l-a', 'l-b'], fetchImpl)).rejects.toThrow(/500/);
+		const err = await reorderLinks(cfg, ['l-a', 'l-b', 'l-c'], fetchImpl).catch((e: unknown) => e);
+		expect(err).toBeInstanceOf(SectionReparentPartialError);
+		expect(partialShape(err)).toEqual({
+			step: 'renumber',
+			renumberedCount: 1,
+			totalCount: 3,
+			status: 500,
+			body: 'nope'
+		});
+		expect((err as Error).message).toMatch(/500/);
 		const calls = callsOf(fetchImpl);
-		expect(calls.some((c) => c.url.includes('l-b'))).toBe(false);
+		expect(calls.some((c) => c.url.includes('l-c'))).toBe(false);
+	});
+
+	it('a failed lookup GET throws the partial error before any write', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(new Response('forbidden', { status: 403 }));
+		const err = await reorderLinks(cfg, ['l-a', 'l-b'], fetchImpl).catch((e: unknown) => e);
+		expect(partialShape(err)).toEqual({
+			step: 'renumber',
+			renumberedCount: 0,
+			totalCount: 2,
+			status: 403,
+			body: 'forbidden'
+		});
+		expect(callsOf(fetchImpl).filter((c) => c.method !== 'GET')).toEqual([]);
+	});
+
+	it('a failed extra-value DELETE throws the partial error for that link', async () => {
+		const fetchImpl = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+			if (init?.method === 'DELETE') return Promise.resolve(new Response('gone', { status: 404 }));
+			if (init?.method === 'POST') return Promise.resolve(json({}));
+			return Promise.resolve(json({ entity: { display_order: [{ _id: 'pv-1' }, { _id: 'pv-2' }] } }));
+		});
+		const err = await reorderLinks(cfg, ['l-a'], fetchImpl).catch((e: unknown) => e);
+		expect(partialShape(err)).toEqual({
+			step: 'renumber',
+			renumberedCount: 0,
+			totalCount: 1,
+			status: 404,
+			body: 'gone'
+		});
 	});
 });
 
@@ -465,4 +468,4 @@ describe('deleteLink — DELETE /entity/{id}, the entity side of the endpoint sp
 	});
 });
 
-// (*MVOX:Tallis* — #256 RED)
+// (*MVOX:Tallis*)

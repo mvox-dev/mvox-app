@@ -2,6 +2,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { INVITE_MINT_TRIGGER } from './inviteConstants';
+import { inviteOf } from './inviteOf';
 
 // Redemption takes the FIRST value carrying `invite`, so stale placeholders go before a mint.
 // A value carrying `uid` is a bound identity and is never touched.
@@ -64,9 +65,7 @@ async function sweepStaleInvitePlaceholders(
 		entity?: { entu_user?: StoredEntuUserEntry[] };
 	};
 	const entries = readBody.entity?.entu_user ?? [];
-	const stalePlaceholders = entries.filter(
-		(e) => typeof e.invite === 'string' && e.invite.length > 0
-	);
+	const stalePlaceholders = entries.filter((e) => inviteOf(e) !== undefined);
 
 	for (const stale of stalePlaceholders) {
 		const delRes = await entuFetch(
@@ -155,9 +154,10 @@ export async function mintSelfLinkInvite(
 	const mintBody = (await mintRes.json()) as {
 		properties?: Array<{ type?: string; invite?: string }>;
 	};
-	const inviteToken = (mintBody.properties ?? []).find(
-		(p) => p.type === 'entu_user' && typeof p.invite === 'string' && p.invite.length > 0
-	)?.invite;
+	const inviteToken = (mintBody.properties ?? [])
+		.filter((p) => p.type === 'entu_user')
+		.map(inviteOf)
+		.find((token) => token !== undefined);
 	if (!inviteToken) {
 		throw new SelfLinkMintError(
 			`self-link mint on person ${personId} returned 2xx without an invite token — API contract drift; do not retry blindly, inspect the person entity`,

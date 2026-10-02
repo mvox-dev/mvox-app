@@ -1,6 +1,11 @@
 // The roster's deactivate, reinstate and inactive-list handlers.
 import type { RosterRow } from '$lib/roster/rosterData';
-import { focusAfterRender, focusTestIdAfterRender, focusableByTestId } from '$lib/a11y/focusable';
+import {
+	focusAfterRender,
+	focusTestIdAfterRender,
+	focusableByTestId,
+	ownsFocus as ownsFocusOf
+} from '$lib/a11y/focusable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
 
 export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
@@ -26,12 +31,7 @@ export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 		if (mo.deactivatePending) return;
 		const cfg = deps.cfg();
 		if (!cfg) return;
-		const activeAtStart = document.activeElement;
-		const ownsFocus =
-			!activeAtStart ||
-			activeAtStart === document.body ||
-			activeAtStart ===
-				document.querySelector(`[data-testid="member-deactivate-confirm-${row.memberId}"]`);
+		const ownsFocus = ownsFocusOf(`member-deactivate-confirm-${row.memberId}`);
 		const gEntry = generation();
 		mo.deactivatePending = true;
 		mo.deactivateRefusal = null;
