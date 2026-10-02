@@ -1,12 +1,19 @@
 // Library list reads; read-only, and never a still-private field (library-browse design §2).
-import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
+import type { EntuFetchOptions } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import { deriveListRead, type ListRead } from '$lib/entu/listRead';
+import { readList, type ListRead } from '$lib/entu/listRead';
 
 export interface Work {
 	id: string;
 	name: string;
 	composer: string;
+}
+
+type WorkRaw = { _id: string; name?: Array<{ string: string }>; composer?: Array<{ string: string }> };
+type ParentRaw = { _parent?: Array<{ reference: string; entity_type?: string }> };
+
+function parentOf(raw: ParentRaw, type: string): string {
+	return (raw._parent ?? []).find((p) => p.entity_type === type)?.reference ?? '';
 }
 
 // Shared readers: `opts` defaults the cache off; libraryPageData.ts switches it on.
@@ -15,26 +22,19 @@ export async function listWorks(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Work>> {
-	const res = await entuFetch(
-		cfg.db,
+	return readList<WorkRaw, Work>(
+		cfg,
+		'listWorks',
 		'entity?_type.string=work&props=name,composer&limit=500',
-		cfg.token,
-		{},
+		(raw) =>
+			raw.map((r) => ({
+				id: r._id,
+				name: r.name?.[0]?.string ?? '',
+				composer: r.composer?.[0]?.string ?? ''
+			})),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listWorks failed: ${res.status}`);
-	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; composer?: Array<{ string: string }> }>;
-	};
-	const raw = body.entities ?? [];
-	const items = raw.map((r) => ({
-		id: r._id,
-		name: r.name?.[0]?.string ?? '',
-		composer: r.composer?.[0]?.string ?? ''
-	}));
-	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface EditionFile {
@@ -84,18 +84,14 @@ export async function listEditions(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Edition>> {
-	const res = await entuFetch(
-		cfg.db,
+	return readList<EditionRaw, Edition>(
+		cfg,
+		'listEditions',
 		`entity?_type.string=edition&_parent.reference=${encodeURIComponent(workId)}&props=name,publisher,external_link,file&limit=500`,
-		cfg.token,
-		{},
+		(raw) => raw.map((r) => toEdition(r)),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listEditions failed: ${res.status}`);
-	const body = (await res.json()) as { count?: number; entities?: EditionRaw[] };
-	const raw = body.entities ?? [];
-	return deriveListRead(raw.map((r) => toEdition(r)), raw.length, body.count);
 }
 
 // Every edition in the collective, so the librarian pickers need no expanded tree node.
@@ -104,22 +100,14 @@ export async function listAllEditions(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Edition>> {
-	const res = await entuFetch(
-		cfg.db,
+	return readList<EditionRaw & ParentRaw, Edition>(
+		cfg,
+		'listAllEditions',
 		'entity?_type.string=edition&props=name,publisher,_parent,external_link,file&limit=500',
-		cfg.token,
-		{},
+		(raw) => raw.map((r) => toEdition(r, parentOf(r, 'work'))),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listAllEditions failed: ${res.status}`);
-	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<EditionRaw & { _parent?: Array<{ reference: string; entity_type?: string }> }>;
-	};
-	const raw = body.entities ?? [];
-	const items = raw.map((r) => toEdition(r, (r._parent ?? []).find((p) => p.entity_type === 'work')?.reference ?? ''));
-	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface Copy {
@@ -130,33 +118,26 @@ export interface Copy {
 	editionId: string;
 }
 
+type CopyRaw = { _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> };
+
+function toCopy(raw: CopyRaw, editionId: string): Copy {
+	return { id: raw._id, name: raw.name?.[0]?.string ?? '', copyNumber: raw.copy_number?.[0]?.number ?? 0, editionId };
+}
+
 export async function listCopies(
 	cfg: EntuCfg,
 	editionId: string,
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Copy>> {
-	const res = await entuFetch(
-		cfg.db,
+	return readList<CopyRaw, Copy>(
+		cfg,
+		'listCopies',
 		`entity?_type.string=copy&_parent.reference=${encodeURIComponent(editionId)}&props=name,copy_number&limit=500`,
-		cfg.token,
-		{},
+		(raw) => raw.map((r) => toCopy(r, editionId)),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listCopies failed: ${res.status}`);
-	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }> }>;
-	};
-	const raw = body.entities ?? [];
-	const items = raw.map((r) => ({
-		id: r._id,
-		name: r.name?.[0]?.string ?? '',
-		copyNumber: r.copy_number?.[0]?.number ?? 0,
-		editionId
-	}));
-	return deriveListRead(items, raw.length, body.count);
 }
 
 // Every copy in the collective; `_parent` gives each its edition for bulk-return grouping.
@@ -165,27 +146,14 @@ export async function listAllCopies(
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Copy>> {
-	const res = await entuFetch(
-		cfg.db,
+	return readList<CopyRaw & ParentRaw, Copy>(
+		cfg,
+		'listAllCopies',
 		'entity?_type.string=copy&props=name,copy_number,_parent&limit=500',
-		cfg.token,
-		{},
+		(raw) => raw.map((r) => toCopy(r, parentOf(r, 'edition'))),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listAllCopies failed: ${res.status}`);
-	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<{ _id: string; name?: Array<{ string: string }>; copy_number?: Array<{ number: number }>; _parent?: Array<{ reference: string; entity_type?: string }> }>;
-	};
-	const raw = body.entities ?? [];
-	const items = raw.map((r) => ({
-		id: r._id,
-		name: r.name?.[0]?.string ?? '',
-		copyNumber: r.copy_number?.[0]?.number ?? 0,
-		editionId: (r._parent ?? []).find((p) => p.entity_type === 'edition')?.reference ?? ''
-	}));
-	return deriveListRead(items, raw.length, body.count);
 }
 
 export interface Lending {
@@ -198,54 +166,48 @@ export interface Lending {
 	returnedAt: string;
 }
 
+type LendingRaw = {
+	_id: string;
+	copy?: Array<{ reference: string }>;
+	member?: Array<{ reference: string }>;
+	assigned_at?: Array<{ date: string }>;
+	assigned_until?: Array<{ date: string }>;
+	returned_at?: Array<{ date: string }>;
+};
+
 export async function listLendings(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch,
 	opts: EntuFetchOptions = {}
 ): Promise<ListRead<Lending>> {
-	const res = await entuFetch(
-		cfg.db,
+	// createLending always writes copy and member together, so a row missing one is corrupt:
+	// drop it with a warning rather than fail the page, and never pass '' on as an id (#258).
+	return readList<LendingRaw, Lending>(
+		cfg,
+		'listLendings',
 		'entity?_type.string=lending&props=copy,member,assigned_at,assigned_until,returned_at&limit=500',
-		cfg.token,
-		{},
+		(raw) =>
+			raw.flatMap((r) => {
+				const copyId = r.copy?.[0]?.reference;
+				const memberId = r.member?.[0]?.reference;
+				if (!copyId || !memberId) {
+					console.warn(
+						`listLendings: dropping malformed lending row ${r._id} — missing ${!copyId ? 'copy' : 'member'} reference (#258)`
+					);
+					return [];
+				}
+				return [
+					{
+						id: r._id,
+						copyId,
+						memberId,
+						assignedAt: r.assigned_at?.[0]?.date ?? '',
+						assignedUntil: r.assigned_until?.[0]?.date ?? '',
+						returnedAt: r.returned_at?.[0]?.date ?? ''
+					}
+				];
+			}),
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) throw new Error(`listLendings failed: ${res.status}`);
-	const body = (await res.json()) as {
-		count?: number;
-		entities?: Array<{
-			_id: string;
-			copy?: Array<{ reference: string }>;
-			member?: Array<{ reference: string }>;
-			assigned_at?: Array<{ date: string }>;
-			assigned_until?: Array<{ date: string }>;
-			returned_at?: Array<{ date: string }>;
-		}>;
-	};
-	// createLending always writes copy and member together, so a row missing one is corrupt:
-	// drop it with a warning rather than fail the page, and never pass '' on as an id (#258).
-	const raw = body.entities ?? [];
-	const items = raw.flatMap((r) => {
-		const copyId = r.copy?.[0]?.reference;
-		const memberId = r.member?.[0]?.reference;
-		if (!copyId || !memberId) {
-			console.warn(
-				`listLendings: dropping malformed lending row ${r._id} — missing ${!copyId ? 'copy' : 'member'} reference (#258)`
-			);
-			return [];
-		}
-		return [
-			{
-				id: r._id,
-				copyId,
-				memberId,
-				assignedAt: r.assigned_at?.[0]?.date ?? '',
-				assignedUntil: r.assigned_until?.[0]?.date ?? '',
-				returnedAt: r.returned_at?.[0]?.date ?? ''
-			}
-		];
-	});
-	// RAW length, never `items.length`: a dropped row must not read as truncation (#321).
-	return deriveListRead(items, raw.length, body.count);
 }
