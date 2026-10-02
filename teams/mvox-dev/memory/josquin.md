@@ -115,3 +115,43 @@ runs until the share is under 10%; keep directives. Check that `git diff -U0` re
 A snippet-param spread (`{...control}`) on an input/select/textarea fails the guard, which
 needs `class=` in the tag. Write `class={control.class}` by name. The guard is in src/*.spec.ts,
 which `test:changed` does not run, so run the root specs by path before committing.
+
+## [PATTERN] Page action wrappers can leave the page as a write relay (#644, 2026-10-02)
+
+The lazy `actions` object moved to `$lib/roster/rosterActions.ts` (value-imports write seams)
+and joined `WRITE_RELAYS` in write-gate-coverage.spec, like eventActions. Factory splits
+(`createMemberOps`, `createArrangeOps`) compose sub-factories by spread; shared state helpers
+go in their own module so sub-factories never value-import the barrel.
+
+## [GOTCHA load-bearing] A bind:this ref read inside an effect-run load re-runs the effect (#643, 2026-10-02)
+
+`roles?.reset()` inside load() (called from the identity `$effect`) tracked the `$state` ref, so
+each mount re-ran load: an endless loop that only page.admin-lookup-reduction caught (call count).
+Wrap child resets in `untrack`. Run gates with `ulimit -c 0`: crashed vitest workers dumped
+2.4GB cores into the repo root and the runs then OOM-killed (#500 b4).
+
+## [PATTERN] Write gate is per export now (#643, 2026-10-02)
+
+`src/lib/testing/writeReach.ts` traces which exports reach a non-GET; WRITE_RELAYS is gone. A child
+.svelte that writes takes the write as a lazy prop from the route. Unsupported import/export
+forms fail a guard in write-gate-coverage.spec: teach writeReach or rewrite the import.
+
+## [PATTERN] Pins whose code moves to a sibling: read the sibling too (#654, 2026-10-02)
+
+Keep `source` on the old file for positive pins; add `const core = readFileSync(sibling)` and
+repeat each negative on it, and move a positive whose code moved. A concatenated source is
+weaker: either file could satisfy a positive. Barrel + value-importing core is a safe ESM cycle
+only while the imported constants are read inside functions.
+
+## [GOTCHA] Path allowlists pin code to a file (#640, 2026-10-02)
+
+soleCreatePath.spec's EXEMPT list names the files allowed the `_inheritrights` literal, and pins
+the list exactly. A split must leave the create in the named file (barrel keeps it), not move it.
+grep every spec for the file's path, not just `readFileSync` pins, before choosing the cut.
+
+## [GOTCHA] Bundled prop objects read mocked exports eagerly (#637, 2026-10-02)
+
+`seams={{ apiDeleteEventSeries, ... }}` reads every import when the object is built; a partial
+vi.mock then throws "No X export". Single props are read lazily. Bundle only local functions.
+A child that binds nested fields of a prop object warns on ownership: pass each bound field
+as its own `$bindable` prop and bind it from the owner (`bind:x={flow.x}`).

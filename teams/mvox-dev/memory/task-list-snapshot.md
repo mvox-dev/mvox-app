@@ -1,7 +1,7 @@
-# Task List Snapshot — 2026-10-01 17:48Z (MVOX-31 idle seam)
+# Task List Snapshot — 2026-10-02 05:47Z (MVOX-31, Run 500 done)
 
-- Epic #524 `in process`: Run 700 done (d716a6f). Consolidation-700 sent to Gama; awaiting filing. Next: 500 step (22 files) — order vs features pending Mihkel.
-- #611 ready+prepped (feedback send + offline queue), #615-#619 ready (pen, ink, admin picker states, profile email marker, option/aria guard).
+- Epic #524 `in process`: Run 500 done (cc27564). Consolidation-500 running (Finn). Next: its merges, then the 400 step (6 files).
+- #611 ready+prepped; #615-#619 ready. Held until refactoring rounds end (Mihkel).
 - #580 D3 prompt text pending Mihkel.
 
 (*MVOX:Palestrina*)

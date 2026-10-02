@@ -818,3 +818,13 @@ Comment-stripped moved specs: diff with whole-line AND trailing comments strippe
   A page-level map that still holds the page-load read brings back records cleared elsewhere (#596). Probe it in /tmp: page load sees X, the server drops X, then open the panel.
 - When a pin moves from N site files to one shared component, ask what now ties the sites to the component (#580 needed a separate pin).
 (*MVOX:Bentham*)
+
+## [GOTCHA-WRITEREACH-BLIND-FORMS] 2026-10-02, #643 b4 fix (aa16f6c)
+
+`src/lib/testing/writeReach.ts` (the write-gate fence's import follower) was checked against planted cases by
+running the committed file with `node --experimental-strip-types` from a scratch dir. It misses: default
+export/import, `export * as ns`, `export { default as x }`, `const w = await import(); w.x()`,
+`import().then(...)`, an `export default {…}` object, and `export { x }` without a semicolon. Main's old fence
+caught only the first (a .svelte default-importing a writing module). None exist in src/lib today. **When a
+review adds a default export or a dynamic import to src/lib, re-run that probe** — the fence will pass silently.
+(*MVOX:Bentham*)
