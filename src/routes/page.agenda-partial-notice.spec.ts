@@ -1,27 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #321 RED — the agenda's NOTICE surfaces for the two person-lifetime reads:
-//
-//   - `listMyRsvps` (every rsvp the singer ever cast, `limit=500`, no season
-//     boundary) — a truncated read means agenda rows can show "unanswered"
-//     for events the singer DID answer. The page must say the answer set is
-//     partial: data-testid="rsvp-partial-notice".
-//   - `listMyAttendance` (every attendance record for the member, `limit=500`)
-//     — same shape, data-testid="attendance-partial-notice".
-//
-// Same pattern as page.library-partial-notice.spec.ts (the one #321 pattern —
-// no second pattern invented): persistent VISIBLE text, role="status", copy
-// through the i18n layer, ABSENT from the DOM when the read is complete. The
-// notices are page-level facts about the singer's own data and render even
-// when the agenda list itself is empty — completeness of MY answers is not a
-// property of which events are upcoming.
-//
-// Mock scaffolding mirrors page.rsvp-wiring.spec.ts (the standing agenda-page
-// spec for exactly these two loads); messages are key-echo so the assertions
-// bind DOM to i18n keys, not to English copy.
+// The agenda notices for a truncated RSVP or attendance lifetime read.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_t, key) => () => String(key) })
@@ -46,11 +28,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -61,9 +38,6 @@ vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
 }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Full replacement (not importOriginal spread) — same $env wall as
-// page.rsvp-wiring.spec.ts documents. rsvpsByEventId is reimplemented inline
-// (pure): the page feeds it the ITEMS of the #321 result shape.
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -103,7 +77,6 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 
-/** #321 result-shape builders. */
 function complete<T>(items: T[]) {
 	return { items, total: items.length, truncated: false };
 }
@@ -118,15 +91,6 @@ interface Read<T> {
 }
 type RsvpRead = Read<{ rsvpId: string; eventId: string; status: string }>;
 type AttendanceRead = Read<{ attendanceId: string; eventId: string; status: string }>;
-
-/** A promise the test resolves by hand, to hold a read in flight. */
-function deferred<T>() {
-	let resolve!: (value: T) => void;
-	const promise = new Promise<T>((r) => {
-		resolve = r;
-	});
-	return { promise, resolve };
-}
 
 function setAuthedWithOneCollective() {
 	setToken('jwt-abc');
@@ -248,16 +212,6 @@ describe('#321 — the agenda states when the singer’s own answer/attendance s
 		expect(q(container, 'attendance-partial-notice')).toBeNull();
 	});
 
-	// #321 review F1 — the same switch spec /library and /roster carry: a
-	// truncation fact belongs to the collective whose read produced it. Both
-	// flags are checked in ONE test because both are person-lifetime state on
-	// the same page and both must die on the same per-load reset.
-	//
-	// B's two reads are held PENDING on purpose. Asserting only the settled end
-	// state would pass without the reset — B's own `truncated: false` overwrites
-	// the flag when it lands. The bug lives in the window between the switch and
-	// that landing, where the page is loading B's agenda while a notice from A
-	// still asserts over it, so the assertion has to happen inside that window.
 	it('neither truncation fact leaks across a collective switch: A truncated on both reads → switch to B → both notices gone while B is still loading', async () => {
 		const bRsvp = deferred<RsvpRead>();
 		const bAttendance = deferred<AttendanceRead>();
@@ -284,12 +238,7 @@ describe('#321 — the agenda states when the singer’s own answer/attendance s
 		});
 
 		selectedCollectiveDbStore.set(DB_B);
-		// B's agenda is on screen and B's rsvp read is in flight (still pending).
 		await waitFor(() => {
-			// #338 — with two collectives `selected-collective` is the header <select>,
-			// whose textContent is EVERY option's label concatenated; reading it would
-			// pass at initial render, before the switch, and stay green on the wrong
-			// selection. The selection itself is the fact this gate needs.
 			const select = q(container, 'selected-collective') as HTMLSelectElement | null;
 			expect(select?.value).toBe(DB_B);
 			expect(select?.selectedOptions[0]?.text.trim()).toBe('Other Choir');
@@ -298,7 +247,6 @@ describe('#321 — the agenda states when the singer’s own answer/attendance s
 		expect(q(container, 'rsvp-partial-notice')).toBeNull();
 		expect(q(container, 'attendance-partial-notice')).toBeNull();
 
-		// And B's own complete reads keep them absent.
 		bRsvp.resolve(complete([{ rsvpId: 'rsvp-b', eventId: 'event-b', status: 'going' }]));
 		bAttendance.resolve(complete([]));
 		await bRsvp.promise;
@@ -310,4 +258,4 @@ describe('#321 — the agenda states when the singer’s own answer/attendance s
 	});
 });
 
-// (*MVOX:Tallis* — RED spec, #321)
+// (*MVOX:Tallis*)

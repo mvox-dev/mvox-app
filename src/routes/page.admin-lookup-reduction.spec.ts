@@ -2,6 +2,7 @@
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
@@ -85,14 +86,6 @@ const ANNA: RolePerson = {
 };
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
-
-function json(body: unknown, status = 200): Response {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
 
 function selectSampledb() {
 	setToken('jwt-admin');

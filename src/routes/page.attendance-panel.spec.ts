@@ -1,18 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #84 TA.3 RED — route-level test for the record-attendance composition:
-// conductor taps 'Take attendance' on a recent event row → the member list
-// expands INLINE (no navigation) with per-member P/A/L toggles and the RSVP
-// comparison column; a non-conductor never sees the entry point at all.
-//
-// This picks up exactly where page.conductor-wiring.spec.ts stopped: TA.2
-// deliberately did NOT wire `ontakeattendance` (the button was gated behind
-// handler presence and asserted ABSENT). TA.3 wires it — the same conductor
-// fixture that previously asserted `take-attendance-btn` null now asserts it
-// present, and drives the full expand flow.
+// The agenda's take-attendance panel: member list, marks and writes.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -24,18 +15,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
 		agenda_filter_empty: () => 'No events match this filter.',
-		// #101 TE.1 -- every agenda row now carries an event-detail link.
 		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
@@ -45,9 +30,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
-		// #471 — the Recent section's show-more button; this mock enumerates
-		// every key the rendered page needs, so the new key lands here too. The
-		// collective-switch fixture below renders the picker, hence its label.
 		agenda_recent_show_more: () => 'Show earlier',
 		agenda_switch_collective: () => 'Switch collective',
 		agenda_take_attendance: () => 'Take attendance',
@@ -60,21 +42,14 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_rsvp_none: () => 'No answer',
 		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) => `RSVP for ${p.name}: ${p.rsvp}`,
 		attendance_load_error: () => "Couldn't load attendance.",
-		// #113 review F4 — the panel's loading state now carries an sr-only
-		// role="status" saying so (focus lands in the panel while it loads).
 		attendance_loading: () => 'Loading attendance…',
 		attendance_ready: (p: { count: number }) => `Attendance loaded, ${p.count} members`,
 		attendance_save_failed: () => 'Could not save attendance.',
-		// #327 — the saved cue + tally's optimistic marking; this mock predates
-		// that slice, so both keys are added here rather than left to throw.
 		attendance_saved: () => 'Saved.',
 		attendance_tally: (p: { present: number; absent: number; late: number }) =>
 			`${p.present} present · ${p.absent} absent · ${p.late} late`,
 		attendance_tally_unconfirmed: () => 'Counts include unconfirmed changes.',
 		attendance_close: () => 'Close',
-		// #85 TA.4 — the recent-row attendance badge + season summary render
-		// unconditionally whenever the Recent section renders, so this file's
-		// conductor fixtures (which populate `recent`) need these keys too.
 		attendance_status_not_recorded: () => 'Not recorded',
 		attendance_season_summary: () => 'This season',
 		attendance_season_rate: (p: { attended: number; total: number }) =>
@@ -113,25 +88,9 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
-// library reads that feed its pickers), which reaches entuFetch ->
-// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
-// request context under happy-dom. Same one-line fix the library/profile specs
-// already use; the real modules keep running, only the base url is stubbed.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// ...and the page resolves management rights per season/event on every load.
-// Only that ONE call is stubbed (the pure helpers and the write functions stay
-// real): left alone it issues a live request per agenda event, which is both a
-// network call from a unit test and a source of teardown AbortErrors. The
-// management surface itself is covered end-to-end in
-// page.repertoire-manage-wiring.spec.ts.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -168,14 +127,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	}
 }));
 
-// #90 TR.2 — the page now resolves each row's Works element and signs PDFs on
-// click. Mocked here for the same reason agendaData/rsvpData are: both modules
-// pull in $lib/entu/request -> $env/dynamic/public, which is unavailable
-// outside a SvelteKit request context under happy-dom (and neither belongs in
-// these specs' subject).
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -236,20 +187,7 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 	completionGateStore.set('complete');
 }
 
-/** A promise the test controls the settlement of — simulates "the write is still in flight". */
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	const promise = new Promise<T>((res) => {
-		resolve = res;
-	});
-	return { promise, resolve };
-}
-
-/** TWO conducted recent events sharing the same roster — for cross-event bleed regressions. */
 function setTwoConductedRecentEventsFixture() {
-	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-	// seat: person-p gains `_editor` on both events so the panel flows this file
-	// pins stay reachable. The seat stays too (it is not what admits her).
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
@@ -268,10 +206,7 @@ function setTwoConductedRecentEventsFixture() {
 	setAuthedWithOneCollective('person-p');
 }
 
-/** One conducted recent event + a two-member roster; m1 answered 'going', m2 never answered. */
 function setConductedRecentFixture() {
-	// #356 — person-p gains `_editor` on the event: the marking gate is rights,
-	// not the seat (see setTwoConductedRecentEventsFixture above).
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] }],
@@ -289,7 +224,6 @@ function setConductedRecentFixture() {
 	setAuthedWithOneCollective('person-p');
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -336,7 +270,6 @@ describe('+page — the Take attendance entry point (#84 TA.3)', () => {
 		});
 		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
 		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
-		// And no attendance/rsvp comparison reads fired — the gate is upstream of IO.
 		expect(listAttendanceMock).not.toHaveBeenCalled();
 		expect(listAllRsvpsForEventMock).not.toHaveBeenCalled();
 	});
@@ -384,11 +317,9 @@ describe('+page — tapping Take attendance expands the inline panel (#84 TA.3)'
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-rsvp-m1"]')).not.toBeNull();
 		});
-		// m1 answered 'going' — the comparison column carries it.
 		expect(container.querySelector('[data-testid="attendance-rsvp-m1"]')!.textContent).toContain(
 			'Going'
 		);
-		// m2 never answered — explicit marker, never a defaulted status.
 		expect(container.querySelector('[data-testid="attendance-rsvp-m2"]')!.textContent).toContain(
 			'No answer'
 		);
@@ -420,7 +351,6 @@ describe('+page — tapping Take attendance expands the inline panel (#84 TA.3)'
 		expect(createAttendanceMock.mock.calls[0][1]).toEqual(
 			expect.objectContaining({ eventId: 'past-1', memberId: 'm1', status: 'present' })
 		);
-		// No batch shape anywhere: nothing waits for a save/submit — the write already fired.
 		expect(container.querySelector('[data-testid="attendance-save-btn"]')).toBeNull();
 	});
 });
@@ -436,12 +366,10 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
 
-		// #471 — past-2's row only exists after show-more; reveal it up front.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
 
-		// Open event A (past-1), tap m1 present — the write fires and hangs (deferred).
 		await fireEvent.click(
 			container.querySelector('[data-testid="agenda-recent-row-past-1"] [data-testid="take-attendance-btn"]')!
 		);
@@ -456,7 +384,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect.objectContaining({ eventId: 'past-1', memberId: 'm1', status: 'present' })
 		);
 
-		// Close the panel, then open event B (past-2) — a DIFFERENT event, same member ids.
 		await fireEvent.click(container.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
@@ -467,7 +394,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-toggle-m1-present"]')).not.toBeNull();
 		});
-		// Fresh panel for event B: m1 has no attendance yet, and nothing is pending.
 		expect(
 			container.querySelector('[data-testid="attendance-toggle-m1-present"]')!.getAttribute('aria-pressed')
 		).toBe('false');
@@ -475,7 +401,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			container.querySelector('[data-testid="attendance-toggle-m1-present"]')!.hasAttribute('disabled')
 		).toBe(false);
 
-		// NOW event A's write resolves — it must NOT bleed into event B's currently-open panel.
 		d.resolve('new-att-1');
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
@@ -486,7 +411,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 		expect(
 			container.querySelector('[data-testid="attendance-toggle-m1-present"]')!.hasAttribute('disabled')
 		).toBe(false);
-		// Only the ONE write (event A) ever fired — event B was never touched.
 		expect(createAttendanceMock).toHaveBeenCalledTimes(1);
 	});
 
@@ -511,7 +435,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(createAttendanceMock).toHaveBeenCalledTimes(1);
 		});
 
-		// Close and reopen the SAME event (past-1) while the first write is still in flight.
 		await fireEvent.click(container.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
@@ -523,23 +446,15 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(container.querySelector('[data-testid="attendance-toggle-m1-present"]')).not.toBeNull();
 		});
 
-		// A second tap for the SAME member on the SAME (reopened) event must NOT fire a
-		// duplicate write — the queue's internal eventId:memberId pending key still guards it.
 		await fireEvent.click(container.querySelector('[data-testid="attendance-toggle-m1-present"]')!);
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(createAttendanceMock).toHaveBeenCalledTimes(1); // still just the one write
 	});
 	it('a stale list response does NOT overwrite a write that reconciled between request-issue and list-resolve (Finding 2)', async () => {
-		// Sequence: tap m1 present on event A -> write in flight -> close -> reopen A
-		// (listAttendance fires but server has not yet indexed the new record) -> the
-		// in-flight write settles (reconcile sets attendanceMap.m1) -> the stale list
-		// resolves with an empty result. The reconciled value must survive.
 		setTwoConductedRecentEventsFixture();
 		const writeDeferred = deferred<string>();
 		createAttendanceMock.mockReturnValueOnce(writeDeferred.promise);
-		// On reopen, listAttendance returns stale (empty) — the server hasn't indexed
-		// the new attendance yet.
 		const listDeferred = deferred<Array<{ attendanceId: string; memberId: string; status: string }>>();
 
 		const { container } = render(Page);
@@ -547,7 +462,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
 
-		// Step 1: open event A (past-1), tap m1 present — write fires, hangs on deferred.
 		await fireEvent.click(
 			container.querySelector('[data-testid="agenda-recent-row-past-1"] [data-testid="take-attendance-btn"]')!
 		);
@@ -559,8 +473,6 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 			expect(createAttendanceMock).toHaveBeenCalledTimes(1);
 		});
 
-		// Step 2: close panel, then reopen same event. On reopen, make listAttendance
-		// return the controlled deferred (stale data).
 		await fireEvent.click(container.querySelector('[data-testid="attendance-collapse-btn"]')!);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
@@ -569,37 +481,22 @@ describe('+page — attendance queue cross-event bleed + duplicate-write regress
 		await fireEvent.click(
 			container.querySelector('[data-testid="agenda-recent-row-past-1"] [data-testid="take-attendance-btn"]')!
 		);
-		// Panel opens with loading state; listAttendance is in flight (deferred).
 
-		// Step 3: the write settles FIRST (before the stale list resolves).
 		writeDeferred.resolve('new-att-1');
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
 
-		// Step 4: NOW the stale list resolves — server returned empty (hasn't indexed yet).
 		listDeferred.resolve([]);
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-toggle-m1-present"]')).not.toBeNull();
 		});
 
-		// The reconciled m1 must still show as present — the stale list must NOT
-		// have overwritten it.
 		expect(
 			container.querySelector('[data-testid="attendance-toggle-m1-present"]')!.getAttribute('aria-pressed')
 		).toBe('true');
-		// And only one write ever fired.
 		expect(createAttendanceMock).toHaveBeenCalledTimes(1);
 	});
 });
-
-// ── #321 review F2: the panel says when the roster behind its rows was cut ──────
-//
-// The PO's reachability ruling (2026-09-11): this panel is a CLOSED SET. A singer
-// with no row here cannot be marked present at all, and her missing row reads as
-// "she is not a member" rather than as a list cut short — so the panel says it,
-// inside itself, where the conductor looking for her is looking. `loadRoster`
-// reports `truncated` to the page for exactly this (it used to console.warn and
-// drop it); the agenda threads it through `attendancePanel.membersPartial`.
 
 describe('+page — the attendance panel states a truncated roster (#321 review F2)', () => {
 	async function openPanelWithRoster(truncated: boolean) {
@@ -635,7 +532,6 @@ describe('+page — the attendance panel states a truncated roster (#321 review 
 		const notice = container.querySelector(NOTICE)!;
 		expect(notice.getAttribute('role')).toBe('status');
 		expect(notice.className).not.toMatch(/sr-only|hidden/);
-		// Inside the panel, with the rows it is about — not on the page behind it.
 		expect(
 			container.querySelector(`[data-testid="attendance-panel"] ${NOTICE}`)
 		).not.toBeNull();
@@ -649,18 +545,9 @@ describe('+page — the attendance panel states a truncated roster (#321 review 
 	});
 });
 
-// ── #471 — a collective switch resets Recent to one card ─────────────────────
-//
-// The page wraps its single <AgendaList> call site in {#key current?.db}: a
-// collective switch REMOUNTS the list, so a pressed show-more never leaks one
-// collective's expansion onto another. Keyed on the db, NOT on the items'
-// identity — a type-filter tap makes a new filtered array and must not
-// collapse an expanded list.
 describe('#471 — a collective switch resets Recent to one card ({#key current?.db})', () => {
 	function setTwoCollectivesFixture() {
 		setTwoConductedRecentEventsFixture();
-		// Widen the auth/collective stores to a second db; the agenda mock
-		// already answers for any db.
 		authStore.set({
 			status: 'authenticated',
 			personIdByDb: { sampledb: 'person-p', otherdb: 'person-p' },
@@ -691,9 +578,6 @@ describe('#471 — a collective switch resets Recent to one card ({#key current?
 		});
 		expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).toBeNull();
 
-		// Switch. The button's RETURN is the switch's own distinguishing content
-		// (it was absent on the stale pre-switch DOM), so waiting on it cannot
-		// resolve against the old render.
 		selectedCollectiveDbStore.set('otherdb');
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-recent-show-more"]')).not.toBeNull();
@@ -706,5 +590,4 @@ describe('#471 — a collective switch resets Recent to one card ({#key current?
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Josquin* — #321 review F2: the panel's closed-set roster notice)
-// (*MVOX:Tallis* — #471 collective-switch reset RED)
+// (*MVOX:Josquin*)

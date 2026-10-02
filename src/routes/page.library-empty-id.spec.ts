@@ -1,22 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #258 RED — INTEGRATION through the ACTUAL /library route. Unlike
-// page.library.spec.ts (which mocks the whole data layer), this file keeps
-// $lib/library/libraryData REAL and stubs only the global fetch the page's
-// default `fetchImpl` resolves to — so the pin covers the real composition
-// chain the incidents rode: +page.svelte -> listLendings -> '' ids ->
-// resolveBorrowerNames / resolveCopyNames / resolveCopyChains -> entuFetch ->
-// `entity/` (entu-api's LIST route) on the wire.
-//
-// Pinned, choice-agnostically (GREEN states FILTER or ASSERT):
-//   - rendering /library with a malformed lending row NEVER fires an
-//     entity/-composed request with an empty id (the fetch stub sees no such
-//     URL);
-//   - the malformed row's handling is observable — the page lands in an honest
-//     terminal state (ready without the row, or the loud load-error), never a
-//     silently blank "Untitled copy" my-loan rendered as data.
+// The /library route never composes an empty entity path from a damaged lending row.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -67,13 +53,9 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-// NOTE: $lib/library/libraryData is deliberately NOT mocked — that is the point
-// of this file. Everything AROUND the library read path keeps the established
-// page.library.spec.ts harness mocks.
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// Sever the $env chain under happy-dom (same fix as page.library.spec.ts).
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -108,19 +90,8 @@ import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-/** Matches an entity path composed with an EMPTY id: '.../entity/' terminal or '.../entity/?query'. */
 const EMPTY_ID_ENTITY_URL = /\/entity\/(\?|$)/;
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/**
- * URL-routed global-fetch stub, real entu-api shapes: list queries answer
- * `{ entities }`; the empty-id 'entity/' path ALSO answers the LIST shape,
- * because that is exactly what entu-api does — the silent wrong answer this
- * issue exists to kill. Single-entity reads answer `{ entity }`.
- */
 function installFetchStub(lendingEntities: unknown[]) {
 	const stub = vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
@@ -162,7 +133,6 @@ function setAuthedWithOneCollective() {
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
-/** The page's honest terminal states: ready tree, empty library, or the loud error. */
 function terminalState(container: HTMLElement): Element | null {
 	return (
 		container.querySelector('[data-testid="library-work-list"]') ??
@@ -200,22 +170,17 @@ describe('/library integration — a malformed lending row never reaches the wir
 				_id: 'lending-bad',
 				copy: [{ reference: 'copy-2' }],
 				assigned_at: [{ date: '2026-07-02' }]
-				// member reference MISSING — on current main this becomes memberId ''
-				// and resolveBorrowerNames composes 'entity/?props=person'.
 			}
 		]);
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
 		await waitFor(() => expect(terminalState(container)).not.toBeNull());
-		// Let post-terminal microtasks (name/chain resolution effects) settle.
 		await new Promise((r) => setTimeout(r, 50));
 
 		const urls = stub.mock.calls.map((c) => String(c[0]));
-		// Sanity: this really exercised the REAL data layer through the page.
 		expect(urls.some((u) => u.includes('_type.string=work'))).toBe(true);
 		expect(urls.some((u) => u.includes('_type.string=lending'))).toBe(true);
-		// THE pin: no entity/-composed request with an empty id, ever.
 		expect(urls.filter((u) => EMPTY_ID_ENTITY_URL.test(u))).toEqual([]);
 		errSpy.mockRestore();
 	});
@@ -228,13 +193,9 @@ describe('/library integration — a malformed lending row never reaches the wir
 				member: [{ reference: 'member-me' }],
 				assigned_at: [{ date: '2026-07-01' }],
 				assigned_until: [{ date: '2026-08-01' }]
-				// copy reference MISSING — on current main this becomes copyId ''
-				// and my-loans resolveCopyNames/resolveCopyChains compose
-				// 'entity/?props=name,copy_number' / 'entity/?props=copy_number,_parent'.
 			}
 		]);
 		setAuthedWithOneCollective();
-		// The malformed lending belongs to the signed-in member -> it is a my-loan.
 		findMyMemberIdMock.mockResolvedValue('member-me');
 
 		const { container } = render(Page);
@@ -244,11 +205,6 @@ describe('/library integration — a malformed lending row never reaches the wir
 		const urls = stub.mock.calls.map((c) => String(c[0]));
 		expect(urls.filter((u) => EMPTY_ID_ENTITY_URL.test(u))).toEqual([]);
 
-		// Observable honest outcome, per GREEN's stated choice: FILTER -> the
-		// malformed loan simply does not exist (no my-loans section at all, since
-		// it was the only loan); ASSERT -> the loud load-error. What is FORBIDDEN
-		// is current main's behavior: a my-loans section rendering the malformed
-		// row as an innocent blank-named loan.
 		const loadError = container.querySelector('[data-testid="library-load-error"]');
 		const myLoans = container.querySelector('[data-testid="my-loans"]');
 		expect(loadError !== null || myLoans === null).toBe(true);
@@ -256,4 +212,4 @@ describe('/library integration — a malformed lending row never reaches the wir
 	});
 });
 
-// (*MVOX:Tallis* — RED spec)
+// (*MVOX:Tallis*)

@@ -26,6 +26,7 @@ import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, readCacheGet, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { tallinnHHMM } from '$lib/preferences/timeFormat';
+import { json } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -43,12 +44,7 @@ const EVENTS = [
 	{ id: 'ev-2', name: 'Autumn concert', start: '2026-10-18T14:00:00.000Z' }
 ];
 
-function json(body: unknown): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function urlOf(input: RequestInfo | URL): string {
 	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -59,10 +55,14 @@ function onlineEntu() {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
 		if (url.includes('_type.string=mvox_collective')) {
-			return json({ count: 1, entities: [{ _id: 'marker-1', name: [{ string: 'Sample Choir' }] }] });
+			return json(
+				{ count: 1, entities: [{ _id: 'marker-1', name: [{ string: 'Sample Choir' }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (url.includes('_type.string=database')) {
-			return json({ count: 1, entities: [{ _id: DB_ENTITY }] });
+			return json({ count: 1, entities: [{ _id: DB_ENTITY }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=season')) {
 			return json({
@@ -75,7 +75,7 @@ function onlineEntu() {
 						end_date: [{ date: '2027-06-30' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=event&')) {
 			return json({
@@ -87,9 +87,9 @@ function onlineEntu() {
 					duration_minutes: [{ number: 90 }],
 					_parent: [{ reference: SEASON, entity_type: 'season' }]
 				}))
-			});
+			}, 200, JSON_HEADERS);
 		}
-		return json({ count: 0, entities: [] });
+		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
 }
 

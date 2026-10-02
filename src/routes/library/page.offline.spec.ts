@@ -41,6 +41,7 @@ import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
+import { json } from '$lib/testing/entuFetchKit';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -66,12 +67,7 @@ const READ_AT = new Date('2026-09-28T07:05:00.000Z');
 const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
 
-function json(body: unknown): Response {
-	return new Response(JSON.stringify(body), {
-		status: 200,
-		headers: { 'Content-Type': 'application/json' }
-	});
-}
+const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function urlOf(input: RequestInfo | URL): string {
 	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
@@ -85,12 +81,12 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 		if (url.includes('_type.string=library&')) {
 			return json(
 				opts.librarianPerson ? { count: 1, entities: [{ _id: LIBRARY }] } : { count: 0, entities: [] }
-			);
+			, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${LIBRARY}?props=_owner,_editor`)) {
 			return json({
 				entity: { _id: LIBRARY, _owner: [{ reference: opts.librarianPerson ?? '' }] }
-			});
+			}, 200, JSON_HEADERS);
 		}
 		// The librarian panel's three collective-wide feeds, distinct from the per-node reads below.
 		if (url.includes('_type.string=edition&props=')) {
@@ -104,7 +100,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 						_parent: [{ reference: WORKS[0].id, entity_type: 'work' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=copy&props=')) {
 			return json({
@@ -116,22 +112,30 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 						_parent: [{ reference: EDITION.id, entity_type: 'edition' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=member&status.string=active')) {
 			return json({
 				count: 1,
 				entities: [{ _id: BORROWER_MEMBER, person: [{ reference: BORROWER_PERSON }] }]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=mvox_collective')) {
-			return json({ count: 1, entities: [{ _id: 'marker-1', name: [{ string: 'Sample Choir' }] }] });
+			return json(
+				{ count: 1, entities: [{ _id: 'marker-1', name: [{ string: 'Sample Choir' }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (url.includes('_type.string=database')) {
-			return json({ count: 1, entities: [{ _id: DB_ENTITY }] });
+			return json({ count: 1, entities: [{ _id: DB_ENTITY }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${DB_ENTITY}?`) && url.includes('roster_show_real_names')) {
-			return json({ entity: { _id: DB_ENTITY, roster_show_real_names: [{ boolean: true }] } });
+			return json(
+				{ entity: { _id: DB_ENTITY, roster_show_real_names: [{ boolean: true }] } },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (url.includes('_type.string=admin_member_record')) {
 			return json({
@@ -143,7 +147,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 						name: [{ string: RECORD_NAME }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=work&')) {
 			return json({
@@ -153,7 +157,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 					name: [{ string: w.name }],
 					composer: [{ string: w.composer }]
 				}))
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=lending&')) {
 			return json({
@@ -166,17 +170,21 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 						assigned_at: [{ date: '2026-09-01' }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		// The my-loans chain, for the describe block whose signed-in person is the borrower.
 		if (
 			url.includes('_type.string=member&') &&
 			url.includes(`person.reference=${BORROWER_PERSON}`)
 		) {
-			return json({ count: 1, entities: [{ _id: BORROWER_MEMBER }] });
+			return json({ count: 1, entities: [{ _id: BORROWER_MEMBER }] }, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${COPY.id}?props=name,copy_number`)) {
-			return json({ entity: { _id: COPY.id, copy_number: [{ number: COPY.copyNumber }] } });
+			return json(
+				{ entity: { _id: COPY.id, copy_number: [{ number: COPY.copyNumber }] } },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (url.includes(`entity/${COPY.id}?props=copy_number,_parent`)) {
 			return json({
@@ -185,7 +193,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 					copy_number: [{ number: COPY.copyNumber }],
 					_parent: [{ reference: EDITION.id, entity_type: 'edition' }]
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${EDITION.id}?props=name,_parent`)) {
 			return json({
@@ -194,10 +202,14 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 					name: [{ string: EDITION.name }],
 					_parent: [{ reference: WORKS[0].id, entity_type: 'work' }]
 				}
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes(`entity/${BORROWER_MEMBER}?props=person`)) {
-			return json({ entity: { _id: BORROWER_MEMBER, person: [{ reference: BORROWER_PERSON }] } });
+			return json(
+				{ entity: { _id: BORROWER_MEMBER, person: [{ reference: BORROWER_PERSON }] } },
+				200,
+				JSON_HEADERS
+			);
 		}
 		if (
 			url.includes('_type.string=profile') &&
@@ -208,7 +220,7 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 				entities: [
 					{ _id: 'prof-2', name: [{ string: PROFILE_NAME }], _sharing: [{ string: 'domain' }] }
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=edition&') && url.includes(`_parent.reference=${WORKS[0].id}`)) {
 			return json({
@@ -220,15 +232,15 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 						publisher: [{ string: EDITION.publisher }]
 					}
 				]
-			});
+			}, 200, JSON_HEADERS);
 		}
 		if (url.includes('_type.string=copy&') && url.includes(`_parent.reference=${EDITION.id}`)) {
 			return json({
 				count: 1,
 				entities: [{ _id: COPY.id, copy_number: [{ number: COPY.copyNumber }] }]
-			});
+			}, 200, JSON_HEADERS);
 		}
-		return json({ count: 0, entities: [] });
+		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
 }
 

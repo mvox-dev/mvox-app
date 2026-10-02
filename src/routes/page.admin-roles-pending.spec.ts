@@ -1,57 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #325 RED — pending guard on the /admin role add/remove surface (the
-// ADMIN/LIBRARIAN half of the issue). Contract: issue #325 + Gama's
-// 2026-09-11 `ready` ruling.
-//
-// WHY THIS HALF'S GUARD IS CORRECTNESS, NOT COSMETICS — the writes here are
-// REAL direct rights-tier grants (roleManagement.ts: addAdmin/addLibrarian
-// POST `_owner`/`_editor` values via grantEditor + delete stale ids), so
-// concurrent writes race Entu's replacement semantics. Citing the rights doc
-// by stable id per ER-16 (docs/architecture/entu-rights-and-visibility-model.md),
-// quoted whole:
-//
-//   ER-6 — "A reference can hold at most one active direct rights-tier grant
-//   per entity. Granting a new direct tier (`_owner`/`_editor`/`_viewer`/
-//   `_expander`) for a reference that already holds a direct tier on that
-//   same entity retires (soft-deletes) the old one — even via a bare,
-//   independent POST carrying no prior `_id`." Qualifications: ER-8, ER-9.
-//
-//   ER-9 — "Since entity CREATE grants the creating caller `_owner` as one
-//   direct document (ER-5), a later explicit grant of any other direct tier
-//   to that same caller on that same entity replaces it (ER-6) and silently
-//   demotes the creator from owner — the replace happens with no error and
-//   no notice."
-//
-// So a double-tap that fires two concurrent direct-grant writes for the same
-// reference on the same entity races the replacement: the second to land
-// silently wins, with no error and no notice. The guard must make a
-// concurrent grant write IMPOSSIBLE, not merely unlikely.
-//
-// PINNED CONTRACT (per issue #325's done-when + the inventory's four-state
-// table, docs/qa/autosave-field-inventory.md):
-//   - a role write in flight disables the person <select>s AND the remove
-//     buttons — and the HANDLERS refuse a second write regardless of the
-//     `disabled` attribute (wire-level: exactly one call), because a
-//     `disabled` control while pending is a double-tap guard, not a state
-//     signal, and fireEvent reaches listeners regardless of `disabled`;
-//   - pending is VISIBLE: a caveat-slot paragraph (#321's precedent shape —
-//     the same slot the partial/order notices use), role="status",
-//     data-testid="admin-roles-pending-notice", text admin_roles_saving —
-//     present exactly while a write is in flight;
-//   - saved is ANNOUNCED: a PERSISTENT role="status" region (#267 shape —
-//     same-node text change fires aria-live),
-//     data-testid="admin-roles-status", empty at rest, announcing
-//     admin_roles_saved after a successful write;
-//   - failure text KEPT byte-identical: the existing
-//     admin-roles-action-error role="alert" node with
-//     admin_roles_action_error, controls re-enabled for retry.
-//
-// Messages are mocked leniently (Proxy → key name), so every text assertion
-// pins the KEY — the byte-identity of the copy itself is messages/*.json's,
-// pinned by src/lib/i18n/pendingGuardKeys.spec.ts.
+// The /admin role add/remove controls hold a pending state until the write lands.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
@@ -65,7 +16,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	)
 }));
 
-// Mock every data seam at its module boundary — same set as page.admin.spec.ts.
 const h = vi.hoisted(() => {
 	class RoleLockoutError extends Error {
 		readonly code = 'role-lockout';
@@ -257,17 +207,6 @@ async function pick(select: HTMLSelectElement, personId: string): Promise<void> 
 	await fireEvent.change(select, { target: { value: personId } });
 }
 
-/** A promise the test settles by hand — the in-flight window under test. */
-function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void; reject: (e: Error) => void } {
-	let resolve!: (v: T) => void;
-	let reject!: (e: Error) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
 beforeEach(() => {
 	loadOk();
 	selectSampledb();
@@ -280,14 +219,10 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 });
 
-// ── the four states exist as DOM facts ─────────────────────────────────────────
-
 describe('#325 admin/librarian — four states at rest (not yet attempted)', () => {
 	it('ready page: PERSISTENT empty role="status" region (admin-roles-status, #267 same-node shape), NO pending notice, NO action error', async () => {
 		const { container } = await renderReady();
 
-		// The saved-announcement region is persistent so aria-live fires on a
-		// text CHANGE of a mounted node, never on a fresh mount.
 		const status = q(container, 'admin-roles-status');
 		expect(status, 'expected the persistent admin-roles-status region').not.toBeNull();
 		expect(status!.getAttribute('role')).toBe('status');
@@ -296,7 +231,6 @@ describe('#325 admin/librarian — four states at rest (not yet attempted)', () 
 		expect(q(container, 'admin-roles-pending-notice')).toBeNull();
 		expect(q(container, 'admin-roles-action-error')).toBeNull();
 
-		// Controls enabled at rest.
 		expect(adminSelect(container).disabled).toBe(false);
 		expect(librarianSelect(container).disabled).toBe(false);
 		expect((q<HTMLButtonElement>(container, 'admin-remove-p-bela') as HTMLButtonElement).disabled).toBe(
@@ -304,8 +238,6 @@ describe('#325 admin/librarian — four states at rest (not yet attempted)', () 
 		);
 	});
 });
-
-// ── the guard: a write in flight disables the controls and refuses a second write ──
 
 describe('#325 admin/librarian — a grant write in flight disables the surface (ER-6/ER-9 race closed)', () => {
 	it('add-admin in flight: BOTH selects and the remove buttons disable; the visible saving notice (caveat-slot paragraph, role="status") shows; a second pick fires NO second grant write; settle → re-enabled, notice gone, saved announced', async () => {
@@ -316,9 +248,6 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 		await pick(adminSelect(container), 'p-cilla');
 		expect(h.addAdminMock).toHaveBeenCalledTimes(1);
 
-		// Pending is VISIBLE (the caveat-slot paragraph shape, #321 precedent) —
-		// `disabled` alone is a double-tap guard, not a state signal
-		// (docs/qa/autosave-field-inventory.md).
 		await waitFor(() => {
 			const notice = q(container, 'admin-roles-pending-notice');
 			expect(notice, 'expected the visible pending notice while the write is in flight').not.toBeNull();
@@ -326,9 +255,6 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 			expect(notice!.textContent).toContain('admin_roles_saving');
 		});
 
-		// The whole role surface guards: the select that fired, its sibling
-		// select, and every remove button — any of them could otherwise fire a
-		// concurrent direct-grant write into the ER-6 replacement race.
 		expect(adminSelect(container).disabled).toBe(true);
 		expect(librarianSelect(container).disabled).toBe(true);
 		expect(
@@ -338,9 +264,6 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 			(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla') as HTMLButtonElement).disabled
 		).toBe(true);
 
-		// WIRE-LEVEL: the handler itself refuses — fireEvent reaches the
-		// listener regardless of the `disabled` attribute, exactly like a
-		// double-tap racing the attribute flip. NO concurrent grant write.
 		await pick(adminSelect(container), 'p-dora');
 		expect(h.addAdminMock).toHaveBeenCalledTimes(1);
 		await fireEvent.click(q(container, 'admin-remove-p-bela') as HTMLElement);
@@ -353,12 +276,10 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 		expect(adminSelect(container).disabled).toBe(false);
 		expect(librarianSelect(container).disabled).toBe(false);
 
-		// Saved is ANNOUNCED on the persistent region.
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-status')?.textContent).toContain('admin_roles_saved');
 		});
 
-		// The guard releases: a next write is possible after settle.
 		await pick(adminSelect(container), 'p-dora');
 		expect(h.addAdminMock).toHaveBeenCalledTimes(2);
 	});
@@ -378,8 +299,6 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 		});
 		expect(adminSelect(container).disabled).toBe(true);
 
-		// The select is part of the same race surface: a grant for the person
-		// being removed, landing second, would silently win (ER-6).
 		await pick(adminSelect(container), 'p-cilla');
 		expect(h.addAdminMock).not.toHaveBeenCalled();
 
@@ -423,8 +342,6 @@ describe('#325 admin/librarian — a grant write in flight disables the surface 
 	});
 });
 
-// ── failure: the existing surfacing is KEPT byte-identical, plus retry ─────────
-
 describe('#325 admin/librarian — failure text kept, controls re-enabled for retry', () => {
 	it('a rejected add keeps the EXISTING admin-roles-action-error role="alert" (admin_roles_action_error), drops the pending notice, announces NO saved, and re-enables the controls — a retry write fires', async () => {
 		const d = deferred<undefined>();
@@ -449,10 +366,9 @@ describe('#325 admin/librarian — failure text kept, controls re-enabled for re
 		);
 		expect(adminSelect(container).disabled).toBe(false);
 
-		// Retry is live: the guard released on failure too.
 		await pick(adminSelect(container), 'p-cilla');
 		expect(h.addAdminMock).toHaveBeenCalledTimes(2);
 	});
 });
 
-// (*MVOX:Tallis* — #325 RED)
+// (*MVOX:Tallis*)

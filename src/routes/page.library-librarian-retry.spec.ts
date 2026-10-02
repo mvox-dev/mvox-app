@@ -2,6 +2,7 @@
 // A late librarian answer from a retry must not overwrite a newer load (#546).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -223,12 +224,6 @@ afterEach(() => {
 
 type Answer = { state: string; libraryId: string | null };
 
-function deferred() {
-	let resolve!: (a: Answer) => void;
-	const promise = new Promise<Answer>((r) => (resolve = r));
-	return { promise, resolve };
-}
-
 function answersForA(queue: Array<Promise<Answer>>) {
 	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
 		cfg.db === DB_A
@@ -254,7 +249,7 @@ async function renderWithLibrarianError(): Promise<HTMLElement> {
 
 describe('/library — #546 the librarian retry ignores a late answer', () => {
 	it('a retry for A that answers after a switch to B leaves B\'s pickers', async () => {
-		const retryA = deferred();
+		const retryA = deferred<Answer>();
 		answersForA([Promise.resolve({ state: 'error', libraryId: null }), retryA.promise]);
 		const container = await renderWithLibrarianError();
 
@@ -285,8 +280,8 @@ describe('/library — #546 the librarian retry ignores a late answer', () => {
 	});
 
 	it('of two retries, the first answering last is ignored', async () => {
-		const first = deferred();
-		const second = deferred();
+		const first = deferred<Answer>();
+		const second = deferred<Answer>();
 		answersForA([
 			Promise.resolve({ state: 'error', libraryId: null }),
 			first.promise,
