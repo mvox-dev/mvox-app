@@ -458,7 +458,7 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 		expect(labelNode!.className).not.toContain('sr-only');
 	});
 
-	it('submit POSTs the FULL create payload — resolved type id, parent ref, name, UTC-converted datetime, and the MANDATORY explicit _sharing: domain', async () => {
+	it('submit POSTs the FULL create payload — resolved type id, parent ref, name, UTC-converted datetime, and no rights fields (#699)', async () => {
 		const { container, fetchStub } = renderSchedulePage({ event: editorEvent(), schedule: [] });
 		await waitReady(container);
 		await openAddForm(container);
@@ -482,13 +482,12 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 			expect(sorted).toEqual(
 				[
 					{ type: '_parent', reference: 'ev1' },
-					{ type: '_sharing', string: 'domain' },
 					{ type: '_type', reference: 'type-schedule-item' },
 					{ type: 'datetime', datetime: '2026-09-01T14:30:00.000Z' },
 					{ type: 'name', string: 'kogunemine' }
 				].sort((a, b) => a.type.localeCompare(b.type))
 			);
-			expect(props).toContainEqual({ type: '_sharing', string: 'domain' });
+			expect(props.filter((p) => p.type === '_sharing' || p.type === '_inheritrights')).toEqual([]);
 			expect(props.map((p) => p.type)).not.toContain('ordinal');
 		});
 	});

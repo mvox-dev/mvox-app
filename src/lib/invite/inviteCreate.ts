@@ -120,14 +120,12 @@ export async function createInvite(
 	}
 	const personParentId = await resolvePersonParentId(cfg, fetchImpl);
 
-	type Prop = { type: string; reference?: string; string?: string; boolean?: boolean };
+	type Prop = { type: string; reference?: string; string?: string };
 
-	// No `_sharing`: the database parent already carries `domain`, which Entu copies at create.
 	const personProps: Prop[] = [
 		{ type: '_type', reference: personTypeId },
 		{ type: '_parent', reference: personParentId },
-		{ type: 'entu_user', string: INVITE_MINT_TRIGGER },
-		{ type: '_inheritrights', boolean: true }
+		{ type: 'entu_user', string: INVITE_MINT_TRIGGER }
 	];
 	const personRes = await entuFetch(
 		cfg.db,
@@ -194,8 +192,7 @@ export async function createInvite(
 		{ type: '_type', reference: memberTypeId },
 		{ type: '_parent', reference: input.dbEntityId },
 		{ type: 'person', reference: personId },
-		{ type: 'status', string: 'active' },
-		{ type: '_inheritrights', boolean: true }
+		{ type: 'status', string: 'active' }
 	];
 	const memberRes = await entuFetch(
 		cfg.db,

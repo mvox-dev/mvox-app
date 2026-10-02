@@ -1,52 +1,4 @@
-// #262 RED — the schedule_item data layer: read, bulk read, create, edit,
-// remove. The type EXISTS on both dbs (#246 settle + seed): child of event
-// (1 → 0..N), props `name` (string) + `datetime` (datetime), both required.
-// Sort by `datetime` ascending, `name` tie-break — deliberately NO ordinal
-// anywhere (adjudicated on #246). Rights/sharing program_item-identical:
-// parent-event `_editor` writes, `_sharing: domain`.
-//
-// CONTRACT under test (defined HERE, implemented in GREEN):
-//
-//   src/lib/schedule/scheduleData.ts
-//     export type ScheduleItem = { id: string; name: string; datetime: string };
-//     export async function listScheduleItems(
-//       cfg: EntuCfg, eventId: string, fetchImpl?: typeof fetch
-//     ): Promise<ScheduleItem[]>;                       // sorted, full shape
-//     export async function listScheduleItemsByEventId(
-//       cfg: EntuCfg, eventIds: string[], fetchImpl?: typeof fetch
-//     ): Promise<Record<string, ScheduleItem[]>>;      // the agenda's bulk read
-//     export async function createScheduleItem(
-//       cfg: EntuCfg,
-//       input: { eventId: string; name: string; datetime: string },
-//       fetchImpl?: typeof fetch
-//     ): Promise<string>;                              // returns new entity id
-//     export async function updateScheduleItemField(
-//       cfg: EntuCfg, itemId: string,
-//       field: 'name' | 'datetime', value: string,
-//       fetchImpl?: typeof fetch
-//     ): Promise<void>;                                // replaceEntityProperty
-//     export async function removeScheduleItem(
-//       cfg: EntuCfg, itemId: string, fetchImpl?: typeof fetch
-//     ): Promise<void>;                                // DELETE entity/{id}
-//
-// Wire rules pinned below (all with a live precedent):
-//   • read = `_type.string=schedule_item` — NEVER a raw type id (per-db ids
-//     differ: 6a9ccea4… on the dev/test collective, 6a9cceab… on crede);
-//     mirror listProgramItems (repertoireData.ts:89-111).
-//   • create = POST `entity` with `_type` as reference via resolveTypeId
-//     (create bodies need refs as `reference`, never `string` — the pinned
-//     wire shape), `_parent` reference, name string, datetime datetime, AND an
-//     explicit `_sharing: domain` — MANDATORY (createProgramItem precedent,
-//     repertoireActions.ts:188-205: parent events are not uniformly domain,
-//     omitting it can land a public schedule_item whose domain-tier prop-defs
-//     drop out of ordinary reads).
-//   • edit = the replaceEntityProperty choreography (replaceProperty.ts): GET
-//     existing id(s) FIRST → ONE POST pairing the first old `_id` with the new
-//     value (Entu's native atomic overwrite); corrupted extras only are swept
-//     after the POST — the normal ≤1-value path issues zero deletes.
-//   • remove = DELETE `entity/{id}` (the ENTITY endpoint — property DELETEs
-//     are for value ids only; conflating the two 404s and pollutes).
-//   • NO ordinal: no read asks for it, no write sends it.
+// schedule_item data layer: read, bulk read, create, edit, remove; no ordinal (#246).
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
@@ -87,8 +39,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-// ── read: one event ──────────────────────────────────────────────────────────
-
 describe('listScheduleItems — wire shape', () => {
 	it('queries by TYPE NAME with parent ref, name+datetime props, limit 500 — the listProgramItems shape', async () => {
 		const fetchImpl = vi.fn(async (_input: RequestInfo | URL) => json({ entities: [] }));
@@ -98,12 +48,8 @@ describe('listScheduleItems — wire shape', () => {
 		expect(url).toContain(
 			'_type.string=schedule_item&_parent.reference=ev1&props=name,datetime&limit=500'
 		);
-		// NEVER a raw type id — per-db type-def ids differ (6a9ccea4… on the
-		// dev/test collective, 6a9cceab… on crede); a baked id reads one db's
-		// schedule and 404s the other.
 		expect(url).not.toContain('_type.reference');
 		expect(url).not.toMatch(/6a9cce/);
-		// NO ordinal — the #246 adjudication holds on the wire too.
 		expect(url).not.toContain('ordinal');
 	});
 
@@ -117,9 +63,6 @@ describe('listScheduleItems — wire shape', () => {
 
 describe('listScheduleItems — sort: datetime ascending, name tie-break', () => {
 	it('returns the FULL row shape, sorted by datetime then name — never wire order', async () => {
-		// Wire order is deliberately scrambled AND carries a datetime tie:
-		// 'b-proov' and 'a-kogunemine' share 15:00Z — the tie-break must put
-		// 'a-kogunemine' first alphabetically. No ordinal exists to sort by.
 		const fetchImpl = vi.fn(async () =>
 			json({
 				entities: [
@@ -130,7 +73,6 @@ describe('listScheduleItems — sort: datetime ascending, name tie-break', () =>
 			})
 		);
 		const rows = await listScheduleItems(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
-		// Full-shape toEqual — partial assertions hide bugs.
 		expect(rows).toEqual([
 			{ id: 'si1', name: 'a-kogunemine', datetime: '2026-09-01T15:00:00.000Z' },
 			{ id: 'si2', name: 'b-proov', datetime: '2026-09-01T15:00:00.000Z' },
@@ -138,8 +80,6 @@ describe('listScheduleItems — sort: datetime ascending, name tie-break', () =>
 		] satisfies ScheduleItem[]);
 	});
 });
-
-// ── read: bulk, for the agenda ───────────────────────────────────────────────
 
 describe('listScheduleItemsByEventId — the agenda bulk read (mirror loadWorksByEventId)', () => {
 	it('one GET per event id (the platform has no multi-parent query), assembled into a per-event record, each list sorted', async () => {
@@ -160,7 +100,6 @@ describe('listScheduleItemsByEventId — the agenda bulk read (mirror loadWorksB
 			['up1', 'rec1', 'up-empty'],
 			fetchImpl as unknown as typeof fetch
 		);
-		// Exactly one schedule GET per id — a per-row refetch storm fails here.
 		const scheduleUrls = urls(fetchImpl).filter((u) => u.includes('_type.string=schedule_item'));
 		expect(scheduleUrls).toHaveLength(3);
 		expect(
@@ -184,15 +123,12 @@ describe('listScheduleItemsByEventId — the agenda bulk read (mirror loadWorksB
 	});
 });
 
-// ── create ───────────────────────────────────────────────────────────────────
-
 function createWireStub() {
 	const posted: Array<{ url: string; body: Array<Record<string, unknown>> }> = [];
 	const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
 		const method = init?.method ?? 'GET';
 		if (url.includes('name.string=schedule_item')) {
-			// resolveTypeId's lookup — the type-def id this db actually holds.
 			return json({ entities: [{ _id: 'type-schedule-item' }] });
 		}
 		if (method === 'POST') {
@@ -204,8 +140,8 @@ function createWireStub() {
 	return { stub, posted };
 }
 
-describe('createScheduleItem — the FULL wire payload, _sharing included', () => {
-	it('resolves the type id per db (resolveTypeId, never a baked id) and POSTs the exact five-prop body', async () => {
+describe('createScheduleItem — the FULL wire payload, no rights fields', () => {
+	it('resolves the type id per db (resolveTypeId, never a baked id) and POSTs the exact four-prop body', async () => {
 		const { stub, posted } = createWireStub();
 		const id = await createScheduleItem(
 			cfg,
@@ -214,31 +150,25 @@ describe('createScheduleItem — the FULL wire payload, _sharing included', () =
 		);
 		expect(id).toBe('si-new');
 		expect(posted).toHaveLength(1);
-		// POST goes to the collection endpoint (`entity`), not entity/{id}.
 		expect(posted[0].url).toMatch(/\/entity(\?|$)/);
-		// Full-shape toEqual — the exact createProgramItem-family payload.
 		expect(posted[0].body).toEqual([
 			{ type: '_type', reference: 'type-schedule-item' },
 			{ type: '_parent', reference: 'ev1' },
 			{ type: 'name', string: 'kogunemine' },
-			{ type: 'datetime', datetime: '2026-09-01T14:30:00.000Z' },
-			{ type: '_sharing', string: 'domain' }
+			{ type: 'datetime', datetime: '2026-09-01T14:30:00.000Z' }
 		]);
 	});
 
-	it('NEGATIVE twin — the explicit `_sharing: domain` prop is MANDATORY on the create body', async () => {
-		// createProgramItem precedent (repertoireActions.ts:188-205): parent
-		// events are NOT uniformly domain-shared — one live event is public — so
-		// a create relying on create-time inherit can land a PUBLIC
-		// schedule_item, and aggregate.js then drops its domain-tier prop-defs
-		// from ordinary reads. A payload without `_sharing` must fail here.
+	it('NEGATIVE twin — the create body carries no `_sharing` and no `_inheritrights` (#699)', async () => {
 		const { stub, posted } = createWireStub();
 		await createScheduleItem(
 			cfg,
 			{ eventId: 'ev1', name: 'proov', datetime: '2026-09-01T15:00:00.000Z' },
 			stub as unknown as typeof fetch
 		);
-		expect(posted[0].body).toContainEqual({ type: '_sharing', string: 'domain' });
+		expect(
+			posted[0].body.filter((p) => p.type === '_sharing' || p.type === '_inheritrights')
+		).toEqual([]);
 	});
 
 	it('never writes an ordinal — no prop of that name on any create body', async () => {
@@ -269,8 +199,6 @@ describe('createScheduleItem — the FULL wire payload, _sharing included', () =
 	});
 });
 
-// ── edit: replaceEntityProperty choreography ─────────────────────────────────
-
 function editWireStub(existingValueIds: string[]) {
 	const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -278,7 +206,6 @@ function editWireStub(existingValueIds: string[]) {
 		if (url.includes('/property/') && method === 'DELETE') return json({ deleted: true });
 		if (url.includes('/entity/si1') && method === 'POST') return json({});
 		if (url.includes('/entity/si1')) {
-			// The GET the choreography opens with — existing value ids to delete.
 			const prop = url.match(/props=([^&]+)/)?.[1] ?? 'name';
 			return json({
 				entity: {
@@ -292,9 +219,6 @@ function editWireStub(existingValueIds: string[]) {
 	return stub;
 }
 
-// #264 — the shared replaceEntityProperty helper went ATOMIC (the POST entry
-// carries the first old value's `_id`; only corrupted EXTRA ids are swept,
-// after the POST). This caller inherits that wire; the shapes below track it.
 describe('updateScheduleItemField — atomic overwrite via replaceEntityProperty (#264)', () => {
 	it("name edit with a corrupted phantom: POST body is exactly [{_id:'v-old', type:'name', string}], and ONLY the phantom is deleted, AFTER the POST", async () => {
 		const stub = editWireStub(['v-old', 'v-phantom']);
@@ -325,8 +249,6 @@ describe('updateScheduleItemField — atomic overwrite via replaceEntityProperty
 		]);
 	});
 });
-
-// ── remove ───────────────────────────────────────────────────────────────────
 
 describe('removeScheduleItem — DELETE the ENTITY, not a property value', () => {
 	it('sends exactly one DELETE to entity/{itemId}', async () => {

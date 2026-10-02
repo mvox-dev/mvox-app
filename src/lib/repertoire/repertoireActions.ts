@@ -85,8 +85,7 @@ export async function createProgramItem(
 		{ type: '_type', reference: typeId },
 		{ type: '_parent', reference: input.eventId },
 		{ type: 'edition', reference: input.editionId },
-		{ type: 'ordinal', number: input.ordinal },
-		{ type: '_sharing', string: 'domain' }
+		{ type: 'ordinal', number: input.ordinal }
 	];
 	const res = await entuFetch(
 		cfg.db,

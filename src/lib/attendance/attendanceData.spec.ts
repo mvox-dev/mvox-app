@@ -1,3 +1,4 @@
+// attendanceData: per-tap attendance writes under the event, and the attendance reads.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -12,24 +13,6 @@ import {
 	type MyAttendance
 } from './attendanceData';
 
-// #84 TA.3 RED — the attendance write/read data layer. Mirrors rsvpData.ts
-// EXACTLY, with the structural differences pinned by #77's ruling:
-//
-//   - `attendance` is a CHILD OF EVENT (`_parent` = eventId) — the conductor
-//     records it, so it hangs off the event, not the singer's person (the
-//     participation split: rsvp child-of-person/member-created, attendance
-//     child-of-event/conductor-created).
-//   - status enum is present | absent | late (three, not four).
-//   - three sentinels: present_ref / absent_ref / late_ref, each carrying the
-//     EVENT id as reference — for attendance the event IS `_parent`, so the
-//     sentinel's reference and the parent coincide (unlike rsvp, where the
-//     sentinel points at the separate `event` prop).
-//   - `_sharing: domain` EXPLICIT at create time per v4E (#82 widen: the whole
-//     collective may see who showed up, and the singer can read her own row).
-//   - per-tap immediate writes — NOT batch. Each toggle tap is one createAttendance /
-//     updateAttendanceStatus / deleteAttendance round-trip; there is no "save all"
-//     payload shape anywhere in this module's API.
-
 const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
 
 function json(body: unknown, status = 200) {
@@ -40,10 +23,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-// ── createAttendance ──────────────────────────────────────────────────────────
-
 describe('createAttendance', () => {
-	/** Type-resolution GET (`_type.string=entity`) + entity-create POST. */
 	function makeFetchMock(resolvedTypeId = 'attendance-type-id') {
 		return vi.fn().mockImplementation((url: string) => {
 			if (url.includes('_type.string=entity')) {
@@ -75,19 +55,13 @@ describe('createAttendance', () => {
 			);
 			const body = createCallBody(fetchImpl);
 
-			// FULL SET check — every required prop present, exactly one sentinel present.
-			// `_parent` is the EVENT (attendance is a child of event, #77 participation
-			// split) — there is no personId anywhere in this payload.
-			expect(body).toEqual(
-				expect.arrayContaining([
-					{ type: '_type', reference: 'attendance-type-42' },
-					{ type: '_parent', reference: 'event-e' },
-					{ type: 'member', reference: 'member-m' },
-					{ type: 'status', string: status },
-					{ type: sentinelType, reference: 'event-e' },
-					{ type: '_sharing', string: 'domain' }
-				])
-			);
+			expect(body).toEqual([
+				{ type: '_type', reference: 'attendance-type-42' },
+				{ type: '_parent', reference: 'event-e' },
+				{ type: 'member', reference: 'member-m' },
+				{ type: 'status', string: status },
+				{ type: sentinelType, reference: 'event-e' }
+			]);
 			const presentTypes = body.map((p) => p.type);
 			for (const absent of absentSentinels) {
 				expect(presentTypes).not.toContain(absent);
@@ -112,7 +86,7 @@ describe('createAttendance', () => {
 		expect(typeProp.string).toBeUndefined();
 	});
 
-	it('POST body contains explicit _sharing:domain — set by the creating client per v4E, never inherit-reliant', async () => {
+	it('POST body carries no _sharing and no _inheritrights — Entu sets rights (#699)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createAttendance(
 			cfg,
@@ -120,10 +94,7 @@ describe('createAttendance', () => {
 			fetchImpl
 		);
 		const body = createCallBody(fetchImpl);
-		expect(body).toEqual(expect.arrayContaining([{ type: '_sharing', string: 'domain' }]));
-		// A body carrying BOTH domain and private would also satisfy arrayContaining —
-		// pin private's absence separately.
-		expect(body).not.toEqual(expect.arrayContaining([{ type: '_sharing', string: 'private' }]));
+		expect(body.filter((p) => p.type === '_sharing' || p.type === '_inheritrights')).toEqual([]);
 	});
 
 	it('returns the created attendance _id', async () => {
@@ -149,20 +120,9 @@ describe('createAttendance', () => {
 	});
 });
 
-// ── updateAttendanceStatus ────────────────────────────────────────────────────
-// Mirrors updateRsvpStatus: GET current entity → DELETE old status value + every
-// existing sentinel value → POST new status + its matching sentinel. The sentinel
-// reference for attendance is the EVENT id, which IS the entity's `_parent` — read
-// from the GET, never from the caller (the function takes no eventId).
-
 describe('updateAttendanceStatus', () => {
 	type Call = { url: string; method: string; body?: unknown };
 
-	/**
-	 * GET returns an attendance entity carrying whichever status/sentinel value-ids
-	 * the caller passes (defaults: single present_ref — normal, non-corrupted case).
-	 * DELETE/POST both succeed. All calls recorded in order.
-	 */
 	function makeMockFetch(existing: {
 		statusValueId?: string;
 		parentRef?: string;
@@ -204,14 +164,6 @@ describe('updateAttendanceStatus', () => {
 		}
 	});
 
-	// #264 RED (PO ruling, branch (i), item 3): the old clear-then-set wire
-	// deleted status + sentinel BEFORE posting — a rejected POST left the
-	// attendance with NO status (empty half-landing). The atomic overwrite
-	// (POST entries carrying the OLD value ids) replaces both in ONE call.
-	// Exact mirror of updateRsvpStatus's #264 block (rsvpData.spec.ts) with the
-	// attendance structural differences: three sentinels, event id from
-	// `_parent`. Corrupted EXTRA sentinels are deleted strictly AFTER the POST.
-
 	it('order: GET → ONE atomic POST — no DELETE anywhere on the normal (one status + one sentinel) path', async () => {
 		const { fetchImpl, calls } = makeMockFetch({});
 		await updateAttendanceStatus(cfg, 'attendance-1', 'absent', fetchImpl);
@@ -251,8 +203,6 @@ describe('updateAttendanceStatus', () => {
 		await expect(updateAttendanceStatus(cfg, 'attendance-1', 'late', fetchImpl)).rejects.toThrow(
 			/500/
 		);
-		// Under the old wire this log held property DELETEs before the failing
-		// POST — the attendance was left empty. Now: none.
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
@@ -294,11 +244,6 @@ describe('updateAttendanceStatus', () => {
 	});
 });
 
-// ── deleteAttendance (tap active to clear) ────────────────────────────────────
-// The status enum has no "unmarked" value — deletion IS the "no record"
-// representation, exactly like deleteRsvp. This is also what keeps the three
-// sentinels from surviving as orphan phantom counts.
-
 describe('deleteAttendance', () => {
 	it('sends DELETE {db}/entity/{attendanceId}', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}));
@@ -314,11 +259,6 @@ describe('deleteAttendance', () => {
 		await expect(deleteAttendance(cfg, 'attendance-xyz', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── listAttendance ────────────────────────────────────────────────────────────
-// attendance is a child of event — `_parent.reference=eventId` alone scopes the
-// read to this event's records (the exact mirror of listMyRsvps' child-of-person
-// scoping).
 
 describe('listAttendance', () => {
 	it("queries _type.string=attendance&_parent.reference=<eventId> — native under the event, encoded", async () => {
@@ -356,9 +296,7 @@ describe('listAttendance', () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
 			json({
 				entities: [
-					// Row visible to non-owner: _id present but member/status in private bucket
 					{ _id: 'att-invisible', status: [{ string: 'present' }] },
-					// Normal row
 					{ _id: 'att-ok', member: [{ reference: 'member-a' }], status: [{ string: 'absent' }] }
 				]
 			})
@@ -402,13 +340,6 @@ describe('listAttendance', () => {
 		await expect(listAttendance(cfg, 'event-e', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── listAllRsvpsForEvent ──────────────────────────────────────────────────────
-// The conductor's RSVP→attendance comparison read (#82 made rsvps domain-visible
-// exactly for this). rsvp is a child of PERSON, so the event scoping goes through
-// the `event` reference prop — NOT `_parent` (that would scope to a person and
-// return nothing). Cross-person by design: the conductor reads every member's
-// domain-tier answer for THIS event.
 
 describe('listAllRsvpsForEvent', () => {
 	it('queries _type.string=rsvp&event.reference=<eventId> — by event ref, NOT _parent (rsvp is child of person)', async () => {
@@ -492,11 +423,6 @@ describe('listAllRsvpsForEvent', () => {
 	});
 });
 
-// ── attendanceByMemberId ──────────────────────────────────────────────────────
-// Pure mapping — no fetch. The panel's per-member toggle rows read initial state
-// off this map; a member with no record is ABSENT (renders unmarked), never
-// defaulted to any status. Exact mirror of rsvpsByEventId.
-
 describe('attendanceByMemberId', () => {
 	it('maps each record by its member id', () => {
 		const records: EventAttendance[] = [
@@ -524,16 +450,6 @@ describe('attendanceByMemberId', () => {
 	});
 });
 
-// ── listMyAttendance ──────────────────────────────────────────────────────────
-// #85 TA.4 RED — the SINGER's own attendance across all events. The inverse
-// read of listAttendance: attendance is a child of EVENT, so "my records" can
-// NOT be scoped by `_parent.reference` (that scopes to ONE event) — the query
-// filters by the `member` REFERENCE prop instead, and the event id is read back
-// off each row's `_parent` (attendance's parent IS the event). Mirrors
-// listMyRsvps' role for rsvp (there: child-of-person, `_parent` scoping; here:
-// child-of-event, `member.reference` scoping — the participation split flips
-// which side is the parent).
-
 describe('listMyAttendance', () => {
 	it('queries attendance by MEMBER reference — never by _parent (which would scope to one event)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ entities: [] }));
@@ -543,9 +459,7 @@ describe('listMyAttendance', () => {
 		const url = String(fetchImpl.mock.calls[0][0]);
 		expect(url).toContain('_type.string=attendance');
 		expect(url).toContain('member.reference=member-me');
-		// `_parent.reference=` scoping would return ONE event's records, not mine.
 		expect(url).not.toContain('_parent.reference=');
-		// The event id rides on `_parent`, status on `status` — both must be asked for.
 		expect(url).toContain('_parent');
 		expect(url).toContain('status');
 	});

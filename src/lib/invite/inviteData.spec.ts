@@ -1,3 +1,4 @@
+// createInvite and the invite reads: person + member mint, self-edit grant, link token.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -22,7 +23,6 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-/** Await a rejection and hand back the typed error — asserting fields needs the instance. */
 async function captureError(p: Promise<unknown>): Promise<InviteCreateError> {
 	try {
 		await p;
@@ -34,10 +34,6 @@ async function captureError(p: Promise<unknown>): Promise<InviteCreateError> {
 
 type Prop = { type: string; reference?: string; string?: string; boolean?: boolean };
 
-/**
- * URL/body-dispatching fetch mock for the whole create sequence. Individual
- * tests override single stations to inject failures.
- */
 function makeFetchMock(
 	overrides: Partial<{
 		personTypeResolve: () => Response;
@@ -51,15 +47,10 @@ function makeFetchMock(
 	const d = {
 		personTypeResolve: () => json({ entities: [{ _id: 'person-type-1' }] }),
 		memberTypeResolve: () => json({ entities: [{ _id: 'member-type-1' }] }),
-		// #29/T4.9 — the database entity carries NO `add_user` (deleted by #22); the
-		// parent is the entity's OWN _id (entu-api sets person _parent = databaseId
-		// at bootstrap, entu-api setupDatabase.js:183-191).
 		database: () => json({ entities: [{ _id: 'db-entity-1' }] }),
 		personCreate: () =>
 			json({
 				_id: 'p1',
-				// entu-api returns `properties` as an ARRAY of property objects
-				// (utils/entity.js:433,506) — the invite JWT is readable ONLY here.
 				properties: [{ _id: 'prop-eu-1', type: 'entu_user', invite: 'tok.abc.def' }]
 			}),
 		editorGrant: () => json({ _id: 'p1', properties: [] }),
@@ -74,8 +65,6 @@ function makeFetchMock(
 		if (u.includes('_type.string=organization'))
 			return Promise.resolve(json({ entities: [{ _id: 'org-1', name: [{ string: 'EFK' }] }] }));
 		if (/entity\/p1$/.test(u)) return Promise.resolve(d.editorGrant());
-		// Remaining calls are the two `POST entity` creates — the person payload is
-		// the one carrying the invitee email prop.
 		const body = JSON.parse(String(init?.body ?? '[]')) as Prop[];
 		if (body.some((p) => p.type === 'entu_user')) return Promise.resolve(d.personCreate());
 		return Promise.resolve(d.memberCreate());
@@ -91,33 +80,14 @@ function callsOf(fetchImpl: ReturnType<typeof makeFetchMock>) {
 	}));
 }
 
-// ── Type-level contract (checked by `pnpm check`, not vitest) ──────────────────
-
-// #36 drops `memberName` from CreateInviteInput (the member carries no name), so an
-// "omitting memberName must not typecheck" guard would contradict the new design.
-// No replacement fixture needed here.
-
-// GREEN drops email from the type + these fixtures — #34 removes it from
-// CreateInviteInput entirely, so an "omitting email must not typecheck" guard
-// would contradict the no-email design. No replacement fixture needed here.
-
 // @ts-expect-error — omitting dbEntityId must not typecheck (the member's parent org is required)
 const _omitsDbEntityId: CreateInviteInput = {};
 void _omitsDbEntityId;
 
-// Forward guard: the correct shape DOES typecheck.
 const _validInput: CreateInviteInput = { dbEntityId: 'o1' };
 void _validInput;
 
-// ── resolvePersonParentId ──────────────────────────────────────────────────────
-
 describe('resolvePersonParentId', () => {
-	// #29/T4.9 — #22 deleted the database entity's `add_user` property, so the old
-	// add_user-based lookup throws live. Fix: the parent is the database entity's
-	// OWN `_id` — entu-api sets person `_parent = databaseId` at bootstrap
-	// (entu-api setupDatabase.js:183-191), and for sampledb that databaseId equals
-	// the deleted add_user value, so it's the same parent WITHOUT depending on (or
-	// re-arming) add_user.
 
 	it("resolves the parent as the database entity's OWN _id — no add_user needed — with the admin's Bearer token", async () => {
 		const fetchImpl = makeFetchMock();
@@ -125,8 +95,6 @@ describe('resolvePersonParentId', () => {
 		expect(id).toBe('db-entity-1');
 		const call = callsOf(fetchImpl).find((c) => c.url.includes('_type.string=database'));
 		expect(call).toBeDefined();
-		// Query shape beyond `_type.string=database` + `limit=1` is immaterial — GREEN
-		// may drop `props=add_user` from the request now that it's unused.
 		expect(call!.url).toContain('/sampledb/entity?_type.string=database');
 		expect(call!.url).toContain('limit=1');
 		expect(call!.headers.Authorization).toBe('Bearer jwt-admin');
@@ -159,21 +127,7 @@ describe('resolvePersonParentId', () => {
 	});
 });
 
-// ── resolveInviteParentId ─────────────────────────────────────────────────────────────
-
 describe('resolveInviteParentId', () => {
-	// #67 (Mihkel ruling) — replaces the old `listOrganizations` enumeration: a
-	// single internal resolve, never a list for a UI picker.
-	//
-	// #161 (collective = database, Mihkel ruling 2026-08-16) — the resolve is
-	// DB-SCOPED (`_type.string=database&limit=1`, exactly one per db), NOT the
-	// retired person -> active member row -> organization `_parent` walk (#159
-	// deleted every organization instance, so that chain could only ever answer
-	// wrong or empty).
-	//
-	// #161 review fix round 2 — the dead `personId` parameter is DELETED from
-	// the call contract, not merely shadowed/guarded: `resolveInviteParentId(cfg,
-	// fetchImpl?)`, `.length === 1`.
 
 	const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
@@ -211,17 +165,11 @@ describe('resolveInviteParentId', () => {
 	});
 
 	it('declares exactly ONE required parameter (cfg) — no personId in the signature', () => {
-		// Function.length counts parameters before the first default — the target
-		// signature `(cfg, fetchImpl = fetch)` has length 1.
 		expect(resolveInviteParentId.length).toBe(1);
 	});
 });
 
-// ── createInvite — input guards (before any fetch) ─────────────────────────────
-
 describe('createInvite — input guards fire before any network call', () => {
-	// GREEN drops email from the type + this guard — #34 removes the `@` check
-	// along with the email field itself. No replacement test needed here.
 
 	it('rejects an empty dbEntityId, naming the field', async () => {
 		const fetchImpl = vi.fn();
@@ -230,8 +178,6 @@ describe('createInvite — input guards fire before any network call', () => {
 	});
 });
 
-// ── createInvite — happy path wire shape ───────────────────────────────────────
-
 describe('createInvite — happy path', () => {
 	it('returns personId, memberId and the invite token captured from the person-create response', async () => {
 		const fetchImpl = makeFetchMock();
@@ -239,7 +185,7 @@ describe('createInvite — happy path', () => {
 		expect(result).toEqual({ personId: 'p1', memberId: 'm1', inviteToken: 'tok.abc.def' });
 	});
 
-	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier database root) — and NO name/email props (prop-defs deleted in T4.3)', async () => {
+	it('person payload is EXACTLY: _type ref, _parent=database entity _id, entu_user=mint-trigger constant, NO _sharing or _inheritrights (#133, #699: rights come from Entu) — and NO name/email props (prop-defs deleted in T4.3)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
@@ -248,18 +194,11 @@ describe('createInvite — happy path', () => {
 		expect(personCall!.body).toEqual(
 			expect.arrayContaining([
 				{ type: '_type', reference: 'person-type-1' },
-				// #29/T4.9 — parent is the database entity's OWN _id, not an add_user ref.
 				{ type: '_parent', reference: 'db-entity-1' },
-				// #34 — entu_user carries a fixed mint-trigger literal, NEVER the invitee
-				// email: any truthy string mints an identical invite token (entu-api
-				// utils/entity.js:462-467), so the invitee's real email must never reach
-				// Entu. Hard-coded here (not imported from source) so RED fails on the
-				// assertion, not on a missing export.
-				{ type: 'entu_user', string: 'trigger invite token' },
-				{ type: '_inheritrights', boolean: true }
+				{ type: 'entu_user', string: 'trigger invite token' }
 			])
 		);
-		expect(personCall!.body).toHaveLength(4);
+		expect(personCall!.body).toHaveLength(3);
 		expect(personCall!.body!.some((p) => p.type === 'name' || p.type === 'email')).toBe(false);
 		expect(personCall!.body!.some((p) => p.type === '_sharing')).toBe(false);
 	});
@@ -269,12 +208,10 @@ describe('createInvite — happy path', () => {
 		await createInvite(cfg, INPUT, fetchImpl);
 		const personCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'entu_user'));
 		expect(personCall).toBeDefined();
-		// Literal, not INPUT.email — GREEN drops `email` from CreateInviteInput, so
-		// referencing INPUT.email here would stop compiling once that lands.
 		expect(JSON.stringify(personCall!.body)).not.toContain('mari@example.com');
 	});
 
-	it('member payload is EXACTLY: _type ref, _parent=dbEntityId, person ref, status:active, _inheritrights:true, NO explicit _sharing (#133: inherited from the domain-tier org parent) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
+	it('member payload is EXACTLY: _type ref, _parent=dbEntityId, person ref, status:active, NO _sharing or _inheritrights (#133, #699: rights come from Entu) — NO name property (#36 — member carries no name, profiles are the sole name source), NO _viewer grant (domain sharing already covers her own read)', async () => {
 		const fetchImpl = makeFetchMock();
 		await createInvite(cfg, INPUT, fetchImpl);
 		const memberCall = callsOf(fetchImpl).find((c) => c.body?.some((p) => p.type === 'person'));
@@ -285,16 +222,10 @@ describe('createInvite — happy path', () => {
 				{ type: '_type', reference: 'member-type-1' },
 				{ type: '_parent', reference: 'org-1' },
 				{ type: 'person', reference: 'p1' },
-				{ type: 'status', string: 'active' },
-				// #36 — private + explicit _viewer was the slice3 visibility model; the
-				// member→domain ruling exists specifically to unbreak the roster query
-				// (#18/T3.2), which under private returned only the invitee's own
-				// membership. domain sharing supersedes the need for the explicit grant.
-				{ type: '_inheritrights', boolean: true }
+				{ type: 'status', string: 'active' }
 			])
 		);
-		expect(memberCall!.body).toHaveLength(5);
-		// Positive proof — absence, not just a changed value.
+		expect(memberCall!.body).toHaveLength(4);
 		expect(memberCall!.body!.some((p) => p.type === 'name')).toBe(false);
 		expect(memberCall!.body!.some((p) => p.type === '_viewer')).toBe(false);
 		expect(memberCall!.body!.some((p) => p.type === '_sharing')).toBe(false);
@@ -329,8 +260,6 @@ describe('createInvite — happy path', () => {
 		}
 	});
 });
-
-// ── createInvite — fail-loud ledger ────────────────────────────────────────────
 
 describe('createInvite — every failure is loud, phased, and names the orphan where one exists', () => {
 	it("wraps a type-resolution miss as phase 'type-resolve'", async () => {

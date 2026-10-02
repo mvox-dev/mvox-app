@@ -59,8 +59,8 @@ function makeCreateFetchMock() {
 	});
 }
 
-describe('createLink — reference-typed create under the DATABASE entity, explicit _sharing (#256 pin 5)', () => {
-	it('POSTs entity with body EXACTLY [_type ref, _parent ref, name, url, description, display_order, _sharing domain, _inheritrights true] and resolves to the new id', async () => {
+describe('createLink — reference-typed create under the DATABASE entity, rights left to Entu (#699)', () => {
+	it('POSTs entity with body EXACTLY [_type ref, _parent ref, name, url, description, display_order] and resolves to the new id', async () => {
 		const fetchImpl = makeCreateFetchMock();
 		const id = await createLink(
 			cfg,
@@ -79,18 +79,14 @@ describe('createLink — reference-typed create under the DATABASE entity, expli
 		const posts = calls.filter((c) => c.method === 'POST');
 		expect(posts).toHaveLength(1);
 		expect(posts[0].url).toContain('/testdb/entity');
-		// FULL-shape toEqual — `_type` as REFERENCE (never string), `_parent` the
-		// database entity, `_sharing: domain` explicit (type-def does NOT
-		// propagate), `_inheritrights: true` explicit.
+		// FULL-shape toEqual: no `_sharing` or `_inheritrights`, Entu sets rights (#699).
 		expect(posts[0].body).toEqual([
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY },
 			{ type: 'name', string: 'Salvestused' },
 			{ type: 'url', string: 'https://f.io/GCkGMr5J' },
 			{ type: 'description', string: 'Crede recordings' },
-			{ type: 'display_order', number: 3 },
-			{ type: '_sharing', string: 'domain' },
-			{ type: '_inheritrights', boolean: true }
+			{ type: 'display_order', number: 3 }
 		]);
 	});
 
@@ -114,9 +110,7 @@ describe('createLink — reference-typed create under the DATABASE entity, expli
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY },
 			{ type: 'name', string: 'A' },
-			{ type: 'url', string: 'https://a.example' },
-			{ type: '_sharing', string: 'domain' },
-			{ type: '_inheritrights', boolean: true }
+			{ type: 'url', string: 'https://a.example' }
 		]);
 	});
 
@@ -144,9 +138,7 @@ describe('createLink — reference-typed create under the DATABASE entity, expli
 				'_type',
 				'_parent',
 				'name',
-				'url',
-				'_sharing',
-				'_inheritrights'
+				'url'
 			]);
 		}
 	});

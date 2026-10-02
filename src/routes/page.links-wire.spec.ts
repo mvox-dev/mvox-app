@@ -1,25 +1,5 @@
+// /links driven against the real link data layer: list order, create body, renumber wire.
 // @vitest-environment happy-dom
-//
-// #256 RED — INTEGRATION: the ACTUAL /links page driving the REAL data
-// modules (linkData + linkActions), mocked only at the entuFetch seam.
-//
-// This is the pin that forces the wiring: a page whose unit specs pass
-// against mocked modules could still ship without ever importing them. Here
-// the REAL listLinks/createLink/reorderLinks run, and the assertions are on
-// the WIRE calls (full-shape toEqual, per the partial-assertions lesson):
-//
-//   - the list read scopes to the DATABASE entity and the page renders the
-//     module's SORTED order (server order deliberately shuffled);
-//   - add → ONE create POST whose body is EXACTLY _type-as-REFERENCE
-//     (resolveTypeId, never a string), _parent = the database entity,
-//     name verbatim, url NORMALISED at the page layer (#374: schemeless →
-//     https:// prepended; #375: own-host → relative — the data layer still
-//     sends what it is given verbatim), display_order appended, EXPLICIT
-//     _sharing 'domain' + _inheritrights true (#256 pin 5);
-//   - move-down → the atomic-overwrite renumber wire, exactly
-//     reorderSections' shape: per link GET ?props=display_order → ONE POST
-//     pairing the old value id with the 1-based position; ZERO DELETEs on
-//     clean data (#256 pin 2).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,9 +28,6 @@ vi.mock('$lib/entu/request', async (importActual) => ({
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-// #374/#375 — the page reads its OWN host from $app/state at save time. The
-// stub host dev.mvox.eu is NOT crede.ee, so the typed crede.ee url below is
-// prepended, not trimmed.
 const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
@@ -90,16 +67,12 @@ function wireCalls(): WireCall[] {
 	);
 }
 
-/** Two links live on the server, display_order 1 and 2 — served SHUFFLED
- *  (order 2 first) so only a real sort can produce the rendered order. */
 function installWireRouter() {
 	entuFetchMock.mockImplementation((_db: string, path: string, _token: string, init?: RequestInit) => {
 		const p = String(path);
 		const method = init?.method ?? 'GET';
 		if (method === 'DELETE') return Promise.resolve(json({ deleted: true }));
 		if (method === 'POST') {
-			// entity create (POST 'entity') answers an _id; property-overwrite
-			// POSTs (entity/{id}) answer {}.
 			if (/^\/?entity$/.test(p)) return Promise.resolve(json({ _id: 'l-new' }));
 			return Promise.resolve(json({}));
 		}
@@ -113,7 +86,6 @@ function installWireRouter() {
 			return Promise.resolve(
 				json({
 					entities: [
-						// Shuffled: display_order 2 arrives first.
 						{
 							_id: 'l-scores',
 							name: [{ string: 'Scores' }],
@@ -135,7 +107,6 @@ function installWireRouter() {
 			const id = p.match(/entity\/([^/?]+)/)?.[1] ?? '';
 			return Promise.resolve(json({ entity: { display_order: [{ _id: `pv-${id}` }] } }));
 		}
-		// Anything else (e.g. a rights read) answers an empty shape.
 		return Promise.resolve(json({ entities: [], entity: {} }));
 	});
 }
@@ -211,7 +182,7 @@ describe('#256 integration — the page drives the REAL read module', () => {
 });
 
 describe('#256 integration — add drives the REAL createLink wire (pin 5, url law now #374/#375)', () => {
-	it('one create POST: _type as REFERENCE, _parent = database entity, url NORMALISED by the page (schemeless typed → https:// on the wire), display_order appended, EXPLICIT _sharing domain + _inheritrights', async () => {
+	it('one create POST: _type as REFERENCE, _parent = database entity, url NORMALISED by the page (schemeless typed → https:// on the wire), display_order appended, no rights fields (#699)', async () => {
 		const { container } = await renderReady();
 		await fireEvent.input(q(container, 'links-add-name')!, { target: { value: 'Uus link' } });
 		await fireEvent.input(q(container, 'links-add-url')!, {
@@ -225,7 +196,6 @@ describe('#256 integration — add drives the REAL createLink wire (pin 5, url l
 			).toBe(true);
 		});
 
-		// The type was resolved by NAME to an id (reference-not-string wire).
 		expect(
 			wireCalls().some(
 				(c) => c.path.includes('_type.string=entity') && c.path.includes('name.string=link')
@@ -234,17 +204,12 @@ describe('#256 integration — add drives the REAL createLink wire (pin 5, url l
 
 		const create = wireCalls().find((c) => c.method === 'POST' && /^\/?entity$/.test(c.path))!;
 		expect(create.db).toBe('sampledb');
-		// FULL-shape toEqual: two links exist (orders 1,2) → the new one is 3.
 		expect(create.body).toEqual([
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: DB_ENTITY },
 			{ type: 'name', string: 'Uus link' },
-			// The page normalised the typed 'crede.ee/salvestused' (#374);
-			// the data layer sent what it was handed, verbatim as ever.
 			{ type: 'url', string: 'https://crede.ee/salvestused' },
-			{ type: 'display_order', number: 3 },
-			{ type: '_sharing', string: 'domain' },
-			{ type: '_inheritrights', boolean: true }
+			{ type: 'display_order', number: 3 }
 		]);
 	});
 });
@@ -263,12 +228,9 @@ describe('#256 integration — move-down drives the REAL reorderLinks renumber w
 		const calls = wireCalls();
 		const posts = calls.filter((c) => c.method === 'POST' && /entity\/l-/.test(c.path));
 		const bodyFor = (id: string) => posts.find((c) => c.path.includes(`entity/${id}`))?.body;
-		// New order after moving 'Salvestused' (l-rec) down: [l-scores, l-rec].
 		expect(bodyFor('l-scores')).toEqual([{ _id: 'pv-l-scores', type: 'display_order', number: 1 }]);
 		expect(bodyFor('l-rec')).toEqual([{ _id: 'pv-l-rec', type: 'display_order', number: 2 }]);
-		// Clean data → the overwrite IS the replace; nothing is DELETEd.
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
-		// Each POST was preceded by its own GET of the old value id.
 		for (const id of ['l-scores', 'l-rec']) {
 			const getIdx = calls.findIndex(
 				(c) =>

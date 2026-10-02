@@ -1,15 +1,7 @@
-// #268 RED — the admin_member_record data layer (wire contract). The module's
-// exports are stubs that throw 'not implemented', so every assertion below
-// FAILS until GREEN.
-//
-// Real member PII rides through this layer on a live pilot (crede): the last
-// describe pins that thrown messages carry static strings + status codes only,
-// never a field value.
+// admin_member_record: load, lazy create, per-field writes, PII kept out of messages.
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-// resolveTypeId is mocked so the create test's fetch mock only ever sees the
-// create POST itself (the type lookup is the resolver's own, cached, concern).
 const { resolveTypeIdMock, replaceEntityPropertyMock } = vi.hoisted(() => ({
 	resolveTypeIdMock: vi.fn(),
 	replaceEntityPropertyMock: vi.fn()
@@ -40,15 +32,8 @@ function json(body: unknown, status = 200) {
 
 beforeEach(() => {
 	resolveTypeIdMock.mockReset().mockResolvedValue('type-amr');
-	// Test-hygiene fix (sibling convention: memberLifecycle.spec.ts's
-	// loadInactiveRoster/listDeactivateBlockers describes reset their hoisted
-	// mocks before each `it`) — several tests below assert an EXACT
-	// `toHaveBeenCalledTimes`, which only holds per-test when the invocation
-	// history doesn't carry over from the previous one.
 	replaceEntityPropertyMock.mockReset().mockResolvedValue(undefined);
 });
-
-// ── READ: check-then-create + editor load, ONE query ─────────────────────────
 
 describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor load share it)', () => {
 	it('URL: _type.string=admin_member_record, person.reference={personId}, props=name,phone,email,birthdate,id_code, limit=10, against cfg.db (#285: the fifth field joins the ONE projection)', async () => {
@@ -60,9 +45,6 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 		expect(url).toContain('person.reference=pp-2');
 		expect(url).toContain('props=name,phone,email,birthdate,id_code');
 		expect(url).toContain('limit=10');
-		// Db-scoped per call — per-collective isolation by construction (the
-		// record's required `database` parent + single-collective-per-db make a
-		// _parent filter redundant, matching listActiveMembers).
 		expect(url).toContain('/sampledb/');
 		expect(url).not.toContain('_parent.reference=');
 	});
@@ -81,7 +63,6 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 						name: [{ string: 'Berta Real' }],
 						birthdate: [{ datetime: '1990-03-15T00:00:00.000Z' }],
 						id_code: [{ string: '50001010017' }]
-						// phone/email absent → ''
 					}
 				]
 			})
@@ -112,7 +93,6 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 			state: 'damaged',
 			count: 2
 		});
-		// The single read is the ONLY wire traffic: no POST, no DELETE, ever.
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		const init = fetchImpl.mock.calls[0][1] as RequestInit | undefined;
 		expect(init?.method ?? 'GET').toBe('GET');
@@ -124,10 +104,8 @@ describe('loadMemberRecord — ONE db-scoped query (check-then-create + editor l
 	});
 });
 
-// ── CREATE: lazy, first save ─────────────────────────────────────────────────
-
-describe('createMemberRecord — lazy create, entity-level _sharing asserted explicitly', () => {
-	it('POST entity with the FULL pinned payload: _type reference, _parent = database entity, _sharing domain, person, name, and each optional field — id_code LAST (full-shape toEqual, #285: the ninth entry)', async () => {
+describe('createMemberRecord — lazy create, rights left to Entu (#699)', () => {
+	it('POST entity with the FULL pinned payload: _type reference, _parent = database entity, person, name, and each optional field — id_code LAST (full-shape toEqual, #285: the eighth entry)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'rec-new' }));
 		await expect(
 			createMemberRecord(
@@ -150,37 +128,29 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 		expect(url).toContain('/sampledb/entity');
 		const init = fetchImpl.mock.calls[0][1] as RequestInit;
 		expect(init.method).toBe('POST');
-		// SHARING MECHANICS (state it so "sharing explicit on every property"
-		// reads correctly): the per-PROPERTY tiers (name→domain, phone/email/
-		// birthdate→private) are the provisioned prop-defs' — schema-level, #265.
-		// What the instance write asserts explicitly is the record's own
-		// entity-level _sharing. birthdate is the UTC-midnight-anchored datetime.
 		expect(JSON.parse(String(init.body))).toEqual([
 			{ type: '_type', reference: 'type-amr' },
 			{ type: '_parent', reference: 'db-1' },
-			{ type: '_sharing', string: 'domain' },
 			{ type: 'person', reference: 'pp-2' },
 			{ type: 'name', string: 'Berta Real' },
 			{ type: 'phone', string: '+372 5551234' },
 			{ type: 'email', string: 'berta@real.example' },
 			{ type: 'birthdate', datetime: '1990-03-15T00:00:00.000Z' },
-			// #285 — id_code rides LAST (FIELD_ORDER parity: a deterministic
-			// partial-failure order needs a deterministic payload order too).
 			{ type: 'id_code', string: '50001010017' }
 		]);
 	});
 
-	it('negative twin: the payload always carries the explicit entity-level _sharing — a payload missing it is a defect', async () => {
+	it('negative twin: the payload never carries _sharing or _inheritrights (#699)', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'rec-new' }));
 		await createMemberRecord(cfg, { dbEntityId: 'db-1', personId: 'pp-2', name: 'N' }, fetchImpl);
 		const body = JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body)) as Array<{
 			type: string;
 			string?: string;
 		}>;
-		expect(body.some((e) => e.type === '_sharing' && e.string === 'domain')).toBe(true);
+		expect(body.filter((e) => e.type === '_sharing' || e.type === '_inheritrights')).toEqual([]);
 	});
 
-	it('optional fields ride along ONLY when non-empty: name-only create (all four optionals empty, id_code included) sends exactly the five identity/required entries', async () => {
+	it('optional fields ride along ONLY when non-empty: name-only create (all four optionals empty, id_code included) sends exactly the four identity/required entries', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'rec-new' }));
 		await createMemberRecord(
 			cfg,
@@ -190,7 +160,6 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 		expect(JSON.parse(String((fetchImpl.mock.calls[0][1] as RequestInit).body))).toEqual([
 			{ type: '_type', reference: 'type-amr' },
 			{ type: '_parent', reference: 'db-1' },
-			{ type: '_sharing', string: 'domain' },
 			{ type: 'person', reference: 'pp-2' },
 			{ type: 'name', string: 'Berta Real' }
 		]);
@@ -208,8 +177,6 @@ describe('createMemberRecord — lazy create, entity-level _sharing asserted exp
 	});
 });
 
-// ── UPDATE: atomic overwrite per changed field ───────────────────────────────
-
 describe('updateMemberRecord — replaceEntityProperty per changed field, fixed order, no deletes', () => {
 	it('routes EVERY changed field through replaceEntityProperty (atomic overwrite — never a bare POST append), in the fixed order name → phone → email → birthdate regardless of object key order', async () => {
 		const fetchImpl = vi.fn();
@@ -226,7 +193,6 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 			type: 'email',
 			string: 'new@x.example'
 		});
-		// The normal path issues ZERO wire calls of its own (no property DELETEs).
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
@@ -245,8 +211,6 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'phone', string: '' });
 	});
 
-	// ── #285 — id_code on the update path: STRING shape (like phone), LAST in
-	// FIELD_ORDER ────────────────────────────────────────────────────────────
 	it('#285 — a changed id_code routes through replaceEntityProperty as { type: "id_code", string: … } — plain string shape like phone, NOT birthdate\'s datetime anchor', async () => {
 		const fetchImpl = vi.fn();
 		await updateMemberRecord(cfg, 'rec-1', { id_code: '50001010017' }, fetchImpl);
@@ -292,8 +256,6 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		await updateMemberRecord(cfg, 'rec-1', { id_code: '' }, fetchImpl);
 		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(1);
 		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'id_code', string: '' });
-		// The removal path (clearEntityProperty's GET + DELETE) is birthdate's
-		// alone: '' is a legal string, so id_code stays on the overwrite path.
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
@@ -314,10 +276,6 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		expect(err.message).not.toContain('50001010017');
 	});
 
-	// #268 review F1 — the ONE field where clearing is NOT an overwrite.
-	// clearEntityProperty is deliberately NOT mocked here (the module mock
-	// spreads importActual), so these assertions see the WIRE THAT IS ACTUALLY
-	// ISSUED, not a stubbed call record.
 	it('clearing the BIRTHDATE removes the stored value (GET + DELETE /property/{id}) — it never POSTs `datetime: ""`, which entu-api would store verbatim as a JS string', async () => {
 		const fetchImpl = vi
 			.fn()
@@ -326,8 +284,6 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 
 		await updateMemberRecord(cfg, 'rec-1', { birthdate: '' }, fetchImpl);
 
-		// The overwrite path is not taken at all — no `{ type: 'birthdate',
-		// datetime: '' }` anywhere, neither through the helper nor on the wire.
 		expect(replaceEntityPropertyMock).not.toHaveBeenCalled();
 		expect(fetchImpl).toHaveBeenCalledTimes(2);
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('/sampledb/entity/rec-1?props=birthdate');
@@ -372,12 +328,7 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 	});
 });
 
-// ── birthdate round-trip: never a day shift, any timezone ────────────────────
-
 describe('birthdate round-trip — #207 no-day-shift idiom (pure string, never new Date() local getters)', () => {
-	// Deterministic non-UTC fixture: America/Anchorage (UTC-9). Local-time
-	// getters on new Date('…T00:00:00.000Z') here yield the PREVIOUS day —
-	// exactly the defect the contract forbids. Node re-reads process.env.TZ.
 	const priorTZ = process.env.TZ;
 	beforeAll(() => {
 		process.env.TZ = 'America/Anchorage';
@@ -400,11 +351,7 @@ describe('birthdate round-trip — #207 no-day-shift idiom (pure string, never n
 	});
 });
 
-// ── privacy: static errors, never a field value ──────────────────────────────
-
 describe('privacy — thrown messages carry static strings + status codes only, NEVER a field value', () => {
-	// #285 — the isikukood joins the never-in-a-message set: it identifies a
-	// real person more precisely than any other field on this form.
 	const PII = ['Berta Real', '+372 5551234', 'berta@real.example', '1990-03-15', '50001010017'];
 
 	it('a failed create\'s thrown message contains none of the submitted values', async () => {
@@ -443,5 +390,3 @@ describe('privacy — thrown messages carry static strings + status codes only, 
 
 // (*MVOX:Tallis* — #268 RED)
 // (*MVOX:Tallis* — #285 RED: id_code joins the projection, the create payload
-//  (last), FIELD_ORDER (last), the string-shape update/clear path, and the PII
-//  never-in-a-message set)

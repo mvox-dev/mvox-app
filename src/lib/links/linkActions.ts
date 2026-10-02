@@ -31,12 +31,8 @@ type CreateProp =
 	| { type: 'name'; string: string }
 	| { type: 'url'; string: string }
 	| { type: 'description'; string: string }
-	| { type: 'display_order'; number: number }
-	| { type: '_sharing'; string: string }
-	| { type: '_inheritrights'; boolean: boolean };
+	| { type: 'display_order'; number: number };
 
-// `_sharing: 'domain'` is set at create: the type's own does not propagate, and #256 keeps links
-// to members. `_inheritrights: true` states the cascade, as createSection does (#264 item 6).
 export async function createLink(
 	cfg: EntuCfg,
 	input: CreateLinkInput,
@@ -78,8 +74,6 @@ export async function createLink(
 	if (typeof input.displayOrder === 'number') {
 		props.push({ type: 'display_order', number: input.displayOrder });
 	}
-	props.push({ type: '_sharing', string: 'domain' });
-	props.push({ type: '_inheritrights', boolean: true });
 
 	return postEntity(cfg, 'createLink', props, fetchImpl);
 }
