@@ -115,11 +115,13 @@
 			canManageLibrarians = false;
 			nameMarker = null;
 		},
-		async gate({ cfg: c, selected: target }) {
+		async gate({ cfg: c, selected: target, isCurrent }) {
 			cfg = c;
 			viewerId = target.personId;
 			// Resolved once here and passed to both resolvers.
-			gatedDbEntityId = await resolveDatabaseEntityId(c);
+			const resolved = await resolveDatabaseEntityId(c);
+			if (!isCurrent()) return false;
+			gatedDbEntityId = resolved;
 			if (!gatedDbEntityId) throw new Error('admin roles: no database entity visible');
 			const adminState = await resolveAdmin(c, target.personId, undefined, gatedDbEntityId);
 			if (adminState === 'error') throw new Error('admin roles: admin resolution failed');

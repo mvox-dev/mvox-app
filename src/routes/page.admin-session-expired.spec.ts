@@ -157,6 +157,42 @@ describe('/admin — session expired', () => {
 	});
 });
 
+describe('/admin — a collective switch during the gate', () => {
+	it("the first load's late entity answer never reaches the second load", async () => {
+		let releaseFirst!: (id: string) => void;
+		h.resolveDatabaseEntityId
+			.mockImplementationOnce(() => new Promise((res) => (releaseFirst = res)))
+			.mockResolvedValueOnce('org-2');
+		let releaseAdmin!: (state: string) => void;
+		h.resolveAdmin.mockImplementation((_c, _p, _f, id) =>
+			id === 'org-2' ? new Promise((res) => (releaseAdmin = res)) : Promise.resolve('admin')
+		);
+		selectSampledb();
+		collectiveState.set({
+			status: 'ready',
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
+				{ db: 'bravura', name: 'Bravura', personId: 'admin-b' }
+			],
+			erroredDbs: []
+		});
+		const { container } = render(Page);
+		await tick();
+
+		selectedCollectiveDbStore.set('bravura');
+		await vi.waitFor(() => expect(h.resolveAdmin).toHaveBeenCalledTimes(1));
+		releaseFirst('org-1');
+		await tick();
+		releaseAdmin('admin');
+
+		await waitFor(() => {
+			expect(q(container, 'admin-roles-admins')).not.toBeNull();
+		});
+		expect(h.resolveLibrarian.mock.calls.map((call) => call[3])).toEqual(['org-2']);
+		expect(h.listAdmins.mock.calls.map((call) => call[1])).toEqual(['org-2']);
+	});
+});
+
 describe('/admin — a collective rename', () => {
 	it('relabels without reloading: the gate and the reads run once', async () => {
 		selectSampledb();
