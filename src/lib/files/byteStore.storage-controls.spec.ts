@@ -1,41 +1,4 @@
-// #352 RED — the STORE half of "Remove downloaded parts from this device"
-// (profile storage section): scoped usage queries + the device-wide clear.
-//
-// WHAT THIS ADDS AND WHAT IT MUST NOT TOUCH:
-//
-//   - usage() is PINNED byte-exact as the GLOBAL sum across ALL partitions
-//     (byteStore.spec.ts "usage sums stored byte sizes across ALL
-//     partitions") — it is NOT repurposed here. The profile section needs a
-//     partition-scoped answer AND an everything-else aggregate, so the
-//     interface gains TWO NEW members:
-//
-//       usageForPartition(db, personId): Promise<{ count: number; size: number }>
-//       usageForOthers(db, personId): Promise<{ count: number; size: number }>
-//
-//     "Others" means every row whose (db, personId) is NOT the asked pair —
-//     which INCLUDES the same human's partition in another collective
-//     (identity C below): partitions are (db, personId), and the profile
-//     section's "everything else on this device" bucket is a statement about
-//     the DEVICE, not about the human (issue #352's ruling).
-//
-//   - Both queries obey #351's law: they are NOT opens. No adapter.touch, no
-//     recency movement, no re-put — a usage read on every profile render that
-//     stamped rows as opened would corrupt LRU eviction order exactly the way
-//     a get()-based presence check would have (byteStore.presence.spec.ts).
-//     Unlike heldFileIds they MAY go through adapter.list() — the answer
-//     needs record.size, which keys do not carry, and this runs on the
-//     profile page's storage section, not on every list row render.
-//
-//   - clearAllPartitions(): Promise<void> — the "Remove everything downloaded
-//     on this device" mechanism: empties EVERY partition, including ones
-//     belonging to identities not signed in. Like clearPartition it works
-//     from KEYS alone (deleting bytes never needs to read them — #351 review
-//     finding 2, pinned for clearPartition in byteStore.presence.spec.ts).
-//
-//   - NOTHING here wires ANY clear to an auth path. clearPartition /
-//     clearAllPartitions remain bare mechanisms; the #343 RETAIN suite
-//     (src/lib/auth/storage.spec.ts, incl. its STRUCTURAL source grep) must
-//     pass UNMODIFIED alongside this file.
+// The byte store's scoped usage queries and device-wide clear, behind the profile storage section.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -250,6 +213,7 @@ describe('#352 — the fake store implements the SAME members (reconciled, not a
 
 describe('#352 — source pins: the members sit on the REAL interface; usage() itself is untouched', () => {
 	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
+	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', import.meta.url)), 'utf-8');
 
 	it('the ByteStore interface declares the two scoped-usage members and the device-wide clear', () => {
 		expect(source).toMatch(/usageForPartition\(db: string, personId: string\): Promise</);
@@ -266,23 +230,11 @@ describe('#352 — source pins: the members sit on the REAL interface; usage() i
 	});
 
 	it('the policy core CALLS adapter.list() nowhere — the grep, not just the spies', () => {
-		// The spies below prove it for the paths this file drives; this pins it
-		// for the whole module, so a future size question cannot quietly reach
-		// for rows again. Matched on the call form (`await adapter.list()`) —
-		// every adapter call in that module is awaited, and the prose around
-		// them names the method freely.
 		expect(source).not.toMatch(/await adapter\.list\(\)/);
+		expect(core).not.toMatch(/await adapter\.list\(\)/);
 	});
 });
 
-// #352 REVIEW — THE OOM FINDING. loadStorageSection fires usageForPartition
-// and usageForOthers CONCURRENTLY on every profile load, and again after every
-// remove-confirm. Both went through adapter.list(), which in idbAdapter is
-// PAYLOAD_STORE.getAll() — structured-clone-deserialising every stored
-// ArrayBuffer. Against a full store (BYTE_STORE_CAP_BYTES = 200MB) that is two
-// simultaneous 200MB heap allocations, ~400MB peak on a phone, purely to sum
-// two complementary columns of record.size. The sizes now come from
-// adapter.listMeta() — keys + size + stamp, no payload touched.
 describe('#352 review — every size sum reads METADATA, never payloads', () => {
 	it('usageForPartition and usageForOthers go through adapter.listMeta and NEVER adapter.list', async () => {
 		await seedThreePartitions();
