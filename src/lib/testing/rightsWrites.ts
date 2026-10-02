@@ -49,7 +49,8 @@ const DECLARATION =
 	/^(?:export\s+)?(?:default\s+)?(?:async\s+)?(?:function\*?|const|let|var|class)\s+([A-Za-z_$][\w$]*)/;
 
 const isUnionMember = (line: string, start: number, end: number) =>
-	line.slice(0, start).trimEnd().endsWith('|') || line.slice(end).trimStart().startsWith('|');
+	/(^|[^|])\|$/.test(line.slice(0, start).trimEnd()) ||
+	/^\|(?!\|)/.test(line.slice(end).trimStart());
 
 export function scanRightsWrites(
 	file: string,

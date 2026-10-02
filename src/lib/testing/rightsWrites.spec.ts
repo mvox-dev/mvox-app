@@ -93,6 +93,14 @@ describe('#700 — the rights-write rules, each shown by a planted example', () 
 		});
 	});
 
+	it('a rights name beside a logical or is untraceable, not a union member', () => {
+		const source = fn('plantOr', "const tier = override || '_owner';", "return tier ?? '_editor' || x;");
+		expect(scanRightsWrites(FILE, source).untraceable).toEqual([
+			{ file: FILE, line: 2, form: 'a rights name outside a type: key' },
+			{ file: FILE, line: 3, form: 'a rights name outside a type: key' }
+		]);
+	});
+
 	it('a rights name as a type union member is no write', () => {
 		const source = [
 			"type Raw = Pick<Wire, '_id' | '_owner'>;",
