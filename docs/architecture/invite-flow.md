@@ -16,13 +16,13 @@ The admin's app puts a fixed trigger constant in a special field; **Entu swaps i
 
 ---
 
-## 1. The admin fills a short form
+## 1. The admin clicks create
 
-The admin enters the invitee's email, a **name** for the membership record (an admin-facing label), and the collective, then clicks create. **The email stays client-side** — it's only how the admin knows where to send the link. It is **never sent to Entu** (§2). Nothing has reached the invitee yet.
+The admin enters nothing about the invitee: no email (#34) and no name (#36 dropped the membership record's name). `CreateInviteInput` carries only the collective's database entity id · **[CONV]** `src/lib/invite/inviteCreate.ts:39-41`. The admin knows where to send the link; mvox and Entu never do (§2). Nothing has reached the invitee yet.
 
 ## 2. mvox creates the `person` — and Entu performs the swap
 
-mvox POSTs a new `person` with a **fixed trigger constant** in the `entu_user` property — `INVITE_MINT_TRIGGER = 'trigger invite token'` · **[CONV]** `mvox-app src/lib/invite/inviteData.ts:211` — not the invitee's email.
+mvox POSTs a new `person` with a **fixed trigger constant** in the `entu_user` property — `INVITE_MINT_TRIGGER = 'trigger invite token'` · **[CONV]** `mvox-app src/lib/invite/inviteConstants.ts:2` — not the invitee's email.
 
 The instant Entu sees text in an `entu_user` field, it does this · **[SRC]** `entu-api utils/entity.js:462-467`:
 
@@ -36,20 +36,20 @@ if (property.type === 'entu_user' && property.string) {
 - **The trigger is only "text in an `entu_user` field."** *Any* truthy string mints the token — there is no invite "mode." mvox exploits this to send a self-documenting constant instead of a person's data.
 - **The token carries no identity** — signed from `{ db, entityId }` only. The address appears nowhere in it. This is *why* the invite binds by possession, not identity.
 - **The string is deleted, not hidden** — `delete property.string`. Consumed to mint, then dropped; never stored on the person.
-- **The email never reaches Entu at all**, and this is now a **compile-time guarantee** · **[CONV]** #34: `CreateInviteInput` has no `email` field (`inviteData.ts:63-66`), so no caller *can* pass it — stronger than a runtime check. (Historically the real email was sent here and deleted; #34 removed even that transient exposure.)
+- **The email never reaches Entu at all**, and this is now a **compile-time guarantee** · **[CONV]** #34: `CreateInviteInput` has no `email` field (`inviteCreate.ts:39-41`), so no caller *can* pass it — stronger than a runtime check. (Historically the real email was sent here and deleted; #34 removed even that transient exposure.)
 - Choosing the constant `'trigger invite token'` deliberately avoids the literal `'send-invite'`, which is magic only on Entu's *update* endpoint (`POST /[db]/entity/[_id]`) where it fires the SES invite email · **[SRC]** `entu-api routes/[db]/entity/[_id]/index.post.js:122`. mvox's person-create hits the *create* endpoint (`POST /[db]/entity`), which reads only truthiness — so no email is ever sent by Entu, which is what we want (mvox delivers the link manually).
 
 ## 3. mvox reads the token back — its one and only chance
 
-Right after create, mvox reads the minted token out of Entu's **response** · **[CONV]** `inviteData.ts:249-252` (it looks for `entu_user.invite`). This is the **only** readable pass: every later GET of the person masks the token as `***` · **[SRC]** `entu-api utils/entity.js:594-598`. So "created but no token in the response" is treated as a hard, fail-loud error — no half-made invite, no blind retry. mvox then grants the person self-`_editor` (so she can edit her own record on arrival) and creates the `member` entity — and mvox **must** do this itself: Entu's invite-acceptance path grants no rights at all · **[SRC]** `entu-api routes/auth/index.get.js:279` (`replaceInviteWithCredentials` writes only the `entu_user` credential property; zero `_editor` work — unlike auto-provision, which self-grants at `:330`).
+Right after create, mvox reads the minted token out of Entu's **response** · **[CONV]** `inviteCreate.ts:162-166` (it looks for `entu_user.invite`). This is the **only** readable pass: every later GET of the person masks the token as `***` · **[SRC]** `entu-api utils/entity.js:594-598`. So "created but no token in the response" is treated as a hard, fail-loud error — no half-made invite, no blind retry. mvox then grants the person self-`_editor` (so she can edit her own record on arrival) and creates the `member` entity — and mvox **must** do this itself: Entu's invite-acceptance path grants no rights at all · **[SRC]** `entu-api routes/auth/index.get.js:279` (`replaceInviteWithCredentials` writes only the `entu_user` credential property; zero `_editor` work — unlike auto-provision, which self-grants at `:330`).
 
 ## 4. The token becomes a link — shown once, then forgotten
 
-mvox builds `…/invite/<token>` · **[CONV]** `inviteData`/`invite-links.ts`. The link lives **only in the admin page's memory** — never stored, never logged — shown once with its expiry read from the token's own `exp`, and discarded when dismissed. From that moment the **only copy of the token in existence is wherever the admin pastes it** — not in mvox storage, and (per the `***` masking) not retrievable from Entu either. A genuine one-shot bearer secret on both ends. The admin pastes it into a channel he trusts.
+mvox builds `…/invite/<token>` · **[CONV]** `invite-links.ts`. The link lives **only in the admin page's memory** — never stored, never logged — shown once with its expiry read from the token's own `exp`, and discarded when dismissed. From that moment the **only copy of the token in existence is wherever the admin pastes it** — not in mvox storage, and (per the `***` masking) not retrievable from Entu either. A genuine one-shot bearer secret on both ends. The admin pastes it into a channel he trusts.
 
 ## 5. The invitee lands on a public page that reads the ticket but trusts nothing
 
-She opens `/invite/<token>` — public by allowlist · **[CONV]** `src/lib/auth/guard.ts:43`. The page **decodes** the token client-side (unverified) to show which collective and the expiry — it **cannot name her** (no email in the token) and **cannot verify** it (the signature is a server secret). She sees a greeting and one sign-in button per provider, each carrying the token forward. A client-clock "expired" keeps the buttons (only a warning) — only the server can declare an invite truly dead. **Nothing is bound to her yet.**
+She opens `/invite/<token>` — public by allowlist · **[CONV]** `src/lib/auth/guard.ts:45`. The page **decodes** the token client-side (unverified) to show which collective and the expiry — it **cannot name her** (no email in the token) and **cannot verify** it (the signature is a server secret). She sees a greeting and one sign-in button per provider, each carrying the token forward. A client-clock "expired" keeps the buttons (only a warning) — only the server can declare an invite truly dead. **Nothing is bound to her yet.**
 
 ## 6. She signs in — and that is the binding
 
@@ -83,11 +83,15 @@ The mint stamps an `exp` (§2), but **nothing enforces it until redemption**, an
 - **Honest edge 1:** that enforcement **rides on the `jsonwebtoken` library's default `exp` check, not an explicit comparison in Entu's own code** — and Entu's *separate* unverified `jwt.decode` · **[SRC]** `:127` (used only to route by db) checks nothing. Whatever the lifetime is, it's a library default, not a hand-written gate.
 - **Honest edge 2 — [LIVE] the source and the deployment disagree.** The pinned source (`@82cb25b`) signs with `expiresIn: '7d'` (§2). But a token minted live during the T4.9 gate walkthrough (2026-08-07, PO Gama + Mihkel) measured **`exp − iat` = 24 hours** — not 7 days. So **the deployed `entu-api` differs from the pinned commit this doc cites**; the 7-day figure is source-accurate but not currently deployment-accurate. Treat the live lifetime as **24h until re-pinned against the actual running version.** No raw token was recorded (bearer secret); only the delta was observed. Filed as a qualified note on #23 (the report that first quoted 7d).
 
+## 8. Minting onto an existing person, and withdrawing
+
+The roster's invite and resend, and a member's own link for adding a sign-in on /profile, mint onto a person who already exists · **[CONV]** `src/lib/invite/inviteSelfLink.ts` `mintSelfLinkInvite`. mvox first deletes the person's un-redeemed `entu_user` placeholders, because redemption takes the first value carrying `invite`, then POSTs the trigger constant (§2) onto the person. A value carrying `uid` is a bound identity and is never touched. Entu allows the mint on another person only for `_owner` · **[CONV]** as stated at `inviteSelfLink.ts:116`, not re-read in `entu-api` here; a person minting for herself needs her self-`_editor` (§3), and a 403 says it is missing. `withdrawInvite` deletes the un-redeemed placeholders and leaves no marker. What a failure midway leaves behind: `docs/property-writes.md`, row 6.
+
 ## Why this is safe
 
 - The invitee's email **never reaches Entu** — mvox sends a constant, so there is no server-side copy, not even a transient one in a request log (#34, compile-time-enforced).
 - The token **names no one**; a leaked link exposes only *that one membership slot*, claimable once, expiring within a day on the live deployment (§7 — source says 7 days, observed live lifetime is 24h; either way, bounded).
-- **[LIVE]** who may mint an invite is governed by Entu's own create-time admin gate — creating a `person` with `_parent` set to the database entity requires the caller to be in that entity's `_expander` (or `_owner`/`_editor`) list · **[SRC]** `entu-api utils/entity.js:234-253`. A non-admin account attempting `createInvite` gets a 400 there, confirmed live during the T4.9 gate. This makes the parent-expander list a de facto "who may invite" register — any future access-control change for inviting lives in Entu's admin configuration, not in mvox code.
+- **[LIVE]** who may mint an invite is governed by Entu's own create-time admin gate — creating a `person` with `_parent` set to the database entity requires the caller to hold `_expander` (or higher) on it; the mechanism is in `docs/architecture/entu-rights-and-visibility-model.md`. A non-admin account attempting `createInvite` gets a 400 there, confirmed live during the T4.9 gate. This makes the parent-expander list a de facto "who may invite" register — any future access-control change for inviting lives in Entu's admin configuration, not in mvox code.
 - The admin is the gate: entry is his deliberate act (create person + member + mint), never self-service — the counterpart to [Runbook §0](https://github.com/mvox-dev/mvox-app/wiki/Runbook-entu-visibility) "a new sign-in gets no `person`."
 - The link is a bearer secret and is treated as one end to end: show-once, never stored by mvox, `***`-masked by Entu, delivered by a human through a trusted channel.
 
@@ -99,13 +103,14 @@ The mint stamps an `exp` (§2), but **nothing enforces it until redemption**, an
   - redemption/binding `routes/auth/index.get.js:198-267`;
   - SES email sentinel `routes/[db]/entity/[_id]/index.post.js:122`.
 - **mvox** (`main` @`cf66173`):
-  - `src/lib/invite/inviteData.ts` (create + token read-back),
+  - `src/lib/invite/inviteCreate.ts` (create + token read-back), `inviteConstants.ts`, `inviteOf.ts`,
+  - `src/lib/invite/inviteSelfLink.ts` (mint onto an existing person, withdraw),
   - `parse-invite-token.ts`,
   - `invite-links.ts`,
   - `redeem.ts`,
   - `src/routes/invite/[token]/+page.svelte`,
   - `src/routes/admin/invite/+page.svelte`,
-  - `src/lib/auth/guard.ts:43`.
+  - `src/lib/auth/guard.ts:45`.
 
 ---
 
