@@ -1,103 +1,9 @@
-// #317 — stable rule identifiers in the rights model document, made enforceable.
-//
-// RED for the #317 TDD chain. This spec parses the REAL document
-// (docs/architecture/entu-rights-and-visibility-model.md) and mechanically
-// enforces the identifier contract from #317's body plus BOTH Gama comments
-// (2026-09-10 15:11Z amendment: qualifications-get-own-identifiers + three new
-// claims; 15:27Z: distil-never-extend + the `_parent` fence). It fails today
-// because no identifiers exist, and it guards every future edit of the doc.
-//
-// Scanning the real file follows the typography-scale.spec / ios-form-zoom.spec
-// precedent (mechanical checks over real repo files, spec at src root).
-//
-// ── THE GRAMMAR THIS SPEC DEFINES (the GREEN implementer writes to this) ──
-//
-// Identifier scheme: `ER-<n>` where <n> is a positive integer with no leading
-// zeros. Opaque, creation-order, NON-POSITIONAL — the sequence number carries
-// no meaning about where the rule sits in the document, and this spec never
-// asserts that any ER id lives in any §-section. §N stays navigation only.
-// The scheme deliberately avoids §-prefixes (reserved for positional
-// navigation) and square-bracket forms (reserved for the [P]/[F]/[PE]/[LIVE]
-// provenance tags) — research-316 finding 6.
-//
-// An IDENTIFIED RULE BLOCK is a markdown blockquote (contiguous lines starting
-// with `>`) whose FIRST line begins with the bold identifier:
-//
-//   > **ER-4** — one-sentence rule text, quotable whole.
-//   > Evidence: `aggregate.js:269-275`.
-//   > Qualifications: ER-7.
-//
-// - The whole blockquote is the rule. It must be short enough to quote whole
-//   (caps below) — IDs attach to individual rules, never to whole §-sections.
-// - A SUPERSEDED rule keeps its identifier forever: the word `superseded` on
-//   the definition's FIRST line marks it (e.g. `> **ER-2** (superseded by
-//   ER-9, 2026-10-01) — …`). Keep the first line of active rules free of that
-//   word. No superseded rule need exist today — the format check is parse-level.
-// - A CROSS-REFERENCE is any bare `ER-<n>` token; every token in the document
-//   must resolve to a defined rule. Base and qualification name each other:
-//   the qualification cites its base rule by ID, and the base carries a
-//   `Qualifications:` line naming every rule that bounds it — so quoting the
-//   base whole shows that it is bounded. Write cross-reference lines as bare IDs — never restate
-//   the referenced rule's text (restating would trip the exactly-one content
-//   probes below, by design: that is the doc's own no-restatement discipline).
-// - Every rule block carries an evidence line: an `entu-api` `file:line`
-//   citation, a probe artifact path under scripts/migrations/, or an explicit
-//   `[unverified]` mark. A distilled sentence with no evidence line is
-//   indistinguishable from an invented one (Gama, 15:27Z).
-//
-// Content coverage is asserted by ID-presence + distinctive substrings, NEVER
-// by position. Each probe set must match EXACTLY ONE rule block — a second
-// block matching the same probes means a rule got restated instead of cited.
-//
-// ── #320 EXTENSION (RED) — the foundation layer gets identifiers ──
-//
-// #320 (body + Gama 2026-09-10 20:26Z + 2026-09-11 00:18Z) adds to THIS file
-// (it is the doc's one mechanical guard; a second spec would fragment it):
-// - §1/§2's four foundation rules get identified blocks (INVENTORY o–r), plus
-//   two sweep finds (s–t). Next free id is ER-18; the numbering fence below
-//   forbids ER-0 / letter suffixes / renumbering — foundations take the NEXT
-//   free numbers. Document order and identifier order are allowed to disagree.
-// - A new structural line type `Stands on: ER-<n>, …` — declared in the scheme
-//   paragraph, used by ER-1/ER-3 (which today presuppose §1/§2 silently) and
-//   by ER-7 (which today cites them POSITIONALLY as `(§1–§2)` — the worked
-//   example the sweep exists to find, Gama 00:18Z).
-// - Not-in-scope fence: §1/§2 prose stays byte-identical; blocks with no #320
-//   mandate stay byte-identical (sha256 pins).
-//
-// ── #322 EXTENSION (RED) — two corrections, identifiers kept ──
-//
-// #322 (body + Gama's release comment, 2026-09-11) corrects two blocks and
-// nothing else. ER-9 is restated DIRECTION-FREE: its "lower/higher" wording
-// presupposed a tier power-ranking the document's evidence never establishes
-// (ER-22 declines it), so the ranking framing goes while the silent-demotion
-// claim stays — Gama's corrected-vs-superseded test: a pre-edit citation of
-// ER-9 for the demotion remains sound, a citation of it for ranked tiers was
-// never supported. Same rule, identifier KEPT, and a one-line dated correction
-// note marks the edit inside the block (the scheme marks supersession only;
-// correction must not be the unmarked cheaper path). ER-12's positional
-// '(§7.3)' becomes ER-7 — a citation swap inside one block. Section 15 states
-// the contract; the section-13 pin map is updated to the corrected ER-9/ER-12
-// bytes and grows ER-18..ER-23 (adopted from Bentham's post-#320 residual,
-// earmarked for #318 — same one-line close, taken here).
-//
-// ── #330 EXTENSION (RED) — two positional citations become identifiers, plus a missing Stands on ──
-//
-// #330 (AMENDED body, 2026-09-11 14:31 + Gama's amendment comment — the record
-// for the citation-vs-navigation rule). THREE edits, no more:
-// 1. ER-3's rule sentence: `(§3)` → `(ER-1)`. A citation, not navigation — no
-//    ER id is present, so the `§` carries the reference by itself.
-// 2. ER-10's rule sentence drops `(§4)`; its Evidence line gains `Distills §4.`
-//    — §4 is ER-10's own provenance, moved into the protected provenance form.
-// 3. ER-12's `Stands on:` gains ER-7 (mirror fix, not a `§` edit: the rule
-//    sentence already cites ER-7, the structural line omitted it).
-// EXPLICITLY OUT (#330 "not in scope" + the 14:31 amendment): ER-12's Evidence
-// line keeps both `§7.3` mentions (#322 ruled them navigation; CORRECTED_ER12
-// pins the bytes), ER-4's Evidence line keeps `ER-3 above (§7.1's operative
-// sentence)` (same shape — the id carries the reference, the `§` locates it),
-// the 9 pre-existing `Distills §n` provenance lines, all §-numbers in headings
-// and narrative prose, and pin coverage for blocks this slice does not edit
-// (ER-1/ER-7 stay unpinned). A blanket "no `§` inside an ER block" check is
-// FORBIDDEN as criterion — it cannot tell a citation from a navigation note.
+// Guard spec for docs/architecture/entu-rights-and-visibility-model.md: parses the real doc.
+
+// A rule block is a `>` blockquote whose first line opens `**ER-<n>**`. Ids are opaque and
+// creation-order; probes find rules by content, never by position, and must match exactly one.
+
+// Byte pins below move only behind a PO-ruled doc edit; a pin proves no drift since that edit.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
@@ -105,18 +11,11 @@ import { resolve } from 'node:path';
 
 const DOC_PATH = resolve(__dirname, '../docs/architecture/entu-rights-and-visibility-model.md');
 
-// ── tests-local parser (deliberately NOT a src/ module — #318 builds its own view later) ──
-
 interface RuleBlock {
-	/** The identifier, e.g. "ER-4" (well-formedness asserted separately). */
 	id: string;
-	/** True when the definition's first line carries the `superseded` marker. */
 	superseded: boolean;
-	/** Full blockquote text, `>` markers stripped, lines joined with \n. */
 	text: string;
-	/** Number of lines in the blockquote. */
 	lineCount: number;
-	/** 1-indexed line the block starts on (for failure messages only — never asserted). */
 	startLine: number;
 }
 
@@ -152,7 +51,6 @@ function parseRuleBlocks(doc: string): RuleBlock[] {
 const doc = readFileSync(DOC_PATH, 'utf-8');
 const blocks = parseRuleBlocks(doc);
 
-/** Exactly-one content lookup. Every probe must match; position is never used. */
 function blockMatching(label: string, probes: RegExp[]): RuleBlock {
 	const hits = blocks.filter((b) => probes.every((p) => p.test(b.text)));
 	expect(
@@ -164,33 +62,14 @@ function blockMatching(label: string, probes: RegExp[]): RuleBlock {
 	return hits[0];
 }
 
-// ── #322 corrected blocks, authored byte-exact (PO ruling on #316, 2026-09-11 doorbell) ──
-//
-// RED authors the corrected bytes so the section-13 pin map can pin them at
-// RED time — the fence holds THROUGH the sanctioned edit instead of being
-// loosened for it. GREEN's whole job on these two blocks is to make the doc
-// match. Section 15 states the same contract as readable per-clause
-// assertions, so a failure names the ruling it violates, not just a hash.
-//
-// ER-9: the ranking framing goes ("both directions", "non-monotonic",
-// "lower"/"higher"), the claim stays; ER-6 gives the whole replacement
-// mechanism, so the restated rule cites it rather than re-deriving it. The
-// evidence paths stay; the quoted probe sentence goes with the ranking wording
-// it carries. The dated correction note is the block's last line, inside the
-// contiguous `>` run.
+// Corrected/edited blocks, byte-exact: the per-block pins in the fence describe use them.
 const CORRECTED_ER9 = [
 	'**ER-9** — Since entity CREATE grants the creating caller `_owner` as one direct document (ER-5), a later explicit grant of any other direct tier to that same caller on that same entity replaces it (ER-6) and silently demotes the creator from owner — the replace happens with no error and no notice.',
 	'Evidence: `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-entu-rights-supersession-cases-2026-09-09.ts`; results `scripts/migrations/seed-results/probe-entu-rights-supersession-cases-live-2026-09-09T17-04-41-123Z.json`.',
 	'Corrected 2026-09-11: ranking wording removed; the claim is unchanged.'
 ].join('\n');
 
-// ER-12: one token swaps — the rule sentence's positional '(§7.3)' becomes
-// '(ER-7)'. The evidence line's own '§7.3' mentions are navigation notes and
-// stay (#322 PO ruling, byte-pinned via ER12_EVIDENCE_LINE_322 below).
-// #330 amends ONE line of this constant: `Stands on:` gains ER-7 — the rule
-// sentence already cites ER-7 for the cascade, so ER-12 demonstrably stands on
-// it, and the scheme's one-way mirror says it must be named on the structural
-// line. Everything else is #322's bytes, unchanged.
+// ER-12's Evidence line keeps its §7.3 mentions: they locate, they do not cite.
 const ER12_EVIDENCE_LINE_322 =
 	'Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis); `aggregate.js:166-183` (the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10. Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.';
 const CORRECTED_ER12 = [
@@ -199,35 +78,18 @@ const CORRECTED_ER12 = [
 	'Stands on: ER-7, ER-18, ER-20, ER-1.'
 ].join('\n');
 
-// ── #330 edited blocks, authored byte-exact at RED time from the POST-edit bytes ──
-//
-// PIN CAVEAT (#330 "Pins", Gama 14:31 amendment comment — stated so nobody
-// misreads a green run): a pin authored by the same slice that edits the bytes
-// proves only that the bytes have not drifted SINCE the edit; it is NOT
-// evidence that the edit was correct. Review is what establishes that.
-//
-// ER-3: this is ER-3's FIRST hash pin — it was one of the unpinned trio
-// (ER-1/ER-3/ER-7, Bentham 2026-09-11). #330 pins it because #330 edits it
-// (pin coverage travels with the slice that edits the block); ER-1 and ER-7
-// stay unpinned — extending coverage to untouched blocks is not this slice's.
 const EDITED_ER3 = [
 	'**ER-3** — A `_viewer`-alone grant already suffices for full private bucket read: property-tier `_sharing` (ER-1) does not filter on top of entity-level rights admission — entity rights decide the bucket, and the whole private bucket is exposed once any grant admits the caller to it.',
 	'Evidence: `https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-294-entu-user-cross-admin-read-2026-09-08.ts`; results `scripts/migrations/seed-results/probe-294-entu-user-cross-admin-read-live-2026-09-08T10-15-15-643Z.json`.',
 	'Stands on: ER-18, ER-20.'
 ].join('\n');
 
-// ER-10: the rule sentence drops '(§4)' — §4 is provenance, not a dependency —
-// and the Evidence line gains 'Distills §4.', the protected provenance form.
-// This CREATES the doc's 10th 'Distills §n' line (see the #330 section below:
-// 10 is the sanctioned post-edit state, not drift).
 const EDITED_ER10 = [
 	'**ER-10** — The database boundary is a read boundary: "One Entu install per collective → `domain` = in-collective visibility" holds, enforced by code, not by data state. A user authenticated against install X cannot read `domain` entities in install Y unless they genuinely have a `person` entity in Y.',
 	'Evidence: `middleware/auth.js:21,31-33,46-48`; `routes/auth/index.get.js:132,141-190,254`. Distills §4.'
 ].join('\n');
 
 const sha256 = (text: string): string => createHash('sha256').update(text, 'utf8').digest('hex');
-
-// ── 1. format + uniqueness ──────────────────────────────────────────────────
 
 describe('identifier scheme (ER-<n>): format and uniqueness', () => {
 	it('at least one identified rule block exists', () => {
@@ -264,15 +126,6 @@ describe('identifier scheme (ER-<n>): format and uniqueness', () => {
 	});
 });
 
-// ── 2/3. coverage — the full amended inventory, found by content, never by position ──
-
-// #320: the foundation layer. Four separable rules (research-320 findings 1a-1d):
-// §1 holds two — bucket structure, write-time snapshot semantics — and §2 holds
-// two — exactly-one-bucket selection, and the tier-priority order itself (no
-// existing ER states the order; ER-4 contrasts formulas without naming it).
-// Probes name CONTENT, never ids and never position; GREEN picks the ids
-// (next-free — the numbering fence below). Distil-never-extend applies: every
-// block's claim must already be stated and evidenced in §1/§2's own prose.
 const SECTION1_FOUNDATIONS: [string, RegExp[]][] = [
 	['o. §1 foundation: aggregateEntity materializes the three property buckets on the stored document', [/aggregateEntity/, /three property (?:objects|buckets)/i, /private/, /access[`\s]*array/i]],
 	['p. §1 foundation: buckets are write-time snapshots — a read returns whatever was last written', [/snapshots? taken at write time/i, /not computed at read time/i]]
@@ -281,22 +134,11 @@ const SECTION2_FOUNDATIONS: [string, RegExp[]][] = [
 	['q. §2 foundation: a read returns exactly one bucket, first match wins; no bucket admitted → 403', [/exactly one bucket/i, /first match wins/i, /403/]],
 	['r. §2 foundation: the tier-priority order — explicit grant, then domain, then public', [/explicit grant/i, /\bdomain\b/, /\bpublic\b/, /priorit|precedence|outrank/i]]
 ];
-// #320 sweep additions (the issue's mechanical test — "if a rule cannot be
-// stated without relying on something, that something is a rule"):
-// s. the rightTypes enumeration (presupposed by ER-5/6/7/9/11/17; the evidenced
-//    array sits in §5 prose, entity.js:21-29, outside any citable block);
-// t. rights-tier arrays, like buckets, are write-time products of the same
-//    aggregateEntity pass (presupposed by ER-6/7/9; doc §1 line + ER-7's
-//    aggregate.js:166-183/185-209 evidence).
-// NOTE for GREEN: each probe set must match EXACTLY ONE block — keep t's
-// wording clear of p's distinctive "snapshots taken at write time" phrase, and
-// keep o's block free of the word "rights-tier".
 const SWEEP_320: [string, RegExp[]][] = [
 	['s. sweep: the rightTypes enumeration — the seven rights-type properties as one citable rule', [/_noaccess/, /_inheritrights/, /_expander/, /rightTypes|rights-type/i]],
 	['t. sweep: rights-tier arrays are write-time products of the same aggregateEntity pass as the buckets', [/aggregateEntity/, /rights-tier|aggregated rights/i, /write[- ]time/i]]
 ];
 
-// Each entry: [label, probes]. Probes are matched against rule-block text only.
 const INVENTORY: [string, RegExp[]][] = [
 	['a. three visibility gates, narrowest wins', [/narrowest wins/i, /gate/i, /prop-def|property definition/i]],
 	['b. one direct rights-tier per (reference, entity); new direct grant replaces', [/at most one active direct/i, /rights-tier/i, /replac|retir/i]],
@@ -304,10 +146,6 @@ const INVENTORY: [string, RegExp[]][] = [
 	['d. direct and inherited are separate additive layers', [/additive/i, /inherited/i, /single-tier|single tier/i]],
 	['e. _sharing vs _inheritrights are different axes', [/_sharing/, /_inheritrights/, /ax[ei]s/i]],
 	['f. CREATE auto-grants caller _owner as one direct doc, all four tiers', [/auto-grant/i, /_owner/, /four tiers/i]],
-	// #322: this probe set used to pin the OLD ranking wording (`non-monotonic|
-	// both directions`) — exactly what the correction removes. Repinned on the
-	// claim itself, which survives the restatement (issue body: "extend only if
-	// an assertion pins the old wording").
 	['g. a later grant to the creator silently demotes them from owner', [/demot/i, /creator|creating caller/i, /no error and no notice/i]],
 	['h. _viewer-alone suffices for full private-bucket read', [/_viewer/, /alone/i, /private bucket/i]],
 	['i. tier-admitted vs grant-admitted readers get different answers', [/tier-admitted/i, /grant-admitted/i]],
@@ -316,7 +154,6 @@ const INVENTORY: [string, RegExp[]][] = [
 	['l. the database boundary is a read boundary', [/read boundary/i, /database|\bdb\b/i]],
 	['m. changing _sharing requires _owner', [/_sharing/, /_owner/, /chang/i]],
 	['n. a systemUser caller bypasses the _owner requirement on the write path (own rule, qualification of m)', [/systemUser/, /bypass/i, /write path/i]],
-	// #320 — appended AFTER the original fourteen so PAIRS' indexes stay stable.
 	...SECTION1_FOUNDATIONS,
 	...SECTION2_FOUNDATIONS,
 	...SWEEP_320
@@ -329,9 +166,7 @@ describe('coverage: every rule in the amended inventory has its own identified b
 	});
 
 	it('the three-gates rule (a) scopes which reader the AND formula holds for', () => {
-		// The unqualified form — "reaches a non-owner reader only if all three gates
-		// allow it" — is false for a grant-admitted reader (rule i), and it is the
-		// natural citation for "three gates". Quoting (a) whole must not assert it.
+		// The unscoped form is false for a grant-admitted reader (rule i).
 		const b = blockMatching('a. three visibility gates, narrowest wins', INVENTORY[0][1]);
 		expect(
 			b.text,
@@ -340,12 +175,8 @@ describe('coverage: every rule in the amended inventory has its own identified b
 	});
 
 	it('only the three-gates rule (a) enumerates the exposure gates — every other block cites it by ID', () => {
-		// The regression this guards: a second block that restates (a)'s formula
-		// drops a gate in the restatement. That is exactly what shipped on
-		// 2026-09-10 — the entity TYPE cap vanished from a two-gate paraphrase —
-		// and it is the anti-pattern this file's header forbids ("write
-		// cross-reference lines as bare IDs — never restate the referenced rule's
-		// text"). Case-sensitive `AND` so ordinary prose "and" does not trip it.
+		// A block restating (a)'s formula is where a gate gets dropped; others cite (a) by ID.
+		// Case-sensitive `AND` so ordinary prose "and" does not trip it.
 		const gates = blockMatching('a. three visibility gates, narrowest wins', INVENTORY[0][1]);
 		const ENUMERATES_GATES = /(?:prop-def|property[- ]definition)[^\n]*_sharing[^\n]*(?:intersect|∩|AND)/;
 		for (const b of blocks) {
@@ -365,12 +196,9 @@ describe('coverage: every rule in the amended inventory has its own identified b
 	});
 });
 
-// ── 3n. the _parent asymmetry — fenced, not required (Gama 15:27Z) ──────────
-
 describe('_parent asymmetry: scoped-if-present (distil-never-extend fence)', () => {
 	it('any rule block mentioning _parent gating carries its full scope: the property, #304, the probe date, and the probe evidence', () => {
-		// The spec accepts EITHER a scoped entry OR its absence. What must not
-		// ship is a clean general rule resting on one narrow probe.
+		// Either a scoped entry or none: never a general rule on one narrow probe.
 		const parentBlocks = blocks.filter((b) => /_parent/.test(b.text));
 		for (const b of parentBlocks) {
 			expect(b.text, `_parent rule at doc line ${b.startLine} missing the issue marker`).toMatch(
@@ -387,10 +215,6 @@ describe('_parent asymmetry: scoped-if-present (distil-never-extend fence)', () 
 	});
 
 	it('any rule block mentioning _parent gating disclaims general reach in words, not only by citation', () => {
-		// The citation markers above are furniture; the fence itself rests on the
-		// block SAYING it is not general Entu behaviour. Strip that sentence and
-		// the assertions above still pass, leaving exactly what the 2026-09-10
-		// 15:27Z ruling forbids: a clean general rule on one narrow probe.
 		const parentBlocks = blocks.filter((b) => /_parent/.test(b.text));
 		for (const b of parentBlocks) {
 			expect(
@@ -415,8 +239,6 @@ describe('_parent asymmetry: scoped-if-present (distil-never-extend fence)', () 
 	});
 });
 
-// ── 4. quotable-whole: bounded, length-capped blocks ────────────────────────
-
 describe('quotable-whole: a rule too long to quote gets paraphrased', () => {
 	const MAX_LINES = 12;
 	const MAX_CHARS = 1200;
@@ -435,12 +257,8 @@ describe('quotable-whole: a rule too long to quote gets paraphrased', () => {
 	});
 });
 
-// ── 5. cross-reference format: qualifications cite their base rule by ID ────
-
 describe('cross-references: base rules and their qualifications name each other by ID', () => {
-	// Both directions are asserted. Upward (qualification → base) alone leaves the
-	// dangerous half invisible: a reader quoting the BASE whole — the whole point of
-	// the identifier scheme — would get no signal that a qualification bounds it.
+	// Both directions: quoting a base whole must show what bounds it.
 	const PAIRS = [
 		{
 			base: 'b (base replace rule)',
@@ -486,9 +304,6 @@ describe('cross-references: base rules and their qualifications name each other 
 	it.each(PAIRS)('$base names the qualification $qual that bounds it by ID', ({ base, baseProbes, qual, qualProbes }) => {
 		const b = blockMatching(base, baseProbes);
 		const q = blockMatching(qual, qualProbes);
-		// The structural `Qualifications:` line, not merely a mention somewhere in
-		// the prose: prose gets rewritten, and the doc's own scheme paragraph makes
-		// this line the base rule's contract.
 		const qualLine = b.text.split('\n').find((l) => /^\s*Qualifications:/i.test(l));
 		expect(
 			qualLine,
@@ -501,12 +316,7 @@ describe('cross-references: base rules and their qualifications name each other 
 	});
 });
 
-// ── 6. provenance: no identified rule without an evidence marker ────────────
-
 describe('provenance: every identified rule block carries an evidence line', () => {
-	// file:line citation (entu-api source read), probe artifact path, or an
-	// explicit unverified mark — a distilled sentence with no evidence line is
-	// indistinguishable from an invented one.
 	const FILE_LINE = /[\w./-]+\.(?:js|ts|md|json):\d+(?:-\d+)?/;
 	const PROBE_PATH = /scripts\/migrations\/(?:probes|seed-results)\/[\w.-]+/;
 	const UNVERIFIED = /\[unverified\]/i;
@@ -521,8 +331,6 @@ describe('provenance: every identified rule block carries an evidence line', () 
 		}
 	});
 });
-
-// ── 7. superseded convention: parse-level, no superseded rule need exist ────
 
 describe('superseded convention: a superseded rule keeps its identifier', () => {
 	const FIXTURE = [
@@ -540,8 +348,7 @@ describe('superseded convention: a superseded rule keeps its identifier', () => 
 	});
 
 	it('in the real doc, superseded rules (if any) still occupy their identifier for uniqueness', () => {
-		// Uniqueness above already includes superseded ids; here we only assert
-		// the marker parses on the real doc without exploding the block set.
+		// Uniqueness above already counts superseded ids; this only checks the marker parses.
 		const superseded = blocks.filter((b) => b.superseded);
 		for (const b of superseded) {
 			expect(b.id).toMatch(WELL_FORMED_ID);
@@ -549,15 +356,8 @@ describe('superseded convention: a superseded rule keeps its identifier', () => 
 	});
 });
 
-// ── 8. working-notes instruction ────────────────────────────────────────────
-
 describe('working-notes instruction: notes carry identifiers, never restatements', () => {
 	it('the instruction lives inside an identified rule block, so #319 can cite it by ID', () => {
-		// Prose anywhere in the file is not enough: the forcing layer that will
-		// enforce this rule has to name it, and the scheme paragraph promises that
-		// "every citable rule below carries a stable identifier". An unidentified
-		// normative sentence would be the one rule in this document that cannot be
-		// cited — precisely the failure it exists to prevent.
 		const block = blocks.find(
 			(b) =>
 				/notes|scratchpads?/i.test(b.text) && /identifiers?/i.test(b.text) && /restat/i.test(b.text)
@@ -569,8 +369,6 @@ describe('working-notes instruction: notes carry identifiers, never restatements
 	});
 });
 
-// ── 9. privacy: the personal name at §7.3 provenance is removed ─────────────
-
 describe('privacy: PO ruling on #318 (2026-09-10 15:27:43Z)', () => {
 	it("the doc contains no occurrence of the personal name (replaced by 'the crede editor-grant disappearance investigation')", () => {
 		expect(doc).not.toContain('Joosep');
@@ -578,13 +376,8 @@ describe('privacy: PO ruling on #318 (2026-09-10 15:27:43Z)', () => {
 	});
 });
 
-// ── 10. #320 numbering fence: foundations take the NEXT free numbers ────────
-
 describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)', () => {
-	// The instinct runs the other way — a foundation numbered after seventeen
-	// findings reads as a filing error. Renumbering, ER-0, or ER-1a silently
-	// repoints every citation already written, with no error and no broken
-	// link. Document order and identifier order are allowed to disagree.
+	// Renumbering, ER-0 or ER-1a silently repoints every citation already written.
 
 	it('no ER-0 and no letter-suffixed id (ER-1a shape) anywhere in the doc', () => {
 		expect(doc, 'ER-0 minted — identifiers are creation-order, never slotted in front').not.toMatch(/\bER-0\b/);
@@ -599,42 +392,14 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 	});
 
 	it('every id number resolves or is retained as a superseded block — a retired id is never renumbered away', () => {
-		// This assertion USED to read `last === length`: the doc may never have a
-		// hole in its id sequence. That is not #317's rule — #317 says ids are
-		// opaque, creation-order, never reused and never renumbered, which says
-		// nothing about gaps. The two only coincide while nothing leaves the doc,
-		// and the moment a rule did leave, the cheapest way to green an equality
-		// is to renumber the survivors — the exact silent-repointing failure the
-		// scheme exists to prevent, applied by its own guard.
-		//
-		// So the check stays (a hole is still worth reporting) but the remedy is
-		// named, and it is the one #317 already prescribes: a rule is retired by
-		// SUPERSEDING it — the block stays, marked `(superseded by ER-<m>,
-		// <date>)`, holding its number forever. Never by renumbering.
-		//
-		// #369: a number can also be absent because it is RESERVED — ruled and
-		// named on its commissioning issue, but not yet written into the doc. That
-		// is a third state the sweep did not model, and it is not the hazard the
-		// sweep exists to catch: the hazard is a number that resolves to nothing
-		// because someone renumbered or reused it. The comment above already
-		// concedes the scheme's own silence here — #317 says ids are opaque,
-		// creation-order, never reused and never renumbered, which "says nothing
-		// about gaps". So a reserved number is listed by hand with the issue that
-		// holds it, and every OTHER hole still fails exactly as before.
-		//
-		// 24/25 are RETIRED, never minting (Mihkel 2026-09-18, closing #364 with
-		// the schema-level ruling: rights bookkeeping is not board work). The
-		// numbers stay empty forever — reusing either would silently repoint
-		// citations, and renumbering ER-26+ to close the hole would do the same.
+		// A hole is reported, but the fix is a superseded stub that keeps its number, never
+		// renumbering. RESERVED lists numbers held out on purpose.
 		const RESERVED: Record<number, string> = {
 			24: 'retired 2026-09-18, never minting',
 			25: 'retired 2026-09-18, never minting'
 		};
 		const ns = blocks.map((b) => Number(b.id.slice(3))).sort((a, b) => a - b);
 		expect(new Set(ns).size, 'duplicate id numbers').toBe(ns.length);
-		// Sweeping from 1 rather than from ns[0] also covers a missing ER-1, so no
-		// separate lowest-is-ER-1 assertion is needed — and it reports that case
-		// with the remedy spelled out instead of a bare "lowest id is not ER-1".
 		const missing: number[] = [];
 		for (let n = 1; n < ns[ns.length - 1]; n += 1) {
 			if (!ns.includes(n) && !(n in RESERVED)) missing.push(n);
@@ -644,8 +409,7 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 			`these ids resolve to no block. #317 retires a rule by SUPERSEDING it: keep the block, mark its first line \`(superseded by ER-<m>, <date>)\`, and it keeps its number forever — restore a superseded stub for each id listed. Do NOT renumber the surviving rules to close the hole, and do not reuse a freed number: either one silently repoints every citation already written, with no error and no broken link. If a listed id is instead RESERVED on an issue and awaiting its slice, add it to RESERVED above with that issue — never close the hole by minting its number for other content.`
 		).toEqual([]);
 
-		// The reservation list is not allowed to go stale: once a reserved rule
-		// lands, its entry must go, or the sweep would stop guarding that number.
+		// A reserved id that resolves to a block is either its rule landing or a squatter.
 		expect(
 			Object.keys(RESERVED)
 				.map(Number)
@@ -666,20 +430,9 @@ describe('#320 numbering fence: next-free numbers, never low ones (Gama 20:26Z)'
 	});
 });
 
-// ── 11. #320 foundation citations: the `Stands on:` line ────────────────────
-
 describe('#320 foundation citations: `Stands on:` lines (one-way by design)', () => {
-	// The scheme paragraph defines only `Qualifications:` — BOUNDING semantics,
-	// the wrong relation here (a foundation does not bound the rules above it).
-	// #320 adds a second structural line type: `> Stands on: ER-<n>, …`.
-	//
-	// DELIBERATE ASYMMETRY with the Qualifications pairs check: the relation is
-	// ONE-WAY, dependent → foundation. A base rule must warn that it is bounded
-	// (quoting it whole without the qualification states a falsehood), so
-	// Qualifications is bidirectional. A foundation is NOT falsified by being
-	// quoted without its dependents, and a dependents list would force an edit
-	// of the foundation block on every new citation. So: no PAIRS entries for
-	// Stands on — foundations never name their dependents.
+	// Stands on: is one-way (dependent → foundation); foundations never name dependents,
+	// unlike Qualifications, which both sides name.
 
 	const standsOnLines = (b: RuleBlock) =>
 		b.text.split('\n').filter((l) => /^\s*Stands on:/i.test(l));
@@ -694,8 +447,7 @@ describe('#320 foundation citations: `Stands on:` lines (one-way by design)', ()
 	});
 
 	it('every `> Stands on:` line sits INSIDE an identified rule block (after a blank line it becomes an orphan, id-less blockquote the parser skips)', () => {
-		// Parser fact (research-320 blast 2b): contiguous `>` lines are absorbed
-		// into the block; a `>` line after a blank line silently falls out.
+		// A `>` line after a blank line falls out of the block.
 		const lines = doc.split('\n');
 		const ranges = blocks.map((b) => [b.startLine, b.startLine + b.lineCount - 1]);
 		lines.forEach((line, idx) => {
@@ -722,9 +474,7 @@ describe('#320 foundation citations: `Stands on:` lines (one-way by design)', ()
 	});
 
 	const DEPENDENTS: [string, RegExp[]][] = [
-		// ER-1: "tier-admitted" needs §2's bucket selection; three-gate AND needs §1's buckets.
 		['a. three visibility gates, narrowest wins', INVENTORY[0][1]],
-		// ER-3: "entity rights decide the bucket" needs §1's buckets and §2's grant branch.
 		['h. _viewer-alone suffices for full private-bucket read', INVENTORY[7][1]]
 	];
 
@@ -746,11 +496,7 @@ describe('#320 foundation citations: `Stands on:` lines (one-way by design)', ()
 	});
 
 	it('caller-identity/grant-matching is stated by at most ONE block (present-or-absent — the soft gap, research-320 sweep)', () => {
-		// The general userStr-in-access mechanic is only PARTIALLY covered
-		// (ER-10 narrows it to the db boundary). The spec does not hard-require
-		// a new rule here: GREEN applies the issue's mechanical test and
-		// reports. What must not happen is the mechanic restated across
-		// several blocks instead of cited.
+		// One citable rule or none: the mechanic must not be restated across blocks.
 		const hits = blocks.filter((b) => /userStr/.test(b.text) && !/read boundary/i.test(b.text));
 		expect(
 			hits.length,
@@ -759,32 +505,9 @@ describe('#320 foundation citations: `Stands on:` lines (one-way by design)', ()
 	});
 });
 
-// ── 12. #320 positional-citation conversion (Gama 00:18Z) ───────────────────
-
 describe('#320: no rule cites the foundation sections positionally once they carry ids', () => {
-	// Sections are POSITIONS: inserting a section above §1/§2 silently repoints
-	// a `(§1–§2)` citation with no error and no broken link. ER-7 and ER-12 both
-	// did exactly this — the worked examples the sweep exists to find.
-	//
-	// The guard scans §-RANGES, not the literal '§1–§2' token it was first
-	// written for. A per-token guard is what let ER-12's rule sentence keep
-	// '(§1–§3)' while its own Evidence line had already been converted to
-	// identifiers: the same block citing the same two sections both ways, and
-	// nothing failed. A §-range can only be read by treating section numbers as
-	// an ordered span, so every range in a rule block is a positional citation
-	// of content that now has identifiers to land on.
-	//
-	// Deliberately NOT scanned: single-section mentions — ER-1's 'Distills §3',
-	// ER-12's evidence-line '§7.3' mentions (its rule-sentence '(§7.3)'
-	// converts to ER-7 under #322 — see section 15; the evidence mentions
-	// stay), ER-4's evidence-line '(§7.1's operative sentence)'.
-	// Those are navigation/provenance notes ("the prose this distills lives
-	// there"), which the scheme paragraph keeps as a legitimate use of §N, and
-	// several sit in blocks pinned byte-exact below. Converting them is a
-	// separate decision, not this guard's business — a per-mention judgment
-	// (#330 converted exactly two, ER-3's '(§3)' and ER-10's '(§4)', because
-	// they were CITATIONS: no ER id present, the `§` carried the reference
-	// itself; see the #330 section below).
+	// A §-range reads sections as an ordered span, so it repoints when one is inserted.
+	// Single-section mentions (`Distills §3`, ER-12's evidence §7.3) are navigation: not scanned.
 	const POSITIONAL_SECTION_RANGE = /§\s*\d+(?:\.\d+)*\s*[–—-]\s*§?\s*\d+(?:\.\d+)*/;
 
 	it("ER-7 (additive layers) no longer contains the positional token '(§1–§2)'", () => {
@@ -817,9 +540,6 @@ describe('#320: no rule cites the foundation sections positionally once they car
 	});
 
 	it('ER-12 (the two axes) cites the foundation identifiers, not a §-range, for the `_sharing` axis', () => {
-		// The half-conversion this guards: ER-12's Evidence line was converted to
-		// identifiers while its operative sentence kept '(§1–§3)'. The rule text is
-		// the half a reader quotes, so it is the half that matters most.
 		const b = blockMatching('e. _sharing vs _inheritrights are different axes', INVENTORY[4][1]);
 		const foundationIds = [...SECTION1_FOUNDATIONS, ...SECTION2_FOUNDATIONS].map(([l, p]) =>
 			blockMatching(l, p).id
@@ -837,18 +557,8 @@ describe('#320: no rule cites the foundation sections positionally once they car
 	});
 });
 
-// ── 13. #320 not-in-scope fence: what this slice must NOT change ────────────
-
 describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', () => {
-	// The issue's own fence: "Not in scope: changing what §1 and §2 say. They
-	// are correct and evidenced; this gives them addresses."
-	//
-	// Two checks guard it, split by what each pins: this list pins the nine
-	// sentences below as EXACT verbatim text (matched anywhere in the doc, so it
-	// catches an edit to any one of them and names it in the failure message),
-	// and the checksum further down pins everything ELSE in the §1→§3 slice —
-	// both headings, the rest of §2's code block, the 'Why `private` is robust'
-	// paragraph — minus the ER blockquotes this slice is sanctioned to add.
+	// Two layers: the sentence list names which claim moved; the checksum below holds the rest.
 	const OPERATIVE_SENTENCES = [
 		'Every entity write runs `aggregateEntity` (`utils/aggregate.js`), which materializes three property objects on the stored document:',
 		'- `propertiesToEntity` seeds `private` / `domain` / `public` as empty objects plus an `access` array (`aggregate.js:312-320`).',
@@ -867,25 +577,9 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		}
 	});
 
-	// The checksum half of that split, and the reason the list alone was not
-	// enough: everything the nine sentences do not name could be rewritten with
-	// the list still green. The §1–§2 prose, with #320's own ER blockquotes
-	// removed, must hash to what MAIN's prose hashes to.
-	//
-	// The pin is computed from `git show main:<doc>` put through the SAME
-	// normalization, so it certifies the prose equals the pre-#320 prose — not
-	// merely that this branch agrees with itself. A failure here says only that
-	// something in the slice moved; the list above is what names which claim,
-	// which is why both stay.
 	const FOUNDATION_PROSE_SHA256 = '113c032718275033757750e07ca10b58a7b592bfb025fce30c76190fc9ed1d4f';
 
-	// §1's heading through the line before §3's, minus the blockquote blocks this
-	// slice is sanctioned to add and the blank-line runs their removal leaves
-	// behind. The exemption is ER DEFINITION blocks specifically — a block whose
-	// first line matches DEFINITION_FIRST_LINE. Any other blockquote is prose the
-	// fence holds: exempting `>` wholesale would let a claim be smuggled into
-	// §1/§2 as a plain note (`> Note: buckets are computed at read time.`) with
-	// both guard layers green.
+	// §1 heading to §3 heading, minus ER definition blocks only: any other blockquote is prose.
 	const foundationProse = (text: string): string => {
 		const lines = text.split('\n');
 		const start = lines.findIndex((l) => l.startsWith('## 1. Three property buckets'));
@@ -921,11 +615,8 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 	});
 
 	it('that checksum is sensitive to §1/§2 prose the sentence list leaves unpinned', () => {
-		// Without these, a fence that silently stopped covering prose — bounds that
-		// slipped, an exemption that ate real lines — would read as green.
+		// Probes prove the checksum still sees prose the sentence list does not cover.
 
-		// Reword probe: 'robust' sits in no OPERATIVE_SENTENCES entry, so the hash
-		// is the only layer that can see this edit.
 		const reworded = doc.replace('**Why `private` is robust:**', '**Why `private` is sturdy:**');
 		expect(
 			reworded,
@@ -936,9 +627,6 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 			'rewording an unpinned §1/§2 paragraph did not move the checksum — the slice bounds or the ER-block exemption are discarding prose the fence is supposed to hold'
 		).not.toBe(FOUNDATION_PROSE_SHA256);
 
-		// Insert probe: only ER DEFINITION blocks are exempt. A plain blockquote is
-		// an unsanctioned addition to §1/§2 — and a way to smuggle in a claim that
-		// contradicts the section — so it must move the hash as well.
 		const smuggled = doc.replace(
 			'**Why `private` is robust:**',
 			'> Note: buckets are actually computed at read time.\n\n**Why `private` is robust:**'
@@ -949,54 +637,8 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 		).not.toBe(FOUNDATION_PROSE_SHA256);
 	});
 
-	// Every block with no LIVE mandate, pinned byte-exact (sha256 of parsed
-	// block text). #320 excluded the blocks it changed (ER-1/ER-3 gained a
-	// Stands on: line, ER-7/ER-12 converted the §1–§2 positional token); ER-16
-	// is pinned: research-320 finding 6 confirmed its wording is generic and
-	// needs no edit.
-	//
-	// #322 maintenance (the sanctioned edit): ER-9's pre-#320 hash and ER-12's
-	// missing entry are replaced by pins of the CORRECTED blocks, computed from
-	// the constants at the top of this file — section 15 asserts the same bytes
-	// with a readable diff. And ER-18..ER-23 join the set: #320 landed, so the
-	// foundation blocks are no longer a live deliverable — pinning them closes
-	// the append-inside-an-ER-block-run path with no new machinery (adopted
-	// from Bentham's post-#320 residual, earmarked for #318; taken here as the
-	// same one-line close, earlier).
-	//
-	// #330 maintenance (the sanctioned edit, AMENDED body 14:31): ER-3 gains its
-	// FIRST pin and ER-10's static pre-#330 hash is re-pinned, both from the
-	// POST-edit constants at the top of this file — the pin-caveat there
-	// applies: these pins prove no drift SINCE the edit, not that the edit was
-	// right. ER-12's pin follows CORRECTED_ER12, whose Stands on: line #330
-	// amends. ER-4 stays on its untouched pin — #330 explicitly keeps its
-	// Evidence line's `(§7.1's operative sentence)` navigation note, so that
-	// existing pin IS the acceptance check for "ER-4 unchanged" (no duplicate
-	// assertion below, by design).
-	//
-	// #369 maintenance (Bentham's review finding, folded in before merge): ER-26
-	// is pinned in the slice that MINTS it, rather than left for a later one. The
-	// remainder pin above excludes it, and under #322/#330 that exclusion bought a
-	// preserved pre-edit anchor — but this slice re-derives the remainder, so the
-	// exclusion buys nothing here and would cost ER-26 every byte-level guard it
-	// otherwise inherits: a silent later edit of its text would trip only the
-	// format checks. Pinning here is preferred over dropping it from the exclusion
-	// set, which would couple the remainder pin to ER-26's content and force a
-	// remainder repin on every future sanctioned edit of it. This is the
-	// post-#320 residual (ER-1/ER-7 still unpinned because #320 edited and
-	// deferred) not repeated.
-	//
-	// #422 maintenance (PO ruling, Gama 2026-09-27, on #422): the dated probe
-	// scripts these blocks cite were deleted from main, so each citation now
-	// points at a commit permalink (the same path at 037ab3b). ER-5, ER-6, ER-8
-	// and ER-14 are repinned from the post-edit bytes; EDITED_ER3 and
-	// CORRECTED_ER9 carry the same conversion. Only the citation tokens moved —
-	// no rule text. Same caveat: the pins prove no drift SINCE this edit.
-	//
-	// #704 maintenance (PO issue #704): ER-13's Evidence line moves from
-	// `entity.js:296-327` (the 2026-08-06 pin at 82cb25b) to `:369-378` on
-	// entu-api 31a7319. ER-13 is repinned from the post-edit bytes; only the
-	// citation moved — no rule text.
+	// Blocks pinned byte-exact (sha256 of parsed block text). Edited blocks pin to the
+	// constants at the top; repin from post-edit bytes only behind a PO-ruled edit.
 	const UNTOUCHED_SHA256: Record<string, string> = {
 		'ER-2': '01cecca21a2ac74eedd7e04a0c3ff94a14f55c8d2d3ef5951016d769c4edf9dc',
 		'ER-3': sha256(EDITED_ER3),
@@ -1070,18 +712,10 @@ describe('#320 fence: §1/§2 prose and unmandated blocks stay byte-identical', 
 	});
 });
 
-// ── 14. #320 review findings: citation hygiene the earlier guards missed ─────
-
 describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
-	// All four landed green before these assertions existed, which is why they
-	// exist. Each is a class of citation the identifier scheme was built to
-	// retire, and each is checkable mechanically.
 
 	it('no rule block cites this document by line number (a self-citation repoints on any insertion above it)', () => {
-		// Worse than the `(§1–§2)` token the scheme already forbids: a section
-		// token at least survives edits inside the section. It is also not one of
-		// the three sanctioned evidence forms (entu-api file:line, probe artifact
-		// path, [unverified]). Cite the rule's identifier instead.
+		// Cite the rule's identifier instead: a doc line number repoints on any insertion.
 		for (const b of blocks) {
 			expect(
 				/doc\s+line\s+\d+/i.test(b.text),
@@ -1091,10 +725,7 @@ describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
 	});
 
 	it('no ER token is cited as a dash-range with another ER token — ranges presume the contiguous ordering the scheme denies', () => {
-		// `ER-18–ER-21` can only be read by treating the numbers as an ordered
-		// sequence; the scheme declares them opaque and creation-order. It also
-		// hides the interior ids from the resolver above (ID_TOKEN sees only the
-		// endpoints), so a dangling middle reference would never be caught.
+		// Ids are opaque, and a range hides its interior ids from the resolver.
 		const RANGE = /ER-\d+\s*[–—-]\s*ER-\d+/;
 		const m = doc.match(RANGE);
 		expect(
@@ -1104,10 +735,7 @@ describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
 	});
 
 	it('the rights-type-set rule states the seven names and makes no claim about what the document as a whole evidences', () => {
-		// Its source (entity.js:21-29) evidences the set. It cannot evidence a
-		// meta-claim about the rest of this document — and the one it asserted
-		// ("no ordering among the tiers") is denied by ER-5 and by the tier fold
-		// at aggregate.js:185-209, leaving two identified rules in contradiction.
+		// Its source evidences the set only, not a claim about the rest of the doc.
 		const b = blockMatching(SWEEP_320[0][0], SWEEP_320[0][1]);
 		for (const name of [
 			'_noaccess',
@@ -1127,10 +755,6 @@ describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
 	});
 
 	it('a foundation named on a `Stands on:` line never names its dependent back (the relation is one-way)', () => {
-		// The scheme paragraph: "additive and one-way: a foundation names no
-		// dependents in return". A foundation that cannot be quoted without its
-		// dependent is not a foundation. Mirror of the Qualifications pair check,
-		// in the inverse direction.
 		const dependentsOf = new Map<string, string[]>();
 		for (const b of blocks) {
 			for (const l of b.text.split('\n').filter((x) => /^\s*Stands on:/i.test(x))) {
@@ -1153,17 +777,8 @@ describe('citation hygiene: the forms a rule block may NOT use to cite', () => {
 	});
 });
 
-// ── 15. #322: two corrections, identifiers kept (PO ruling on #316, 2026-09-11) ──
-
 describe('#322: ER-9 restated direction-free — the ranking framing goes, the demotion claim stays', () => {
-	// The ruling verbatim: "restate ER-9 direction-free — ER-6 gives the whole
-	// replacement mechanism; a tier-ranking rule minted to save the old sentence
-	// would extend evidence." Gama's corrected-vs-superseded test (#322 release
-	// comment): a pre-edit citation of ER-9 for "a later grant can silently
-	// demote the creator from owner" remains sound; a citation of it for "grant
-	// tiers are ranked" was never supported — the document never established
-	// that ranking, and ER-22 declines it outright. No sound citation breaks,
-	// so it is the same rule, and the identifier is KEPT.
+	// A correction, not a supersession: the demotion claim survives, so ER-9 keeps its id.
 
 	const er9 = () => blocks.find((b) => b.id === 'ER-9');
 
@@ -1178,11 +793,7 @@ describe('#322: ER-9 restated direction-free — the ranking framing goes, the d
 
 	it('ER-9 contains no ranking or direction language', () => {
 		const b = er9();
-		// 'demote' is deliberately NOT in this list: the silent demotion of the
-		// creator IS the claim, and it survives. What goes is the comparative
-		// tier-ranking framing ('lower'/'higher', 'non-monotonic', 'both
-		// directions', 'the reverse') that presupposes a rank the document's
-		// evidence never establishes.
+		// 'demote' is not listed: the silent demotion is the claim and stays.
 		const RANKING = [/\blower\b/i, /\bhigher\b/i, /monotonic/i, /\bdirections?\b/i, /\breverse\b/i];
 		for (const p of RANKING) {
 			expect(
@@ -1209,14 +820,7 @@ describe('#322: ER-9 restated direction-free — the ranking framing goes, the d
 	});
 
 	it('ER-9 carries a one-line dated correction note INSIDE the blockquote run', () => {
-		// The scheme marks supersession and says nothing about correction, which
-		// leaves correction as the unmarked — and therefore cheaper — path
-		// everything would drift toward. In this document of all documents a
-		// rule's text must not change with no trace (Gama, #322): a reader who
-		// remembers the old sentence must see the ranking went deliberately.
-		// Inside the contiguous `>` run is the parser boundary that matters — a
-		// note after a blank line falls out of the block and out of every quote
-		// of it (the section-11 orphan fact).
+		// Correction must leave a trace, inside the `>` run so every quote of the block carries it.
 		const b = er9();
 		const noteLines = (b?.text ?? '')
 			.split('\n')
@@ -1262,14 +866,8 @@ describe("#322: ER-12's positional citation becomes ER-7 — a citation swap ins
 			'Conflating the two axes answers "who can see this?" wrongly in either direction',
 			'it distinguishes what each one decides',
 			'Evidence: `aggregate.js:86,94,113-121,269-275` (the `_sharing` axis)',
-			// the evidence line's own §7.3 mentions are navigation notes and STAY —
-			// only the rule sentence's citation converts (the half a reader quotes):
 			'(the `_inheritrights` cascade, §7.3) — `entu-api` source-read 2026-09-10',
 			'Clarifying distinction over ER-18, ER-19, ER-20, ER-21 and §7.3; adds no new claim.',
-			// #330: the Stands on: line is the ONE line that moves after #322 —
-			// it gains ER-7 (the mirror fix). The pre-#330 verbatim
-			// 'Stands on: ER-18, ER-20, ER-1.' is retired here on the amended
-			// #330 body's authority; the #330 section below asserts the new line.
 			'Stands on: ER-7, ER-18, ER-20, ER-1.'
 		]) {
 			expect(t.includes(s), `ER-12 changed beyond the sanctioned edits — missing: "${s}"`).toBe(true);
@@ -1281,22 +879,8 @@ describe("#322: ER-12's positional citation becomes ER-7 — a citation swap ins
 	});
 });
 
-// ── 16. #330: two positional citations become identifiers, plus ER-12's missing mirror ──
-//
-// Per-edit assertions, stated so a failure names the ruling it violates
-// (#330 AMENDED body 14:31 — the amendment comment is the record for the
-// citation-vs-navigation rule). The first body version's criterion — a
-// blanket grep for any `§` inside an ER block — is FORBIDDEN: the doc keeps
-// navigation `§`s inside ER blocks on purpose (#322 ruling on ER-12's
-// Evidence line; same reading for ER-4's), and a grep cannot tell a citation
-// from a navigation note. Every check below is per-edit and per-line.
-
 describe("#330 edit 1: ER-3's rule sentence cites ER-1, not §3", () => {
-	// Citation, not navigation: no ER id was present, so '(§3)' carried the
-	// reference by itself — insert a section and it silently points at a
-	// different rule. ER-1 is the identifier that content now lands on (ER-4
-	// already states the mapping in words: "the gate conjunction stated in
-	// ER-1").
+	// '(§3)' carried the reference by itself, so it was a citation and converts to ER-1.
 	const er3 = () => blocks.find((b) => b.id === 'ER-3');
 	const ruleSentence = () => (er3()?.text ?? '').split('\n')[0];
 
@@ -1320,10 +904,6 @@ describe("#330 edit 1: ER-3's rule sentence cites ER-1, not §3", () => {
 });
 
 describe("#330 edit 2: ER-10's own provenance moves onto its Evidence line as `Distills §4.`", () => {
-	// §4 is ER-10's provenance, not a dependency on another rule — but sitting
-	// inside the rule sentence it READS as a citation. The protected
-	// `Distills §n` form keeps the information and takes it out of the
-	// sentence a reader quotes.
 	const er10 = () => blocks.find((b) => b.id === 'ER-10');
 
 	it("ER-10's rule sentence contains no '§'", () => {
@@ -1358,27 +938,14 @@ describe("#330 edit 3: ER-12's `Stands on:` mirror gains ER-7 — not a § edit"
 	});
 
 	it("ER-12's Evidence line is byte-identical to the #322 pin — both §7.3 mentions stay", () => {
-		// #322 ruled these navigation notes (PO ruling, 2026-09-11 doorbell) and
-		// #330's amendment explicitly declines to reopen it — the first body
-		// version targeted this line and was withdrawn. Byte-equality, so a
-		// "helpful" conversion of either §7.3 fails loudly with a readable diff.
+		// Byte-equality, so converting either §7.3 fails with a readable diff.
 		const evidence = (er12()?.text ?? '').split('\n').find((l) => l.startsWith('Evidence:'));
 		expect(evidence).toBe(ER12_EVIDENCE_LINE_322);
 	});
 });
 
 describe('#330 fence: provenance lines survive, and 10 `Distills §` lines is the sanctioned state', () => {
-	// #330 acceptance item 4 as amended: the assertion names the LITERAL test,
-	// not a bare number — "how many §s does the scheme keep?" has at least
-	// three right answers on this doc depending on the criterion, and a bare
-	// count is only checkable if it says what counts as one. Criterion here:
-	// full raw doc lines containing the literal string 'Distills §'.
-	//
-	// The 9 lines below are the pre-#330 set, verbatim with their '> ' markers.
-	// ER-10's edit CREATES a 10th (its Evidence line, EDITED_ER10) — so the
-	// post-edit count reads 10, and that is the sanctioned state, NOT drift.
-	// Asserting the 9 originals AND the 10th explicitly is what keeps the two
-	// readings from ever being confused.
+	// Counted as raw doc lines containing the literal 'Distills §': 9 originals + ER-10's.
 	const ORIGINAL_DISTILLS_LINES = [
 		'> Evidence: `aggregate.js:312-320`. Distills §1; adds no new claim.',
 		'> Evidence: `aggregate.js:312-320` (the write that produces the snapshot). Distills §1; adds no new claim.',
@@ -1410,70 +977,11 @@ describe('#330 fence: provenance lines survive, and 10 `Distills §` lines is th
 		).toEqual([...wanted].sort());
 	});
 
-	// ER-4's Evidence line ("ER-3 above (§7.1's operative sentence). Distills
-	// §7.1 + §3.") gets NO assertion here on purpose: #330 keeps it unchanged,
-	// and section 13's byte pin ('ER-4': 'd8de9757…') already IS that check.
-	// A duplicate would be a second place to loosen the same fence.
 });
 
 describe('#322/#330: outside the sanctioned blocks, the document is byte-identical', () => {
-	// Complements the existing fences: section 13's pins hold the other ER
-	// blocks and the §1/§2 checksum holds the foundation prose — this holds
-	// EVERYTHING else (§3–§7 prose, headers, code fences, trailers), so the
-	// block-list mandate cannot quietly widen. #317's method rules restated as
-	// one hash: distil-never-extend, no renumbering, §-prose untouched.
-	//
-	// #330 maintenance — the CHOICE, stated: the exclusion set WIDENS from
-	// {ER-9, ER-12} to {ER-3, ER-9, ER-10, ER-12} (the union of #322's and
-	// #330's sanctioned blocks) and the hash is recomputed over the SAME
-	// pre-edit document minus the widened set. Widening was chosen over
-	// re-deriving from post-edit bytes because it keeps this fence's guarantee
-	// anchored to the pre-#330 state: it passes BEFORE and AFTER the #330
-	// edits, so any red here means unsanctioned drift, never the sanctioned
-	// edit itself — the per-block pins (EDITED_ER3/EDITED_ER10/CORRECTED_ER12,
-	// section 13) are what carry #330's RED. Derivation: doc at origin/main
-	// 38cffec (== b3fa46b doc bytes), drop the four blockquote runs, sha256.
-	//
-	// #369 maintenance (PO-approved 2026-09-15, Gama) — the exclusion set widens
-	// again, to {ER-3, ER-9, ER-10, ER-12, ER-26}, for ER-26 (a reference's own
-	// `.string` carries the referenced person's name and email, whatever `props`
-	// asked for). The #330 CHOICE above cannot be repeated here, and the reason is
-	// worth stating: #322 and #330 EDITED existing blocks, so excluding them
-	// preserved a pre-edit anchor. #369 ADDS — a new §7.5 heading, its paragraph,
-	// and the blank line that separates the new blockquote run — and added lines
-	// outside the excluded blocks land in the remainder by construction. No
-	// exclusion set can hold the old anchor, so the pin is RE-DERIVED from
-	// post-#369 bytes, and it carries #330's caveat in full: it proves no drift
-	// SINCE this edit, not that this edit was right. Derivation: doc at this
-	// commit, drop the five blockquote runs, sha256.
-	//
-	// #372 maintenance: same shape again for ER-27 and its §7.6 home — an
-	// addition, so the remainder re-derives rather than preserving an anchor, and
-	// the same caveat rides along. ER-27 is pinned below in this same slice.
-	//
-	// #411 maintenance (PO ruling, Gama 2026-09-18, Mihkel releasing the issue and
-	// widening the docs carve-out) — the FIRST repin that touches no ER block at
-	// all. The edit is one sentence of §-prose inside the "What this changes"
-	// SUPERSEDED marker: it claimed ~15 person prop-defs still sat at `domain`,
-	// true when written 2026-08-06 and false since #181 flipped them on
-	// 2026-08-27. A stale privacy claim on a live-pilot database is exactly what
-	// this fence must not preserve, so the mandate widens to it by name: prose
-	// correction inside that marker, nothing else — no ER block, no renumbering,
-	// no other §-prose. Re-derived from post-#411 bytes; #330's caveat rides on
-	// unchanged, so this proves no drift SINCE this edit, never that the edit was
-	// right. Provenance: mvox-app#411.
-	//
-	// #422 maintenance (PO ruling, Gama 2026-09-27, on #422): citations of the
-	// deleted dated probe scripts become commit permalinks — inside the ER-5/6/8/14
-	// blocks (repinned in section 13) and in the §7.1–§7.3 "Probe artifacts" /
-	// "Live-confirmed" prose lines. Only the cited path tokens change. Re-derived
-	// from post-#422 bytes; #330's caveat rides on unchanged.
-	//
-	// #704 maintenance (PO issue #704): references only — `inviteData.ts` →
-	// `inviteCreate.ts` (header delta, §7.2 prose), the header delta's
-	// `entity.js` range (as ER-13, repinned in section 13), and the two
-	// superseded `docs/migration/*` paths qualified with their repo
-	// (mvox_v4e_web). Re-derived from post-#704 bytes; #330's caveat rides on.
+	// Holds everything outside the excluded blocks (§3–§7 prose, headers, code fences).
+	// Repin from post-edit bytes behind a PO-ruled edit: drop the listed blocks, sha256.
 	const DOC_MINUS_TARGETS_SHA256 = '9105883b938441a2746a537f743e4817689f14b8d19b1f2e9fe2a287d6798db9';
 
 	const docExcludingBlocks = (ids: string[]): string => {

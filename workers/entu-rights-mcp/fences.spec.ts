@@ -24,7 +24,7 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 		expect(
 			sha256('src/rights-model-identifiers.spec.ts'),
 			'the guard spec is the doc\'s one mechanical guard and #318 must not touch it — the parser here is a second CONSUMER of its grammar, never an edit to it. Repin only from a slice whose mandate names that file.'
-		).toBe('d2c8ee9dce45064e0024fee7d6da87b238101350c97a8d3b35a93c7f53227085');
+		).toBe('e5e9a086ba4e7c6e72f7034739b9561c5944f7c3e6cbff3364b2a32b9a61dc3d');
 	});
 });
 
