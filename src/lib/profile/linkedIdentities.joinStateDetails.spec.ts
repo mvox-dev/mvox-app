@@ -1,45 +1,9 @@
-// #467 RED — the roster's DATED join read: `listJoinStateDetails`.
-//
-// Contract under test (GREEN implements exactly this, in THIS module — the
-// sibling of `listJoinStates`, sharing its internal `entity/{personId}` read,
-// never a duplicate fetch path):
-//
-//   export type JoinStateDetail = { state: JoinState; at?: string };
-//   listJoinStateDetails(cfg: EntuCfg, personIds: string[], fetchImpl?)
-//     : Promise<Record<string, JoinStateDetail>>   // keyed by personId
-//   readPropertyCreatedAt(cfg: EntuCfg, propertyId: string, fetchImpl?)
-//     : Promise<string | undefined>
-//
-// The dates (issue #467, Mihkel's table): every property VALUE in Entu carries
-// `created: {at, by}`, but ONLY `GET /property/{_id}` returns it — the entity
-// read never does (https://github.com/mvox-dev/mvox-app/blob/037ab3bbae3644a09fe863a4e7ad123eaeffb3f2/scripts/migrations/probes/probe-property-value-created-stamp-2026-09-21.ts). The value
-// `_id`s needed are already in the `entity/{personId}?props=entu_user,_viewer`
-// response this module reads today:
-//   invited → the masked placeholder's own `_id` ({_id, invite:'***'})
-//   joined  → the bound identity's own `_id`   ({_id, uid, provider, email})
-//   absent  → NO follow-up read at all (the date for that display line is the
-//             member entity's `_created`, threaded by rosterData.ts — not this
-//             module's business)
-//
-// Failure split, per the house #456 shape:
-//   entity read HTTP failure → THROW (existing listLinkedIdentities behaviour,
-//     unchanged);
-//   property read non-2xx or missing `created.at` → console.warn NAMING the
-//     property id, `at` undefined, the STATE still returned, other rows
-//     untouched — skip-and-warn per row, never throw the batch.
-//
-// Withheld private bucket (no `_viewer` tell, #454) → the personId is OMITTED,
-// exactly as listJoinStates does today — and no property read is ever issued
-// for a person whose entries this caller never observed.
-//
-// PII (ER-26): `created.by` is a person reference and must never leave the
-// reader — the detail shape is {state, at} and nothing else; the full-toEqual
-// assertions below pin that structurally.
-
+// listJoinStateDetails: the roster's dated join read.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import * as linkedIdentities from './linkedIdentities';
 import * as inviteData from '$lib/invite/inviteData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type JoinState = 'absent' | 'invited' | 'joined';
 type JoinStateDetail = { state: JoinState; at?: string };
@@ -54,9 +18,6 @@ type ReadPropertyCreatedAt = (
 	fetchImpl?: typeof fetch
 ) => Promise<string | undefined>;
 
-// Dynamic-shaped access: at RED the exports do not exist yet; each test then
-// fails on the call rather than the whole file failing at module link time
-// (the linkedIdentities.joinStates.spec.ts idiom).
 const listJoinStateDetails = (
 	linkedIdentities as unknown as { listJoinStateDetails?: ListJoinStateDetails }
 ).listJoinStateDetails;
@@ -65,29 +26,14 @@ const readPropertyCreatedAt = (
 ).readPropertyCreatedAt;
 const listJoinStates = linkedIdentities.listJoinStates;
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt-admin' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('sampledb', 'jwt-admin');
 
 type WireEntry = { _id: string; uid?: string; provider?: string; email?: string; invite?: string };
 
-/** A grant admitting the caller to the private bucket (#454 tell). */
 const ADMITTED = [{ _id: 'gr-1', reference: 'me', property_type: '_editor' }];
 
-/** The GET /property/{_id} body shape the 2026-09-21 live probe pinned:
- *  {_id, type, string, entity, created:{at, by}}. `by` is DELIBERATELY present
- *  in every fixture — the reader must drop it (ER-26). */
 type PropFixture = { created?: { at?: string; by?: string } } | { status: number };
 
-/**
- * Routed fetch stub covering BOTH wire shapes this producer touches:
- *   entity/{id}?props=entu_user,_viewer — answered per-person from `persons`
- *     (WireEntry[] | 'no-key' | 'withheld' | null, the joinStates.spec idiom)
- *   property/{_id} — answered from `props` ({created:{at,by}} or {status})
- * Anything else answers 404 — an unrouted request is a contract violation.
- */
 function routedFetch(
 	persons: Record<string, WireEntry[] | 'no-key' | 'withheld' | null>,
 	props: Record<string, PropFixture> = {}
@@ -138,7 +84,6 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 		});
 		expect(propertyCalls(fetchImpl)).toHaveLength(1);
 		expect(propertyCalls(fetchImpl)[0]).toContain('property/eu-p');
-		// ER-26: the author must not survive extraction in ANY shape.
 		expect(JSON.stringify(details)).not.toContain('author-person-1');
 	});
 
@@ -251,10 +196,6 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 		warnSpy.mockRestore();
 	});
 
-	// #467 review F1 — a NON-STRING `created.at` is as unusable as a missing
-	// one, and worse if it leaks: a JSON `null` typed `string` reaches the
-	// roster's date formatter as `new Date(null)` → a fabricated 1970-01-01.
-	// Same skip-and-warn answer as the missing key.
 	it('2xx with created.at = null (non-string) → undefined + warn naming the id, never a null typed as string', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'v-4', created: { at: null } }));
@@ -292,6 +233,4 @@ describe('INVITE_LIFETIME_MS — the ONE lifetime constant (docs/architecture/in
 });
 
 // (*MVOX:Tallis* — #467 RED: listJoinStateDetails/readPropertyCreatedAt contract,
-//  fetch-mock idiom from linkedIdentities.joinStates.spec.ts, property/{id} mock
-//  shape from repertoire/fileUrls.spec.ts)
 // (*MVOX:Josquin* — #467 review F1: non-string created.at is the same skip-and-warn)

@@ -3,6 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createRouteLoadMachine, type GatedRouteLoadStatus } from '$lib/loading/routeLoad';
 import { clearAll, setToken } from '$lib/auth/storage';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 const SAMPLEDB = { db: 'sampledb' };
 
@@ -10,14 +11,6 @@ function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
 	e.name = 'AuthExpiredError';
 	return e;
-}
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	const promise = new Promise<T>((res) => {
-		resolve = res;
-	});
-	return { promise, resolve };
 }
 
 function harness(gate: () => Promise<boolean>) {

@@ -20,12 +20,9 @@ import {
 	type RepertoireStatus,
 	type ManageRightsState
 } from './repertoireActions';
+import { deferred, json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
@@ -115,7 +112,6 @@ describe('createRepertoireItem', () => {
 });
 
 describe('updateRepertoireStatus', () => {
-	type Call = { url: string; method: string; body?: unknown };
 
 	function makeMockFetch(statusValueIds: string[] = ['sv-1']) {
 		const calls: Call[] = [];
@@ -205,7 +201,6 @@ describe('updateRepertoireStatus', () => {
 });
 
 describe('pinEdition', () => {
-	type Call = { url: string; method: string; body?: unknown };
 
 	function makeMockFetch(editionValueIds: string[]) {
 		const calls: Call[] = [];
@@ -366,7 +361,6 @@ describe('createProgramItem', () => {
 });
 
 describe('updateProgramItemOrdinal', () => {
-	type Call = { url: string; method: string; body?: unknown };
 
 	function makeMockFetch(ordinalValueIds: string[] = ['ov-1']) {
 		const calls: Call[] = [];
@@ -696,16 +690,6 @@ describe('createRepertoireWriteQueue', () => {
 			reconcile: vi.fn(),
 			revert: vi.fn()
 		};
-	}
-
-	function deferred() {
-		let resolve!: () => void;
-		let reject!: (e: unknown) => void;
-		const promise = new Promise<void>((res, rej) => {
-			resolve = res;
-			reject = rej;
-		});
-		return { promise, resolve, reject };
 	}
 
 	it('fires the write IMMEDIATELY on request — per-tap, no batching, no debounce', () => {

@@ -12,12 +12,9 @@ import {
 	type Level,
 	type MyProfile
 } from './profileData';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
@@ -344,7 +341,6 @@ describe('profilesByLevel — pure index by visibility level', () => {
 
 describe('saveProfileFields — overwrite-first per field, never a create', () => {
 	type Values = Array<{ _id: string; string: string }>;
-	type Call = { url: string; method: string; body: unknown };
 
 	// GET answers only the projected prop, as Entu does.
 	function makeFetchMock(

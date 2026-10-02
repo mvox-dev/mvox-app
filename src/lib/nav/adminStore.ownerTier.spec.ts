@@ -1,31 +1,8 @@
-// #294 RED — `resolveOwnerTier`: the owner/editor split behind the roster's
-// invite controls.
-//
-// PO ruling (issue #294, 2026-09-09): the three-state DISPLAY is for every
-// admin (`admin === 'admin'` — `_owner` OR `_editor` on the database entity,
-// adminStore.ts:84-86), but the three CONTROLS (kutsu / saada uuesti / tühista
-// kutse) gate on `_owner` ONLY. That is not mvox inventing a distinction — the
-// platform enforces it: the 2026-09-09 admin-cascade probe minted onto another
-// member's person as a db-entity `_owner` (HTTP 200) and was refused as a
-// db-entity `_editor` (HTTP 403, Entu's own text: "User not in _owner
-// property"). The only choice is whether the boundary is visible or discovered
-// by failure.
-//
-// Contract under test (GREEN implements exactly this, in THIS module — it
-// already owns the database-entity rights read; #173's pre-resolved-id
-// shortcut carries over):
-//
-//   resolveOwnerTier(cfg: EntuCfg, personId: string, fetchImpl?, dbEntityId?)
-//     : Promise<'owner' | 'editor' | 'none' | 'error'>
-//
-// 'error' vs 'none' mirrors resolveAdmin's discipline: 'none' is a RIGHTS
-// ANSWER (the entity was read, the person is in neither list); an unresolvable
-// prerequisite is 'error', never a silent "no rights". Deliberately NOT a
-// general owner/editor capability layer — one boundary is not a role system.
-
+// resolveOwnerTier: the owner/editor split behind the roster's invite controls.
 import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import * as adminStoreModule from './adminStore';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type OwnerTier = 'owner' | 'editor' | 'none' | 'error';
 type ResolveOwnerTier = (
@@ -35,24 +12,13 @@ type ResolveOwnerTier = (
 	dbEntityId?: string
 ) => Promise<OwnerTier>;
 
-// Dynamic-shaped access: at RED the export does not exist yet; each test then
-// fails on the call rather than the whole file failing at module link time.
 const resolveOwnerTier = (adminStoreModule as unknown as { resolveOwnerTier?: ResolveOwnerTier })
 	.resolveOwnerTier;
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'test-token' };
+const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
-function json(body: unknown, status = 200) {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
-
-/** Routed mock: the database-entity lookup, then the entity GET by id. */
 function mockFetch(opts: {
 	database?: unknown;
 	databaseStatus?: number;

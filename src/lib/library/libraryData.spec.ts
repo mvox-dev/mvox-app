@@ -1,3 +1,4 @@
+// The library read and write layer: works, editions, copies and lendings on the wire.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from '$lib/profile/profileData';
@@ -22,18 +23,13 @@ import {
 	type CopyAvailability,
 	type LoanChain
 } from './libraryData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
 });
-
-// ── listWorks ──────────────────────────────────────────────────────────────
 
 describe('listWorks', () => {
 	it('maps name,composer into Work[]', async () => {
@@ -68,8 +64,6 @@ describe('listWorks', () => {
 	});
 });
 
-// ── listEditions ───────────────────────────────────────────────────────────
-
 describe('listEditions', () => {
 	it('maps name,publisher into Edition[], scoped by _parent.reference=workId', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -90,15 +84,6 @@ describe('listEditions', () => {
 		expect(url).not.toMatch(/\bcost\b/);
 	});
 });
-
-// ── #89 TR.1 — edition file/external_link visibility (post sharing-widen) ───
-// The #89 sharing widen makes `edition.file` and `edition.external_link`
-// domain-visible (previously still-private per the T6.1/T6.2 ruled set). The
-// browse data layer must now query both and surface them on Edition:
-//   external_link (multi-value string) → externalLinks: string[]
-//   file (Entu file prop: _id/filename/filesize/filetype, entu-www files doc)
-//     → files: Array<{ id, filename, filesize, filetype }>
-// Absent props → empty arrays, never undefined.
 
 describe('listEditions — file/external_link widen (#89)', () => {
 	it('props query includes external_link and file', async () => {
@@ -126,7 +111,6 @@ describe('listEditions — file/external_link widen (#89)', () => {
 							{ _id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }
 						]
 					},
-					// neither prop present — still an empty-array shape, not undefined
 					{ _id: 'edition-2', name: [{ string: 'Peters arrangement' }] }
 				]
 			})
@@ -194,8 +178,6 @@ describe('listAllEditions — file/external_link widen (#89)', () => {
 	});
 });
 
-// ── listAllEditions ───────────────────────────────────────────────────────
-
 describe('listAllEditions', () => {
 	it('maps name,publisher,_parent into Edition[] with workId from _parent[0].reference', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -238,8 +220,6 @@ describe('listAllEditions', () => {
 	});
 });
 
-// ── listCopies ─────────────────────────────────────────────────────────────
-
 describe('listCopies', () => {
 	it('maps name,copy_number into Copy[], scoped by _parent.reference=editionId', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -259,8 +239,6 @@ describe('listCopies', () => {
 	});
 });
 
-// ── listLendings ───────────────────────────────────────────────────────────
-
 describe('listLendings', () => {
 	it("maps copy,member,assigned_at,assigned_until,returned_at into Lending[]; absent returned_at → ''", async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(
@@ -272,7 +250,6 @@ describe('listLendings', () => {
 						member: [{ reference: 'member-1' }],
 						assigned_at: [{ date: '2026-07-01' }],
 						assigned_until: [{ date: '2026-08-01' }]
-						// returned_at absent — still out
 					}
 				]
 			})
@@ -294,8 +271,6 @@ describe('listLendings', () => {
 		expect(url).not.toMatch(/\brenewed_at\b/);
 	});
 });
-
-// ── deriveCopyAvailability — pure, no fetch ──────────────────────────────────
 
 describe('deriveCopyAvailability', () => {
 	const lendings: Lending[] = [
@@ -338,21 +313,10 @@ describe('deriveCopyAvailability', () => {
 	});
 });
 
-// ── resolveBorrowerNames — batched, dedup, domain-or-public scan ────────────
-
 function profile(sharing: MyProfile['_sharing'], name: string): MyProfile {
 	return { _id: `p-${sharing}`, name, email: '', _sharing: sharing };
 }
 
-/**
- * #469 review F2 — the real-names wire every borrower-name test now has to
- * answer, because this producer consults `roster_show_real_names` like every
- * other member-name surface. `records: null` means the toggle answers FALSE
- * (and the records read must then never be issued at all); a records array
- * means the toggle is ON and those `admin_member_record` rows are on offer.
- * Returns `undefined` for any url it does not own, so each test's own routes
- * stay in charge.
- */
 const RN_DB_ENTITY = 'db-ent-lib';
 function realNamesRoute(
 	url: string,
@@ -406,7 +370,6 @@ describe('resolveBorrowerNames', () => {
 		});
 		const names = await resolveBorrowerNames(cfg, ['member-1', 'member-1'], fetchImpl);
 		expect(names.get('member-1')).toBe('Ada Lovelace');
-		// deduped — one member lookup + one profile lookup, not two of each
 		const memberLookups = fetchImpl.mock.calls.filter(([u]) => String(u).includes('entity/member-1'));
 		expect(memberLookups).toHaveLength(1);
 	});
@@ -448,16 +411,6 @@ describe('resolveBorrowerNames', () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		await expect(resolveBorrowerNames(cfg, ['member-4'], fetchImpl)).rejects.toThrow(/500/);
 	});
-	// ── #469 review F2 — the library obeys roster_show_real_names ─────────────
-	//
-	// HISTORY, named not deleted: the library is the surface Henry's 2026-09-06
-	// #269 scope ruling named BY NAME as keeping profile names ("pickers, chips,
-	// the agenda, event pages, the library"). Mihkel's #469 word (2026-09-23:
-	// "all places we are showing member names ... must obey the admin setting")
-	// supersedes it — the lending rows and the bulk-checkout member picker are
-	// both fed from this map, and a collective with the toggle on can no longer
-	// read 'Gone Girl' here while the roster, agenda and event page say
-	// 'Rita Real'.
 	function twoBorrowerWire(records: Array<{ person?: string; name?: string }> | null) {
 		return vi.fn().mockImplementation((url: string) => {
 			const rn = realNamesRoute(url, records);
@@ -521,10 +474,6 @@ describe('resolveBorrowerNames', () => {
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	// The overlay degrades fail-SOFT while the base resolution stays fail-loud:
-	// an unreadable `admin_member_record` must not make a lending row
-	// unresolvable, only un-overlaid — the direction every real-names degrade
-	// takes, and never the reverse.
 	it('an unreadable records read degrades to PROFILE names instead of rejecting', async () => {
 		const fetchImpl = vi.fn().mockImplementation((url: string) => {
 			if (url.includes('_type.string=admin_member_record')) {
@@ -551,8 +500,6 @@ describe('resolveBorrowerNames', () => {
 	});
 });
 
-// ── deriveEditionAvailability — pure, no fetch ──────────────────────────────
-
 describe('deriveEditionAvailability', () => {
 	const copies: Copy[] = [
 		{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
@@ -578,8 +525,6 @@ describe('deriveEditionAvailability', () => {
 	});
 });
 
-// ── activeLendingForMemberInEdition — pure, no fetch ────────────────────────
-
 describe('activeLendingForMemberInEdition', () => {
 	const editionCopyIds = new Set(['copy-1', 'copy-2']);
 	const lendings: Lending[] = [
@@ -602,15 +547,11 @@ describe('activeLendingForMemberInEdition', () => {
 	});
 
 	it('ignores active lendings for copies outside the edition', () => {
-		// member-a has an active lending for copy-3, which is NOT in editionCopyIds
 		const outsideCopyIds = new Set(['copy-3']);
 		expect(activeLendingForMemberInEdition('member-a', outsideCopyIds, lendings)).toEqual(lendings[2]);
-		// But if we ask about a set that doesn't include copy-3:
 		expect(activeLendingForMemberInEdition('member-a', new Set(['copy-99']), lendings)).toBeUndefined();
 	});
 });
-
-// ── deriveWorkAvailability — pure, no fetch ───────────────────────────────
 
 describe('deriveWorkAvailability', () => {
 	const editions: Edition[] = [
@@ -630,7 +571,6 @@ describe('deriveWorkAvailability', () => {
 			{ id: 'l1', copyId: 'copy-1', memberId: 'm-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' },
 			{ id: 'l2', copyId: 'copy-3', memberId: 'm-b', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
 		];
-		// work-1 has 3 copies (copy-1, copy-2, copy-3), 2 lent => 1 available
 		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 1, total: 3 });
 	});
 
@@ -642,7 +582,6 @@ describe('deriveWorkAvailability', () => {
 		const lendings: Lending[] = [
 			{ id: 'l1', copyId: 'copy-other', memberId: 'm-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
 		];
-		// work-1 has 3 copies, none lent (copy-other belongs to work-2)
 		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 3, total: 3 });
 	});
 
@@ -657,8 +596,6 @@ describe('deriveWorkAvailability', () => {
 		expect(deriveWorkAvailability('work-1', editions, copies, lendings)).toEqual({ available: 3, total: 3 });
 	});
 });
-
-// ── resolveCopyNames — batched, dedup ─────────────────────────────────────
 
 describe('resolveCopyNames', () => {
 	it('resolves copy names from entity lookup; prefers name over copy_number', async () => {
@@ -708,10 +645,6 @@ describe('resolveCopyNames', () => {
 	});
 });
 
-// ── formatLoanChainLabel — pure, no fetch ────────────────────────────────────
-// #129 — loan entries must show the full chain: copy nr, work name, edition
-// name ("Copy #3 — Spem in alium / 40-part original"), not just "Copy #3".
-
 describe('formatLoanChainLabel', () => {
 	it('formats copy number + work name + edition name as "Copy #<n> — <work> / <edition>"', () => {
 		const chain: LoanChain = { copyNumber: 3, workName: 'Spem in alium', editionName: '40-part original' };
@@ -724,12 +657,6 @@ describe('formatLoanChainLabel', () => {
 		expect(formatLoanChainLabel(chain)).not.toContain('Copy #');
 	});
 });
-
-// ── resolveCopyChains — batched, dedup, follows copy -> edition -> work ──────
-// #129 — network fallback for the loan → copy → edition → work chain. Work
-// names come from the ALREADY-LOADED `works` list (listWorks runs for every
-// viewer on page load — see +page.svelte loadForSelected) — never fetched
-// here, matching the "no new API calls for data already loaded" AC.
 
 describe('resolveCopyChains', () => {
 	const works: Work[] = [{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }];
@@ -764,7 +691,6 @@ describe('resolveCopyChains', () => {
 			workName: 'Spem in alium',
 			editionName: '40-part original'
 		});
-		// The works list is provided, never fetched — only copy + edition lookups.
 		const workFetches = fetchImpl.mock.calls.filter((args) => String(args[0]).includes('entity/work-1'));
 		expect(workFetches).toHaveLength(0);
 	});

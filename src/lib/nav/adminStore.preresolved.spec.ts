@@ -1,28 +1,9 @@
-// src/lib/nav/adminStore.preresolved.spec.ts
-//
-// #173 RED — reduce admin page lookups: `resolveAdmin` must accept a
-// PRE-RESOLVED database entity id and, when one is provided, skip its internal
-// `resolveDatabaseEntityId` round-trip entirely.
-//
-// WHY: the /admin page load currently resolves the database entity THREE times
-// (page direct + inside resolveAdmin + inside resolveLibrarian). The id is
-// db-scoped and constant for the load — resolving it once and threading it
-// through is pure round-trip removal, no behavior change.
-//
-// Pinned contract (GREEN must implement):
-//   resolveAdmin(cfg, personId, fetchImpl?, dbEntityId?)
-//   - 4th param OPTIONAL — omitted, behavior is IDENTICAL to today (the
-//     existing adminStore.spec.ts pins that path; this file does not re-pin it).
-//   - Provided, resolveAdmin makes NO `_type.string=database` query: the ONLY
-//     wire traffic is the rights read `entity/{dbEntityId}?props=_owner,_editor`
-//     against the PROVIDED id.
-//   - The rights answer ('admin' / 'not-admin') is computed exactly as before.
+// resolveAdmin skips the database lookup when given its id.
 import { describe, it, expect, vi } from 'vitest';
 import { resolveAdmin as resolveAdminActual, type AdminState } from './adminStore';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json } from '$lib/testing/entuFetchKit';
 
-// The #173 target signature. Cast (rather than raw extra-arg call) so this
-// spec is typecheck-clean in RED; the runtime assertions below do the failing.
 type ResolveAdminPreResolved = (
 	cfg: EntuCfg,
 	personId: string,
@@ -35,17 +16,6 @@ const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
-function json(body: unknown, status = 200) {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
-
-/** Routed stub: serves BOTH the database lookup (so a leftover internal
- *  resolution still completes and the spec fails on the COUNT assertions, not
- *  on a broken flow) and the rights read by id. */
 function mockFetch(rights: { _owner?: unknown[]; _editor?: unknown[] }) {
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
@@ -80,7 +50,6 @@ describe('resolveAdmin with a pre-resolved dbEntityId (#173)', () => {
 
 		expect(state).toBe('admin');
 		const urls = calledUrls(fetchImpl);
-		// ONE wire call total: the rights read against the pre-resolved id.
 		expect(urls).toHaveLength(1);
 		expect(urls[0]).toContain(`/entity/${DB_ENTITY}`);
 		expect(urls[0]).toContain('props=_owner');

@@ -1,11 +1,6 @@
+// The profile edit queue reports only what the server confirmed.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-
-// T4.6/#26 — the honest-round-trip orchestrator (AC2). Mock applyProfileSave at its
-// boundary; ProfileSaveError is defined INSIDE the mock so the queue's
-// `instanceof ProfileSaveError` matches the instances these tests reject with (the
-// same technique page.admin-invite.spec.ts uses for InviteCreateError). RED: the
-// queue's `request` is a stub throwing 'not implemented'.
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 const h = vi.hoisted(() => {
 	class ProfileSaveError extends Error {
@@ -25,19 +20,8 @@ vi.mock('./applyProfileSave', () => ({
 
 import { createProfileEditQueue } from './profileEditQueue';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const fields = { name: 'Ada', email: 'ada@example.com' };
-
-/** A promise whose settlement the test controls — "the write is still in flight". */
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
 
 function makeCallbacks() {
 	return {
@@ -52,8 +36,6 @@ beforeEach(() => {
 	h.applyProfileSaveMock.mockReset();
 });
 
-// ── AC2 — no "ready"/"saved" state without a SERVER CONFIRMATION ────────────────
-
 describe('createProfileEditQueue — AC2: "saved" flips ONLY after the server confirms', () => {
 	it('marks the level pending synchronously on dispatch and does NOT reconcile before the write resolves', () => {
 		const d = deferred<{ profileId: string }>();
@@ -63,10 +45,8 @@ describe('createProfileEditQueue — AC2: "saved" flips ONLY after the server co
 
 		queue.request({ cfg, personId: 'person-p', level: 'public', existingId: null, fields });
 
-		// pending is on immediately (the control disables) …
 		expect(cb.setPending).toHaveBeenCalledWith('public', true);
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1);
-		// … but NOTHING has reached "saved" — the write has not resolved yet.
 		expect(cb.reconcile).not.toHaveBeenCalled();
 		expect(cb.setPending).not.toHaveBeenCalledWith('public', false);
 	});
@@ -96,8 +76,6 @@ describe('createProfileEditQueue — AC2: "saved" flips ONLY after the server co
 	});
 });
 
-// ── Fail-loud — a rejected write surfaces + never leaves a stuck-pending ─────────
-
 describe('createProfileEditQueue — a failed write fails loud, never stuck-pending', () => {
 	it('on a plain failure: clears pending, marks the level failed, and does NOT reconcile', async () => {
 		h.applyProfileSaveMock.mockRejectedValueOnce(new Error('save failed: 500'));
@@ -126,8 +104,6 @@ describe('createProfileEditQueue — a failed write fails loud, never stuck-pend
 	});
 });
 
-// ── Concurrent-save backstop (the #15 double-tap lesson) ────────────────────────
-
 describe('createProfileEditQueue — concurrent-save backstop', () => {
 	it('a second request for the SAME level while its write is in flight is a no-op — only one applyProfileSave fires', () => {
 		h.applyProfileSaveMock.mockReturnValueOnce(deferred().promise);
@@ -141,7 +117,6 @@ describe('createProfileEditQueue — concurrent-save backstop', () => {
 	});
 
 	it('reset() releases an in-flight level so a fresh same-level save fires while the stale write is STILL pending (the collective-switch race)', () => {
-		// A slow first save is STILL in flight (never resolves) …
 		h.applyProfileSaveMock.mockReturnValueOnce(new Promise(() => {}));
 		h.applyProfileSaveMock.mockReturnValueOnce(new Promise(() => {}));
 		const cb = makeCallbacks();
@@ -151,13 +126,9 @@ describe('createProfileEditQueue — concurrent-save backstop', () => {
 		queue.request({ cfg, personId: 'person-a', level: 'public', existingId: null, fields });
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1);
 
-		// The member switches collective: the page bumps generation and resets the queue.
 		generation = 1;
 		queue.reset();
 
-		// A fresh same-level save in the new collective MUST fire — without reset() the
-		// backstop would swallow it silently (no pending, no error, no Saved) until the
-		// stale request happened to settle.
 		queue.request({ cfg, personId: 'person-b', level: 'public', existingId: null, fields });
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2);
 		expect(cb.setPending).toHaveBeenLastCalledWith('public', true);
@@ -176,8 +147,6 @@ describe('createProfileEditQueue — concurrent-save backstop', () => {
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2);
 	});
 });
-
-// ── Per-level isolation (a failure on one level never touches another) ──────────
 
 describe('createProfileEditQueue — per-level isolation', () => {
 	it('each level fires its own write; one busy level never blocks another', () => {
@@ -208,11 +177,6 @@ describe('createProfileEditQueue — per-level isolation', () => {
 	});
 });
 
-// ── Generation guard (the YELLOW-RSVP.1 residual — RSVP guarded only reads) ─────
-// If the collective/context changes between dispatch and settle, the stale settle
-// must NOT touch the UI (no cross-collective display bleed) — but MUST still free
-// the pending slot so a fresh same-level save can proceed.
-
 describe('createProfileEditQueue — generation guard on the write settle', () => {
 	it('a SUCCESS that settles after the generation changed does NOT reconcile/setPending(false)/markFailed', async () => {
 		const d = deferred<{ profileId: string }>();
@@ -225,7 +189,6 @@ describe('createProfileEditQueue — generation guard on the write settle', () =
 		generation = 1; // collective switched while the write was in flight
 		d.resolve({ profileId: 'server-real-1' });
 
-		// Give the .then a tick to run.
 		await Promise.resolve();
 		await Promise.resolve();
 
@@ -266,8 +229,6 @@ describe('createProfileEditQueue — generation guard on the write settle', () =
 		await Promise.resolve();
 		await Promise.resolve();
 
-		// A fresh save into the same level under the new generation must fire — proof
-		// the pending slot was released despite the guarded (no-op) settle.
 		queue.request({ cfg, personId: 'person-p', level: 'public', existingId: null, fields });
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2);
 	});

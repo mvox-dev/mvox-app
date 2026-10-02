@@ -1,12 +1,8 @@
+// Visibility moves: write order and whole-pair bodies per entity.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from './profileData';
-
-// T4.7/#27 — the visibility-MOVE dispatch layer. Mock the T4.6 data primitives at
-// their module boundary (createOwnProfile / saveProfileFields), asserting on the
-// ORDER + the per-entity whole-pair bodies (RECON B §4 conventions). RED: applyFieldMove
-// / applyDuplicateRepair / planLoadedDuplicateRepairs are stubs throwing
-// 'not implemented', so these fail on assertions until GREEN.
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 const { createOwnProfileMock, saveProfileFieldsMock } = vi.hoisted(() => ({
 	createOwnProfileMock: vi.fn(),
@@ -26,20 +22,8 @@ import {
 	type FieldMoveInput
 } from './fieldMove';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 
-/** A promise whose settlement the test controls — "the write is still in flight". */
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-/** Move `name` domain→public, target absent (must be lazily created). */
 function nameWiden(overrides: Partial<FieldMoveInput> = {}): FieldMoveInput {
 	return {
 		cfg,
@@ -60,8 +44,6 @@ beforeEach(() => {
 	createOwnProfileMock.mockReset();
 	saveProfileFieldsMock.mockReset();
 });
-
-// ── AC1 — create-before-delete ORDER (the load-bearing safety) ──────────────────
 
 describe('applyFieldMove — AC1 create-before-delete ordering', () => {
 	it('target ABSENT: createOwnProfile → add-to-new → onPhase(created) → delete-from-old → onPhase(deleted), in THAT order', async () => {
@@ -101,18 +83,13 @@ describe('applyFieldMove — AC1 create-before-delete ordering', () => {
 			.mockImplementationOnce(() => Promise.resolve()); // delete-from-old
 		const phases: string[] = [];
 
-		// Attach the rejection handler synchronously so a RED stub's early rejection is
-		// never an unhandled rejection (in GREEN this settles to the FieldMoveResult).
 		const settled = applyFieldMove(nameWiden(), (ph) => phases.push(ph)).then(
 			(r) => ({ ok: true as const, r }),
 			(e) => ({ ok: false as const, e })
 		);
-		// Let the microtasks up to the pending add-to-new run.
 		await Promise.resolve();
 		await Promise.resolve();
 
-		// The create side has dispatched exactly ONE write (add-to-new) and NOTHING is
-		// confirmed yet — the delete-from-old must not have been issued.
 		expect(createOwnProfileMock).toHaveBeenCalledTimes(1);
 		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(1);
 		expect(phases).not.toContain('created');
@@ -120,7 +97,6 @@ describe('applyFieldMove — AC1 create-before-delete ordering', () => {
 		dstAdd.resolve();
 		await settled;
 
-		// Only NOW is the second write (delete-from-old) issued, after 'created'.
 		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(2);
 		expect(phases).toEqual(['created', 'deleted']);
 	});
@@ -142,8 +118,6 @@ describe('applyFieldMove — AC1 create-before-delete ordering', () => {
 	});
 });
 
-// ── Whole-pair bodies + target-exists branch ────────────────────────────────────
-
 describe('applyFieldMove — whole-pair writes preserve the sibling field', () => {
 	it('target ABSENT: add-to-new carries {name:value, email:""}; delete-from-old carries {name:"", email:srcSibling}', async () => {
 		createOwnProfileMock.mockResolvedValue('pub-new');
@@ -151,10 +125,8 @@ describe('applyFieldMove — whole-pair writes preserve the sibling field', () =
 
 		await applyFieldMove(nameWiden(), () => {});
 
-		// add-to-new (first saveProfileFields): the moved field set, sibling empty (new shell).
 		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('pub-new');
 		expect(saveProfileFieldsMock.mock.calls[0][2]).toEqual({ name: 'Ada', email: '' });
-		// delete-from-old (second): the moved field '' (net delete), the source sibling preserved.
 		expect(saveProfileFieldsMock.mock.calls[1][1]).toBe('dom-src');
 		expect(saveProfileFieldsMock.mock.calls[1][2]).toEqual({ name: '', email: 'dom@x.io' });
 	});
@@ -168,10 +140,8 @@ describe('applyFieldMove — whole-pair writes preserve the sibling field', () =
 		);
 
 		expect(createOwnProfileMock).not.toHaveBeenCalled();
-		// add-to-new writes to the EXISTING target, keeping its email.
 		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('pub-existing');
 		expect(saveProfileFieldsMock.mock.calls[0][2]).toEqual({ name: 'Ada', email: 'pub@x.io' });
-		// delete-from-old still clears name on the source, keeping its email.
 		expect(saveProfileFieldsMock.mock.calls[1][1]).toBe('dom-src');
 		expect(saveProfileFieldsMock.mock.calls[1][2]).toEqual({ name: '', email: 'dom@x.io' });
 	});
@@ -200,8 +170,6 @@ describe('applyFieldMove — whole-pair writes preserve the sibling field', () =
 	});
 });
 
-// ── Interruption model — loss-safe: a crash leaves a DETECTABLE duplicate, never a loss ─
-
 describe('applyFieldMove — interruption is loss-safe (create-before-delete)', () => {
 	it('delete-from-old REJECTS after create confirmed → throws FieldMoveError(phase:"delete"); value is now in BOTH entities (a detectable duplicate, not a loss)', async () => {
 		createOwnProfileMock.mockResolvedValue('pub-new');
@@ -214,10 +182,7 @@ describe('applyFieldMove — interruption is loss-safe (create-before-delete)', 
 
 		expect(err).toBeInstanceOf(FieldMoveError);
 		expect((err as FieldMoveError).phase).toBe('delete');
-		// The create WAS confirmed (value written to the new entity) …
 		expect(phases).toContain('created');
-		// … and the delete WAS attempted against the source — so the value survives in
-		// BOTH the new AND the old entity: a duplicate, never a loss.
 		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(2);
 		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('pub-new');
 		expect(saveProfileFieldsMock.mock.calls[1][1]).toBe('dom-src');
@@ -232,13 +197,10 @@ describe('applyFieldMove — interruption is loss-safe (create-before-delete)', 
 		expect(err).toBeInstanceOf(FieldMoveError);
 		expect((err as FieldMoveError).phase).toBe('create');
 		expect((err as FieldMoveError).createdTargetId).toBe('shell-1'); // retry updates the shell, no dup
-		// The delete-from-old must NOT have run — only the failed add-to-new was attempted.
 		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(1);
 		expect(saveProfileFieldsMock.mock.calls[0][1]).toBe('shell-1');
 	});
 });
-
-// ── applyDuplicateRepair — completes the DELETE that the interrupted move didn't ──
 
 describe('applyDuplicateRepair — completes the interrupted delete (AC3 privacy repair)', () => {
 	it('clears the field on each given entity via saveProfileFields({field:"", sibling preserved}) and returns the cleared ids', async () => {
@@ -268,8 +230,6 @@ describe('applyDuplicateRepair — completes the interrupted delete (AC3 privacy
 		).rejects.toThrow(/403/);
 	});
 });
-
-// ── planLoadedDuplicateRepairs — DETECT + PLAN at load (AC3), privacy-safe direction ─
 
 describe('planLoadedDuplicateRepairs — detect interrupted moves at load, plan a privacy-safe repair (AC3)', () => {
 	const P = (id: string, sharing: MyProfile['_sharing'], name: string, email: string): MyProfile => ({
@@ -308,7 +268,6 @@ describe('planLoadedDuplicateRepairs — detect interrupted moves at load, plan 
 			P('prof-dom', 'domain', 'Ada', 'ada@x.io')
 		]);
 		expect(plans.map((p) => p.field).sort()).toEqual(['email', 'name']);
-		// Narrowest (private) is kept for both; the domain copy is cleared.
 		for (const plan of plans) {
 			expect(plan.narrowLevel).toBe('private');
 			expect(plan.narrowId).toBe('prof-pri');
@@ -329,15 +288,6 @@ describe('planLoadedDuplicateRepairs — detect interrupted moves at load, plan 
 		expect(plans[0].clear.map((c) => c.id)).toEqual(['prof-dom', 'prof-pub']);
 	});
 });
-
-// ── applyConflictResolution — #131 browse-then-confirm: sync every OTHER
-// holder to the previewed (second-tapped) tier's value ────────────────────
-// Distinct from applyDuplicateRepair: a conflict is DIFFERENT legitimate
-// values across tiers (not an interrupted move) — resolving it WRITES the
-// chosen value onto every other holder rather than clearing them to ''. No
-// entity is deleted; every existing holder keeps its own row, now converged
-// on the same value (which planLoadedDuplicateRepairs then sees as a
-// same-value duplicate — the pre-existing collapse-to-one-entity path).
 
 describe('applyConflictResolution — sync every other holder to the previewed value (#131)', () => {
 	it('writes the chosen value onto each given entity via saveProfileFields({field: value, sibling preserved}) and returns the synced ids', async () => {

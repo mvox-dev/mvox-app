@@ -1,28 +1,13 @@
-// src/lib/nav/adminStore.spec.ts
+// resolveAdmin evaluates rights on the database entity, read by id.
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 import { adminStore, resetAdmin, resolveAdmin } from './adminStore';
-
-// #161 (collective = database, Mihkel ruling 2026-08-16) — `resolveAdmin`
-// evaluates rights on the DATABASE entity (resolved via
-// `resolveDatabaseEntityId`, `_type.string=database&limit=1`), read by id. The
-// retired person -> active member row -> organization `_parent` walk is gone
-// (#159 deleted every organization instance, so that chain could only ever
-// answer wrong or empty).
+import { json } from '$lib/testing/entuFetchKit';
 
 const cfg = { db: 'sampledb', token: 'test-token' };
 const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 
-function json(body: unknown, status = 200) {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
-
-/** Routed mock: the database-entity lookup, then the entity GET by id. */
 function mockFetch(opts: {
 	database?: unknown;
 	databaseStatus?: number;
@@ -36,7 +21,6 @@ function mockFetch(opts: {
 				json(opts.database ?? { entities: [], count: 0 }, opts.databaseStatus ?? 200)
 			);
 		}
-		// entity/<id>?props=_owner,_editor
 		const id = u.split('/entity/')[1]?.split('?')[0] ?? '';
 		return Promise.resolve(
 			json({ entity: opts.orgById?.[id] ?? undefined }, opts.orgStatus ?? 200)
@@ -44,7 +28,6 @@ function mockFetch(opts: {
 	}) as unknown as typeof fetch;
 }
 
-/** The database entity lookup response. */
 function databaseBody(dbEntityId: string | null) {
 	return dbEntityId ? { entities: [{ _id: dbEntityId }], count: 1 } : { entities: [], count: 0 };
 }

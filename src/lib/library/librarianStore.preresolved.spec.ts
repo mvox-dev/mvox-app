@@ -1,23 +1,4 @@
-// src/lib/library/librarianStore.preresolved.spec.ts
-//
-// #173 RED — reduce admin page lookups: `resolveMyLibraryId` and
-// `resolveLibrarian` must accept a PRE-RESOLVED database entity id and, when
-// one is provided, skip the internal `resolveDatabaseEntityId` round-trip.
-//
-// Sibling of adminStore.preresolved.spec.ts — see its header for the shared
-// #173 rationale (the /admin page currently resolves the database entity three
-// times per load; once is enough).
-//
-// Pinned contract (GREEN must implement):
-//   resolveMyLibraryId(cfg, fetchImpl?, dbEntityId?)
-//   resolveLibrarian(cfg, personId, fetchImpl?, dbEntityId?)
-//   - trailing param OPTIONAL — omitted, behavior is IDENTICAL to today (the
-//     existing librarianStore.spec.ts pins that path; this file does not
-//     re-pin it).
-//   - Provided, NO `_type.string=database` query is made: the library lookup
-//     goes straight to `_type.string=library&_parent.reference=<PROVIDED id>`.
-//   - Everything downstream (rights read on the library entity, the
-//     librarian / not-librarian / error mapping) is unchanged.
+// resolveMyLibraryId and resolveLibrarian skip the database lookup when given its id.
 import { describe, it, expect, vi } from 'vitest';
 import {
 	resolveMyLibraryId as resolveMyLibraryIdActual,
@@ -25,9 +6,8 @@ import {
 	type LibrarianResult
 } from './librarianStore';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json } from '$lib/testing/entuFetchKit';
 
-// The #173 target signatures. Cast (rather than raw extra-arg calls) so this
-// spec is typecheck-clean in RED; the runtime assertions do the failing.
 type ResolveMyLibraryIdPreResolved = (
 	cfg: EntuCfg,
 	fetchImpl?: typeof fetch,
@@ -47,17 +27,6 @@ const personId = 'person-123';
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 const LIBRARY_ID = 'lib-entity-1';
 
-function json(body: unknown, status = 200) {
-	return {
-		ok: status >= 200 && status < 300,
-		status,
-		json: () => Promise.resolve(body)
-	} as unknown as Response;
-}
-
-/** Routed stub: serves the database lookup TOO (so a leftover internal
- *  resolution still completes and the spec fails on the COUNT assertions, not
- *  on a broken flow), the library search, and the library rights read. */
 function mockFetch(opts: { libraryHit?: boolean; libraryRights?: unknown } = {}) {
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
@@ -69,7 +38,6 @@ function mockFetch(opts: { libraryHit?: boolean; libraryRights?: unknown } = {})
 				json(opts.libraryHit ? { entities: [{ _id: LIBRARY_ID }] } : { entities: [] })
 			);
 		}
-		// entity/<libraryId>?props=_owner,_editor
 		return Promise.resolve(json({ entity: opts.libraryRights ?? { _id: LIBRARY_ID } }));
 	}) as unknown as typeof fetch;
 }
@@ -115,8 +83,6 @@ describe('resolveLibrarian with a pre-resolved dbEntityId (#173)', () => {
 		expect(result).toEqual({ state: 'librarian', libraryId: LIBRARY_ID });
 		const urls = calledUrls(fetchImpl);
 		expect(urls.filter((u) => u.includes('_type.string=database'))).toEqual([]);
-		// Exactly TWO round-trips: library search under the provided id + the
-		// library rights read. The database resolution is gone.
 		expect(urls).toHaveLength(2);
 	});
 
