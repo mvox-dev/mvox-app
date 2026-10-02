@@ -262,8 +262,10 @@ const NOT_A_PERSONS_NAME: Readonly<Record<string, Readonly<Record<string, string
 	'src/routes/links/+page.svelte': {
 		'row.name': 'a saved link'
 	},
-	'src/routes/roster/+page.svelte': {
-		'node.name': 'a section',
+	'src/lib/roster/RosterSectionTree.svelte': {
+		'node.name': 'a section'
+	},
+	'src/lib/roster/RosterNotices.svelte': {
 		'arrange.removeError.name': 'the section whose removal failed'
 	}
 };

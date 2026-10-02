@@ -31,7 +31,7 @@ const DIRECT_SEAMS = ALL.filter(
 
 // Modules that hand a page its writes without issuing them; one counts as a seam
 // while it value-imports a direct seam.
-const WRITE_RELAYS = ['$lib/events/eventActions'];
+const WRITE_RELAYS = ['$lib/events/eventActions', '$lib/roster/rosterActions'];
 const relaySource = (seam: string) =>
 	readFileSync(join(SRC, 'lib', seam.replace(/^\$lib\//, '') + '.ts'), 'utf-8');
 const WRITE_SEAMS = [
