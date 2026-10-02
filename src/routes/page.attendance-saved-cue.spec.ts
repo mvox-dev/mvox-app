@@ -1,41 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #327 RED (agenda-page integration) — the attendance saved cue on the WRITE
-// path, host page 1 of 2 (the conductor's inline "Take attendance" panel on a
-// recent agenda row).
-//
-// Renders the real +page → AgendaList → AttendanceSurface chain and drives
-// real taps through the real attendanceChangeQueue — only the write dispatch
-// (applyAttendanceChange) and the data reads are mocked, the same seam as its
-// #326 sibling (page.rsvp-saved-cue.spec.ts) and the same read-mock harness as
-// page.attendance-panel.spec.ts. This is what forces GREEN to thread
-// savedMemberIds through the page's queue callbacks, the AttendancePanel
-// bundle (attendance/types.ts) AND AgendaList's explicit prop pass-through —
-// not merely into an isolated component. Pins (mirroring #326's, per-member
-// instead of per-event):
-//
-//   1. SAVED CUE ON RECONCILE — a settled write puts the per-row saved
-//      announcement on the member row that reconciled.
-//   2. PER-(EVENT,MEMBER) GRANULARITY — the cue never claims more than the
-//      row that reconciled: the OTHER member's row stays blank, and a cue
-//      earned on event A never shows in event B's panel (same member id).
-//   3. THE TALLY — while a write is in flight the tally line carries the
-//      visible unconfirmed marking (the RED stated choice, see
-//      AttendanceSurface.saved-cue.spec.ts); once every write settles the
-//      marking is gone and the counts are server-confirmed.
-//   4. PENDING BYTE-PRESERVED — the PO-ruled silent disable stays: aria-busy
-//      + aria-disabled, no saved text on the row; a NEW write clears the
-//      previous saved cue the moment it starts.
-//   5. FAILURE BYTE-PRESERVED — a rejected write still reverts the value and
-//      raises the per-row role=alert; no saved cue appears, and a failure
-//      AFTER an earlier saved clears that stale cue.
-//   6. A successfully CLEARED record announces too — reconciled-null renders
-//      identically to never-marked; the cue is the only distinguisher.
-//   7. READ PATH SILENT — opening a panel over records saved earlier
-//      announces nothing: the cue reports a write, never a read.
+// The attendance saved cue on the agenda's inline attendance panel.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
@@ -55,7 +23,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		agenda_row_link_label: (p) => `View details for ${(p as { event: string }).event}`,
 		agenda_row_link_label_unnamed: () => 'View event details',
 		agenda_recent: () => 'Recent',
-		// #471 — the Recent section's show-more button.
 		agenda_recent_show_more: () => 'Show earlier',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p) => `Take attendance for ${(p as { event: string }).event}`,
@@ -132,11 +99,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -175,9 +137,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 		return map;
 	}
 }));
-// The write dispatch — mocked so a "write" can be resolved/held/rejected on
-// demand; the queue orchestration around it (attendanceChangeQueue) stays
-// REAL, exactly the applyRsvpChange seam of the #326 sibling spec.
 vi.mock('$lib/attendance/attendanceOptimistic', () => ({
 	applyAttendanceChange: applyAttendanceChangeMock
 }));
@@ -233,13 +192,9 @@ function setAuthedWithOneCollective(personId = 'person-p') {
 	completionGateStore.set('complete');
 }
 
-/** ONE conducted recent event; `existing` seeds listAttendance for it. */
 function setConductedRecentFixture(
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
 ) {
-	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-	// seat: person-p gains `_editor` on the event so the saved-cue flows this
-	// file pins stay reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],
@@ -257,13 +212,11 @@ function setConductedRecentFixture(
 	setAuthedWithOneCollective('person-p');
 }
 
-/** TWO conducted recent events sharing the same roster — the cross-event pins. */
 function setTwoConductedRecentEventsFixture() {
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],
 			upcoming: [],
-			// #356 — same rights adjustment as setConductedRecentFixture above.
 			recent: [
 				{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z'), editors: ['person-p'] },
 				{ ...agendaItem('past-2', '2026-06-03T16:00:00.000Z'), editors: ['person-p'] }
@@ -278,16 +231,6 @@ function setTwoConductedRecentEventsFixture() {
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
-}
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -323,7 +266,6 @@ async function closePanel(container: HTMLElement) {
 	});
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -379,7 +321,6 @@ describe('+page — the saved cue fires on reconcile, per (event, member) (#327)
 	});
 
 	it('a successfully CLEARED record announces saved too — tapping the ACTIVE status clears it, reconciled-null looks exactly like never-marked', async () => {
-		// m1 is already marked present on the server — tapping Present clears her.
 		setConductedRecentFixture([{ attendanceId: 'att-1', memberId: 'm1', status: 'present' }]);
 		applyAttendanceChangeMock.mockResolvedValue({ attendanceId: null });
 		const { container } = render(Page);
@@ -422,14 +363,12 @@ describe('+page — the saved cue fires on reconcile, per (event, member) (#327)
 
 describe('+page — pending stays SILENT (byte-preserved) and the tally says unconfirmed while a write is in flight (#327)', () => {
 	it('in flight: aria-busy silent disable + NO saved text on the row, and the tally line carries the visible unconfirmed marking; settled: marking gone, cue on', async () => {
-		// m2 present is server-settled; m1's write is held in flight.
 		setConductedRecentFixture([{ attendanceId: 'att-2', memberId: 'm2', status: 'present' }]);
 		const held = deferred<{ attendanceId: string | null }>();
 		applyAttendanceChangeMock.mockReturnValue(held.promise);
 		const { container } = render(Page);
 		await openPanel(container);
 
-		// Before any tap: settled counts, NO unconfirmed marking.
 		expect(q(container, 'attendance-tally-unconfirmed')).toBeNull();
 
 		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
@@ -447,7 +386,6 @@ describe('+page — pending stays SILENT (byte-preserved) and the tally says unc
 		}
 		expect(rowSavedText(container, 'm1')).toBe('');
 		expect(q(container, 'attendance-row-m1')?.textContent).not.toContain('Saved.');
-		// The tally now counts m1's OPTIMISTIC present (2 present) — so it says so.
 		const marker = container.querySelector(
 			'[data-testid="attendance-tally"] [data-testid="attendance-tally-unconfirmed"]'
 		);
@@ -458,7 +396,6 @@ describe('+page — pending stays SILENT (byte-preserved) and the tally says unc
 		await waitFor(() => {
 			expect(rowSavedText(container, 'm1')).toContain('Saved.');
 		});
-		// Every write settled — the counts are server-confirmed, the marking goes.
 		expect(q(container, 'attendance-tally-unconfirmed')).toBeNull();
 	});
 
@@ -476,7 +413,6 @@ describe('+page — pending stays SILENT (byte-preserved) and the tally says unc
 			expect(rowSavedText(container, 'm1')).toContain('Saved.');
 		});
 
-		// Second tap — a NEW write starts (held in flight): the stale cue must go.
 		await fireEvent.click(q(container, 'attendance-toggle-m1-late')!);
 		await waitFor(() => {
 			expect(rowSavedText(container, 'm1')).toBe('');
@@ -541,7 +477,6 @@ describe("+page — the cue never leaks across events (#327 per-(event,member) g
 		});
 
 		await closePanel(container);
-		// #471 — past-2's row only exists after show-more.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
@@ -564,13 +499,11 @@ describe("+page — the cue never leaks across events (#327 per-(event,member) g
 		});
 
 		await closePanel(container);
-		// #471 — past-2's row only exists after show-more.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
 		await openPanel(container, 'past-2');
 
-		// NOW event A's write settles — it must not claim a row in B's panel.
 		held.resolve({ attendanceId: 'att-new-1' });
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
@@ -580,4 +513,4 @@ describe("+page — the cue never leaks across events (#327 per-(event,member) g
 	});
 });
 
-// (*MVOX:Tallis* — #327 RED)
+// (*MVOX:Tallis*)

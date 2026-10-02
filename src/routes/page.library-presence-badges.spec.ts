@@ -1,37 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #351 RED — the LIBRARY surface tells the member which parts are on this
-// device: one indicator, two states, on every edition-file row.
-//
-//   - BADGE: [data-testid="file-presence-{fileId}"] inside the file's row
-//     ([data-testid="library-edition-file-{fileId}"] — src/routes/library/
-//     +page.svelte, the #275 files list). Exactly TWO states, pinned via
-//     message keys: m.file_presence_on_device() when the store holds the
-//     bytes for the CURRENT identity's partition, m.file_presence_needs_network()
-//     when it does not. No third state, no percentage, no spinner.
-//   - WHILE THE STORE HAS NOT ANSWERED: NEITHER badge renders. An absent
-//     badge is not a claim; a wrong badge is. In particular the page must NOT
-//     default to needs-network and correct it a moment later — that
-//     default-then-correct flicker is the failure this slice exists to
-//     prevent, in miniature (#289's rule: telling the member nothing is
-//     telling them something false).
-//   - THE TRAP (issue #351): ByteStore.get() counts as an open — a per-row
-//     get() would collapse LRU to render order. The page asks presence
-//     through the NEW heldFileIds(db, personId) — ONE call for the whole
-//     list — and never calls get() just to render.
-//   - THE BADGE IS NOT A CONTROL: no button/link semantics, no role, no
-//     tabindex; clicking it signs nothing and opens nothing. The row's Open
-//     affordance is unchanged.
-//   - WORDING: byteStore.ts:8 — the partition is a CORRECTNESS boundary, not
-//     a security boundary. No locale value for these keys may imply the
-//     bytes are private/secure/protected (en, et, lv, uk — pinned below).
-//
-// INTEGRATION (house rule): the ACTUAL /library route renders; only the read
-// seams and the $lib/files/appByteStore persistence seam are substituted.
+// Library edition-file rows show whether the part is on this device.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -159,26 +132,14 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 
 let fakeByteStore: FakeByteStore;
 
-/** The #351 presence member — an intersection until the interface lands. */
 type PresenceQuery = (db: string, personId: string) => Promise<string[]>;
 
-/** Installs a controllable heldFileIds on the fake and returns the spy —
- *  the page-level seam for BOTH the answered and the not-yet-answered
- *  states. Defaults to answering from the fake's own held rows. */
 function installPresence(impl?: PresenceQuery) {
 	const spy = vi.fn<PresenceQuery>(
 		impl ?? (async (db, personId) => fakeByteStore.heldFor(db, personId))
 	);
 	(fakeByteStore as unknown as { heldFileIds: PresenceQuery }).heldFileIds = spy;
 	return spy;
-}
-
-function deferred<T>() {
-	let resolveIt!: (value: T) => void;
-	const promise = new Promise<T>((r) => {
-		resolveIt = r;
-	});
-	return { promise, resolve: resolveIt };
 }
 
 const IDENTITY = { db: 'sampledb', personId: 'person-p' };
@@ -216,8 +177,6 @@ function setAuthedWithOneCollective() {
 	listRepertoireItemsMock.mockResolvedValue([]);
 }
 
-/** ONE work, ONE edition, TWO files — both presence states live in the SAME
- *  render: file-held is seeded into the store below, file-absent is not. */
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(
 		toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }])
@@ -300,7 +259,6 @@ async function expandEdition(container: HTMLElement, editionId: string): Promise
 	});
 }
 
-/** Route rendered, work-1 and edition-1 expanded — file rows on screen. */
 async function renderWithFilesVisible(): Promise<HTMLElement> {
 	const container = await renderReady();
 	await expandWork(container, 'work-1');
@@ -332,7 +290,6 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		expect(held.textContent).not.toContain('[file_presence_needs_network]');
 		expect(absent.textContent).toContain('[file_presence_needs_network]');
 		expect(absent.textContent).not.toContain('[file_presence_on_device]');
-		// Each badge sits inside ITS file's row, not floating beside the list.
 		expect(held.closest('[data-testid="library-edition-file-file-held"]')).not.toBeNull();
 		expect(absent.closest('[data-testid="library-edition-file-file-absent"]')).not.toBeNull();
 	});
@@ -349,12 +306,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 			expect(container.querySelector('[data-testid="file-presence-file-held"]')).not.toBeNull();
 		});
 
-		// One store query per list render, not one per row (two rows here);
-		// re-query on a LATER render is fine, a second call in THIS settled
-		// render is the per-row shape leaking back in.
 		expect(presenceSpy.mock.calls).toEqual([['sampledb', 'person-p']]);
-		// get() counts as an open (byteStore.ts head comment) — a render must
-		// never call it, or LRU collapses to render order.
 		expect(getSpy).not.toHaveBeenCalled();
 	});
 
@@ -366,8 +318,6 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 		const container = await renderWithFilesVisible();
 
-		// File rows are on screen, the store has not answered: an absent badge
-		// is not a claim. Specifically NOT needs-network-then-correct.
 		expect(container.querySelectorAll('[data-testid^="file-presence-"]').length).toBe(0);
 		const filesBlock = container.querySelector(
 			'[data-testid="library-edition-files-edition-1"]'
@@ -375,7 +325,6 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		expect(filesBlock.textContent).not.toContain('[file_presence_needs_network]');
 		expect(filesBlock.textContent).not.toContain('[file_presence_on_device]');
 
-		// The answer lands → the badges appear, from the answer alone.
 		pending.resolve(['file-held']);
 		await waitFor(() => {
 			expect(
@@ -406,13 +355,11 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 			);
 			expect(badge.hasAttribute('role')).toBe(false);
 			expect(badge.hasAttribute('tabindex')).toBe(false);
-			// Not wrapped inside the Open control (or any control) either.
 			expect(badge.closest('button, a, [role="button"]')).toBeNull();
 			await fireEvent.click(badge);
 		}
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 		expect(openSpy).not.toHaveBeenCalled();
-		// The existing Open affordance still stands, unchanged, per row.
 		expect(
 			container.querySelector('[data-testid="library-edition-file-open-file-held"]')
 		).not.toBeNull();
@@ -421,25 +368,11 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 		).not.toBeNull();
 	});
 
-	// #351's two eviction-cascade pins (store put evicts a held row / evicts
-	// then the write itself rejects) lived here because this page's OWN Open
-	// click used to reach openFileBytes' store.put directly. #427 moved that
-	// read (and so every write it can trigger) into the fullscreen part
-	// viewer — this page's click is now a bare `goto`
-	// (page.library-edition-files.spec.ts), so there is no store write left
-	// on THIS surface for a page-reaction test to pin. The eviction
-	// arithmetic itself stays covered in byteStore.presence.spec.ts; the
-	// "page re-queries presence after its own write" shape these two
-	// exercised has no place to live until the viewer (or a return-to-page
-	// refresh) grows the same coverage — flagged, not silently dropped.
 });
 
 describe('#351 — wording honesty (byteStore.ts:8 — a correctness boundary, NOT a security boundary)', () => {
 	const localeFiles = ['en', 'et', 'lv', 'uk'] as const;
 	const BADGE_KEYS = ['file_presence_on_device', 'file_presence_needs_network'] as const;
-	// The private/secure/protected wording family, across all four locales:
-	// en private/secure/protected, et privaatne/kaitstud/turvaline,
-	// lv privāts/aizsargāts/drošs, uk приватний/захищений/безпечний.
 	const FORBIDDEN = [
 		/priv/i,
 		/secur/i,
@@ -456,7 +389,6 @@ describe('#351 — wording honesty (byteStore.ts:8 — a correctness boundary, N
 	it('both badge keys exist, non-empty, in all four locales', () => {
 		for (const locale of localeFiles) {
 			const messages = JSON.parse(
-				// cwd-relative, the works-write-failure precedent.
 				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 			) as Record<string, unknown>;
 			for (const key of BADGE_KEYS) {

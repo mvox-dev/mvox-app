@@ -1,49 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #257 RED — the three profile keys #229 held back reach their screens.
-//
-// The R1 key census (#229) found profile_repair_done / profile_visibility_title
-// / profile_visibility_intro translated in all four locales but referenced only
-// from spec mocks — the surfaces they were written for were never finished. PO
-// ruling: keep all three, wire all three. This file pins the wiring:
-//
-//  1. A successful visibility repair ANNOUNCES itself. Today
-//     VisibilityRepairBanner has zero success-path markup — `repairPlans` is
-//     $derived off `loadedProfiles`, so a successful repair drops the field
-//     and the banner unmounts with no announcement (silent in the strongest
-//     sense: an unmount announces nothing to a screen reader). The fix must
-//     match the app's ONE confirmation idiom (issue AC2 — do not invent a
-//     second shape): a PERSISTENT `role="status"` `aria-live="polite"` region
-//     whose text is set imperatively from plain state, exactly like
-//     `event-create-status` (routes/+page.svelte) and `roster-reorder-status`
-//     (routes/roster/+page.svelte) — NOT a conditionally-mounted node, and NOT
-//     a setTimeout auto-dismiss (the app has zero timer-dismiss patterns;
-//     "transient" here means cleared at the START of the next repair attempt,
-//     the same way eventCreateStatus/reorderStatus are cleared at the top of
-//     the next action).
-//
-//  2. The per-field visibility picker list gains its missing title and
-//     operating instruction: a REAL h2 (the page's only sectioning precedent
-//     is the Linked Accounts h2) carrying profile_visibility_title immediately
-//     above the field list, with profile_visibility_intro as its explanatory
-//     line. profile_intro stays where it is — page intro and control
-//     explanation are complementary.
-//
-//  FOLD-IN (#260 review note 2, Gama-approved for this visit): the #260
-//  stale-rejection guard in refreshCompletionGate swallows EVERY rejection —
-//  including a LIVE (current-generation) failure to resolve membership
-//  standing, which today vanishes without a trace. Pin: a live rejection
-//  reaches console.error; a stale one stays silent (the existing race spec in
-//  page.profile-completion-gate-race.spec.ts pins the stale half's
-//  store/DOM silence — here the console-silence half is added, and that spec
-//  MUST stay green untouched).
-//
-// Every test renders the REAL /profile route component (integration, not an
-// isolated unit): the repair flow drives the real planLoadedDuplicateRepairs /
-// fieldMoveQueue machinery (only the applyDuplicateRepair write primitive is
-// mocked), so the announcement is pinned as wired into the actual page.
+// The profile repair and visibility messages reach their screens.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -68,9 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		profile_saved: () => 'Saved',
 		profile_save_error: () => "Couldn't save — please try again.",
 		profile_name_private_disabled: () => 'Name cannot be private',
-		// #257 — the three held-back keys. The English mock strings below are
-		// what the DOM assertions read, so a hit proves the COMPONENT calls the
-		// m.* function (the house key-wiring proof, same as every other spec).
 		profile_visibility_title: () => 'Who can see each field',
 		profile_visibility_intro: () => 'Pick an icon to move a field.',
 		profile_repair_done: () => 'Visibility change completed.',
@@ -134,10 +90,6 @@ const h = vi.hoisted(() => ({
 	resolveGateMock: vi.fn()
 }));
 
-// Mock ONLY the applyDuplicateRepair write primitive; planLoadedDuplicateRepairs
-// and the rest of fieldMove stay REAL — the repair banners below are driven by
-// the actual load-detection machinery (page.profile.spec.ts precedent for the
-// applyConflictResolution partial mock).
 vi.mock('$lib/profile/fieldMove', async () => {
 	const actual =
 		await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
@@ -172,8 +124,6 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 	applyProfileSave: h.applyProfileSaveMock,
 	ProfileSaveError: class ProfileSaveError extends Error {}
 }));
-// Override ONLY resolveGate; keep the REAL store so the fold-in assertions read
-// the one SSOT instance (page.profile-completion-gate-race.spec.ts precedent).
 vi.mock('$lib/profile/completionGate', async (importActual) => {
 	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
 	return { ...actual, resolveGate: h.resolveGateMock };
@@ -197,18 +147,6 @@ import {
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
 
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-/** Drain the microtask queue so a just-settled promise chain fully lands
- *  (usable under fake timers, where waitFor's polling interval would hang). */
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 }
@@ -230,9 +168,6 @@ async function waitReady(container: HTMLElement): Promise<void> {
 	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 }
 
-/** The confirmation region — the house `role="status"` idiom
- *  (event-create-status / roster-reorder-status: a PERSISTENT live region whose
- *  text is set imperatively, never a conditionally-mounted node). */
 function statusRegion(container: HTMLElement): HTMLElement | null {
 	return q(container, '[data-testid="profile-repair-status"]') as HTMLElement | null;
 }
@@ -240,14 +175,11 @@ function statusText(container: HTMLElement): string {
 	return (statusRegion(container)?.textContent ?? '').trim();
 }
 
-// DOM-order helper: true when `b` comes after `a` in document order.
 const FOLLOWING = 4; // Node.DOCUMENT_POSITION_FOLLOWING
 function precedes(a: Element, b: Element): boolean {
 	return (a.compareDocumentPosition(b) & FOLLOWING) !== 0;
 }
 
-/** Deepest element whose entire trimmed text equals `text` (querySelectorAll
- *  is document-order, parents before children — the last match is innermost). */
 function byExactText(container: HTMLElement, text: string): Element | null {
 	const all = Array.from(container.querySelectorAll('*')).filter(
 		(el) => (el.textContent ?? '').trim() === text
@@ -269,9 +201,6 @@ afterEach(() => {
 	resetGate();
 });
 
-// ---------------------------------------------------------------------------
-// 1. profile_repair_done — a successful repair announces itself.
-// ---------------------------------------------------------------------------
 describe('#257 — repair confirmation announcement (profile_repair_done)', () => {
 	it('the status region is PERSISTENT: mounted (empty) from first ready render, role="status" aria-live="polite" — even with no repair pending', async () => {
 		selectSampledb();
@@ -281,9 +210,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		const { container } = render(Page);
 		await waitReady(container);
 
-		// No duplicate → no banner — the region must exist anyway (the house
-		// idiom: a persistent live region a screen reader is already watching
-		// BEFORE the announcement text arrives as a content change).
 		expect(q(container, '[data-testid="profile-visibility-repair-name"]')).toBeNull();
 		const region = statusRegion(container);
 		expect(region, 'persistent profile-repair-status region must render with the ready surface').not.toBeNull();
@@ -294,8 +220,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 
 	it('fail THEN succeed in one flow: failure shows profile_repair_error (no done announcement); the successful retry announces profile_repair_done and the banner unmounts', async () => {
 		selectSampledb();
-		// Same value at two levels = an interrupted move → the REAL
-		// planLoadedDuplicateRepairs mounts the repair banner for `name`.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
@@ -304,13 +228,9 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-visibility-repair-name"]')).not.toBeNull()
 		);
-		// Region present and empty BEFORE any attempt.
 		expect(statusRegion(container)).not.toBeNull();
 		expect(statusText(container)).toBe('');
 
-		// Attempt 1 — the repair write FAILS. Today's error path must be
-		// byte-unchanged: profile_repair_error inside the kept banner (its
-		// outer div already carries role="alert"), and NO done announcement.
 		h.applyDuplicateRepairMock.mockRejectedValueOnce(new Error('repair delete failed: 502'));
 		const fix = q(
 			container,
@@ -325,16 +245,9 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		expect(
 			q(container, '[data-testid="profile-visibility-repair-name-error"]')!.textContent
 		).toBe("Couldn't finish. Your Name is still readable at Collective.");
-		// Failure is NOT success — the confirmation region carries nothing.
 		expect(statusText(container)).toBe('');
-		// Preserve-on-error: the banner is kept.
 		expect(q(container, '[data-testid="profile-visibility-repair-name"]')).not.toBeNull();
 
-		// Attempt 2 — the repair SUCCEEDS. The reload now finds a single
-		// holder, the banner unmounts (unchanged behavior), and the
-		// announcement text arrives in the persistent region as a content
-		// change — the screen-reader-audible confirmation that a change to who
-		// can see this person's data actually landed.
 		h.applyDuplicateRepairMock.mockResolvedValueOnce({
 			field: 'name',
 			clearedIds: ['prof-dom']
@@ -343,12 +256,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: '', email: '', _sharing: 'domain' }
 		]);
-		// #257 review F1 — the SAME node must carry the text afterwards. The
-		// success path reloads, and the reload writes status='loading'
-		// synchronously; a region living inside the ready branch would be
-		// destroyed and remounted with its text already in place, which announces
-		// NOTHING (a live region announces only changes to a region the AT was
-		// already watching). Asserting final textContent alone cannot see that.
 		const regionBefore = statusRegion(container);
 		await fireEvent.click(fix);
 		await waitFor(() => {
@@ -360,9 +267,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			'the live region must SURVIVE the post-repair reload — same node, not a remount'
 		).toBe(regionBefore);
 
-		// Full-shape: the repair write got the exact plan the banner surfaced —
-		// keep the narrowest holder (private), clear the wider (domain) copy,
-		// preserving its sibling email value.
 		expect(h.applyDuplicateRepairMock).toHaveBeenCalledTimes(2);
 		expect(h.applyDuplicateRepairMock.mock.calls[1][0]).toEqual({
 			cfg: { db: 'sampledb', token: 'jwt-member' },
@@ -373,8 +277,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 
 	it('transient per the house pattern: the announcement clears at the START of the next repair attempt — and NEVER by a timer', async () => {
 		selectSampledb();
-		// BOTH fields duplicated → two independent repair plans, letting a
-		// second attempt start after the first success.
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
 			{ _id: 'p-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
@@ -385,7 +287,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			expect(q(container, '[data-testid="profile-visibility-repair-email"]')).not.toBeNull();
 		});
 
-		// Repair NAME successfully → announcement lands.
 		h.applyDuplicateRepairMock.mockResolvedValueOnce({ field: 'name', clearedIds: ['p-dom'] });
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
@@ -399,23 +300,14 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			expect(statusText(container)).toBe('Visibility change completed.');
 		});
 
-		// Start the EMAIL repair attempt, holding its write in flight: the
-		// stale announcement must clear at the START of the attempt (the
-		// eventCreateStatus/reorderStatus pattern — cleared at the top of the
-		// next action), not when/if it settles.
 		const emailWrite = deferred<{ field: string; clearedIds: string[] }>();
 		h.applyDuplicateRepairMock.mockReturnValueOnce(emailWrite.promise);
 		await fireEvent.click(
 			q(container, '[data-testid="profile-visibility-repair-email-fix"]') as HTMLButtonElement
 		);
 		await waitFor(() => expect(statusText(container)).toBe(''));
-		// The attempt really is in flight (banner kept, button busy).
 		expect(q(container, '[data-testid="profile-visibility-repair-email"]')).not.toBeNull();
 
-		// Settle the email repair under FAKE timers and prove the announcement
-		// is NOT on a clock: it lands, then survives a full minute of timer
-		// advance. (The app has zero setTimeout auto-dismiss patterns — a
-		// timer here would be the first, and AC2 forbids inventing one.)
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
 			{ _id: 'p-dom', name: '', email: '', _sharing: 'domain' }
@@ -434,9 +326,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		).toBe('Visibility change completed.');
 	});
 
-	// #257 review F1 — structural: the region lives OUTSIDE the `status` gate, so
-	// it is mounted through the loading state the post-repair reload passes
-	// through. Pinned on the initial load (same gate, observable without a repair).
 	it('the region is outside the status gate: mounted while status is still loading, before the ready surface exists', async () => {
 		selectSampledb();
 		const firstLoad = deferred<Array<Record<string, string>>>();
@@ -444,9 +333,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		const { container } = render(Page);
 
 		await waitFor(() => expect(h.listMyProfilesMock).toHaveBeenCalledTimes(1));
-		// Still loading — the ready surface is absent…
 		expect(q(container, '[data-testid="profile-field-name"]')).toBeNull();
-		// …and the live region is present anyway.
 		expect(
 			statusRegion(container),
 			'profile-repair-status must not be gated on `status` — a region that mounts alongside its own text announces nothing'
@@ -456,10 +343,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		await waitReady(container);
 	});
 
-	// #257 review F2 — the same stale-settle class the #260 guard covers for
-	// refreshCompletionGate. loadForSelected() RESOLVES on every branch, a
-	// superseded one included, so an un-gated `.then()` would announce collective
-	// A's repair over collective B's profile.
 	it('a superseded post-repair reload never announces: switching collectives mid-reload leaves the new profile silent', async () => {
 		setToken('jwt-member');
 		collectiveState.set({
@@ -472,7 +355,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		});
 		urlCollectiveDbStore.set(null);
 		selectedCollectiveDbStore.set('sampledb');
-		// A loads with a duplicated `name` → the real machinery mounts the banner.
 		h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 			cfg.db === 'bravura'
 				? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' }]
@@ -486,7 +368,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			expect(q(container, '[data-testid="profile-visibility-repair-name"]')).not.toBeNull()
 		);
 
-		// The repair write succeeds; A's post-repair reload is HELD in flight.
 		h.applyDuplicateRepairMock.mockResolvedValueOnce({ field: 'name', clearedIds: ['prof-dom'] });
 		const heldReload = deferred<Array<Record<string, string>>>();
 		h.listMyProfilesMock.mockReturnValueOnce(heldReload.promise);
@@ -495,8 +376,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		);
 		await waitFor(() => expect(h.listMyProfilesMock).toHaveBeenCalledTimes(2));
 
-		// Switch to B while A's reload is still pending — B's own load bumps the
-		// generation and resetState()s repairStatus back to ''.
 		selectedCollectiveDbStore.set('bravura');
 		await waitFor(() =>
 			expect((q(container, '[data-testid="profile-name-value"]')?.textContent ?? '').trim()).toBe(
@@ -505,7 +384,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		);
 		expect(statusText(container)).toBe('');
 
-		// A's reload settles now — superseded. It must announce nothing.
 		heldReload.resolve([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: '', email: '', _sharing: 'domain' }
@@ -518,10 +396,6 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 	});
 });
 
-// ---------------------------------------------------------------------------
-// 2. profile_visibility_title + profile_visibility_intro — the field list
-//    becomes a titled, explained section.
-// ---------------------------------------------------------------------------
 describe('#257 — visibility section heading (profile_visibility_title / profile_visibility_intro)', () => {
 	async function renderReady(): Promise<HTMLElement> {
 		selectSampledb();
@@ -537,15 +411,10 @@ describe('#257 — visibility section heading (profile_visibility_title / profil
 		const container = await renderReady();
 
 		const fieldList = q(container, '[data-testid="profile-field-name"]')!;
-		// Helper sanity on elements that exist TODAY (guards the DOM-order
-		// helper itself): the page intro precedes the field list.
 		const pageIntro = byExactText(container, 'Fill in your name and email.');
 		expect(pageIntro).not.toBeNull();
 		expect(precedes(pageIntro!, fieldList)).toBe(true);
 
-		// The heading: a real <h2> in the page's existing hierarchy (the
-		// Linked Accounts h2 is the page's one sectioning precedent — issue
-		// AC7: a heading element, not a styled div).
 		const headings = Array.from(container.querySelectorAll('h2'));
 		const visHeading = headings.find(
 			(el) => (el.textContent ?? '').trim() === 'Who can see each field'
@@ -555,16 +424,12 @@ describe('#257 — visibility section heading (profile_visibility_title / profil
 			'an <h2> carrying profile_visibility_title must render on the ready surface'
 		).not.toBeUndefined();
 
-		// Its explanatory line — the control's entire operating instruction
-		// (one level per field; tapping an icon is what moves it).
 		const introLine = byExactText(container, 'Pick an icon to move a field.');
 		expect(
 			introLine,
 			'profile_visibility_intro must render as the section\'s explanatory line'
 		).not.toBeNull();
 
-		// Placement: heading → intro line → field list, all before the Linked
-		// Accounts section.
 		expect(precedes(visHeading!, introLine!)).toBe(true);
 		expect(precedes(introLine!, fieldList)).toBe(true);
 		const linkedHeading = headings.find((el) =>
@@ -594,11 +459,6 @@ describe('#257 — visibility section heading (profile_visibility_title / profil
 	});
 });
 
-// ---------------------------------------------------------------------------
-// FOLD-IN (#260 note 2) — refreshCompletionGate's rejection handler must
-// distinguish stale from live: stale stays silent (the race fix), a LIVE
-// failure to resolve membership standing reaches console.error.
-// ---------------------------------------------------------------------------
 describe('#257 fold-in — live resolveGate rejection is logged, stale stays silent (#260 note 2)', () => {
 	const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 	const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
@@ -645,9 +505,6 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 		return editorInput!;
 	}
 
-	/** Initiate the gate re-read the way the app does: a domain-level name
-	 *  save settles → the queue's reconcile → refreshCompletionGate →
-	 *  resolveGate, whose promise the test holds. */
 	async function saveNameToInitiateGateRead(
 		container: HTMLElement,
 		newName: string
@@ -670,19 +527,15 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 		await waitReadyShowing(container, 'Ada');
 		await saveNameToInitiateGateRead(container, 'Ada M.');
 
-		// NO switch — the read is still current when it rejects.
 		const err = new Error('resolveGate: network down');
 		liveRead.reject(err);
 		await flushMicrotasks();
 
-		// The failure is LOGGED (like every other failure in this file — the
-		// house console.error shape), exactly once, carrying the error itself.
 		const logged = consoleSpy.mock.calls.filter((args) => args.includes(err));
 		expect(
 			logged,
 			'a live resolveGate rejection must reach console.error with the error object'
 		).toHaveLength(1);
-		// And it still writes nothing to the SSOT — logging, not corrupting.
 		expect(get(completionGateStore)).toBe('loading');
 		consoleSpy.mockRestore();
 	});
@@ -699,15 +552,11 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 		await waitReadyShowing(container, 'Ada');
 		await saveNameToInitiateGateRead(container, 'Ada M.');
 
-		// Switch to B while A's read is in flight, THEN reject it — stale.
 		selectedCollectiveDbStore.set('bravura');
 		await waitReadyShowing(container, 'Bea');
 		staleRead.reject(new Error('resolveGate: network down'));
 		await flushMicrotasks();
 
-		// The existing race spec pins the store/DOM silence; this pins the
-		// CONSOLE silence — the stale half of the stale-silent/live-logged
-		// split (#260 note 2).
 		expect(consoleSpy).not.toHaveBeenCalled();
 		expect(get(completionGateStore)).toBe('loading');
 		consoleSpy.mockRestore();

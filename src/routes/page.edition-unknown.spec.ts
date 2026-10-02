@@ -1,46 +1,12 @@
 // @vitest-environment happy-dom
-//
-// #329 RED (agenda half, site (b)) — the work-edition picker says UNKNOWN.
-//
-// The ruling: a negative derived from a truncated read is not a fact — get
-// the fact or say you don't have it, never print the negative. Truncation
-// poisons NEGATIVES, never positives.
-//
-// Pre-#329 (the #321 residual this replaces): the pin-edition picker
-// (`work-edition-picker`) is a closed set over the `listAllEditions` read
-// (limit=500) joined per work (`editionsByWorkId`), and its control gates out
-// entirely on `options.length > 0` — so under a TRUNCATED edition read a work
-// whose editions ALL fall past the cap loses the picker, and with it (#125
-// F5b) the row's only edition line, which then reads as "no edition" for a
-// work that HAS one.
-//
-// Ruled fix, pinned here on the REAL agenda route:
-//   • matched rows unchanged — a truncated read poisons only negatives;
-//   • a zero-match row under a TRUNCATED read renders the UNKNOWN state (a
-//     NEW i18n key — known-absent and not-known are different states), never
-//     the known-absent wording;
-//   • the picker is NOT gated out on unknown — present and openable;
-//   • known-absent (COMPLETE read, zero matches) keeps today's wording and
-//     today's behaviour byte-identically.
-//
-// Review round: opening the picker was only half of it — "let it open and read
-// that one work THERE, where it is one request and scoped". So the page reads
-// `listEditions(workId)` for every unknown row's work, and the unknown state
-// lasts exactly as long as that read is unanswered:
-//   • it comes back with editions → they fill the picker, wording gone;
-//   • it comes back EMPTY and COMPLETE → a genuine known-absence, today's
-//     wording;
-//   • it FAILS, or comes back TRUNCATED against its own cap → unknown stands.
-//     A read that did not answer is not an absence.
-//
-// Harness: page.repertoire-status-edition.spec.ts family — the real
-// +page.svelte, agenda loader mocked, network stubbed at `fetch`.
+// The agenda's work-edition picker says unknown after a partial read.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
@@ -107,14 +73,6 @@ function setAuthedWithOneCollective() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-// ri-1 (Spem, work-1) has TWO editions in the (possibly truncated) read — the
-// MATCHED row, which truncation must never touch. ri-2 (Old warhorse, work-2)
-// has ZERO matches — the row whose meaning flips with the read's completeness:
-// complete → known-absent (today's wording); truncated → UNKNOWN.
 const REPERTOIRE_ITEMS = [
 	{
 		_id: 'ri-1',
@@ -131,8 +89,6 @@ const REPERTOIRE_ITEMS = [
 	}
 ];
 
-/** The one work-2 edition that fell past the collective-wide cap — only the
- *  SCOPED per-work read can see it. */
 const SCOPED_WORK_2_EDITIONS = [
 	{
 		_id: 'ed-9',
@@ -141,7 +97,6 @@ const SCOPED_WORK_2_EDITIONS = [
 	}
 ];
 
-/** person-p holds `_editor` on the season, so the pin-edition surface renders. */
 function installWorld(
 	options: {
 		editionCount?: number;
@@ -187,11 +142,8 @@ function installWorld(
 				]
 			});
 		}
-		// The SCOPED per-work read (#329 review) — matched BEFORE the
-		// collective-wide one below, which its url also looks like.
 		if (url.includes('_type.string=edition') && url.includes('_parent.reference=work-2')) {
 			if (options.scoped === 'fail') return json({ error: 'boom' }, 500);
-			// `count` above the returned rows = this scoped read is ITSELF partial.
 			if (options.scoped === 'partial-empty') return json({ count: 900, entities: [] });
 			if (options.scoped === 'partial-some')
 				return json({ count: 900, entities: SCOPED_WORK_2_EDITIONS });
@@ -224,7 +176,6 @@ function installWorld(
 	return fetchMock;
 }
 
-/** Open the agenda row's Works disclosure and wait for the management row. */
 async function renderExpandedAsEditor() {
 	setAuthedWithOneCollective();
 	const rendered = render(Page);
@@ -238,7 +189,6 @@ async function renderExpandedAsEditor() {
 	return rendered;
 }
 
-/** The <li> rendering the named work. */
 function workRowOf(container: HTMLElement, workName: string): HTMLElement {
 	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
 		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
@@ -247,7 +197,6 @@ function workRowOf(container: HTMLElement, workName: string): HTMLElement {
 	return li as HTMLElement;
 }
 
-/** Full option shape of a row's pin-edition picker — value/label/disabled. */
 function pickerOptions(row: HTMLElement) {
 	const select = row.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
 	expect(select, 'work-edition-picker').not.toBeNull();
@@ -275,8 +224,6 @@ afterEach(() => {
 
 describe('#329 agenda — a zero-match row under a TRUNCATED edition read says UNKNOWN', () => {
 	it('the unknown state stands while the scoped read has not answered — never the known-absent wording', async () => {
-		// The scoped read FAILS: nothing is learned, so nothing is claimed. This
-		// is also the shape of the in-flight window, held open.
 		const fetchMock = installWorld({ editionCount: 4000, scoped: 'fail' });
 		const { container } = await renderExpandedAsEditor();
 		await vi.waitFor(() => {
@@ -288,11 +235,8 @@ describe('#329 agenda — a zero-match row under a TRUNCATED edition read says U
 		expect(
 			li.querySelector('[data-testid="work-edition-unknown"]')!.textContent
 		).toContain('[repertoire_edition_unknown]');
-		// The known-absent claim must be GONE — not softened, not captioned: absent.
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
-		// And the control is still there to be opened — gating it out is itself
-		// the assertion this issue removes.
 		const picker = li.querySelector('[data-testid="work-edition-picker"]');
 		expect(picker, 'work-edition-picker on the unknown row').not.toBeNull();
 		expect((picker as HTMLElement).tagName).toBe('SELECT');
@@ -305,7 +249,6 @@ describe('#329 agenda — a zero-match row under a TRUNCATED edition read says U
 		await vi.waitFor(() => {
 			expect(pickerOptions(workRowOf(container, 'Old warhorse')).length).toBe(2);
 		});
-		// One request, scoped to the work — not another collective-wide read.
 		const scoped = fetchMock.mock.calls
 			.map((c) => String(c[0]))
 			.filter((u) => u.includes('_parent.reference=work-2'));
@@ -386,9 +329,6 @@ describe('#329 agenda — a zero-match row under a TRUNCATED edition read says U
 	});
 });
 
-/** Wait for the scoped read to have been made, then let its promise chain and
- *  the render queue drain. The assertions that follow are about a state change
- *  that must NOT happen, so it has to have had every chance to happen first. */
 async function settleScopedRead(fetchMock: ReturnType<typeof installWorld>, urlFragment: string) {
 	await vi.waitFor(() => {
 		expect(fetchMock.mock.calls.some((c) => String(c[0]).includes(urlFragment))).toBe(true);
@@ -398,8 +338,6 @@ async function settleScopedRead(fetchMock: ReturnType<typeof installWorld>, urlF
 
 describe("#329 review — the scoped read's OWN truncation is not a fact either", () => {
 	it('a scoped read that comes back PARTIAL is not a known absence — unknown stands', async () => {
-		// A work with more editions than the scoped read's own cap: its empty (or
-		// short) page proves nothing, exactly as the collective-wide read's did.
 		const fetchMock = installWorld({ editionCount: 4000, scoped: 'partial-empty' });
 		const { container } = await renderExpandedAsEditor();
 		await settleScopedRead(fetchMock, '_parent.reference=work-2');
@@ -423,12 +361,9 @@ describe("#329 review — the scoped read's OWN truncation is not a fact either"
 		const li = workRowOf(container, 'Old warhorse');
 		expect(li.querySelector('[data-testid="work-edition-unknown"]')).not.toBeNull();
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
-		// The partial page never entered `scopedEditionsByWorkId`: the picker holds
-		// its placeholder and nothing else, and the row is still owed a real answer.
 		expect(pickerOptions(li)).toEqual([
 			{ value: '', label: '[repertoire_pin_edition_label]', disabled: false }
 		]);
-		// Still one request — an unsettled work is not re-read in a loop.
 		expect(
 			fetchMock.mock.calls
 				.map((c) => String(c[0]))
@@ -441,8 +376,6 @@ describe('#329 agenda — known-absent under a COMPLETE read is byte-identical t
 	it("zero editions for the work, read complete → today's wording, no unknown state, no picker", async () => {
 		const fetchMock = installWorld({}); // no count on the wire = complete
 		const { container } = await renderExpandedAsEditor();
-		// The MATCHED row's picker proves the edition read has settled — only then
-		// is "no picker on the zero-match row" an answer rather than a not-yet.
 		await vi.waitFor(() => {
 			expect(
 				workRowOf(container, 'Spem in alium').querySelector(
@@ -456,8 +389,6 @@ describe('#329 agenda — known-absent under a COMPLETE read is byte-identical t
 		expect(noEdition!.textContent).toContain('[repertoire_no_edition]');
 		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
 		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
-		// And NO scoped read is owed: a complete read already IS the fact, so the
-		// per-work requests cost nothing in the ordinary case.
 		expect(
 			fetchMock.mock.calls.some((c) => String(c[0]).includes('_parent.reference=work-2'))
 		).toBe(false);
@@ -473,8 +404,6 @@ describe('#329 — the lifetime listMyRsvps read keeps its OTHER consumer', () =
 	});
 });
 
-// ── i18n — the unknown wording (all four locales) ─────────────────────────────
-
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function localeMessages(locale: string): MessageFile {
@@ -483,8 +412,6 @@ function localeMessages(locale: string): MessageFile {
 	) as MessageFile;
 }
 
-/** Today's known-absent wording, byte-pinned: the ruling says known-absent
- *  KEEPS this — only not-known changes. */
 const NO_EDITION_TODAY: Record<(typeof LOCALES)[number], string> = {
 	en: 'No pinned edition',
 	et: 'Trükiväljaanne valimata',
@@ -516,12 +443,6 @@ describe('#329 i18n — repertoire_edition_unknown exists; repertoire_no_edition
 	});
 });
 
-// #342 i18n — the unknown wording splits. `repertoire_edition_unknown` keeps
-// its current sentence and serves the TRUNCATED state only (its incompleteness
-// claim is true there); `repertoire_edition_unknown_pinned` serves the
-// DANGLING pin under a COMPLETE read, where nothing is incomplete and nothing
-// the user waits for will resolve it. Three states, three sentences — none may
-// share wording in any locale.
 describe('#342 i18n — repertoire_edition_unknown_pinned exists; the three edition-state messages are distinct', () => {
 	it.each(LOCALES)('%s.json carries repertoire_edition_unknown_pinned, non-empty', (locale) => {
 		const messages = localeMessages(locale);
@@ -546,6 +467,4 @@ describe('#342 i18n — repertoire_edition_unknown_pinned exists; the three edit
 	);
 });
 
-// (*MVOX:Tallis* — #329 RED)
-// (*MVOX:Tallis* — #342 RED: the dangling-pin key added to the locale guards;
-// no_edition byte-pin untouched)
+// (*MVOX:Tallis*)

@@ -1,25 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #256 RED — pin 6: multi-collective. The /links page state resets on a
-// collective switch, and a list read still in flight for the OLD collective
-// NEVER repopulates the NEW collective's page (the #287/#296/#297/#299 bug
-// class, guarded on new pages by the EXTRACTED machine).
-//
-// House method (#259's deterministic race construction, worked example:
-// page.roster-pending-collective-switch.spec.ts): the read mock itself is
-// release-controlled — hold → switch → settle. Assertions read rendered DOM
-// and mock call records, never component internals.
-//
-// STRUCTURAL PIN: this is a NEW page, so it uses the extracted
-// createRouteLoadMachine from $lib/loading/routeLoad.ts (the machine roster/
-// library/profile share) — NOT a hand-rolled in-file counter (the agenda
-// +page.svelte's requestId idiom is grandfathered in-file precedent, not the
-// pattern for new pages; see routeLoad.wiring.spec.ts's "actually replaces,
-// not sits beside" discipline).
+// /links resets on a collective switch and drops the old collective's late reads.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_t, key) => () => String(key) })
@@ -46,7 +31,6 @@ vi.mock('$lib/links/linkActions', () => ({
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-// #374/#375 — the page reads its OWN host from $app/state at save time.
 vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links') } }));
 
 import Page from './links/+page.svelte';
@@ -71,16 +55,6 @@ function rowsB(): LinkRow[] {
 	return [
 		{ id: 'lb-1', name: 'B-Website', url: 'https://b.example', description: null, displayOrder: 1 }
 	];
-}
-
-function deferred<T = void>() {
-	let resolveFn!: (v: T) => void;
-	let rejectFn!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolveFn = res;
-		rejectFn = rej;
-	});
-	return { promise, resolve: resolveFn, reject: rejectFn };
 }
 
 function setAuthedWithTwoCollectives() {
@@ -140,19 +114,16 @@ describe('#256 pin 6 — a stale list read never repopulates the new collective 
 		);
 
 		const { container } = render(Page);
-		// A's read is in flight — nothing rendered yet.
 		await waitFor(() => {
 			expect(listLinksMock).toHaveBeenCalled();
 		});
 		expect(rowNames(container)).toEqual([]);
 
-		// Switch to B; B's read resolves immediately.
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['B-Website']);
 		});
 
-		// NOW A's stale read settles — it must change NOTHING.
 		heldA.resolve(rowsA());
 		await Promise.resolve();
 		await Promise.resolve();
@@ -243,4 +214,4 @@ describe('#256 structural — the NEW page uses the extracted route-load machine
 	});
 });
 
-// (*MVOX:Tallis* — #256 RED)
+// (*MVOX:Tallis*)

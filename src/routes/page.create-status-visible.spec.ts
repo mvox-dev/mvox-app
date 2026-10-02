@@ -3,6 +3,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
@@ -191,16 +192,6 @@ function fixtureRows(): RosterRow[] {
 			dbEntityId: ORG_EFK
 		}
 	];
-}
-
-function deferred<T>() {
-	let resolveFn!: (v: T) => void;
-	let rejectFn!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolveFn = res;
-		rejectFn = rej;
-	});
-	return { promise, resolve: resolveFn, reject: rejectFn };
 }
 
 async function flushMicrotasks(): Promise<void> {

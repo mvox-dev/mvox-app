@@ -1,24 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 review F1 — /links writes are gated while offline, on the REAL
-// page (harness: page.links-wire.spec.ts — the wire is mocked at the entuFetch
-// seam, so a write that slips through is visible as a non-GET call).
-//
-// THE FINDING: slice 6 gated the three offline-READ routes and stopped. /links
-// carried createLink / updateLink / deleteLink / reorderLinks fully enabled
-// offline with no reason text, and no fence covered it.
-//
-// CONTRACT — an admin on a loaded list, the signal ($lib/net/online) offline:
-//   • links-add-submit, links-edit, links-remove, links-move-up/down and
-//     links-edit-save are disabled;
-//   • ONE visible sentence [data-testid="links-write-unavailable"] =
-//     m.write_unavailable_no_signal();
-//   • the SWEEP: operating every still-enabled control puts no non-GET on the
-//     wire (so a control nobody listed fails here, not in production);
-//   • a typed draft is KEPT — nothing is queued, nothing is discarded;
-//   • back online: enabled again, the sentence gone, an add writes.
+// /links writes are gated while offline, on the real page.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
@@ -70,10 +54,6 @@ import {
 const DB_ENTITY = 'db-ent-1';
 const TYPE_ID = 'type-link-1';
 const REASON = '[write_unavailable_no_signal]';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function nonGetWireCalls(): string[] {
 	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>)
@@ -176,7 +156,6 @@ async function renderReadyOnline() {
 	return utils;
 }
 
-/** The admin write controls that exist on a loaded list with no editor open. */
 function writeControls(container: HTMLElement): HTMLElement[] {
 	return [
 		q(container, 'links-add-submit') as HTMLElement,
@@ -238,8 +217,6 @@ describe('/links — writes while offline (#434 slice 6 review F1)', () => {
 		expect((q(container, 'links-edit-name') as HTMLInputElement).value).toBe('Renamed');
 	});
 
-	// The sweep: every enabled control, re-queried after each interaction, so a
-	// write control nobody remembered to list fails HERE.
 	it('offline: operating every enabled control puts no non-GET on the wire', async () => {
 		const { container } = await renderReadyOnline();
 		await goOffline();
@@ -248,8 +225,6 @@ describe('/links — writes while offline (#434 slice 6 review F1)', () => {
 
 		const touched = await exerciseEveryEnabledControl(container);
 
-		// Not a vacuous pass — the sweep really did reach live controls (the three
-		// add-form text boxes, the edit-cancel, the read retry).
 		expect(touched.length).toBeGreaterThan(2);
 		expect(nonGetWireCalls()).toEqual([]);
 	});
@@ -272,4 +247,4 @@ describe('/links — writes while offline (#434 slice 6 review F1)', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)

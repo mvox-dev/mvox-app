@@ -1,41 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #260 RED — the completionGate race: a stale resolveGate settle after a
-// collective switch corrupts the membership SSOT.
-//
-// THE DEFECT (triage YELLOW-T4.8.1, verbatim on main): profile/+page.svelte's
-// `refreshCompletionGate()` does `resolveGate(...).then((state) =>
-// completionGateStore.set(state))` with NO generation guard. It is called from
-// generation-guarded queue callbacks, but the async read INSIDE it is not
-// guarded — start a gate re-read in collective A, switch to B, and A's late
-// answer lands as the current truth. `completionGateStore` is the app-wide
-// SSOT ("no surface can re-derive the gate"), so a stale 'complete' suppresses
-// the /profile redirect and re-enables member affordances everywhere at once,
-// and BY DESIGN nothing downstream can catch it: the written value is keyed to
-// nothing.
-//
-// THE PROOF CLAUSE (#253 standard — Bentham, pre-committed): a timing race
-// resists commit-replay, so every test here is DETERMINISTICALLY ORDERED — the
-// resolveGate promise is HELD by the test (deferred mock), the collective is
-// switched, and only THEN is the stale read settled. The race test fails
-// against pre-fix code EVERY run, for the RIGHT reason: the tripping assertion
-// is on the STORE'S VALUE, showing the stale 'complete' actually reaching
-// `completionGateStore` — never a timeout, never an unrelated assertion.
-//
-// These specs render the REAL /profile route component (integration, not an
-// isolated unit): the gate re-read is initiated exactly the way the app does
-// it — a domain-level name save settling through the real edit queue's
-// `reconcile` → `refreshCompletionGate()`. Only `resolveGate` is overridden
-// (importActual keeps the real store — layout.completion-gate.spec.ts
-// precedent), so the store the assertions read is the ONE shared SSOT
-// instance every consumer subscribes to.
-//
-// House precedent mirrored, not reinvented: the event page's generation
-// guards and #255's call-time capture pattern (per-request context captured
-// at initiation, compared at settle). RED asserts OUTCOME, not mechanism —
-// GREEN may key the guard on request generation or collective identity.
+// A stale completion-gate result after a collective switch is dropped.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -151,15 +118,10 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 	applyProfileSave: h.applyProfileSaveMock,
 	ProfileSaveError: class ProfileSaveError extends Error {}
 }));
-// Override ONLY resolveGate; keep the REAL store/resetGate so the page under
-// test and this spec's assertions share the one SSOT instance — the same
-// partial-mock shape layout.completion-gate.spec.ts uses.
 vi.mock('$lib/profile/completionGate', async (importActual) => {
 	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
 	return { ...actual, resolveGate: h.resolveGateMock };
 });
-// The linked-identities read runs after every profile load; stubbed empty so it
-// neither hits the network nor injects its own async noise into the ordering.
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
 }));
@@ -179,17 +141,6 @@ import {
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
 
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-/** Drain the microtask queue so a just-settled promise chain fully lands. */
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
 }
@@ -197,11 +148,6 @@ async function flushMicrotasks(): Promise<void> {
 const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
-/** Per-collective profiles with DISTINCT names, so "which collective's ready
- *  state is on screen" is observable in the DOM — the switch sentinels below
- *  are content-based, never a guess about render timing. Both hold their name
- *  at DOMAIN level, so a name save dispatches at 'domain' and its reconcile
- *  reaches `refreshCompletionGate()` (the gate re-read's real initiation site). */
 function wireProfilesPerCollective(): void {
 	h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 		cfg.db === 'bravura'
@@ -227,8 +173,6 @@ function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
 	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
 }
 
-/** Wait until the profile surface shows THIS collective's loaded name — proof
- *  the new context's load fully landed (not a leftover DOM from the last one). */
 async function waitReadyShowing(container: HTMLElement, name: string): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull();
@@ -251,11 +195,6 @@ async function openEditor(
 	return editorInput!;
 }
 
-/** Initiate the gate re-read the way the app does: a domain-level name save
- *  settles, the queue's `reconcile` fires, and `refreshCompletionGate()` calls
- *  `resolveGate` — whose promise THIS spec holds. Waits until the resolveGate
- *  call count reaches `expectedCalls`, so the initiation is confirmed before
- *  the test proceeds to switch/settle. */
 async function saveNameToInitiateGateRead(
 	container: HTMLElement,
 	newName: string,
@@ -295,27 +234,17 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		const { container } = render(Page);
 		await waitReadyShowing(container, 'Ada');
 
-		// 1. Initiate the gate re-read in A. The resolveGate promise is HELD.
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 		expect(h.resolveGateMock.mock.calls[0][1]).toBe('person-p');
 
-		// 2. Switch to B while A's read is still in flight.
 		await switchCollective(container, 'bravura', 'Bea');
 
-		// 3. B's own gate resolution lands (the layout owns this on a switch):
-		//    the user has NOT completed her profile in B.
 		completionGateStore.set('incomplete');
 
-		// 4. ONLY NOW settle A's stale read — with exactly the value that opens
-		//    the hole: 'complete' suppresses the /profile redirect and re-enables
-		//    member affordances app-wide.
 		staleRead.resolve('complete');
 		await flushMicrotasks();
 
-		// THE assertion (the store's value — the SSOT itself): A's stale
-		// 'complete' must never land. Pre-fix this reads 'complete' — the stale
-		// write reaching the app-wide gate — and fails every run.
 		expect(get(completionGateStore)).toBe('incomplete');
 	});
 
@@ -332,7 +261,6 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 		await switchCollective(container, 'bravura', 'Bea');
 
-		// B's resolve has not landed: the store is still in its pending state.
 		expect(get(completionGateStore)).toBe('loading');
 
 		staleRead.resolve('complete');
@@ -353,7 +281,6 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 
-		// No switch: the settle is current, and MUST write.
 		read.resolve('complete');
 		await flushMicrotasks();
 
@@ -375,30 +302,23 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		const { container } = render(Page);
 		await waitReadyShowing(container, 'Ada');
 
-		// Three gate re-reads initiated across A → B → A, ALL held.
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 		await switchCollective(container, 'bravura', 'Bea');
 		await saveNameToInitiateGateRead(container, 'Bea M.', 2);
 		await switchCollective(container, 'sampledb', 'Ada');
 		await saveNameToInitiateGateRead(container, 'Ada N.', 3);
 
-		// The three requests carried their own contexts at initiation.
 		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 		expect(h.resolveGateMock.mock.calls[1][0]).toMatchObject({ db: 'bravura' });
 		expect(h.resolveGateMock.mock.calls[1][1]).toBe('person-b');
 		expect(h.resolveGateMock.mock.calls[2][0]).toMatchObject({ db: 'sampledb' });
 
-		// Settle out of order: the superseded A-read first (no assertion on the
-		// intermediate value — RED pins outcome, not the guard's keying), then
-		// the LAST requested context's read.
 		readA1.resolve('incomplete');
 		await flushMicrotasks();
 		readA2.resolve('complete');
 		await flushMicrotasks();
 		expect(get(completionGateStore)).toBe('complete');
 
-		// B's read settles LAST of all — from a context the user has left.
-		// It must write nothing: the last-requested context's result stands.
 		readB.resolve('incomplete');
 		await flushMicrotasks();
 		expect(get(completionGateStore)).toBe('complete');
@@ -417,21 +337,15 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
 		await switchCollective(container, 'bravura', 'Bea');
 
-		// The stale read REJECTS after the user has left its context. The guard
-		// must swallow it silently (write nothing, surface nothing) — GREEN's
-		// seam owns the rejection so it cannot escape as an unhandled rejection.
 		staleRead.reject(new Error('resolveGate: network down'));
 		await flushMicrotasks();
 
 		expect(get(completionGateStore)).toBe('loading');
-		// B's surface is untouched by A's stale failure.
 		expect(q(container, '[data-testid="profile-load-error"]')).toBeNull();
 		expect(displayValue(container, 'name')).toBe('Bea');
 	});
 
 	it('write-side guard only: the completionGate module keeps its exported surface (no API change for consumers)', async () => {
-		// The ACTUAL module (this spec mocks only resolveGate for the page) —
-		// consumers everywhere depend on exactly this surface.
 		const actual = await vi.importActual<typeof import('$lib/profile/completionGate')>(
 			'$lib/profile/completionGate'
 		);
@@ -443,7 +357,6 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		expect(typeof actual.hasVisibleName).toBe('function');
 		expect(typeof actual.hasDomainName).toBe('function');
 
-		// The store contract consumers rely on: starts 'loading', set() lands.
 		const seen: GateState[] = [];
 		const unsubscribe = actual.completionGateStore.subscribe((s) => seen.push(s));
 		actual.completionGateStore.set('complete');

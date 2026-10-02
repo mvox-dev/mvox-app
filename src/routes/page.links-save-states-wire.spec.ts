@@ -1,27 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #323 RED — INTEGRATION: the ACTUAL /links page driving the REAL
-// linkData/linkActions modules, mocked only at the entuFetch seam — the
-// FAILURE leg the unit specs cannot force. reorderLinks (linkActions.ts) is a
-// sequential per-id GET→POST renumber loop that THROWS MID-LOOP on the first
-// HTTP failure, leaving every earlier id already renumbered on the server.
-// This spec constructs exactly that: three links, a move whose renumber
-// succeeds for the first id and 500s on the second, so the server ends
-// HALF-APPLIED and only a genuine re-read can tell the user the truth.
-//
-// Pins (issue #323 done-when 2 + Gama's adjacent-scope ruling):
-//   - the thrown wire error surfaces as role="alert" (links_reorder_failed),
-//     NOT console.error-and-nothing;
-//   - the failure TRIGGERS a fresh list read AFTER the failing POST, and the
-//     page renders exactly what the server returns — never the half-applied
-//     intent, never a stale pre-write memory;
-//   - the loop stopped mid-way (no renumber POST ever hits the third id) —
-//     the untouched tail is the reason a re-read is mandatory;
-//   - retry stays available: the arrow buttons end enabled;
-//   - adjacent: a REAL createLink failure (500 on the create POST) surfaces
-//     as role="alert" (links_create_failed) with the draft retained.
+// /links reorder through the real link data modules, mocked only at entuFetch.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
@@ -48,7 +29,6 @@ vi.mock('$lib/entu/request', async (importActual) => ({
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-// #374/#375 — the page reads its OWN host from $app/state at save time.
 vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links') } }));
 
 import Page from './links/+page.svelte';
@@ -64,10 +44,6 @@ import {
 
 const DB_ENTITY = 'db-ent-1';
 const TYPE_ID = 'type-link-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 interface WireCall {
 	db: string;
@@ -93,11 +69,8 @@ interface ServerLink {
 	order: number;
 }
 
-/** Mutable server-side truth the list read serves from. */
 let serverLinks: ServerLink[];
-/** Renumber POSTs that must answer 500 (by entity id). */
 let failRenumberFor: Set<string>;
-/** When true, the entity-create POST answers 500. */
 let failCreate: boolean;
 
 function serveList() {
@@ -217,19 +190,12 @@ describe('#323 integration — a MID-LOOP renumber failure on the REAL wire surf
 	it('move-down on Alpha: l-b renumbers OK, l-a 500s → role=alert links_reorder_failed, the loop stops before l-c, a FRESH list read follows the failing POST, and the screen shows the SERVER order', async () => {
 		const { container } = await renderReady();
 
-		// Intent: [Beta, Alpha, Gamma] → renumber order l-b(1), l-a(2), l-c(3).
-		// l-b's POST succeeds, l-a's POST 500s — the server is now
-		// HALF-APPLIED. The router's list read reflects the server truth we
-		// choose it to have settled at; distinct from BOTH the pre-write order
-		// (Alpha,Beta,Gamma) and the intent (Beta,Alpha,Gamma), so only a real
-		// re-read can produce the rendered result.
 		failRenumberFor.add('l-a');
 		const postFailureServerOrder: ServerLink[] = [
 			{ _id: 'l-b', name: 'Beta', order: 1 },
 			{ _id: 'l-c', name: 'Gamma', order: 2 },
 			{ _id: 'l-a', name: 'Alpha', order: 3 }
 		];
-		// Swap the server truth the moment the failing POST answers.
 		const baseImpl = entuFetchMock.getMockImplementation()!;
 		entuFetchMock.mockImplementation((db: string, path: string, token: string, init?: RequestInit) => {
 			const p = String(path);
@@ -241,7 +207,6 @@ describe('#323 integration — a MID-LOOP renumber failure on the REAL wire surf
 
 		await fireEvent.click(rowEls(container)[0].querySelector('[data-testid="links-move-down"]')!);
 
-		// The failure surfaces as a truthful alert — not console.error-and-nothing.
 		const alert = await waitFor(() => {
 			const el = q(container, 'links-reorder-error');
 			expect(el).not.toBeNull();
@@ -251,12 +216,10 @@ describe('#323 integration — a MID-LOOP renumber failure on the REAL wire surf
 		expect(alert.textContent).toContain('links_reorder_failed');
 
 		const calls = wireCalls();
-		// The loop stopped at the failure: l-b renumbered, l-a attempted, l-c NEVER touched.
 		expect(calls.filter((c) => c.method === 'POST' && /entity\/l-b/.test(c.path))).toHaveLength(1);
 		expect(calls.filter((c) => c.method === 'POST' && /entity\/l-a/.test(c.path))).toHaveLength(1);
 		expect(calls.filter((c) => c.method === 'POST' && /entity\/l-c/.test(c.path))).toHaveLength(0);
 
-		// A FRESH list read fired AFTER the failing POST.
 		const failingPostIdx = calls.findIndex(
 			(c) => c.method === 'POST' && /entity\/l-a/.test(c.path)
 		);
@@ -269,13 +232,10 @@ describe('#323 integration — a MID-LOOP renumber failure on the REAL wire surf
 			'failure must trigger a re-read of the list AFTER the failing renumber POST'
 		).toBe(true);
 
-		// The screen matches the SERVER — not the half-applied intent, not the
-		// pre-write memory.
 		await waitFor(() => {
 			expect(rowNames(container)).toEqual(['Beta', 'Gamma', 'Alpha']);
 		});
 
-		// Retry stays available: non-boundary arrows end enabled.
 		await waitFor(() => {
 			expect(
 				rowEls(container)[1].querySelector<HTMLButtonElement>('[data-testid="links-move-down"]')!
@@ -308,4 +268,4 @@ describe('#323 integration adjacent — a REAL createLink failure surfaces as ro
 	});
 });
 
-// (*MVOX:Tallis* — #323 RED)
+// (*MVOX:Tallis*)
