@@ -2,7 +2,12 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { namedBindings, writesToEntu, writingExports } from '$lib/testing/writeReach';
+import {
+	namedBindings,
+	untraceableForms,
+	writesToEntu,
+	writingExports
+} from '$lib/testing/writeReach';
 
 const SRC = resolve(process.cwd(), 'src');
 const GATE_MODULE = '$lib/net/online';
@@ -43,14 +48,15 @@ const WRITE_SEAMS = [...WRITING]
 /** The `$lib` imports of a .svelte file that bring in a binding which writes. */
 function writingImports(path: string, source: string): string[] {
 	const out: string[] = [];
-	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*'([^']+)'/g;
+	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
 	for (const [, typeOnly, clause, specifier] of source.matchAll(pattern)) {
 		const module = typeOnly ? null : resolveModule(specifier, path);
 		const names = module ? WRITING.get(module) : undefined;
 		if (!names || names.size === 0) continue;
 		const named = clause.match(/\{([\s\S]*)\}/)?.[1];
 		const viaNamespace = /\*\s+as\s+/.test(clause);
-		if (viaNamespace || namedBindings(named ?? '').some(([name]) => names.has(name))) {
+		const viaDefault = /^\s*[A-Za-z_$][\w$]*\s*(,|$)/.test(clause) && names.has('default');
+		if (viaNamespace || viaDefault || namedBindings(named ?? '').some(([name]) => names.has(name))) {
 			out.push(specifier);
 		}
 	}
@@ -61,7 +67,7 @@ function writingImports(path: string, source: string): string[] {
  *  type { … } from` contributes nothing). */
 function valueImportSpecifiers(source: string): string[] {
 	const out: string[] = [];
-	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*'([^']+)'/g;
+	const pattern = /import\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
 	let match: RegExpExecArray | null;
 	while ((match = pattern.exec(source)) !== null) {
 		const [, typeOnlyKeyword, clause, specifier] = match;
@@ -135,6 +141,54 @@ describe('#643 — a write reached through other modules still counts', () => {
 			c: "export function c() { return f(u, { method: 'DELETE' }); }"
 		});
 		expect(fed.get('a')).toEqual(new Set(['a']));
+	});
+});
+
+describe('#643 — writeReach follows the forms it was taught, and refuses the rest', () => {
+	const planted = (files: Record<string, string>) =>
+		writingExports(new Map(Object.entries(files)), (spec) => spec.replace(/^\.\//, ''));
+	const writer = 'function save() { return f(u, { method: "PUT" }); }';
+
+	it('a default export and a default import carry the write', () => {
+		const writing = planted({
+			w: `export default ${writer}`,
+			page: "import save from './w';\nexport const relay = () => save();"
+		});
+		expect(writing.get('w')).toEqual(new Set(['default']));
+		expect(writing.get('page')).toEqual(new Set(['relay']));
+		expect(planted({ w: `${writer}\nexport default save;` }).get('w')).toEqual(
+			new Set(['default'])
+		);
+	});
+
+	it('an export list with no semicolon still exports, and double quotes still count', () => {
+		expect(planted({ w: `${writer}\nexport { save }` }).get('w')).toEqual(new Set(['save']));
+		expect(writesToEntu('f(u, { method: "DELETE" })')).toBe(true);
+	});
+
+	it.each([
+		["export * as ns from './w';", 'export * as ns from'],
+		["export { default as save } from './w';", 'export { default } from'],
+		["const w = await import('./w');\nw.save();", 'a whole module from import()'],
+		["import('$lib/w').then(({ save }) => save());", 'import().then'],
+		['export default { save };', 'a default-exported object'],
+		['export default async function () {}', 'anonymous export default']
+	])('the guard catches %s', (source, label) => {
+		expect(untraceableForms(source)).toEqual([label]);
+	});
+
+	it('no file in src/lib or src/routes uses a form writeReach cannot trace', () => {
+		const untraced = ALL.filter(
+			(p) =>
+				/\.(ts|svelte)$/.test(p) &&
+				!p.endsWith('.spec.ts') &&
+				[LIB, join(SRC, 'routes')].some((dir) => p.startsWith(dir))
+		).flatMap((p) =>
+			untraceableForms(readFileSync(p, 'utf-8')).map(
+				(form) => `${rel(p)}: writeReach can't trace this form (${form}): teach it or rewrite`
+			)
+		);
+		expect(untraced).toEqual([]);
 	});
 });
 

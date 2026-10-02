@@ -2,11 +2,26 @@
 import { stripComments } from './commentRules';
 
 // A deliberate pinned text check: a new write module is a seam once written. Comments don't count.
-const WRITE_METHOD = /method:\s*'(POST|DELETE|PUT|PATCH)'/;
+const WRITE_METHOD = /method:\s*['"`](POST|DELETE|PUT|PATCH)['"`]/;
 const DECLARATION =
-	/^(export\s+)?(?:default\s+)?(?:declare\s+)?(?:async\s+)?(?:function\*?|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
+	/^(export\s+)?(default\s+)?(?:declare\s+)?(?:async\s+)?(?:function\*?|const|let|var|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
 
 export const writesToEntu = (source: string) => WRITE_METHOD.test(stripComments(source));
+
+// Forms parseModule cannot follow; a guard spec fails on any of them in src/lib or src/routes.
+const UNTRACEABLE: ReadonlyArray<[RegExp, string]> = [
+	[/export\s+\*\s+as\s+[\w$]+\s+from\s*['"][.$]/, 'export * as ns from'],
+	[/export\s*\{[^}]*\bdefault\b[^}]*\}\s*from\s*['"][.$]/, 'export { default } from'],
+	[/(?:const|let|var)\s+[\w$]+\s*=\s*(?:await\s+)?import\(\s*['"][.$]/, 'a whole module from import()'],
+	[/import\(\s*['"][.$][^'"]*['"]\s*\)\s*\.then/, 'import().then'],
+	[/export\s+default\s*\{/, 'a default-exported object'],
+	[/export\s+default\s+(?:async\s+)?(?:function\s*\*?\s*\(|class\s*[{e]|\()/, 'anonymous export default']
+];
+
+export function untraceableForms(source: string): string[] {
+	const code = stripComments(source);
+	return UNTRACEABLE.filter(([pattern]) => pattern.test(code)).map(([, label]) => label);
+}
 
 export type Resolve = (specifier: string, fromFile: string) => string | null;
 
@@ -46,7 +61,7 @@ function parseModule(path: string, source: string, resolve: Resolve): ModuleShap
 		reexports: [],
 		starReexports: []
 	};
-	const importPattern = /import\s+(type\s+)?([^;]*?)\s*from\s*'([^']+)'/g;
+	const importPattern = /import\s+(type\s+)?([^;]*?)\s*from\s*['"]([^'"]+)['"]/g;
 	for (const [, typeOnly, clause, specifier] of code.matchAll(importPattern)) {
 		const module = typeOnly ? null : resolve(specifier, path);
 		if (!module) continue;
@@ -56,8 +71,10 @@ function parseModule(path: string, source: string, resolve: Resolve): ModuleShap
 		}
 		const namespace = clause.match(/\*\s+as\s+([\w$]+)/)?.[1];
 		if (namespace) shape.namespaces.set(namespace, module);
+		const defaultImport = clause.match(/^\s*([A-Za-z_$][\w$]*)\s*(,|$)/)?.[1];
+		if (defaultImport) shape.imports.set(defaultImport, { module, name: 'default' });
 	}
-	const dynamicPattern = /const\s*\{([^}]*)\}\s*=\s*await\s+import\(\s*'([^']+)'\s*\)/g;
+	const dynamicPattern = /const\s*\{([^}]*)\}\s*=\s*await\s+import\(\s*['"]([^'"]+)['"]\s*\)/g;
 	for (const [, clause, specifier] of code.matchAll(dynamicPattern)) {
 		const module = resolve(specifier, path);
 		if (!module) continue;
@@ -65,7 +82,7 @@ function parseModule(path: string, source: string, resolve: Resolve): ModuleShap
 			shape.imports.set(local, { module, name });
 		}
 	}
-	const reexportPattern = /export\s+(type\s+)?(\*|\{[^}]*\})\s*from\s*'([^']+)'/g;
+	const reexportPattern = /export\s+(type\s+)?(\*|\{[^}]*\})\s*from\s*['"]([^'"]+)['"]/g;
 	for (const [, typeOnly, clause, specifier] of code.matchAll(reexportPattern)) {
 		const module = typeOnly ? null : resolve(specifier, path);
 		if (!module) continue;
@@ -74,15 +91,18 @@ function parseModule(path: string, source: string, resolve: Resolve): ModuleShap
 			shape.reexports.push({ module, name: `${name}\u0000${exported}` });
 		}
 	}
-	for (const [, clause] of code.matchAll(/export\s*\{([^}]*)\}\s*;/g)) {
+	for (const [, clause] of code.matchAll(/export\s*\{([^}]*)\}(?!\s*from\b)/g)) {
 		for (const [local, exported] of namedBindings(clause)) shape.exported.set(exported, local);
+	}
+	for (const [, local] of code.matchAll(/^export\s+default\s+([A-Za-z_$][\w$]*)\s*;?\s*$/gm)) {
+		shape.exported.set('default', local);
 	}
 	let current: string | null = null;
 	for (const line of code.split('\n')) {
 		const declared = line.match(DECLARATION);
 		if (declared) {
-			current = declared[2];
-			if (declared[1]) shape.exported.set(current, current);
+			current = declared[3];
+			if (declared[1]) shape.exported.set(declared[2] ? 'default' : current, current);
 			shape.chunks.set(current, '');
 		}
 		if (current) shape.chunks.set(current, shape.chunks.get(current) + line + '\n');
