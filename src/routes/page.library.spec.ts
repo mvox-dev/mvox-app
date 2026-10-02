@@ -1827,8 +1827,12 @@ function stripLineComments(src: string): string {
 }
 
 describe('/library — read-only structural guard', () => {
-	it('the data layer module never contains a write-method call (no POST/PUT/DELETE)', () => {
-		const src = readFileSync(resolve(process.cwd(), 'src/lib/library/libraryData.ts'), 'utf-8');
+	it.each([
+		'src/lib/library/libraryData.ts',
+		'src/lib/library/libraryReads.ts',
+		'src/lib/library/libraryAvailability.ts'
+	])('the data layer module %s never contains a write-method call (no POST/PUT/DELETE)', (file) => {
+		const src = readFileSync(resolve(process.cwd(), file), 'utf-8');
 		expect(stripLineComments(src)).not.toMatch(/method:\s*['"](POST|PUT|DELETE)['"]/);
 	});
 

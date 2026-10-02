@@ -1,28 +1,4 @@
-// #434 slice 2/6 review round, finding 2 — the OPT-IN FENCE.
-//
-// readCache.ts's header states the law: "OPT IN, NEVER BLANKET ... a reader
-// gets the flag in the same slice that ships its screen's 'as of <time>' line.
-// A flag on a reader whose screen has no age line yet is a stored copy painted
-// as if it were live." The first cut of slice 2 broke it by hard-wiring
-// CACHED_READ INSIDE three SHARED readers — `checkCollectiveMarker`,
-// `resolveDatabaseEntityId`, `listSeasons`/`listEvents` — which is a blanket by
-// another route: `resolveDatabaseEntityId` alone has FIFTEEN call sites, EIGHT
-// of them a GET that is a STEP INSIDE A WRITE (season/event/series create,
-// sectionActions, linkActions, inviteData — each resolves the id and then POSTs
-// it as `_parent`), and `listSeasons` also serves /library, whose own age line
-// is slice 3's.
-//
-// So the flag is an ARGUMENT, defaulting to off, and this file is the fence
-// around where it may be switched on. Two halves:
-//   (1) BEHAVIOUR — the default really is uncached: a `resolveDatabaseEntityId`
-//       called the way every write path calls it stores nothing and, offline,
-//       rejects; the same call with CACHED_READ stores and serves.
-//   (2) STRUCTURE — an ALLOWLIST of the files that may name CACHED_READ at all,
-//       the same shape swPolicy.ts's fence takes ("deliberately structural, not
-//       a per-endpoint blacklist, so it cannot erode one route at a time
-//       later"). Slices 3-6 add their own screens' readers here ON PURPOSE,
-//       as a visible line in a diff, not by a flag drifting into a shared
-//       module.
+// The read-cache opt-in fence: shared readers take the flag as an argument, default off.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -74,9 +50,7 @@ describe('#434 — a write-path resolveDatabaseEntityId is NOT cache-backed', ()
 	});
 
 	it('the default call REJECTS offline — a stale _parent id is never fed into a write', async () => {
-		// Warm the cache the way the AGENDA's path does, so there IS a stored
-		// answer for this exact key: the rejection below is then the default's
-		// own doing, not an empty cache.
+		// Warm the cache first, so the rejection is the default's doing, not an empty cache.
 		expect(await resolveDatabaseEntityId(CFG, online(), CACHED_READ)).toBe('db-entity-1');
 		await flushReadCache();
 		expect(await readCacheEntryCount()).toBe(1);
@@ -94,66 +68,34 @@ describe('#434 — a write-path resolveDatabaseEntityId is NOT cache-backed', ()
 describe('#434 — the shared readers hard-wire no flag', () => {
 	const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
 
-	// Each of these is called from screens that have no "as of <time>" line
-	// (and, for resolveDatabaseEntityId, from eight write paths). They must
-	// take the flag as an argument and never name it.
 	it.each([
 		'src/lib/collectives/marker.ts',
 		'src/lib/collective/databaseEntity.ts',
 		'src/lib/seasons/entuSeasons.ts',
-		// Slice 3: the event page's reader and the profile read under its
-		// conductor line — both shared (post-write refresh, profile page).
 		'src/lib/events/eventDetail.ts',
 		'src/lib/profile/profileData.ts',
-		// Slice 3 review round, finding 1: the real-names overlay under the same
-		// conductor line. Shared three ways over (the /roster rows, the library's
-		// borrower names, this header) and — with `roster_show_real_names` ON —
-		// the one read whose absence offline changes a conductor's NAME rather
-		// than merely dropping a decoration.
 		'src/lib/roster/rosterData.ts',
 		'src/lib/collective/rosterNames.ts',
-		// Slice 4: the library's readers — shared with the librarian's pickers,
-		// the post-write lending re-reads and the my-loans chain.
-		'src/lib/library/libraryData.ts',
-		// Slice 4 review round, finding 1: the librarian resolution. Shared with
-		// /admin's librarian panel and /roster's lending-eligibility chain, and
-		// (via resolveMyLibraryId) the parent id a lending WRITE is created
-		// under — so the flag can only ever be an argument here.
+		'src/lib/library/libraryReads.ts',
+		'src/lib/library/libraryAvailability.ts',
 		'src/lib/library/librarianStore.ts',
-		// Slice 4 review round, finding 2: the viewer's own member id. Shared
-		// with the RSVP WRITE path (agenda + event page resolve it and then POST
-		// it as `member` on an rsvp) — the exact step-inside-a-write shape.
 		'src/lib/rsvp/rsvpData.ts',
-		// Slice 5 review round, finding 3: the repertoire resolver under the event
-		// page's works section. Shared with the AGENDA's own works read (every
-		// visible row's Works element, a screen whose age line is its own) and with
-		// both pages' post-write re-reads — and `RepertoireReadOptions` now extends
-		// EntuFetchOptions, so a `cache: true` written inside this file would switch
-		// the agenda's works read on with no visible diff line anywhere.
 		'src/lib/repertoire/repertoireData.ts'
 	])('%s takes EntuFetchOptions and never hard-wires CACHED_READ', (path) => {
 		const source = src(path);
 		expect(source).toContain('EntuFetchOptions');
 		expect(source).toMatch(/opts: EntuFetchOptions = \{\}/);
-		// The name may appear in prose; never as an argument.
 		expect(source).not.toMatch(/^\s*CACHED_READ\s*$/m);
 		expect(source).not.toMatch(/,\s*CACHED_READ\s*\)/);
 	});
 
 	it('listSeasons threads its own opts into the resolveDatabaseEntityId underneath it', () => {
-		// The season query is useless offline without the `_parent` id it filters
-		// on, so the agenda's flag has to reach BOTH reads — but only via the
-		// argument, which is what makes the write paths' default hold.
 		expect(src('src/lib/seasons/entuSeasons.ts')).toContain(
 			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
 		);
 	});
 
 	it('the real-names overlay threads its own opts all the way down', () => {
-		// Slice 3 review round, finding 1 — same reasoning as listSeasons above:
-		// the toggle's value read is addressed BY the database entity id, and the
-		// records read is what carries the names, so one un-threaded link in the
-		// chain is the whole overlay lost offline.
 		expect(src('src/lib/collective/rosterNames.ts')).toContain(
 			'resolveDatabaseEntityId(cfg, fetchImpl, opts)'
 		);
@@ -169,41 +111,23 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	});
 
 	it('the library borrower-name chain threads its own opts all the way down', () => {
-		// Slice 4 — a lent copy's row names its borrower through member ->
-		// person -> profile, overlaid by the real-names setting; one un-threaded
-		// link and the offline row shows a different name than the online one.
-		const library = src('src/lib/library/libraryData.ts');
+		const library = src('src/lib/library/libraryAvailability.ts');
 		expect(library).toContain('listMyProfiles(cfg, personId, fetchImpl, opts)');
 		expect(library).toContain('resolveRealNameByPerson(cfg, fetchImpl, opts)');
 	});
 
 	it('the librarian resolution threads its own opts all the way down', () => {
-		// Slice 4 review round, finding 1 — resolveLibrarian maps ANY throw to
-		// `{ state: 'error' }`, so one un-threaded link out of its three reads
-		// (database entity -> library list -> the library's _owner/_editor) is a
-		// red `librarian-load-error` alert offline, beside a listing that
-		// restored perfectly.
 		const store = src('src/lib/library/librarianStore.ts');
 		expect(store).toContain('resolveDatabaseEntityId(cfg, fetchImpl, opts)');
 		expect(store).toContain('resolveMyLibraryId(cfg, fetchImpl, dbEntityId, opts)');
 	});
 
 	it('the my-loans copy labels thread their own opts all the way down', () => {
-		// Slice 4 review round, finding 2 — a my-loans row's label is the copy
-		// read AND (for the work/edition context) the edition read; an
-		// un-threaded link leaves a restored row half-labelled or
-		// `library_copy_name_unknown`.
-		const library = src('src/lib/library/libraryData.ts');
+		const library = src('src/lib/library/libraryAvailability.ts');
 		expect(library).toContain('resolveCopyName(cfg, id, fetchImpl, opts)');
 	});
 
 	it('the repertoire resolver threads its own options into both of its reads', () => {
-		// Slice 5 review round, finding 3 — `resolveEventWorksBatch` is the shared
-		// reader UNDER the event page's works section AND the agenda's own works
-		// read. Its bag is `RepertoireReadOptions`, which only widens
-		// EntuFetchOptions with `includeInactive`, so the flag still only ever
-		// arrives as an argument — pinned here so a later `cache: true` inside this
-		// file cannot switch the agenda's read on silently.
 		const rep = src('src/lib/repertoire/repertoireData.ts');
 		expect(rep).toMatch(/interface RepertoireReadOptions extends EntuFetchOptions/);
 		expect(rep).toContain('listProgramItems(cfg, id, fetchImpl, options)');
@@ -211,46 +135,24 @@ describe('#434 — the shared readers hard-wire no flag', () => {
 	});
 
 	it('the works join threads its own options into all four of its reads', () => {
-		// Slice 5 review round, finding 3 — `loadWorksByEventId` is the OTHER shared
-		// reader slice 5 threaded, and it is a join over four collections: the three
-		// collective-wide label lookups plus the per-event item resolve. One
-		// un-threaded link and the restored row set is short a name/composer/edition
-		// — or, for the item resolve, empty. It takes `options:
-		// RepertoireReadOptions = {}` rather than `opts: EntuFetchOptions = {}`, so
-		// it is guarded here by threading rather than in the bag-shape list above.
 		const rows = src('src/lib/repertoire/workRows.ts');
 		expect(rows).toContain('options: RepertoireReadOptions = {}');
 		expect(rows).toContain('listWorks(cfg, fetchImpl, options)');
 		expect(rows).toContain('listAllEditions(cfg, fetchImpl, options)');
 		expect(rows).toContain('listAllCopies(cfg, fetchImpl, options)');
 		expect(rows).toContain('resolveEventWorksBatch(cfg, eventIds, seasonId, fetchImpl, options)');
-		// Same never-as-an-argument rule as the bag-shape list above.
 		expect(rows).not.toMatch(/^\s*CACHED_READ\s*$/m);
 		expect(rows).not.toMatch(/,\s*CACHED_READ\s*\)/);
 	});
 });
 
 describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', () => {
-	/** Every non-spec file under src/ that names CACHED_READ in an import or
-	 *  export — i.e. every file that can actually pass the flag. */
 	const ALLOWED = [
-		// The definition itself, and request.ts's re-export of it.
 		'src/lib/entu/fetchOptions.ts',
 		'src/lib/entu/request.ts',
-		// Slice 2: collective discovery — the app's ONE identity read.
 		'src/lib/collectives/discover.ts',
-		// Slice 2: the agenda's own entry point, the screen with the age line.
 		'src/lib/agenda/agendaData.ts',
-		// Slice 3: the event page's own entry points — the mounted screen's
-		// cache-backed load AND the store-only twin the agenda's next-event
-		// prefetch and the page's post-write refresh use (slice 3 review round,
-		// findings 1 and 2). Slice 5 (and its review round findings 1 and 2) adds
-		// the same pair over this screen's works read, in the same file.
 		'src/lib/events/eventPageData.ts',
-		// Slice 4: the library's own entry points — the listing, the node
-		// expansions, the store-only post-write lending re-read, and (slice 4
-		// review round, findings 1 and 2) the librarian state and the my-loans
-		// member id + copy labels.
 		'src/lib/library/libraryPageData.ts'
 	].sort();
 
@@ -272,21 +174,9 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 		return out;
 	}
 
-	/** Names ANY of the flags in an `import`/`export` statement — the only way a
-	 *  file can hold the binding and pass it to `entuFetch`. */
 	function switchesTheCacheOn(source: string): boolean {
-		// ONE line: `[^;\n]*` must not run past the end of the statement, or an
-		// `export function ...` header would reach a CACHED_READ mentioned in a
-		// comment inside its body (libraryData.ts's "NO CACHED_READ here yet").
-		//
-		// No trailing `\b` (slice 3 review round): `_` is a word character, so
-		// `\bCACHED_READ\b` does NOT match `CACHED_READ_STORE_ONLY` — the fence
-		// would have let the store-only flag, and any later variant, spread
-		// unwatched. Storing without serving is a lesser claim than serving, but
-		// not a free one: a stored body is still a body a SERVING reader of the
-		// same key can hand back later (a signed `property/{id}` url, a stale
-		// `_id` a write is about to target), and it still spends the shared byte
-		// budget. Same fence, both flags.
+		// One statement only, so a comment in a function body never matches; no trailing \b, so
+		// CACHED_READ_STORE_ONLY is caught too.
 		return /^[ \t]*(?:import|export)\b[^;\n]*\bCACHED_READ/m.test(source);
 	}
 
@@ -295,14 +185,10 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 			true
 		);
 		expect(switchesTheCacheOn("import { CACHED_READ } from './fetchOptions';")).toBe(true);
-		// Prose is still not an opt-in.
 		expect(switchesTheCacheOn('// NO CACHED_READ_STORE_ONLY here yet, on purpose.')).toBe(false);
 	});
 
 	it('only the allowlisted files switch the read cache on', () => {
-		// Prose-only mentions (libraryData.ts saying why it stays OFF, and the
-		// three shared readers' own doc comments) are not an opt-in: the fence is
-		// over the BINDING, which is what a call site needs to pass it.
 		const root = resolve(process.cwd());
 		const files = collect(SRC)
 			.filter((path) => switchesTheCacheOn(readFileSync(path, 'utf-8')))
@@ -312,8 +198,5 @@ describe('#434 — the CACHED_READ allowlist (structural, not per-endpoint)', ()
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 2 review round, finding 2)
-// (*MVOX:Tallis* — #434 slice 3 RED: event page entries)
-// (*MVOX:Josquin* — #434 slice 3 review round 2, findings 1-4)
-// (*MVOX:Tallis* — #434 slice 4 RED: library entries)
-// (*MVOX:Josquin* — #434 slice 5 review round, finding 3: repertoire entries)
+// (*MVOX:Josquin*)
+// (*MVOX:Tallis*)

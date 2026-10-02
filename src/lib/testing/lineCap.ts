@@ -4,23 +4,14 @@ export const STEP = 500;
 export const NEXT_STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
-export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/library/libraryData.ts',
-	'src/lib/sections/sectionActions.ts',
-	'src/routes/+page.svelte',
-	'src/routes/library/+page.svelte'
-];
+export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
 
 export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/agenda/SeriesCreateForm.svelte',
 	'src/lib/components/StrokeSurface.svelte',
 	'src/lib/components/admin/InviteSurface.svelte',
 	'src/lib/events/EventRsvpSection.svelte',
-	'src/lib/library/libraryData.ts',
 	'src/lib/roster/memberLifecycle.ts',
-	'src/lib/sections/sectionActions.ts',
-	'src/routes/+page.svelte',
-	'src/routes/library/+page.svelte',
 	'src/routes/part/[fileId]/+page.svelte'
 ];
 

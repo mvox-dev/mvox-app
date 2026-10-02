@@ -29,6 +29,27 @@ export function createAgendaPanelState() {
 
 export type AgendaPanelState = ReturnType<typeof createAgendaPanelState>;
 
+export function resetPanelRepertoire(
+	ag: AgendaLoadState,
+	seq: LoadCounters,
+	panel: AgendaPanelState
+): void {
+	ag.panelRepertoire = [];
+	seq.panelRepertoireSeasonId = null;
+	ag.panelWorks = [];
+	ag.panelWorksPartial = false;
+	ag.panelEditions = [];
+	ag.panelCopies = [];
+	panel.pendingKeys = new Set();
+	ag.panelRepertoireError = false;
+	panel.manageError = false;
+	panel.manageStatus = '';
+	ag.panelRepertoireLoading = false;
+	ag.panelRepertoireItemsOk = false;
+	ag.panelWorksSourcesOk = false;
+	panel.pickableWorksVisible = undefined;
+}
+
 export interface AgendaRepertoireDeps {
 	selected: () => { db: string } | null | undefined;
 	isOffline: () => boolean;

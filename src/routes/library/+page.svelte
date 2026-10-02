@@ -5,57 +5,38 @@
 	// member's own loans, and the librarian's tools. The page owns every load and every write.
 	import { openPart } from '$lib/parts/openPart';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
-	import { cfgFor } from '$lib/entu/cfg';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
 	import { formatLoanChainLabel, type Edition, type Work } from '$lib/library/libraryData';
 	// #434 — the library's own cache-backed entry points; the shared readers stay unused here.
 	import {
 		loadLibraryListing,
-		loadLibraryEditions,
-		loadLibraryCopies,
-		refreshLibraryLendings,
-		loadLibrarianState,
-		loadLibrarianPickers,
-		loadLibrarianMemberNames,
-		resolveWriteLibraryId,
 		loadMyMemberId,
 		loadMyLoanCopyNames,
 		loadMyLoanCopyChains
 	} from '$lib/library/libraryPageData';
+	import { createLibraryTreeLoads, createLibrarianLoad } from '$lib/library/libraryPageLoads';
+	import { createLibraryWrites } from '$lib/library/libraryPageWrites';
 	import AsOfLine from '$lib/components/offline/AsOfLine.svelte';
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
-	import { librarianStore, resetLibrarian } from '$lib/library/librarianStore';
-	import { createLending, returnLending, bulkCheckout } from '$lib/library/lendingActions';
-	import { createWork, createEdition } from '$lib/entity/entityCreate';
-	import { uploadEditionFiles, formatFileSize } from '$lib/library/editionFiles';
+	import { librarianStore } from '$lib/library/librarianStore';
+	import { formatFileSize } from '$lib/library/editionFiles';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import { listSeasons } from '$lib/seasons/entuSeasons';
 	import { currentSeason } from '$lib/attendance/conductorLogic';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
-	import { isAuthExpiredError } from '$lib/entu/request';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import { writesAvailable } from '$lib/net/online';
 	import { createLendingView } from '$lib/library/lendingView';
 	import {
 		applyLendings,
-		applyUploadFailures,
-		closeEditionDraft,
-		closeWorkForm,
 		createBulkCheckout,
 		createEditionDrafts,
 		createEditionFilesState,
 		createLibraryState,
 		createWorkForm,
-		endUpload,
-		markUploadBatchError,
 		resetBulkCheckout,
 		resetTree,
-		setEditionDraftError,
-		setEditionDraftPending,
-		startUpload,
-		updateEditionFiles,
 		workFormView,
 		type TreeActions
 	} from '$lib/library/libraryState';
@@ -63,7 +44,7 @@
 	import BulkCheckoutPanel from '$lib/library/BulkCheckoutPanel.svelte';
 	import InlineCreateForm from '$lib/library/InlineCreateForm.svelte';
 	import WorkRow from '$lib/library/WorkRow.svelte';
-	import { withItem, without } from '$lib/collections/immutable';
+	import { withItem } from '$lib/collections/immutable';
 
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
@@ -110,51 +91,6 @@
 		} catch (e) {
 			console.error('library: file presence read failed', e);
 		}
-	}
-
-	// #321 — a picker claim must never outlive the options it described.
-	function resetLibrarianPickerPartial(): void {
-		lib.optionsPartial = false;
-		lib.membersPartial = false;
-	}
-
-	async function submitCreateWork(): Promise<void> {
-		if (workForm.pending) return;
-		if (isOffline) return;
-		workForm.error = null;
-		workForm.status = '';
-		const current = selected;
-		if (!current) {
-			console.error('library: create work with no collective');
-			workForm.error = m.library_create_work_error;
-			return;
-		}
-		const name = workForm.name.trim();
-		if (!name) {
-			workForm.error = m.library_create_work_name_required;
-			return;
-		}
-		const composer = workForm.composer.trim();
-		const cfg = cfgFor(current.db);
-
-		let newId: string;
-		workForm.pending = true;
-		try {
-			// The parent is resolved live: a GET inside a write never answers from the cache.
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('submitCreateWork: no library entity under this collective');
-			newId = await createWork(cfg, { name, composer, libraryEntityId: libraryId });
-		} catch (e) {
-			console.error('library: create work failed', name, e);
-			workForm.error = m.library_create_work_error;
-			return;
-		} finally {
-			workForm.pending = false;
-		}
-
-		lib.works = [...lib.works, { id: newId, name, composer }];
-		workForm.status = m.library_create_work_created({ name });
-		closeWorkForm(workForm);
 	}
 
 	const routeLoad = createRouteLoadMachine({
@@ -223,166 +159,36 @@
 		return routeLoad.loadForSelected();
 	}
 
-	// Fetch only; the node stays expanded across a retry.
-	async function loadEditionsFor(workId: string): Promise<void> {
-		const current = selected;
-		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'loading');
-		try {
-			const result = await loadLibraryEditions({ db: current.db, token }, workId);
-			lib.editionsByWork = new Map(lib.editionsByWork).set(workId, result.items);
-			editionsPartialWorkIds = withItem(editionsPartialWorkIds, workId, result.truncated);
-			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'idle');
-		} catch (e) {
-			// #107 — an expired session on a node read shows the page's session notice.
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('library: editions load failed', workId, e);
-			lib.editionNodeStatus = new Map(lib.editionNodeStatus).set(workId, 'error');
+	const tree = createLibraryTreeLoads({
+		selected: () => selected,
+		lib,
+		setStatus: (s) => {
+			status = s;
+		},
+		markEditionsPartial: (workId, truncated) => {
+			editionsPartialWorkIds = withItem(editionsPartialWorkIds, workId, truncated);
+		},
+		markCopiesPartial: (editionId, truncated) => {
+			copiesPartialEditionIds = withItem(copiesPartialEditionIds, editionId, truncated);
 		}
-	}
+	});
 
-	function toggleWork(workId: string): void {
-		if (lib.expandedWorks.has(workId)) {
-			lib.expandedWorks = without(lib.expandedWorks, workId);
-			return;
+	const writes = createLibraryWrites({
+		selected: () => selected,
+		isOffline: () => isOffline,
+		lib,
+		workForm: () => workForm,
+		editionDrafts: () => editionDrafts,
+		bulk: () => bulk,
+		fileUploads,
+		routeLoad,
+		setLendingsPartial: (partial) => {
+			lendingsPartial = partial;
+		},
+		setReturnError: (message) => {
+			returnError = message;
 		}
-		lib.expandedWorks = new Set(lib.expandedWorks).add(workId);
-		if (lib.editionsByWork.has(workId)) return;
-		void loadEditionsFor(workId);
-	}
-
-	async function submitCreateEdition(workId: string): Promise<void> {
-		if (editionDrafts.pending.has(workId)) return;
-		if (isOffline) return;
-		setEditionDraftError(editionDrafts, workId, null);
-		editionDrafts.statuses = new Map(editionDrafts.statuses).set(workId, '');
-		const current = selected;
-		if (!current) {
-			console.error('library: create edition with no collective', { workId });
-			setEditionDraftError(editionDrafts, workId, m.library_create_edition_error);
-			return;
-		}
-		const name = (editionDrafts.name.get(workId) ?? '').trim();
-		if (!name) {
-			setEditionDraftError(editionDrafts, workId, m.library_create_edition_name_required);
-			return;
-		}
-		const publisher = (editionDrafts.publisher.get(workId) ?? '').trim();
-		const cfg = cfgFor(current.db);
-
-		// A collective switch during the create must not insert into the new collective's tree.
-		const g = routeLoad.generation;
-
-		let newId: string;
-		setEditionDraftPending(editionDrafts, workId, true);
-		try {
-			newId = await createEdition(cfg, { name, publisher, workId });
-		} catch (e) {
-			console.error('library: create edition failed', workId, name, e);
-			setEditionDraftError(editionDrafts, workId, m.library_create_edition_error);
-			return;
-		} finally {
-			setEditionDraftPending(editionDrafts, workId, false);
-		}
-
-		if (!routeLoad.isCurrent(g)) return;
-
-		const list = lib.editionsByWork.get(workId) ?? [];
-		lib.editionsByWork = new Map(lib.editionsByWork).set(workId, [
-			...list,
-			{ id: newId, name, publisher, externalLinks: [], files: [] }
-		]);
-		editionDrafts.statuses = new Map(editionDrafts.statuses).set(
-			workId,
-			m.library_create_edition_created({ name })
-		);
-		closeEditionDraft(editionDrafts, workId);
-	}
-
-	async function loadCopiesFor(editionId: string): Promise<void> {
-		const current = selected;
-		if (!current) return;
-		const token = getToken();
-		if (!token) return;
-		lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'loading');
-		try {
-			const result = await loadLibraryCopies({ db: current.db, token }, editionId);
-			lib.copiesByEdition = new Map(lib.copiesByEdition).set(editionId, result.items);
-			copiesPartialEditionIds = withItem(copiesPartialEditionIds, editionId, result.truncated);
-			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'idle');
-		} catch (e) {
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('library: copies load failed', editionId, e);
-			lib.copyNodeStatus = new Map(lib.copyNodeStatus).set(editionId, 'error');
-		}
-	}
-
-	function toggleEdition(editionId: string): void {
-		if (lib.expandedEditions.has(editionId)) {
-			lib.expandedEditions = without(lib.expandedEditions, editionId);
-			return;
-		}
-		lib.expandedEditions = new Set(lib.expandedEditions).add(editionId);
-		if (lib.copiesByEdition.has(editionId)) return;
-		void loadCopiesFor(editionId);
-	}
-
-	async function handleAttachFiles(editionId: string, fileList: FileList | null): Promise<void> {
-		if (!fileList || fileList.length === 0) return;
-		if (isOffline) return;
-		const files = Array.from(fileList);
-		const current = selected;
-		if (!current) {
-			console.error('library: attach files with no collective', { editionId });
-			markUploadBatchError(fileUploads, editionId);
-			return;
-		}
-		const cfg = cfgFor(current.db);
-
-		// Both halves of a mixed result apply only if no collective switch happened meanwhile.
-		const g = routeLoad.generation;
-		startUpload(fileUploads, editionId);
-
-		let result: Awaited<ReturnType<typeof uploadEditionFiles>>;
-		try {
-			result = await uploadEditionFiles(cfg, editionId, files);
-		} catch (e) {
-			console.error('library: attach files failed', editionId, e);
-			if (routeLoad.isCurrent(g)) markUploadBatchError(fileUploads, editionId);
-			return;
-		} finally {
-			endUpload(fileUploads, editionId);
-		}
-
-		if (!routeLoad.isCurrent(g)) return;
-
-		if (result.uploaded.length > 0) {
-			updateEditionFiles(lib, editionId, (existing) => [
-				...existing,
-				...result.uploaded.map((u) => ({
-					id: u.propertyId,
-					filename: u.filename,
-					filesize: u.filesize,
-					filetype: u.filetype
-				}))
-			]);
-			fileUploads.statuses = new Map(fileUploads.statuses).set(
-				editionId,
-				m.library_edition_file_uploaded({
-					filenames: result.uploaded.map((u) => u.filename).join(', ')
-				})
-			);
-		}
-		applyUploadFailures(fileUploads, editionId, result.failed);
-	}
+	});
 
 	function handleOpenEditionFile(fileId: string, work: Work, edition: Edition, filename: string): void {
 		if (!selected) return;
@@ -419,151 +225,28 @@
 		});
 	});
 
-	// #72 — keyed on `selected`: back to 'loading' on every selection, so a stale
-	// collective's late answer never lands. The pickers load before the tools show.
-	let librarianGen = 0;
+	const librarian = createLibrarianLoad(lib);
 	$effect(() => {
-		const current = selected;
-		if (!current) {
-			++librarianGen;
-			resetLibrarian();
-			resetLibrarianPickerPartial();
-			return;
-		}
-		resetLibrarian();
-		resetLibrarianPickerPartial();
-		loadLibrarian(current);
+		librarian.select(selected);
 	});
 
 	function retryLibrarianLoad(): void {
-		if (!selected) return;
-		resetLibrarianPickerPartial();
-		loadLibrarian(selected);
-	}
-
-	function loadLibrarian(current: { db: string; personId: string }): void {
-		const g = ++librarianGen;
-		const token = getToken();
-		const cfg = { db: current.db, token: token ?? '' };
-		loadLibrarianState(cfg, current.personId).then(async (result) => {
-			if (g !== librarianGen) return;
-			if (result.state === 'librarian') {
-				try {
-					const {
-						editions: editionsRead,
-						copies: copiesRead,
-						members: membersRead
-					} = await loadLibrarianPickers(cfg);
-					if (g !== librarianGen) return;
-					lib.allEditions = editionsRead.items;
-					lib.allCopies = copiesRead.items;
-					lib.allMembers = membersRead.items;
-					lib.optionsPartial = editionsRead.truncated || copiesRead.truncated;
-					lib.membersPartial = membersRead.truncated;
-					const memberIdList = membersRead.items.map((mbr) => mbr.memberId);
-					loadLibrarianMemberNames(cfg, memberIdList)
-						.then((names) => {
-							if (g === librarianGen) lib.memberNames = names;
-						})
-						.catch((e) => console.error('library: member name resolution failed', e));
-				} catch (e) {
-					console.error('library: checkout data load failed', e);
-					if (g !== librarianGen) return;
-					librarianStore.set('error');
-					return;
-				}
-			}
-			if (g !== librarianGen) return;
-			librarianStore.set(result.state);
-		});
-	}
-
-	// #76 — picking a member checks out at once. Lendings are re-read after the write, so
-	// availability is server-confirmed, never an optimistic flip.
-	async function handleInlineCheckout(copyId: string, memberId: string): Promise<void> {
-		if (isOffline) return;
-		lib.inlineCheckoutErrors = without(lib.inlineCheckoutErrors, copyId);
-		const current = selected;
-		if (!current) return;
-		const cfg = cfgFor(current.db);
-		try {
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('handleInlineCheckout: no library entity under this collective');
-			await createLending(cfg, libraryId, {
-				copyId,
-				memberId,
-				assignedAt: new Date().toISOString().slice(0, 10)
-			});
-			// Stores without serving: the live answer or a rejection, never pre-write availability.
-			const refreshed = await refreshLibraryLendings(cfg);
-			lendingsPartial = applyLendings(lib, refreshed);
-		} catch (e) {
-			console.error('library: inline checkout failed', copyId, e);
-			const errNext = new Map(lib.inlineCheckoutErrors);
-			errNext.set(copyId, e instanceof Error ? e.message : m.library_inline_checkout_error());
-			lib.inlineCheckoutErrors = errNext;
-		}
-	}
-
-	async function handleReturn(lendingId: string): Promise<void> {
-		if (isOffline) return;
-		returnError = '';
-		const current = selected;
-		if (!current) return;
-		const cfg = cfgFor(current.db);
-		try {
-			await returnLending(cfg, lendingId);
-			const refreshed = await refreshLibraryLendings(cfg);
-			lendingsPartial = applyLendings(lib, refreshed);
-		} catch (e) {
-			console.error('library: return failed', e);
-			returnError = e instanceof Error ? e.message : 'Return failed';
-		}
-	}
-
-	async function handleBulkCheckout(): Promise<void> {
-		if (isOffline) return;
-		bulk.error = '';
-		const current = selected;
-		if (!current) return;
-		if (!bulk.editionId || bulk.members.size === 0) return;
-		const cfg = cfgFor(current.db);
-		const activeLendings = lib.lendings.filter((l) => l.returnedAt === '');
-		try {
-			const libraryId = await resolveWriteLibraryId(cfg);
-			if (!libraryId) throw new Error('handleBulkCheckout: no library entity under this collective');
-			const result = await bulkCheckout(cfg, libraryId, {
-				editionId: bulk.editionId,
-				memberIds: [...bulk.members],
-				assignedAt: new Date().toISOString().slice(0, 10),
-				...(bulk.dueDate ? { assignedUntil: bulk.dueDate } : {})
-			}, activeLendings);
-			if (result.failed.length > 0) {
-				bulk.error = `${result.failed.length} checkout(s) failed`;
-			}
-			const refreshed = await refreshLibraryLendings(cfg);
-			lendingsPartial = applyLendings(lib, refreshed);
-			bulk.members = new Set();
-			bulk.dueDate = '';
-		} catch (e) {
-			console.error('library: bulk checkout failed', e);
-			bulk.error = e instanceof Error ? e.message : 'Bulk checkout failed';
-		}
+		librarian.retryLibrarianLoad(selected);
 	}
 
 	const treeActions: TreeActions = {
-		toggleWork,
-		loadEditions: loadEditionsFor,
-		toggleEdition,
-		loadCopies: loadCopiesFor,
+		toggleWork: tree.toggleWork,
+		loadEditions: tree.loadEditionsFor,
+		toggleEdition: tree.toggleEdition,
+		loadCopies: tree.loadCopiesFor,
 		setCopySortKey: (key) => {
 			lib.copySortKey = key;
 		},
-		checkout: handleInlineCheckout,
-		returnLending: handleReturn,
-		attachFiles: handleAttachFiles,
+		checkout: writes.handleInlineCheckout,
+		returnLending: writes.handleReturn,
+		attachFiles: writes.handleAttachFiles,
 		openFile: handleOpenEditionFile,
-		submitEdition: submitCreateEdition,
+		submitEdition: writes.submitCreateEdition,
 		fileSize: (bytes) => formatFileSize(bytes)
 	};
 </script>
@@ -604,14 +287,14 @@
 					membersPartial={lib.membersPartial}
 					{view}
 					{isOffline}
-					submit={handleBulkCheckout}
+					submit={writes.handleBulkCheckout}
 				/>
 
 				<InlineCreateForm
 					kind="work"
 					view={workFormView(workForm)}
 					{isOffline}
-					submit={submitCreateWork}
+					submit={writes.submitCreateWork}
 				/>
 			</section>
 		{:else if $librarianStore === 'error'}
