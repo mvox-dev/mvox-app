@@ -1,25 +1,11 @@
+// A member's collective is its _parent entry with entity_type database.
 import { describe, expect, it, vi } from 'vitest';
 import { listActiveMembers, toRosterRow } from './rosterData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from '$lib/profile/profileData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #161 RED — collective = database: a member's collective is the `_parent` entry
-// with `entity_type === 'database'`, NOT `'organization'` (#159 deleted every
-// organization instance; entu-api parents members created through the invite
-// flow under the database entity now). `ActiveMember.dbEntityId` / `RosterRow.dbEntityId`
-// keep their names (an entity id is an entity id — the roster page threads it
-// into createSection unchanged) but must carry the DATABASE entity id.
-//
-// Successor of rosterData.org.spec.ts's organization-parent contract — that
-// spec's `entity_type: 'organization'` fixtures describe the retired world and
-// go with the GREEN pass.
-
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 describe('listActiveMembers — the collective id comes from the DATABASE `_parent` (#161)', () => {
 	it("a member parented to [section, database]: dbEntityId = the `entity_type: 'database'` reference, sections untouched", async () => {
@@ -39,8 +25,6 @@ describe('listActiveMembers — the collective id comes from the DATABASE `_pare
 			})
 		);
 		const members = await listActiveMembers(cfg, fetchImpl);
-		// #321 — the reader returns a ListRead now; `count: 1` above matches the one
-		// entity on the wire, so this read is COMPLETE.
 		expect(members).toEqual({
 			items: [
 				{
@@ -88,4 +72,4 @@ describe('toRosterRow — carries the database-entity collective id through verb
 	});
 });
 
-// (*MVOX:Tallis* — #161 RED)
+// (*MVOX:Tallis*)

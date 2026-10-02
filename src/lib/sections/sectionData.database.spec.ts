@@ -1,19 +1,10 @@
+// A top-level section's collective is its _parent entry with entity_type database.
 import { describe, expect, it, vi } from 'vitest';
 import { listSections } from './sectionData';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #161 RED — collective = database: a TOP-LEVEL section's owning collective is
-// the `_parent` entry with `entity_type === 'database'`, not `'organization'`
-// (#159 deleted every organization instance). `SectionNode.dbEntityId` keeps its name
-// but must carry the DATABASE entity id — the picker's sibling-scoped duplicate
-// check and the roster page's create threading both key on it.
-
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 describe('listSections — top-level sections carry the DATABASE entity as their collective (#161)', () => {
 	it("a root parented to the database entity: parentId null, dbEntityId = the `entity_type: 'database'` reference; a sub-section keeps parentId = its section and dbEntityId null", async () => {
@@ -69,4 +60,4 @@ describe('listSections — top-level sections carry the DATABASE entity as their
 	});
 });
 
-// (*MVOX:Tallis* — #161 RED)
+// (*MVOX:Tallis*)

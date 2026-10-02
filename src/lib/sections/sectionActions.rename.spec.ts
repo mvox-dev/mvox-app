@@ -1,47 +1,16 @@
+// Section rename: one overwrite POST carrying the old value's _id.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { renameSection } from './sectionActions';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-// #155/S4 — the section RENAME write layer.
-// #264 RED — the replace goes ATOMIC (PO ruling, branch (i)): the POST entry
-// carries the OLD value's `_id` (Entu's native overwrite; setEntity
-// soft-deletes it in the same call), so the normal path issues NO
-// `DELETE /property/{id}` at all.
-//
-// Contract under test:
-//
-//   - `renameSection(cfg, sectionId, name)`: GET `entity/{id}?props=name`
-//     FIRST (the existing value ids) → ONE `POST entity/{id}` with body
-//     EXACTLY `[{ _id: <old value id>, type: 'name', string: <trimmed> }]`.
-//   - NO existing value → plain POST `[{ type: 'name', string: <trimmed> }]`.
-//   - CORRUPTED duplicate state (2+ values): the overwrite pairs the FIRST old
-//     id; every EXTRA stale id is deleted at `/property/{id}` strictly AFTER
-//     the POST landed (the only DELETEs left; a failure leaves a stale
-//     duplicate, never an empty name).
-//   - A failed POST leaves the old name untouched — the overwrite never
-//     committed, nothing to clean up.
-//   - `name` sent TRIMMED; empty/whitespace-only throws WITHOUT any fetch.
+const cfg = testCfg('testdb');
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** Fetch mock: GET entity/{id}?props=name answers with the given old `name`
- *  value ids; POST and DELETE succeed. */
 function makeFetchMock(oldValues: Array<{ _id: string }>) {
 	return vi.fn().mockImplementation((_url: string, init?: RequestInit) => {
 		if (init?.method === 'DELETE') return Promise.resolve(json({ deleted: true }));
 		if (init?.method === 'POST') return Promise.resolve(json({}));
 		return Promise.resolve(json({ entity: { name: oldValues } }));
 	});
-}
-
-interface Call {
-	url: string;
-	method: string;
-	body: unknown;
 }
 
 function callsOf(fetchImpl: ReturnType<typeof vi.fn>): Call[] {
@@ -140,5 +109,5 @@ describe('renameSection — ATOMIC overwrite of the name property (#264)', () =>
 	});
 });
 
-// (*MVOX:Palestrina* — #155/S4)
-// (*MVOX:Tallis* — #264 RED: atomic overwrite-POST, extras-only sweep)
+// (*MVOX:Palestrina*)
+// (*MVOX:Tallis*)

@@ -1,3 +1,4 @@
+// The RSVP data layer: member lookup, reads and the status write.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import {
@@ -9,20 +10,13 @@ import {
 	rsvpsByEventId,
 	type MyRsvp
 } from './rsvpData';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
+const cfg = testCfg('testdb');
 
 beforeEach(() => {
 	resetTypeIdCache();
 });
-
-// ── findMyMemberId ────────────────────────────────────────────────────────────
-// DE-FANNED to match listSeasons/listEvents: no dbEntityId param — person +
-// status=active alone resolves the singer's active member row in the collective.
 
 describe('findMyMemberId', () => {
 	it('queries member type + person ref + status=active, WITHOUT an org _parent filter', async () => {
@@ -61,10 +55,7 @@ describe('findMyMemberId', () => {
 	});
 });
 
-// ── createRsvp ────────────────────────────────────────────────────────────────
-
 describe('createRsvp', () => {
-	/** Type-resolution GET (`_type.string=entity`) + entity-create POST. */
 	function makeFetchMock(resolvedTypeId = 'rsvp-type-id') {
 		return vi.fn().mockImplementation((url: string) => {
 			if (url.includes('_type.string=entity')) {
@@ -97,7 +88,6 @@ describe('createRsvp', () => {
 			);
 			const body = createCallBody(fetchImpl);
 
-			// FULL SET check — every required prop present, exactly one sentinel present.
 			expect(body).toEqual(
 				expect.arrayContaining([
 					{ type: '_type', reference: 'rsvp-type-42' },
@@ -154,16 +144,8 @@ describe('createRsvp', () => {
 	});
 });
 
-// ── updateRsvpStatus ──────────────────────────────────────────────────────────
-
 describe('updateRsvpStatus', () => {
-	type Call = { url: string; method: string; body?: unknown };
 
-	/**
-	 * GET returns an rsvp entity carrying whichever status/sentinel value-ids the
-	 * caller passes in `existing` (defaults to a single going_ref — the normal,
-	 * non-corrupted case). DELETE/POST both succeed. All calls recorded in order.
-	 */
 	function makeMockFetch(existing: {
 		statusValueId?: string;
 		eventRef?: string;
@@ -200,21 +182,6 @@ describe('updateRsvpStatus', () => {
 			expect(url).toContain(prop);
 		}
 	});
-
-	// #264 RED (PO ruling, branch (i), item 3): the old clear-then-set wire
-	// deleted the status + sentinel values BEFORE posting the new ones — a
-	// rejected POST left the rsvp with NO status at all (empty half-landing,
-	// worse than a duplicate). The atomic overwrite (POST entries carrying the
-	// OLD value ids — entu-www "Overwriting a Property Value") replaces both in
-	// ONE call. Status/sentinels are not rightTypes props — pure atomicity.
-	//
-	// New pinned wire: GET (unchanged) → ONE POST:
-	//   [{ _id: <old status id>, type:'status', string:<new> },
-	//    { _id: <old sentinel id>, type:'<new>_ref', reference:<event> }]
-	// (an entry drops its `_id` when no old value exists to pair). Cross-type
-	// pairing is platform-legal: setEntity soft-deletes by `_id` regardless of
-	// the new entry's type. Corrupted EXTRA sentinel values are deleted at
-	// /property/{id} strictly AFTER the POST — never before.
 
 	it('order: GET → ONE atomic POST — no DELETE anywhere on the normal (one status + one sentinel) path', async () => {
 		const { fetchImpl, calls } = makeMockFetch({});
@@ -253,8 +220,6 @@ describe('updateRsvpStatus', () => {
 			);
 		});
 		await expect(updateRsvpStatus(cfg, 'rsvp-1', 'late', fetchImpl)).rejects.toThrow(/500/);
-		// THE pin: under the old wire this log held THREE property DELETEs
-		// before the failing POST — the rsvp was left empty. Now: none.
 		expect(calls.filter((c) => c.method === 'DELETE')).toEqual([]);
 	});
 
@@ -294,8 +259,6 @@ describe('updateRsvpStatus', () => {
 	});
 });
 
-// ── deleteRsvp (clear) ────────────────────────────────────────────────────────
-
 describe('deleteRsvp', () => {
 	it('sends DELETE {db}/entity/{rsvpId}', async () => {
 		const fetchImpl = vi.fn().mockResolvedValue(json({}));
@@ -311,11 +274,6 @@ describe('deleteRsvp', () => {
 		await expect(deleteRsvp(cfg, 'rsvp-xyz', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── listMyRsvps (#11) ─────────────────────────────────────────────────────────
-// rsvp is a child of person — `_parent.reference=personId` alone scopes the read
-// to the singer's own rsvps. No `member`/`person` filter needed or wanted (issue
-// AC: "no cross-person query").
 
 describe('listMyRsvps', () => {
 	it('queries _type.string=rsvp&_parent.reference=<personId>, native under the singer\'s own person, no cross-person filter', async () => {
@@ -354,12 +312,6 @@ describe('listMyRsvps', () => {
 		await expect(listMyRsvps(cfg, 'person-p', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
-
-// ── rsvpsByEventId (#11) ──────────────────────────────────────────────────────
-// Pure mapping — no fetch. The agenda row control reads its initial state off
-// this map; an event with no rsvp must be ABSENT, never defaulted (issue AC:
-// "events with no answer render as unanswered rather than defaulting to any
-// status").
 
 describe('rsvpsByEventId', () => {
 	it('maps each rsvp by its event id', () => {

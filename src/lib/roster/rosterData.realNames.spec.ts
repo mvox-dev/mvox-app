@@ -1,75 +1,14 @@
+// Every producer of member names obeys the collective's real-names setting.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { loadRoster, type RosterRow } from './rosterData';
 import * as rosterDataModule from './rosterData';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-// #469 RED — EVERY producer of member names obeys the admin setting.
-// Contract: issue #469 body (Mihkel, 2026-09-23, verbatim: "now we need to
-// revisit all places we are showing member names and they all must obey the
-// admin setting"). This SUPERSEDES the 2026-09-06 scope ruling on #269 (Henry
-// for Gama: "roster only for now") that fenced the overlay to /roster — the
-// history is named, not deleted: #269 built the overlay and #469 widens it to
-// the shared producer.
-//
-// Seam: the DATA layer — the real-names overlay (toggle read via
-// readRosterNamesSetting + the bulk admin_member_record read, the fail-soft
-// catch, the re-sort by displayed name, the truncated OR) moves INTO
-// `loadRoster` itself, extracted as the reusable `applyRealNames` so
-// memberLifecycle's producers apply the SAME overlay (memberLifecycle.spec.ts).
-// `loadRosterWithRealNames` is REMOVED — one producer, no opt-in fork left to
-// miss a caller with (missing a caller is exactly the failure mode #469 exists
-// to close). Behaviour is byte-identical to yesterday's loadRosterWithRealNames
-// for every existing case; only WHO runs it changed.
-//
-// Pinned here:
-//   1. RESOLUTION RULE — `roster_show_real_names` true AND that member's
-//      admin_member_record carries a non-empty `name` → row.name is the real
-//      name; OTHERWISE the profile name exactly as today. The fallback is
-//      SILENT AND COMPLETE: no placeholder, no marker — an empty/cleared/
-//      whitespace-only record name falls back like no record at all.
-//   2. PROFILE NAME STILL TRAVELS — `row.profileName` carries the roster's own
-//      domain-or-public profile resolution on EVERY row and is NEVER overlaid:
-//      SectionPicker's aria label, the record-edit pencil and the banners keep
-//      naming the member by it (page.roster-real-names.spec.ts pins those).
-//   3. TOGGLE READ — resolveDatabaseEntityId's query (`_type.string=database`)
-//      then ONE GET `entity/{dbEntityId}?props=roster_show_real_names`, parsed
-//      `?.[0]?.boolean ?? false` (the key is entirely ABSENT when unset).
-//      EMPTY roster → the toggle read is never spent at all.
-//   4. RECORDS READ — ONLY when the toggle is true (a false toggle fetches NO
-//      records at all — pinned as a negative): ONE bulk query per roster load,
-//      `entity?_type.string=admin_member_record&props=person,name&limit=500`,
-//      joined client-side by person reference (the listSections one-fetch
-//      idiom; person read as `?.[0]?.reference`). A person carrying MORE THAN
-//      ONE record is DROPPED from the join rather than last-wins — the same
-//      refuse-to-guess answer `loadMemberRecord` gives that member ({state:
-//      'damaged'}, #264), which on the row means the silent profile-name
-//      fallback of rule 1.
-//   5. INCIDENTAL-EXPOSURE FENCE (PO-ruled, UNCHANGED by #469) —
-//      `props=person,name` is the db-level projection fence: `phone`, `email`
-//      and `birthdate` are private record fields and this load must never
-//      request them. Pinned as URL-shape negatives. NOTE the scoping: the
-//      roster's PROFILE read legitimately projects `email`
-//      (props=name,email,_sharing — the roster renders it), so the email fence
-//      is pinned on the admin_member_record query specifically, while
-//      phone/birthdate (which no roster-load query may ever carry) are pinned
-//      across EVERY request URL. No fetch-and-discard: the ruled ban means no
-//      code path requests the fields and drops them — the URL pins ARE the
-//      acceptance list's network check at this layer.
-//   6. SORTING — rows come back ordered by the DISPLAYED name (fixture where
-//      real-name order differs from profile-name order).
-//   7. COMPLETENESS GATE STAYS PROFILE-ONLY — a member with no domain/public
-//      profile name stays off the roster even when a record exists (pinned;
-//      design note for the live round).
-
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const DB_ENTITY = 'db-ent-1';
 
-/** The pinned row shape: profileName rides along on every row. */
 type RealNameRow = RosterRow & { profileName: string };
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function rawProfile(sharing: string, name: string, email = '', id = `prof-${sharing}`) {
 	return {
@@ -87,9 +26,7 @@ function makeFetch(opts: {
 	profilesByPerson?: Record<string, unknown[]>;
 	toggle?: boolean | 'absent';
 	records?: WireRecord[];
-	/** non-2xx on the toggle read (readRosterNamesSetting throws). */
 	toggleStatus?: number;
-	/** non-2xx on the bulk admin_member_record read. */
 	recordsStatus?: number;
 }) {
 	const {
@@ -163,8 +100,6 @@ describe('#469 loadRoster — resolution rule: toggle AND non-empty record name,
 			records: [{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' }]
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items as RealNameRow[];
-		// Full shape (partial-assertions memory): the record substitutes ONLY the
-		// displayed name — email/sections/ids untouched, profile name preserved.
 		expect(rows).toEqual([
 			{
 				memberId: 'member-1',
@@ -195,16 +130,11 @@ describe('#469 loadRoster — resolution rule: toggle AND non-empty record name,
 			toggle: true,
 			records: [
 				{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' },
-				// person-b has NO record; person-c's record name was CLEARED;
-				// person-d's is whitespace-only — "non-empty" means a real name.
 				{ _id: 'rec-c', person: 'person-c', name: '' },
 				{ _id: 'rec-d', person: 'person-d', name: '   ' }
 			]
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items as RealNameRow[];
-		// Sorted by the DISPLAYED name (Zoe last although Ada would sort first) —
-		// and every fallback row is shaped IDENTICALLY to the record-backed one:
-		// same fields, no marker field, no placeholder text.
 		expect(rows).toEqual([
 			{
 				memberId: 'member-b',
@@ -252,13 +182,10 @@ describe('#469 loadRoster — resolution rule: toggle AND non-empty record name,
 				{ _id: 'member-b', person: 'person-b' }
 			],
 			profilesByPerson: {
-				// Profile order would be: Anna Aas, Berta Kask.
 				'person-a': [rawProfile('domain', 'Anna Aas')],
 				'person-b': [rawProfile('domain', 'Berta Kask')]
 			},
 			toggle: true,
-			// Displayed: person-a → 'Zoe Zed', person-b → 'Berta Kask' (no record
-			// name change) — displayed order flips: Berta first, Zoe second.
 			records: [{ _id: 'rec-a', person: 'person-a', name: 'Zoe Zed' }]
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items;
@@ -287,9 +214,7 @@ describe('#469 loadRoster — toggle read and the toggle-off negative', () => {
 			}
 		]);
 		const all = urls(fetchImpl);
-		// A false toggle fetches NO records at all (the ruled negative).
 		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		// The toggle WAS read: ONE GET entity/{dbEntityId}?props=roster_show_real_names.
 		expect(all.filter((u) => u.includes(`entity/${DB_ENTITY}`) && u.includes('props=roster_show_real_names'))).toHaveLength(1);
 	});
 
@@ -338,7 +263,6 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 		expect(u).toContain('_type.string=admin_member_record');
 		expect(u).toMatch(/props=person,name(&|$)/);
 		expect(u).toContain('limit=500');
-		// The join lands on the right members.
 		expect(rows.map((r) => [r.memberId, r.name])).toEqual([
 			['member-b', 'Bella Boone'],
 			['member-c', 'Mara Moon'],
@@ -355,18 +279,8 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 		await loadRoster(cfg, fetchImpl);
 		const all = urls(fetchImpl);
 		for (const u of all) {
-			// phone/birthdate (and the older private-tier fields) have NO legitimate
-			// carrier anywhere in a roster load — pinned across every URL.
-			// #285 BLIND-SPOT FIX: 'idcode' (no underscore) never matched the REAL
-			// #282 prop-def name `id_code` — the fence was blind to the actual
-			// field. `id_code` added; `idcode` kept (belt). The #469 overlay query
-			// stays props=person,name exactly (pinned below), so id_code never
-			// rides in the admin overlay either.
 			expect(u).not.toMatch(/props=[^&]*\b(phone|birthdate|notes|idcode|id_code)\b/);
 		}
-		// email IS legitimately projected on the PROFILE read (the roster renders
-		// it) — so the email fence is pinned on the record query specifically:
-		// props=person,name exactly, nothing widening it.
 		const recordUrls = all.filter((u) => u.includes('admin_member_record'));
 		expect(recordUrls).toHaveLength(1);
 		expect(recordUrls[0]).toMatch(/props=person,name(&|$)/);
@@ -397,10 +311,6 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 			...threeMembers,
 			toggle: true,
 			records: [
-				// person-a carries TWO records with DIFFERENT names — the condition
-				// loadMemberRecord calls {state:'damaged'} (#264). Last-wins would have
-				// shown 'Second Wins' here while the pencil on the same row refused to
-				// guess; instead the row falls back to the profile name.
 				{ _id: 'rec-a1', person: 'person-a', name: 'First Wins' },
 				{ _id: 'rec-a2', person: 'person-a', name: 'Second Wins' },
 				{ _id: 'rec-b', person: 'person-b', name: 'Mara Moon' }
@@ -412,8 +322,6 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 			['member-c', 'Cora Crane'],
 			['member-b', 'Mara Moon']
 		]);
-		// SILENT AND COMPLETE — byte-indistinguishable from "no record at all": no
-		// placeholder, no marker, profileName unchanged, and nothing on the console.
 		const dup = rows.find((r) => r.memberId === 'member-a')!;
 		expect(dup.profileName).toBe('Ada Lovelace');
 		expect(dup.name).toBe(dup.profileName);
@@ -448,7 +356,6 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 				{ _id: 'member-b', person: 'person-b' }
 			],
 			profilesByPerson: {
-				// person-a: only a PRIVATE-tier name — hasVisibleName === 'incomplete'.
 				'person-a': [rawProfile('private', 'Hidden Name', 'hidden@example.com')],
 				'person-b': [rawProfile('domain', 'Bella Boone', 'bella@example.com')]
 			},
@@ -459,24 +366,9 @@ describe('#469 loadRoster — the records read: ONE bulk query, narrow projectio
 			]
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items;
-		// member-a never appears — the record does NOT satisfy the gate; member-b
-		// is on and shows her real name.
 		expect(rows.map((r) => [r.memberId, r.name])).toEqual([['member-b', 'Mara Moon']]);
 	});
 });
-
-// ── the overlay's failure branch: OBSERVABLE degrade (carried from #269) ────
-//
-// `readRosterNamesSetting` is fail-loud by contract (rosterNames.ts: "no visible
-// database entity or a non-2xx anywhere → throw"). The overlay deliberately
-// NARROWS that at its one call site — a dead overlay must never take the base
-// member/profile roster down with it — so the narrowing is pinned here, both
-// branches, and it is LOUD in the console rather than silent (the standing
-// fail-loudly-over-fallbacks rule). The degrade direction is what makes it safe:
-// it can only show FEWER real names, never leak one while the toggle is off.
-// The breadcrumb now names `applyRealNames` — the ONE extracted overlay every
-// producer shares under #469 (loadRosterWithRealNames, which the old message
-// named, no longer exists).
 
 describe('#469 loadRoster — a failing overlay degrades to profile names, loudly', () => {
 	it('the TOGGLE read answers 500: the base roster comes back INTACT with profile names in BOTH name and profileName, no records request is ever issued, and the degrade is logged', async () => {
@@ -495,8 +387,6 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 			toggleStatus: 500
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items as RealNameRow[];
-		// Full shape, both members still on the roster — the overlay is what is
-		// lost, never a member.
 		expect(rows).toEqual([
 			{
 				memberId: 'member-a',
@@ -517,7 +407,6 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 				ownerIds: []
 			}
 		]);
-		// The toggle never resolved true, so no records read was even attempted.
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toEqual([]);
 		expect(errorSpy).toHaveBeenCalledWith(
 			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
@@ -562,7 +451,6 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 				ownerIds: []
 			}
 		]);
-		// The toggle DID resolve true here — the read was made and failed; no retry.
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
 		expect(errorSpy).toHaveBeenCalledWith(
 			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
@@ -571,17 +459,6 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 		errorSpy.mockRestore();
 	});
 });
-
-// ── #469 — the SHARED producer's conditional contract ───────────────────────
-//
-// REWRITTEN from the old '#269 loadRoster (shared producer) — profile names
-// only, no overlay reads at all' fence: that fence pinned Henry's 2026-09-06
-// roster-only ruling, which Mihkel's #469 word supersedes ("all places we are
-// showing member names ... must obey the admin setting"). The fence's OPPOSITE
-// is now the contract: `loadRoster` — the app-wide producer the agenda, event
-// page, admin page and /roster all consume — consults the toggle itself.
-// What SURVIVES from the fence: the read discipline. One toggle GET, one
-// records GET, never more; and an empty roster spends neither.
 
 describe('#469 loadRoster (shared producer) — obeys roster_show_real_names (supersedes the #269 roster-only ruling)', () => {
 	it('toggle ON with named records on the wire: REAL names on the rows, profileName untouched, and exactly ONE toggle GET + ONE records GET for the whole load', async () => {
@@ -602,7 +479,6 @@ describe('#469 loadRoster (shared producer) — obeys roster_show_real_names (su
 			]
 		});
 		const rows = (await loadRoster(cfg, fetchImpl)).items as RealNameRow[];
-		// Sorted by the DISPLAYED name: Aaron (member-b) before Zoe (member-a).
 		expect(rows).toEqual([
 			{
 				memberId: 'member-b',
@@ -628,7 +504,6 @@ describe('#469 loadRoster (shared producer) — obeys roster_show_real_names (su
 		expect(
 			requested.filter((u) => u.includes(`entity/${DB_ENTITY}`) && u.includes('props=roster_show_real_names'))
 		).toHaveLength(1);
-		// …and nothing degraded: the overlay ran, it did not fail.
 		expect(errorSpy).not.toHaveBeenCalled();
 		errorSpy.mockRestore();
 	});
@@ -652,7 +527,5 @@ describe('#469 loadRoster (shared producer) — obeys roster_show_real_names (su
 	});
 });
 
-// (*MVOX:Tallis* — #269 RED, data layer)
-// (*MVOX:Palestrina* — #269 review F1/F3 fixes: overlay-failure pins)
-// (*MVOX:Palestrina* — #269 review F1/F2: shared-producer fence, opt-in overlay)
-// (*MVOX:Tallis* — #469 RED: the overlay moves into loadRoster; the fence flips to the conditional contract)
+// (*MVOX:Tallis*)
+// (*MVOX:Palestrina*)

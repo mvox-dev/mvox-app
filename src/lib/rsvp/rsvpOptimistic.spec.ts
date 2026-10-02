@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyRsvp } from './rsvpData';
+import { testCfg } from '$lib/testing/entuFetchKit';
 
 const { createRsvpMock, updateRsvpStatusMock, deleteRsvpMock } = vi.hoisted(() => ({
 	createRsvpMock: vi.fn(),
@@ -15,7 +15,7 @@ vi.mock('./rsvpData', () => ({
 
 import { applyRsvpChange } from './rsvpOptimistic';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const existing: MyRsvp = { rsvpId: 'rsvp-1', eventId: 'event-e', status: 'going' };
 
 beforeEach(() => {

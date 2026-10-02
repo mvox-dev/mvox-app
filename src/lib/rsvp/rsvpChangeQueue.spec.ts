@@ -1,24 +1,14 @@
+// The RSVP optimistic queue: one write per tap, pending keyed by event.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyRsvp } from './rsvpData';
+import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
 const { applyRsvpChangeMock } = vi.hoisted(() => ({ applyRsvpChangeMock: vi.fn() }));
 vi.mock('./rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMock }));
 
 import { createRsvpChangeQueue } from './rsvpChangeQueue';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
-
-/** A promise the test controls the settlement of — simulates "the write is still in flight". */
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
+const cfg = testCfg('testdb');
 
 function makeCallbacks() {
 	return {
@@ -152,16 +142,10 @@ describe('createRsvpChangeQueue — two DIFFERENT events tapped concurrently', (
 		});
 		expect(cb.revert).toHaveBeenCalledWith('e1', null);
 		expect(cb.revert).not.toHaveBeenCalledWith('e2', expect.anything());
-		// e2 must STILL be pending — a whole-map/whole-state operation triggered by
-		// e1's failure would have no way to leave e2 alone; this API structurally can't.
 		expect(cb.setPending).not.toHaveBeenCalledWith('e2', false);
 	});
 });
 
-// #372 review F1 — the LAST-RESORT member-id lookup. The page's load-time
-// lookup can reject, parking `memberId` at null for the page's life while the
-// Entu grant keeps the control enabled; every create-path tap then threw the
-// data-layer backstop, forever. `resolveMemberId` gives that tap one retry.
 describe('createRsvpChangeQueue — resolveMemberId (the write-time member lookup)', () => {
 	const EXISTING: MyRsvp = { rsvpId: 'r-1', eventId: 'e1', status: 'going' };
 
@@ -173,8 +157,6 @@ describe('createRsvpChangeQueue — resolveMemberId (the write-time member looku
 
 		queue.request({ cfg, personId: 'person-p', memberId: null, resolveMemberId, eventId: 'e1', existing: null, newStatus: 'going' });
 
-		// The optimistic/pending feedback is still SYNCHRONOUS — the retry never
-		// delays the control's own response to the tap.
 		expect(cb.setPending).toHaveBeenCalledWith('e1', true);
 		expect(cb.setOptimistic).toHaveBeenCalledWith('e1', expect.objectContaining({ status: 'going' }));
 
@@ -195,7 +177,6 @@ describe('createRsvpChangeQueue — resolveMemberId (the write-time member looku
 
 		await vi.waitFor(() => expect(cb.revert).toHaveBeenCalledWith('e1', null));
 		expect(cb.setPending).toHaveBeenLastCalledWith('e1', false);
-		// The write itself was never attempted — nothing to send without a member.
 		expect(applyRsvpChangeMock).not.toHaveBeenCalled();
 	});
 

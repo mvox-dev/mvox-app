@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { EntuCfg } from './entuSeasons';
 import { isCascadePartial, isDeleteForbidden } from './deleteErrors';
 import * as manage from './seasonManage';
+import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
 type DeleteFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<unknown>;
 type CountFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<number>;
@@ -45,17 +46,9 @@ const countSeasonScope = (manage as unknown as { countSeasonScope?: CountScopeFn
 	.countSeasonScope;
 const deleteSeason = (manage as unknown as { deleteSeason?: DeleteSeasonFn }).deleteSeason;
 
-const cfg: EntuCfg = { db: 'sampledb', token: 'jwt' };
+const cfg = testCfg('sampledb');
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-interface Call {
-	url: string;
-	method: string;
-	headers: string;
-}
+type HeaderedCall = Call & { headers: string };
 
 /** `${_type.string}:${_parent.reference}` — how a scoped child read is keyed in
  *  the stub below, i.e. exactly what the cascade asks the server for. */
@@ -86,7 +79,7 @@ interface StubOpts {
 }
 
 function stubFetch(opts: StubOpts = {}) {
-	const calls: Call[] = [];
+	const calls: HeaderedCall[] = [];
 	const impl = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
 		const href = String(url);
 		const method = init?.method ?? 'GET';
@@ -110,12 +103,12 @@ function stubFetch(opts: StubOpts = {}) {
 }
 
 /** Just the DELETE targets, in order — the cascade's observable shape. */
-function deleteTargets(calls: Call[]): string[] {
+function deleteTargets(calls: HeaderedCall[]): string[] {
 	return calls.filter((c) => c.method === 'DELETE').map((c) => entityIdOf(c.url));
 }
 
 /** Just the scoped GETs, in order — which children the cascade looked for. */
-function lookupKeys(calls: Call[]): string[] {
+function lookupKeys(calls: HeaderedCall[]): string[] {
 	return calls.filter((c) => c.method === 'GET').map((c) => scopeKey(c.url));
 }
 

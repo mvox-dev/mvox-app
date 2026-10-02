@@ -1,55 +1,17 @@
-// #321 review F2 — truncation detection for the ROSTER's member reads.
-//
-// The review finding: /roster got zero #321 treatment although its reads are the
-// same shape the branch itself classified as reachable elsewhere —
-//   - `listActiveMembers`   (`status.string=active`, limit=500): cardinality IS
-//     the collective's active membership, with no structural ceiling to appeal to
-//     (the live dev db already holds 132 against a cap of 500);
-//   - `listInactiveMembers` (`status.string=archived`, limit=500): a deactivate
-//     only flips `status`, so this is the collective's whole membership HISTORY
-//     minus whoever is active — byte-for-byte the "no natural ceiling" argument
-//     `listLendings` is given;
-//   - `listRecordNamesByPerson` (`admin_member_record`, limit=500): one row per
-//     person ever recorded, never archived away. Its truncation is the sneaky
-//     one — the overlay silently reverts SOME rows to profile names, on screen
-//     indistinguishable from "she has no record".
-//
-// Contract is the shared one ($lib/entu/listRead, pinned for the library/rsvp/
-// attendance readers in their own truncation specs): `{ items, total, truncated }`,
-// `truncated` = server `count` > the RAW entities length on the SAME single
-// request; an absent `count` reads as COMPLETE; `entities.length === limit` is
-// never the signal.
-//
-// Also pinned here, because they are the two places the fact can be LOST:
-//   - `loadRoster` (the shared profile-names producer, three non-/roster
-//     consumers) deliberately discards the flag and WARNS instead — a silent
-//     discard is what the review called out, so the console line is part of the
-//     contract, not a debugging leftover;
-//   - the #28 completeness gate drops nameless members, so `items.length` is
-//     legitimately smaller than the wire array. That drop must never read as a
-//     truncation, and a roster with NO presentable member must still report one.
+// The roster's member reads say when a list is partial, from the server count.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { listActiveMembers, loadRoster } from './rosterData';
 import { listInactiveMembers, loadInactiveRoster } from './memberLifecycle';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const cfg: EntuCfg = { db: 'testdb', token: 'jwt' };
+const cfg = testCfg('testdb');
 const DB_ENTITY = 'db-ent-1';
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
 
 function domainProfile(name: string, id = 'prof-1') {
 	return { _id: id, name: [{ string: name }], _sharing: [{ string: 'domain' }] };
 }
 
-/**
- * One wire router for the whole roster load: the member list (active OR
- * archived), one profile read per person, the database entity, the real-names
- * toggle and the bulk admin_member_record read. `memberCount`/`recordCount` are
- * the server `count` values — left undefined to exercise the absent-count case.
- */
 function makeFetch(opts: {
 	members?: Array<{ _id: string; person: string }>;
 	memberCount?: number;
@@ -201,7 +163,6 @@ describe('listInactiveMembers / loadInactiveRoster — the archived-member panel
 		});
 		const read = await loadInactiveRoster(cfg, fetchImpl);
 		expect(read.items.map((r) => r.name)).toEqual(['Zoe Zed']);
-		// `total` is the MEMBER read's count, not the presentable row count.
 		expect(read.total).toBe(812);
 		expect(read.truncated).toBe(true);
 	});
@@ -219,13 +180,6 @@ describe('listInactiveMembers / loadInactiveRoster — the archived-member panel
 	});
 });
 
-// The PO's reachability ruling (2026-09-11) took this producer from
-// "discards the flag with a console.warn" to REPORTING it: all three of its
-// consumers turned out to be closed-set pickers (the agenda's conductor
-// selects and attendance panel, the event page's attendance panel, the admin
-// roles page's person selects), where a missing row reads as "not a member"
-// rather than as a short list. So the flag reaches the caller, and the caller
-// says it inside the picker.
 describe('loadRoster — the shared producer REPORTS the flag (#321)', () => {
 	it('reports truncated, with the member read\'s own count as total', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -238,8 +192,6 @@ describe('loadRoster — the shared producer REPORTS the flag (#321)', () => {
 		expect(read.truncated).toBe(true);
 		expect(read.total).toBe(640);
 		expect(read.items.map((r) => r.name)).toEqual(['Ada Lovelace']);
-		// No console warning any more: the fact now has a surface, and a producer
-		// that both warns and reports would have the consumer saying it twice.
 		expect(warnSpy).not.toHaveBeenCalled();
 		warnSpy.mockRestore();
 	});
@@ -286,7 +238,6 @@ describe('loadRoster — the shared producer reports both reads (#321; overlay f
 			})
 		);
 		expect(read.items.map((r) => r.name)).toEqual(['Zoe Zed']);
-		// `total` stays the MEMBER read's count — the overlay renames rows, never adds any.
 		expect(read.total).toBe(1);
 		expect(read.truncated).toBe(true);
 	});
@@ -314,7 +265,6 @@ describe('loadRoster — the shared producer reports both reads (#321; overlay f
 				memberCount: 1,
 				profilesByPerson: { 'person-a': [domainProfile('Ada Lovelace')] },
 				toggle: true,
-				// 3 rows on the wire, 0 survive the join: one orphan + a duplicated person.
 				records: [
 					{ _id: 'rec-orphan', name: 'Nobody' },
 					{ _id: 'rec-1', person: 'person-a', name: 'Zoe Zed' },
@@ -367,4 +317,4 @@ describe('loadRoster — the shared producer reports both reads (#321; overlay f
 	});
 });
 
-// (*MVOX:Josquin* — #321 review F2)
+// (*MVOX:Josquin*)
