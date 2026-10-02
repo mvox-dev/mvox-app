@@ -57,7 +57,7 @@ export class SectionReparentPartialError extends Error {
 	) {
 		super(
 			step === 'renumber'
-				? `reorderSections: renumber failed after ${renumberedCount} of ${totalCount} section(s): HTTP ${status}`
+				? `renumberDisplayOrder: renumber failed after ${renumberedCount} of ${totalCount}: HTTP ${status}`
 				: `reparentSection: reparent failed: HTTP ${status}`
 		);
 		this.name = 'SectionReparentPartialError';

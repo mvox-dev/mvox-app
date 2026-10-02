@@ -3,6 +3,8 @@ import { entuFetch } from '$lib/entu/request';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
 import { postEntity } from '$lib/entity/entityCreateShared';
 
+export { renumberDisplayOrder as reorderLinks } from '$lib/sections/sectionTreeWrites';
+
 function hasNonWhitespace(s: string): boolean {
 	return /\S/.test(s);
 }
@@ -156,69 +158,6 @@ export async function updateLink(
 	}
 }
 
-interface DisplayOrderValue {
-	_id: string;
-}
-
-export async function reorderLinks(
-	cfg: EntuCfg,
-	orderedIds: string[],
-	fetchImpl: typeof fetch = fetch
-): Promise<void> {
-	const total = orderedIds.length;
-	for (let i = 0; i < total; i++) {
-		const id = orderedIds[i];
-		const number = i + 1;
-
-		const getRes = await entuFetch(
-			cfg.db,
-			`entity/${id}?props=display_order`,
-			cfg.token,
-			{},
-			fetchImpl
-		);
-		if (!getRes.ok) {
-			throw new Error(`reorderLinks: lookup failed for '${id}': HTTP ${getRes.status}`);
-		}
-		const body = (await getRes.json()) as { entity?: { display_order?: DisplayOrderValue[] } };
-		const existing = body.entity?.display_order ?? [];
-		const [oldValue, ...extras] = existing;
-
-		const entry = oldValue
-			? { _id: oldValue._id, type: 'display_order', number }
-			: { type: 'display_order', number };
-
-		const postRes = await entuFetch(
-			cfg.db,
-			`entity/${id}`,
-			cfg.token,
-			{
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify([entry])
-			},
-			fetchImpl
-		);
-		if (!postRes.ok) {
-			throw new Error(`reorderLinks: renumber failed for '${id}': HTTP ${postRes.status}`);
-		}
-
-		// EXTRA-sweep — corrupted multi-value state only, strictly AFTER the POST.
-		for (const value of extras) {
-			const delRes = await entuFetch(
-				cfg.db,
-				`property/${value._id}`,
-				cfg.token,
-				{ method: 'DELETE' },
-				fetchImpl
-			);
-			if (!delRes.ok) {
-				throw new Error(`reorderLinks: cleanup failed for '${id}': HTTP ${delRes.status}`);
-			}
-		}
-	}
-}
-
 // The entity endpoint: a /property/ DELETE here would 404 and leave the link standing.
 export async function deleteLink(
 	cfg: EntuCfg,
@@ -229,4 +168,4 @@ export async function deleteLink(
 	if (!res.ok) throw new Error(`deleteLink failed: HTTP ${res.status}`);
 }
 
-// (*MVOX:Palestrina* — #256 GREEN)
+// (*MVOX:Josquin*)

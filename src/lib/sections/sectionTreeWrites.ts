@@ -22,9 +22,9 @@ interface DisplayOrderValue {
 	_id: string;
 }
 
-// One sibling group, 1-based. The POST pairs the first old value's `_id`, so a failed POST
-// leaves the old number; extra duplicates go only after it lands. Stops at a failure (#253).
-export async function reorderSections(
+// One sibling list, 1-based. The POST pairs the first old value's `_id`, so a failed POST
+// leaves the old number; extra duplicates go only after it lands. Stops at the first failure.
+export async function renumberDisplayOrder(
 	cfg: EntuCfg,
 	orderedIds: string[],
 	fetchImpl: typeof fetch = fetch
@@ -87,6 +87,8 @@ export async function reorderSections(
 		}
 	}
 }
+
+export const reorderSections = renumberDisplayOrder;
 
 interface CountBody {
 	count?: number;
