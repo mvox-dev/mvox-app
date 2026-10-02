@@ -2,13 +2,9 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getToken } from '$lib/auth/storage';
-	import { cfgFor } from '$lib/entu/cfg';
-	import {
-		selectedCollectiveStore,
-		selectedCollectiveIdentityStore,
-		type CollectiveIdentity
-	} from '$lib/collectives/store';
+	import { selectedCollectiveStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
+	import { createRouteLoadMachine, type GatedRouteLoadStatus } from '$lib/loading/routeLoad';
+	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import {
 		resolveCollectiveNameMarker,
 		updateCollectiveName,
@@ -36,10 +32,10 @@
 	import CollectiveNameEditor from '$lib/admin/CollectiveNameEditor.svelte';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
-	type Status = 'no-collective' | 'loading' | 'no-access' | 'load-error' | 'ready';
-
-	let status = $state<Status>('loading');
-	// Only the invite label reads this; what the page acts on keys off the identity store.
+	let status = $state<GatedRouteLoadStatus>('loading');
+	// Keyed on the identity store: a rename republishes the collective, and a reload would
+	// clobber the name just set. The label alone reads selectedCollectiveStore.
+	const identity = $derived($selectedCollectiveIdentityStore);
 	const selected = $derived($selectedCollectiveStore);
 	const isOffline = $derived(!$writesAvailable);
 	let cfg = $state<EntuCfg | null>(null);
@@ -57,8 +53,7 @@
 	let rosterPartial = $state(false);
 	// [] (no sections) falls back to the roster's own name order.
 	let sections = $state<SectionNode[]>([]);
-	/** The section read only orders the pickers, so it sits outside the blocking load: a
-	 *  failure falls back to name order and leaves the rest of the page alone. */
+	// The section read only orders the pickers: a failure falls back to name order.
 	let sectionsError = $state(false);
 	// A name confirm refused offline, with the editor still open on the draft.
 	let nameHeldOffline = $state(false);
@@ -70,19 +65,17 @@
 	let nameMarker = $state<CollectiveNameMarker | null>(null);
 	let nameEditor = $state<CollectiveNameEditor>();
 	let roles = $state<AdminRoles>();
-
-	// A collective switch updates the store in place, so a slow load can land after a newer
-	// one. Every state write after an await is fenced behind thisLoad.
-	let loadSeq = 0;
+	// Handed from the gate to the body; no await sits between them.
+	let gatedDbEntityId: string | null = null;
 
 	async function refreshRole(kind: RoleKind, thisLoad: number): Promise<void> {
-		if (thisLoad !== loadSeq) return; // the collective moved on before this read
+		if (!routeLoad.isCurrent(thisLoad)) return;
 		const entityId = kind === 'admin' ? dbEntityId : libraryId;
 		if (!cfg || !entityId || !viewerId) return;
 		// The roster maps ids to names for rows whose aggregated name has not caught up yet.
 		const list = kind === 'admin' ? listAdmins : listLibrarians;
 		const listing = await list(cfg, entityId, viewerId, undefined, roster);
-		if (thisLoad !== loadSeq) return; // superseded by a newer selection
+		if (!routeLoad.isCurrent(thisLoad)) return;
 		if (kind === 'admin') {
 			admins = listing.persons;
 			canManageAdmins = listing.canManage;
@@ -92,120 +85,80 @@
 		}
 	}
 
-	async function load(target: CollectiveIdentity): Promise<void> {
-		const thisLoad = ++loadSeq;
-		status = 'loading';
-		// Untracked: load runs inside the identity effect, and the refs change on every mount.
-		untrack(() => roles?.reset());
-		if (!getToken()) {
-			console.error('admin roles: no auth token in storage on a protected route');
-			status = 'load-error';
-			return;
-		}
-		const c: EntuCfg = cfgFor(target.db);
-		cfg = c;
-		viewerId = target.personId;
-		canManageAdmins = false;
-		canManageLibrarians = false;
-		nameMarker = null;
-		untrack(() => nameEditor?.reset());
-
-		// Resolve the database entity once and pass it to both resolvers.
-		let resolvedDbEntityId: string | null;
-		try {
-			resolvedDbEntityId = await resolveDatabaseEntityId(c);
-		} catch (e) {
-			if (thisLoad !== loadSeq) return; // superseded by a newer selection
-			console.error('admin roles: database entity resolution failed', e);
-			status = 'load-error';
-			return;
-		}
-		if (thisLoad !== loadSeq) return; // superseded by a newer selection
-		if (!resolvedDbEntityId) {
-			status = 'load-error';
-			return;
-		}
-
-		const adminState = await resolveAdmin(c, target.personId, undefined, resolvedDbEntityId);
-		if (thisLoad !== loadSeq) return; // superseded by a newer selection
-		if (adminState === 'not-admin') {
-			status = 'no-access';
-			return;
-		}
-		if (adminState === 'error') {
-			status = 'load-error';
-			return;
-		}
-
-		// Read alongside the blocking reads, never as one: a failure costs only the picker order.
+	function loadSections(c: EntuCfg, isCurrent: () => boolean): void {
 		sections = [];
 		sectionsError = false;
-		// The partial notice goes down while the list is re-read.
-		rosterPartial = false;
 		listSections(c)
 			.then((tree) => {
-				if (thisLoad !== loadSeq) return; // superseded by a newer selection
-				sections = tree;
+				if (isCurrent()) sections = tree;
 			})
 			.catch((e) => {
-				if (thisLoad !== loadSeq) return;
+				if (!isCurrent()) return;
 				console.error(
 					'admin roles: section tree read failed — the person selects fall back to name order',
 					e
 				);
 				sectionsError = true;
 			});
+	}
 
-		try {
+	const routeLoad = createRouteLoadMachine({
+		name: 'admin roles',
+		selected: () => identity,
+		setStatus: (s) => {
+			status = s;
+		},
+		reset: () => {
+			roles?.reset();
+			nameEditor?.reset();
+			canManageAdmins = false;
+			canManageLibrarians = false;
+			nameMarker = null;
+		},
+		async gate({ cfg: c, selected: target, isCurrent }) {
+			cfg = c;
+			viewerId = target.personId;
+			// Resolved once here and passed to both resolvers.
+			const resolved = await resolveDatabaseEntityId(c);
+			if (!isCurrent()) return false;
+			gatedDbEntityId = resolved;
+			if (!gatedDbEntityId) throw new Error('admin roles: no database entity visible');
+			const adminState = await resolveAdmin(c, target.personId, undefined, gatedDbEntityId);
+			if (adminState === 'error') throw new Error('admin roles: admin resolution failed');
+			return adminState !== 'not-admin';
+		},
+		async load({ cfg: c, selected: target, g, isCurrent }) {
+			const resolvedDbEntityId = gatedDbEntityId!;
+			// Read alongside the blocking reads, never as one: a failure costs only the order.
+			loadSections(c, isCurrent);
+			// The partial notice goes down while the list is re-read.
+			rosterPartial = false;
 			const [libResult, rosterRead, resolvedNameMarker] = await Promise.all([
 				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
 				loadRoster(c),
 				// A failed marker read is a load-error, never "no name".
 				resolveCollectiveNameMarker(c)
 			]);
-			if (thisLoad !== loadSeq) return; // superseded by a newer selection
+			if (!isCurrent()) return;
 			// resolveLibrarian turns a failed read into libraryId null, the same as "no library".
-			// Branch on state first, so a failed read fails loudly.
-			if (libResult.state === 'error') {
-				console.error('admin roles: librarian resolution failed');
-				status = 'load-error';
-				return;
-			}
+			if (libResult.state === 'error') throw new Error('admin roles: librarian resolution failed');
 			dbEntityId = resolvedDbEntityId;
 			libraryId = libResult.libraryId;
 			roster = rosterRead.items;
 			rosterPartial = rosterRead.truncated;
 			nameMarker = resolvedNameMarker;
 			await Promise.all([
-				refreshRole('admin', thisLoad),
-				libraryId ? refreshRole('librarian', thisLoad) : Promise.resolve()
+				refreshRole('admin', g),
+				libraryId ? refreshRole('librarian', g) : Promise.resolve()
 			]);
-			if (thisLoad !== loadSeq) return; // superseded by a newer selection
-			status = 'ready';
-		} catch (e) {
-			if (thisLoad !== loadSeq) return; // a superseded load's failure is not this view's
-			console.error('admin roles: load failed', e);
-			status = 'load-error';
+			if (isCurrent()) status = 'ready';
 		}
-	}
+	});
 
-	function retryLoad(): void {
-		if (loadedIdentity) void load(loadedIdentity);
-	}
-
-	// Also what retryLoad re-runs against, so a retry never targets a different collective.
-	let loadedIdentity = $state<CollectiveIdentity | null>(null);
-
-	// Keyed on the identity store, not selectedCollectiveStore: a rename republishes the
-	// collective, and re-running load() would clobber the name just set.
 	$effect(() => {
-		const id = $selectedCollectiveIdentityStore;
-		loadedIdentity = id;
-		if (!id) {
-			status = 'no-collective';
-			return;
-		}
-		void load(id);
+		void identity;
+		// Untracked: the refs reset in the hook change on every mount.
+		untrack(() => void routeLoad.loadForSelected());
 	});
 </script>
 
@@ -219,6 +172,8 @@
 			</p>
 		{:else if status === 'loading'}
 			<p class="text-sm" aria-busy="true">…</p>
+		{:else if status === 'session-expired'}
+			<SessionExpiredNotice />
 		{:else if status === 'no-access'}
 			<p data-testid="admin-roles-no-access" class="text-sm" role="alert">
 				{m.admin_roles_no_access()}
@@ -230,7 +185,7 @@
 					type="button"
 					data-testid="admin-roles-retry-load"
 					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={retryLoad}
+					onclick={() => routeLoad.loadForSelected()}
 				>
 					{m.admin_roles_retry_load()}
 				</button>
@@ -242,7 +197,7 @@
 				bind:nameHeldOffline
 				{cfg}
 				{isOffline}
-				loadSeq={() => loadSeq}
+				loadSeq={() => routeLoad.generation}
 				updateCollectiveName={(...a) => updateCollectiveName(...a)}
 			/>
 
@@ -273,7 +228,7 @@
 				{sections}
 				{sectionsError}
 				{isOffline}
-				loadSeq={() => loadSeq}
+				loadSeq={() => routeLoad.generation}
 				{refreshRole}
 				writes={{
 					addAdmin: (...a) => addAdmin(...a),

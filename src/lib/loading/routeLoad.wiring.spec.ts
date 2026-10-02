@@ -11,12 +11,14 @@ const ROUTE_CONSUMERS = [
 	'routes/profile/+page.svelte',
 	'routes/roster/+page.svelte',
 	'routes/library/+page.svelte',
-	'routes/event/[id]/+page.svelte'
+	'routes/event/[id]/+page.svelte',
+	'routes/admin/+page.svelte'
 ] as const;
 
 const SUPERSET_EXTRAS: Record<string, readonly string[]> = {
 	'lib/components/admin/InviteSurface.svelte': ["'no-access'", "'creating'", "'done'", "'create-error'"],
-	'routes/event/[id]/+page.svelte': ["'not-available'"]
+	'routes/event/[id]/+page.svelte': ["'not-available'"],
+	'routes/admin/+page.svelte': ["'no-access'"]
 };
 
 const BASE_STATES = [
