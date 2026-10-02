@@ -233,6 +233,13 @@ function finishedSummary(count: number): string {
 	return count === 1 ? '1 tehtud alamülesanne' : `${count} tehtud alamülesannet`;
 }
 
+// #692: an active epic's list is open by default and folds on a click.
+function activeSummary(issues: RoadmapIssue[]): string {
+	const open = issues.filter((sub) => !allFinished([sub])).length;
+	const total = issues.length === 1 ? '1 alamülesanne' : `${issues.length} alamülesannet`;
+	return `${total}, ${open} pooleli`;
+}
+
 function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	if (rendered.has(issue.number)) return '';
 	rendered.add(issue.number);
@@ -262,10 +269,12 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 		.map((html) => `<li>${html}</li>`)
 		.join('');
 	const listHtml = childrenHtml ? `<ul class="sub-issues">${childrenHtml}</ul>` : '';
-	const subIssuesHtml =
-		listHtml && allFinished(subIssues)
-			? `<details class="sub-issues-done"><summary>${finishedSummary(subIssues.length)}</summary>${listHtml}</details>`
-			: listHtml;
+	const finished = allFinished(subIssues);
+	const subIssuesHtml = !listHtml
+		? ''
+		: finished
+			? `<details class="sub-issues-fold"><summary>${finishedSummary(subIssues.length)}</summary>${listHtml}</details>`
+			: `<details class="sub-issues-fold" open><summary>${activeSummary(subIssues)}</summary>${listHtml}</details>`;
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
 		renderUpdatedAt(issue.updatedAt) +
@@ -350,7 +359,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	.label { display: inline-block; font-size: 0.75rem; background: #eee; border: 1px solid rgba(0, 0, 0, 0.15); border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
 	.board-group h2 { font-size: 1rem; color: #666; margin: 1.5rem 0 0.5rem; }
 	.sub-issues { list-style: none; margin: 0.5rem 0 0; padding-left: 1.5rem; }
-	.sub-issues-done summary { cursor: pointer; margin-top: 0.5rem; color: #666; font-size: 0.9rem; }
+	.sub-issues-fold summary { cursor: pointer; margin-top: 0.5rem; color: #666; font-size: 0.9rem; }
 	.staleness-warning { background: #fff3cd; border: 1px solid #f0ad4e; border-radius: 0.5rem; padding: 0.75rem 1rem; margin: 1rem 0; color: #7a5900; font-size: 0.95rem; }
 	.staleness-warning .issue-link { color: inherit; font-weight: 600; }
 </style>

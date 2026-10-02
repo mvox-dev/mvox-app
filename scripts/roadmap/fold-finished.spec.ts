@@ -42,19 +42,31 @@ describe('#690 — an epic whose sub-issues are all done renders folded', () => 
 		expect(summary!.textContent).toBe('1 tehtud alamülesanne');
 	});
 
-	it('leaves the list open when any direct sub-issue is open', () => {
-		const epic = issue(1, 'open', [issue(2, 'closed'), issue(3, 'open')]);
-		const article = epicArticle([epic, ...epic.subIssues!], 1);
-		expect(article.querySelector(':scope > details')).toBeNull();
-		expect(article.querySelector(':scope > ul.sub-issues')).not.toBeNull();
+});
+
+describe('#692 — an active epic folds on a click, open by default', () => {
+	it('renders an open <details> naming the count and how many are open', () => {
+		const epic = issue(1, 'open', [issue(2, 'closed'), issue(3, 'open'), issue(6, 'open')]);
+		const details = epicArticle([epic, ...epic.subIssues!], 1).querySelector(':scope > details');
+		expect(details).not.toBeNull();
+		expect(details!.hasAttribute('open')).toBe(true);
+		expect(details!.querySelector('summary')!.textContent).toBe('3 alamülesannet, 2 pooleli');
+		expect(details!.querySelectorAll('article[data-issue]').length).toBe(3);
 	});
 
-	it('leaves the list open when an open issue sits deeper down', () => {
+	it('counts a closed child with an open issue deeper down as active', () => {
 		const grandchild = issue(4, 'open');
 		const child = issue(2, 'closed', [grandchild]);
 		const epic = issue(1, 'open', [child, issue(3, 'closed')]);
-		const article = epicArticle([epic, child, grandchild, ...epic.subIssues!.slice(1)], 1);
-		expect(article.querySelector(':scope > details')).toBeNull();
+		const details = epicArticle([epic, child, grandchild, issue(3, 'closed')], 1).querySelector(':scope > details');
+		expect(details!.hasAttribute('open')).toBe(true);
+		expect(details!.querySelector('summary')!.textContent).toBe('2 alamülesannet, 1 pooleli');
+	});
+
+	it('uses the singular for one sub-issue', () => {
+		const epic = issue(1, 'open', [issue(2, 'open')]);
+		const summary = epicArticle([epic, ...epic.subIssues!], 1).querySelector(':scope > details > summary');
+		expect(summary!.textContent).toBe('1 alamülesanne, 1 pooleli');
 	});
 
 	it('an issue with no sub-issues gets no fold', () => {
