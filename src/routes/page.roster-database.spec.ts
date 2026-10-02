@@ -1,23 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #161 RED — the /roster page on DATABASE-parented data, wire-level
-// (integration: real roster/+page.svelte, REAL rosterData/profileData/
-// sectionData against a stubbed `entuFetch`; only the WRITE layer
-// (sectionActions) is mocked so the create call shape is observable).
-//
-// The live db after #159/#161 holds NO organization entities: members and
-// top-level sections are parented to the DATABASE entity
-// (`entity_type: 'database'` in the `_parent` wire shape). Pinned contract:
-//   - the roster renders those members (the read layer keys the collective off
-//     the `database` parent, not the retired `organization` one),
-//   - a TOP-LEVEL section create threads the DATABASE entity id into
-//     `createSection` (the page KNOWS the collective from the member row — the
-//     data layer must not guess),
-//   - nothing on the wire ever queries `_type.string=organization`.
+// /roster on database-parented data, through the real data modules.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -30,12 +16,10 @@ const { entuFetchMock, assignMock, unassignMock, createSectionMock, wireLog } = 
 	wireLog: [] as string[]
 }));
 
-// READ layers stay REAL — the wire is the seam (see module header).
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: entuFetchMock };
 });
-// WRITE layer mocked so the create call shape is observable.
 vi.mock('$lib/sections/sectionActions', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionActions')>();
 	return {
@@ -59,16 +43,9 @@ import {
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 
-// ── the wire (post-#159 shape: NO organization entities exist) ─────────────────
-
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
 const CFG = { db: 'sampledb', token: 'jwt-abc' };
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** Routes the READ queries loadRoster/listSections actually issue. */
 function wireRouter(path: string): Response {
 	if (path.includes('_type.string=member') && path.includes('status.string=active')) {
 		return json({
@@ -76,12 +53,7 @@ function wireRouter(path: string): Response {
 				{
 					_id: 'm-pete',
 					person: [{ reference: 'p-pete' }],
-					// The member's collective is its DATABASE `_parent` — there is no
-					// organization entry anymore.
 					_parent: [{ reference: DB_ENTITY, entity_type: 'database' }],
-					// #468 — the reader ('p-pete', her own row) holds `_owner` on
-					// herself, so the picker gate stays open for this file's own
-					// (unrelated) database-parenting concern.
 					_owner: [{ reference: 'p-pete' }]
 				}
 			],
@@ -164,8 +136,6 @@ async function renderReady(): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
-	// Sections default collapsed (TU.2/#110 #9) — expand so member rows and
-	// their picker triggers render.
 	const toggleAll = q(container, 'roster-view-chip-expanded');
 	if (toggleAll) {
 		await fireEvent.click(toggleAll);
@@ -178,8 +148,6 @@ async function renderReady(): Promise<HTMLElement> {
 
 describe('/roster on DATABASE-parented data (#161)', () => {
 	it("renders the member read off a database-parented member row, and a TOP-LEVEL create threads the DATABASE entity id: createSection(cfg, { name, parentId: null, dbEntityId: <database entity> })", async () => {
-		// #470 — the picker's inline create form is RETIRED; the db-scoping pin
-		// re-drives through the page-level `roster-new-section` entry (Arrange).
 		const container = await renderReady();
 
 		await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
@@ -198,8 +166,6 @@ describe('/roster on DATABASE-parented data (#161)', () => {
 		await waitFor(() => {
 			expect(createSectionMock).toHaveBeenCalledTimes(1);
 		});
-		// The page KNOWS the collective (the member's database `_parent`) and must
-		// say it — the data layer never guesses.
 		expect(createSectionMock).toHaveBeenCalledWith(CFG, {
 			name: 'Tenor',
 			parentId: null,
@@ -210,12 +176,8 @@ describe('/roster on DATABASE-parented data (#161)', () => {
 	it('nothing on the wire ever queries `_type.string=organization`', async () => {
 		await renderReady();
 		expect(wireLog.some((p) => p.includes('_type.string=organization'))).toBe(false);
-		// …and the roster genuinely came off the wire (regression guard for the
-		// harness itself, not the app).
 		expect(wireLog.some((p) => p.includes('_type.string=member'))).toBe(true);
 	});
 });
 
-// (*MVOX:Tallis* — #161 RED)
-// (*MVOX:Tallis* — #470: db-scoping pin re-driven through roster-new-section;
-//  the picker's inline create form is retired)
+// (*MVOX:Tallis*)

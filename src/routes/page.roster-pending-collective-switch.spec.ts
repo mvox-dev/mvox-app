@@ -1,40 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #287 RED — `removePending` / `deactivatePending` survive a collective switch
-// (the #260 class, on the roster's write flags).
-//
-// The route-load `reset` callback clears the ARMED ids (`pendingRemoveId`,
-// `pendingDeactivateId`) and their error slots on every switch — but neither
-// in-flight FLAG. And neither handler's `finally` is generation-guarded. Three
-// distinct consequences, each pinned here:
-//
-//   (1) STALE DISABLE — a write held on collective A keeps its flag true
-//       through the switch, so collective B's controls render disabled (and,
-//       for remove, undraggable via `structuralWritePending`) from FIRST
-//       PAINT, for a write B never started.
-//   (2) CROSS-COLLECTIVE ANNOUNCEMENT (remove only) — the success branch
-//       writes `removeStatus = roster_section_removed({name})` with no
-//       generation check at all: A's delete settling after the switch
-//       announces A's section into B's live region. (Deactivate has NO
-//       success announcement — its exposure is the disabled/aria-busy half
-//       only, pinned in (1)/(3).)
-//   (3) LATE-SETTLE CLOBBER — clearing the flags on switch is NOT enough on
-//       its own: A's stale promise can settle AFTER a genuine new write has
-//       started on B, and an unguarded `finally` clobbers B's live flag back
-//       to false — re-enabling B's controls mid-write and reopening the
-//       double-submit window #273/#286 closed. The stale success also nulls
-//       the armed id, unmounting B's own armed pair mid-write.
-//
-// House method for timing proofs (#259's deterministic race construction):
-// the WRITE mock itself is release-controlled — hold → switch → (arm B) →
-// settle. No existing spec holds the remove/deactivate WRITE across a switch
-// (#259's block holds only the panel RELOAD), which is why this file exists.
-// Flags are not exported: every assertion here reads rendered `disabled` /
-// `aria-busy` / `draggable` DOM state and mock call counts, never the flags.
+// Roster remove and deactivate pending flags reset on a collective switch.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
-// Lenient message mock — key + params echoed; structural assertions only.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -86,7 +55,6 @@ const {
 	mintSelfLinkInviteMock: vi.fn(),
 	loadMemberRecordMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -121,8 +89,6 @@ vi.mock('$lib/library/librarianStore', async (importActual) => ({
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// #302 — opening a card runs the editor's record lookup; resolve it so the
-// editor (and the deactivate controls now inside it) can mount.
 vi.mock('$lib/roster/memberRecord', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
 	loadMemberRecord: loadMemberRecordMock
@@ -142,8 +108,6 @@ import {
 } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 
-// ── two collectives, two disjoint fixtures ──────────────────────────────────
-
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
 
@@ -162,10 +126,6 @@ function treeB(): SectionNode[] {
 	];
 }
 
-// Every member UNASSIGNED: all sections stay empty (deletable — `canDelete`
-// needs an empty, childless section) and the rows live under the Unassigned
-// group's toggle. All personIds differ from both viewers', so the deactivate
-// trigger renders on every row.
 function rowsA(): RosterRow[] {
 	return [
 		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A },
@@ -232,19 +192,6 @@ afterEach(() => {
 	resetAdmin();
 });
 
-// ── house helpers (deferred: page.roster-deactivate.spec.ts; switch/flush:
-//    page.roster-arrange-stale-success.spec.ts) ──────────────────────────────
-
-function deferred<T = void>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
@@ -271,14 +218,12 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 
 async function switchToOtherChoirArrange(container: HTMLElement) {
 	selectedCollectiveDbStore.set('other-choir');
-	// Collective B's tree is on screen before anything stale settles.
 	await waitFor(() => {
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 	});
 	expect(q(container, 'arrange-row-sec-alto')).toBeNull();
 }
 
-// Arms sec-tenor's delete on collective A and confirms it into the HELD write.
 async function startHeldRemoveOnA(container: HTMLElement) {
 	await fireEvent.click(q(container, 'section-remove-sec-tenor') as HTMLElement);
 	await waitFor(() => {
@@ -289,8 +234,6 @@ async function startHeldRemoveOnA(container: HTMLElement) {
 		expect(deleteMock).toHaveBeenCalledTimes(1);
 	});
 }
-
-// ── groups-view helpers for the deactivate flow ─────────────────────────────
 
 async function renderGroupsRoster(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
@@ -308,21 +251,16 @@ async function renderGroupsRoster(): Promise<HTMLElement> {
 
 async function switchToOtherChoirGroups(container: HTMLElement) {
 	selectedCollectiveDbStore.set('other-choir');
-	// B's own tree replaces A's before anything stale settles …
 	await waitFor(() => {
 		expect(q(container, 'section-toggle-sec-b1')).not.toBeNull();
 	});
 	expect(q(container, 'section-toggle-sec-sop')).toBeNull();
-	// … and the switch collapsed the groups: reopen Unassigned to reach Bob.
 	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'roster-row-m-bob')).not.toBeNull();
 	});
 }
 
-// #302 drive-path step (Gama's on-issue ruling): the deactivate controls
-// render inside the OPENED record editor, so reaching them takes an
-// open-the-card step first. Idempotent — an already-open editor is left alone.
 async function openCard(container: HTMLElement, memberId: string) {
 	const li = q(container, `roster-row-${memberId}`);
 	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
@@ -337,10 +275,6 @@ async function openCard(container: HTMLElement, memberId: string) {
 	});
 }
 
-// Arms the row's deactivate and confirms it into the HELD write (the blocker
-// read and the library lookup resolve immediately from the beforeEach mocks).
-// #302 drive-path edit: opens the row's card first — the trigger lives inside
-// the opened editor now. Everything the helper CLAIMS is unchanged.
 async function startHeldDeactivate(container: HTMLElement, memberId: string, nthWrite: number) {
 	await openCard(container, memberId);
 	await fireEvent.click(q(container, `member-deactivate-${memberId}`) as HTMLElement);
@@ -353,8 +287,6 @@ async function startHeldDeactivate(container: HTMLElement, memberId: string, nth
 	});
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('/roster — #287 removePending across a collective switch', () => {
 	it("STALE DISABLE: with collective A's delete WRITE still in flight, collective B's structural controls render ENABLED from load — A's unresolved write is not B's business", async () => {
 		const gate = deferred();
@@ -363,10 +295,6 @@ describe('/roster — #287 removePending across a collective switch', () => {
 
 		await startHeldRemoveOnA(container);
 
-		// Switch while the write is held. Pre-fix, `removePending` is still true
-		// (the reset callback never clears it), `structuralWritePending` is
-		// derived page-wide from it, and every control below renders disabled /
-		// undraggable on B from FIRST PAINT.
 		await switchToOtherChoirArrange(container);
 
 		expect(
@@ -386,7 +314,6 @@ describe('/roster — #287 removePending across a collective switch', () => {
 			"B's rows must be draggable — no structural write is in flight HERE"
 		).toBe('true');
 
-		// Settle A's orphaned write cleanly before teardown.
 		gate.resolve();
 		await flush();
 	});
@@ -402,12 +329,7 @@ describe('/roster — #287 removePending across a collective switch', () => {
 		gate.resolve();
 		await flush();
 
-		// THE pin: pre-fix the success branch writes
-		// `removeStatus = roster_section_removed({name: 'Tenor'})` with no
-		// generation check at all — a screen-reader user standing in collective
-		// B is told a section of collective A was removed.
 		expect(removeStatusText(container)).toBe('');
-		// …and B's tree is untouched by the stale settle.
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 		expect(q(container, 'arrange-row-sec-b2')).not.toBeNull();
 	});
@@ -423,14 +345,11 @@ describe('/roster — #287 removePending across a collective switch', () => {
 		await startHeldRemoveOnA(container);
 		await switchToOtherChoirArrange(container);
 
-		// Precondition (= the STALE DISABLE pin): B's trigger must be usable at
-		// all, or no genuine write can ever start here.
 		expect(
 			(q(container, 'section-remove-sec-b2') as HTMLButtonElement).disabled,
 			"B's delete trigger must be enabled after the switch"
 		).toBe(false);
 
-		// A GENUINE new write on B, held on its own gate.
 		await fireEvent.click(q(container, 'section-remove-sec-b2') as HTMLElement);
 		await waitFor(() => {
 			expect(q(container, 'section-remove-confirm-sec-b2')).not.toBeNull();
@@ -440,10 +359,6 @@ describe('/roster — #287 removePending across a collective switch', () => {
 			expect(deleteMock).toHaveBeenCalledTimes(2);
 		});
 
-		// NOW A's stale promise settles. An unguarded `finally` would clobber
-		// B's live flag back to false; the unguarded success branch would null
-		// the armed id (unmounting B's own armed pair mid-write) and announce
-		// A's section. All three must not happen.
 		gateA.resolve();
 		await flush();
 
@@ -458,15 +373,11 @@ describe('/roster — #287 removePending across a collective switch', () => {
 		expect(q(container, 'arrange-row-sec-b1')?.getAttribute('draggable')).toBe('false');
 		expect(removeStatusText(container)).toBe('');
 
-		// Double-submit probe on the (still-mounted) confirm: nothing fires.
 		await fireEvent.click(confirmB!);
 		confirmB!.click();
 		await flush();
 		expect(deleteMock).toHaveBeenCalledTimes(2);
 
-		// B's own write completes HONESTLY: announced with B's section name,
-		// controls released. (Trap detector: an over-broad guard — e.g. a
-		// generation consumed by A's settle — would leave B frozen forever.)
 		gateB.resolve();
 		await flush();
 		await waitFor(() => {
@@ -480,18 +391,6 @@ describe('/roster — #287 removePending across a collective switch', () => {
 });
 
 describe('/roster — #287 deactivatePending across a collective switch', () => {
-	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, per
-	// relocated switch-guard test): after the drive-path edit below, delete the
-	// guard this test pins — the route-load reset callback's unconditional
-	// `deactivatePending = false` clear (roster/+page.svelte, #287 block) —
-	// confirm THIS test FAILS, restore, confirm it passes. A frozen assertion
-	// proves nobody weakened the claim; only this check proves the
-	// open-editor step didn't detach the test from the guard (opening the
-	// editor could bump the sequence the test was written to exercise).
-	// [GREEN 2026-09-10: guard (line 216, reset callback's unconditional
-	// `deactivatePending = false`) commented out — this test FAILED
-	// ("B's deactivate trigger must not be disabled..." false→true).
-	// Restored — test PASSES. The drive-path edit still reaches the guard.]
 	it("STALE DISABLE: with collective A's deactivate WRITE still in flight, collective B's deactivate trigger renders ENABLED from load", async () => {
 		const gate = deferred();
 		deactivateMemberMock.mockImplementation(() => gate.promise);
@@ -499,15 +398,8 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 
 		await startHeldDeactivate(container, 'm-ada', 1);
 		await switchToOtherChoirGroups(container);
-		// #302 drive-path edit: the switch closed every editor — open Bob's card
-		// to reach the trigger the assertion pins.
 		await openCard(container, 'm-bob');
 
-		// Pre-fix `deactivatePending` is still true (never cleared on switch),
-		// so Bob's trigger — `disabled={deactivatePending}` — renders disabled
-		// from first paint, falsely signalling an in-flight operation that was
-		// never started in this collective. There is no armed pair on B
-		// (`pendingDeactivateId` IS reset), so the trigger is the whole surface.
 		expect(
 			(q(container, 'member-deactivate-m-bob') as HTMLButtonElement).disabled,
 			"B's deactivate trigger must not be disabled by A's in-flight write"
@@ -517,16 +409,6 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 		await flush();
 	});
 
-	// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN): after the
-	// drive-path edit below, delete the guard this test pins — the
-	// generation-guarded `finally` (and the guarded success writes) in
-	// `handleDeactivateConfirm` (roster/+page.svelte, #287) — confirm THIS
-	// test FAILS, restore, confirm it passes. Opening Bob's editor before
-	// arming must not have bumped the generation sequence this race is built
-	// on. [GREEN 2026-09-10: guard (line 1219, `if (gEntry === routeLoad.generation)
-	// deactivatePending = false` in handleDeactivateConfirm's finally) made
-	// unconditional — this test FAILED ("B's write is STILL in flight — confirm
-	// stays disabled" true→false). Restored — test PASSES.]
 	it("LATE-SETTLE CLOBBER: A's stale settle lands AFTER a genuine new deactivate has started on B — B's armed pair stays mounted, disabled and aria-busy; no double-fire; B then completes honestly", async () => {
 		const gateA = deferred();
 		const gateB = deferred();
@@ -537,24 +419,15 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 
 		await startHeldDeactivate(container, 'm-ada', 1);
 		await switchToOtherChoirGroups(container);
-		// #302 drive-path edit: open Bob's card so the precondition can read his
-		// trigger (startHeldDeactivate below would open it anyway — the
-		// precondition assert just comes first).
 		await openCard(container, 'm-bob');
 
-		// Precondition (= the STALE DISABLE pin).
 		expect(
 			(q(container, 'member-deactivate-m-bob') as HTMLButtonElement).disabled,
 			"B's deactivate trigger must be enabled after the switch"
 		).toBe(false);
 
-		// A GENUINE new deactivate on B, held on its own gate.
 		await startHeldDeactivate(container, 'm-bob', 2);
 
-		// A's stale promise settles. An unguarded settle would (a) null the
-		// armed id — unmounting B's confirm/cancel pair mid-write — and (b) via
-		// the unguarded `finally`, flip `deactivatePending` back to false,
-		// re-enabling B's armed pair while B's write is still in flight.
 		gateA.resolve();
 		await flush();
 
@@ -566,18 +439,11 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 			(q(container, 'member-deactivate-cancel-m-bob') as HTMLButtonElement).disabled
 		).toBe(true);
 
-		// Double-submit probe: a second tap on the still-mounted confirm must
-		// not fire a third write.
 		await fireEvent.click(confirmB!);
 		confirmB!.click();
 		await flush();
 		expect(deactivateMemberMock).toHaveBeenCalledTimes(2);
 
-		// B's own write completes HONESTLY: Bob leaves the roster via B's own
-		// refetch and the pair disarms. (Trap detector: if A's stale settle was
-		// allowed to bump the generation — e.g. by running its unguarded
-		// `loadForSelected()` — B's guarded success path would read stale and
-		// Bob's row would never leave.)
 		loadRosterMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : []))
 		);
@@ -591,7 +457,4 @@ describe('/roster — #287 deactivatePending across a collective switch', () => 
 	});
 });
 
-// (*MVOX:Tallis* — #287 RED, house deterministic-race method per #259/#264;
-//  held-WRITE-across-switch construction new here, fixtures/switch driver from
-//  page.roster-arrange-stale-success.spec.ts, deferred from
-//  page.roster-deactivate.spec.ts)
+// (*MVOX:Tallis*)

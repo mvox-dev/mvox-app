@@ -1,54 +1,9 @@
 // @vitest-environment happy-dom
-//
-// #325 RED — pending guard on the season-manage CONDUCTOR add/remove (the
-// CONDUCTOR half of the issue). Contract: issue #325 + Gama's 2026-09-11
-// `ready` ruling, which SPLITS the criterion between the two halves:
-//
-//   THE CONDUCTOR WRITE IS NOT A RIGHTS GRANT. addSeasonConductor
-//   (seasonManage.ts) POSTs a plain multi-value property value
-//   `{ type: 'conductor', reference: personId }`; removeSeasonConductor is a
-//   GET-find-DELETE. Entu's direct-grant replacement rule (ER-6,
-//   docs/architecture/entu-rights-and-visibility-model.md) does NOT reach a
-//   plain property — per the ruling, this half's hazard is deliberately NOT
-//   cited as ER-6. The race here is DUPLICATE/LOST-REMOVE:
-//     - a duplicate POST appends a SECOND conductor value onto the
-//       multi-value list (POST appends, it never replaces);
-//     - a re-tapped remove — or a remove still in flight when the same
-//       person is re-added — can delete the RE-ADDED value: the remove's
-//       GET-find-DELETE resolves against whatever value ids exist when it
-//       runs, so a late remove can land on the value the re-add just wrote.
-//   Same missing guard as the admin/librarian half, same fix shape —
-//   different criterion.
-//
-// PINNED CONTRACT (issue #325 done-when + the inventory's four-state table,
-// docs/qa/autosave-field-inventory.md):
-//   - a conductor write in flight disables the <select> AND the chip remove
-//     buttons; the HANDLERS refuse a second write regardless of the
-//     `disabled` attribute (wire-level: exactly one call) — `disabled` alone
-//     is a double-tap guard, not a state signal;
-//   - pending is VISIBLE: a caveat-slot paragraph (#321's precedent — the
-//     slot the partial/order notices already use beside this very select),
-//     role="status", data-testid="season-manage-conductor-pending-notice",
-//     text season_manage_conductor_saving, present exactly while in flight;
-//   - saved is ANNOUNCED: a PERSISTENT role="status" region (#267 same-node
-//     shape), data-testid="season-manage-conductor-status", empty at rest,
-//     announcing season_manage_conductor_saved after a successful write;
-//   - failure text KEPT byte-identical: the existing
-//     season-manage-conductor-error role="alert" with
-//     season_manage_save_error, optimistic chip reverted, controls
-//     re-enabled;
-//   - the season-switch generation check (seasonManageSwitchGeneration —
-//     the same capture-compare every conductor settle path already runs)
-//     gates the NEW pending flag too: a switch mid-flight clears it, and the
-//     stale settle may neither re-raise pending nor announce saved on the
-//     new season's panel.
-//
-// Messages are mocked leniently (Proxy → key name): every text assertion
-// pins the KEY; the four-locale copy is pinned by
-// src/lib/i18n/pendingGuardKeys.spec.ts.
+// Season-manage conductor add/remove holds a pending state until the write lands.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
@@ -347,7 +302,6 @@ async function pickConductor(container: HTMLElement, personId: string): Promise<
 	await fireEvent.change(conductorSelect(container), { target: { value: personId } });
 }
 
-/** Every per-season collapsed entry currently on the page, in DOM order. */
 function expandButtons(container: HTMLElement): HTMLElement[] {
 	return Array.from(
 		container.querySelectorAll('[data-testid="season-card-expand"]')
@@ -358,7 +312,6 @@ function expandFor(container: HTMLElement, seasonName: string): HTMLElement | nu
 	return expandButtons(container).find((b) => b.textContent?.includes(seasonName)) ?? null;
 }
 
-/** Open (or switch to) the panel FOR the named season via its own entry. */
 async function openPanelForSeason(container: HTMLElement, seasonName: string): Promise<void> {
 	await waitFor(() => {
 		expect(expandFor(container, seasonName), `an entry for ${seasonName}`).not.toBeNull();
@@ -368,23 +321,6 @@ async function openPanelForSeason(container: HTMLElement, seasonName: string): P
 		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe(seasonName);
 	});
 }
-
-/** A promise the test settles by hand — the in-flight window under test. */
-function deferred<T>(): {
-	promise: Promise<T>;
-	resolve: (v: T) => void;
-	reject: (e: Error) => void;
-} {
-	let resolve!: (v: T) => void;
-	let reject!: (e: Error) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-// ── the four states exist as DOM facts ─────────────────────────────────────────
 
 describe('#325 conductor — four states at rest (not yet attempted)', () => {
 	it('open panel: PERSISTENT empty role="status" region (season-manage-conductor-status, #267 same-node shape), NO pending notice, NO error, select enabled', async () => {
@@ -402,8 +338,6 @@ describe('#325 conductor — four states at rest (not yet attempted)', () => {
 	});
 });
 
-// ── the guard: a write in flight disables the controls and refuses a second write ──
-
 describe('#325 conductor — a write in flight disables the surface (duplicate/lost-remove race closed)', () => {
 	it('add in flight: select AND every chip remove button disable; the visible saving notice (caveat-slot paragraph, role="status") shows; a second pick fires NO second POST (a duplicate POST would APPEND a second conductor value); settle → re-enabled, notice gone, saved announced', async () => {
 		const d = deferred<undefined>();
@@ -415,8 +349,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 		expect(addSeasonConductorMock).toHaveBeenCalledTimes(1);
 		expect(addSeasonConductorMock).toHaveBeenCalledWith(CFG, SEASON_ID, 'p-ada');
 
-		// Pending is VISIBLE — `disabled` alone is a double-tap guard, not a
-		// state signal (docs/qa/autosave-field-inventory.md).
 		await waitFor(() => {
 			const notice = q(container, 'season-manage-conductor-pending-notice');
 			expect(notice, 'expected the visible pending notice while the write is in flight').not.toBeNull();
@@ -425,8 +357,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 		});
 
 		expect(conductorSelect(container).disabled).toBe(true);
-		// Every chip's × guards too: a remove racing the in-flight add is the
-		// lost-remove half of this surface's hazard.
 		expect(
 			(q(container, 'season-manage-conductor-remove-p-grace') as HTMLButtonElement).disabled
 		).toBe(true);
@@ -435,9 +365,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 			expect((optimisticRemove as HTMLButtonElement).disabled).toBe(true);
 		}
 
-		// WIRE-LEVEL: the handler refuses regardless of the `disabled`
-		// attribute — fireEvent reaches listeners exactly like a double-tap
-		// racing the attribute flip. NO concurrent conductor write.
 		await pickConductor(container, 'person-p');
 		expect(addSeasonConductorMock).toHaveBeenCalledTimes(1);
 		await fireEvent.click(q(container, 'season-manage-conductor-remove-p-grace') as HTMLElement);
@@ -454,7 +381,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 			);
 		});
 
-		// The guard releases: a next write is possible after settle.
 		await pickConductor(container, 'person-p');
 		expect(addSeasonConductorMock).toHaveBeenCalledTimes(2);
 	});
@@ -474,8 +400,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 		});
 		expect(conductorSelect(container).disabled).toBe(true);
 
-		// Grace left the chips optimistically, so she is back among the
-		// options — re-adding her NOW is exactly the race the guard closes.
 		await pickConductor(container, 'p-grace');
 		expect(addSeasonConductorMock).not.toHaveBeenCalled();
 
@@ -492,8 +416,6 @@ describe('#325 conductor — a write in flight disables the surface (duplicate/l
 		expect(conductorSelect(container).disabled).toBe(false);
 	});
 });
-
-// ── failure: the existing surfacing is KEPT byte-identical, plus retry ─────────
 
 describe('#325 conductor — failure text kept, controls re-enabled for retry', () => {
 	it('a rejected add keeps the EXISTING season-manage-conductor-error role="alert" (season_manage_save_error), reverts the optimistic chip, drops the pending notice, announces NO saved, and re-enables the select — a retry write fires', async () => {
@@ -514,7 +436,6 @@ describe('#325 conductor — failure text kept, controls re-enabled for retry', 
 			expect(alert!.getAttribute('role')).toBe('alert');
 			expect(alert!.textContent).toContain('season_manage_save_error');
 		});
-		// Optimistic chip reverted — the pre-existing behaviour stays.
 		expect(q(container, 'season-manage-conductor-p-ada')).toBeNull();
 		expect(q(container, 'season-manage-conductor-pending-notice')).toBeNull();
 		expect(q(container, 'season-manage-conductor-status')?.textContent ?? '').not.toContain(
@@ -522,13 +443,10 @@ describe('#325 conductor — failure text kept, controls re-enabled for retry', 
 		);
 		expect(conductorSelect(container).disabled).toBe(false);
 
-		// Retry is live: the guard released on failure too.
 		await pickConductor(container, 'p-ada');
 		expect(addSeasonConductorMock).toHaveBeenCalledTimes(2);
 	});
 });
-
-// ── pin 4: the season-switch generation check gates the NEW pending flag too ──
 
 describe('#325 conductor — the pending flag does not leak across a season switch', () => {
 	it('an add on A still in flight when the admin switches to B: B’s panel shows NO pending notice and an ENABLED select; A’s write settling late announces NOTHING and re-raises NO pending on B (seasonManageSwitchGeneration gates the settle path)', async () => {
@@ -546,13 +464,10 @@ describe('#325 conductor — the pending flag does not leak across a season swit
 
 		await openPanelForSeason(container, 'Season 2027');
 
-		// The switch cleared the in-flight state: B starts clean.
 		expect(q(container, 'season-manage-conductor-pending-notice')).toBeNull();
 		expect(conductorSelect(container).disabled).toBe(false);
 		expect(q(container, 'season-manage-conductor-status')?.textContent?.trim() ?? '').toBe('');
 
-		// …and only NOW does A's write land. The generation check must swallow
-		// the settle whole: no saved announcement, no pending, no chip on B.
 		d.resolve(undefined);
 		await flush();
 
@@ -563,4 +478,4 @@ describe('#325 conductor — the pending flag does not leak across a season swit
 	});
 });
 
-// (*MVOX:Tallis* — #325 RED)
+// (*MVOX:Tallis*)

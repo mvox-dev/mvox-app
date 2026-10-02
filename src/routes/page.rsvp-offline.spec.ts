@@ -1,23 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (agenda integration) — the agenda row's RSVP is gated
-// while offline, through the REAL +page -> AgendaList -> RsvpControl chain.
-//
-// CONTRACT: the ONE signal store ($lib/net/online) flips to offline
-// (navigator.onLine false + the window `offline` event). Then on the agenda:
-//   • every rsvp-btn-* on a row the singer may write is `disabled`;
-//   • the row's rsvp-control shows the VISIBLE sentence
-//     [data-testid="rsvp-write-unavailable"] = m.write_unavailable_no_signal();
-//   • a click dispatches nothing: applyRsvpChange is never called and fetch is
-//     not called at all (nothing is queued for later either);
-//   • the `online` event re-enables the buttons, removes the sentence, and a
-//     click dispatches the write again.
-// Harness: page.rsvp-rights-gate.spec.ts's (real rights predicate, global
-// fetch stubbed at the wire, applyRsvpChange module-mocked).
+// The agenda row's RSVP is gated while offline.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { AgendaItem } from '$lib/agenda/types';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
@@ -40,10 +27,6 @@ const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRs
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// NOTE — deliberately NO mock of $lib/repertoire/repertoireActions here: the
-// enablement read must reach the WIRE through the real resolveManageRights, so
-// this spec can pin the request URL full-shape. The database-entity fallback is
-// stubbed to null so the ONLY resolveManageRights caller is rsvp enablement.
 vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
 	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
@@ -96,7 +79,6 @@ import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { goOffline, goOnline, resetOnLine, settle, expectVisibleReason } from '$lib/testing/networkSignal';
 
-
 function agendaEvent(id: string, startDatetime: string): AgendaItem {
 	return {
 		id,
@@ -124,22 +106,14 @@ function agendaWith(events: AgendaItem[]) {
 	});
 }
 
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** The exact enablement read (ER-26 shape) — full URL, pinned byte-for-byte. */
 const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/person-p?props=_owner,_editor';
 
-/** Person-entity rights fixtures — on the PERSON entity, never member rows. */
 const SELF_EDITOR = {
 	_id: 'person-p',
 	_editor: [{ reference: 'person-p' }, { reference: 'someone-else' }]
 };
 type RightsAnswer = { body?: unknown; hold?: boolean; deferredResponse?: Promise<Response> };
 
-/** Global-fetch stub: answers the person rights read per fixture; everything
- *  else (sections, library, repertoire lists…) gets an inert empty list. */
 function stubWire(rights: Record<string, RightsAnswer>) {
 	const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -199,7 +173,6 @@ afterEach(() => {
 	collectiveState.set({ status: 'loading' });
 	resetGate();
 });
-
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -269,4 +242,4 @@ describe('+page (agenda) — RSVP while offline (#434 slice 6)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)

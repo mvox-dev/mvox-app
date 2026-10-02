@@ -1,34 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #372 RED (agenda surface) — the RSVP control asks Entu whether the singer
-// may write.
-//
-// PARADIGM (issue #362, ratified): Entu's grants are the only authority. The
-// rsvp entity is created with `_parent` = the singer's own PERSON entity
-// (rsvpData.createRsvp), so the grant that permits the write is
-// `_editor`/`_owner` on that person (ER-27). The control's ENABLED state must
-// derive from exactly that grant — read on the wire as
-//
-//   GET entity/{personId}?props=_owner,_editor
-//
-// via the app's ONE rights predicate (repertoireActions.resolveManageRights /
-// manageRightsFrom, `.reference` only — ER-26). Membership (findMyMemberId)
-// may survive as DISPLAY (the non-member hint) and as the WRITE payload's
-// memberId — it must never feed enablement.
-//
-// Where the grant is ABSENT (rights props live in the private bucket: a
-// no-grant caller reads the person entity WITHOUT `_owner`/`_editor` at all),
-// NO control renders — not disabled, not a hint-bearing invitation (Gama
-// ruling on #372). #369 is the mismatch this pins: 19 of 24 crede members saw
-// fully enabled buttons for a write Entu always refused.
-//
-// INTEGRATION posture: the real +page -> AgendaList -> RsvpControl chain with
-// the REAL rights predicate — only global fetch is stubbed at the wire, so the
-// enablement read's URL is pinned full-shape, end to end.
+// The agenda's RSVP control asks Entu whether the singer may write.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { AgendaItem } from '$lib/agenda/types';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred, json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
@@ -51,10 +27,6 @@ const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRs
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// NOTE — deliberately NO mock of $lib/repertoire/repertoireActions here: the
-// enablement read must reach the WIRE through the real resolveManageRights, so
-// this spec can pin the request URL full-shape. The database-entity fallback is
-// stubbed to null so the ONLY resolveManageRights caller is rsvp enablement.
 vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
 	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
@@ -133,34 +105,16 @@ function agendaWith(events: AgendaItem[]) {
 	});
 }
 
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
-}
-
-function json(body: unknown, status = 200) {
-	return new Response(JSON.stringify(body), { status });
-}
-
-/** The exact enablement read (ER-26 shape) — full URL, pinned byte-for-byte. */
 const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/person-p?props=_owner,_editor';
 const RIGHTS_URL_OTHER =
 	'https://api.entu-test.invalid/other-choir/entity/person-p?props=_owner,_editor';
 
-/** Person-entity rights fixtures — on the PERSON entity, never member rows. */
 const SELF_EDITOR = {
 	_id: 'person-p',
 	_editor: [{ reference: 'person-p' }, { reference: 'someone-else' }]
 };
 const SELF_OWNER_ONLY = { _id: 'person-p', _owner: [{ reference: 'person-p' }] };
-/** The private-bucket case: a no-grant caller sees NO rights props at all. */
 const NO_GRANT = { _id: 'person-p' };
-/** The #369 shape: rights props visible but the singer's own id in NEITHER. */
 const GRANTS_EXCLUDE_SELF = {
 	_id: 'person-p',
 	_owner: [{ reference: 'org-admin' }],
@@ -169,8 +123,6 @@ const GRANTS_EXCLUDE_SELF = {
 
 type RightsAnswer = { body?: unknown; hold?: boolean; deferredResponse?: Promise<Response> };
 
-/** Global-fetch stub: answers the person rights read per fixture; everything
- *  else (sections, library, repertoire lists…) gets an inert empty list. */
 function stubWire(rights: Record<string, RightsAnswer>) {
 	const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
 		const url = String(input);
@@ -242,8 +194,6 @@ afterEach(() => {
 describe('+page — RSVP enablement is the Entu grant on the singer’s own person (#372)', () => {
 	it('WIRE: enablement is GET entity/{personId}?props=_owner,_editor — full shape — and does NOT wait on findMyMemberId', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaWith([E1]));
-		// The member lookup NEVER resolves: if enablement consulted it, the
-		// control could never enable in this test.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));
 		listMyRsvpsMock.mockResolvedValue(toListRead([]));
 		const fetchStub = stubWire({ [RIGHTS_URL]: { body: SELF_EDITOR } });
@@ -251,7 +201,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 
 		const { container } = render(Page);
 
-		// The read happened, byte-exact URL, authenticated GET.
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
@@ -259,8 +208,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		expect(init?.method ?? 'GET').toBe('GET');
 		expect((init?.headers as Record<string, string>)?.Authorization).toBe('Bearer jwt-abc');
 
-		// Grant in hand -> enabled, while the member lookup is STILL in flight:
-		// membership is not consulted for enablement.
 		await waitFor(() => {
 			const btn = row(container, 'e1')?.querySelector(
 				'[data-testid="rsvp-btn-going"]'
@@ -279,8 +226,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 
 		const { container } = render(Page);
 		await waitForRow(container, 'e1');
-		// The MECHANISM is the pin, not the coincidence of an enabled button:
-		// the grant was actually read off her person entity.
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
@@ -306,7 +251,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 
 		const { container } = render(Page);
 
-		// Mechanism pin — the grant read happened (RED today: it never does).
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
@@ -329,7 +273,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		const { container } = render(Page);
 		const r = await waitForRow(container, 'e1');
 
-		// The rights answer arrived and settled…
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
@@ -337,7 +280,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		await Promise.resolve();
 		await Promise.resolve();
 
-		// …and NO control renders on the row: not disabled, not a hint.
 		expect(r.querySelector('[data-testid="rsvp-control"]')).toBeNull();
 		expect(container.querySelectorAll('[data-testid="rsvp-control"]').length).toBe(0);
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
@@ -356,8 +298,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		await Promise.resolve();
 		await Promise.resolve();
 
-		// Whatever renders while the answer is pending, it must not INVITE: no
-		// enabled button, no hint.
 		const buttons = rsvpButtons(container);
 		expect(buttons.every((b) => b.disabled)).toBe(true);
 		expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).toBeNull();
@@ -378,20 +318,15 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		]);
 
 		const { container } = render(Page);
-		// Sampledb's rights read is in flight…
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL).length).toBeGreaterThan(0);
 		});
 
-		// …switch away while it hangs…
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => {
 			expect(rightsCalls(fetchStub, RIGHTS_URL_OTHER).length).toBeGreaterThan(0);
 		});
 
-		// …NOW the stale sampledb answer lands: editor. It belongs to the OLD
-		// identity and must be discarded — other-choir's own answer is still
-		// unresolved, so nothing may enable.
 		stale.resolve(json({ entity: SELF_EDITOR }));
 		await Promise.resolve();
 		await Promise.resolve();
@@ -420,17 +355,6 @@ describe('+page — RSVP enablement is the Entu grant on the singer’s own pers
 		expect(r.querySelector('[data-testid="rsvp-control"]')).toBeNull();
 	});
 
-	// #372 review F1 — the grant alone is NOT sufficient. Every person mvox mints
-	// carries self-`_editor` on her own person (inviteData.ts step 3, mirroring
-	// entu-api's auth auto-create) and deactivation never revokes it
-	// (memberLifecycle flips only the member `status`), so an archived — or
-	// invited-but-not-yet-accepted — person arrives here as
-	// "confirmed non-member + self-editor". Reading the grant first gave her a
-	// fully enabled control whose every tap throws 'cannot create without a
-	// memberId' (the rsvp entity requires a `member` reference she hasn't got) —
-	// #372's own defect, reintroduced by a different route — and made the hint
-	// unreachable in production, since only a person WITHOUT self-editor could
-	// ever have seen it.
 	it('F1: a CONFIRMED non-member who still holds self-_editor gets the hint, NOT an enabled control', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaWith([E1]));
 		findMyMemberIdMock.mockResolvedValue(null); // archived / not yet accepted

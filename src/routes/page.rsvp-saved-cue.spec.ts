@@ -1,32 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #326 RED (agenda-page integration) — the saved cue on the WRITE path.
-//
-// Renders the real +page -> AgendaList -> RsvpControl chain and drives real
-// taps through the real rsvpChangeQueue (only the write dispatch
-// applyRsvpChange and the data reads are mocked). Pins:
-//
-//   1. SAVED CUE ON RECONCILE — when a write settles successfully, the
-//      per-row saved announcement fires on the reconciled event's row.
-//   2. PER-EVENT GRANULARITY — the cue never claims more than the key that
-//      reconciled: the OTHER row shows nothing.
-//   3. THE DANGEROUS PAIR — an optimistic value never sits on screen
-//      unconfirmed without the state saying so: while a write is in flight
-//      the row is aria-busy (the PO-ruled SILENT disable, byte-preserved —
-//      no saved text, no new text); once reconciled, the saved cue says so.
-//      A NEW tap clears the previous saved cue the moment the next write
-//      starts.
-//   4. FAILURE PATH BYTE-PRESERVED — a rejected write still reverts the
-//      value and raises the role=alert error; no saved cue appears, and a
-//      failure AFTER an earlier saved clears that stale cue.
-//   5. A successfully CLEARED answer announces too — reconciled-null renders
-//      identically to never-answered, so the cue is the only distinguisher.
-//   6. MULTI-COLLECTIVE — the cue does not leak across a collective switch,
-//      even onto an event with the SAME id in the next collective.
+// The RSVP saved cue on the agenda's write path.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { AgendaItem } from '$lib/agenda/types';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
@@ -83,11 +61,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -110,8 +83,6 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: vi.fn()
 }));
-// The write dispatch — mocked so a "write" can be resolved/held/rejected on
-// demand; the queue orchestration around it stays real.
 vi.mock('$lib/rsvp/rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMock }));
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
@@ -173,16 +144,6 @@ function agendaWith(events: AgendaItem[]) {
 		seasonOwners: [],
 		seasonEditors: []
 	});
-}
-
-function deferred<T>() {
-	let resolve!: (v: T) => void;
-	let reject!: (e: unknown) => void;
-	const promise = new Promise<T>((res, rej) => {
-		resolve = res;
-		reject = rej;
-	});
-	return { promise, resolve, reject };
 }
 
 function setAuthed(dbs: Array<{ db: string; name: string }>) {
@@ -254,7 +215,6 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 		await waitFor(() => {
 			expect(rowSavedText(container, 'e1')).toContain('Saved.');
 		});
-		// The reconciled value renders — pressed, and the state SAYS saved.
 		expect(
 			row(container, 'e1')
 				?.querySelector('[data-testid="rsvp-btn-going"]')
@@ -284,7 +244,6 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 	it('a successfully CLEARED answer announces saved too — reconciled-null looks exactly like never-answered, the cue is the only distinguisher', async () => {
 		loadFullAgendaMock.mockResolvedValue(agendaWith([E1]));
 		findMyMemberIdMock.mockResolvedValue('member-1');
-		// She already answered e1 "going" — tapping the ACTIVE status clears it.
 		listMyRsvpsMock.mockResolvedValue(
 			toListRead([{ rsvpId: 'rsvp-77', eventId: 'e1', status: 'going' }])
 		);
@@ -302,7 +261,6 @@ describe('+page — the saved cue fires on reconcile, per event (#326)', () => {
 		await waitFor(() => {
 			expect(rowSavedText(container, 'e1')).toContain('Saved.');
 		});
-		// The reconciled state is UNANSWERED — all four unpressed…
 		for (const status of ['going', 'not_going', 'maybe', 'late']) {
 			expect(
 				row(container, 'e1')
@@ -341,7 +299,6 @@ describe('+page — the dangerous pair: pending stays SILENT (byte-preserved), a
 				?.querySelector('[data-testid="rsvp-msg-line"]')
 				?.textContent?.trim()
 		).toBe('');
-		// Settle so teardown never leaks a pending write into the next test.
 		held.resolve({ rsvpId: 'rsvp-new-1' });
 	});
 
@@ -363,7 +320,6 @@ describe('+page — the dangerous pair: pending stays SILENT (byte-preserved), a
 			expect(rowSavedText(container, 'e1')).toContain('Saved.');
 		});
 
-		// Second tap — a NEW write starts (held in flight): the stale cue must go.
 		const maybeBtn = await waitForEnabledButton(container, 'e1', 'maybe');
 		await fireEvent.click(maybeBtn);
 
@@ -431,10 +387,6 @@ describe('+page — the failure path is byte-preserved, and failure never announ
 
 describe('+page — the saved cue does not leak across a collective switch (#326 pin 7)', () => {
 	it("a cue earned in collective A is GONE after switching to B — even on an event with the SAME id", async () => {
-		// Collective B deliberately reuses the id 'e1': if savedEventIds survives
-		// the switch, B's unrelated event would claim "Saved." for a write it
-		// never saw — the exact leak under test. (loadFullAgenda takes no args —
-		// the served agenda is flipped via this variable at the switch.)
 		let servedAgenda = agendaWith([E1]);
 		loadFullAgendaMock.mockImplementation(() => Promise.resolve(servedAgenda));
 		findMyMemberIdMock.mockResolvedValue('member-1');
@@ -453,12 +405,10 @@ describe('+page — the saved cue does not leak across a collective switch (#326
 			expect(rowSavedText(container, 'e1')).toContain('Saved.');
 		});
 
-		// Switch to B.
 		const callsBefore = loadFullAgendaMock.mock.calls.length;
 		servedAgenda = agendaWith([agendaEvent('e1', '2026-07-01T09:00:00.000Z')]);
 		selectedCollectiveDbStore.set('other-choir');
 
-		// B's agenda renders (same event id), with NO saved cue anywhere.
 		await waitFor(() => {
 			expect(loadFullAgendaMock.mock.calls.length).toBeGreaterThan(callsBefore);
 			expect(row(container, 'e1')).not.toBeNull();
@@ -468,4 +418,4 @@ describe('+page — the saved cue does not leak across a collective switch (#326
 	});
 });
 
-// (*MVOX:Tallis* — #326 RED)
+// (*MVOX:Tallis*)
