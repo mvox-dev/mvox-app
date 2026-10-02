@@ -61,7 +61,7 @@ describe('#701 rights sweep: read-only', () => {
 
 		const report = await runRightsSweep(cfg, fetchImpl as typeof fetch, 2);
 
-		const props = '_inheritrights,_sharing,_owner,_editor,_viewer,_expander';
+		const props = '_inheritrights,_sharing,_owner,_editor,_viewer,_expander,_noaccess';
 		expect(requests).toEqual([
 			{ path: 'entity?_type.string=entity&props=name,_sharing&limit=2&skip=0', method: 'GET' },
 			{ path: `entity?_type.string=event&props=${props}&limit=2&skip=0`, method: 'GET' },
@@ -126,14 +126,35 @@ describe('#701 rights sweep: findings', () => {
 				}
 			],
 			['library', { _id: 'lib-1', _editor: [ref('p-librarian')], _viewer: [ref('p-librarian')] }],
-			['person', { _id: 'pe-1', _editor: [ref('pe-1')], _expander: [ref('p-stray')] }]
+			['person', { _id: 'pe-1', _editor: [ref('pe-1')], _expander: [ref('p-stray')], _noaccess: [ref('p-barred')] }]
 		]);
 		expect(report.unexplainedGrants).toEqual([
 			{ id: 'ev-1', type: 'event', tier: '_editor', reference: 'p-editor' },
 			{ id: 'ev-1', type: 'event', tier: '_expander', reference: 'p-expander' },
 			{ id: 'ev-1', type: 'event', tier: '_viewer', reference: 'p-viewer' },
-			{ id: 'pe-1', type: 'person', tier: '_expander', reference: 'p-stray' }
+			{ id: 'pe-1', type: 'person', tier: '_expander', reference: 'p-stray' },
+			{ id: 'pe-1', type: 'person', tier: '_noaccess', reference: 'p-barred' }
 		]);
+	});
+
+	it('counts entities with no rights prop readable, and grant values by their inherited marker', () => {
+		const report = sweep({ event: 'domain', person: 'domain' }, [
+			['event', { _id: 'ev-blind', name: [{ string: PLANTED }] }],
+			['event', { _id: 'ev-seen', _owner: [ref('p-1')], _editor: [ref('p-1'), ref('p-2', true)] }],
+			['person', { _id: 'pe-blind' }],
+			['person', { _id: 'pe-sharing', _sharing: sharing('domain') }]
+		]);
+		expect(report.noRightsReadable).toEqual([
+			{ type: 'event', count: 1 },
+			{ type: 'person', count: 1 }
+		]);
+		expect(report.grantValues).toEqual({ inherited: 1, direct: 2 });
+		const printed = formatReport(report);
+		expect(printed).toContain('NO RIGHTS PROPS READABLE (no right on the entity): 2');
+		expect(printed).toContain('GRANT VALUES read: inherited=1 direct=2');
+		expect(printed).toContain(
+			'  event ev-blind expected=true actual=absent or unreadable (no right on the entity: rights props are in the private bucket)'
+		);
 	});
 
 	it("states each library's _inheritrights (#695)", () => {
@@ -168,7 +189,8 @@ describe('#701 rights sweep: output carries ids, types and counts only', () => {
 					_id: 'ev-1',
 					name: [{ string: PLANTED }],
 					_sharing: sharing('public'),
-					_editor: [ref('p-1')]
+					_editor: [ref('p-1')],
+					_noaccess: [ref('p-2')]
 				}
 			],
 			['profile', { _id: 'pr-1', email: [{ string: 'jaan@example.org' }], _inheritrights: flag(true) }],
@@ -182,7 +204,15 @@ describe('#701 rights sweep: output carries ids, types and counts only', () => {
 		expect(JSON.stringify(report)).not.toContain('jaan@');
 
 		expect(Object.keys(report).sort()).toEqual(
-			['countsByType', 'inheritanceOutliers', 'library', 'sharingOutliers', 'unexplainedGrants'].sort()
+			[
+				'countsByType',
+				'grantValues',
+				'inheritanceOutliers',
+				'library',
+				'noRightsReadable',
+				'sharingOutliers',
+				'unexplainedGrants'
+			].sort()
 		);
 		const findingKeys = new Set(
 			[
@@ -190,13 +220,28 @@ describe('#701 rights sweep: output carries ids, types and counts only', () => {
 				...report.inheritanceOutliers,
 				...report.sharingOutliers,
 				...report.unexplainedGrants,
-				...report.library
+				...report.library,
+				...report.noRightsReadable,
+				report.grantValues
 			].flatMap(
 				(finding) => Object.keys(finding)
 			)
 		);
 		expect([...findingKeys].sort()).toEqual(
-			['actual', 'count', 'expected', 'id', 'inheritrights', 'reference', 'sharing', 'tier', 'type', 'typeSharing'].sort()
+			[
+				'actual',
+				'count',
+				'direct',
+				'expected',
+				'id',
+				'inherited',
+				'inheritrights',
+				'reference',
+				'sharing',
+				'tier',
+				'type',
+				'typeSharing'
+			].sort()
 		);
 		for (const key of [...findingKeys, ...Object.keys(report)]) {
 			expect(COMMITTED_ALLOW).toContain(key);

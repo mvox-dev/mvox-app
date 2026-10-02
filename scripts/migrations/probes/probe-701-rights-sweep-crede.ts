@@ -16,7 +16,9 @@ type Tier = (typeof TIERS)[number];
 type Sharing = 'private' | 'domain' | 'public' | 'unrecognised';
 
 const SHARING_RANK: Record<Sharing, number> = { private: 0, domain: 1, public: 2, unrecognised: 3 };
-const ENTITY_PROPS = ['_inheritrights', '_sharing', ...TIERS].join(',');
+const RIGHTS_PROPS = ['_inheritrights', '_sharing', ...TIERS, '_noaccess'];
+const ENTITY_PROPS = RIGHTS_PROPS.join(',');
+const ABSENT = 'absent or unreadable (no right on the entity: rights props are in the private bucket)';
 
 /** Types that inherit rights from their parent (docs/create-inheritance.md); profile never. */
 export const INHERITANCE_EXPECTED: Readonly<Record<string, boolean>> = {
@@ -50,7 +52,11 @@ export const COMMITTED_ALLOW = [
 	'typeSharing',
 	'tier',
 	'reference',
-	'inheritrights'
+	'inheritrights',
+	'noRightsReadable',
+	'grantValues',
+	'inherited',
+	'direct'
 ] as const;
 
 interface RawValue {
@@ -76,14 +82,20 @@ export interface SweptEntity {
 	inheritrights: boolean | null;
 	sharing: Sharing | null;
 	directTier: Map<string, Tier>;
+	noaccess: string[];
+	rightsReadable: boolean;
+	inheritedValues: number;
+	directValues: number;
 }
 
 export interface SweepReport {
 	countsByType: Array<{ type: string; count: number }>;
 	inheritanceOutliers: Array<{ id: string; type: string; expected: boolean; actual: boolean | null }>;
 	sharingOutliers: Array<{ id: string; type: string; sharing: Sharing; typeSharing: TypeDef['sharing'] }>;
-	unexplainedGrants: Array<{ id: string; type: string; tier: Tier; reference: string }>;
+	unexplainedGrants: Array<{ id: string; type: string; tier: Tier | '_noaccess'; reference: string }>;
 	library: Array<{ id: string; inheritrights: boolean | null }>;
+	noRightsReadable: Array<{ type: string; count: number }>;
+	grantValues: { inherited: number; direct: number };
 }
 
 const values = (raw: RawEntity, prop: string): RawValue[] => {
@@ -104,9 +116,14 @@ export function extractEntity(type: string, raw: RawEntity): SweptEntity {
 	const flag = values(raw, '_inheritrights')[0]?.boolean;
 	const level = values(raw, '_sharing')[0]?.string;
 	const directTier = new Map<string, Tier>();
+	let inheritedValues = 0;
+	let directValues = 0;
 	for (const tier of TIERS) {
 		for (const v of values(raw, tier)) {
-			if (v.reference && !v.inherited && !directTier.has(v.reference)) directTier.set(v.reference, tier);
+			if (!v.reference) continue;
+			if (v.inherited) inheritedValues++;
+			else directValues++;
+			if (!v.inherited && !directTier.has(v.reference)) directTier.set(v.reference, tier);
 		}
 	}
 	return {
@@ -114,7 +131,11 @@ export function extractEntity(type: string, raw: RawEntity): SweptEntity {
 		type,
 		inheritrights: flag ?? null,
 		sharing: level === undefined ? null : toSharing(level),
-		directTier
+		directTier,
+		noaccess: values(raw, '_noaccess').flatMap((v) => (v.reference ? [v.reference] : [])),
+		rightsReadable: RIGHTS_PROPS.some((prop) => values(raw, prop).length > 0),
+		inheritedValues,
+		directValues
 	};
 }
 
@@ -138,8 +159,11 @@ export function classifySweep(types: TypeDef[], entities: SweptEntity[]): SweepR
 		inheritanceOutliers: [],
 		sharingOutliers: [],
 		unexplainedGrants: [],
-		library: []
+		library: [],
+		noRightsReadable: [],
+		grantValues: { inherited: 0, direct: 0 }
 	};
+	const unreadable = new Map<string, number>();
 	for (const e of entities) {
 		counts.set(e.type, (counts.get(e.type) ?? 0) + 1);
 		const expected = INHERITANCE_EXPECTED[e.type];
@@ -155,9 +179,16 @@ export function classifySweep(types: TypeDef[], entities: SweptEntity[]): SweepR
 		for (const [reference, tier] of e.directTier) {
 			if (!explained.has(tier)) report.unexplainedGrants.push({ id: e.id, type: e.type, tier, reference });
 		}
+		for (const reference of e.noaccess) {
+			report.unexplainedGrants.push({ id: e.id, type: e.type, tier: '_noaccess', reference });
+		}
+		if (!e.rightsReadable) unreadable.set(e.type, (unreadable.get(e.type) ?? 0) + 1);
+		report.grantValues.inherited += e.inheritedValues;
+		report.grantValues.direct += e.directValues;
 		if (e.type === 'library') report.library.push({ id: e.id, inheritrights: e.inheritrights });
 	}
 	report.countsByType = [...counts].map(([type, count]) => ({ type, count })).sort((a, b) => a.type.localeCompare(b.type));
+	report.noRightsReadable = [...unreadable].map(([type, count]) => ({ type, count })).sort((a, b) => a.type.localeCompare(b.type));
 	report.inheritanceOutliers.sort(byTypeThenId);
 	report.sharingOutliers.sort(byTypeThenId);
 	report.unexplainedGrants.sort((a, b) => byTypeThenId(a, b) || a.tier.localeCompare(b.tier));
@@ -165,19 +196,25 @@ export function classifySweep(types: TypeDef[], entities: SweptEntity[]): SweepR
 	return report;
 }
 
+const sum = (counts: Array<{ count: number }>) => counts.reduce((n, c) => n + c.count, 0);
+
 export function formatReport(report: SweepReport): string[] {
 	const lines = ['COUNTS (entities this key reads)'];
 	for (const c of report.countsByType) lines.push(`  ${c.type}: ${c.count}`);
+	lines.push(`NO RIGHTS PROPS READABLE (no right on the entity): ${sum(report.noRightsReadable)}`);
+	for (const c of report.noRightsReadable) lines.push(`  ${c.type}: ${c.count}`);
+	const { inherited, direct } = report.grantValues;
+	lines.push(`GRANT VALUES read: inherited=${inherited} direct=${direct}`);
 	lines.push(`INHERITRIGHTS differs from the type's expectation: ${report.inheritanceOutliers.length}`);
 	for (const o of report.inheritanceOutliers) {
-		lines.push(`  ${o.type} ${o.id} expected=${o.expected} actual=${o.actual ?? 'absent'}`);
+		lines.push(`  ${o.type} ${o.id} expected=${o.expected} actual=${o.actual ?? ABSENT}`);
 	}
 	lines.push(`SHARING wider than the type's: ${report.sharingOutliers.length}`);
 	for (const o of report.sharingOutliers) lines.push(`  ${o.type} ${o.id} ${o.sharing} > type ${o.typeSharing}`);
 	lines.push(`DIRECT GRANTS no register row explains: ${report.unexplainedGrants.length}`);
 	for (const o of report.unexplainedGrants) lines.push(`  ${o.type} ${o.id} ${o.tier} -> ${o.reference}`);
 	lines.push(`LIBRARY _inheritrights (#695): ${report.library.length}`);
-	for (const o of report.library) lines.push(`  library ${o.id} ${o.inheritrights ?? 'absent'}`);
+	for (const o of report.library) lines.push(`  library ${o.id} ${o.inheritrights ?? ABSENT}`);
 	return lines;
 }
 
