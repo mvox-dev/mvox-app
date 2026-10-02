@@ -25,10 +25,10 @@ function isComment(line: string): boolean {
 
 describe('#420 — the retired `name` wire key stays out of event reads/writes', () => {
 	it("createEvent writes `event_name` — `optional('name'` inside createEvent is retired", () => {
-		const src = readFileSync('src/lib/entity/entityCreate.ts', 'utf8');
+		const src = readFileSync('src/lib/entity/entityCreateEvent.ts', 'utf8');
 		// The '(' anchors the exact function: 'createEvent' alone prefix-matches createEventSeries.
 		const start = src.indexOf('export async function createEvent(');
-		expect(start, 'createEvent not found in entityCreate.ts').toBeGreaterThan(-1);
+		expect(start, 'createEvent not found in entityCreateEvent.ts').toBeGreaterThan(-1);
 		const nextExport = src.indexOf('\nexport ', start + 1);
 		const body = src.slice(start, nextExport === -1 ? undefined : nextExport);
 		expect(
