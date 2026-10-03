@@ -17,8 +17,9 @@ import { attendanceQueueHandlers } from './attendancePanel';
 import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQueue';
 import { attendanceByMemberId } from '$lib/attendance/attendanceData';
 import { createWriteTokens } from '$lib/net/writeTokens';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
 
 const ITEM: AgendaItem = {
 	id: 'ev1',
@@ -58,7 +59,7 @@ afterEach(() => {
 	loadRosterMock.mockReset();
 	applyAttendanceChangeMock.mockReset();
 	vi.restoreAllMocks();
-	clearAll({ preserveProvider: false });
+	resetAppState();
 });
 
 describe('agenda attendance panel load', () => {

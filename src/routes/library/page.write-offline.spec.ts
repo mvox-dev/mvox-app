@@ -1,20 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (library integration) — the librarian's lending writes
-// are gated while offline, on the REAL /library page (harness:
-// src/routes/page.library.spec.ts — reads module-mocked, lendingActions
-// module-mocked with named handles, global fetch spied so a stray write is
-// visible too).
-//
-// CONTRACT — a librarian, the tree expanded to copies; the signal
-// ($lib/net/online) goes offline:
-//   • inline-checkout-{copyId} (the per-copy member select), library-return-
-//     {copyId} and bulk-checkout-submit are disabled;
-//   • ONE visible sentence [data-testid="library-write-unavailable"] =
-//     m.write_unavailable_no_signal() is on the page;
-//   • picking a member / clicking Return / clicking bulk submit calls none of
-//     createLending / returnLending / bulkCheckout and issues no fetch;
-//   • back online: enabled again, the sentence gone, a Return writes.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -37,8 +21,6 @@ const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, li
 		listLendingsMock: vi.fn(),
 		resolveBorrowerNamesMock: vi.fn(),
 		resolveCopyNamesMock: vi.fn(),
-		// #129 — loan → copy → edition → work chain resolver (network fallback
-		// when the chain isn't already available from locally-loaded data).
 		resolveCopyChainsMock: vi.fn()
 	}));
 vi.mock('$lib/library/libraryData', async () => {
@@ -59,18 +41,11 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// vi.importActual for $lib/library/libraryData (kept above, to preserve the real
-// deriveCopyAvailability) pulls entuFetch -> $lib/entu-config, which reads
-// $env/dynamic/public — unavailable outside a SvelteKit request context under
-// happy-dom. Same fix as page.profile.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
 
-// #434 slice 4 review round 2, finding 2 — the write paths no longer read the
-// library id off a store the (cache-backed) librarian resolution filled: they
-// resolve it LIVE through `resolveMyLibraryId`, so it is mocked here too.
 const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
 	resolveLibrarianMock: vi.fn(),
 	resolveMyLibraryIdMock: vi.fn()
@@ -84,17 +59,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-// T6.4/#73 — "my loans" resolves the viewer's own active member the same way
-// RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
-// org scoping in the single-collective dev/test db). Reused, not re-derived.
 const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
-// #434 slice 6 review F1 — the tree's OWN write seams get named handles too, so
-// the offline fence can assert on the call, not just on a POST reaching the wire:
-// `createEdition` resolves its type id with a GET FIRST, so under this file's
-// empty-answer read stub an ungated create dies on that GET and never issues a
-// non-GET at all — invisible to `nonGetCalls` alone.
 const { createWorkMock, createEditionMock } = vi.hoisted(() => ({
 	createWorkMock: vi.fn(),
 	createEditionMock: vi.fn()
@@ -104,7 +71,6 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEdition: createEditionMock
 }));
 
-// #74 — mock lendingActions to verify submit triggers the action layer
 const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
 	createLendingMock: vi.fn(),
 	returnLendingMock: vi.fn(),
@@ -117,9 +83,6 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
 	goOffline,
@@ -131,29 +94,16 @@ import {
 	nonGetCalls,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
-	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	// #434 slice 4 review round 2, finding 2 — the LIVE write-path resolution
-	// every checkout/create now makes for its own `_parent`.
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
-	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
 	findMyMemberIdMock.mockResolvedValue(null);
-	// Default: empty copy names, unless a test overrides.
 	resolveCopyNamesMock.mockResolvedValue(new Map());
-	// Default: empty loan chains, unless a test overrides. (#129)
 	resolveCopyChainsMock.mockResolvedValue(new Map());
-	// Default: empty checkout data, unless a test overrides.
 	listAllEditionsMock.mockResolvedValue(toListRead([]));
 	listAllCopiesMock.mockResolvedValue(toListRead([]));
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
@@ -179,11 +129,8 @@ afterEach(() => {
 	bulkCheckoutMock.mockReset();
 	createWorkMock.mockReset();
 	createEditionMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
-
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -192,7 +139,6 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
-/** work-1 → edition-1 → copy-1 (available) + copy-2 (out to member-a). */
 function mockLibrarianTree() {
 	listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]));
 	listLendingsMock.mockResolvedValue(
@@ -256,7 +202,6 @@ async function renderExpandedOnline() {
 		expect(q(container, 'bulk-checkout-edition-select')).not.toBeNull();
 	});
 
-	// Bulk: an edition and a member picked, so submit is enabled on its own terms.
 	await fireEvent.change(q(container, 'bulk-checkout-edition-select') as HTMLSelectElement, {
 		target: { value: 'edition-1' }
 	});
@@ -323,12 +268,6 @@ describe('/library — lending writes while offline (#434 slice 6)', () => {
 	});
 });
 
-// ── #434 slice 6 review F1 — the STRUCTURAL fence ────────────────────────────
-// The block above pins the three LENDING controls by name. That naming is how
-// the slice shipped five controls on other routes still live offline, and on
-// this one it left create-work, create-edition and attach-files ungated too.
-// This sweep operates EVERY enabled control on the rendered page and asserts no
-// non-GET reached the wire — so a control nobody listed fails here.
 describe('/library — no write control reaches the wire offline (#434 slice 6 fence)', () => {
 	it('offline: operating every enabled control issues no non-GET', async () => {
 		const { container, fetchStub } = await renderExpandedOnline();
@@ -342,14 +281,10 @@ describe('/library — no write control reaches the wire offline (#434 slice 6 f
 		createEditionMock.mockClear();
 		resolveMyLibraryIdMock.mockClear();
 
-		// The two tree DISCLOSURE toggles are skipped: they write nothing, and
-		// collapsing the subtree mid-sweep would hide the very copy/edition
-		// controls this fence exists to reach.
 		const touched = await exerciseEveryEnabledControl(container, {
 			skip: ['library-work-toggle-work-1', 'library-edition-toggle-edition-1']
 		});
 
-		// Not a vacuous pass: the sweep really did reach live controls.
 		expect(touched.length).toBeGreaterThan(5);
 		expect(createLendingMock).not.toHaveBeenCalled();
 		expect(returnLendingMock).not.toHaveBeenCalled();
@@ -357,15 +292,11 @@ describe('/library — no write control reaches the wire offline (#434 slice 6 f
 		expect(createWorkMock).not.toHaveBeenCalled();
 		expect(createEditionMock).not.toHaveBeenCalled();
 		expect(resolveMyLibraryIdMock).not.toHaveBeenCalled();
-		// …and nothing outside those seams reached the wire either (the file
-		// upload leg has no seam of its own — it IS raw entuFetch).
 		expect(nonGetCalls(fetchStub)).toEqual([]);
 	});
 
 	it('offline: the tree\'s own create/attach controls are disabled too', async () => {
 		const { container } = await renderExpandedOnline();
-		// The edition-create form is opened by its own button (which writes
-		// nothing), exactly as the agenda's create forms are.
 		await fireEvent.click(q(container, 'create-edition-button-work-1') as HTMLElement);
 		await waitFor(() => expect(q(container, 'create-edition-submit-work-1')).not.toBeNull());
 		await goOffline();
@@ -380,4 +311,4 @@ describe('/library — no write control reaches the wire offline (#434 slice 6 f
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED; fence added by *MVOX:Josquin* for review F1)
+// (*MVOX:Tallis*)

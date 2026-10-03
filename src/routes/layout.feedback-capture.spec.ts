@@ -29,11 +29,10 @@ vi.mock('modern-screenshot', () => ({ domToBlob: domToBlobMock }));
 vi.mock('$lib/feedback/sendFeedback', () => ({ sendFeedback: sendMock }));
 
 import Layout from './+layout.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetMembership } from '$lib/collective/membershipStore';
+import { resetAppState } from '$lib/testing/appReset';
+import { SAMPLEDB, signIn } from '$lib/testing/session';
 
 const PNG = new Blob(['png'], { type: 'image/png' });
 
@@ -45,17 +44,9 @@ const children = createRawSnippet(() => ({
 	</section>`
 }));
 
-function signIn() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	const collectives = [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }];
-	discoverMock.mockResolvedValue({ collectives, erroredDbs: [] });
-	collectiveState.set({ status: 'ready', collectives, erroredDbs: [] });
-	selectedCollectiveDbStore.set('sampledb');
+function signInDiscovered() {
+	discoverMock.mockResolvedValue({ collectives: [SAMPLEDB], erroredDbs: [] });
+	signIn();
 }
 
 function doubleTap(target: Element) {
@@ -68,7 +59,7 @@ function doubleTap(target: Element) {
 
 async function openEditor() {
 	render(Layout, { props: { children } });
-	signIn();
+	signInDiscovered();
 	await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
 	doubleTap(screen.getByTestId('plain'));
 	await vi.waitFor(() => expect(screen.getByRole('toolbar')).toBeTruthy());
@@ -87,10 +78,7 @@ afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
 	vi.unstubAllGlobals();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 	resetMembership();
 	document.documentElement.removeAttribute(REDACT_TOGGLE_ATTR);
@@ -124,7 +112,7 @@ describe('+layout — a double tap captures the screen and opens the feedback ed
 
 	it('replaces the nav with copy, send and close; close discards and returns the page as it was', async () => {
 		render(Layout, { props: { children } });
-		signIn();
+		signInDiscovered();
 		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
 		const page = screen.getByTestId('page');
 		doubleTap(screen.getByTestId('plain'));
@@ -149,7 +137,7 @@ describe('+layout — a double tap captures the screen and opens the feedback ed
 
 	it('moves focus to the first editor control, and close returns it to where it was', async () => {
 		render(Layout, { props: { children } });
-		signIn();
+		signInDiscovered();
 		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
 		const before = screen.getByTestId('page-button');
 		before.focus();
@@ -208,7 +196,7 @@ describe('+layout — a double tap captures the screen and opens the feedback ed
 
 	it('a double tap on a button does not capture; one on plain text then does', async () => {
 		render(Layout, { props: { children } });
-		signIn();
+		signInDiscovered();
 		await vi.waitFor(() => expect(screen.getByRole('navigation')).toBeTruthy());
 
 		doubleTap(screen.getByTestId('page-button'));

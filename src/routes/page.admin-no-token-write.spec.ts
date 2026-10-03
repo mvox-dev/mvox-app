@@ -88,22 +88,15 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { authStore } from '$lib/auth/session';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { clearAll } from '$lib/auth/storage';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function selectSampledb() {
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'admin-p' }, expMs: Date.now() + 100_000 });
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -124,10 +117,7 @@ afterEach(() => {
 	setAuthExpiredHandler(null);
 	cleanup();
 	vi.unstubAllGlobals();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
+	resetAppState();
 	history.replaceState({}, '', '/');
 });
 
@@ -140,7 +130,6 @@ async function expectSessionExpiredAndNothingSent() {
 
 describe('#550 — admin writes with no token', () => {
 	it('a roles write whose token vanished after load sends nothing and goes to session-expired', async () => {
-		setToken('jwt-admin');
 		selectSampledb();
 		const { container } = render(AdminPage);
 		await waitFor(() => expect(q(container, 'admin-add-admin-select')).not.toBeNull());
@@ -153,7 +142,6 @@ describe('#550 — admin writes with no token', () => {
 	});
 
 	it('an invite create with no token shows the session-expired notice, not a create error', async () => {
-		setToken('jwt-admin');
 		selectSampledb();
 		const { container } = render(InvitePage);
 		await waitFor(() => {

@@ -1,15 +1,4 @@
 // @vitest-environment happy-dom
-//
-// T4.8/#28 RED — the mandatory-completion gate's APP-WIDE ENFORCEMENT lives in the
-// root layout: one read populates `completionGateStore`, one redirect sends an
-// incomplete member to /profile (closing home + /admin/invite + /collectives + any
-// future roster in a single place). This spec renders the real +layout.svelte and
-// drives the gate via a mocked `resolveGate` (the read/classify logic is unit-tested
-// in completionGate.spec.ts; here we test only the layout's redirect wiring).
-//
-// RED: the layout does not yet call resolveGate / redirect, so the load-bearing
-// "incomplete member → goto('/profile')" assertions FAIL. Template:
-// layout.reactive-auth.spec.ts.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -21,16 +10,9 @@ const { discoverMock, gotoMock, resolveGateMock } = vi.hoisted(() => ({
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
-// The layout now installs the #107 401 recovery at module scope, which pulls in
-// $lib/entu/request -> $lib/entu-config. Severs the $env/dynamic/public chain
-// (unavailable outside a SvelteKit request context) — the same one-liner
-// layout.reactive-auth.spec.ts and every page spec use.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// Mutable $app/state stub so a test can put the layout on /profile (loop exemption).
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-// Override ONLY resolveGate; keep the real store / resetGate so the layout and this
-// spec share the one store instance.
 vi.mock('$lib/profile/completionGate', async (importActual) => {
 	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
 	return { ...actual, resolveGate: resolveGateMock };
@@ -38,24 +20,14 @@ vi.mock('$lib/profile/completionGate', async (importActual) => {
 
 import Layout from './+layout.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { collectiveState } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { SAMPLEDB, signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-	discoverMock.mockResolvedValue({
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	discoverMock.mockResolvedValue({ collectives: [SAMPLEDB], erroredDbs: [] });
+	signIn();
 }
 
 afterEach(() => {
@@ -63,12 +35,8 @@ afterEach(() => {
 	discoverMock.mockReset();
 	gotoMock.mockReset();
 	resolveGateMock.mockReset();
-	clearAll({ preserveProvider: false });
+	resetAppState();
 	pageStub.url = new URL('http://localhost/');
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
 	resetGate();
 });
 
@@ -87,7 +55,6 @@ describe('+layout — completion gate redirect (app-wide enforcement)', () => {
 		setAuthedWithOneCollective();
 
 		await vi.waitFor(() => expect(get(collectiveState).status).toBe('ready'));
-		// settle any gate effect
 		await new Promise((r) => setTimeout(r, 0));
 		expect(gotoMock).not.toHaveBeenCalledWith('/profile');
 	});

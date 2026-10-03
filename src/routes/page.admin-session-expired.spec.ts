@@ -67,13 +67,10 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
@@ -90,10 +87,10 @@ function setCollective(name: string) {
 }
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	setCollective('Sampledb');
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({
+		token: 'jwt-admin',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }]
+	});
 }
 
 function loadOk() {
@@ -123,10 +120,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.restoreAllMocks();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/admin — session expired', () => {

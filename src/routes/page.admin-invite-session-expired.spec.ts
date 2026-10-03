@@ -1,13 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #107 review F2 — auth token expiry recovery on /admin/invite, the second
-// surface the first #107 pass missed. Both of its failure sinks were
-// untreated: the prerequisite load fell into `load-error` (Retry against a
-// token entuFetch had already deleted), and the create POST fell into
-// `create-error` ("Invite creation failed" for what is really a dead session).
-// Neither is "not admin" and neither is a data problem.
-//
-// Mock scaffolding inherited from page.admin-invite.spec.ts.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,14 +42,9 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/invite/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-/** Duck-typed 401 rejection from the entuFetch layer (name-tag contract). */
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
 	e.name = 'AuthExpiredError';
@@ -66,14 +52,7 @@ function authExpiredError(): Error {
 }
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 beforeEach(() => {
@@ -84,10 +63,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/admin/invite — session expired (#107 review F2)', () => {

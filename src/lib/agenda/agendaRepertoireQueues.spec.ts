@@ -17,12 +17,9 @@ import { createRepertoireWriteQueue } from '$lib/repertoire/repertoireActions';
 import type { RepertoireRowActions } from '$lib/repertoire/repertoireRowHandlers';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { WorkRow } from '$lib/repertoire/types';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const RI_1: RepertoireItem = { id: 'ri-1', workId: 'work-1', editionId: '', status: 'active', name: 'A' };
 const RI_2: RepertoireItem = { id: 'ri-2', workId: 'work-2', editionId: '', status: 'active', name: 'B' };
@@ -84,22 +81,11 @@ function setup(listRepertoireItems = vi.fn(NEVER)) {
 }
 
 beforeEach(() => {
-	setToken('jwt-abc');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'crede', name: 'Crede', personId: 'person-p' }
-		],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'crede', name: 'Crede', personId: 'person-p' }] });
 });
 
 afterEach(() => {
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('#605 — the card and the panel write through one queue', () => {

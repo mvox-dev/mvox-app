@@ -1,21 +1,8 @@
 // @vitest-environment happy-dom
-//
-// T4.5/#31, #67 — the admin invite surface at /admin/invite. Contract:
-// - no available collective → no-collective message
-// - prerequisite load: not-visible → no-access (labeled heuristic); ANY other
-//   failure → load-error + retry. Network errors are NEVER presented as
-//   "not admin".
-// - ready → DATABASE (collective) select only (#67 — no organization-entity
-//   enumeration remains in the invite path; the member's org-entity parent is
-//   resolved internally, never picked); a sole collective preselects and
-//   submit is immediately enabled once its prerequisites resolve; multiple
-//   collectives require a manual pick before submit enables
-// - done → show-ONCE invite link + always-visible bearer warning; the token
-//   never touches localStorage/sessionStorage
-// - create-error → verbatim phased error; a personId-carrying error additionally
-//   surfaces the orphaned-person warning
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
@@ -40,9 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-// Mock the invite data layer at its module boundary. The error class is defined
-// INSIDE the mock so the page's `instanceof InviteCreateError` checks match the
-// instances these tests reject with.
 const h = vi.hoisted(() => {
 	class InviteCreateError extends Error {
 		readonly phase: string;
@@ -69,48 +53,25 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
-// Sever the $env chain the collectives store pulls in (discover → marker →
-// entu-config) and the store's `goto` import.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/invite/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
 	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
 }
 
-// The minted token is a REAL decodable invite JWT — the done-panel derives the
-// shown expiry from the token's own exp, not an assumed +7d.
 const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 function selectTwoCollectives() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
-			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
-		],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(null);
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }, { db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }], selected: null });
 }
 
 function loadOk() {
@@ -133,10 +94,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/admin/invite — prerequisites', () => {
@@ -180,11 +138,9 @@ describe('/admin/invite — prerequisites', () => {
 		});
 		expect(container.querySelector('[data-testid="invite-admin-no-access"]')).toBeNull();
 
-		// Generic message shown, raw error NOT shown
 		expect(container.textContent).toContain('Could not load invite prerequisites.');
 		expect(container.textContent).not.toContain('resolve failed: 500');
 
-		// Detail logged to console
 		expect(consoleSpy).toHaveBeenCalled();
 		const loggedArgs = consoleSpy.mock.calls.flat();
 		const loggedDetail = loggedArgs.some(
@@ -192,7 +148,6 @@ describe('/admin/invite — prerequisites', () => {
 		);
 		expect(loggedDetail).toBe(true);
 
-		// Retry is real: once the backend recovers, the same button reaches ready.
 		loadOk();
 		const retry = container.querySelector(
 			'[data-testid="invite-admin-retry-load"]'
@@ -219,7 +174,6 @@ describe('/admin/invite — ready form', () => {
 
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
 		expect(select.value).toBe('sampledb'); // sole collective preselected (select still rendered)
-		// Explicit empty placeholder option + the one real collective.
 		expect(select.options.length).toBe(2);
 
 		const submit = container.querySelector(
@@ -229,11 +183,7 @@ describe('/admin/invite — ready form', () => {
 			expect(submit.disabled).toBe(false); // db chosen + org resolved internally
 		});
 
-		// #67 — the org-entity resolve happened ONCE, internally, never as a list
-		// the admin picks from.
 		expect(h.resolveInviteParentMock).toHaveBeenCalledTimes(1);
-		// #161 review fix round 2 — `resolveInviteParentId` is DB-SCOPED, not
-		// person-scoped: no personId argument.
 		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'sampledb', token: 'jwt-admin' })
 		);
@@ -250,7 +200,6 @@ describe('/admin/invite — ready form', () => {
 
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
 		expect(select.value).toBe('');
-		// Explicit empty placeholder option + the two real collectives.
 		expect(select.options.length).toBe(3);
 
 		const submit = container.querySelector(
@@ -270,11 +219,6 @@ describe('/admin/invite — ready form', () => {
 });
 
 describe('/admin/invite — page heading', () => {
-	// #140/S3 review F2 — the invite surface became a shared component whose
-	// heading is an <h2> when embedded under /admin's own <h1>. On THIS route the
-	// surface IS the page, so it must still carry the page-level <h1> it had
-	// before the extraction — heading hierarchy is part of the backward-compat
-	// promise for the standalone URL, not just the rendered controls.
 	it('renders the invite title as the single page-level h1', async () => {
 		selectSampledb();
 		loadOk();
@@ -287,7 +231,6 @@ describe('/admin/invite — page heading', () => {
 		const headings = Array.from(container.querySelectorAll('h1'));
 		expect(headings).toHaveLength(1);
 		expect(headings[0].textContent?.trim()).toBe('Invite a new member');
-		// …and the title is not ALSO emitted at a lower level.
 		expect(container.querySelector('h2')).toBeNull();
 	});
 });
@@ -315,11 +258,6 @@ describe('/admin/invite — done (show-once link)', () => {
 			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
 		});
 
-		// The data layer was driven with the selected DATABASE (not an
-		// organization-entity id) + the internally-resolved org. #34/#36 —
-		// neither the invitee's email nor a member name is ever collected or
-		// forwarded: the member carries no name and the invitee's real email
-		// never reaches Entu.
 		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
 			{ dbEntityId: string; email?: string; memberName?: string }
@@ -329,21 +267,12 @@ describe('/admin/invite — done (show-once link)', () => {
 		expect(inputArg).not.toHaveProperty('email');
 		expect(inputArg).not.toHaveProperty('memberName');
 
-		// #360 — the invite URL is NEVER rendered: no invite-link input exists.
-		// Copy-to-clipboard is the only egress (page.admin-invite-copy.spec.ts
-		// pins the button-driven copy and its payload).
 		expect(container.querySelector('[data-testid="invite-link"]')).toBeNull();
 
-		// Bearer warning is always visible. #36 — it can no longer name the
-		// invitee (no email is collected at all), so it stays generic.
 		const warning = container.querySelector('[data-testid="invite-bearer-warning"]');
 		expect(warning).not.toBeNull();
 		expect(warning!.textContent).toContain('Bearer secret');
 
-		// #360 bearer-secret hygiene, tightened from "exactly once" to ZERO: the
-		// token surfaces NOWHERE in the rendered output — not in markup, not as
-		// an input value (Svelte sets values as properties, so innerHTML alone
-		// may count zero: include input values).
 		const surface =
 			container.innerHTML +
 			Array.from(container.querySelectorAll('input'))
@@ -351,7 +280,6 @@ describe('/admin/invite — done (show-once link)', () => {
 				.join('\n');
 		expect(surface.split(MINTED_TOKEN).length - 1).toBe(0);
 
-		// Bearer-secret hygiene: the token lives ONLY in component state.
 		for (let i = 0; i < localStorage.length; i++) {
 			const key = localStorage.key(i)!;
 			expect(localStorage.getItem(key)).not.toContain(MINTED_TOKEN);
@@ -362,10 +290,6 @@ describe('/admin/invite — done (show-once link)', () => {
 		}
 	});
 
-	// #207 rule 7 (PO standing rule, Gama 2026-09-02) — the shown expiry is
-	// numeric date text: ISO `YYYY-MM-DD`, never a browser-locale rendering.
-	// The message mock echoes `admin_invite_show_once`'s `date` param, so this
-	// pins the string the surface derives from the minted token's own exp.
 	it('#207 rule 7: the show-once expiry date renders as ISO YYYY-MM-DD', async () => {
 		selectSampledb();
 		loadOk();
@@ -388,8 +312,6 @@ describe('/admin/invite — done (show-once link)', () => {
 			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
 		});
 
-		// Oracle mirrors the required production mechanism (en-CA Intl → ISO)
-		// over MINTED_TOKEN's exp instant (4_102_444_800s) in the local zone.
 		const isoExpiry = new Intl.DateTimeFormat('en-CA', {
 			year: 'numeric',
 			month: '2-digit',
@@ -431,7 +353,6 @@ describe('/admin/invite — create-error', () => {
 		expect(errorBlock.textContent).not.toContain('member-create');
 		expect(errorBlock.textContent).not.toContain('member create failed: 500');
 
-		// Detail logged to console
 		expect(consoleSpy).toHaveBeenCalled();
 		const loggedArgs = consoleSpy.mock.calls.flat();
 		const loggedDetail = loggedArgs.some(
@@ -443,7 +364,6 @@ describe('/admin/invite — create-error', () => {
 		expect(partial).not.toBeNull();
 		expect(partial!.textContent).toContain('p1');
 
-		// Form value preserved for retry: the sole-collective selection survives the error.
 		const select = container.querySelector('[data-testid="invite-db"]') as HTMLSelectElement;
 		expect(select.value).toBe('sampledb');
 

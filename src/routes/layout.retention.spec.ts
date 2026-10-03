@@ -1,24 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #410 review F1 — the retention set is a SESSION duty, not the agenda page's.
-//
-// The byte store is a module singleton and FOUR routes put bytes through it:
-// the agenda (`+page.svelte`), `/event/[id]`, `/library` and `/downloads` all
-// call `openFileBytes(..., getAppByteStore())`, whose `store.put` fires the
-// after-every-put pressure sweep. While the protected-set build lived inside
-// `+page.svelte`, a cold boot straight into any of the other three never
-// mounted that component: `setProtectedKeys` was never called, the store kept
-// its default-EMPTY protected set for the whole session, and the sweep evicted
-// the next event's parts — the one thing #410's done-when forbids.
-//
-// This suite renders the ROOT LAYOUT and nothing else (no agenda page, no
-// route component at all) and holds it to the whole app-open duty: build the
-// set from every collective she has JOINED, hand it over, relieve.
-//
-// review F2 — "joined" means the hydrated, marker-filtered `collectiveState`
-// list (what `discoverCollectives` resolved), NOT `auth.personIdByDb`: that
-// map is every Entu db in her JWT, her non-mvox apps included, and reading
-// their agendas is a fan-out this app has no business issuing.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
@@ -30,8 +10,6 @@ const { discoverMock, gotoMock, listFullAgendaMock, loadWorksByEventIdMock } = v
 	loadWorksByEventIdMock: vi.fn()
 }));
 
-// The same boundary the sibling layout specs use: discover.ts and goto can't
-// run under happy-dom outside an app, and entu-config reads $env/dynamic/public.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
@@ -43,8 +21,6 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: loadWorksByEventIdMock
 }));
-// The byte-store seam: the retention module reaches persistence only through
-// getAppByteStore(), so the in-memory fake stands in for IndexedDB.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} })
@@ -52,10 +28,11 @@ vi.mock('$lib/files/appLabelStore', () => ({
 
 import Layout from './+layout.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import { collectiveState } from '$lib/collectives/store';
 import { resetRetentionForTests } from '$lib/files/retention';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { resetAppState } from '$lib/testing/appReset';
 
 let fakeByteStore: FakeByteStore;
 
@@ -99,9 +76,6 @@ function pkey(db: string, personId: string, fileId: string): string {
 beforeEach(() => {
 	fakeByteStore = createFakeByteStore();
 	resetRetentionForTests();
-	// The layout's completion-gate / admin / membership effects fire entuFetch
-	// the moment auth resolves; pin them to a benign 200 (same arrangement as
-	// layout.reactive-auth.spec.ts).
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async () => new Response(JSON.stringify({ entities: [] }), { status: 200 }))
@@ -116,13 +90,9 @@ afterEach(() => {
 	gotoMock.mockReset();
 	listFullAgendaMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
-/** Authenticated, with TWO joined collectives and a THIRD Entu db in the token
- *  that is not an mvox collective at all (review F2's scope claim). */
 function setAuthedWithTwoJoinedAndOneForeignDb() {
 	setToken('jwt-abc');
 	authStore.set({
@@ -160,13 +130,10 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 		await vi.waitFor(() => {
 			expect(relieveSpy).toHaveBeenCalled();
 		});
-		// This is the F1 bug in one assertion: with the build on +page.svelte,
-		// nothing here would have handed the store anything at all.
 		const handed = fakeByteStore.protectedLog.at(-1)!;
 		expect([...handed].sort()).toEqual(
 			[pkey('crede', 'person-c', 'file-c1'), pkey('sampledb', 'person-p', 'file-p1')].sort()
 		);
-		// ...and the set exists BEFORE the sweep runs on it.
 		expect(fakeByteStore.protectedLog.length).toBe(1);
 	});
 
@@ -203,8 +170,6 @@ describe('#410 — the retention set is built by the ROOT LAYOUT, so it covers e
 		await vi.waitFor(() => {
 			expect(relieveSpy).toHaveBeenCalled();
 		});
-		// A collective re-selection (or any other re-run of the layout effect)
-		// must not re-pay the fan-out: the build is latched per session.
 		collectiveState.set({
 			status: 'ready',
 			collectives: [

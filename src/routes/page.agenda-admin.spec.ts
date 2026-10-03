@@ -123,15 +123,11 @@ import {
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
@@ -195,19 +191,7 @@ function seriesFixture() {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -255,9 +239,7 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -991,22 +973,7 @@ describe('agenda admin — Cancel/Escape is refused while the form’s own creat
 
 describe('agenda admin — a collective switch leaves no creation form behind', () => {
 	function setAuthedWithTwoCollectives() {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { 'org-a': 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'org-a', name: 'Org A', personId: 'person-p' },
-				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('org-a');
+		signIn({ collectives: [{ db: 'org-a', name: 'Org A', personId: 'person-p' }, { db: 'org-b', name: 'Org B', personId: 'person-p' }] });
 	}
 
 	it('series form open in A, then a same-route switch to B: re-opening the panel in B does NOT resurrect A’s form', async () => {

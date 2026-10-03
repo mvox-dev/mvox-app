@@ -160,15 +160,12 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 
@@ -204,14 +201,7 @@ const ROSTER = [
 ];
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 function loadOk() {
@@ -302,10 +292,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/admin — access gate', () => {
@@ -1078,17 +1065,7 @@ describe('/admin — a library OWNER row', () => {
 
 describe('/admin — a collective switch that lands mid-load', () => {
 	it('a slow EARLIER load never clobbers the newer collective: rows, the org acted on, and canManage all come from the collective now selected', async () => {
-		setToken('jwt-admin');
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'alpha', name: 'Alpha', personId: 'p-alpha' },
-				{ db: 'beta', name: 'Beta', personId: 'p-beta' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('alpha');
+		signIn({ token: 'jwt-admin', collectives: [{ db: 'alpha', name: 'Alpha', personId: 'p-alpha' }, { db: 'beta', name: 'Beta', personId: 'p-beta' }] });
 
 		let releaseAlpha!: () => void;
 		const alphaGate = new Promise<void>((resolve) => {

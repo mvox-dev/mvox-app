@@ -1,22 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #251 RED — INTEGRATION: the real agenda route's day-group headers render in
-// the APP language, not the device locale.
-//
-// Real +page.svelte + real AgendaList; only the data seams are mocked (same
-// harness family as page.agenda-event-types.spec.ts). The unit pins live in
-// AgendaList.spec.ts (#251 describe); what THIS spec forces is the wiring on
-// the actual route: the page renders AgendaList as-is, so a GREEN that fixes
-// the component only in isolation (or reroutes the page through some other
-// header path) still has to show Estonian header text HERE, where Joosep's
-// 2026-09-05 screenshot showed English.
-//
-// The paraglide runtime mock intercepts '$lib/paraglide/runtime.js' — the
-// specifier routes/+page.svelte:83 already imports getLocale from — and backs
-// it with a SvelteMap (a reactive signal), so the live language-switch test
-// below genuinely invalidates a $derived-constructed formatter. happy-dom's
-// device locale is en-US: every 'et' assertion proves device-locale
-// independence by construction.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -64,11 +46,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -104,27 +81,12 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p1' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
 }
 
 function item(id: string, name: string, startDatetime: string): AgendaItem {
@@ -141,9 +103,6 @@ function item(id: string, name: string, startDatetime: string): AgendaItem {
 	} as AgendaItem;
 }
 
-// Far-future date so the relative-day decoration (which reads the real clock)
-// never adds a TÄNA/HOMME pill to the header under test: 2030-06-10T16:00Z is
-// Monday 10 June in Europe/Tallinn.
 const REHEARSAL = item('ev-proov', 'Tavaline proov', '2030-06-10T16:00:00.000Z');
 
 findMyMemberIdMock.mockResolvedValue(null);
@@ -154,8 +113,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	setAppLocale('en');
 });
 
@@ -174,10 +132,6 @@ describe('+page — agenda headers follow the app language on the real route (#2
 		expect(header.textContent?.trim()).toBe('esmaspäev, 10. juuni');
 	});
 
-	// done-when 2 at the route level — switch the app language with the page
-	// MOUNTED: the header re-renders in the new language without a reload.
-	// (setLocale reloads the page today; this is the tripwire for whoever
-	// removes that reload.)
 	it('switching the app language live re-renders the header without a reload', async () => {
 		setAppLocale('en');
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ upcoming: [REHEARSAL] }));

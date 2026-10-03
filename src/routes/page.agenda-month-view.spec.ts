@@ -1,63 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #247 RED — INTEGRATION: the month overview of the agenda, behind a
-// Nimekiri | Kuu segmented control sitting with the #214 filter chips.
-//
-// Real +page.svelte + real AgendaList; only the data seams are mocked (same
-// harness family as page.agenda-filter.spec.ts / page.agenda-header-locale
-// .spec.ts). The issue's "Ruled 2026-09-06" section + Gama's scope comment ARE
-// the contract this spec pins:
-//
-//   - Toggle (ruling 9/10): a two-state segmented control — two native
-//     buttons, one active — reading the ruled labels via NEW locale keys
-//     (et "Nimekiri" | "Kuu"). It sits WITH the #214 filter chips; the day
-//     list stays the DEFAULT; the choice persists per-device via the #207
-//     idiom (src/lib/preferences/agendaView.ts — see agendaView.spec.ts for
-//     the store's own sanitize/SSR pins).
-//     #312 RESHAPES the toggle into ONE segmented pill: role="radiogroup" /
-//     role="radio" / aria-checked (the aria-pressed pins changed on purpose —
-//     a stated contract change, see the issue), roving tabindex + arrow keys.
-//     The behaviour pins (click switches, day-list default, persistence)
-//     stay byte-identical.
-//   - SCOPE (Gama's ruling comment): the month overview consumes `items`
-//     (upcoming) ONLY. recentItems are NEVER rendered in month mode — the
-//     current month deliberately shows only its remainder ("what's coming"),
-//     the Recent window stays a day-list-only concern.
-//   - The compact row (done-when 3 + ruling 11): EXACTLY four things —
-//     short-weekday key + day-of-month number (the month is named once, in
-//     the heading — no full/ISO date), event title, type badge. No time, no
-//     duration, no location, no works, no RSVP, no attendance. "If a row
-//     looks bare, that is the feature."
-//   - Weekday letters come from NEW short-weekday locale keys (the charAt(0)
-//     trap: en/lv/uk collide on first letters; et alone does not) — and from
-//     the TALLINN calendar day, same timezone discipline as the day list.
-//   - Months group ascending by Tallinn YYYY-MM (the seriesCreateMonthGroups
-//     idiom), heading localized via the APP language (getLocale — #251's
-//     rule, never the device locale).
-//   - Type badges reuse #211's eventTypeBadgeClass — never a forked hue map.
-//   - The #214 filter chips apply to the month overview identically (free by
-//     construction: month mode consumes the same pre-filtered `items` prop).
-//   - Rows link to the same event detail page as the day-list rows.
-//   - Day-list mode is BYTE-UNCHANGED — the mode is additive; every
-//     pre-existing agenda/AgendaList spec is the fence and stays green
-//     untouched. This spec only pins that toggling away and back restores
-//     the day list (Recent included).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AgendaItem } from '$lib/agenda/types';
-// #211's ONE scheme — the month-row badge must consume the same map the
-// day-list badges and the chips do, never a second hand-typed copy.
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
 vi.mock('$lib/paraglide/messages.js', () => {
 	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
-		// Distinct markers: every asserted string must go through paraglide,
-		// never raw/hardcoded copy. Weekday letters ESPECIALLY — a charAt(0)
-		// of the full-day keys, or an Intl weekday:narrow, can never produce
-		// these markers.
 		agenda_view_list: () => '[msg:view-list]',
 		agenda_view_month: () => '[msg:view-month]',
 		agenda_view_toggle_label: () => '[msg:view-toggle]',
@@ -70,9 +21,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		agenda_weekday_short_6: () => '[msg:wd-6]',
 		agenda_filter_group_label: () => '[msg:filter-group]',
 		agenda_filter_all: () => '[msg:filter-all]',
-		// #214's two DIFFERENT truths, as two distinguishable markers — the whole
-		// point of the review finding is that month mode was rendering the second
-		// where it owed the first.
 		agenda_filter_empty: () => '[msg:filter-empty]',
 		agenda_empty_no_events: () => '[msg:empty-no-events]',
 		agenda_duration_min: (params) => `[msg:dur:${(params as { minutes: number }).minutes}]`,
@@ -89,10 +37,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 	};
 });
 
-// The APP-language seam (#251): month headings must follow getLocale(), never
-// the device locale — happy-dom's device locale is en-US, so every Estonian
-// heading assertion below proves app-locale wiring by construction. Same
-// SvelteMap-backed mock as page.agenda-header-locale.spec.ts.
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({
 	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
@@ -126,11 +70,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -166,27 +105,12 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p1' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
 }
 
 function item(
@@ -209,32 +133,15 @@ function item(
 	} as AgendaItem;
 }
 
-// Far-future fixtures with VERIFIED Tallinn calendar facts (Europe/Tallinn,
-// EEST +3 on these dates):
-//   2030-06-10T16:00Z → Tallinn 2030-06-10, Monday    → weekday key _1
-//   2030-06-12T18:00Z → Tallinn 2030-06-12, Wednesday → weekday key _3
-//   2030-06-30T22:00Z → Tallinn 2030-07-01 01:00, Monday — the MONTH-BOUNDARY
-//     pin: in UTC this instant is still Sunday, June 30. A naive
-//     startDatetime.slice(0, 7) (or a UTC getDay()) files it under June with
-//     weekday key _0; the Tallinn calendar files it under JULY, Monday (_1) —
-//     exactly the day-list's own timezone discipline (groupKeyFmt).
-//   2030-07-03T16:00Z → Tallinn 2030-07-03, Wednesday → weekday key _3
 const JUN_MON = item('jun-mon', 'Esmaspäevane proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
 const JUN_WED = item('jun-wed', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert', 'Kammersaal');
 const JUL_BOUNDARY = item('jul-boundary', 'Ööproov', '2030-06-30T22:00:00.000Z', 'rehearsal');
 const JUL_WED = item('jul-wed', 'Suvekontsert', '2030-07-03T16:00:00.000Z', 'concert');
 const RECENT_SOCIAL = item('rec-soc', 'Suvepidu', '2026-05-01T18:00:00.000Z', 'social');
-// A PAST concert: it puts the concert chip on screen (chips derive from the
-// whole agenda, recent included) while leaving the UPCOMING set concert-free —
-// the exact reachable shape of the #214-in-month-mode finding.
 const RECENT_CONCERT = item('rec-con', 'Talvekontsert', '2026-04-20T18:00:00.000Z', 'concert');
 
 const ALL_UPCOMING = [JUN_MON, JUN_WED, JUL_BOUNDARY, JUL_WED];
 
-/** The view toggle GROUP — #312 makes it ONE segmented pill: a native
- *  role="radiogroup" (was role="group" under #247) whose accessible name is
- *  still the localized agenda_view_toggle_label (standing rules 1/2 — native
- *  controls, no hand-rolled widget). */
 function viewToggle(container: HTMLElement): HTMLElement | null {
 	return container.querySelector('[role="radiogroup"][aria-label="[msg:view-toggle]"]');
 }
@@ -306,12 +213,7 @@ afterEach(async () => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	// The view-mode preference is module-level state (the #207 idiom): reset it
-	// to the default so one test's Kuu choice never leaks into the next.
-	// Dynamic import + catch: pre-GREEN the module does not exist yet, and this
-	// afterEach must not turn every RED failure into an import crash.
+	resetAppState();
 	const prefs = await import('$lib/preferences/agendaView').catch(() => null);
 	prefs?.setAgendaView('list');
 	if (typeof localStorage !== 'undefined') localStorage.clear();
@@ -324,7 +226,6 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		const toggle = viewToggle(container);
 		expect(toggle, 'view toggle group must exist').not.toBeNull();
 
-		// Exactly two buttons — a two-state control, not a widget family.
 		const buttons = Array.from(toggle!.querySelectorAll('button'));
 		expect(buttons.map((b) => b.getAttribute('data-testid'))).toEqual([
 			'agenda-view-list',
@@ -333,21 +234,15 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		for (const btn of buttons) {
 			expect(btn.tagName).toBe('BUTTON');
 			expect(btn.getAttribute('type')).toBe('button');
-			// #312 contract change, stated on purpose: one segmented pill = a radio
-			// group, so each segment is role="radio" + aria-checked. aria-pressed is
-			// GONE — pressed-state on role="radio" is an invalid ARIA mix (the
-			// role="option" trap's sibling, see roster's view-mode comment).
 			expect(btn.getAttribute('role')).toBe('radio');
 			expect(btn.getAttribute('aria-checked')).not.toBeNull();
 			expect(btn.getAttribute('aria-pressed')).toBeNull();
 		}
-		// The ruled labels arrive via the NEW keys, never hardcoded copy.
 		expect(buttons.map((b) => b.textContent?.trim())).toEqual([
 			'[msg:view-list]',
 			'[msg:view-month]'
 		]);
 
-		// Default = the day list (ruling 9), month not checked.
 		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
 		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('false');
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
@@ -362,8 +257,6 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		const chips = chipGroup(container) as HTMLElement;
 		expect(toggle).not.toBeNull();
 		expect(chips).not.toBeNull();
-		// "A small view toggle sitting with the #214 filter chips" (ruling 9) —
-		// one control strip, not a toggle exiled to some other corner of the page.
 		expect(toggle.parentElement).toBe(chips.parentElement);
 
 		const agendaList = container.querySelector('[data-testid="agenda-list"]') as HTMLElement;
@@ -381,14 +274,12 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
 		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('false');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
-		// The day-grouped list is fully gone in month mode — groups, headers, rows.
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).toBeNull();
 		expect(container.querySelector('[data-testid="agenda-date-header"]')).toBeNull();
 		expect(dayListRowIds(container)).toEqual([]);
 
 		await fireEvent.click(viewButton(container, 'agenda-view-list'));
 
-		// Back exactly as it was — the mode is additive, the day list untouched.
 		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
 		expect(monthGroups(container)).toEqual([]);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
@@ -407,16 +298,10 @@ describe('#247 — SCOPE (Gama ruling): month mode consumes `items` ONLY, never 
 		expect(container.querySelector('[data-testid="agenda-recent"]')).toBeNull();
 		expect(container.querySelector('[data-testid="agenda-recent-header"]')).toBeNull();
 		expect(container.querySelectorAll('[data-testid^="agenda-recent-row-"]').length).toBe(0);
-		// The recent event's id never leaks into the month rows either.
 		expect(monthRowIds(container)).not.toContain('rec-soc');
 	});
 
 	it('the current month shows only its REMAINDER: past days live in recent and stay off-screen (deliberate, not a gap)', async () => {
-		// A fixture spanning past + future of the CURRENT month, delivered the
-		// way the real producer delivers it: the past day arrives in `recent`,
-		// the future day in `upcoming`. The pinned behaviour is Gama's ruling —
-		// the month view answers "what is coming", so it renders EXACTLY the
-		// upcoming set and the past day of the very same month is absent.
 		const now = Date.now();
 		const upNear = item(
 			'up-near',
@@ -446,19 +331,12 @@ describe('#247 — month grouping: ascending Tallinn YYYY-MM, app-locale heading
 
 		await switchToMonth(container);
 
-		// Two months, ascending, named once each in the APP language (device
-		// locale is en-US — an Intl call without getLocale() cannot produce
-		// these strings).
 		expect(monthHeaders(container)).toEqual(['juuni 2030', 'juuli 2030']);
 
-		// Group membership pins the Tallinn month boundary: 2030-06-30T22:00Z is
-		// July 1 in Tallinn — a UTC (or string-slice) grouping would file it
-		// under June.
 		const [june, july] = monthGroups(container);
 		expect(monthRowIds(june)).toEqual(['jun-mon', 'jun-wed']);
 		expect(monthRowIds(july)).toEqual(['jul-boundary', 'jul-wed']);
 
-		// Overall row order = the upcoming list's own chronological order.
 		expect(monthRowIds(container)).toEqual(['jun-mon', 'jun-wed', 'jul-boundary', 'jul-wed']);
 	});
 
@@ -481,15 +359,10 @@ describe('#247 — the compact row: EXACTLY weekday key + day number + title + t
 		const row = monthRow(container, 'jun-wed');
 		const text = row.textContent ?? '';
 
-		// Ruling 11: short weekday key + day-of-month number (e.g. "N 15") —
-		// Wednesday = key _3, day 12. The weekday precedes the day number.
 		expect(text).toMatch(/\[msg:wd-3\]\s*12(?!\d)/);
-		// The month is named once, in the heading: no full/ISO date in the row.
 		expect(text).not.toContain('2030-06-12');
 		expect(text).not.toContain('2030');
-		// Title.
 		expect(text).toContain('Kevadkontsert');
-		// Type badge: the SHARED #211 classes, verbatim, and the localized label.
 		const badge = row.querySelector('[data-testid="event-type-badge-jun-wed"]');
 		expect(badge, 'month row must carry the type badge').not.toBeNull();
 		expect(badge?.textContent?.trim()).toBe('[msg:concert]');
@@ -499,21 +372,12 @@ describe('#247 — the compact row: EXACTLY weekday key + day number + title + t
 			expect(badge?.classList.contains(cls), `badge must carry ${cls}`).toBe(true);
 		}
 
-		// NOTHING ELSE (done-when 3 — "if a row looks bare, that is the
-		// feature"): no time, no duration, no location, no interactive controls.
 		expect(text).not.toMatch(/\d{1,2}:\d{2}/); // no clock time
 		expect(text).not.toContain('[msg:dur'); // no duration line
 		expect(text).not.toContain('Kammersaal'); // no location (fixture has one)
 		expect(row.querySelectorAll('button').length).toBe(0); // no RSVP/attendance/works controls
 	});
 
-	// #247 review F2 — the date column must FIT its worst case. Content is up to
-	// five characters ('Нд 30' in uk, 'Se 28' in lv, 'Su 30' in en; et's single
-	// letters are the narrow case), which at text-xs monospace runs ~36px — past
-	// the old w-8 (32px). The span is `shrink-0` with no clipping, so an
-	// undersized column does not truncate, it OVERRUNS the title beside it.
-	// Class-token assertions (the #250 typography-spec idiom), since happy-dom
-	// does no layout: the contract is "no fixed 32px cap on the date column".
 	it('the date column is wide enough for a two-character weekday + two-digit day', async () => {
 		const container = await renderAgenda(ALL_UPCOMING);
 
@@ -525,7 +389,6 @@ describe('#247 — the compact row: EXACTLY weekday key + day number + title + t
 		expect(date, 'the month row must have a date column').not.toBeNull();
 		expect(date!.classList.contains('w-8'), 'w-8 (32px) cannot hold "Нд 30"').toBe(false);
 		expect(date!.classList.contains('min-w-[3rem]')).toBe(true);
-		// It still may not shrink — the column aligns down the whole list.
 		expect(date!.classList.contains('shrink-0')).toBe(true);
 	});
 
@@ -571,8 +434,6 @@ describe('#247 — the #214 filter chips govern the month overview identically',
 			container.querySelector('[data-testid="agenda-filter-concert"]') as HTMLElement
 		);
 
-		// Same upstream mechanism as the day list: only concert rows remain,
-		// in both months.
 		expect(monthRowIds(container)).toEqual(['jun-wed', 'jul-wed']);
 
 		await fireEvent.click(
@@ -581,14 +442,7 @@ describe('#247 — the #214 filter chips govern the month overview identically',
 		expect(monthRowIds(container)).toEqual(['jun-mon', 'jun-wed', 'jul-boundary', 'jul-wed']);
 	});
 
-	// #247 review F1 — #214's rule is about the AGENDA, not about one of its two
-	// views. A filter that empties the upcoming set is a different truth than an
-	// agenda with nothing coming: the collective HAS events, the filter hid them.
-	// Month mode used to render the flat "no upcoming events" line here, with no
-	// cue that the tapped chip caused it.
 	it('a chip that empties the upcoming set renders the FILTER-empty copy, not "no upcoming events"', async () => {
-		// Upcoming is all rehearsals; the only concert is a PAST one, so the
-		// concert chip is on screen and tapping it empties the month view.
 		const container = await renderAgenda([JUN_MON, JUL_BOUNDARY], [RECENT_CONCERT]);
 
 		await switchToMonth(container);
@@ -602,12 +456,9 @@ describe('#247 — the #214 filter chips govern the month overview identically',
 		const filterEmpty = container.querySelector('[data-testid="agenda-filter-empty"]');
 		expect(filterEmpty, 'month mode must honour #214s filtered-empty override').not.toBeNull();
 		expect(filterEmpty?.textContent).toContain('[msg:filter-empty]');
-		// ...and must NOT claim the agenda itself is empty.
 		expect(container.querySelector('[data-testid="agenda-empty"]')).toBeNull();
 		expect(container.textContent).not.toContain('[msg:empty-no-events]');
 
-		// Clearing the filter brings the rows back — the override is scoped to an
-		// active filter, it does not become the month view's permanent empty state.
 		await fireEvent.click(
 			container.querySelector('[data-testid="agenda-filter-all"]') as HTMLElement
 		);
@@ -616,9 +467,6 @@ describe('#247 — the #214 filter chips govern the month overview identically',
 	});
 
 	it('with NO filter active, a genuinely empty upcoming set still reads "no upcoming events"', async () => {
-		// The other half of the same fence: the override must not leak into the
-		// unfiltered case. Recent-only agenda → chips (and the toggle) exist, the
-		// filter is 'all', upcoming is genuinely empty.
 		const container = await renderAgenda([], [RECENT_CONCERT]);
 
 		await switchToMonth(container);
@@ -646,10 +494,6 @@ describe('#247 — per-device persistence (the #207 idiom, ruling 9)', () => {
 		await switchToMonth(first);
 		cleanup();
 
-		// Fresh mount of the whole page — the preference store (not component
-		// state) must carry the choice. agendaView.spec.ts pins the other half:
-		// the store itself initializes from a sanitized, SSR-safe localStorage
-		// read, so together this closes the reload loop.
 		const container = await renderAgenda(ALL_UPCOMING);
 		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
@@ -683,9 +527,6 @@ describe('#247 — the new locale keys exist in all four locales', () => {
 	});
 
 	it.each(LOCALES)('%s defines all 7 short-weekday keys, non-empty and DISTINCT', (locale) => {
-		// Distinctness is the whole point of the key set: charAt(0) of the full
-		// day names collides in en/lv/uk (the issue's table) — seven identical-
-		// or-colliding strings would rebuild the trap behind new keys.
 		const file = messages(locale);
 		const values = WEEKDAY_KEYS.map((key) => {
 			expect(file[key], `${locale}.json must define ${key}`).toBeDefined();
@@ -700,10 +541,6 @@ describe('#247 — the new locale keys exist in all four locales', () => {
 	it.each(['en', 'lv', 'uk'] as const)(
 		'%s (a first-letter-collision locale) uses ≥2-character weekday strings — never down to one character',
 		(locale) => {
-			// The issue's rule: Estonian alone is collision-free at one character;
-			// en/lv/uk need two (their example sets — en Su..Sa, lv Sv..Se, uk
-			// Нд..Сб — are refinable copy, so no verbatim pin, only the length
-			// floor the ruling sets).
 			const file = messages(locale);
 			for (const key of WEEKDAY_KEYS) {
 				expect(
@@ -714,15 +551,6 @@ describe('#247 — the new locale keys exist in all four locales', () => {
 		}
 	);
 });
-
-// ── #312: one segmented pill — radiogroup semantics + roving tabindex ────────
-// The #247 two-chip toggle becomes ONE pill: the CONTAINER carries the border
-// and the rounding, the segments sit flush inside it (the LanguageSelector /
-// RsvpControl / AttendanceSurface flush idiom), and the semantics become a
-// radio group — arrows MOVE focus AND SELECT. Same house pattern
-// page.roster-arrange.spec.ts pins for roster-view-modes (#156): radiogroup of
-// radios, exactly one Tab stop (the checked segment), wrapping arrows,
-// Tab/Enter/Space never swallowed.
 
 describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving tabindex)', () => {
 	function segments(container: HTMLElement): HTMLButtonElement[] {
@@ -736,7 +564,6 @@ describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving ta
 		const container = await renderAgenda(ALL_UPCOMING);
 		const group = viewToggle(container);
 		expect(group, 'radiogroup with the localized label must exist').not.toBeNull();
-		// The old role="group" wrapper is GONE, not merely doubled up.
 		expect(container.querySelector('[role="group"][aria-label="[msg:view-toggle]"]')).toBeNull();
 		for (const s of segments(container)) {
 			expect(s.getAttribute('role'), s.getAttribute('data-testid') ?? '').toBe('radio');
@@ -762,12 +589,9 @@ describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving ta
 			expect(month.getAttribute('aria-checked')).toBe('true');
 		});
 		expect(document.activeElement).toBe(month);
-		// Arrow selection is a REAL selection: it lands in the month view and in
-		// the #207 preference — never a parallel local state beside the store.
 		expect(monthGroups(container).length).toBeGreaterThan(0);
 		expect(localStorage.getItem('mvox.agenda_view')).toBe('month');
 
-		// …and wraps round the end back to the first segment.
 		await fireEvent.keyDown(month, { key: 'ArrowRight' });
 		await waitFor(() => {
 			expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
@@ -799,8 +623,6 @@ describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving ta
 		const group = viewToggle(container) as HTMLElement;
 		const tokens = [...group.classList];
 
-		// The flush idiom (LanguageSelector.svelte:96 and kin): the container
-		// clips, borders and rounds; the segments are NOT independent chips.
 		expect(tokens).toContain('overflow-hidden');
 		expect(tokens).toContain('border');
 		expect(
@@ -820,6 +642,5 @@ describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving ta
 	});
 });
 
-// (*MVOX:Tallis* — #247 RED)
-// (*MVOX:Byrd* — #247 review fixes: filter-empty in month mode + date-column width)
-// (*MVOX:Tallis* — #312 RED: one segmented pill — radiogroup + roving tabindex; aria-pressed→aria-checked is the issue's stated contract change)
+// (*MVOX:Tallis*)
+// (*MVOX:Byrd*)

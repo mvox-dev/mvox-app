@@ -2,8 +2,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, type Readable } from 'svelte/store';
 
-// Mock the discovery boundary (severs the entu-config → $env import under happy-dom)
-// and $app/navigation (goto can't run outside an app).
 const { discoverMock, gotoMock } = vi.hoisted(() => ({ discoverMock: vi.fn(), gotoMock: vi.fn() }));
 vi.mock('./discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
@@ -23,6 +21,7 @@ import {
 import type { Collective } from './types';
 import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
+import { resetAppState } from '$lib/testing/appReset';
 
 const A: Collective = { db: 'sampledb', name: 'Sampledb', personId: 'p1' };
 const B: Collective = { db: 'ww', name: 'WW Choir', personId: 'w1' };
@@ -34,10 +33,7 @@ function ready(collectives: Collective[]) {
 beforeEach(() => {
 	localStorage.clear();
 	sessionStorage.clear();
-	collectiveState.set({ status: 'loading' });
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(null);
-	authStore.set({ status: 'loading' });
+	resetAppState();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
 });
@@ -122,13 +118,7 @@ describe('hydrateCollectives', () => {
 	});
 });
 
-// #165 review F1 — a rename must not wake readers that only care about WHICH
-// collective is selected (the root layout's completion gate and its admin
-// determination both re-resolve from scratch, the latter for 2 Entu
-// round-trips, and the Admin nav entry the viewer is standing on unmounts
-// while it does).
 describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
-	/** Record every emission of a store while `fn` runs. */
 	function emissions<T>(store: Readable<T>, fn: () => void): T[] {
 		const seen: T[] = [];
 		const stop = store.subscribe((v) => seen.push(v));
@@ -141,7 +131,6 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 		ready([A, B]);
 		renameCollectiveInStore('sampledb', 'Koor Sampledb');
 		expect(get(selectedCollectiveStore)).toEqual({ ...A, name: 'Koor Sampledb' });
-		// Siblings are untouched.
 		expect(get(collectiveState)).toEqual({
 			status: 'ready',
 			collectives: [{ ...A, name: 'Koor Sampledb' }, B],
@@ -155,7 +144,6 @@ describe('renameCollectiveInStore + selectedCollectiveIdentityStore', () => {
 			renameCollectiveInStore('sampledb', 'Sampledb'); // already named that
 			renameCollectiveInStore('nope', 'Whatever'); // not a known collective
 		});
-		// The initial emission on subscribe, and nothing more.
 		expect(seen).toHaveLength(1);
 	});
 
