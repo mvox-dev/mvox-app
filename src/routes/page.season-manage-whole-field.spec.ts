@@ -10,7 +10,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	resolveManageRightsMock,
 	listEventSeriesForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
@@ -18,7 +17,6 @@ const {
 	removeSeasonConductorMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	resolveManageRightsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
@@ -44,10 +42,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
@@ -88,7 +85,8 @@ import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock
+	resolveDatabaseEntityIdMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';

@@ -3,9 +3,8 @@ import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 
-const { listFullAgendaMock, loadWorksByEventIdMock } = vi.hoisted(() => ({
+const { listFullAgendaMock } = vi.hoisted(() => ({
 	listFullAgendaMock: vi.fn(),
-	loadWorksByEventIdMock: vi.fn()
 }));
 
 vi.mock('$lib/collectives/discover', async () =>
@@ -21,10 +20,9 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: vi.fn(),
 	listFullAgenda: listFullAgendaMock
 }));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} })
@@ -38,6 +36,7 @@ import { resetRetentionForTests } from '$lib/files/retention';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

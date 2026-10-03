@@ -10,7 +10,6 @@ const {
 	loadRosterMock,
 	createSeasonMock,
 	createEventMock,
-	resolveManageRightsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -18,7 +17,6 @@ const {
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
 	getSeriesDefaultsMock,
-	loadWorksByEventIdMock,
 	listWorksMock,
 	listAllEditionsMock,
 	listRepertoireItemsMock
@@ -26,7 +24,6 @@ const {
 	loadRosterMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	createEventMock: vi.fn(),
-	resolveManageRightsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -34,7 +31,6 @@ const {
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
 	getSeriesDefaultsMock: vi.fn(),
-	loadWorksByEventIdMock: vi.fn(),
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
 	listRepertoireItemsMock: vi.fn()
@@ -60,10 +56,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
@@ -80,10 +75,9 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: listWorksMock,
@@ -107,7 +101,9 @@ import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock
+	loadWorksByEventIdMock,
+	resolveDatabaseEntityIdMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';

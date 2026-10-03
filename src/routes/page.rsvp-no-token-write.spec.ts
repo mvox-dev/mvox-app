@@ -36,15 +36,9 @@ vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
 	listMyRsvps: h.listMyRsvpsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
+);
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );

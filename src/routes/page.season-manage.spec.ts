@@ -10,15 +10,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	resolveManageRightsMock,
 	listEventSeriesForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
 	listRepertoireItemsMock,
-	deleteRepertoireItemMock,
-	updateRepertoireStatusMock,
 	getSeriesDefaultsMock,
 	deleteEventSeriesMock,
 	countSeriesOccurrencesMock,
@@ -26,15 +23,12 @@ const {
 	deleteSeasonMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	resolveManageRightsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
 	listRepertoireItemsMock: vi.fn(),
-	deleteRepertoireItemMock: vi.fn(),
-	updateRepertoireStatusMock: vi.fn(),
 	getSeriesDefaultsMock: vi.fn(),
 	deleteEventSeriesMock: vi.fn(),
 	countSeriesOccurrencesMock: vi.fn(),
@@ -65,12 +59,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock,
-	deleteRepertoireItem: deleteRepertoireItemMock,
-	updateRepertoireStatus: updateRepertoireStatusMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal(), { writes: true })
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
@@ -120,11 +111,14 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import {
+	deleteRepertoireItemMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listSectionsMock,
 	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock
+	resolveDatabaseEntityIdMock,
+	resolveManageRightsMock,
+	updateRepertoireStatusMock
 } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;

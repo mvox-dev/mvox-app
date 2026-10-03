@@ -19,8 +19,7 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const { loadWorksByEventIdMock, signFileUrlMock } = vi.hoisted(() => ({
-	loadWorksByEventIdMock: vi.fn(),
+const { signFileUrlMock } = vi.hoisted(() => ({
 	signFileUrlMock: vi.fn()
 }));
 vi.mock('$app/navigation', async () =>
@@ -32,10 +31,9 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
@@ -47,6 +45,7 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

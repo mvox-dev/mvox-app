@@ -30,11 +30,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	applyRsvpChangeMock,
-	resolveManageRightsMock
+	applyRsvpChangeMock
 } = vi.hoisted(() => ({
 	applyRsvpChangeMock: vi.fn(),
-	resolveManageRightsMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
@@ -45,10 +43,9 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
 );
@@ -61,21 +58,9 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 vi.mock('$lib/rsvp/rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMock }));
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: (
-		records: Array<{ attendanceId: string; memberId: string; status: string }>
-	) => {
-		const map: Record<string, { attendanceId: string; status: string }> = {};
-		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
-		return map;
-	}
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare', byMember: 'records' })
+);
 
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
@@ -90,7 +75,8 @@ import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
-	loadFullAgendaMock
+	loadFullAgendaMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const EVENT = {

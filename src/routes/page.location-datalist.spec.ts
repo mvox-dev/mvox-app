@@ -10,7 +10,6 @@ const {
 	loadRosterMock,
 	createEventMock,
 	createEventSeriesMock,
-	resolveManageRightsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -22,7 +21,6 @@ const {
 	loadRosterMock: vi.fn(),
 	createEventMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
-	resolveManageRightsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -52,10 +50,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
@@ -72,15 +69,9 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
 );
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule()
+);
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
@@ -113,7 +104,8 @@ import {
 	listMyRsvpsMock,
 	listSectionsMock,
 	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock
+	resolveDatabaseEntityIdMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';

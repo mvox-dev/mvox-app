@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadWorksByEventIdMock,
 	signFileUrlMock,
 	loadRosterMock,
 	listRepertoireItemsMock,
@@ -18,7 +17,6 @@ const {
 	listAllCopiesMock,
 	listEventSeriesForSeasonMock
 } = vi.hoisted(() => ({
-	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	listRepertoireItemsMock: vi.fn(),
@@ -53,10 +51,9 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: listWorksMock,
@@ -104,8 +101,11 @@ import { openFileBytes } from '$lib/files/openFileBytes';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	listSectionsMock,
+	loadFullAgendaMock,
+	loadWorksByEventIdMock
+} from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 
