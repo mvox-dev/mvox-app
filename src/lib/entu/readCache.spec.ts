@@ -4,7 +4,9 @@ import { IDBFactory } from 'fake-indexeddb';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from './request';
 import {

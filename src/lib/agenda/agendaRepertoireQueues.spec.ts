@@ -5,7 +5,9 @@ import { deferred } from '$lib/testing/entuFetchKit';
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
 vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
 

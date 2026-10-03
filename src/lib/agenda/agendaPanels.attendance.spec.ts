@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 const { applyAttendanceChangeMock } = vi.hoisted(() => ({ applyAttendanceChangeMock: vi.fn() }));
 vi.mock('$lib/attendance/attendanceOptimistic', () => ({
 	applyAttendanceChange: applyAttendanceChangeMock

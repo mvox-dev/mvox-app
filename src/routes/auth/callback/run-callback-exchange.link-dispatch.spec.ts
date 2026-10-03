@@ -1,22 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #193 RED — dispatcher wiring: a state blob carrying `intent: 'link'` must take
-// the LINK branch of the real callback orchestrator (runCallbackExchange), never
-// the db-less normal-login exchange. Kept separate from run-link-callback.spec
-// so this file imports only modules that exist on main — it fails FUNCTIONALLY
-// (today 'link' falls through to the normal login path), pinning the integration
-// rather than erroring at import time.
+// A state blob with intent 'link' takes the link branch of the real callback orchestrator,
+// never the normal-login exchange.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { encodeState, OAUTH_STATE_KEY, type OAuthState } from '$lib/auth/state';
 
-// #219 — run-link-callback.ts now imports listLinkedIdentities (for the
-// same-identity duplicate check), which transitively pulls in $lib/entu-config
-// -> `$env/dynamic/public`; that virtual module doesn't resolve under happy-dom
-// (same rationale as run-link-callback.spec.ts). Neither test here sets
-// `linkedSnapshot` on the stashed state, so the real listLinkedIdentities is
-// never actually invoked — this mock only keeps the import graph resolvable.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+// Keeps the import graph resolvable: run-link-callback reaches entu-config → $env, and no test
+// here sets linkedSnapshot, so the real listLinkedIdentities never runs.
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 const { exchangeSessionMock, exchangeInviteMock, setUserMock, setTokenMock } = vi.hoisted(() => ({
 	exchangeSessionMock: vi.fn(),
@@ -116,4 +109,4 @@ describe('runCallbackExchange — intent "link" dispatch (#193)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #193 RED: callback dispatcher takes the link branch)
+// (*MVOX:Tallis*)

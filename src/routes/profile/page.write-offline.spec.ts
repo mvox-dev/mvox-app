@@ -66,11 +66,17 @@ vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
 	mintSelfLinkInvite: h.mintSelfLinkInviteMock
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './+page.svelte';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';

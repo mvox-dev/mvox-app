@@ -4,7 +4,9 @@ import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 
 // Sever the `$env/dynamic/public` chain (entu-config) — that virtual module
 // doesn't resolve under happy-dom (same rationale as run-callback-exchange.spec).
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { buildOAuthInitUrl } from './build-oauth-init-url';
 

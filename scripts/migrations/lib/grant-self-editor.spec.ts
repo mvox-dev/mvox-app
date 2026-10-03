@@ -3,7 +3,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { grantSelfEditor } from './grant-self-editor';
 import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 const BASE = 'https://api.entu-test.invalid/testdb';
 const PERSON = 'person-1';

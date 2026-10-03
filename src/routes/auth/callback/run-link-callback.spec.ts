@@ -1,31 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #193 RED — link-intent branch of the OAuth callback: the user came back from
-// the SECOND provider carrying a real session key + the self-minted invite in
-// the (already-consumed) state blob. Redemption reuses the sole account-scoped
-// exchange (exchangeSessionWithInvite) — entu-api's replaceInviteWithCredentials
-// then writes the second identity as a separate array entry, leaving the first
-// identity untouched (APPEND, platform-verified live in the SPIKE).
-//
-// The decisive difference from the admin-invite branch (run-invite-callback.ts):
-// there, a `conflict` persists the OTHER person as the current user (acceptable
-// for a stranger arriving). For a self-link initiated from an authenticated
-// profile page that would mean "clicked link, got silently logged in AS SOMEONE
-// ELSE" — the link path must REFUSE to persist any identity other than the
-// initiating person's, and surface every non-happy outcome as a loud, named
-// error instead.
-//
-// Contract under test (GREEN implements exactly this, in a NEW module —
-// src/routes/auth/callback/run-link-callback.ts):
-//   runLinkCallbackExchange(key: string, state: OAuthState): Promise<CallbackOutcome>
+// The link branch of the OAuth callback redeems the self-minted invite and must never persist an
+// identity other than the initiating person's: every non-happy outcome is a named error.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { OAuthState } from '$lib/auth/state';
 
-// #219 — the same-identity duplicate check re-reads the linked set through the
-// REAL listLinkedIdentities/entuFetch, so the `$env/dynamic/public` chain
-// (entu-config) must be severed the same way the page specs do.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+// The duplicate check reads through the real entuFetch, so the $env chain is severed here.
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 const {
 	exchangeInviteMock,
@@ -130,11 +113,8 @@ describe('runLinkCallbackExchange — redeemed (the append happy path)', () => {
 		expect(hydrateCollectivesMock).toHaveBeenCalledTimes(1);
 	});
 
-	// Review F2: the redemption JWT is account-scoped — entu-api filters the db scan
-	// to the invite's db (index.get.js:124-129, :143), so its `accounts` claim names
-	// ONLY the collective the link was started from. hydrateAuth reads personIdByDb
-	// straight off that claim and hydrateCollectives wholesale-replaces the list, so
-	// swapping it in drops every OTHER collective from the switcher until next login.
+	// The redemption JWT names only the invite's collective; swapping it in would drop every
+	// other collective from the switcher until the next login.
 	it('does NOT replace the existing, broader session token (that would silently drop the user’s other collectives)', async () => {
 		exchangeInviteMock.mockResolvedValue(REDEEMED);
 		getTokenMock.mockReturnValue('existing-broad-jwt');
@@ -191,9 +171,7 @@ describe('runLinkCallbackExchange — conflict NEVER swaps the session identity'
 		});
 	});
 
-	// Review F3: a conflict whose existing owner IS the initiating person is not
-	// "in use by another member here" — it means the user re-linked a sign-in they
-	// already have. Distinct outcome so the message stays truthful.
+	// A conflict owned by the initiating person means a re-link of a sign-in they already have.
 	it('a SAME-person conflict is classified as already_linked, not as someone else’s account', async () => {
 		exchangeInviteMock.mockResolvedValue({
 			status: 'conflict',
@@ -281,32 +259,11 @@ describe('runLinkCallbackExchange — inconsistent state fails loudly, never deg
 	});
 });
 
-// ── #219: same-identity re-link — `redeemed` is NOT always a new link ───────────
-//
-// entu-api's same-person branch (`existingEntry.user._id === inviteData.entityId`)
-// still runs replaceInviteWithCredentials on the fresh placeholder and reports a
-// clean `redeemed` with NO conflict flag — on the wire a re-link of an identity
-// the person already has is indistinguishable from a legitimate new link. (The
-// conflict-status test above — "a SAME-person conflict is classified as
-// already_linked" — covers a DIFFERENT, defensive input shape that entu-api never
-// actually produces for this case. Do not conflate the two.)
-//
-// The only detection is client-side: at mint time the profile page snapshots the
-// CURRENT identities' {_id, uid, provider} into the OAuth-state blob
-// (state.linkedSnapshot); after `redeemed` the callback re-reads the linked set
-// via the REAL listLinkedIdentities — scoped to state.invite.db +
-// state.linkPersonId with result.token (the just-redeemed JWT for that db),
-// NEVER the selected-collective store — and the entry whose _id is NOT in the
-// snapshot is the just-bound one. If its uid+provider matches a snapshot pair,
-// the round trip changed nothing: DELETE the duplicate property VALUE
-// (property/{id}, not entity/{id}) with result.token and report the neutral
-// no-op. The sign-in itself NEVER fails on this path — the Path C persistence
-// sequence (getToken → setUser → setLastProvider → conditional setToken →
-// hydrateAuth) runs exactly as before.
+// ── same-identity re-link: `redeemed` is not always a new link ──────────────────
+// The callback compares the re-read set with the snapshot taken at mint time and deletes a
+// new entry that repeats a known identity, with the redeemed token; sign-in never fails.
 
 describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
-	// The blob type gains `linkedSnapshot` in GREEN; the intersection keeps this
-	// spec compiling at RED and stays valid once the field lands on OAuthState.
 	type LinkStateWithSnapshot = OAuthState & {
 		linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
 	};
@@ -328,22 +285,14 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		email: 'me@example.com'
 	};
 
-	// #454 — the re-read now also asks for `_viewer`: `listLinkedIdentities`
-	// reads a returned rights property as the tell that the private bucket
-	// (which is where `entu_user` lives) came back at all, rather than reading
-	// an empty-looking 200 as "no identities". On THIS path the caller is
-	// reading their OWN person with the just-redeemed JWT and holds
-	// self-`_editor`, so the tell is always present live — the fixture says so.
+	// The re-read asks for _viewer as the tell that the private bucket came back; the caller
+	// reads their own person and holds self-_editor, so the fixture carries it.
 	const READ_URL = 'https://api.entu-test.invalid/sampledb/entity/person-me?props=entu_user,_viewer';
 	const SELF_EDITOR_GRANT = [
 		{ _id: 'gr-self', reference: 'person-me', property_type: '_editor' }
 	];
 
-	/**
-	 * Route the REAL entuFetch's traffic: the identity re-read gets a canned
-	 * entity body; a DELETE gets the configured status. Anything else is a wiring
-	 * bug and throws loudly.
-	 */
+	// The real entuFetch's traffic: a canned re-read, a DELETE status; anything else throws.
 	function stubFetch(opts: {
 		entries: Array<{ _id: string; uid?: string; provider?: string; email?: string }>;
 		deleteStatus?: number;
@@ -430,7 +379,7 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 			name: 'Me'
 		});
 		expect(setLastProviderMock).toHaveBeenCalledWith('google');
-		// The broader session token is still kept (#193 review F2 — unchanged).
+		// The broader session token is still kept.
 		expect(setTokenMock).not.toHaveBeenCalled();
 		expect(hydrateAuthMock).toHaveBeenCalledTimes(1);
 		expect(hydrateCollectivesMock).toHaveBeenCalledTimes(1);
@@ -495,5 +444,4 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #193 RED: link-callback redemption branch)
-// (*MVOX:Tallis* — #219 RED: same-identity re-link no-op guard)
+// (*MVOX:Tallis*)
