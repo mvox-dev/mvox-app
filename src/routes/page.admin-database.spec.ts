@@ -7,23 +7,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const h = vi.hoisted(() => ({
-	resolveAdminMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
-	resolveLibrarianMock: vi.fn(),
-}));
-
 vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
 	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
 );
-vi.mock('$lib/nav/adminStore', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/nav/adminStore')>();
-	return { ...actual, resolveAdmin: h.resolveAdminMock, resolveOwnerTier: h.resolveOwnerTierMock };
-});
-vi.mock('$lib/library/librarianStore', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/library/librarianStore')>();
-	return { ...actual, resolveLibrarian: h.resolveLibrarianMock };
-});
+vi.mock('$lib/nav/adminStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
@@ -65,7 +57,10 @@ import {
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
+	resolveAdminMock,
 	resolveCollectiveNameMarkerMock,
+	resolveLibrarianMock,
+	resolveOwnerTierMock,
 	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
@@ -73,6 +68,7 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
+resolveOwnerTierMock.mockResolvedValue('error');
 listJoinStatesMock.mockResolvedValue({});
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
@@ -91,14 +87,14 @@ function selectSampledb() {
 }
 
 beforeEach(() => {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	entuFetchMock.mockRejectedValue(
 		new Error(
 			'wire disabled in this spec — collective resolution must go through resolveDatabaseEntityId'
 		)
 	);
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));

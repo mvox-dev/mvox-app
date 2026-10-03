@@ -53,33 +53,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock, resolveCopyChainsMock } =
-	vi.hoisted(() => ({
-		listWorksMock: vi.fn(),
-		listEditionsMock: vi.fn(),
-		listCopiesMock: vi.fn(),
-		listAllEditionsMock: vi.fn(),
-		listAllCopiesMock: vi.fn(),
-		listLendingsMock: vi.fn(),
-		resolveBorrowerNamesMock: vi.fn(),
-		resolveCopyNamesMock: vi.fn(),
-		resolveCopyChainsMock: vi.fn()
-	}));
-vi.mock('$lib/library/libraryData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>('$lib/library/libraryData');
-	return {
-		...actual, // the real availability arithmetic is what this spec exercises
-		listWorks: listWorksMock,
-		listEditions: listEditionsMock,
-		listCopies: listCopiesMock,
-		listAllEditions: listAllEditionsMock,
-		listAllCopies: listAllCopiesMock,
-		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock,
-		resolveCopyChains: resolveCopyChainsMock
-	};
-});
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
+);
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
 );
@@ -115,7 +91,17 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
-import { bulkCheckoutMock, resolveMyLibraryIdMock } from '$lib/testing/mocks/library';
+import {
+	bulkCheckoutMock,
+	listAllCopiesMock,
+	listAllEditionsMock,
+	listLendingsMock,
+	listWorksMock,
+	resolveBorrowerNamesMock,
+	resolveCopyChainsMock,
+	resolveCopyNamesMock,
+	resolveMyLibraryIdMock
+} from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 

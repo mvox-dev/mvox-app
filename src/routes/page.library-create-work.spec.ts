@@ -81,20 +81,9 @@ vi.mock('$lib/roster/rosterData', async () =>
 
 // The new work's `_parent` is resolved live at submit time (`resolveMyLibraryId`), not read
 // off a store the cache-backed librarian resolution filled.
-const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
-	resolveLibrarianMock: vi.fn(),
-	resolveMyLibraryIdMock: vi.fn()
-}));
-vi.mock('$lib/library/librarianStore', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>(
-		'$lib/library/librarianStore'
-	);
-	return {
-		...actual, // keep the real writable stores + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock,
-		resolveMyLibraryId: resolveMyLibraryIdMock
-	};
-});
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
+);
 
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
@@ -141,10 +130,12 @@ import {
 	listWorksMock,
 	resolveBorrowerNamesMock,
 	resolveCopyChainsMock,
-	resolveCopyNamesMock
+	resolveCopyNamesMock,
+	resolveMyLibraryIdMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
+import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 
 function setAuthedWithOneCollective() {
 	signIn();
