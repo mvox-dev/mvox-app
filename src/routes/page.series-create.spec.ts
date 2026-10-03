@@ -11,9 +11,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
-	createEventSeriesMock,
-	createEventMock,
 	listEventSeriesForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
@@ -21,9 +18,6 @@ const {
 	removeSeasonConductorMock,
 	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	createEventSeriesMock: vi.fn(),
-	createEventMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
@@ -35,11 +29,9 @@ const {
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: vi.fn(),
-	createEventSeries: createEventSeriesMock,
-	createEvent: createEventMock
-}));
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule(['series', 'event'])
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -54,7 +46,9 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -73,13 +67,15 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/moduleStubs')).libraryDataModule()
 );
-vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: vi.fn().mockResolvedValue([])
-}));
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
+);
 
 import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
@@ -92,7 +88,7 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -100,6 +96,8 @@ import {
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
+import { createEventMock, createEventSeriesMock } from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

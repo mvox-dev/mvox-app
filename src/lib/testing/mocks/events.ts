@@ -10,6 +10,7 @@ export const listMyAttendanceMock = vi.fn();
 export const createAttendanceMock = vi.fn();
 export const updateAttendanceStatusMock = vi.fn();
 export const deleteAttendanceMock = vi.fn();
+export const applyRsvpChangeMock = vi.fn();
 export const applyAttendanceChangeMock = vi.fn();
 export const listAttendanceMock = vi.fn();
 export const listAllRsvpsForEventMock = vi.fn();
@@ -88,6 +89,23 @@ export function attendanceHandlesModule(opts: {
 		updateAttendanceStatus: h(opts.writes, updateAttendanceStatusMock),
 		deleteAttendance: h(opts.writes, deleteAttendanceMock),
 		attendanceByMemberId: byMemberId
+	};
+}
+
+export function rsvpOptimisticModule() {
+	return { applyRsvpChange: applyRsvpChangeMock };
+}
+
+// Over the real module: the three reads are shared handles, the writes bare vi.fn()s.
+export async function attendanceListsOverRealModule(importOriginal: Real) {
+	return {
+		...(await real(importOriginal)),
+		listAttendance: listAttendanceMock,
+		listMyAttendance: listMyAttendanceMock,
+		listAllRsvpsForEvent: listAllRsvpsForEventMock,
+		createAttendance: vi.fn(),
+		updateAttendanceStatus: vi.fn(),
+		deleteAttendance: vi.fn()
 	};
 }
 

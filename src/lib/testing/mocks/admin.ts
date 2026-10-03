@@ -127,6 +127,14 @@ export async function joinStateDetailsModule(importOriginal: Real) {
 	};
 }
 
+export async function adminStoreOverRealModule(importOriginal: Real) {
+	return {
+		...(await real(importOriginal)),
+		resolveAdmin: resolveAdminMock,
+		resolveOwnerTier: resolveOwnerTierMock
+	};
+}
+
 export async function ownerTierOverRealModule(importOriginal: Real) {
 	return { ...(await real(importOriginal)), resolveOwnerTier: resolveOwnerTierMock };
 }

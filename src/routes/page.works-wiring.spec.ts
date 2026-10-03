@@ -14,12 +14,10 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadFullAgendaMock,
-	listFullAgendaMock,
-	signFileUrlMock
+	listFullAgendaMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	listFullAgendaMock: vi.fn(),
-	signFileUrlMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({
@@ -57,20 +55,28 @@ const pdfjs = vi.hoisted(() => ({
 	}))
 }));
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: { workerSrc: '' }, getDocument: pdfjs.getDocument }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-worker.mjs' }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
+	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
+);
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
 );
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
+vi.mock('$lib/files/appLabelStore', async () =>
+	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
+);
 
 import Page from './+page.svelte';
 import PartPage from './part/[fileId]/+page.svelte';
@@ -81,6 +87,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
 
 let fakeByteStore: FakeByteStore;
 

@@ -6,24 +6,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => {
-	class ProfileSaveError extends Error {
-		readonly createdProfileId?: string;
-		constructor(message: string, createdProfileId?: string) {
-			super(message);
-			this.name = 'ProfileSaveError';
-			this.createdProfileId = createdProfileId;
-		}
-	}
-	return { ProfileSaveError };
-});
 vi.mock('$lib/profile/profileData', async (importOriginal) =>
 	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
 );
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: vi.fn(),
-	ProfileSaveError: h.ProfileSaveError
-}));
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('shared')
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -41,6 +29,7 @@ import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { ProfileSaveError } from '$lib/testing/mocks/profile';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');

@@ -7,35 +7,29 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
 	updateSeasonFieldMock,
 	addSeasonConductorMock,
 	removeSeasonConductorMock,
-	listRepertoireItemsMock,
 	getSeriesDefaultsMock,
 	deleteEventSeriesMock,
 	countSeriesOccurrencesMock,
 	countSeasonScopeMock,
-	deleteSeasonMock,
-	createEventMock
+	deleteSeasonMock
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	updateSeasonFieldMock: vi.fn(),
 	addSeasonConductorMock: vi.fn(),
 	removeSeasonConductorMock: vi.fn(),
-	listRepertoireItemsMock: vi.fn(),
 	getSeriesDefaultsMock: vi.fn(),
 	deleteEventSeriesMock: vi.fn(),
 	countSeriesOccurrencesMock: vi.fn(),
 	countSeasonScopeMock: vi.fn(),
 	deleteSeasonMock: vi.fn(),
-	createEventMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', async () =>
@@ -54,18 +48,18 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	countSeasonScope: countSeasonScopeMock,
 	deleteSeason: deleteSeasonMock
 }));
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: vi.fn(),
-	createEventSeries: vi.fn(),
-	createEvent: createEventMock
-}));
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule()
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal(), { writes: true })
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -87,13 +81,15 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/moduleStubs')).libraryDataModule()
 );
-vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: listRepertoireItemsMock
-}));
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
+);
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
 import Page from './+page.svelte';
@@ -114,7 +110,7 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	deleteRepertoireItemMock,
 	findMyMemberIdMock,
@@ -125,6 +121,9 @@ import {
 	resolveManageRightsMock,
 	updateRepertoireStatusMock
 } from '$lib/testing/moduleHandles';
+import { createEventMock } from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
 
 let fakeByteStore: FakeByteStore;
 

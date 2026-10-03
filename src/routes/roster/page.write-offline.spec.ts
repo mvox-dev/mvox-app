@@ -7,7 +7,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
 	loadInactiveRosterMock: vi.fn(),
 	loadActiveAndArchivedRostersMock: vi.fn(),
 	listInactiveMembersMock: vi.fn(),
@@ -30,7 +29,9 @@ const h = vi.hoisted(() => ({
 	resolveOwnerTierMock: vi.fn()
 }));
 
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: h.deactivateMemberMock,
 	reinstateMember: h.reinstateMemberMock,
@@ -70,11 +71,9 @@ vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
 	resolveOwnerTier: h.resolveOwnerTierMock
 }));
-vi.mock('$lib/library/librarianStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/library/librarianStore')>()),
-	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
-	resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
-}));
+vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -101,6 +100,7 @@ import {
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -138,11 +138,12 @@ function setAuthed() {
 
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	loadRosterMock.mockReset();
 	listSectionsMock.mockReset();
-	h.loadRosterMock.mockResolvedValue(toListRead(ROWS));
+	loadRosterMock.mockResolvedValue(toListRead(ROWS));
 	h.loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 	h.loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => ({
-		active: await h.loadRosterMock(cfg),
+		active: await loadRosterMock(cfg),
 		inactive: await h.loadInactiveRosterMock(cfg)
 	}));
 	h.listInactiveMembersMock.mockResolvedValue(toListRead([]));
@@ -267,6 +268,7 @@ describe('/roster — the member surface while offline (#434 slice 6 review F1)'
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		loadRosterMock.mockClear();
 		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container);
@@ -322,6 +324,7 @@ describe('/roster — the arrange surface while offline (#434 slice 6 review F1)
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		loadRosterMock.mockClear();
 		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container, {

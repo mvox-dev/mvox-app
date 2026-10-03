@@ -9,9 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 const h = vi.hoisted(() => ({
 	listAdminsMock: vi.fn(),
 	listLibrariansMock: vi.fn(),
-	resolveAdminMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn(),
-	resolveLibrarianMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 }));
@@ -25,15 +22,12 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => ({
 	addLibrarian: vi.fn(),
 	removeLibrarian: vi.fn()
 }));
-vi.mock('$lib/nav/adminStore', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/nav/adminStore')>()),
-	resolveAdmin: h.resolveAdminMock,
-	resolveOwnerTier: h.resolveOwnerTierMock
-}));
-vi.mock('$lib/library/librarianStore', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/library/librarianStore')>()),
-	resolveLibrarian: h.resolveLibrarianMock
-}));
+vi.mock('$lib/nav/adminStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -69,7 +63,10 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
+	resolveAdminMock,
 	resolveCollectiveNameMarkerMock,
+	resolveLibrarianMock,
+	resolveOwnerTierMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 
@@ -78,9 +75,9 @@ function selectSampledb() {
 }
 
 beforeEach(() => {
-	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveOwnerTierMock.mockResolvedValue('owner');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+	resolveAdminMock.mockResolvedValue('admin');
+	resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	listSectionsMock.mockResolvedValue([]);
@@ -266,7 +263,7 @@ describe('#361 — admin roles lists: member names are marked', () => {
 	});
 
 	it('Librarians list: the name span is marked once, and the Remove button text sits whole in one marker', async () => {
-		h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		h.listLibrariansMock.mockResolvedValue({
 			persons: [{ id: 'p-lena', name: LIB_NAME, role: 'editor', valueIds: ['v-l'] }],
 			canManage: true

@@ -6,39 +6,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const {
-	listWorksMock,
-	listEditionsMock,
-	listCopiesMock,
-	listAllEditionsMock,
-	listAllCopiesMock,
-	listLendingsMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock
-} = vi.hoisted(() => ({
-	listWorksMock: vi.fn(),
-	listEditionsMock: vi.fn(),
-	listCopiesMock: vi.fn(),
-	listAllEditionsMock: vi.fn(),
-	listAllCopiesMock: vi.fn(),
-	listLendingsMock: vi.fn(),
-	resolveBorrowerNamesMock: vi.fn(),
-	resolveCopyNamesMock: vi.fn()
-}));
-vi.mock('$lib/library/libraryData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>('$lib/library/libraryData');
-	return {
-		...actual, // keep the pure availability derivations real
-		listWorks: listWorksMock,
-		listEditions: listEditionsMock,
-		listCopies: listCopiesMock,
-		listAllEditions: listAllEditionsMock,
-		listAllCopies: listAllCopiesMock,
-		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock
-	};
-});
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule({ chains: false })
+);
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
 );
@@ -83,6 +53,16 @@ import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import {
+	listAllCopiesMock,
+	listAllEditionsMock,
+	listCopiesMock,
+	listEditionsMock,
+	listLendingsMock,
+	listWorksMock,
+	resolveBorrowerNamesMock,
+	resolveCopyNamesMock
+} from '$lib/testing/mocks/library';
 
 const SEASONS = [
 	{

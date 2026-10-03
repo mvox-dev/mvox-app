@@ -12,64 +12,26 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	loadRosterMock,
-	listEventSeriesForSeasonMock,
-	listEventsForSeasonMock,
-	updateSeasonFieldMock,
-	addSeasonConductorMock,
-	removeSeasonConductorMock,
-	getSeriesDefaultsMock,
-	deleteEventMock,
-	deleteEventSeriesMock,
-	countSeriesOccurrencesMock,
-	countSeasonScopeMock,
-	deleteSeasonMock
-} = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	listEventSeriesForSeasonMock: vi.fn(),
-	listEventsForSeasonMock: vi.fn(),
-	updateSeasonFieldMock: vi.fn(),
-	addSeasonConductorMock: vi.fn(),
-	removeSeasonConductorMock: vi.fn(),
-	getSeriesDefaultsMock: vi.fn(),
-	deleteEventMock: vi.fn(),
-	deleteEventSeriesMock: vi.fn(),
-	countSeriesOccurrencesMock: vi.fn(),
-	countSeasonScopeMock: vi.fn(),
-	deleteSeasonMock: vi.fn()
-}));
-
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
 // The season-management data layer — the ONE seam the panel may read/write
 // through. #197 widens it with the two delete functions.
-vi.mock('$lib/seasons/seasonManage', () => ({
-	listEventSeriesForSeason: listEventSeriesForSeasonMock,
-	listEventsForSeason: listEventsForSeasonMock,
-	updateSeasonField: updateSeasonFieldMock,
-	addSeasonConductor: addSeasonConductorMock,
-	removeSeasonConductor: removeSeasonConductorMock,
-	getSeriesDefaults: getSeriesDefaultsMock,
-	deleteEvent: deleteEventMock,
-	deleteEventSeries: deleteEventSeriesMock,
-	countSeriesOccurrences: countSeriesOccurrencesMock,
-	countSeasonScope: countSeasonScopeMock,
-	deleteSeason: deleteSeasonMock
-}));
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: vi.fn(),
-	createEventSeries: vi.fn(),
-	createEvent: vi.fn()
-}));
+vi.mock('$lib/seasons/seasonManage', async () =>
+	(await import('$lib/testing/mocks/seasons')).seasonManageWritesModule({ deleteEvent: true })
+);
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule([])
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -94,15 +56,17 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 // The viewer IS a season editor here, so the page's loadManagePickers fires —
 // stub its reads or they hit the network.
 vi.mock('$lib/library/libraryData', async () =>
 	(await import('$lib/testing/moduleStubs')).libraryDataModule()
 );
-vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: vi.fn().mockResolvedValue([])
-}));
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
+);
 
 import Page from './+page.svelte';
 // NOT mocked (and deliberately not part of the seasonManage mock above): the
@@ -121,7 +85,7 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -129,6 +93,20 @@ import {
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	addSeasonConductorMock,
+	countSeasonScopeMock,
+	countSeriesOccurrencesMock,
+	deleteEventMock,
+	deleteEventSeriesMock,
+	deleteSeasonMock,
+	getSeriesDefaultsMock,
+	listEventSeriesForSeasonMock,
+	listEventsForSeasonMock,
+	removeSeasonConductorMock,
+	updateSeasonFieldMock
+} from '$lib/testing/mocks/seasons';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 

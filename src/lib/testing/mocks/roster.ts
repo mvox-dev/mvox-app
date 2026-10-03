@@ -10,6 +10,8 @@ export const loadActiveAndArchivedRostersMock = vi.fn();
 export const listInactiveMembersMock = vi.fn();
 export const listDeactivateBlockersMock = vi.fn();
 export const loadMemberRecordMock = vi.fn();
+export const createMemberRecordMock = vi.fn();
+export const updateMemberRecordMock = vi.fn();
 
 export function rosterModule() {
 	return { loadRoster: loadRosterMock };
@@ -27,20 +29,33 @@ export function emptyRosterModule() {
 	return { loadRoster: vi.fn(async () => ({ items: [], total: 0, truncated: false })) };
 }
 
-// archived: loadActiveAndArchivedRosters is a shared handle too.
-export function memberLifecycleModule(opts: { archived?: boolean } = {}) {
+// archived: loadActiveAndArchivedRosters is a shared handle too; others: 'bare' gives
+// the other five fresh vi.fn()s instead of the shared handles.
+export function memberLifecycleModule(opts: { archived?: boolean; others?: 'bare' } = {}) {
+	const pick = (mock: ReturnType<typeof vi.fn>) => (opts.others === 'bare' ? vi.fn() : mock);
 	return {
-		deactivateMember: deactivateMemberMock,
-		reinstateMember: reinstateMemberMock,
-		loadInactiveRoster: loadInactiveRosterMock,
+		deactivateMember: pick(deactivateMemberMock),
+		reinstateMember: pick(reinstateMemberMock),
+		loadInactiveRoster: pick(loadInactiveRosterMock),
 		...(opts.archived ? { loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock } : {}),
-		listInactiveMembers: listInactiveMembersMock,
-		listDeactivateBlockers: listDeactivateBlockersMock
+		listInactiveMembers: pick(listInactiveMembersMock),
+		listDeactivateBlockers: pick(listDeactivateBlockersMock)
 	};
 }
 
-export async function memberRecordModule(importOriginal: () => Promise<unknown>) {
-	return { ...((await importOriginal()) as object), loadMemberRecord: loadMemberRecordMock };
+// writes: create and update are shared handles too.
+export async function memberRecordModule(
+	importOriginal: () => Promise<unknown>,
+	opts: { writes?: boolean } = {}
+) {
+	const writes = opts.writes
+		? { createMemberRecord: createMemberRecordMock, updateMemberRecord: updateMemberRecordMock }
+		: {};
+	return {
+		...((await importOriginal()) as object),
+		loadMemberRecord: loadMemberRecordMock,
+		...writes
+	};
 }
 
 // (*MVOX:Josquin*)

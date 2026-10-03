@@ -8,69 +8,24 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('plain')
 );
 
-const {
-	loadRosterMock,
-	assignMock,
-	unassignMock,
-	createMock,
-	reorderMock,
-	deleteMock,
-	reparentMock,
-	renameMock,
-	deactivateMemberMock,
-	reinstateMemberMock,
-	loadInactiveRosterMock,
-	listInactiveMembersMock,
-	listDeactivateBlockersMock,
-	createInviteMock,
-	mintSelfLinkInviteMock
-} = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	assignMock: vi.fn(),
-	unassignMock: vi.fn(),
-	createMock: vi.fn(),
-	reorderMock: vi.fn(),
-	deleteMock: vi.fn(),
-	reparentMock: vi.fn(),
-	renameMock: vi.fn(),
-	deactivateMemberMock: vi.fn(),
-	reinstateMemberMock: vi.fn(),
-	loadInactiveRosterMock: vi.fn(),
-	listInactiveMembersMock: vi.fn(),
-	listDeactivateBlockersMock: vi.fn(),
-	createInviteMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn()
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock,
-	createSection: createMock,
-	reorderSections: reorderMock,
-	deleteSection: deleteMock,
-	reparentSection: reparentMock,
-	renameSection: renameMock
-}));
-vi.mock('$lib/roster/memberLifecycle', () => ({
-	deactivateMember: deactivateMemberMock,
-	reinstateMember: reinstateMemberMock,
-	loadInactiveRoster: loadInactiveRosterMock,
-	listInactiveMembers: listInactiveMembersMock,
-	listDeactivateBlockers: listDeactivateBlockersMock
-}));
-vi.mock('$lib/invite/inviteData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/invite/inviteData')>()),
-	createInvite: createInviteMock,
-	mintSelfLinkInvite: mintSelfLinkInviteMock
-}));
-vi.mock('$lib/library/librarianStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/library/librarianStore')>()),
-	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
-	resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
-}));
+vi.mock('$lib/sections/sectionActions', async () =>
+	(await import('$lib/testing/mocks/sections')).sectionActionsModule(['reparent', 'rename'])
+);
+vi.mock('$lib/roster/memberLifecycle', async () =>
+	(await import('$lib/testing/mocks/roster')).memberLifecycleModule()
+);
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
+);
+vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -92,6 +47,23 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	deactivateMemberMock,
+	listDeactivateBlockersMock,
+	listInactiveMembersMock,
+	loadInactiveRosterMock,
+	loadRosterMock,
+	reinstateMemberMock
+} from '$lib/testing/mocks/roster';
+import {
+	assignMock,
+	createMock,
+	deleteMock,
+	renameMock,
+	reorderMock,
+	reparentMock,
+	unassignMock
+} from '$lib/testing/mocks/sections';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
