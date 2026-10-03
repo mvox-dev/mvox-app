@@ -158,7 +158,8 @@ interface WorldOptions {
 }
 
 function installWorld(options: WorldOptions) {
-	const { repertoireBySeason, failWrites = () => false } = options;
+	const { failWrites = () => false } = options;
+	const repertoireBySeason = structuredClone(options.repertoireBySeason);
 	let createSeq = 0;
 
 	const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

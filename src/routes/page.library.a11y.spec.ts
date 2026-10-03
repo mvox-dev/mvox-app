@@ -7,8 +7,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		library_title: () => 'Library',
 		library_no_collective: () => 'Select a collective to view the library.',
 		library_load_error: () => 'Something went wrong loading the library.',
@@ -46,8 +46,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_bulk_checkout_too_many: () => 'Not enough copies available',
 		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`
-	}
-}));
+	})
+);
 
 const { listWorksMock, listEditionsMock, listCopiesMock, listAllEditionsMock, listAllCopiesMock, listLendingsMock, resolveBorrowerNamesMock, resolveCopyNamesMock } =
 	vi.hoisted(() => ({

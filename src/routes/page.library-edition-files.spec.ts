@@ -2,8 +2,8 @@
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		library_title: () => 'Library',
 		library_no_collective: () => 'Select a collective to view the library.',
 		library_load_error: () => 'Something went wrong loading the library.',
@@ -73,8 +73,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 			`${p.filename} was not attached — the server returned nothing for it.`,
 		file_presence_on_device: () => 'On this device',
 		file_presence_needs_network: () => 'Needs network'
-	}
-}));
+	})
+);
 
 const {
 	listWorksMock,

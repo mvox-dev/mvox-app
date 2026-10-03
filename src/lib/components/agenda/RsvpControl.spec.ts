@@ -3,8 +3,8 @@ import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import RsvpControl from './RsvpControl.svelte';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
@@ -12,8 +12,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.'
-	}
-}));
+	})
+);
 
 afterEach(cleanup);
 
@@ -86,14 +86,9 @@ describe('RsvpControl — tap behavior (set / tap-active-to-clear)', () => {
 	});
 });
 
-// ── The root split (the earlier fix) and what #372 left of it ──────────────
-// The old single `disabled` boolean conflated "not a member" with "a write is
-// in flight", so a member mid-write got the "Only members can RSVP" hint (the
-// reported regression). #372 + its review F3 finished the job from the other
-// end: membership is no longer an input to this component AT ALL. A confirmed
-// non-member gets no control (the two surfaces render RsvpNonMemberHint in its
-// place), so `pending` is the only disable reason left and the hint is never
-// this component's to render.
+// ── membership is not an input: `pending` is the only disable reason ────────
+// A non-member gets no control at all (the surfaces render RsvpNonMemberHint),
+// so a member mid-write can never be shown the members-only hint.
 
 describe('RsvpControl — membership is not one of its inputs (#372 review F3)', () => {
 	it('by default — buttons are enabled and no non-member hint is rendered', () => {
@@ -166,8 +161,8 @@ describe('RsvpControl — aria-busy while pending (a11y)', () => {
 });
 
 describe('RsvpControl — nothing to describe, so no aria-describedby (a11y)', () => {
-	// The hint the buttons used to point at is no longer this component's (#372
-	// review F3), and `pending` is a SILENT disable by PO ruling — so there is no
+	// The hint the buttons used to point at is no longer this component's,
+	// and `pending` is a SILENT disable by PO ruling — so there is no
 	// description to associate, in any state.
 	it('buttons carry no aria-describedby, idle or pending', () => {
 		for (const props of [{ status: null }, { status: null, pending: true }]) {
@@ -205,12 +200,9 @@ describe('RsvpControl — reserved message space (no layout jump)', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #156 — roving tabindex. WAI-APG TOOLBAR semantics: exactly one Tab stop,
-// arrows MOVE focus only (never activate — tapping the active status CLEARS the
-// answer, so an arrow that activated would silently destroy data), Tab/Enter/
-// Space untouched, and the stop never parks on a disabled button.
-// ---------------------------------------------------------------------------
+// ── roving tabindex: one Tab stop; arrows move focus, never activate ───────
+// (tapping the active status clears the answer, so an activating arrow would
+// destroy data); the stop never parks on a disabled button.
 describe('RsvpControl — roving tabindex (#156)', () => {
 	function buttons(container: HTMLElement): HTMLButtonElement[] {
 		return Array.from(

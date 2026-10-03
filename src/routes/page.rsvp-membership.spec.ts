@@ -3,8 +3,8 @@ import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
@@ -26,8 +26,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_group_label: () => 'RSVP',
 		rsvp_non_member_hint: () => 'Only members can RSVP.',
 		rsvp_save_failed: () => 'Could not save your answer.'
-	}
-}));
+	})
+);
 
 const {
 	loadFullAgendaMock,

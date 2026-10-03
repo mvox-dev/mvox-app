@@ -2,8 +2,8 @@
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (params: { minutes: number }) => `${params.minutes} min`,
 		agenda_today: () => 'Today',
@@ -19,8 +19,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_filter_empty: () => 'No events match this filter.',
 		session_expired_message: () => 'Your session has expired. Please sign in again.',
 		session_expired_signin: () => 'Sign in'
-	}
-}));
+	})
+);
 
 const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } =
 	vi.hoisted(() => ({
