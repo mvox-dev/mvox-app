@@ -33,4 +33,53 @@ export function attendanceModule(
 	};
 }
 
+export function runtimeModule() {
+	return {
+		getLocale: () => 'en',
+		setLocale: vi.fn(),
+		locales: ['en', 'et', 'lv', 'uk'],
+		overwriteGetLocale: vi.fn()
+	};
+}
+
+// 'self-editor': editor on an entity whose id is the asking person's own id.
+export function repertoireActionsModule(
+	actual: unknown,
+	rights: 'self-editor' | 'not-editor' = 'self-editor'
+) {
+	const resolveManageRights =
+		rights === 'not-editor'
+			? vi.fn().mockResolvedValue('not-editor')
+			: vi.fn((...args: unknown[]) => {
+					const [, entityId, personId] = args as [unknown, string, string];
+					return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
+				});
+	return { ...(actual as object), resolveManageRights };
+}
+
+const emptyList = () => vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false });
+
+export function libraryDataModule() {
+	return { listWorks: emptyList(), listAllEditions: emptyList(), listAllCopies: emptyList() };
+}
+
+export function rsvpDataModule(memberId: string | null = 'member-1') {
+	return {
+		findMyMemberId: vi.fn().mockResolvedValue(memberId),
+		listMyRsvps: emptyList(),
+		rsvpsByEventId: () => ({}),
+		createRsvp: vi.fn(),
+		updateRsvpStatus: vi.fn(),
+		deleteRsvp: vi.fn()
+	};
+}
+
+export function rsvpViewerModule(actual: unknown) {
+	return {
+		...(actual as object),
+		findMyMemberId: vi.fn().mockResolvedValue('member-viewer'),
+		findMyRsvpForEvent: vi.fn().mockResolvedValue(null)
+	};
+}
+
 // (*MVOX:Josquin*)

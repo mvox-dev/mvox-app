@@ -10,7 +10,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/paraglide/messages', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
-vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
+vi.mock('$lib/paraglide/runtime', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );

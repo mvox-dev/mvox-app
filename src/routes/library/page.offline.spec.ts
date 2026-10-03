@@ -11,18 +11,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
-vi.mock('$lib/paraglide/runtime', () => ({
-	getLocale: () => 'en',
-	setLocale: vi.fn(),
-	locales: ['en', 'et', 'lv', 'uk'],
-	overwriteGetLocale: vi.fn()
-}));
-vi.mock('$lib/paraglide/runtime.js', () => ({
-	getLocale: () => 'en',
-	setLocale: vi.fn(),
-	locales: ['en', 'et', 'lv', 'uk'],
-	overwriteGetLocale: vi.fn()
-}));
+vi.mock('$lib/paraglide/runtime', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
+vi.mock('$lib/paraglide/runtime.js', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );

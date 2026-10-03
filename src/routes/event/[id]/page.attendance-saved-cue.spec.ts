@@ -53,11 +53,9 @@ vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 vi.mock('$lib/attendance/attendanceOptimistic', () => ({
 	applyAttendanceChange: applyAttendanceChangeMock
 }));
-vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/rsvp/rsvpData')>()),
-	findMyMemberId: vi.fn().mockResolvedValue('member-viewer'),
-	findMyRsvpForEvent: vi.fn().mockResolvedValue(null)
-}));
+vi.mock('$lib/rsvp/rsvpData', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).rsvpViewerModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
