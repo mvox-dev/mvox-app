@@ -5,20 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get: (_target, key) => {
-				if (key === 'season_manage_delete_progress')
-					return (params: { current: number; total: number }) =>
-						`Kustutan ${params.current} / ${params.total}…`;
-				return (params?: Record<string, unknown>) =>
-					params === undefined ? String(key) : `${String(key)} ${JSON.stringify(params)}`;
-			}
-		}
-	)
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('raw', {
+		season_manage_delete_progress: (p: { current: number; total: number }) =>
+			`Kustutan ${p.current} / ${p.total}…`,
+	})
+);
 
 const {
 	loadFullAgendaMock,

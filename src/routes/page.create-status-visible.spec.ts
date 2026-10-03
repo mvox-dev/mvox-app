@@ -5,23 +5,14 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { deferred } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get: (_target, key) => {
-				const k = String(key);
-				if (k === 'season_created') return (p: { name: string }) => `season_created ${p.name}`;
-				if (k === 'event_created')
-					return (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`;
-				if (k === 'event_created_hidden_by_filter')
-					return (p: { name: string; when: string }) =>
-						`event_created_hidden_by_filter ${p.name} @ ${p.when}`;
-				return () => k;
-			}
-		}
-	)
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare', {
+		season_created: (p: { name: string }) => `season_created ${p.name}`,
+		event_created: (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`,
+		event_created_hidden_by_filter: (p: { name: string; when: string }) =>
+			`event_created_hidden_by_filter ${p.name} @ ${p.when}`,
+	})
+);
 
 const {
 	loadFullAgendaMock,

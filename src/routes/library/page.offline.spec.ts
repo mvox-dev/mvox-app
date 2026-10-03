@@ -7,14 +7,10 @@ import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { msgProxy } = vi.hoisted(() => ({
-	msgProxy: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
-		get: (_t, key) => (params?: Record<string, unknown>) =>
-			params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
-vi.mock('$lib/paraglide/messages.js', () => ({ m: msgProxy }));
-vi.mock('$lib/paraglide/messages', () => ({ m: msgProxy }));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
+vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
 vi.mock('$lib/paraglide/runtime', () => ({
 	getLocale: () => 'en',
 	setLocale: vi.fn(),

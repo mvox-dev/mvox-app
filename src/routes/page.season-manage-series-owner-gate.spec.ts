@@ -3,17 +3,9 @@ import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get:
-				(_target, key) =>
-				(params?: Record<string, unknown>) =>
-					params === undefined ? String(key) : `${String(key)} ${JSON.stringify(params)}`
-		}
-	)
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('raw')
+);
 
 const {
 	loadFullAgendaMock,
