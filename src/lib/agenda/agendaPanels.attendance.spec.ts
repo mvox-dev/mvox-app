@@ -2,15 +2,15 @@
 // The agenda's attendance panel load: a fresh roster on every open, and a logged failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-const { applyAttendanceChangeMock } = vi.hoisted(() => ({ applyAttendanceChangeMock: vi.fn() }));
-vi.mock('$lib/attendance/attendanceOptimistic', () => ({
-	applyAttendanceChange: applyAttendanceChangeMock
-}));
+vi.mock('$lib/attendance/attendanceOptimistic', async () =>
+	(await import('$lib/testing/mocks/events')).attendanceOptimisticModule()
+);
 
 import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from './agendaLoad';
 import type { AgendaLoadDeps } from './agendaLoad';
@@ -22,6 +22,8 @@ import { createWriteTokens } from '$lib/net/writeTokens';
 import { setToken } from '$lib/auth/storage';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
+import { applyAttendanceChangeMock } from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const ITEM: AgendaItem = {
 	id: 'ev1',

@@ -28,13 +28,9 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-vi.mock('$lib/files/appLabelStore', () => ({
-	getAppLabelStore: () => ({
-		putLabel: async () => {},
-		labelsFor: async () => new Map(),
-		remove: async () => {}
-	})
-}));
+vi.mock('$lib/files/appLabelStore', async () =>
+	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
+);
 
 import EventPage from './+page.svelte';
 import { authStore } from '$lib/auth/session';

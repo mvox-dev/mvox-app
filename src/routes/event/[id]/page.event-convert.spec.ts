@@ -22,13 +22,6 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const {
-	convertEventToSeriesMock,
-	createEventMock
-} = vi.hoisted(() => ({
-	convertEventToSeriesMock: vi.fn(),
-	createEventMock: vi.fn(),
-}));
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -38,15 +31,12 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/events/eventConvert', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/events/eventConvert')>();
-	return { ...actual, convertEventToSeries: convertEventToSeriesMock };
-});
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: vi.fn(),
-	createEventSeries: vi.fn(),
-	createEvent: createEventMock
-}));
+vi.mock('$lib/events/eventConvert', async (importOriginal) =>
+	(await import('$lib/testing/mocks/events')).eventConvertModule(importOriginal)
+);
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule()
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
@@ -58,6 +48,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import { convertEventToSeriesMock, createEventMock } from '$lib/testing/mocks/events';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

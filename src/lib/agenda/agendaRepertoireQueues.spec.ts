@@ -8,8 +8,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
-vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
 
 import { createAgendaPanelState, createAgendaRepertoireQueues } from './agendaRepertoireQueues';
 import { createAgendaLoadState, createLoadCounters } from './agendaLoad';
@@ -20,6 +21,7 @@ import type { WorkRow } from '$lib/repertoire/types';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { reportProblem } from '$lib/testing/mocks/session';
 
 const RI_1: RepertoireItem = { id: 'ri-1', workId: 'work-1', editionId: '', status: 'active', name: 'A' };
 const RI_2: RepertoireItem = { id: 'ri-2', workId: 'work-2', editionId: '', status: 'active', name: 'B' };

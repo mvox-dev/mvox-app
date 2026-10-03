@@ -1,13 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #427 review round 3, findings 1 and 6 — the renderer rasterises in DEVICE
-// pixels and states the geometry it rendered at.
-//
-// pdf.js is mocked at the module seam (the same substitution the route spec
-// makes): the real library is a multi-MB renderer with a worker, and none of
-// it runs under happy-dom. `getViewport({ scale })` here returns a viewport
-// whose size scales linearly from a 600x800 page, which is exactly the
-// relation the wrapper's fit maths depends on.
+// The renderer rasterises in device pixels and states the geometry it rendered at. pdf.js is
+// mocked: getViewport scales linearly from a 600x800 page, the relation the fit maths needs.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const pdfjs = vi.hoisted(() => {
@@ -35,7 +28,9 @@ vi.mock('pdfjs-dist', () => ({
 	GlobalWorkerOptions: { workerSrc: '' },
 	getDocument: pdfjs.getDocument
 }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-worker.mjs' }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
+	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
+);
 
 import { openPdf } from './pdfRenderer';
 

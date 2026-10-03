@@ -2,10 +2,6 @@
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveGateMock, resolveMembershipMock } = vi.hoisted(() => ({
-	resolveGateMock: vi.fn(),
-	resolveMembershipMock: vi.fn()
-}));
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -17,14 +13,12 @@ vi.mock('$lib/entu-config', async () =>
 );
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$lib/profile/completionGate', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
-	return { ...actual, resolveGate: resolveGateMock };
-});
-vi.mock('$lib/collective/membershipStore', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/collective/membershipStore')>();
-	return { ...actual, resolveMembership: resolveMembershipMock };
-});
+vi.mock('$lib/profile/completionGate', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).completionGateModule(importOriginal)
+);
+vi.mock('$lib/collective/membershipStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).membershipModule(importOriginal)
+);
 
 import Layout from './+layout.svelte';
 import { authStore } from '$lib/auth/session';
@@ -33,6 +27,7 @@ import { resetMembership } from '$lib/collective/membershipStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { SAMPLEDB, signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { resolveGateMock, resolveMembershipMock } from '$lib/testing/mocks/session';
 
 function setAuthedWithOneCollective() {
 	discoverMock.mockResolvedValue({ collectives: [SAMPLEDB], erroredDbs: [] });

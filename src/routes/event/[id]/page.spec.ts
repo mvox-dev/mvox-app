@@ -19,19 +19,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
-const localeMock = vi.hoisted(() => ({
-	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
-}));
-vi.mock('$lib/paraglide/runtime.js', async () => {
-	const { SvelteMap } = await import('svelte/reactivity');
-	localeMock.state ??= new SvelteMap<string, string>([['locale', 'en']]);
-	return {
-		getLocale: () => localeMock.state!.get('locale'),
-		setLocale: vi.fn(),
-		locales: ['en', 'et', 'lv', 'uk'],
-		overwriteGetLocale: vi.fn()
-	};
-});
+vi.mock('$lib/paraglide/runtime.js', async () =>
+	(await import('$lib/testing/mocks/session')).localeRuntimeModule()
+);
 function setAppLocale(locale: AppLocale): void {
 	localeMock.state?.set('locale', locale);
 }
@@ -62,6 +52,7 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
+import { localeMock } from '$lib/testing/mocks/session';
 
 const cfg = testCfg('sampledb');
 

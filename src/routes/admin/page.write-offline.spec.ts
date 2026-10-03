@@ -13,16 +13,9 @@ const h = vi.hoisted(() => ({
 	listLibrariansMock: vi.fn(),
 	addLibrarianMock: vi.fn(),
 	removeLibrarianMock: vi.fn(),
-	resolveAdminMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn(),
-	resolveLibrarianMock: vi.fn(),
-	loadRosterMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	resolveInviteParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	listJoinStatesMock: vi.fn(),
-	resolveCollectiveNameMarkerMock: vi.fn(),
-	updateCollectiveNameMock: vi.fn()
 }));
 vi.mock('$lib/admin/roleManagement', () => ({
 	RoleLockoutError: class extends Error {},
@@ -35,23 +28,27 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: h.addLibrarianMock,
 	removeLibrarian: h.removeLibrarianMock
 }));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock,
-	resolveOwnerTier: h.resolveOwnerTierMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({ resolveLibrarian: h.resolveLibrarianMock }));
-vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStatesMock }));
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/admin')).joinStatesModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: class extends Error {},
 	resolvePersonParentId: h.resolveParentMock,
@@ -82,6 +79,15 @@ import {
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	listJoinStatesMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveLibrarianMock,
+	resolveOwnerTierMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const REASON = '[write_unavailable_no_signal]';
 const HELD = '[write_held_no_signal]';
@@ -97,12 +103,12 @@ const ROSTER = [
 ];
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA, BELA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [CILLA], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
@@ -110,14 +116,21 @@ function loadOk() {
 	h.removeLibrarianMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
-	h.resolveOwnerTierMock.mockResolvedValue('error');
-	h.listJoinStatesMock.mockResolvedValue({});
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveOwnerTierMock.mockResolvedValue('error');
+	listJoinStatesMock.mockResolvedValue({});
 }
 
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listJoinStatesMock.mockReset();
+	loadRosterMock.mockReset();
+	resolveAdminMock.mockReset();
+	resolveCollectiveNameMarkerMock.mockReset();
+	resolveLibrarianMock.mockReset();
+	resolveOwnerTierMock.mockReset();
+	updateCollectiveNameMock.mockReset();
 	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 	loadOk();
@@ -160,7 +173,7 @@ function noWriteSeamCalled() {
 	expect(h.removeAdminMock).not.toHaveBeenCalled();
 	expect(h.addLibrarianMock).not.toHaveBeenCalled();
 	expect(h.removeLibrarianMock).not.toHaveBeenCalled();
-	expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+	expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 	expect(h.createInviteMock).not.toHaveBeenCalled();
 }
 
@@ -214,7 +227,7 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		const still = q<HTMLInputElement>(container, 'admin-collective-name-input');
 		expect(still, 'the editor stays open on her text').not.toBeNull();
 		expect(still!.value).toBe('Uus nimi');
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 		expectVisibleReason(container, 'admin-name-held-offline', HELD);
 	});
 
@@ -228,6 +241,13 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listJoinStatesMock.mockClear();
+		loadRosterMock.mockClear();
+		resolveAdminMock.mockClear();
+		resolveCollectiveNameMarkerMock.mockClear();
+		resolveLibrarianMock.mockClear();
+		resolveOwnerTierMock.mockClear();
+		updateCollectiveNameMock.mockClear();
 		listSectionsMock.mockClear();
 		resolveDatabaseEntityIdMock.mockClear();
 

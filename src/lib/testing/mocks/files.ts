@@ -1,0 +1,29 @@
+// File, label-store and screenshot mocks shared across specs.
+import { vi } from 'vitest';
+
+export const signFileUrlMock = vi.fn();
+export const domToBlobMock = vi.fn();
+
+export function fileUrlsModule() {
+	return { signFileUrl: signFileUrlMock };
+}
+
+export function appLabelStoreModule() {
+	return {
+		getAppLabelStore: () => ({
+			putLabel: async () => {},
+			labelsFor: async () => new Map(),
+			remove: async () => {}
+		})
+	};
+}
+
+export function pdfWorkerUrlModule() {
+	return { default: '/mock-pdf-worker.mjs' };
+}
+
+export function screenshotModule() {
+	return { domToBlob: domToBlobMock };
+}
+
+// (*MVOX:Josquin*)
