@@ -59,8 +59,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	return { ...actual, resolveLibrarian: resolveLibrarianMock, resolveMyLibraryId: resolveMyLibraryIdMock };
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 import Page from './+page.svelte';
 import { clearAll } from '$lib/auth/storage';
@@ -72,6 +73,7 @@ import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 function stubWire() {
 	const fetchStub = vi.fn(async (input: RequestInfo | URL) => {

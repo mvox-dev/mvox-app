@@ -39,8 +39,6 @@ const {
 	loadRosterMock,
 	createEventMock,
 	resolveManageRightsMock,
-	findMyMemberIdMock,
-	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -52,8 +50,6 @@ const {
 	loadRosterMock: vi.fn(),
 	createEventMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -100,14 +96,9 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
@@ -136,6 +127,8 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
 	listSectionsMock,
 	loadFullAgendaMock,
 	resolveDatabaseEntityIdMock

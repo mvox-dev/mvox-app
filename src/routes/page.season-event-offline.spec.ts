@@ -8,10 +8,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
-	findMyMemberIdMock,
-	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -29,10 +26,7 @@ const {
 	createEventMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -71,10 +65,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: createEventMock
 }));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: resolveManageRightsMock,
@@ -94,14 +87,9 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
@@ -136,7 +124,13 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
-import { listSectionsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	listSectionsMock,
+	loadFullAgendaMock,
+	resolveDatabaseEntityIdMock
+} from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

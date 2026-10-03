@@ -9,13 +9,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
 
 const {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
 	listMyAttendanceMock,
 	hydrateCollectivesMock
 } = vi.hoisted(() => ({
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	hydrateCollectivesMock: vi.fn()
 }));
@@ -37,18 +33,9 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
 );
 vi.mock('$app/navigation', async () => (await import('$lib/testing/routeMocks')).navigationModule());
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: (rsvps: Array<{ rsvpId: string; eventId: string; status: string }>) => {
-		const map: Record<string, { rsvpId: string; status: string }> = {};
-		for (const r of rsvps) map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
-		return map;
-	},
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
@@ -82,7 +69,11 @@ import {
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	loadFullAgendaMock
+} from '$lib/testing/moduleHandles';
 
 const DB_A = 'sampledb';
 const DB_B = 'orlando';
