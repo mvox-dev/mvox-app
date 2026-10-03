@@ -8,25 +8,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('plain')
 );
 
-const { loadRosterMock, assignMock, unassignMock, createMock, reorderMock, deleteMock, reparentMock } =
-	vi.hoisted(() => ({
-		loadRosterMock: vi.fn(),
-		assignMock: vi.fn(),
-		unassignMock: vi.fn(),
-		createMock: vi.fn(),
-		reorderMock: vi.fn(),
-		deleteMock: vi.fn(),
-		reparentMock: vi.fn()
-	}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock,
-	createSection: createMock,
-	reorderSections: reorderMock,
-	deleteSection: deleteMock,
-	reparentSection: reparentMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/sections/sectionActions', async () =>
+	(await import('$lib/testing/mocks/sections')).sectionActionsModule(['reparent'])
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -43,6 +30,15 @@ import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	assignMock,
+	createMock,
+	deleteMock,
+	reorderMock,
+	reparentMock,
+	unassignMock
+} from '$lib/testing/mocks/sections';
 
 const DB_ENTITY = 'db-1';
 

@@ -17,19 +17,16 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-vi.mock('$lib/profile/profileData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
-		'$lib/profile/profileData'
-	);
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 
 import ProfilePage from './profile/+page.svelte';
 import { timeFormatStore, TIME_FORMAT_KEY } from '$lib/preferences/timeFormat';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const control = (c: HTMLElement) =>
@@ -42,7 +39,7 @@ function selectSampledb() {
 
 async function renderProfileReady(): Promise<HTMLElement> {
 	selectSampledb();
-	h.listMyProfilesMock.mockResolvedValue([]);
+	listMyProfilesMock.mockResolvedValue([]);
 	const { container } = render(ProfilePage);
 	await waitFor(() => expect(control(container)).not.toBeNull());
 	return container;
@@ -51,7 +48,7 @@ async function renderProfileReady(): Promise<HTMLElement> {
 beforeEach(() => {
 	localStorage.clear();
 	timeFormatStore.set('24h');
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 });
 
 afterEach(() => {
@@ -96,7 +93,7 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 
 	it("changing it writes localStorage 'mvox.time_format' AND the store IMMEDIATELY — no network", async () => {
 		const container = await renderProfileReady();
-		const fetchCallsBefore = h.listMyProfilesMock.mock.calls.length;
+		const fetchCallsBefore = listMyProfilesMock.mock.calls.length;
 
 		await fireEvent.change(control(container)!, { target: { value: 'ampm' } });
 		expect(localStorage.getItem(TIME_FORMAT_KEY)).toBe('ampm');
@@ -106,7 +103,7 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 		expect(localStorage.getItem(TIME_FORMAT_KEY)).toBe('24h');
 		expect(get(timeFormatStore)).toBe('24h');
 
-		expect(h.listMyProfilesMock.mock.calls.length).toBe(fetchCallsBefore);
+		expect(listMyProfilesMock.mock.calls.length).toBe(fetchCallsBefore);
 	});
 
 	it('renders ONE muted hint line DIRECTLY UNDER the select (Gama 01:59 — a fact about the storage)', async () => {

@@ -59,4 +59,13 @@ export function libraryCreateModule() {
 	return { createWork: vi.fn(), createEdition: vi.fn() };
 }
 
+// Over the real store: the caller is a ready librarian of lib-1.
+export async function readyLibrarianModule(importOriginal: () => Promise<unknown>) {
+	return {
+		...((await importOriginal()) as object),
+		resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
+		resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
+	};
+}
+
 // (*MVOX:Josquin*)

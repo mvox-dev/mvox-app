@@ -6,32 +6,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const {
-	loadRosterMock,
-	assignMock,
-	unassignMock,
-	createSectionMock,
-	reorderMock,
-	deleteMock
-} = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	assignMock: vi.fn(),
-	unassignMock: vi.fn(),
-	createSectionMock: vi.fn(),
-	reorderMock: vi.fn(),
-	deleteMock: vi.fn(),
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock,
-	createSection: createSectionMock,
-	reorderSections: reorderMock,
-	deleteSection: deleteMock
-}));
+vi.mock('$lib/sections/sectionActions', async () =>
+	(await import('$lib/testing/mocks/sections')).sectionCreateModule({ arrange: true })
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
@@ -53,6 +36,14 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	assignMock,
+	createSectionMock,
+	deleteMock,
+	reorderMock,
+	unassignMock
+} from '$lib/testing/mocks/sections';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';

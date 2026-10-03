@@ -8,18 +8,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('plain')
 );
 
-const { loadRosterMock, entuFetchMock } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	entuFetchMock: vi.fn()
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/entu/request', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/entu/request')>();
-	return { ...actual, entuFetch: entuFetchMock };
-});
+vi.mock('$lib/entu/request', async (importOriginal) =>
+	(await import('$lib/testing/mocks/seasons')).entuRequestModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -38,6 +35,8 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { entuFetchMock } from '$lib/testing/mocks/seasons';
 
 function fixtureTree(): SectionNode[] {
 	const sop1: SectionNode = {

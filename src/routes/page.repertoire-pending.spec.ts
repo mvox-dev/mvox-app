@@ -23,9 +23,9 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: vi.fn(async () => ({ items: [], total: 0, truncated: false }))
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).emptyRosterModule()
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
 );

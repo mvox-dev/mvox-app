@@ -84,10 +84,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	listMyProfilesMock: vi.fn(),
-	applyProfileSaveMock: vi.fn(),
 	applyDuplicateRepairMock: vi.fn(),
-	resolveGateMock: vi.fn()
 }));
 
 vi.mock('$lib/profile/fieldMove', async () => {
@@ -95,42 +92,18 @@ vi.mock('$lib/profile/fieldMove', async () => {
 		await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
 	return { ...actual, applyDuplicateRepair: h.applyDuplicateRepairMock };
 });
-vi.mock('$lib/profile/profileData', () => {
-	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
-	return {
-		listMyProfiles: h.listMyProfilesMock,
-		profilesByLevel: (ps: Array<{ _sharing: string }>) => {
-			const by: Record<string, unknown> = {};
-			for (const p of ps) by[p._sharing] = p;
-			return by;
-		},
-		NARROWNESS,
-		resolveField: (
-			ps: Array<{ _id: string; name: string; email: string; _sharing: string }>,
-			field: 'name' | 'email'
-		) => {
-			const withValue = ps
-				.filter((p) => p[field] !== '')
-				.slice()
-				.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
-			return {
-				value: withValue.length > 0 ? withValue[0][field] : '',
-				holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
-			};
-		}
-	};
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: class ProfileSaveError extends Error {}
-}));
-vi.mock('$lib/profile/completionGate', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
-	return { ...actual, resolveGate: h.resolveGateMock };
-});
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
-}));
+vi.mock('$lib/profile/profileData', async () =>
+	(await import('$lib/testing/mocks/profile')).profileDataModule()
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('bare')
+);
+vi.mock('$lib/profile/completionGate', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).completionGateModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -149,6 +122,8 @@ import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock, resolveGateMock } from '$lib/testing/mocks/session';
 
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
@@ -186,10 +161,10 @@ function byExactText(container: HTMLElement, text: string): Element | null {
 afterEach(() => {
 	vi.useRealTimers();
 	cleanup();
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
 	h.applyDuplicateRepairMock.mockReset();
-	h.resolveGateMock.mockReset();
+	resolveGateMock.mockReset();
 	resetAppState();
 	resetGate();
 });
@@ -197,7 +172,7 @@ afterEach(() => {
 describe('#257 — repair confirmation announcement (profile_repair_done)', () => {
 	it('the status region is PERSISTENT: mounted (empty) from first ready render, role="status" aria-live="polite" — even with no repair pending', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -213,7 +188,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 
 	it('fail THEN succeed in one flow: failure shows profile_repair_error (no done announcement); the successful retry announces profile_repair_done and the banner unmounts', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
@@ -245,7 +220,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 			field: 'name',
 			clearedIds: ['prof-dom']
 		});
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: '', email: '', _sharing: 'domain' }
 		]);
@@ -270,7 +245,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 
 	it('transient per the house pattern: the announcement clears at the START of the next repair attempt — and NEVER by a timer', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
 			{ _id: 'p-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -281,7 +256,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		});
 
 		h.applyDuplicateRepairMock.mockResolvedValueOnce({ field: 'name', clearedIds: ['p-dom'] });
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
 			{ _id: 'p-dom', name: '', email: 'ada@x.io', _sharing: 'domain' }
 		]);
@@ -301,7 +276,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 		await waitFor(() => expect(statusText(container)).toBe(''));
 		expect(q(container, '[data-testid="profile-visibility-repair-email"]')).not.toBeNull();
 
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'p-priv', name: 'Ada', email: 'ada@x.io', _sharing: 'private' },
 			{ _id: 'p-dom', name: '', email: '', _sharing: 'domain' }
 		]);
@@ -322,10 +297,10 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 	it('the region is outside the status gate: mounted while status is still loading, before the ready surface exists', async () => {
 		selectSampledb();
 		const firstLoad = deferred<Array<Record<string, string>>>();
-		h.listMyProfilesMock.mockReturnValueOnce(firstLoad.promise);
+		listMyProfilesMock.mockReturnValueOnce(firstLoad.promise);
 		const { container } = render(Page);
 
-		await waitFor(() => expect(h.listMyProfilesMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(listMyProfilesMock).toHaveBeenCalledTimes(1));
 		expect(q(container, '[data-testid="profile-field-name"]')).toBeNull();
 		expect(
 			statusRegion(container),
@@ -344,7 +319,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 				{ db: 'bravura', name: 'Bravura', personId: 'person-b' }
 			]
 		});
-		h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
+		listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 			cfg.db === 'bravura'
 				? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' }]
 				: [
@@ -359,11 +334,11 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 
 		h.applyDuplicateRepairMock.mockResolvedValueOnce({ field: 'name', clearedIds: ['prof-dom'] });
 		const heldReload = deferred<Array<Record<string, string>>>();
-		h.listMyProfilesMock.mockReturnValueOnce(heldReload.promise);
+		listMyProfilesMock.mockReturnValueOnce(heldReload.promise);
 		await fireEvent.click(
 			q(container, '[data-testid="profile-visibility-repair-name-fix"]') as HTMLButtonElement
 		);
-		await waitFor(() => expect(h.listMyProfilesMock).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(listMyProfilesMock).toHaveBeenCalledTimes(2));
 
 		selectedCollectiveDbStore.set('bravura');
 		await waitFor(() =>
@@ -388,7 +363,7 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 describe('#257 — visibility section heading (profile_visibility_title / profile_visibility_intro)', () => {
 	async function renderReady(): Promise<HTMLElement> {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -453,7 +428,7 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 	const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 	function wireProfilesPerCollective(): void {
-		h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
+		listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 			cfg.db === 'bravura'
 				? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' }]
 				: [{ _id: 'prof-a-dom', name: 'Ada', email: '', _sharing: 'domain' }]
@@ -498,15 +473,15 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: newName } });
 		await fireEvent.blur(nameInput);
-		await waitFor(() => expect(h.resolveGateMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(resolveGateMock).toHaveBeenCalledTimes(1));
 	}
 
 	it('a LIVE (current-generation) resolveGate rejection reaches console.error — a real failure to resolve membership standing must not vanish', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const liveRead = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(liveRead.promise);
+		resolveGateMock.mockReturnValueOnce(liveRead.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);
@@ -529,9 +504,9 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 	it('a STALE rejection (after a collective switch) stays fully silent — no console.error either', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const staleRead = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(staleRead.promise);
+		resolveGateMock.mockReturnValueOnce(staleRead.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);

@@ -19,19 +19,15 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	listMyProfilesMock: vi.fn(),
 	readRosterNamesMock: vi.fn(),
 	updateRosterNamesMock: vi.fn()
 }));
-vi.mock('$lib/profile/profileData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
-		'$lib/profile/profileData'
-	);
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
-}));
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
+);
 vi.mock('$lib/collective/rosterNames', () => ({
 	readRosterNamesSetting: h.readRosterNamesMock,
 	updateRosterShowRealNames: h.updateRosterNamesMock
@@ -45,6 +41,7 @@ import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
 import { signIn } from '$lib/testing/session';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 type RosterNamesSetting = { dbEntityId: string; showRealNames: boolean };
 
@@ -65,7 +62,7 @@ const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 function wireProfilesPerCollective(): void {
-	h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
+	listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 		cfg.db === 'bravura'
 			? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' as const }]
 			: [{ _id: 'prof-a-dom', name: 'Ada', email: '', _sharing: 'domain' as const }]
@@ -102,7 +99,7 @@ async function renderAdminReady(
 
 beforeEach(() => {
 	localStorage.clear();
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 	h.readRosterNamesMock.mockReset();
 	h.updateRosterNamesMock.mockReset();
 });
@@ -164,7 +161,7 @@ describe('/profile — roster-names control structure (admin view)', () => {
 
 	it('is app chrome, NOT gated on route-load status: still rendered for an admin when the profile-fields load errored', async () => {
 		wireProfilesPerCollective();
-		h.listMyProfilesMock.mockRejectedValue(new Error('boom'));
+		listMyProfilesMock.mockRejectedValue(new Error('boom'));
 		h.readRosterNamesMock.mockResolvedValue({ dbEntityId: 'db-entity-a', showRealNames: false });
 		adminStore.set('admin');
 		signInMember([COLLECTIVE_A]);

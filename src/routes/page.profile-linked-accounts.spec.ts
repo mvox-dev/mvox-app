@@ -114,47 +114,19 @@ const h = vi.hoisted(() => {
 	return {
 		SelfLinkMintError,
 		InviteCreateError,
-		listMyProfilesMock: vi.fn(),
-		applyProfileSaveMock: vi.fn(),
-		applyConflictResolutionMock: vi.fn(),
 		listLinkedIdentitiesMock: vi.fn(),
 		mintSelfLinkInviteMock: vi.fn()
 	};
 });
-vi.mock('$lib/profile/fieldMove', async () => {
-	const actual =
-		await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
-	return { ...actual, applyConflictResolution: h.applyConflictResolutionMock };
-});
-vi.mock('$lib/profile/profileData', () => {
-	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
-	return {
-		listMyProfiles: h.listMyProfilesMock,
-		profilesByLevel: (ps: Array<{ _sharing: string }>) => {
-			const by: Record<string, unknown> = {};
-			for (const p of ps) by[p._sharing] = p;
-			return by;
-		},
-		NARROWNESS,
-		resolveField: (
-			ps: Array<{ _id: string; name: string; email: string; _sharing: string }>,
-			field: 'name' | 'email'
-		) => {
-			const withValue = ps
-				.filter((p) => p[field] !== '')
-				.slice()
-				.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
-			return {
-				value: withValue.length > 0 ? withValue[0][field] : '',
-				holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
-			};
-		}
-	};
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: class ProfileSaveError extends Error {}
-}));
+vi.mock('$lib/profile/fieldMove', async () =>
+	(await import('$lib/testing/mocks/profile')).conflictResolutionModule()
+);
+vi.mock('$lib/profile/profileData', async () =>
+	(await import('$lib/testing/mocks/profile')).profileDataModule()
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('bare')
+);
 // #193 — the linked-identities read producer (unit-pinned in
 // lib/profile/linkedIdentities.spec.ts against the real wire; mocked HERE so the
 // page test pins the WIRING: called from the route with the real cfg/personId).
@@ -194,6 +166,8 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyConflictResolutionMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const qa = (c: HTMLElement, sel: string) => Array.from(c.querySelectorAll(sel));
@@ -230,9 +204,9 @@ async function openPicker(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-	h.listMyProfilesMock.mockReset().mockResolvedValue([]);
-	h.applyProfileSaveMock.mockReset();
-	h.applyConflictResolutionMock.mockReset();
+	listMyProfilesMock.mockReset().mockResolvedValue([]);
+	applyProfileSaveMock.mockReset();
+	applyConflictResolutionMock.mockReset();
 	h.listLinkedIdentitiesMock.mockReset().mockResolvedValue({
 		identities: [GOOGLE_ID],
 		pendingInvites: 0

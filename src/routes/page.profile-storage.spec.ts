@@ -23,19 +23,15 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	listMyProfilesMock: vi.fn(),
 	listAllEditionsMock: vi.fn()
 }));
 // Mock ONLY the network reads; keep the pure helpers real.
-vi.mock('$lib/profile/profileData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
-		'$lib/profile/profileData'
-	);
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
-}));
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
+);
 vi.mock('$lib/collective/rosterNames', () => ({
 	readRosterNamesSetting: vi
 		.fn()
@@ -59,6 +55,7 @@ import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 let fakeByteStore: FakeByteStore;
 
@@ -179,7 +176,7 @@ function signInMember(): void {
 
 async function renderReady(): Promise<{ container: HTMLElement; controls: StorageControls }> {
 	const controls = installStorageControls();
-	h.listMyProfilesMock.mockResolvedValue([
+	listMyProfilesMock.mockResolvedValue([
 		{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' as const }
 	]);
 	signInMember();
@@ -218,7 +215,7 @@ async function armAll(container: HTMLElement): Promise<void> {
 beforeEach(() => {
 	localStorage.clear();
 	fakeByteStore = createFakeByteStore();
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 	h.listAllEditionsMock.mockReset();
 });
 

@@ -11,34 +11,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => {
-	class ProfileSaveError extends Error {
-		readonly createdProfileId?: string;
-		constructor(message: string, createdProfileId?: string) {
-			super(message);
-			this.name = 'ProfileSaveError';
-			this.createdProfileId = createdProfileId;
-		}
-	}
-	return {
-		ProfileSaveError,
-		listMyProfilesMock: vi.fn(),
-		applyProfileSaveMock: vi.fn(),
-		applyFieldMoveMock: vi.fn()
-	};
-});
-vi.mock('$lib/profile/profileData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: h.ProfileSaveError
-}));
-vi.mock('$lib/profile/fieldMove', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/fieldMove')>();
-	return { ...actual, applyFieldMove: h.applyFieldMoveMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('shared')
+);
+vi.mock('$lib/profile/fieldMove', async (importOriginal) =>
+	(await import('$lib/testing/mocks/profile')).fieldMoveModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -55,6 +36,8 @@ import Page from './profile/+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-member' });
@@ -70,7 +53,7 @@ const input = (c: HTMLElement, field: 'name' | 'email') =>
 
 async function renderSeeded(): Promise<HTMLElement> {
 	selectSampledb();
-	h.listMyProfilesMock.mockResolvedValue([
+	listMyProfilesMock.mockResolvedValue([
 		{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 	]);
 	const { container } = render(Page);
@@ -87,9 +70,9 @@ async function openEditor(c: HTMLElement, field: 'name' | 'email'): Promise<HTML
 }
 
 beforeEach(() => {
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
-	h.applyFieldMoveMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
+	applyFieldMoveMock.mockReset();
 });
 
 afterEach(() => {
@@ -172,7 +155,7 @@ describe('#205 — /profile display state: whole-field activators', () => {
 
 	it('tier toggles are still FUNCTIONAL from display state: clicking an inactive tier dispatches the move', async () => {
 		const container = await renderSeeded();
-		h.applyFieldMoveMock.mockResolvedValue(undefined);
+		applyFieldMoveMock.mockResolvedValue(undefined);
 
 		const pubBtn = q(
 			container,
@@ -181,7 +164,7 @@ describe('#205 — /profile display state: whole-field activators', () => {
 		expect(pubBtn.disabled).toBe(false);
 		await fireEvent.click(pubBtn);
 
-		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(applyFieldMoveMock).toHaveBeenCalledTimes(1));
 		expect(input(container, 'name')).toBeNull();
 	});
 });
@@ -197,12 +180,12 @@ describe('#205 — /profile activation', () => {
 		expect(nameInput.value).toBe('Ada');
 		expect(document.activeElement).toBe(nameInput);
 		expect(activator(container, 'name')).toBeNull();
-		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+		expect(applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
 	it('a first-time user (empty field) still gets an activator, opening an empty editor', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
@@ -216,7 +199,7 @@ describe('#205 — /profile activation', () => {
 	it('activating a field during a #131 conflict PREVIEW exits the preview — the value shown is the value edited', async () => {
 		vi.useRealTimers();
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
@@ -240,11 +223,11 @@ describe('#205 — /profile activation', () => {
 describe('#205 — /profile confirm and cancel', () => {
 	it('Enter CONFIRMS: the flush fires (unchanged save seam), the editor closes, the display shows the new value', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValueOnce([]);
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValueOnce([]);
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
@@ -254,8 +237,8 @@ describe('#205 — /profile confirm and cancel', () => {
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 		await fireEvent.keyDown(nameInput, { key: 'Enter' });
 
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 			level: 'domain',
 			existingId: null,
 			personId: 'person-p',
@@ -267,11 +250,11 @@ describe('#205 — /profile confirm and cancel', () => {
 
 	it('blur CONFIRMS: same flush, editor closes back to display', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValueOnce([]);
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValueOnce([]);
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
@@ -281,7 +264,7 @@ describe('#205 — /profile confirm and cancel', () => {
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 		await fireEvent.blur(nameInput);
 
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
 		await waitFor(() => expect(input(container, 'name')).toBeNull());
 		expect(valueEl(container, 'name')?.textContent).toContain('Ada');
 	});
@@ -289,7 +272,7 @@ describe('#205 — /profile confirm and cancel', () => {
 	it('Escape CANCELS: editor closes, draft reverts, NOTHING is written — not even by the idle autosave later', async () => {
 		vi.useFakeTimers();
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -306,16 +289,16 @@ describe('#205 — /profile confirm and cancel', () => {
 		expect(valueEl(container, 'name')?.textContent).not.toContain('Zed');
 
 		vi.advanceTimersByTime(2_500);
-		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+		expect(applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
 	it('Escape after a mid-edit idle autosave WRITES the pre-edit value back — the display and Entu never diverge', async () => {
 		vi.useFakeTimers();
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const { container } = render(Page);
 		await vi.waitFor(() =>
 			expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
@@ -328,8 +311,8 @@ describe('#205 — /profile confirm and cancel', () => {
 
 		await fireEvent.input(nameInput, { target: { value: 'Adam' } });
 		await vi.advanceTimersByTimeAsync(2_500);
-		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1);
-		expect(h.applyProfileSaveMock.mock.calls[0][0].fields.name).toBe('Adam');
+		expect(applyProfileSaveMock).toHaveBeenCalledTimes(1);
+		expect(applyProfileSaveMock.mock.calls[0][0].fields.name).toBe('Adam');
 
 		await fireEvent.input(nameInput, { target: { value: 'Adamant' } });
 		await fireEvent.keyDown(nameInput, { key: 'Escape' });
@@ -338,20 +321,20 @@ describe('#205 — /profile confirm and cancel', () => {
 		await vi.waitFor(() => expect(input(container, 'name')).toBeNull());
 		expect(valueEl(container, 'name')?.textContent).toContain('Ada');
 
-		expect(h.applyProfileSaveMock.mock.calls.length).toBeGreaterThan(1);
-		const lastCall = h.applyProfileSaveMock.mock.calls.at(-1)![0];
+		expect(applyProfileSaveMock.mock.calls.length).toBeGreaterThan(1);
+		const lastCall = applyProfileSaveMock.mock.calls.at(-1)![0];
 		expect(lastCall.fields.name, 'Escape must flush the reverted value').toBe('Ada');
 		expect(lastCall.level).toBe('domain');
 		expect(lastCall.existingId).toBe('prof-dom');
 
 		await vi.advanceTimersByTimeAsync(3_000);
-		expect(h.applyProfileSaveMock.mock.calls.at(-1)![0].fields.name).toBe('Ada');
+		expect(applyProfileSaveMock.mock.calls.at(-1)![0].fields.name).toBe('Ada');
 	});
 });
 
 describe('#205 review F3 — closing the editor lands focus back on the activator', () => {
 	it('Enter: focus moves to profile-name-edit, not <body>', async () => {
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const container = await renderSeeded();
 
 		const nameInput = await openEditor(container, 'name');

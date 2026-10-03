@@ -6,21 +6,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { loadRosterMock, assignMock, unassignMock, createSectionMock } = vi.hoisted(() => ({
-		loadRosterMock: vi.fn(),
-		assignMock: vi.fn(),
-		unassignMock: vi.fn(),
-		createSectionMock: vi.fn()
-	}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock,
-	createSection: createSectionMock
-}));
+vi.mock('$lib/sections/sectionActions', async () =>
+	(await import('$lib/testing/mocks/sections')).sectionCreateModule({ arrange: false })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -39,6 +33,8 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { assignMock, createSectionMock, unassignMock } from '$lib/testing/mocks/sections';
 
 const ORG_1 = 'org-1';
 
