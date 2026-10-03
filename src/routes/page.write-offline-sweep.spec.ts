@@ -9,8 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const H = vi.hoisted(() => ({
 	loadRoster: vi.fn(),
-	listSections: vi.fn(),
-	resolveDatabaseEntityId: vi.fn(),
 	resolveManageRights: vi.fn(),
 	findMyMemberId: vi.fn(),
 	listMyRsvps: vi.fn(),
@@ -65,10 +63,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: H.createEventSeries,
 	createEvent: H.createEvent
 }));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/collective/databaseEntity')>()),
-	resolveDatabaseEntityId: H.resolveDatabaseEntityId
-}));
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: H.resolveManageRights,
@@ -81,10 +78,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) => ({
 	deleteProgramItem: H.deleteProgramItem
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: H.loadRoster }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: H.listSections
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -148,7 +144,11 @@ import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import {
+	listSectionsMock,
+	loadFullAgendaMock,
+	resolveDatabaseEntityIdMock
+} from '$lib/testing/moduleHandles';
 
 const ORG = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
@@ -232,8 +232,8 @@ beforeEach(() => {
 			}
 		])
 	);
-	H.listSections.mockResolvedValue([]);
-	H.resolveDatabaseEntityId.mockResolvedValue(ORG);
+	listSectionsMock.mockResolvedValue([]);
+	resolveDatabaseEntityIdMock.mockResolvedValue(ORG);
 	H.resolveManageRights.mockResolvedValue('editor');
 	H.findMyMemberId.mockResolvedValue('m-pete');
 	H.listMyRsvps.mockResolvedValue(toListRead([]));
@@ -258,6 +258,8 @@ afterEach(() => {
 	gotoMock.mockReset();
 	discoverMock.mockReset();
 	loadFullAgendaMock.mockReset();
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	resetOnLine();
 	resetAppState();
 });

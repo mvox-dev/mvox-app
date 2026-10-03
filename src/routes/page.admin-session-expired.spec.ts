@@ -12,9 +12,7 @@ const h = vi.hoisted(() => ({
 	resolveAdmin: vi.fn(),
 	resolveOwnerTier: vi.fn(),
 	resolveLibrarian: vi.fn(),
-	resolveDatabaseEntityId: vi.fn(),
 	loadRoster: vi.fn(),
-	listSections: vi.fn(),
 	listAdmins: vi.fn(),
 	listLibrarians: vi.fn(),
 	resolveCollectiveNameMarker: vi.fn(),
@@ -39,14 +37,13 @@ vi.mock('$lib/nav/adminStore', () => ({
 }));
 vi.mock('$lib/library/librarianStore', () => ({ resolveLibrarian: h.resolveLibrarian }));
 vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStates }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: h.resolveDatabaseEntityId
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRoster }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSections
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarker,
 	updateCollectiveName: vi.fn()
@@ -72,6 +69,7 @@ import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/sto
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
@@ -95,12 +93,12 @@ function selectSampledb() {
 }
 
 function loadOk() {
-	h.resolveDatabaseEntityId.mockResolvedValue('org-1');
+	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveAdmin.mockResolvedValue('admin');
 	h.resolveOwnerTier.mockResolvedValue('error');
 	h.resolveLibrarian.mockResolvedValue({ state: 'librarian', libraryId: null });
 	h.loadRoster.mockResolvedValue(toListRead([]));
-	h.listSections.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.listAdmins.mockResolvedValue({ persons: [], canManage: false });
 	h.listLibrarians.mockResolvedValue({ persons: [], canManage: false });
 	h.resolveCollectiveNameMarker.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
@@ -115,6 +113,8 @@ function q(root: ParentNode, testid: string): Element | null {
 
 beforeEach(() => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	loadOk();
 });
 
@@ -126,7 +126,7 @@ afterEach(() => {
 
 describe('/admin — session expired', () => {
 	it('an auth-expired first read shows the session-expired notice, not the load error', async () => {
-		h.resolveDatabaseEntityId.mockRejectedValue(authExpiredError());
+		resolveDatabaseEntityIdMock.mockRejectedValue(authExpiredError());
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -155,7 +155,7 @@ describe('/admin — session expired', () => {
 describe('/admin — a collective switch during the gate', () => {
 	it("the first load's late entity answer never reaches the second load", async () => {
 		let releaseFirst!: (id: string) => void;
-		h.resolveDatabaseEntityId
+		resolveDatabaseEntityIdMock
 			.mockImplementationOnce(() => new Promise((res) => (releaseFirst = res)))
 			.mockResolvedValueOnce('org-2');
 		let releaseAdmin!: (state: string) => void;
@@ -200,7 +200,7 @@ describe('/admin — a collective rename', () => {
 		await tick();
 		await tick();
 
-		expect(h.resolveDatabaseEntityId).toHaveBeenCalledTimes(1);
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
 		expect(h.resolveAdmin).toHaveBeenCalledTimes(1);
 		expect(h.loadRoster).toHaveBeenCalledTimes(1);
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
