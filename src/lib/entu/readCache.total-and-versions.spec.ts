@@ -1,38 +1,11 @@
-// #434 slice 2/6 RED — two carries from Bentham's slice-1 review (2026-09-28),
-// owned here because slice 2 is the first slice whose reader WRITES the cache.
-//
-// (i) A RUNNING TOTAL, not a re-sum. Slice 1's budget pass walks every
-//     entry's [readAt, bytes] index key on EVERY put to total the bytes —
-//     O(entries) per read, on every read the agenda fans out. The total is
-//     kept instead in a small meta record updated in the SAME transaction as
-//     the put (and as any eviction the put triggers), so it can never drift
-//     from the entries it describes.
-//       New export: readCacheTotalBytes(): Promise<number> — the stored
-//       running total (0 with no database, or on any failure).
-//     `readCacheEntryCount()` keeps meaning "how many READ entries" — a meta
-//     record must not be counted as one (slice 1's budget specs pin exact
-//     counts).
-//     The oldest-first walk is still how eviction finds its victims — but only
-//     when a put actually takes the total over READ_CACHE_MAX_BYTES. A put
-//     under the budget opens no cursor at all.
-//
-// (ii) ANOTHER TAB ON AN OLDER VERSION. Two failure shapes of a real browser:
-//     - This tab holds the connection and another tab (a newer deploy) opens a
-//       higher version: our connection gets `versionchange` and must CLOSE, or
-//       the other tab's upgrade blocks forever.
-//     - Another tab (an older deploy) holds a LOWER version open and never
-//       closes: our `open()` fires `blocked` and never settles. Offline serving
-//       must not hang on it: the open is time-boxed by READ_CACHE_OPEN_TIMEOUT_MS
-//       and a timed-out open falls through to the no-cache path — offline, the
-//       ORIGINAL network error is rethrown, exactly as with nothing cached.
-//       A timed-out open is not memoised: once the other tab lets go, the next
-//       read opens normally.
-//       New export: READ_CACHE_OPEN_TIMEOUT_MS: number (≤ 2000 — a screen
-//       waiting on it is a screen showing nothing).
+// The cache keeps a running byte total in the same transaction as each put, evicting only over
+// budget; another tab's version change closes us, and a blocked open times out to the network.
 import { IDBFactory, IDBIndex, IDBObjectStore } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { CACHED_READ, entuFetch } from './request';
 import * as readCache from './readCache';
@@ -47,8 +20,7 @@ import {
 } from './readCache';
 import { authStore } from '$lib/auth/session';
 
-// The two new exports, read off the module namespace so this file compiles
-// (and fails on the assertion, not the import) before GREEN adds them.
+// Read off the module namespace so a missing export fails an assertion, not the import.
 const mod = readCache as unknown as {
 	readCacheTotalBytes?: () => Promise<number>;
 	READ_CACHE_OPEN_TIMEOUT_MS?: number;

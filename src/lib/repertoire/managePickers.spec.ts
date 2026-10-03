@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
 vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { readManagePickers } from '$lib/repertoire/managePickers';
 import type { Edition, Work } from '$lib/library/libraryData';

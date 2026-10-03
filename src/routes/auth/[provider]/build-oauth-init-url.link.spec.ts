@@ -1,28 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #193 RED — `intent: 'link'` on the OAuth initiation (profile auth-provider
-// linking). The existing localStorage state blob is the carrier for the whole
-// round trip; linking adds:
-//   - intent 'link' (new union member on OAuthState / OAuthInitArgs),
-//   - linkPersonId — the INITIATING person, replayed by the callback as the
-//     redemption's expectedEntityId tripwire,
-//   - invite {db, token} — the freshly self-minted invite, riding the blob only.
-//
-// Hazard 3 (SPIKE, 2026-09-01): buildOAuthInitUrl unconditionally sets
-// `login_hint` from getUser().email — for 'link' that pre-fills the account the
-// user already HAS, steering them back into their existing identity (which
-// entu-api then binds as a DUPLICATE entry — no dedupe). The link intent MUST
-// suppress login_hint.
-//
-// Bearer hygiene (SPIKE finding): the self-link flow has no cross-page handoff —
-// the token must never enter ANY URL (neither the Entu init URL nor an mvox one).
+// intent 'link' carries linkPersonId and the self-minted invite in the state blob, suppresses
+// login_hint (it would steer back to the existing identity), and puts the token in no URL.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 
-// Sever the `$env/dynamic/public` chain (entu-config) — that virtual module
-// doesn't resolve under happy-dom (same rationale as the sibling spec).
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+// Severs the entu-config → $env/dynamic/public chain.
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { buildOAuthInitUrl } from './build-oauth-init-url';
 import { setToken, setUser } from '$lib/auth/storage';
@@ -98,4 +84,4 @@ describe('buildOAuthInitUrl — link intent (#193)', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #193 RED: link-intent OAuth initiation)
+// (*MVOX:Tallis*)

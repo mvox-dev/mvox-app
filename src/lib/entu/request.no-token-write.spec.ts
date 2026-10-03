@@ -1,7 +1,9 @@
 // A write with no token sends nothing and goes to the same session-expired handling a 401 gets.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 async function freshRequest() {
 	vi.resetModules();

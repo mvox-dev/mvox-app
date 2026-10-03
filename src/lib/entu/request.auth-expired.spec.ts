@@ -4,11 +4,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-// Not routeMocks: vi.resetModules() would hand the factory a new routeMocks with other handles.
+// goto stays hoisted: vi.resetModules() would hand a routeMocks factory a new gotoMock.
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 // Severs the $env/dynamic/public chain, unavailable outside SvelteKit.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 // The single-flight redirect guard is module state, so every test gets a fresh module instance;
 // one test's fired redirect can't leak into the next.

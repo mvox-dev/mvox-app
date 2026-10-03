@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import EventCreateForm from './EventCreateForm.svelte';
 import SeasonCreateForm from './SeasonCreateForm.svelte';

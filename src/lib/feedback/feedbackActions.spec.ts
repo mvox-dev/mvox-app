@@ -4,7 +4,9 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { serialize, type StrokeData } from '$lib/strokes/strokes';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { createFeedback } from './feedbackActions';
 

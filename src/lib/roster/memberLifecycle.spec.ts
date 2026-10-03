@@ -16,7 +16,9 @@ vi.mock('$lib/profile/profileData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/profileData')>()),
 	listMyProfiles: listMyProfilesMock
 }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import {
 	deactivateMember,
