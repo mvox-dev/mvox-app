@@ -182,27 +182,18 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, setUser, setLastProvider, clearAll } from '$lib/auth/storage';
+import { setUser, setLastProvider } from '$lib/auth/storage';
 import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const qa = (c: HTMLElement, sel: string) => Array.from(c.querySelectorAll(sel));
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 const GOOGLE_ID = { _id: 'eu-1', uid: 'uid-g-1', provider: 'google', email: 'me@example.com' };
@@ -247,11 +238,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
+	resetAppState();
 	localStorage.removeItem(OAUTH_STATE_KEY);
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
 	resetGate();
 });
 
@@ -350,17 +338,13 @@ describe('/profile — linking copy is scoped to the collective (#193 review F1)
 
 	it('switching collective re-scopes the copy — it reads selectedCollectiveStore, not a fixed label', async () => {
 		pageStub.url = new URL('http://localhost/profile?linked=1');
-		setToken('jwt-member');
-		collectiveState.set({
-			status: 'ready',
+		signIn({
+			token: 'jwt-member',
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'kammerkoor', name: 'Kammerkoor', personId: 'person-k' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 
 		const { container } = render(Page);
 		await waitFor(() =>

@@ -71,7 +71,13 @@ function selectSampledb() {
 }
 
 function selectTwoCollectives() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }, { db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }], selected: null });
+	signIn({
+		token: 'jwt-admin',
+		collectives: [
+			{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
+			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
+		]
+	});
 }
 
 function loadOk() {

@@ -42,14 +42,10 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 type EntityRaw = Record<string, unknown>;
 
@@ -170,22 +166,12 @@ function installWorld(options: WorldOptions) {
 }
 
 function setAuthed() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', crede: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'crede', name: 'Crede', personId: 'person-p' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function gateOn(method: string, fragment: string, promise: Promise<void>) {
@@ -218,9 +204,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	loadFullAgendaMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('#551 — agenda: a move or remove keeps pending until it settles', () => {

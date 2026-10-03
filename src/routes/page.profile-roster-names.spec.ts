@@ -33,14 +33,12 @@ vi.mock('$lib/collective/rosterNames', () => ({
 
 import ProfilePage from './profile/+page.svelte';
 import { m } from '$lib/paraglide/messages.js';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { resetAppState } from '$lib/testing/appReset';
+import type { Collective } from '$lib/collectives/types';
+import { signIn } from '$lib/testing/session';
 
 type RosterNamesSetting = { dbEntityId: string; showRealNames: boolean };
 
@@ -68,11 +66,8 @@ function wireProfilesPerCollective(): void {
 	);
 }
 
-function signIn(collectives: Array<{ db: string; name: string; personId: string }>): void {
-	setToken('jwt-member');
-	collectiveState.set({ status: 'ready', collectives, erroredDbs: [] });
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(collectives[0].db);
+function signInMember(collectives: Collective[]): void {
+	signIn({ token: 'jwt-member', collectives });
 }
 
 function displayName(container: HTMLElement): string {
@@ -92,7 +87,7 @@ async function renderAdminReady(
 	wireProfilesPerCollective();
 	h.readRosterNamesMock.mockResolvedValue(setting);
 	adminStore.set('admin');
-	signIn([COLLECTIVE_A]);
+	signInMember([COLLECTIVE_A]);
 	const { container } = render(ProfilePage);
 	await waitReadyShowing(container, 'Ada');
 	await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
@@ -109,10 +104,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	localStorage.clear();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -169,7 +161,7 @@ describe('/profile — roster-names control structure (admin view)', () => {
 		h.listMyProfilesMock.mockRejectedValue(new Error('boom'));
 		h.readRosterNamesMock.mockResolvedValue({ dbEntityId: 'db-entity-a', showRealNames: false });
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A]);
+		signInMember([COLLECTIVE_A]);
 		const { container } = render(ProfilePage);
 		await waitFor(() => expect(q(container, '[data-testid="profile-load-error"]')).not.toBeNull());
 		expect(rosterSelect(container), 'app chrome must survive a fields load-error').not.toBeNull();
@@ -185,7 +177,7 @@ describe('/profile — roster-names visibility is admin-only (fail-closed)', () 
 				showRealNames: true
 			});
 			adminStore.set(state);
-			signIn([COLLECTIVE_A]);
+			signInMember([COLLECTIVE_A]);
 			const { container } = render(ProfilePage);
 			await waitReadyShowing(container, 'Ada');
 			expect(timeFormatSelect(container)).not.toBeNull();
@@ -228,7 +220,7 @@ describe('/profile — roster-names READ (integration: the page route drives the
 				: staleRead.promise
 		);
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A, COLLECTIVE_B]);
+		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
 
@@ -258,7 +250,7 @@ describe('/profile — roster-names READ (integration: the page route drives the
 				: Promise.resolve({ dbEntityId: 'db-entity-a', showRealNames: true })
 		);
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A, COLLECTIVE_B]);
+		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
 		await waitFor(() => expect(rosterSelect(container)!.value).toBe('real'));
@@ -368,7 +360,7 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 		const write = deferred<void>();
 		h.updateRosterNamesMock.mockReturnValueOnce(write.promise);
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A, COLLECTIVE_B]);
+		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
 		await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
@@ -402,7 +394,7 @@ describe('/profile — roster-names WRITE (server-confirmed, never optimistic)',
 		const write = deferred<void>();
 		h.updateRosterNamesMock.mockReturnValueOnce(write.promise);
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A, COLLECTIVE_B]);
+		signInMember([COLLECTIVE_A, COLLECTIVE_B]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
 		await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
@@ -428,7 +420,7 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 		const read = deferred<RosterNamesSetting>();
 		h.readRosterNamesMock.mockReturnValueOnce(read.promise);
 		adminStore.set('admin');
-		signIn([COLLECTIVE_A]);
+		signInMember([COLLECTIVE_A]);
 		const { container } = render(ProfilePage);
 		await waitReadyShowing(container, 'Ada');
 		await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
@@ -454,7 +446,7 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 			wireProfilesPerCollective();
 			h.readRosterNamesMock.mockRejectedValue(new Error('entu 500'));
 			adminStore.set('admin');
-			signIn([COLLECTIVE_A]);
+			signInMember([COLLECTIVE_A]);
 			const { container } = render(ProfilePage);
 			await waitReadyShowing(container, 'Ada');
 			await waitFor(() => expect(rosterSelect(container)).not.toBeNull());

@@ -27,13 +27,13 @@ vi.mock('$app/navigation', () => ({ goto: h.gotoMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { authStore } from '$lib/auth/session';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { clearAll } from '$lib/auth/storage';
 import { resetGate } from '$lib/profile/completionGate';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const q = (c: HTMLElement, testid: string) => c.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 
@@ -52,26 +52,14 @@ afterEach(() => {
 	setAuthExpiredHandler(null);
 	cleanup();
 	vi.unstubAllGlobals();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 	history.replaceState({}, '', '/');
 });
 
 describe('#550 — a profile write with no token', () => {
 	it('an Enter-save sends nothing and goes to session-expired, not load-error', async () => {
-		setToken('jwt-member');
-		authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-		collectiveState.set({
-			status: 'ready',
-			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
+		signIn({ token: 'jwt-member' });
 		h.listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);

@@ -1,50 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #205 RED — profile name + email become whole-field display-then-edit.
-//
-// Standing UX rule 4 (Mihkel 2026-09-01) + the Mihkel overrule comment on
-// #205: the profile fields ARE in scope — click-to-activate costs the same one
-// click as click-to-focus — and every activator must also be TAB-to-activate.
-//
-// CONTRACT (defined HERE, implemented in GREEN — ProfileField grows a
-// display state; the always-live <input> is retired):
-//
-//   DISPLAY (default) state, per field ∈ name | email:
-//     • profile-<field>-edit    the whole-field activator: ONE native
-//       <button type="button">, `w-full min-h-11` (the #165 F3 width-collapse
-//       trap), sr-only ACTION label + the value INSIDE the button.
-//     • profile-<field>-value   the value element, INSIDE the button. Shows the
-//       field's current draft value — and stays preview-aware: during a #131
-//       conflict preview it shows the previewed tier's value (pinned by the
-//       amended page.profile.spec.ts AC2/AC4/AC6).
-//     • profile-<field>         (the edit input) is NOT in the DOM.
-//     • the visibility tier toolbar renders in display state, exactly as
-//       before — the tier toggles are a SEPARATE concept and stay untouched.
-//   ACTIVATION: clicking anywhere in the field area (the value included)
-//     swaps display → edit: profile-<field> appears, pre-filled with the
-//     draft, focused; the activator unmounts (the admin reference swap).
-//   CONFIRM: Enter or blur — the editor closes back to display, and the
-//     existing autosave flush fires exactly as the old blur did (the save
-//     seam, queue and reconcile wiring are untouched).
-//   CANCEL: Escape — the editor closes, the draft REVERTS to its pre-edit
-//     value, and any idle-autosave pending for the cancelled typing never
-//     fires. "Nothing is written" holds only while nothing WAS written: if the
-//     2s idle window was crossed mid-edit the half-typed value already reached
-//     Entu, and the revert has to be written back through the same save seam or
-//     the display and the server diverge silently (review round 3, F1).
-//   STRINGS: the two sr-only action labels are NEW Paraglide keys —
-//     profile_name_edit_label / profile_email_edit_label — present in ALL FOUR
-//     locales (en/et/lv/uk); guard below reads the real message files.
-//
-// Integration posture: real ./profile/+page.svelte (the actual /profile
-// route) with the real ProfileField, real autosave/profileEditQueue wiring;
-// only the network-edge primitives are mocked. Scaffolding inherited from
-// page.profile-first-save-tier-reactivity.spec.ts.
-//
-// REAL timers by default: blur/Enter fire the flush synchronously, and a
-// not-yet-implemented waitFor must fail on its own ~1s default instead of
-// hanging fake-timer-blocked to the 5s test timeout (tallis.md GOTCHA). The
-// one Escape-cancels-idle-save test opts into fake timers locally.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/svelte';
@@ -53,8 +7,6 @@ import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { REDACT_ATTR } from '$lib/redact/redact';
 
-// Full-fallback paraglide mock — every key renders `[key {params}]`, so the
-// sr-only assertions below can pin WHICH key the label rides on.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -80,7 +32,6 @@ const h = vi.hoisted(() => {
 		applyFieldMoveMock: vi.fn()
 	};
 });
-// Keep the READ model real — mock only the network edge.
 vi.mock('$lib/profile/profileData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
 	return { ...actual, listMyProfiles: h.listMyProfilesMock };
@@ -100,23 +51,12 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -127,7 +67,6 @@ const valueEl = (c: HTMLElement, field: 'name' | 'email') =>
 const input = (c: HTMLElement, field: 'name' | 'email') =>
 	q(c, `[data-testid="profile-${field}"]`) as HTMLInputElement | null;
 
-/** Render /profile seeded with a domain profile; settle on the DISPLAY state. */
 async function renderSeeded(): Promise<HTMLElement> {
 	selectSampledb();
 	h.listMyProfilesMock.mockResolvedValue([
@@ -138,7 +77,6 @@ async function renderSeeded(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Open a field's editor via its whole-field activator. */
 async function openEditor(c: HTMLElement, field: 'name' | 'email'): Promise<HTMLInputElement> {
 	const btn = activator(c, field);
 	expect(btn, `profile-${field}-edit must render in display state`).not.toBeNull();
@@ -156,14 +94,9 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
-
-// ── display state: whole-field activator, value inside, no live input ──────────
 
 describe('#205 — /profile display state: whole-field activators', () => {
 	for (const field of ['name', 'email'] as const) {
@@ -187,13 +120,11 @@ describe('#205 — /profile display state: whole-field activators', () => {
 				'w-full'
 			);
 
-			// The value lives INSIDE the button.
 			const value = valueEl(container, field);
 			expect(value, `profile-${field}-value must render`).not.toBeNull();
 			expect(btn!.contains(value)).toBe(true);
 			expect(value!.textContent).toContain(field === 'name' ? 'Ada' : 'ada@x.io');
 
-			// Display-then-edit: the live input is retired from the default state.
 			expect(input(container, field)).toBeNull();
 		});
 
@@ -205,12 +136,6 @@ describe('#205 — /profile display state: whole-field activators', () => {
 			expect((srOnly as HTMLElement).textContent).toContain(`profile_${field}_edit_label`);
 		});
 
-		// #205 review F1 — "the key renders" is not "the key is announced". The
-		// first GREEN put `aria-labelledby="profile-<field>-label profile-<field>-value"`
-		// ON the button; aria-labelledby SUPERSEDES an element's own contents in
-		// the accname algorithm, so the computed name was "Name Ada" and the two
-		// NEW locale keys were dead weight — rendered, never surfaced. Resolving
-		// the button by its ACCESSIBLE NAME is the assertion that can see it.
 		it(`${field}: the computed ACCESSIBLE NAME is "<action label> <value>"`, async () => {
 			const container = await renderSeeded();
 
@@ -256,12 +181,9 @@ describe('#205 — /profile display state: whole-field activators', () => {
 		await fireEvent.click(pubBtn);
 
 		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
-		// The move never opened the editor.
 		expect(input(container, 'name')).toBeNull();
 	});
 });
-
-// ── activation ────────────────────────────────────────────────────────────────
 
 describe('#205 — /profile activation', () => {
 	it('clicking the VALUE opens the editor, pre-filled and focused; the activator unmounts', async () => {
@@ -274,7 +196,6 @@ describe('#205 — /profile activation', () => {
 		expect(nameInput.value).toBe('Ada');
 		expect(document.activeElement).toBe(nameInput);
 		expect(activator(container, 'name')).toBeNull();
-		// Opening the editor writes nothing.
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
@@ -291,12 +212,6 @@ describe('#205 — /profile activation', () => {
 		expect(emailInput.type).toBe('email');
 	});
 
-	// #205 review F4 — display renders `displayValue` (the previewed tier's value
-	// while a #131 conflict preview is live) but the editor binds the underlying
-	// draft. Leaving the preview live across the display→edit swap made the text
-	// jump "Annie" → "Ann" with no explanation, and Escape then returned the user
-	// to the PREVIEW rather than to what the editor had shown. Activating a field
-	// exits preview mode, so the value clicked is the value edited.
 	it('activating a field during a #131 conflict PREVIEW exits the preview — the value shown is the value edited', async () => {
 		vi.useRealTimers();
 		selectSampledb();
@@ -308,7 +223,6 @@ describe('#205 — /profile activation', () => {
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 		expect(valueEl(container, 'name')?.textContent?.trim()).toBe('Ann');
 
-		// Preview the PUBLIC tier's conflicting value.
 		await fireEvent.click(q(container, '[data-testid="profile-vis-name-public"]') as HTMLElement);
 		await waitFor(() => expect(valueEl(container, 'name')?.textContent?.trim()).toBe('Annie'));
 
@@ -316,14 +230,11 @@ describe('#205 — /profile activation', () => {
 		expect(nameInput.value, 'the editor edits the draft, so the preview must be gone').toBe('Ann');
 		expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
 
-		// Escape returns to the same value the editor was showing, not the preview.
 		await fireEvent.keyDown(nameInput, { key: 'Escape' });
 		await waitFor(() => expect(input(container, 'name')).toBeNull());
 		expect(valueEl(container, 'name')?.textContent?.trim()).toBe('Ann');
 	});
 });
-
-// ── confirm / cancel ──────────────────────────────────────────────────────────
 
 describe('#205 — /profile confirm and cancel', () => {
 	it('Enter CONFIRMS: the flush fires (unchanged save seam), the editor closes, the display shows the new value', async () => {
@@ -375,7 +286,6 @@ describe('#205 — /profile confirm and cancel', () => {
 	});
 
 	it('Escape CANCELS: editor closes, draft reverts, NOTHING is written — not even by the idle autosave later', async () => {
-		// Fake timers so the 2s idle autosave window can be crossed inside the test.
 		vi.useFakeTimers();
 		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([
@@ -391,24 +301,13 @@ describe('#205 — /profile confirm and cancel', () => {
 		await fireEvent.keyDown(nameInput, { key: 'Escape' });
 
 		await waitFor(() => expect(input(container, 'name')).toBeNull());
-		// The OLD value is back — the cancelled typing left no trace.
 		expect(valueEl(container, 'name')?.textContent).toContain('Ada');
 		expect(valueEl(container, 'name')?.textContent).not.toContain('Zed');
 
-		// The keystroke's pending idle save must have been cancelled with it.
 		vi.advanceTimersByTime(2_500);
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
-	// #205 review round 3, F1 — the test above only covers the case where the
-	// idle timer has NOT yet fired, so `cancel()`'s clearTimer is enough. Once
-	// the 2s window is crossed MID-EDIT the draft is already in Entu, and
-	// killing a timer that no longer exists undoes nothing: the display reverted
-	// to the pre-edit value while the server kept the mid-edit one, with no
-	// dirty indicator anywhere. Escape must be honest about the whole edit, not
-	// just the keystrokes since the last autosave — so cancelling a field that
-	// autosaved mid-edit has to WRITE the reverted value back through the same
-	// save seam.
 	it('Escape after a mid-edit idle autosave WRITES the pre-edit value back — the display and Entu never diverge', async () => {
 		vi.useFakeTimers();
 		selectSampledb();
@@ -426,14 +325,11 @@ describe('#205 — /profile confirm and cancel', () => {
 		await vi.waitFor(() => expect(input(container, 'name')).not.toBeNull());
 		const nameInput = input(container, 'name') as HTMLInputElement;
 
-		// Type, then PAUSE past the 2s idle window: the autosave fires and the
-		// mid-edit value lands on the server.
 		await fireEvent.input(nameInput, { target: { value: 'Adam' } });
 		await vi.advanceTimersByTimeAsync(2_500);
 		expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1);
 		expect(h.applyProfileSaveMock.mock.calls[0][0].fields.name).toBe('Adam');
 
-		// Keep typing, then change your mind.
 		await fireEvent.input(nameInput, { target: { value: 'Adamant' } });
 		await fireEvent.keyDown(nameInput, { key: 'Escape' });
 		await vi.advanceTimersByTimeAsync(0);
@@ -441,28 +337,18 @@ describe('#205 — /profile confirm and cancel', () => {
 		await vi.waitFor(() => expect(input(container, 'name')).toBeNull());
 		expect(valueEl(container, 'name')?.textContent).toContain('Ada');
 
-		// The revert reached the SERVER, not just the display: the LAST write
-		// carries the pre-edit value.
 		expect(h.applyProfileSaveMock.mock.calls.length).toBeGreaterThan(1);
 		const lastCall = h.applyProfileSaveMock.mock.calls.at(-1)![0];
 		expect(lastCall.fields.name, 'Escape must flush the reverted value').toBe('Ada');
 		expect(lastCall.level).toBe('domain');
 		expect(lastCall.existingId).toBe('prof-dom');
 
-		// And nothing lingers: no later timer resurrects the abandoned draft.
 		await vi.advanceTimersByTimeAsync(3_000);
 		expect(h.applyProfileSaveMock.mock.calls.at(-1)![0].fields.name).toBe('Ada');
 	});
 });
 
-// ── focus return on close (#205 review F3) ───────────────────────────────────
-
 describe('#205 review F3 — closing the editor lands focus back on the activator', () => {
-	// The <input> is only mounted while editing, so every keyboard dismissal
-	// UNMOUNTS the focused element. Without an explicit restore, focus falls to
-	// <body> and a keyboard user tabbing in, pressing Enter to open, typing and
-	// pressing Enter to confirm loses their place entirely. The house pattern is
-	// roster's `cancelRename`/`submitRename` and admin's `namePencilRef`.
 	it('Enter: focus moves to profile-name-edit, not <body>', async () => {
 		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const container = await renderSeeded();
@@ -500,9 +386,6 @@ describe('#205 review F3 — closing the editor lands focus back on the activato
 	});
 
 	it('BLUR does not yank focus back — the user already moved it somewhere deliberately', async () => {
-		// admin's `restoreFocus` distinction: restore on the keyboard dismissals
-		// only. Stealing focus back from wherever a Tab (or a click) just put it
-		// would be worse than dropping it.
 		const container = await renderSeeded();
 
 		const nameInput = await openEditor(container, 'name');
@@ -516,8 +399,6 @@ describe('#205 review F3 — closing the editor lands focus back on the activato
 		expect(document.activeElement).not.toBe(activator(container, 'name'));
 	});
 });
-
-// ── locale coverage for the NEW strings ───────────────────────────────────────
 
 describe('#205 — new Paraglide keys land in ALL FOUR locales', () => {
 	it('profile_name_edit_label + profile_email_edit_label exist non-empty in en/et/lv/uk', () => {
@@ -533,13 +414,8 @@ describe('#205 — new Paraglide keys land in ALL FOUR locales', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #205 RED; review round-3 flush-on-cancel case *MVOX:Josquin*)
+// (*MVOX:Tallis*) (*MVOX:Josquin*)
 
-// ── #361 — ProfileField marks the displayed NAME via PersonName ────────────
-//
-// Only the name field's displayed value routes through PersonName. The email
-// field is not a name and is not this slice's to mark — and must never carry
-// a second, nested marker (one marker per rendered value).
 describe('#361 — /profile: the displayed name value is marked', () => {
 	it('name: the display-state value sits inside exactly one marker', async () => {
 		const container = await renderSeeded();
@@ -559,10 +435,6 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		expect(markers.length).toBeLessThanOrEqual(1);
 	});
 
-	// Review round 3: the EDIT state renders the name into a bare <input>. The
-	// marker cannot sit on a replaced element, so it wraps the input the way
-	// RedactedField does. The email editor stays unmarked (#361 is names only;
-	// recorded as uncovered in redact.ts).
 	const markerAncestors = (el: Element): number => {
 		let n = 0;
 		for (let cur: Element | null = el; cur; cur = cur.parentElement) {

@@ -33,14 +33,9 @@ vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links')
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const DB_ENTITY = 'db-ent-1';
 const TYPE_ID = 'type-link-1';
@@ -120,19 +115,7 @@ function installWireRouter() {
 }
 
 function setAuthedAdmin() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	adminStore.set('admin');
 }
 
@@ -156,11 +139,7 @@ afterEach(() => {
 	consoleErrorSpy.mockRestore();
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 

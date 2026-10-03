@@ -141,24 +141,14 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, setUser, setLastProvider, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { setUser, setLastProvider } from '$lib/auth/storage';
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -198,10 +188,7 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 

@@ -129,15 +129,10 @@ import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
@@ -218,19 +213,7 @@ function standaloneFixture() {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 let fetchSpy: ReturnType<typeof vi.fn>;
@@ -288,9 +271,7 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {

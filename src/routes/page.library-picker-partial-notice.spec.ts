@@ -1,38 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #321 review F2 — the LIBRARIAN PICKERS say when their own feed was truncated.
-//
-// THE RULING THIS PINS (PO, Gama, 2026-09-11): the test for an option list is
-// REACHABILITY, not read-versus-pick. A closed-set picker's options are the whole
-// reachable world, so a truncated feed does not read as a short list — it reads as
-// an ABSENCE ("that copy isn't in the library", "that singer isn't a member") and
-// the librarian acts on that. Worse than a truncated read-list, not lesser. And
-// the statement goes INSIDE the open picker, where the eyes are, not on the page
-// behind it: neither the page-level `library-partial-notice` (a different claim,
-// about the browsing tree) nor /roster's notice (a different page) covers these.
-//
-// The three feeds, and where each one lands:
-//   `listAllEditions` → the bulk-checkout EDITION select's options
-//   `listAllCopies`   → the same select: a truncated copy read hides an edition's
-//                       copies, so availability reads "none available" for an
-//                       edition that has some — the same false absence one level
-//                       down, hence one flag for both
-//   `listActiveMembers` → the bulk-checkout member checkbox list AND every
-//                       per-copy inline-checkout select
-//
-// TWO SHAPES, ONE MEANING (asserted here so a later edit cannot quietly split
-// them): a native <select> cannot host a <p>/live region, so its notice is a
-// trailing DISABLED option — unselectable, last, absent when the read is
-// complete. A list-shaped picker (the member checkboxes) carries the shared
-// visible <p role="status"> notice instead. Both render the same i18n keys
-// (`picker_partial_options_notice` / `picker_partial_members_notice`, pinned
-// per-locale in page.partial-notice-i18n.spec.ts).
-//
-// Harness: the librarian scaffolding of
-// page.library-bulk-checkout-collective-switch.spec.ts (per-db data mocks, real
-// route, real selects) with the key-echo message mock of
-// page.library-partial-notice.spec.ts, so every assertion binds DOM to an i18n
-// key rather than to English copy.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -101,14 +67,10 @@ const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const DB_A = 'sampledb';
 const DB_B = 'other-choir';
@@ -116,14 +78,10 @@ const DB_B = 'other-choir';
 const OPTIONS_OPTION = 'bulk-checkout-edition-partial-option';
 const MEMBERS_NOTICE = 'bulk-checkout-members-partial-notice';
 
-/** A read the server reported as PARTIAL (its count exceeded the rows returned). */
 function truncated<T>(items: T[], total: number) {
 	return { items, total, truncated: true };
 }
 
-// TWO works per collective, as page.library-bulk-checkout-collective-switch.spec.ts
-// documents: with one work the #74 auto-select effect picks it, and these pins
-// drive the work select by hand.
 function worksFor(db: string) {
 	return db === DB_A
 		? [
@@ -173,27 +131,15 @@ function membersFor(db: string) {
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB_A]: 'person-p', [DB_B]: 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
 			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(DB_A);
 }
 
 beforeEach(() => {
-	// Defaults: the viewer is a librarian and every feed is COMPLETE; each pin
-	// overrides the one read it is about.
 	listWorksMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(toListRead(worksFor(cfg.db)))
 	);
@@ -225,20 +171,13 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-/** Render as collective A's librarian and open the EDITION step of the
- *  bulk-checkout picker (work → edition), sanity-asserting each step so no pin
- *  can pass because the picker never opened. */
 async function openEditionStep(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
 	const { container } = render(Page);
@@ -254,7 +193,6 @@ async function openEditionStep(): Promise<HTMLElement> {
 	return container;
 }
 
-/** …and on to the member step, which the edition pick reveals. */
 async function openMemberStep(): Promise<HTMLElement> {
 	const container = await openEditionStep();
 	await fireEvent.change(q(container, 'bulk-checkout-edition-select') as HTMLSelectElement, {
@@ -266,8 +204,6 @@ async function openMemberStep(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Expand work → edition in the browsing tree, where the per-copy
- *  inline-checkout select lives (librarian-only, available copies only). */
 async function openInlineCheckout(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();
 	const { container } = render(Page);
@@ -295,11 +231,6 @@ describe('#321 review F2 — the bulk-checkout EDITION picker states a truncated
 		await waitFor(() => {
 			expect(q(container, OPTIONS_OPTION)).not.toBeNull();
 		});
-		// Inside the picker the librarian is scanning — not on the page behind it —
-		// and LAST, so it never competes with a real edition. Read off the select's
-		// own `options` collection rather than by node identity: happy-dom hands
-		// back non-identical wrappers for one node, so `contains`/`toBe` compare
-		// false on nodes that ARE the same (probed while writing this pin).
 		const select = q(container, 'bulk-checkout-edition-select') as HTMLSelectElement;
 		const options = Array.from(select.options);
 		const last = options[options.length - 1];
@@ -307,7 +238,6 @@ describe('#321 review F2 — the bulk-checkout EDITION picker states a truncated
 		expect(last.tagName).toBe('OPTION');
 		expect(last.disabled).toBe(true);
 		expect(last.textContent?.trim()).toBe('picker_partial_options_notice');
-		// The page-level browse notice is a DIFFERENT claim and stays down.
 		expect(q(container, 'library-partial-notice')).toBeNull();
 	});
 
@@ -368,11 +298,9 @@ describe('#321 review F2 — the borrower pickers state a truncated member feed'
 			expect(q(container, MEMBERS_NOTICE)).not.toBeNull();
 		});
 		const notice = q(container, MEMBERS_NOTICE) as HTMLElement;
-		// A list-shaped picker CAN host a live region, so it gets the shared shape.
 		expect(notice.getAttribute('role')).toBe('status');
 		expect(notice.className).not.toMatch(/sr-only|hidden/);
 		expect(notice.textContent?.trim()).toBe('picker_partial_members_notice');
-		// Inside the picker it is about, with the members it describes.
 		expect(
 			q(container, 'bulk-checkout-member-list')!.querySelector(`[data-testid="${MEMBERS_NOTICE}"]`)
 		).not.toBeNull();
@@ -408,4 +336,3 @@ describe('#321 review F2 — the borrower pickers state a truncated member feed'
 });
 
 // (*MVOX:Josquin* — #321 review F2: the librarian pickers, per the PO's
-// reachability ruling — closed set, so a missing option is a false absence)

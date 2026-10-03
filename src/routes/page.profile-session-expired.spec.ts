@@ -1,13 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #107 review F6 — the /profile session-expired branch shipped with no spec at
-// all: the `'session-expired'` status was added to the page but never
-// exercised, so nothing pinned it against a later refactor. Mirrors
-// page.roster-session-expired.spec.ts, both pairings:
-//   • an auth-expired load shows the notice, NOT the generic load error;
-//   • a generic failure still shows the loud load error + retry.
-//
-// Mock scaffolding inherited from page.profile.spec.ts.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -40,23 +31,16 @@ vi.mock('$lib/profile/applyProfileSave', () => ({
 	ProfileSaveError: h.ProfileSaveError
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-// #193 — the profile page reads `?link_error` / `?linked` off `page.url` (the
-// return leg of the provider-link round trip). Default: a clean /profile URL.
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-/** Duck-typed 401 rejection from the entuFetch layer (name-tag contract). */
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
 	e.name = 'AuthExpiredError';
@@ -64,14 +48,7 @@ function authExpiredError(): Error {
 }
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 beforeEach(() => {
@@ -80,10 +57,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
@@ -103,7 +77,6 @@ describe('/profile — session expired (#107)', () => {
 
 		expect(container.querySelector('[data-testid="profile-load-error"]')).toBeNull();
 		expect(container.querySelector('[data-testid="profile-retry-load"]')).toBeNull();
-		// …and never the editable form, which would invite a save that cannot land.
 		expect(container.querySelector('[data-testid="profile-field-name"]')).toBeNull();
 	});
 
