@@ -6,11 +6,16 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './library/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
@@ -18,6 +23,7 @@ import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 type Route = 'work' | 'edition-of-work' | 'copy-of-edition' | 'lending' | 'other';
 

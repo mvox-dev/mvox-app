@@ -13,8 +13,6 @@ const H = vi.hoisted(() => ({
 	listSections: vi.fn(),
 	resolveDatabaseEntityId: vi.fn(),
 	resolveManageRights: vi.fn(),
-	discover: vi.fn(),
-	goto: vi.fn(),
 	findMyMemberId: vi.fn(),
 	listMyRsvps: vi.fn(),
 	listEventSeriesForSeason: vi.fn(),
@@ -86,9 +84,15 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
 	listSections: H.listSections
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: H.discover }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: H.goto }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: H.findMyMemberId,
 	listMyRsvps: H.listMyRsvps,
@@ -143,6 +147,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 
 const ORG = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
@@ -249,6 +254,8 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	for (const value of Object.values(H)) value.mockReset();
+	gotoMock.mockReset();
+	discoverMock.mockReset();
 	resetOnLine();
 	resetAppState();
 });

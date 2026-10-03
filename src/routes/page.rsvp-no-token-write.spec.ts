@@ -10,13 +10,16 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const h = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
-	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: h.loadFullAgendaMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn((...args: unknown[]) => {
@@ -28,7 +31,9 @@ vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
 	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
 }));
-vi.mock('$app/navigation', () => ({ goto: h.gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/rsvp/rsvpData')>()),
 	findMyMemberId: h.findMyMemberIdMock,
@@ -60,6 +65,7 @@ import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const E1 = {
 	id: 'e1',
@@ -83,7 +89,7 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', fetchStub);
 	install401Recovery();
 	resetTypeIdCache();
-	h.gotoMock.mockReset();
+	gotoMock.mockReset();
 	history.replaceState({}, '', '/');
 });
 
@@ -128,8 +134,8 @@ describe('#550 — agenda RSVP with no token', () => {
 
 		await fireEvent.click(going);
 
-		await waitFor(() => expect(h.gotoMock).toHaveBeenCalledTimes(1));
-		expect(String(h.gotoMock.mock.calls[0][0])).toContain('session_expired');
+		await waitFor(() => expect(gotoMock).toHaveBeenCalledTimes(1));
+		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
 		await settle();
 		expect(nonGetCalls(fetchStub)).toEqual([]);
 	});
