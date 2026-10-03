@@ -73,9 +73,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function complete<T>(items: T[]) {
 	return { items, total: items.length, truncated: false };
@@ -93,41 +93,14 @@ type RsvpRead = Read<{ rsvpId: string; eventId: string; status: string }>;
 type AttendanceRead = Read<{ attendanceId: string; eventId: string; status: string }>;
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB_A]: 'person-p', [DB_B]: 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [
-			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
-			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(DB_A);
+	signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }, { db: DB_B, name: 'Other Choir', personId: 'person-q' }] });
 }
 
 function emptyAgenda() {
@@ -145,11 +118,7 @@ function emptyAgenda() {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {

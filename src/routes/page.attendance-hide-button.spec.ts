@@ -1,20 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #112/#1 RED — while the inline attendance panel is OPEN, the 'Take
-// attendance' button that opened it must be HIDDEN.
-//
-// The bug: AgendaList renders <TakeAttendanceButton> unconditionally for every
-// conducted recent row — the row whose panel is open keeps showing the button
-// directly ABOVE the expanded panel. Tapping it again is a no-op that looks
-// broken, and the control reads as "attendance not yet taken" while the taking
-// surface sits right under it. The event detail page already got this right
-// (`{#if isConductorForEvent && !attendancePanelOpen}`); the agenda did not.
-//
-// These are route-level integration tests on the REAL +page.svelte (the same
-// composition page.attendance-inline-placement.spec.ts drives): they render
-// the actual page route, click the actual button, and assert on the button's
-// presence INSIDE the owning row — so an implementation that only patches a
-// component unit test without re-wiring AgendaList cannot go green here.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -28,13 +12,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
@@ -48,7 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		rsvp_non_member_hint: () => 'You are not an active member.',
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_recent: () => 'Recent',
-		// #471 — the Recent section's show-more button.
 		agenda_recent_show_more: () => 'Show earlier',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
@@ -62,8 +40,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) =>
 			`RSVP for ${p.name}: ${p.rsvp}`,
 		attendance_load_error: () => "Couldn't load attendance.",
-		// #113 review F4 — the panel's loading state now carries an sr-only
-		// role="status" saying so (focus lands in the panel while it loads).
 		attendance_loading: () => 'Loading attendance…',
 		attendance_ready: (p: { count: number }) => `Attendance loaded, ${p.count} members`,
 		attendance_save_failed: () => 'Could not save attendance.',
@@ -109,18 +85,9 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// Same stubs page.attendance-inline-placement.spec.ts uses: the repertoire
-// write layer reaches $env/dynamic/public (unavailable under happy-dom outside
-// a SvelteKit request context), and the works/rights loads are not this file's
-// subject.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -157,9 +124,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 		return map;
 	}
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -167,15 +131,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -191,29 +150,11 @@ function agendaItem(id: string, startDatetime: string, conductors: string[] = []
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
-/** TWO conducted recent events — enough to prove the hide is scoped to the ONE
- *  row whose panel is open, not a page-wide blanket. Reverse-chron, as the
- *  page delivers them. */
 function setTwoConductedRecentEventsFixture() {
-	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-	// seat: person-p gains `_editor` on both events so the button/panel flows
-	// this file pins stay reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [
@@ -256,7 +197,6 @@ async function openPanelOnRow(container: HTMLElement, eventId: string) {
 	});
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -271,9 +211,7 @@ afterEach(() => {
 	createAttendanceMock.mockReset();
 	updateAttendanceStatusMock.mockReset();
 	deleteAttendanceMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -281,12 +219,10 @@ describe("+page — the 'Take attendance' button hides while its panel is open (
 	it('with every panel CLOSED, each conducted recent row shows its button (guard: the hide must not become a blanket removal)', async () => {
 		const container = await renderPageWithRecentRows();
 
-		// #471 — past-2's row only exists after show-more; reveal it up front.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
 
-		// No panel open anywhere → both conducted rows carry the entry point.
 		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
 		expect(container.querySelector(buttonInRow('past-1'))).not.toBeNull();
 		expect(container.querySelector(buttonInRow('past-2'))).not.toBeNull();
@@ -296,21 +232,18 @@ describe("+page — the 'Take attendance' button hides while its panel is open (
 		const container = await renderPageWithRecentRows();
 		await openPanelOnRow(container, 'past-1');
 
-		// The tapped row's button is GONE while its panel is expanded.
 		expect(container.querySelector(panelInRow('past-1'))).not.toBeNull();
 		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 	});
 
 	it("the hide is scoped to the OPEN row — the other conducted row keeps its button", async () => {
 		const container = await renderPageWithRecentRows();
-		// #471 — past-2's row only exists after show-more; reveal it up front.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
 		await openPanelOnRow(container, 'past-1');
 
 		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
-		// past-2's panel is closed → its entry point stays.
 		expect(container.querySelector(panelInRow('past-2'))).toBeNull();
 		expect(container.querySelector(buttonInRow('past-2'))).not.toBeNull();
 	});
@@ -318,11 +251,9 @@ describe("+page — the 'Take attendance' button hides while its panel is open (
 	it('closing the panel brings the button back; reopening hides it again — visibility tracks the panel across the full toggle cycle', async () => {
 		const container = await renderPageWithRecentRows();
 
-		// open → hidden
 		await openPanelOnRow(container, 'past-1');
 		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 
-		// close (the panel's own collapse control) → visible again
 		await fireEvent.click(
 			container.querySelector(
 				`${rowSelector('past-1')} [data-testid="attendance-collapse-btn"]`
@@ -333,21 +264,18 @@ describe("+page — the 'Take attendance' button hides while its panel is open (
 		});
 		expect(container.querySelector(buttonInRow('past-1'))).not.toBeNull();
 
-		// reopen → hidden again (the restored button is live, not a dead clone)
 		await openPanelOnRow(container, 'past-1');
 		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 	});
 
 	it("switching the panel to a DIFFERENT row restores the first row's button and hides the newly opened row's", async () => {
 		const container = await renderPageWithRecentRows();
-		// #471 — past-2's row only exists after show-more; reveal it up front.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
 		await openPanelOnRow(container, 'past-1');
 		expect(container.querySelector(buttonInRow('past-1'))).toBeNull();
 
-		// Open the second event — one panel at a time, so past-1's panel closes.
 		await fireEvent.click(container.querySelector(buttonInRow('past-2'))!);
 		await waitFor(() => {
 			expect(container.querySelector(panelInRow('past-2'))).not.toBeNull();

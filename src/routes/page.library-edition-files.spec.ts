@@ -1,53 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #275 RED — files on an edition: the /library page grows, PER EDITION (the
-// #271 create-edition template one level down), the app's FIRST file list and
-// FIRST upload affordance.
-//
-//   - FILES LIST (a NEW render path — at branch base `edition.files` renders
-//     NOWHERE): [data-testid="library-edition-files-{editionId}"] inside the
-//     EXPANDED edition region, one row
-//     [data-testid="library-edition-file-{propertyId}"] per file showing
-//     filename + human filesize (formatFileSize from the new
-//     $lib/library/editionFiles module — stated: no other helper exists). The
-//     list is a READ path, visible to everyone. Zero editions with files is
-//     normal and unremarkable: NO empty-state noise.
-//   - DOWNLOAD reuses the EXISTING mechanism: signFileUrl
-//     ($lib/repertoire/fileUrls) mints the 60s URL AT CLICK TIME. The read
-//     model carries no url field by design — nothing from the upload response
-//     or the entity fetch is stored or rendered as a link.
-//     (#427: the click itself is now a NAVIGATION to /part/<fileId> — the
-//     signing/read-through runs inside the /part viewer route, not here.)
-//   - ATTACH ([data-testid="library-attach-file-{editionId}"]): librarian-only
-//     (absent-not-disabled, $librarianStore idiom), a NATIVE
-//     <input type=file multiple> — [TRIGGER-NATIVE-CONTROLS]. Selection needs
-//     no seam in happy-dom: construct File objects, set input.files, dispatch
-//     change. The upload itself goes through the new module's
-//     uploadEditionFiles (mocked here; its wire contract — one POST, four-
-//     header S3 PUT, phantom cleanup — is pinned in
-//     src/lib/library/editionFiles.spec.ts).
-//   - STATE IS KEYED PER EDITION (the createEditionPending Map/Set precedent):
-//     uploading edition A's batch disables A's attach control only; PER-BATCH
-//     pending state (stated choice), success announced via the sr-only
-//     create-edition-status idiom, failures visible PER FILE (#253
-//     says-exactly-what-landed), a delete-failed phantom rendered as a BROKEN
-//     row — never as a normal attachment.
-//   - GENERATION GUARD: captured before the upload chain; success-apply AND
-//     failure-apply both gated on isCurrent (the #271 create-edition
-//     precedent in the same file).
-//   - LAYOUT (stated choice for GREEN): INLINE-IN-EDITION-BLOCK — the files
-//     block renders inside the edition's existing expanded region without a
-//     THIRD ml-4 nesting level (research: phone width at max-w-md). Sanity
-//     pins: no ml-4 on the files container, filenames wrap (break-words/
-//     break-all), never truncate/whitespace-nowrap.
-//
-// INTEGRATION (house rule): these tests render the ACTUAL /library route
-// component (./library/+page.svelte), so the feature cannot go green as an
-// isolated component that no page ever mounts.
-//
-// UNTOUCHED READ PATHS: the done-when's "existing read paths unchanged" means
-// the AGENDA's work-link-pdf path — pinned green by the existing
-// page.season-repertoire.spec.ts suite, which this slice must not touch.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -110,7 +61,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_edition_name_required: () => 'Edition name is required.',
 		library_create_edition_created: (p: { name: string }) => `${p.name} created.`,
 		library_create_edition_error: () => 'Could not create the edition.',
-		// #275 — edition-file affordance (engineering drafts, see the i18n spec)
 		library_edition_file_attach: () => 'Attach files',
 		library_edition_file_open: () => 'Open',
 		library_edition_file_uploading: () => 'Uploading…',
@@ -121,7 +71,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_edition_file_error: () => 'Could not attach files.',
 		library_edition_file_not_created: (p: { filename: string }) =>
 			`${p.filename} was not attached — the server returned nothing for it.`,
-		// #351 — presence badge, rendered on every file row once the store answers.
 		file_presence_on_device: () => 'On this device',
 		file_presence_needs_network: () => 'Needs network'
 	}
@@ -220,11 +169,6 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEdition: vi.fn()
 }));
 
-// #275 — the two seams under test at the PAGE level. Factory-only mocks (no
-// importActual): $lib/library/editionFiles is a RED-phase contract stub whose
-// real bodies land in GREEN, and fileUrls' real signFileUrl would do network.
-// formatFileSize is stubbed deterministically so the "human filesize" pins
-// prove the page renders THROUGH the shared helper.
 const { uploadEditionFilesMock, signFileUrlMock } = vi.hoisted(() => ({
 	uploadEditionFilesMock: vi.fn(),
 	signFileUrlMock: vi.fn()
@@ -235,43 +179,20 @@ vi.mock('$lib/library/editionFiles', () => ({
 		bytes === 1937 ? '1.9 KB' : bytes === 245678 ? '239.9 KB' : bytes === 2048 ? '2.0 KB' : `${bytes} B`
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
-// #343 — the byte-store persistence seam: an in-memory fake stands in for
-// IndexedDB (fresh per test, see beforeEach). The open path now READS
-// THROUGH it: sign → fetch bytes → store under (db, personId, fileId) →
-// serve a blob: URL. On THAT path the signed URL never reaches the tab; on the
-// degraded ones (byte fetch or body read rejected, declared size over the
-// store cap) openFileBytes hands the signed URL over on purpose rather than
-// let the cache gate an open — see its DELIVERY REPORTING block.
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 let fakeByteStore: FakeByteStore;
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -283,13 +204,6 @@ function setAuthedWithOneCollective() {
 	listRepertoireItemsMock.mockResolvedValue([]);
 }
 
-/**
- * Baseline: ONE work with TWO editions — edition-1 CARRIES two files (the
- * read model's EditionFile[] shape, straight from listEditions), edition-2
- * has NONE. Two editions because the per-EDITION-keyed-state contract needs
- * two attach controls live at once; a zero-files edition because optionality
- * is a done-when.
- */
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
@@ -322,7 +236,6 @@ function mockLibrarian() {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
-/** #343 — a byte-serving global fetch for the signed-URL GET leg. */
 function stubByteFetch() {
 	const fetchMock = vi.fn(async (_input: RequestInfo | URL) =>
 		new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]).slice(), {
@@ -358,12 +271,9 @@ afterEach(() => {
 	signFileUrlMock.mockReset();
 	gotoMock.mockReset();
 	vi.unstubAllGlobals();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
-/** Renders the route and waits for the work row. */
 async function renderReady(): Promise<HTMLElement> {
 	const { container } = render(Page);
 	await waitFor(() => {
@@ -395,7 +305,6 @@ async function expandEdition(container: HTMLElement, editionId: string): Promise
 	});
 }
 
-/** Route rendered, work-1 and the given edition expanded. */
 async function renderWithEditionOpen(editionId: string): Promise<HTMLElement> {
 	const container = await renderReady();
 	await expandWork(container, 'work-1');
@@ -409,8 +318,6 @@ function attachInput(container: HTMLElement, editionId: string): HTMLInputElemen
 	) as HTMLInputElement;
 }
 
-/** Selects files on the native input — happy-dom needs no seam: File objects
- *  constructed directly, input.files set, change dispatched. */
 async function selectFiles(input: HTMLInputElement, files: File[]): Promise<void> {
 	await fireEvent.change(input, { target: { files } });
 }
@@ -418,10 +325,6 @@ async function selectFiles(input: HTMLInputElement, files: File[]): Promise<void
 function makeFile(name: string, bytes: number, type: string): File {
 	return new File([new Uint8Array(bytes)], name, { type });
 }
-
-// ---------------------------------------------------------------------------
-// FILES LIST — the NEW render path (edition.files rendered nowhere before)
-// ---------------------------------------------------------------------------
 
 describe('#275 — the files list renders inside the expanded edition (integration)', () => {
 	it('an edition WITH files shows one row per file — filename AND human filesize (via the shared formatFileSize) — inside the expanded edition block', async () => {
@@ -435,7 +338,6 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 				container.querySelector('[data-testid="library-edition-files-edition-1"]')
 			).not.toBeNull();
 		});
-		// The list lives WITH its edition — inside that edition's block.
 		const editionBlock = container.querySelector(
 			'[data-testid="library-edition-edition-1"]'
 		) as HTMLElement;
@@ -460,14 +362,11 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 		const container = await renderReady();
 		await expandWork(container, 'work-1');
-		// edition-1 visible but NOT expanded: no file rows yet.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-edition-edition-1"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="library-edition-files-edition-1"]')).toBeNull();
 
-		// Expanded: the list is there (the positive control that makes the
-		// absence pins above and below non-vacuous).
 		await expandEdition(container, 'edition-1');
 		await waitFor(() => {
 			expect(
@@ -475,7 +374,6 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 			).not.toBeNull();
 		});
 
-		// Collapsed again: gone.
 		await fireEvent.click(
 			container.querySelector('[data-testid="library-edition-toggle-edition-1"]') as Element
 		);
@@ -492,8 +390,6 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 		const container = await renderWithEditionOpen('edition-1');
 		await expandEdition(container, 'edition-2');
 
-		// Positive control first: edition-1's list exists, so a base build with
-		// NO files feature at all cannot pass this test.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="library-edition-files-edition-1"]')
@@ -506,14 +402,12 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 		expect(editionBlock.querySelector('[data-testid^="library-edition-files-"]')).toBeNull();
 		expect(editionBlock.querySelector('[data-testid^="library-edition-file-"]')).toBeNull();
 		expect(editionBlock.querySelector('[data-testid^="library-attach-file-"]')).toBeNull();
-		// The existing copies-empty read path is untouched.
 		expect(editionBlock.textContent).toContain('No copies yet.');
 	});
 
 	it('the files list is a READ path — it renders for the non-librarian member too', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
-		// resolveLibrarian default: not-librarian.
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -535,8 +429,6 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
-		// Stated layout choice: inline-in-edition-block — the block rides the
-		// edition's EXISTING indent, no third ml-4 level under max-w-md.
 		expect(Array.from(list.classList)).not.toContain('ml-4');
 
 		const row = list.querySelector('[data-testid="library-edition-file-file-1"]') as HTMLElement;
@@ -552,10 +444,6 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 		).toBe(true);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// DOWNLOAD — the existing signFileUrl mechanism, minted AT CLICK TIME
-// ---------------------------------------------------------------------------
 
 describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-rendered; the click navigates', () => {
 	it('no URL is rendered or pre-signed: at render, signFileUrl has NOT been called, the row holds no <a href>, and the open control is a BUTTON', async () => {
@@ -597,10 +485,6 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 		await fireEvent.click(open);
 
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
-		// #427 review finding 3 — work/composer/edition/filename are in hand
-		// exactly here and nowhere in the viewer, which is where the bytes
-		// land; the label rides the navigation so a part opened from the
-		// library is not "Unnamed part" on /downloads. Full shape, both args.
 		expect(gotoMock.mock.calls.slice(before)).toEqual([
 			[
 				'/part/file-1?db=sampledb',
@@ -645,12 +529,6 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 		).toBeNull();
 	});
 });
-
-// ---------------------------------------------------------------------------
-// #427 — Open is a navigation whether or not the part is on the device; the
-// held/missing distinction is the VIEWER's business (see
-// src/routes/part/page.part-viewer.spec.ts), never this page's
-// ---------------------------------------------------------------------------
 
 describe('#427 — a part already on the device navigates the same way', () => {
 	it('with every network path dead and the file in the store, the click still just navigates — same URL, no signing, no fetch, no error', async () => {
@@ -702,10 +580,6 @@ describe('#427 — a part already on the device navigates the same way', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// ATTACH AFFORDANCE — librarian-only, native input, per-edition keyed
-// ---------------------------------------------------------------------------
-
 describe('#275 — the attach control: librarian-only native <input type=file multiple>', () => {
 	it('for the librarian it renders inside the expanded edition — a NATIVE file input, multiple, labelled — on the zero-files edition too (attach is how files ever appear)', async () => {
 		mockBaselineLibrary();
@@ -723,7 +597,6 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 		expect(input.type).toBe('file');
 		expect(input.multiple).toBe(true);
 		expect(input.getAttribute('aria-label') || input.labels?.length).toBeTruthy();
-		// Inside THIS edition's block.
 		const editionBlock = container.querySelector(
 			'[data-testid="library-edition-edition-2"]'
 		) as HTMLElement;
@@ -755,10 +628,6 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 		expect(container.querySelectorAll('[data-testid^="library-attach-file-"]')).toHaveLength(0);
 	});
 });
-
-// ---------------------------------------------------------------------------
-// THE UPLOAD FLOW — select, in-flight per edition, local append, announce
-// ---------------------------------------------------------------------------
 
 describe('#275 — selecting files uploads them through uploadEditionFiles', () => {
 	it('a change with two Files calls uploadEditionFiles ONCE with (cfg, the edition id, the Files) — and no listEditions refetch afterwards; the new rows appear LOCALLY with the sr-only announcement naming exactly what landed', async () => {
@@ -792,8 +661,6 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 		const sent = call[2] as File[];
 		expect(sent.map((f) => f.name)).toEqual(['new-a.pdf', 'new-b.pdf']);
 
-		// LOCAL append — the rows render, keyed by the returned property ids,
-		// with filename + human filesize; no refetch.
 		await waitFor(() => {
 			expect(
 				container.querySelector('[data-testid="library-edition-file-prop-new-1"]')
@@ -809,8 +676,6 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 		expect(row.textContent).toContain('2.0 KB');
 		expect(listEditionsMock.mock.calls.length).toBe(editionReadsBefore);
 
-		// The sr-only live region announces EXACTLY what landed (#253) — the
-		// create-edition-status idiom, per edition.
 		const status = container.querySelector(
 			'[data-testid="library-edition-files-status-edition-2"]'
 		) as HTMLElement;
@@ -846,13 +711,11 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
-		// Nothing pre-signed by the upload flow.
 		expect(signFileUrlMock).not.toHaveBeenCalled();
 
 		const before = gotoMock.mock.calls.length;
 		await fireEvent.click(open);
 
-		// #427 — same affordance as an existing file: a navigation, no signing.
 		await waitFor(() => expect(gotoMock.mock.calls.length).toBeGreaterThan(before));
 		expect(gotoMock.mock.calls.slice(before)).toEqual([
 			[
@@ -903,12 +766,10 @@ describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated c
 				container.querySelector('[data-testid="library-edition-files-uploading-edition-2"]')
 			).not.toBeNull();
 		});
-		// PER-EDITION: the other edition's control is untouched.
 		expect(attachInput(container, 'edition-1').disabled).toBe(false);
 		expect(
 			container.querySelector('[data-testid="library-edition-files-uploading-edition-1"]')
 		).toBeNull();
-		// Uploading copy is visible, localized.
 		expect(
 			container.querySelector('[data-testid="library-edition-files-uploading-edition-2"]')
 				?.textContent
@@ -928,10 +789,6 @@ describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated c
 		});
 	});
 });
-
-// ---------------------------------------------------------------------------
-// FAILURE — visible, per file, phantom-free (#253 says-exactly-what-landed)
-// ---------------------------------------------------------------------------
 
 describe('#275 — a failed file is reported by NAME and never renders as an attachment', () => {
 	it('file 2 of 3 fails (cleaned up): rows for 1 and 3 render, NO row for 2, and a visible per-file failure names it — while the announcement names what DID land', async () => {
@@ -966,13 +823,11 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 				container.querySelector('[data-testid="library-edition-file-prop-new-3"]')
 			).not.toBeNull();
 		});
-		// NO phantom row for the cleaned-up failure.
 		expect(container.querySelector('[data-testid="library-edition-file-prop-new-2"]')).toBeNull();
 		expect(
 			container.querySelector('[data-testid="library-edition-file-open-prop-new-2"]')
 		).toBeNull();
 
-		// The failure is VISIBLE (role=alert) and names the file.
 		const err = await waitFor(() => {
 			const el = container.querySelector(
 				'[data-testid="library-edition-files-error-edition-2"]'
@@ -983,15 +838,12 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 		expect(err.getAttribute('role')).toBe('alert');
 		expect(err.textContent).toContain('Could not attach new-b.pdf.');
 
-		// Says exactly what landed: only the two that made it.
 		const status = container.querySelector(
 			'[data-testid="library-edition-files-status-edition-2"]'
 		) as HTMLElement;
 		expect(status.textContent?.trim()).toBe('new-a.pdf, new-c.pdf attached.');
 	});
 
-	// Review YELLOW: the third cleanup state. Nothing was created for this file,
-	// so it is neither an attachment nor a phantom — and it must not vanish.
 	it('a "not-created" file is named in the visible error with its OWN message — distinct from the created-then-cleaned-up wording, and no row for it', async () => {
 		mockBaselineLibrary();
 		setAuthedWithOneCollective();
@@ -1023,10 +875,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 		expect(err.textContent).toContain(
 			'new-b.pdf was not attached — the server returned nothing for it.'
 		);
-		// NOT the created-then-cleaned wording — that would claim a cleanup that
-		// never had a target.
 		expect(err.textContent).not.toContain('Could not attach new-b.pdf.');
-		// No attachment row, and no broken row either (there is no phantom).
 		expect(container.querySelector('[data-testid="library-edition-file-prop-new-2"]')).toBeNull();
 		expect(container.querySelector('[data-testid^="library-edition-file-broken-"]')).toBeNull();
 		const status = container.querySelector(
@@ -1060,8 +909,6 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 			return el as HTMLElement;
 		});
 		expect(broken.textContent).toContain('new-a.pdf failed and could not be cleaned up.');
-		// NEVER a normal attachment: no plain row under the normal testid, no
-		// Open control for it, and no success announcement.
 		expect(container.querySelector('[data-testid="library-edition-file-prop-new-1"]')).toBeNull();
 		expect(
 			container.querySelector('[data-testid="library-edition-file-open-prop-new-1"]')
@@ -1100,29 +947,9 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 	});
 });
 
-// ---------------------------------------------------------------------------
-// GENERATION GUARD — a mid-flight collective switch must not apply ANYTHING
-// ---------------------------------------------------------------------------
-
 describe('#275 — success-apply AND failure-apply are generation-guarded', () => {
 	it('an upload that settles AFTER the collective switched applies NOTHING — no rows, no announcement, no error (a stale mixed result must not leak either half into the new collective)', async () => {
-		// Two collectives, the #271 guard-test shape.
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', secondchoir: 'person-s' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-				{ db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
+		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'secondchoir', name: 'Second Choir', personId: 'person-s' }] });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -1158,7 +985,6 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 			return el;
 		});
 
-		// Hold the upload in flight…
 		let resolveUpload: (r: unknown) => void = () => {};
 		uploadEditionFilesMock.mockReturnValue(
 			new Promise((resolve) => {
@@ -1169,7 +995,6 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		await waitFor(() => expect(uploadEditionFilesMock).toHaveBeenCalledTimes(1));
 		expect(uploadEditionFilesMock.mock.calls[0][0]).toEqual({ db: 'sampledb', token: 'jwt-abc' });
 
-		// …switch the collective while it is pending…
 		selectedCollectiveDbStore.set('secondchoir');
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="library-work-work-1"]')?.textContent).toContain(
@@ -1177,8 +1002,6 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 			);
 		});
 
-		// …then let the stale upload settle with a MIXED result — one landed
-		// file AND one failure, so BOTH apply paths are exercised.
 		resolveUpload({
 			uploaded: [
 				{ propertyId: 'prop-new-1', filename: 'new-a.pdf', filesize: 2048, filetype: 'application/pdf' }
@@ -1187,7 +1010,6 @@ describe('#275 — success-apply AND failure-apply are generation-guarded', () =
 		});
 		await new Promise((r) => setTimeout(r, 0));
 
-		// NOTHING applied in the new collective: re-open the tree and look.
 		await expandWork(container, 'work-1');
 		await expandEdition(container, 'edition-1');
 		expect(container.querySelector('[data-testid="library-edition-file-prop-new-1"]')).toBeNull();

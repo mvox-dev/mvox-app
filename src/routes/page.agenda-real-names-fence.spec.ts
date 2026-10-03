@@ -1,33 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #469 — the AGENDA (`src/routes/+page.svelte`) obeys `roster_show_real_names`.
-//
-// HISTORY, named not deleted: this file was the #269 SCOPE FENCE under Henry's
-// 2026-09-06 roster-only ruling ("Every other place a member's name appears —
-// pickers, chips, the agenda, event pages, the library — keeps profile names").
-// Mihkel's #469 word (2026-09-23, issue body: "all places we are showing member
-// names and they all must obey the admin setting") SUPERSEDES that ruling, so
-// the fence FLIPS to the conditional contract. The agenda reaches the shared
-// `loadRoster` through `getRoster` and feeds `rosterRows` to the attendance
-// panel, the conductor chips and all three conductor pickers — one producer,
-// so pinning the panel pins them all.
-//
-// Pinned here, on the non-vacuous wire (`_type.string=database` resolves, the
-// toggle is a REAL read answer, named `admin_member_record`s are served in both
-// states):
-//   1. toggle ON → the attendance panel's member rows show the REAL names and
-//      the profile names appear nowhere in it; ONE toggle read and ONE records
-//      read for the whole load + panel open (`getRoster` is one read);
-//   2. toggle OFF → the reverse: profile names, ZERO `admin_member_record`
-//      requests — the off side is a read answer, never a skipped ask, so the
-//      toggle itself IS read exactly once.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// Full-fallback paraglide mock: every key resolves to a `[key]` stub, so no
-// message key can crash the mock. Assertions below match on DATA (names), never
-// on copy.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -55,19 +30,11 @@ const {
 	listAllRsvpsForEventMock: vi.fn()
 }));
 
-// NOTE what is deliberately NOT mocked: `$lib/roster/rosterData`. This file's
-// whole subject is what the REAL roster producer does when the agenda calls it,
-// so it runs for real against the stubbed wire below.
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -97,17 +64,12 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, PROFILE_NAMES, REAL_NAMES } from '$lib/testing/realNamesFence';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -123,19 +85,7 @@ function agendaItem(id: string, startDatetime: string) {
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
@@ -151,19 +101,11 @@ afterEach(() => {
 	listAttendanceMock.mockReset();
 	listAllRsvpsForEventMock.mockReset();
 	resetTypeIdCache();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
-/** One conducted recent event; the viewer (person-p) holds the season seat. */
 function setConductedRecentFixture() {
-	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-	// seat: person-p gains `_editor` on the event so the panel this fence spec
-	// opens stays reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],

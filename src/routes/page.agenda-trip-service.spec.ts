@@ -1,41 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #266 RED — INTEGRATION: wire values `trip` and `service` join the canonical
-// event-type vocabulary, and every derived agenda surface picks them up FOR
-// FREE from the ONE shared vocabulary (EVENT_TYPE_LABEL →
-// CANONICAL_EVENT_TYPES → eventTypeBadgeClass). Real +page.svelte, real
-// AgendaList / AgendaMonthView, real eventTypeLabels / eventTypeStyles — only
-// the data seams are mocked (same harness family as page.agenda-filter.spec.ts
-// and page.agenda-month-view.spec.ts).
-//
-// Pinned contract (#266, team-lead build shape):
-//
-//   - NEW canonical order (TEN types): rehearsal, concert, service, festival,
-//     retreat, trip, workshop, meeting, social, other — service beside concert
-//     (performance family), trip beside retreat (travel family).
-//   - trip/service are QUIET-GREY-FIRST: eventTypeBadgeClass maps both to the
-//     same default the social/other badges wear; the hued set stays the #211
-//     six (daylight-distinguishability bar).
-//   - #214 chips DERIVE the two new types from present events — own chips, in
-//     canonical order, localized labels, chip colour = eventTypeBadgeClass
-//     (never bucketed into 'other' once canonical).
-//   - #247 month view renders their badges via the same label + class pair.
-//   - Agenda day-list row badges likewise.
-//   - Done-when 6 FENCE: a non-canonical free-text type still renders exactly
-//     as today — raw label, quiet badge, grouped under the 'other' chip.
-//   - Locale keys event_type_trip / event_type_service in ALL FOUR files,
-//     exact text pinned (et fixed by the commission; en/lv/uk engineering
-//     drafts flagged refinable): en Trip/Service, et Reis/Teenistus,
-//     lv Brauciens/Dievkalpojums, uk Поїздка/Богослужіння — every draft within
-//     the existing ~18-char ceiling (done-when 7, phone-width surfaces).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { AgendaItem } from '$lib/agenda/types';
-// #211's ONE scheme — chips and badges must consume the same map; asserting
-// against it here proves "chip colour = badge colour" without a re-typed copy.
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
 vi.mock('$lib/paraglide/messages.js', () => {
@@ -49,9 +18,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		event_type_rehearsal: () => '[msg:rehearsal]',
 		event_type_concert: () => '[msg:concert]',
 		event_type_other: () => '[msg:other]',
-		// #266 — the two new keys get DISTINCT markers: a label that renders as
-		// the marker went through paraglide; the raw wire string ('trip') or the
-		// bare key would fail these pins.
 		event_type_trip: () => '[msg:trip]',
 		event_type_service: () => '[msg:service]'
 	};
@@ -77,11 +43,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -117,27 +78,12 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p1' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
 }
 
 function item(id: string, name: string, startDatetime: string, eventType: string): AgendaItem {
@@ -154,9 +100,6 @@ function item(id: string, name: string, startDatetime: string, eventType: string
 	} as AgendaItem;
 }
 
-// Far-future upcoming dates — AgendaList's relative-day decoration reads the
-// real clock, so the fixtures stay ahead of it. These fixture events carry the
-// NEW wire values and drive the REAL producer chain end to end.
 const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
 const UP_CONCERT = item('up-con', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
 const UP_SERVICE = item('up-serv', 'Jumalateenistus', '2030-06-15T08:00:00.000Z', 'service');
@@ -198,14 +141,12 @@ function badge(container: HTMLElement, id: string): HTMLElement {
 	return el as HTMLElement;
 }
 
-/** Every class token of eventTypeBadgeClass(type), asserted PRESENT on el. */
 function expectSchemeClasses(el: Element, type: string) {
 	const classes = eventTypeBadgeClass(type).split(/\s+/).filter(Boolean);
 	expect(classes.length).toBeGreaterThan(0);
 	for (const cls of classes) {
 		expect([...el.classList], `expected scheme class ${cls}`).toContain(cls);
 	}
-	// Quiet-grey-first: no hued type-* token may ride along.
 	for (const cls of el.classList) {
 		expect(cls, `unexpected hued token ${cls}`).not.toMatch(/^(bg|text|border)-type-/);
 	}
@@ -238,25 +179,16 @@ afterEach(async () => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	// The #247 view-mode preference is module-level state: reset it so one
-	// test's Kuu choice never leaks into the next.
+	resetAppState();
 	const prefs = await import('$lib/preferences/agendaView').catch(() => null);
 	prefs?.setAgendaView('list');
 	if (typeof localStorage !== 'undefined') localStorage.clear();
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// #214 chips — trip and service derive their OWN chips (not the 'other' bucket)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#266 — the filter chips pick trip and service up from the vocabulary', () => {
 	it('renders own chips for present trip/service events — canonical order (service after concert, trip after retreat-slot neighbours), localized labels, NO other bucket', async () => {
 		const container = await renderAgenda([UP_REHEARSAL, UP_CONCERT, UP_SERVICE, UP_TRIP]);
 
-		// Canonical NEW order among present types; trip/service are canonical
-		// now, so NO 'other' chip appears — nothing here buckets into it.
 		expect(chipTestids(container)).toEqual([
 			'agenda-filter-all',
 			'agenda-filter-rehearsal',
@@ -279,7 +211,6 @@ describe('#266 — the filter chips pick trip and service up from the vocabulary
 		await fireEvent.click(chip(container, 'agenda-filter-trip'));
 		expect(upcomingRowIds(container)).toEqual(['up-trip']);
 
-		// Toggle back to All, then the service chip.
 		await fireEvent.click(chip(container, 'agenda-filter-trip'));
 		await fireEvent.click(chip(container, 'agenda-filter-service'));
 		expect(upcomingRowIds(container)).toEqual(['up-serv']);
@@ -295,27 +226,17 @@ describe('#266 — the filter chips pick trip and service up from the vocabulary
 			await fireEvent.click(chip(container, testid));
 
 			expect(chip(container, testid).getAttribute('aria-pressed')).toBe('true');
-			// The scheme classes, verbatim from the SHARED map — quiet grey, the
-			// same classes the row badge wears.
 			expectSchemeClasses(chip(container, testid), type);
-			// And — the #214 F1 lesson, which bites every QUIET type — the pressed
-			// state must be visible beyond the hue: at least one class the
-			// inactive chip did not carry.
 			const added = [...chip(container, testid).classList].filter((cls) => !inactive.has(cls));
 			expect(
 				added.length,
 				`the active ${type} chip must carry at least one class its inactive self does not`
 			).toBeGreaterThan(0);
 
-			// Back to All for the next type.
 			await fireEvent.click(chip(container, testid));
 		}
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// day-list row badges — localized label + quiet scheme from the shared pair
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#266 — agenda day-list badges render trip and service localized and quiet', () => {
 	it('the trip and service rows carry badges with the paraglide labels (never the raw wire string) and the shared quiet classes', async () => {
@@ -330,10 +251,6 @@ describe('#266 — agenda day-list badges render trip and service localized and 
 		expectSchemeClasses(service, 'service');
 	});
 });
-
-// ═════════════════════════════════════════════════════════════════════════════
-// #247 month view — same label + class pair, for free
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('#266 — the month view renders trip and service via the same vocabulary pair', () => {
 	it('month rows for trip/service events carry the localized badge with the shared quiet classes', async () => {
@@ -355,21 +272,14 @@ describe('#266 — the month view renders trip and service via the same vocabula
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// done-when 6 FENCE — existing events untouched
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#266 — existing-events fence: non-canonical free text renders exactly as today', () => {
 	it("a free-text 'proov' event keeps its raw badge label, the quiet default classes, and still groups under the 'other' chip", async () => {
 		const container = await renderAgenda([UP_TRIP, UP_FREETEXT]);
 
-		// The raw string survives on the badge (visibly wrong beats invisibly
-		// blank) with the quiet default — byte-identical posture to today.
 		const freeText = badge(container, 'up-proov');
 		expect(freeText.textContent?.trim()).toBe('proov');
 		expectSchemeClasses(freeText, 'proov');
 
-		// Free text buckets under 'other'; canonical trip stands apart.
 		expect(chipTestids(container)).toEqual([
 			'agenda-filter-all',
 			'agenda-filter-trip',
@@ -380,14 +290,7 @@ describe('#266 — existing-events fence: non-canonical free text renders exactl
 	});
 });
 
-// ═════════════════════════════════════════════════════════════════════════════
-// locale files — exact-text pins, all four languages (house style)
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('#266 — event_type_trip / event_type_service in all four locale files, exact text', () => {
-	// et is FIXED by the commission (Mihkel, verbatim: "reis ja teenistus");
-	// en/lv/uk are engineering drafts flagged refinable in the delivery report
-	// (the #247 weekday-keys posture) — but pinned exactly, house style.
 	const EXPECTED: Record<string, { trip: string; service: string }> = {
 		en: { trip: 'Trip', service: 'Service' },
 		et: { trip: 'Reis', service: 'Teenistus' },
@@ -395,9 +298,6 @@ describe('#266 — event_type_trip / event_type_service in all four locale files
 		uk: { trip: 'Поїздка', service: 'Богослужіння' }
 	};
 
-	// Done-when 7 — phone-width surfaces: the longest existing type label is 18
-	// chars ('Saviesīgs pasākums' / 'Товариська зустріч'); no new label may
-	// exceed that ceiling.
 	const LENGTH_CEILING = 'Saviesīgs pasākums'.length;
 
 	it.each(Object.keys(EXPECTED))('%s.json carries both keys with the pinned copy', (locale) => {
@@ -413,4 +313,3 @@ describe('#266 — event_type_trip / event_type_service in all four locale files
 });
 
 // (*MVOX:Tallis* — #266 RED: trip + service join the app vocabulary — chips,
-//  badges, month view, fence, four-locale copy pins)

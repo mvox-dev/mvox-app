@@ -1,45 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #123 — RED: language selector on the profile page.
-//
-// The app ships 4 Paraglide locales (en/et/lv/uk) but language is currently
-// browser-detected only (runtime strategy: localStorage → preferredLanguage →
-// baseLocale, cookie strategy tree-shaken OUT). This spec defines the contract
-// for a user-facing selector:
-//
-//   Component: src/lib/components/LanguageSelector.svelte
-//     - container  [data-testid="language-selector"] (labelled; role="toolbar"
-//       since #156 — arrows move focus here and never activate)
-//     - one native <button type="button"> per locale:
-//         [data-testid="language-option-<locale>"] showing the locale's
-//         NATIVE name (English / Eesti / Latviešu / Українська)
-//     - current locale marked with aria-pressed="true"
-//     - click → sets the locale via the injectable seam
-//       `setLocaleImpl?: (locale) => void` (house style: trailing injectable
-//       seam, defaults to the real paraglide `setLocale`)
-//
-//   Runtime: selection must persist via the PARAGLIDE_LOCALE cookie and the
-//   cookie must win over browser detection (preferredLanguage) on next load —
-//   i.e. the paraglide strategy list needs 'cookie' BEFORE 'preferredLanguage'
-//   (vite.config.ts paraglideVitePlugin strategy — runtime.js is regenerated
-//   from it).
-//
-//   Integration: the selector renders on the actual /profile route — both in
-//   the ready state and with no collective selected (language choice is app
-//   chrome, like the sign-out link, not gated on membership).
 import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-// #193 — the profile page reads `?link_error` / `?linked` off `page.url` (the
-// return leg of the provider-link round trip). Default: a clean /profile URL.
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-// Mock ONLY the network read; keep resolveField/profilesByLevel real.
 vi.mock('$lib/profile/profileData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
 		'$lib/profile/profileData'
@@ -49,16 +18,10 @@ vi.mock('$lib/profile/profileData', async () => {
 
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
-// Does not exist yet — the whole file is RED with "Failed to resolve import"
-// until GREEN creates src/lib/components/LanguageSelector.svelte.
 import LanguageSelector from '$lib/components/LanguageSelector.svelte';
 import { cookieName, getLocale, setLocale, strategy } from '$lib/paraglide/runtime.js';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 type AppLocale = (typeof LOCALES)[number];
@@ -82,11 +45,6 @@ function clearLocaleCookie() {
 	document.cookie = `${cookieName}=; path=/; max-age=0`;
 }
 
-/**
- * Replace window.location.reload with a spy; returns a restore fn. The picker
- * uses paraglide's default `reload: true`, so any test exercising the real
- * seam would otherwise depend on happy-dom's navigation stub.
- */
 function spyOnReload() {
 	const reload = vi.fn();
 	const original = Object.getOwnPropertyDescriptor(window.location, 'reload');
@@ -108,20 +66,12 @@ function setNavigatorLanguages(langs: string[]) {
 }
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 beforeEach(() => {
 	localStorage.clear();
 	clearLocaleCookie();
-	// Deterministic browser detection: happy-dom's default may vary.
 	setNavigatorLanguages(['en']);
 	h.listMyProfilesMock.mockReset();
 });
@@ -131,10 +81,7 @@ afterEach(() => {
 	localStorage.clear();
 	clearLocaleCookie();
 	Reflect.deleteProperty(window.navigator, 'languages');
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('LanguageSelector — options (#123)', () => {
@@ -157,19 +104,13 @@ describe('LanguageSelector — options (#123)', () => {
 	it('exposes a toolbar role with an accessible name', async () => {
 		const { container } = await renderSelector();
 		const selector = q(container, '[data-testid="language-selector"]');
-		// #156 — role="toolbar", not the original bare "group": arrows MOVE
-		// focus here and never activate (activation reloads the document), which
-		// is the WAI-APG toolbar contract. The app's arrow-SELECTS groups (roster
-		// view chips, library copy-sort) are role="radiogroup" instead.
 		expect(selector?.getAttribute('role')).toBe('toolbar');
-		// Label content is Comenius territory — only require that one exists.
 		const label =
 			selector?.getAttribute('aria-label') ?? selector?.getAttribute('aria-labelledby');
 		expect(label, 'selector toolbar needs aria-label or aria-labelledby').toBeTruthy();
 	});
 
 	it('marks the current locale as selected via aria-pressed', async () => {
-		// Clean state + navigator=['en'] → current locale is 'en'.
 		const { container } = await renderSelector();
 		expect(option(container, 'en')?.getAttribute('aria-pressed')).toBe('true');
 		for (const locale of ['et', 'lv', 'uk']) {
@@ -200,10 +141,6 @@ describe('LanguageSelector — selection (#123)', () => {
 });
 
 describe('locale persistence — cookie (#123)', () => {
-	// RED driver: 'cookie' is currently tree-shaken out of the generated
-	// runtime (strategy is localStorage → preferredLanguage → baseLocale), so
-	// setLocale never writes the cookie and getLocale never reads it. GREEN
-	// adds 'cookie' to the paraglideVitePlugin strategy in vite.config.ts.
 
 	it('setLocale persists the selected locale in the PARAGLIDE_LOCALE cookie', () => {
 		setLocale('lv', { reload: false });
@@ -222,8 +159,6 @@ describe('locale persistence — cookie (#123)', () => {
 	});
 
 	it('the persisted cookie locale beats browser detection on next load', () => {
-		// Simulate a fresh load: no localStorage (cleared in beforeEach), a
-		// previously persisted cookie, and a browser reporting Estonian.
 		document.cookie = `${cookieName}=uk; path=/`;
 		setNavigatorLanguages(['et-EE', 'et']);
 		expect(getLocale()).toBe('uk');
@@ -239,14 +174,6 @@ describe('locale persistence — cookie (#123)', () => {
 });
 
 describe('locale switch takes effect — rendered UI (#123)', () => {
-	// The state assertions above (seam called, getLocale() === 'et', cookie
-	// written) all pass even when the app visibly stays in the old language:
-	// Paraglide messages read plain module state (`_locale` in runtime.js), so
-	// `{m.foo()}` in a Svelte template has no reactive dependency and never
-	// re-evaluates. The observable contract for a reloading picker is therefore
-	// (a) the document reload is requested and (b) the reloaded document renders
-	// the newly selected language. Both are asserted here on the real /profile
-	// page with unmocked messages.
 
 	it('selecting a locale re-renders the profile page in that language', async () => {
 		selectSampledb();
@@ -261,11 +188,8 @@ describe('locale switch takes effect — rendered UI (#123)', () => {
 
 			await fireEvent.click(option(first.container, 'et')!);
 
-			// The picker must ask the document to reload — without it the already
-			// rendered English strings stay on screen.
 			expect(reload, 'selecting a locale must request a document reload').toHaveBeenCalled();
 
-			// Simulate that reload: a fresh document render must come up Estonian.
 			cleanup();
 			const second = render(ProfilePage);
 			await waitFor(() =>
@@ -280,10 +204,6 @@ describe('locale switch takes effect — rendered UI (#123)', () => {
 });
 
 describe('document language attribute (#123 review F1)', () => {
-	// app.html hardcodes `<html lang="en">` and this is a pure client-side SPA
-	// (no hooks, no +layout.server), so nothing declared the resolved locale to
-	// assistive tech: a fully Estonian page still announced itself as English.
-	// The root layout now syncs `document.documentElement.lang` to getLocale().
 	beforeEach(() => {
 		document.documentElement.lang = 'en';
 	});
@@ -302,9 +222,6 @@ describe('document language attribute (#123 review F1)', () => {
 });
 
 describe('LanguageSelector — touch target (#123 review F2)', () => {
-	// House rule (#132/T6 review F2): every interactive control reserves a
-	// 44px-tall hit area. The locale buttons were px-2 py-1 text-sm (~28px) —
-	// the smallest tappable target on the profile page.
 	it('every locale option reserves a 44px-tall touch target (min-h-11)', async () => {
 		const { container } = await renderSelector();
 		for (const locale of LOCALES) {
@@ -320,9 +237,6 @@ describe('LanguageSelector — touch target (#123 review F2)', () => {
 });
 
 describe('LanguageSelector — keyboard accessibility (#123)', () => {
-	// Native <button> elements give Tab focus + Enter/Space activation for
-	// free (happy-dom cannot synthesize key→click, so the contract is pinned
-	// structurally: real buttons, in the tab order, programmatically focusable).
 	it('locale options are native buttons, and the group holds exactly one Tab stop (roving tabindex, #156)', async () => {
 		const { container } = await renderSelector();
 		let zeroStops = 0;
@@ -333,8 +247,6 @@ describe('LanguageSelector — keyboard accessibility (#123)', () => {
 			expect((el as HTMLButtonElement).type).toBe('button');
 			if (el!.getAttribute('tabindex') === '0') zeroStops++;
 		}
-		// Exactly one option is the Tab stop — the others sit at tabindex="-1"
-		// but stay reachable via the group's own arrow-key handler.
 		expect(zeroStops).toBe(1);
 	});
 
@@ -345,9 +257,6 @@ describe('LanguageSelector — keyboard accessibility (#123)', () => {
 		expect(document.activeElement).toBe(et);
 	});
 
-	// #156 — roving tabindex, TOOLBAR semantics: arrows MOVE focus and never
-	// activate. Activation reloads the document (see the component's block
-	// comment), so an arrow that selected would blow the page away mid-browse.
 	it('ArrowRight moves focus forward and WRAPS; ArrowLeft wraps backwards', async () => {
 		const { container } = await renderSelector();
 		const opts = LOCALES.map((l) => option(container, l) as HTMLButtonElement);
@@ -400,8 +309,6 @@ describe('integration — /profile route (#123)', () => {
 		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
-		// Wait until the page has fully loaded (profile fields present) so the
-		// selector is asserted on the real ready-state page, not a flash frame.
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 		expect(q(container, '[data-testid="language-selector"]')).not.toBeNull();
 		for (const locale of LOCALES) {
@@ -410,11 +317,7 @@ describe('integration — /profile route (#123)', () => {
 	});
 
 	it('renders the language selector even with no collective selected', async () => {
-		// Language choice is app chrome (like sign-out) — it must not be gated
-		// on collective membership.
-		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set(null);
+		signIn({ collectives: [], selected: null });
 		const { container } = render(ProfilePage);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-no-collective"]')).not.toBeNull()

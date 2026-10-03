@@ -1,32 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #113 TU.5 RED — focus order around TU.4/#112's hide-while-open attendance
-// entry point, on the REAL agenda route (./+page.svelte).
-//
-// TU.4 made the 'Take attendance' button UNMOUNT while its panel is open. That
-// fixed the visual defect (#112/#1) but introduced the focus one: the click
-// that opens the panel destroys the very button that held focus, and the
-// browser drops focus to <body> — a keyboard user's next Tab restarts at the
-// top of the document (WCAG 2.4.3 Focus Order). Closing the panel does the
-// same in reverse: the panel's own Close button unmounts itself.
-//
-// This is the exact defect class the section picker already fixed (#99 F1 —
-// `closeMenu` in src/lib/sections/SectionPicker.svelte, which puts focus back
-// on the trigger instead of letting it drop to <body>): when an activation
-// unmounts its own control, the handler must place focus explicitly. The
-// roster's `handleRemoveSection` follows the same discipline. The pinned
-// contract:
-//   - opening a row's panel moves focus INTO that panel (its close control is
-//     the natural landing — first focusable, and the symmetric undo);
-//   - closing the panel returns focus to that row's restored 'Take
-//     attendance' button.
-//
-// Guard tests pin the labels TU.4 kept: the entry point's contextual
-// event-named aria-label, and the panel close control's m.* label.
-//
-// Route-level integration on the real +page.svelte — same mock composition as
-// page.attendance-hide-button.spec.ts, so a fix that only patches a component
-// unit test cannot go green here.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -40,13 +12,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
@@ -120,11 +87,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -161,9 +123,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 		return map;
 	}
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -171,15 +130,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -195,26 +149,11 @@ function agendaItem(id: string, startDatetime: string, conductors: string[] = []
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
 function setOneConductedRecentEventFixture() {
-	// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-	// seat: person-p gains `_editor` on the event so the focus flows this file
-	// pins stay reachable. The seat stays too.
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 		upcoming: [],
 		recent: [{ ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] }],
@@ -245,7 +184,6 @@ async function renderPageWithRecentRow() {
 	return container;
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -260,9 +198,7 @@ afterEach(() => {
 	createAttendanceMock.mockReset();
 	updateAttendanceStatusMock.mockReset();
 	deleteAttendanceMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -286,8 +222,6 @@ describe("+page — focus order around the hide-while-open 'Take attendance' but
 			expect(el).not.toBeNull();
 			return el as HTMLElement;
 		});
-		// The button is gone (the #112/#1 hide) — focus must now be somewhere
-		// INSIDE the panel that replaced it, never on <body>.
 		expect(container.querySelector(buttonInRow)).toBeNull();
 		expect(
 			panel.contains(document.activeElement),
@@ -319,11 +253,6 @@ describe("+page — focus order around the hide-while-open 'Take attendance' but
 		).toBe(restored);
 	});
 
-	// #113 review F4 — focus now LANDS in the panel while its roster is still
-	// loading, so the busy state is no longer cosmetic: without it a
-	// screen-reader user hears "Close, button" and then silence. Review F1
-	// extended the tail: aria-busy clearing is not itself an announcement, so
-	// the live region must outlive the load and change its text.
 	it('the panel reports aria-busy="true" while it loads, with an sr-only role="status" saying so — focus lands here before the rows exist', async () => {
 		setOneConductedRecentEventFixture();
 		let releaseRoster: (rows: unknown[]) => void = () => {};
@@ -353,19 +282,10 @@ describe("+page — focus order around the hide-while-open 'Take attendance' but
 		expect(status!.getAttribute('aria-live')).toBe('polite');
 		const loadingText = status!.textContent?.trim();
 		expect(loadingText).not.toBe('');
-		// …and the busy state clears when the rows arrive.
 		releaseRoster([{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: '' }]);
 		await waitFor(() => {
 			expect(container.querySelector(panelInRow)!.getAttribute('aria-busy')).toBeNull();
 		});
-		// #113 review F1 — the region must be the SAME node it was during the
-		// load, now carrying DIFFERENT text. A region that mounts together with
-		// its text announces nothing (a live region speaks changes to contents,
-		// not its own insertion), and one that unmounts on completion leaves the
-		// user with no cue that the wait ended — aria-busy dropping off a
-		// non-live container is silent. Node identity is what separates
-		// "always mounted, text swapped" from "mounted with text", which the
-		// during-load assertions above cannot tell apart on their own.
 		const loaded = container.querySelector(panelInRow)!.querySelector(
 			'[data-testid="attendance-panel-status"]'
 		);

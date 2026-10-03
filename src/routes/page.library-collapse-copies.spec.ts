@@ -1,30 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #128 RED — member (non-librarian) view collapses AVAILABLE copies into one
-// summary line; lent-out copies keep rendering individually.
-//
-// Today the copy list inside an unfolded edition renders EVERY copy as its own
-// row for everyone. Per #126 the list is partitioned lent-first / available-
-// second; #128 collapses the available block for members. The contract pinned
-// here:
-//
-//   - member view: lent copies render individually (unchanged); available
-//     copies do NOT get individual rows — instead ONE summary line with the
-//     available count renders where the available block was;
-//   - the summary line carries data-testid="library-available-summary-<editionId>"
-//     (per edition — each unfolded edition's copy list collapses independently)
-//     and its text comes from a message key, mocked here as
-//     library_available_summary → "<count> copies available for lending";
-//   - librarian view: NO collapse — every copy renders individually (the
-//     available rows carry the inline-checkout affordance) and no summary line
-//     appears;
-//   - all-available edge (member): only the summary line, zero individual rows;
-//   - all-lent edge: no summary line (a "0 copies available" line is noise).
-//
-// Route-level integration tests on the REAL /library +page.svelte (same
-// composition page.library.spec.ts and page.library-copy-sort.spec.ts drive):
-// render the route, expand the real work → edition nodes, assert on the DOM —
-// so a helper-only implementation cannot go green here.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -53,10 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',
 		library_create_work_error: () => 'Could not create the work.',
-		// #271 — the create-edition button renders unconditionally in the
-		// librarian tree once a work's editions are idle, same as create-work's
-		// button above; this spec never opens the form, so only this one key
-		// is needed (same minimal footprint as the create-work set here).
 		library_create_edition_button: () => 'Add edition',
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
@@ -81,8 +51,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_sort_nr: () => 'Nr',
 		library_copy_sort_member: () => 'Member',
 		library_copy_sort_since: () => 'Since',
-		// #128 — the collapsed-available summary line (GREEN adds the real key to
-		// messages/*.json; the mock pins the key NAME and the count param).
 		library_available_summary: (p: { count: number }) =>
 			`${p.count} copies available for lending`
 	}
@@ -126,9 +94,6 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// vi.importActual for $lib/library/libraryData pulls entuFetch -> $lib/entu-config,
-// which reads $env/dynamic/public — unavailable outside a SvelteKit request
-// context under happy-dom. Same fix as page.library.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -160,29 +125,12 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -192,21 +140,10 @@ function setAuthedWithOneCollective() {
 }
 
 type Fixture = {
-	/** copy ids that carry an active lending */
 	lent: string[];
-	/** copy ids with no active lending */
 	available: string[];
 };
 
-/**
- * One work, one edition, five copies. Which are lent vs available is chosen
- * per test:
- *
- *   copy-a (nr 1) … copy-e (nr 5)
- *
- * Lendings are generated for the requested `lent` ids (distinct borrowers,
- * distinct dates) so the lent rows are real, individually-rendered rows.
- */
 function setFixture({ lent, available }: Fixture) {
 	const all = [...lent, ...available];
 	listWorksMock.mockResolvedValue(toListRead([
@@ -242,7 +179,6 @@ function setFixture({ lent, available }: Fixture) {
 
 const SUMMARY = '[data-testid="library-available-summary-edition-1"]';
 
-/** The copy rows of edition-1, as copy ids, in DOM order. */
 function copyRows(container: HTMLElement): string[] {
 	return [
 		...container.querySelectorAll(
@@ -251,9 +187,6 @@ function copyRows(container: HTMLElement): string[] {
 	].map((el) => el.getAttribute('data-testid')!.replace('library-copy-', ''));
 }
 
-/** Render /library and unfold work-1 → edition-1 (does NOT wait for copies —
- *  which nodes exist after copy load differs per scenario, so each test waits
- *  for its own anchor). */
 async function renderWithEditionUnfolded() {
 	const { container } = render(Page);
 	await waitFor(() =>
@@ -285,9 +218,7 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/library — member view collapses available copies (#128)', () => {
@@ -295,13 +226,11 @@ describe('/library — member view collapses available copies (#128)', () => {
 		setFixture({ lent: ['copy-b', 'copy-c'], available: ['copy-a', 'copy-d', 'copy-e'] });
 		const container = await renderWithEditionUnfolded();
 
-		// Lent rows are still individual rows (unchanged by #128).
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="library-copy-copy-b"]')).not.toBeNull()
 		);
 		expect(container.querySelector('[data-testid="library-copy-copy-c"]')).not.toBeNull();
 
-		// The available copies do NOT render as individual rows…
 		expect(copyRows(container).sort()).toEqual(['copy-b', 'copy-c']);
 		for (const id of ['copy-a', 'copy-d', 'copy-e']) {
 			expect(
@@ -310,7 +239,6 @@ describe('/library — member view collapses available copies (#128)', () => {
 			).toBeNull();
 		}
 
-		// …instead exactly ONE summary line appears, with the correct count.
 		const summaries = container.querySelectorAll(SUMMARY);
 		expect(summaries.length, 'summary line count').toBe(1);
 		expect(summaries[0].textContent).toContain('3 copies available for lending');
@@ -321,8 +249,6 @@ describe('/library — member view collapses available copies (#128)', () => {
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		const container = await renderWithEditionUnfolded();
 
-		// Librarian state settled (tools revealed) before asserting rows — GREEN
-		// must not collapse for librarians even transiently once resolved.
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull()
 		);

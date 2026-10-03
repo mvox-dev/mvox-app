@@ -95,24 +95,15 @@ const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	listAllEditionsMock.mockResolvedValue(toListRead([]));
@@ -137,9 +128,7 @@ afterEach(() => {
 	listAllEditionsMock.mockReset();
 	listAllCopiesMock.mockReset();
 	listActiveMembersMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 // ---------------------------------------------------------------------------

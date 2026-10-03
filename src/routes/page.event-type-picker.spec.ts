@@ -118,14 +118,9 @@ import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const CANONICAL_EVENT_TYPES = [
 	'rehearsal',
@@ -183,19 +178,7 @@ function standaloneFixture() {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -237,9 +220,7 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {

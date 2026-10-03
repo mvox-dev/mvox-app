@@ -1,9 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #83 review fix — route-level test for the conductor data flow: loadFullAgenda
-// returns recent items + seasonConductors, and the page wires them into AgendaList
-// as recentItems + conductorEventIds. Prior route specs all returned
-// `recent: [], seasonConductors: [], seasonOwners: [], seasonEditors: []`, leaving this wire untested.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,18 +12,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
 		agenda_filter_empty: () => 'No events match this filter.',
-		// #101 TE.1 -- every agenda row now carries an event-detail link.
 		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
@@ -40,9 +29,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_recent: () => 'Recent',
 		agenda_take_attendance: () => 'Take attendance',
 		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
-		// #85 TA.4 — the recent-row attendance badge + season summary render
-		// unconditionally whenever the Recent section renders, so this file's
-		// fixtures (which all populate `recent`) need these keys too.
 		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
@@ -69,25 +55,9 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
-// library reads that feed its pickers), which reaches entuFetch ->
-// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
-// request context under happy-dom. Same one-line fix the library/profile specs
-// already use; the real modules keep running, only the base url is stubbed.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// ...and the page resolves management rights per season/event on every load.
-// Only that ONE call is stubbed (the pure helpers and the write functions stay
-// real): left alone it issues a live request per agenda event, which is both a
-// network call from a unit test and a source of teardown AbortErrors. The
-// management surface itself is covered end-to-end in
-// page.repertoire-manage-wiring.spec.ts.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -107,11 +77,6 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	deleteRsvp: vi.fn()
 }));
 
-// #84 — +page.svelte now also imports $lib/roster/rosterData and
-// $lib/attendance/attendanceData at module scope (the "Take attendance" panel
-// wiring), both of which pull in $lib/entu/request -> $env/dynamic/public —
-// same $env wall as rsvpData above. This spec doesn't exercise attendance
-// behavior, just needs the import to resolve cleanly.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
@@ -128,14 +93,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	}
 }));
 
-// #90 TR.2 — the page now resolves each row's Works element and signs PDFs on
-// click. Mocked here for the same reason agendaData/rsvpData are: both modules
-// pull in $lib/entu/request -> $env/dynamic/public, which is unavailable
-// outside a SvelteKit request context under happy-dom (and neither belongs in
-// these specs' subject).
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -143,15 +100,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(
 	id: string,
@@ -180,23 +132,10 @@ function agendaItem(
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -205,9 +144,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -250,11 +187,6 @@ describe('+page — recent items reach AgendaList (#83 conductor wiring)', () =>
 
 describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', () => {
 	it('a conductor sees the Recent section with their conducted events identified', async () => {
-		// person-p is in the season conductors, and the event inherits (empty conductors)
-		// #356 — the marking gate is now EVENT RIGHTS (canMarkAttendance), not the
-		// seat: person-p gains `_editor` on the event so the button expectation
-		// below keeps its behavioral intent (the recent-items wiring this test is
-		// about). The seat stays for the wiring's own sake.
 		const recentEvent = { ...agendaItem('past-1', '2026-06-10T16:00:00.000Z', []), editors: ['person-p'] };
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming: [],
@@ -268,10 +200,6 @@ describe('+page — conductorEventIds reach AgendaList (#83 conductor wiring)', 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
-		// #84 TA.3 — +page.svelte now wires ontakeattendance, so the button that was
-		// deliberately gated absent here in TA.2 (handler not yet wired) is now
-		// present for a conductor. See page.attendance-panel.spec.ts for the full
-		// expand-flow coverage this handler now drives.
 		expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
 	});
 

@@ -18,8 +18,7 @@ export interface SignInOpts {
 }
 
 export function signIn(opts: SignInOpts = {}): void {
-	const { token = 'jwt-abc', collectives = [SAMPLEDB], ttlMs = 100_000 } = opts;
-	const selected = opts.selected === undefined ? (collectives[0]?.db ?? null) : opts.selected;
+	const { token = 'jwt-abc', collectives = [SAMPLEDB], selected = null, ttlMs = 100_000 } = opts;
 	setToken(token);
 	authStore.set({
 		status: 'authenticated',

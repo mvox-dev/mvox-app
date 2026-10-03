@@ -1,31 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #331 RED (agenda half) — the READER's unknown branch must be reachable.
-//
-// #329 built the non-editor unknown state (RepertoireElement's reader branch)
-// and page.edition-unknown.spec.ts pinned the whole chain — FOR AN EDITOR.
-// For a reader with no manage rights anywhere the chain's flag never arrives:
-// `rowEditionUnknown` opens with `if (!partial) return false`, and `partial`
-// reaches the component as `worksManage?.pickableEditionsPartial ?? false`
-// (AgendaList) — with `worksManage` $derived UNDEFINED for a rights-less
-// reader by its own docstring. So the branch whose comment names "a
-// non-editor viewer" cannot fire for one, and a reader whose pinned edition
-// fell past the cap of a truncated collective read is told "No pinned
-// edition" — the stated negative this family of issues exists to remove.
-//
-// The reader's flag is computed and DISCARDED one link earlier:
-// `loadWorksByEventId` reads `listAllEditions` and drops `.truncated`. The
-// settled fix (do not re-fork): the flag rides each row as the OPTIONAL
-// `WorkRow.truncated` field — workRows.spec.ts pins the producer end; THIS
-// suite pins the page end, on the real +page.svelte route, with the producer
-// mocked at its module seam (`$lib/repertoire/workRows`) so a row can arrive
-// exactly as a truncated read will deliver it.
-//
-// Fences ridden along: `repertoire_no_edition` under a complete read with
-// nothing pinned stays byte-identical; a resolvable pin's NAME renders under
-// truncated and complete reads alike (truncation poisons negatives, never
-// positives); the reader gets NO picker and owes NO read — not the scoped
-// per-work read either ("No new read is issued on any path").
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
@@ -48,10 +21,6 @@ const { loadFullAgendaMock, loadWorksByEventIdMock, discoverMock, gotoMock, list
 	}));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-// The producer, mocked at ITS seam — the page still runs its real wiring from
-// `worksByEventId` through AgendaList into RepertoireElement, which is the
-// integration under test. `collectSources`/`buildWorkRows` stay real (the
-// page imports them for the #234 panel join).
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: loadWorksByEventIdMock
@@ -80,37 +49,15 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
-/** The viewer holds NO rights anywhere: not on the season, not on any event.
- *  `worksManage` derives to undefined for her — the exact route by which the
- *  editor-side `pickableEditionsPartial` can never reach her rows. */
 function setAuthedReader() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', orlando: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'orlando', name: 'Orlando', personId: 'person-p' }
-		],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'orlando', name: 'Orlando', personId: 'person-p' }] });
 }
 
 function agendaEvent(id: string, name: string) {
@@ -126,7 +73,6 @@ function agendaEvent(id: string, name: string) {
 	};
 }
 
-/** One agenda per collective, rights-less throughout. */
 function installAgenda() {
 	loadFullAgendaMock.mockImplementation(async () =>
 		fullAgendaResult(
@@ -153,9 +99,6 @@ function installAgenda() {
 	);
 }
 
-/** Exactly what `loadWorksByEventId` delivers for a reader whose collective's
- *  edition read TRUNCATED and whose pin fell past the cap: the id is real,
- *  the label lookup came back empty, and the read says so on the row. */
 function workRow(overrides: Partial<WorkRow> = {}): WorkRow {
 	return {
 		id: 'ri-1',
@@ -177,10 +120,6 @@ function workRow(overrides: Partial<WorkRow> = {}): WorkRow {
 	};
 }
 
-/** Wire fallback for whatever the page still reads directly (type cache and
- *  friends) — everything answers empty. The `fetchMock` doubles as the
- *  no-new-read instrument: a reader's row must never cost an edition read,
- *  scoped or collective-wide. */
 function stubWire() {
 	const fetchMock = vi.fn(
 		async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -226,9 +165,7 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	loadWorksByEventIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('#331 agenda — a rights-less reader under a TRUNCATED edition read', () => {
@@ -237,25 +174,15 @@ describe('#331 agenda — a rights-less reader under a TRUNCATED edition read', 
 		const { container } = await renderExpandedAsReader({ 'pv-ev': [workRow()] });
 		const li = workRowOf(container, 'Old warhorse');
 
-		// The reader branch #329 wrote for exactly this viewer must fire.
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
 		expect(unknown, 'work-edition-unknown on the reader\u2019s row').not.toBeNull();
 		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
-		// The stated negative must be GONE — not softened, not captioned: absent.
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
 
-		// A reader still gets NO management surface — the wording changes, the
-		// editor-only picker does not appear (editor behaviour byte-identical).
 		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
 		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
 
-		// And she owes NO read for it: not the scoped per-work read (its own URL
-		// pattern, `_parent.reference=work-1` — page.edition-unknown.spec.ts's
-		// established check, not a bare `_parent.reference=`, which every
-		// _parent-scoped read on the page also matches, e.g. this test's own
-		// schedule_item bulk read), not a second edition read — the flag she
-		// needed was already computed.
 		expect(
 			fetchMock.mock.calls.some((c) => String(c[0]).includes('_type.string=edition'))
 		).toBe(false);
@@ -308,12 +235,6 @@ describe('#331 agenda — the reader\'s COMPLETE read keeps every stated fact', 
 
 	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#331 item 4)', async () => {
 		stubWire();
-		// The flag is absent entirely — the complete-read shape every hand-built
-		// row already has. The pin's id resolves to nothing: not the row's own
-		// label lookup, and (the read being complete) not anything a re-read
-		// could find. "No pinned edition" is false either way.
-		// #342 \u2014 this IS the dangling state: the list is whole, so the wording is
-		// the NEW key, never the truncated state's incompleteness claim.
 		const { container } = await renderExpandedAsReader({
 			'pv-ev': [workRow({ truncated: undefined })]
 		});
@@ -368,9 +289,6 @@ describe('#331 agenda — a collective switch carries no stale unknown state acr
 			).not.toBeNull();
 		});
 
-		// The complete collective renders complete: its pin by name, no unknown
-		// wording anywhere on the page — the flag lives ON the rows, and the
-		// rows it rode out on are gone.
 		expect(
 			workRowOf(container, 'Fresh piece').querySelector('[data-testid="work-edition"]')!
 				.textContent
