@@ -3,13 +3,11 @@ import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-const { discoverMock, gotoMock, resolveGateMock } = vi.hoisted(() => ({
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
-	resolveGateMock: vi.fn()
-}));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
+const { resolveGateMock } = vi.hoisted(() => ({ resolveGateMock: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () => (await import('$lib/testing/routeMocks')).discoverModule());
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
+);
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
@@ -24,6 +22,7 @@ import { collectiveState } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { SAMPLEDB, signIn } from '$lib/testing/session';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 
 function setAuthedWithOneCollective() {
 	discoverMock.mockResolvedValue({ collectives: [SAMPLEDB], erroredDbs: [] });
