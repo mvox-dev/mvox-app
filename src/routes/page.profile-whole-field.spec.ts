@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/svelte';
+import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
@@ -33,15 +33,13 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './profile/+page.svelte';
-import { resetGate } from '$lib/profile/completionGate';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
+import {
+	realTimersCleanupResetGate,
+	resetSaveMocks,
+	selectSampledb
+} from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const activator = (c: HTMLElement, field: 'name' | 'email') =>
@@ -69,18 +67,9 @@ async function openEditor(c: HTMLElement, field: 'name' | 'email'): Promise<HTML
 	return input(c, field) as HTMLInputElement;
 }
 
-beforeEach(() => {
-	listMyProfilesMock.mockReset();
-	applyProfileSaveMock.mockReset();
-	applyFieldMoveMock.mockReset();
-});
+beforeEach(resetSaveMocks);
 
-afterEach(() => {
-	vi.useRealTimers();
-	cleanup();
-	resetAppState();
-	resetGate();
-});
+afterEach(realTimersCleanupResetGate);
 
 describe('#205 — /profile display state: whole-field activators', () => {
 	for (const field of ['name', 'email'] as const) {

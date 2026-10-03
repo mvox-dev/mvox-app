@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The profile sharing tier updates on a first-time save.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -30,27 +30,22 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './profile/+page.svelte';
-import { resetGate } from '$lib/profile/completionGate';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	ProfileSaveError,
 	applyFieldMoveMock,
 	applyProfileSaveMock
 } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
+import {
+	cleanupResetGate,
+	displayValue,
+	resetSaveMocks,
+	selectSampledb
+} from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const btn = (c: HTMLElement, testid: string) =>
 	q(c, `[data-testid="${testid}"]`) as HTMLButtonElement;
-
-function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
-	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
-}
 
 async function openEditor(
 	container: HTMLElement,
@@ -97,17 +92,9 @@ async function typeNameAndSave(container: HTMLElement, value: string): Promise<v
 	});
 }
 
-beforeEach(() => {
-	listMyProfilesMock.mockReset();
-	applyProfileSaveMock.mockReset();
-	applyFieldMoveMock.mockReset();
-});
+beforeEach(resetSaveMocks);
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetGate);
 
 describe('/profile — #160 sharing tier reactivity on first save', () => {
 	it('sanity (issue step 4): a first-time user renders the tier picker with the non-active tiers disabled', async () => {

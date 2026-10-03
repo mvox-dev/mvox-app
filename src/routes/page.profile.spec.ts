@@ -1,88 +1,11 @@
 // @vitest-environment happy-dom
 // The profile page: one editor per field, autosaved, with save feedback.
-import { cleanup, createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { createEvent, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		profile_title: () => 'Your profile',
-		profile_intro: () => 'Fill in your name and email.',
-		profile_completion_required: () => 'Please add your name to continue.',
-		profile_no_collective: () => 'Select a collective.',
-		profile_load_error: () => 'Could not load your profile.',
-		profile_load_retry: () => 'Retry',
-		profile_field_name_label: () => 'Name',
-		profile_field_email_label: () => 'Email',
-		profile_name_edit_label: () => 'Edit name',
-		profile_email_edit_label: () => 'Edit email',
-		profile_level_public_label: () => 'Public',
-		profile_level_public_hint: () => 'Anyone.',
-		profile_level_domain_label: () => 'Collective',
-		profile_level_domain_hint: () => 'Members.',
-		profile_level_private_label: () => 'Private',
-		profile_level_private_hint: () => 'Only you.',
-		profile_save: () => 'Save',
-		profile_saving: () => 'Saving…',
-		profile_saved: () => 'Saved',
-		profile_save_error: () => "Couldn't save — please try again.",
-		profile_name_private_disabled: () => 'Name cannot be private',
-		profile_visibility_title: () => 'Who can see each field',
-		profile_visibility_intro: () => 'Pick an icon to move a field.',
-		profile_visibility_active: (p: { level: string }) => `Visible at ${p.level}`,
-		profile_visibility_move: (p: { field: string; level: string }) =>
-			`Move ${p.field} to ${p.level}`,
-		profile_visibility_moving: () => 'Moving…',
-		profile_visibility_leak: (p: { level: string }) => `Still readable at ${p.level}`,
-		profile_visibility_conflict: (p: { field: string }) =>
-			`Your ${p.field} has different values at more than one level.`,
-		profile_visibility_confirm_preview: (p: { level: string }) => `Tap again to keep ${p.level}`,
-		profile_visibility_preview_note: () => 'Tap again to keep this version.',
-		profile_move_error: () =>
-			"Couldn't change visibility. Nothing was lost — please try again.",
-		profile_repair_title: () => 'Unfinished visibility change',
-		profile_repair_body_tightening: (p: { field: string; level: string }) =>
-			`Your ${p.field} is still readable at ${p.level}.`,
-		profile_repair_body_widening: (p: { field: string; level: string }) =>
-			`An old copy of your ${p.field} is still at ${p.level}.`,
-		profile_repair_body_loaded: (p: { field: string; level: string }) =>
-			`An unfinished change left your ${p.field} readable at ${p.level}.`,
-		profile_repair_action: () => 'Finish now',
-		profile_repair_working: () => 'Finishing…',
-		profile_repair_error: (p: { field: string; level: string }) =>
-			`Couldn't finish. Your ${p.field} is still readable at ${p.level}.`,
-		profile_repair_done: () => 'Visibility change completed.',
-		profile_sign_out: () => 'Sign out',
-		profile_signed_in_as: (p: { account: string; provider: string }) =>
-			`Signed in as ${p.account} via ${p.provider}`,
-		profile_language_label: () => 'Language',
-		profile_time_format_label: () => 'Time format',
-		profile_time_format_24h: () => '24-hour',
-		profile_time_format_ampm: () => 'AM/PM',
-		profile_time_format_hint: () => 'Applies on this device.',
-		profile_linked_accounts_title: (p: { collective: string }) =>
-			`Sign-ins that work for ${p.collective}`,
-		profile_link_another: () => 'Link another account',
-		profile_link_choose_provider: () => 'Choose a provider to link',
-		profile_link_error_conflict: () =>
-			'That account is already in use by another member here.',
-		profile_link_error_dead: () => 'The link attempt expired or was already used.',
-		profile_link_error_failed: () => 'Linking failed — you can try again.',
-		profile_link_error_missing_rights: () =>
-			'Your account is missing the rights needed to link another sign-in.',
-		profile_link_error_already_linked: () => 'That sign-in is already linked to your account.',
-		profile_link_error_step: (p: { step: string }) =>
-			`Linking could not be completed — it stopped at step: ${p.step}. You can try again.`,
-		profile_link_success: (p: { collective: string }) =>
-			`That sign-in now works for ${p.collective}.`,
-		profile_link_cancel: () => 'Cancel',
-		auth_provider_smart_id: () => 'Smart-ID',
-		auth_provider_mobile_id: () => 'Mobile-ID',
-		auth_provider_id_card: () => 'ID-card',
-		auth_provider_e_mail: () => 'E-mail',
-		auth_provider_google: () => 'Google',
-		auth_provider_apple: () => 'Apple'
-	})
+	(await import('$lib/testing/pages/profileCopy')).profileMessages()
 );
 
 vi.mock('$lib/profile/fieldMove', async () =>
@@ -109,42 +32,18 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './profile/+page.svelte';
 import { setUser, setLastProvider } from '$lib/auth/storage';
 import { get } from 'svelte/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { completionGateStore } from '$lib/profile/completionGate';
 import { applyConflictResolutionMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
+import {
+	displayValue,
+	openEditor,
+	realTimersCleanupResetGate,
+	selectSampledb,
+	waitReady
+} from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
-
-async function waitReady(container: HTMLElement): Promise<void> {
-	await waitFor(() =>
-		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull()
-	);
-}
-
-function displayValue(container: HTMLElement, field: 'name' | 'email'): string {
-	return (q(container, `[data-testid="profile-${field}-value"]`)?.textContent ?? '').trim();
-}
-
-async function openEditor(
-	container: HTMLElement,
-	field: 'name' | 'email'
-): Promise<HTMLInputElement> {
-	const btn = q(container, `[data-testid="profile-${field}-edit"]`) as HTMLButtonElement | null;
-	expect(btn, `profile-${field}-edit must render in display state`).not.toBeNull();
-	await fireEvent.click(btn!);
-	let editorInput: HTMLInputElement | null = null;
-	await waitFor(() => {
-		editorInput = q(container, `[data-testid="profile-${field}"]`) as HTMLInputElement | null;
-		expect(editorInput).not.toBeNull();
-	});
-	return editorInput!;
-}
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -153,12 +52,7 @@ beforeEach(() => {
 	applyConflictResolutionMock.mockReset();
 });
 
-afterEach(() => {
-	vi.useRealTimers();
-	cleanup();
-	resetAppState();
-	resetGate();
-});
+afterEach(realTimersCleanupResetGate);
 
 describe('/profile v2 — render + seed', () => {
 	it('renders name and email whole-field activators once loaded (#205 — the raw inputs no longer live-mount)', async () => {

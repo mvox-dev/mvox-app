@@ -1,6 +1,6 @@
 // Library page harness: the setup its specs had word for word. Specs import what they use.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
-import { expect, vi } from 'vitest';
+import { expect } from 'vitest';
 import Page from '../../../routes/library/+page.svelte';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
@@ -29,13 +29,9 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 
-export const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
+export { cleanupClearReset } from './dom';
 
-export function cleanupClearReset(): void {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-}
+export const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 
 export function resetCopyListMocks(): void {
 	cleanup();

@@ -93,16 +93,9 @@ import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
-}
+import { selectSampledb } from '$lib/testing/pages/admin';
+import { q } from '$lib/testing/pages/dom';
 
 let fetchStub: ReturnType<typeof vi.fn<typeof fetch>>;
 

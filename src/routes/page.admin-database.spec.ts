@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -49,8 +49,6 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
@@ -66,12 +64,12 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
+import { DB_ENTITY, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 resolveOwnerTierMock.mockResolvedValue('error');
 listJoinStatesMock.mockResolvedValue({});
-
-const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 
 const ANNA: RolePerson = {
 	id: 'p-anna',
@@ -81,10 +79,6 @@ const ANNA: RolePerson = {
 };
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
 
 beforeEach(() => {
 	resolveAdminMock.mockResolvedValue('admin');
@@ -109,15 +103,7 @@ beforeEach(() => {
 	updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearReset);
 
 async function renderReady(): Promise<HTMLElement> {
 	selectSampledb();

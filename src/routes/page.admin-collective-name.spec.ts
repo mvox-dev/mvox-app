@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 // The editable collective name on /admin, stored on the mvox_collective marker.
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred, testCfg } from '$lib/testing/entuFetchKit';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -46,8 +46,6 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './admin/+page.svelte';
 import { selectedCollectiveStore } from '$lib/collectives/store';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	listAdminsMock,
@@ -60,17 +58,13 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-const CFG = testCfg('sampledb', 'jwt-admin');
+import { CFG, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupReset, q } from '$lib/testing/pages/dom';
 
 const MARKER = { markerId: 'marker-1', name: 'Koor Sampledb' };
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own'] };
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
 
 function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
@@ -84,10 +78,6 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-}
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
 }
 
 async function renderReady() {
@@ -136,10 +126,7 @@ beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockReset();
 });
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-});
+afterEach(cleanupReset);
 
 describe('/admin — collective name display', () => {
 	it('READY renders the MARKER resolution\'s name with a pencil button — the real admin route, not an isolated component', async () => {

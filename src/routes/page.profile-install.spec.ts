@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,10 +26,11 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
 import { startInstallAffordance } from '$lib/install/installState';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { LOCALES, readMessages } from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const installButton = (c: HTMLElement) =>
@@ -227,14 +227,7 @@ describe('#408 review F1 — the install adapter is app-lifetime, owned by the r
 	});
 });
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 const NEW_KEYS = ['profile_install_button', 'profile_install_ios_hint'] as const;
-
-function readMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(__dirname, `../../messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 describe('locale parity — #408 keys exist, non-empty, in en/et/lv/uk', () => {
 	for (const locale of LOCALES) {

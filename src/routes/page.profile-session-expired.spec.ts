@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -25,11 +25,8 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './profile/+page.svelte';
-import { resetGate } from '$lib/profile/completionGate';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-import { ProfileSaveError } from '$lib/testing/mocks/profile';
+import { cleanupResetGate, selectSampledb } from '$lib/testing/pages/profile';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
@@ -37,19 +34,11 @@ function authExpiredError(): Error {
 	return e;
 }
 
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
-
 beforeEach(() => {
 	listMyProfilesMock.mockReset();
 });
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetGate);
 
 describe('/profile — session expired (#107)', () => {
 	it('an auth-expired profile load shows the session-expired notice with a sign-in link — not the generic load error', async () => {

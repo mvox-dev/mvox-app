@@ -1,27 +1,13 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		admin_invite_title: () => 'Invite a new member',
-		admin_invite_no_collective: () => 'Select a collective before creating invites.',
-		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
-		admin_invite_load_error: () => 'Could not load invite prerequisites.',
-		admin_invite_retry_load: () => 'Retry',
-		admin_invite_db_label: () => 'Collective',
-		admin_invite_submit: () => 'Create invite',
-		admin_invite_creating: () => 'Creating…',
-		admin_invite_link_label: () => 'Invite link',
+	(await import('$lib/testing/pages/adminCopy')).adminMessages({
 		admin_invite_copy: () => '[admin_invite_copy]',
 		admin_invite_copied: () => '[admin_invite_copied]',
 		admin_invite_copy_error: () => '[admin_invite_copy_error]',
-		admin_invite_create_another: () => '[admin_invite_create_another]',
-		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
-		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
-		admin_invite_error: () => 'Invite creation failed.',
-		admin_invite_partial_failure: (p: { personId: string }) =>
-			`A person entity (${p.personId}) was already created and carries a live invite token.`
+		admin_invite_create_another: () => '[admin_invite_create_another]'
 	})
 );
 
@@ -49,52 +35,13 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/invite/+page.svelte';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	createInviteMock,
 	resolveInviteParentMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
-
-function jwt(payload: object): string {
-	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
-	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
-}
-const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
-
-function selectSampledb(): void {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
-
-function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: string): T | null {
-	return container.querySelector<T>(`[data-testid="${testid}"]`);
-}
-
-async function renderDone(): Promise<{ container: HTMLElement }> {
-	selectSampledb();
-	resolveParentMock.mockResolvedValue('parent-1');
-	resolveInviteParentMock.mockResolvedValue('org-1');
-	createInviteMock.mockResolvedValue({
-		personId: 'p1',
-		memberId: 'm1',
-		inviteToken: MINTED_TOKEN
-	});
-	const { container } = render(Page);
-	await waitFor(() => {
-		const submit = q<HTMLButtonElement>(container, 'invite-admin-submit');
-		expect(submit && !submit.disabled).toBe(true);
-	});
-	await fireEvent.click(q(container, 'invite-admin-submit') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'invite-admin-result')).not.toBeNull();
-	});
-	return { container };
-}
-
-const EXPECTED_URL = () => `${window.location.origin}/invite/${MINTED_TOKEN}`;
-
-const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+import { EXPECTED_URL, cleanupRestoreClipboard, renderDone } from '$lib/testing/pages/adminInvite';
+import { q } from '$lib/testing/pages/dom';
 
 function installWriteText(): ReturnType<typeof vi.fn> {
 	const writeText = vi.fn().mockResolvedValue(undefined);
@@ -113,15 +60,7 @@ beforeEach(() => {
 	h.createCopierSpy.mockClear();
 });
 
-afterEach(() => {
-	cleanup();
-	if (originalClipboardDesc) {
-		Object.defineProperty(navigator, 'clipboard', originalClipboardDesc);
-	} else {
-		Reflect.deleteProperty(navigator, 'clipboard');
-	}
-	resetAppState();
-});
+afterEach(cleanupRestoreClipboard);
 
 describe('#346/#360 InviteSurface rides the shared copy module', () => {
 	it('a BUTTON-click copy runs through createInviteLinkCopier, and its getText yields the surface\'s own inviteLink', async () => {

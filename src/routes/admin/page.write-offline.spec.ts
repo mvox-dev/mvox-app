@@ -88,6 +88,8 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { ROSTER } from '$lib/testing/pages/admin';
+import { q } from '$lib/testing/pages/dom';
 
 const REASON = '[write_unavailable_no_signal]';
 const HELD = '[write_held_no_signal]';
@@ -95,12 +97,6 @@ const HELD = '[write_held_no_signal]';
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-a'] };
 const BELA = { id: 'p-bela', name: 'Bela Brauer', role: 'editor' as const, valueIds: ['pv-b'] };
 const CILLA = { id: 'p-cilla', name: 'Cilla Cane', role: 'editor' as const, valueIds: ['pv-c'] };
-const ROSTER = [
-	{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
-	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' },
-	{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' },
-	{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '' }
-];
 
 function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
@@ -143,10 +139,6 @@ afterEach(() => {
 	resetAppState();
 	resetOnLine();
 });
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
-}
 
 async function renderReadyOnline() {
 	const rendered = render(Page);

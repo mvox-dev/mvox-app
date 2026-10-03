@@ -20,35 +20,18 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/invite/+page.svelte';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	InviteCreateError,
 	createInviteMock,
 	resolveInviteParentMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
+import { authExpiredError, resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupReset } from '$lib/testing/pages/dom';
 
-function authExpiredError(): Error {
-	const e = new Error('Entu returned 401 — session expired');
-	e.name = 'AuthExpiredError';
-	return e;
-}
+beforeEach(resetInviteMocks);
 
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
-
-beforeEach(() => {
-	resolveParentMock.mockReset();
-	resolveInviteParentMock.mockReset();
-	createInviteMock.mockReset();
-});
-
-afterEach(() => {
-	cleanup();
-	resetAppState();
-});
+afterEach(cleanupReset);
 
 describe('/admin/invite — session expired (#107 review F2)', () => {
 	it('an auth-expired PREREQUISITE load shows the session-expired notice — not the generic load error, and never "not admin"', async () => {

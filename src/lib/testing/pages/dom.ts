@@ -1,7 +1,12 @@
-import { expect } from 'vitest';
+import { cleanup } from '@testing-library/svelte';
+import { expect, vi } from 'vitest';
+import { resetAppState } from '$lib/testing/appReset';
 
-export function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
+export function q<T extends HTMLElement = HTMLElement>(
+	root: ParentNode,
+	testid: string
+): T | null {
+	return root.querySelector<T>(`[data-testid="${testid}"]`);
 }
 
 export function qa(container: HTMLElement, testid: string): HTMLElement[] {
@@ -16,6 +21,17 @@ export function expectTouchTarget(container: HTMLElement, testid: string): void 
 		Array.from((el as HTMLElement).classList),
 		`${testid} must reserve a 44px-tall touch target (min-h-11)`
 	).toContain('min-h-11');
+}
+
+export function cleanupReset(): void {
+	cleanup();
+	resetAppState();
+}
+
+export function cleanupClearReset(): void {
+	cleanup();
+	vi.clearAllMocks();
+	resetAppState();
 }
 
 // (*MVOX:Josquin*)

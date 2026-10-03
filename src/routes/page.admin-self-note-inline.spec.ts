@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The self-removal note renders inline in the viewer's own admin row.
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -43,9 +43,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/+page.svelte';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	listAdminsMock,
@@ -59,8 +56,9 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { BELA, CFG, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupReset, q } from '$lib/testing/pages/dom';
 
-const CFG = testCfg('sampledb', 'jwt-admin');
 const SELF_HINT_KEY = '[admin_roles_remove_self_hint]';
 
 const SELF_OWNER = {
@@ -75,22 +73,12 @@ const DB_ROOT = {
 	role: 'owner' as const,
 	valueIds: ['pv-own-dbroot']
 };
-const BELA = {
-	id: 'p-bela',
-	name: 'Bela Brauer',
-	role: 'editor' as const,
-	valueIds: ['pv-ed-bela']
-};
 
 const ROSTER = [
 	{ memberId: 'm-0', personId: 'admin-p', name: 'Mihkel Putrinš', email: '' },
 	{ memberId: 'm-1', personId: 'p-dbroot', name: 'db-root (mvox dev admin)', email: '' },
 	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' }
 ];
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
 
 function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
@@ -105,10 +93,6 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-}
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
 }
 
 async function renderReady() {
@@ -134,10 +118,7 @@ beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockReset();
 });
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-});
+afterEach(cleanupReset);
 
 describe('/admin — #175 self-removal note renders inline in the own row', () => {
 	it("route integration — the note sits INSIDE the viewer's own <li> (the same {#each} iteration as the other Remove buttons), where the button would otherwise be", async () => {

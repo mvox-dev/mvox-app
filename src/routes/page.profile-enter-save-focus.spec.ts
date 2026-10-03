@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // #565: Enter-save disables the edit button while the save runs; focus must land on it after.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -29,11 +29,10 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './profile/+page.svelte';
-import { resetGate } from '$lib/profile/completionGate';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { applyProfileSaveMock } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { cleanupResetGate, resetSaveMocks } from '$lib/testing/pages/profile';
 
 type Field = 'name' | 'email';
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -60,17 +59,9 @@ async function openEditor(c: HTMLElement, field: Field): Promise<HTMLInputElemen
 	return el;
 }
 
-beforeEach(() => {
-	listMyProfilesMock.mockReset();
-	applyProfileSaveMock.mockReset();
-	applyFieldMoveMock.mockReset();
-});
+beforeEach(resetSaveMocks);
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetGate);
 
 describe('#565 — Enter-save returns focus to the edit button once the save settles', () => {
 	const edits: Record<Field, string> = { name: 'Ada L', email: 'ada@y.io' };

@@ -1,65 +1,11 @@
 // @vitest-environment happy-dom
 // The /admin role-management page.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		admin_roles_title: () => 'Role management',
-		admin_roles_no_collective: () => 'Select a collective to manage roles.',
-		admin_roles_no_access: () => 'Managing roles requires administrator rights.',
-		admin_roles_load_error: () => 'Could not load role management.',
-		admin_roles_retry_load: () => 'Retry',
-		admin_roles_admins_title: () => 'Administrators',
-		admin_roles_librarians_title: () => 'Librarians',
-		admin_roles_add_admin_label: () => 'Add an administrator',
-		admin_roles_add_admin_placeholder: () => 'Add administrator…',
-		admin_roles_add_librarian_label: () => 'Add a librarian',
-		admin_roles_add_librarian_placeholder: () => 'Add librarian…',
-		picker_everyone_added: () => 'Everyone is already added',
-		picker_no_members: () => 'No members to add',
-		picker_order_fallback: () => 'Sorted by name — section order unavailable',
-		picker_partial_members_notice: () => 'Not every member is listed here',
-		admin_roles_remove: (p: { name: string }) => `Remove ${p.name}`,
-		admin_roles_last_owner_hint: () => 'The last owner cannot be removed.',
-		admin_roles_no_library: () => 'No library entity is visible in this collective.',
-		admin_roles_action_error: () => 'Role change failed.',
-		admin_roles_saving: () => 'Saving…',
-		admin_roles_saved: () => 'Saved.',
-		admin_roles_read_only: () => 'Only an owner of this collective can change these roles.',
-		admin_roles_remove_self_hint: () => 'Cannot remove your own rights.',
-		admin_roles_role_owner: () => 'omanik',
-		admin_roles_role_editor: () => 'toimetaja',
-		admin_collective_name_edit_aria_label: () => 'Edit collective name',
-		admin_collective_name_save_error: () => "Couldn't save.",
-		nav_admin: () => 'Admin',
-		admin_invite_title: () => 'Invite a new member',
-		admin_invite_no_collective: () => 'Select a collective before creating invites.',
-		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
-		admin_invite_load_error: () => 'Could not load invite prerequisites.',
-		admin_invite_retry_load: () => 'Retry',
-		admin_invite_db_label: () => 'Collective',
-		admin_invite_submit: () => 'Create invite',
-		admin_invite_creating: () => 'Creating…',
-		admin_invite_link_label: () => 'Invite link',
-		admin_invite_copy: () => 'Copy link',
-		admin_invite_copied: () => 'Copied',
-		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
-		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
-		admin_invite_error: () => 'Invite creation failed.',
-		admin_invite_copy_error: () => "Couldn't copy the link.",
-		admin_invite_partial_failure: (p: { personId: string }) =>
-			`A person entity (${p.personId}) was already created and carries a live invite token.`,
-		admin_invite_create_another: () => 'Create another invite',
-		admin_invite_person_label: () => 'Who are you inviting?',
-		admin_invite_person_new: () => 'A new person',
-		admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
-		admin_invite_person_list_error: () => 'Could not load the list of uninvited people.',
-		admin_invite_mint_error: (p: { name: string }) => `Could not invite ${p.name}.`,
-		admin_invite_mint_owner_only: () => 'Inviting an existing person requires owner rights.',
-		roster_member_invite_owner_only: () => 'Managing invites requires owner rights.'
-	})
+	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
 
 vi.mock('$lib/admin/roleManagement', async () =>
@@ -104,93 +50,44 @@ import type { RolePerson } from '$lib/admin/roleManagement';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	addAdminMock,
 	addLibrarianMock,
-	createInviteMock,
 	listAdminsMock,
 	listJoinStatesMock,
 	listLibrariansMock,
 	removeAdminMock,
 	removeLibrarianMock,
 	resolveAdminMock,
-	resolveCollectiveNameMarkerMock,
-	resolveInviteParentMock,
 	resolveLibrarianMock,
-	resolveOwnerTierMock,
-	resolveParentMock,
-	updateCollectiveNameMock
+	resolveOwnerTierMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	ANNA,
+	BELA,
+	CFG,
+	CILLA,
+	ROSTER,
+	listing,
+	loadOk,
+	resetAdminMocks,
+	selectSampledb
+} from '$lib/testing/pages/admin';
+import { cleanupReset, q } from '$lib/testing/pages/dom';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
 resolveOwnerTierMock.mockResolvedValue('error');
 
-const CFG = testCfg('sampledb', 'jwt-admin');
-
-const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
-const BELA = {
-	id: 'p-bela',
-	name: 'Bela Brauer',
-	role: 'editor' as const,
-	valueIds: ['pv-ed-bela']
-};
-const CILLA = {
-	id: 'p-cilla',
-	name: 'Cilla Cane',
-	role: 'editor' as const,
-	valueIds: ['pv-ed-cilla']
-};
 const DORA_ADMIN = {
 	id: 'p-dora',
 	name: 'Dora Duncan',
 	role: 'editor' as const,
 	valueIds: ['pv-ed-dora']
 };
-
-function listing(persons: RolePerson[], canManage = true) {
-	return { persons, canManage };
-}
-
-const ROSTER = [
-	{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
-	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' },
-	{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' },
-	{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '' }
-];
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
-
-function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
-	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
-	listLibrariansMock.mockResolvedValue(listing([CILLA]));
-	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	listSectionsMock.mockResolvedValue([]);
-	addAdminMock.mockResolvedValue(undefined);
-	addLibrarianMock.mockResolvedValue(undefined);
-	removeAdminMock.mockResolvedValue(undefined);
-	removeLibrarianMock.mockResolvedValue(undefined);
-	resolveParentMock.mockResolvedValue('parent-1');
-	resolveInviteParentMock.mockResolvedValue('org-1');
-	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	updateCollectiveNameMock.mockResolvedValue(undefined);
-	resolveOwnerTierMock.mockResolvedValue('error');
-	listJoinStatesMock.mockResolvedValue({});
-}
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
-}
 
 function section(container: HTMLElement, testid: string): HTMLElement {
 	const el = q<HTMLElement>(container, testid);
@@ -231,33 +128,9 @@ async function pickPerson(select: HTMLSelectElement, personId: string): Promise<
 	await fireEvent.change(select, { target: { value: personId } });
 }
 
-beforeEach(() => {
-	for (const mock of [
-		listAdminsMock,
-		addAdminMock,
-		removeAdminMock,
-		listLibrariansMock,
-		addLibrarianMock,
-		removeLibrarianMock,
-		resolveAdminMock,
-		resolveLibrarianMock,
-		resolveDatabaseEntityIdMock,
-		loadRosterMock,
-		listSectionsMock,
-		resolveParentMock,
-		resolveInviteParentMock,
-		createInviteMock,
-		resolveCollectiveNameMarkerMock,
-		updateCollectiveNameMock
-	]) {
-		mock.mockReset();
-	}
-});
+beforeEach(resetAdminMocks);
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-});
+afterEach(cleanupReset);
 
 describe('/admin — access gate', () => {
 	it('without an available collective shows the no-collective state and issues ZERO data calls', async () => {

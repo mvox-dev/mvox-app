@@ -2,8 +2,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
@@ -23,19 +21,16 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 
 import ProfilePage from './profile/+page.svelte';
 import { timeFormatStore, TIME_FORMAT_KEY } from '$lib/preferences/timeFormat';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { LOCALES, readMessages, selectSampledb } from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const control = (c: HTMLElement) =>
 	q(c, '[data-testid="profile-time-format"]') as HTMLSelectElement | null;
 const hint = (c: HTMLElement) => q(c, '[data-testid="profile-time-format-hint"]');
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
 
 async function renderProfileReady(): Promise<HTMLElement> {
 	selectSampledb();
@@ -128,8 +123,6 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 	});
 });
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-
 const NEW_KEYS = [
 	'time_select_hour_label',
 	'time_select_minute_label',
@@ -140,12 +133,6 @@ const NEW_KEYS = [
 	'profile_time_format_ampm',
 	'profile_time_format_hint'
 ] as const;
-
-function readMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(__dirname, `../../messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 describe('locale parity — #207 part 1 keys exist, non-empty, in en/et/lv/uk', () => {
 	for (const locale of LOCALES) {
