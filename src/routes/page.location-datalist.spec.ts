@@ -8,7 +8,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	listSectionsMock,
 	createEventMock,
 	createEventSeriesMock,
 	resolveDatabaseEntityIdMock,
@@ -24,7 +23,6 @@ const {
 	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	createEventMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
@@ -66,10 +64,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -124,6 +121,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

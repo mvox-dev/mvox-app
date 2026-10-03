@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
@@ -21,7 +20,6 @@ const {
 	addSeasonConductorMock,
 	removeSeasonConductorMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
@@ -34,7 +32,9 @@ const {
 	removeSeasonConductorMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -96,6 +96,7 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

@@ -10,9 +10,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
-	listSectionsMock,
 	signFileUrlMock,
 	listEventsForSeasonMock,
 	deleteEventMock,
@@ -20,9 +18,7 @@ const {
 	deleteEventSeriesMock,
 	countSeriesOccurrencesMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	deleteEventMock: vi.fn(),
@@ -31,7 +27,9 @@ const {
 	countSeriesOccurrencesMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -60,10 +58,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEvent: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
@@ -86,6 +83,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { listSectionsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);

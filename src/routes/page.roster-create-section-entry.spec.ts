@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	listSectionsMock,
 	assignMock,
 	unassignMock,
 	createSectionMock,
@@ -18,7 +17,6 @@ const {
 	resolveDatabaseEntityIdMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	assignMock: vi.fn(),
 	unassignMock: vi.fn(),
 	createSectionMock: vi.fn(),
@@ -27,10 +25,9 @@ const {
 	resolveDatabaseEntityIdMock: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
-	return { ...actual, listSections: listSectionsMock };
-});
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/sections/sectionActions', () => ({
 	assignMemberSection: assignMock,
 	unassignMemberSection: unassignMock,
@@ -60,6 +57,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';

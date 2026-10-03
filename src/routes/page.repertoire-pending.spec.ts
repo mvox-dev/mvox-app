@@ -8,11 +8,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const { loadFullAgendaMock } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
-}));
-
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -44,6 +42,7 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 type EntityRaw = Record<string, unknown>;
 

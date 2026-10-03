@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	listSectionsMock,
 	createSeasonMock,
 	resolveDatabaseEntityIdMock,
 	entuFetchMock,
@@ -18,7 +17,6 @@ const {
 	listMyRsvpsMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
@@ -48,10 +46,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -92,6 +89,7 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 const CFG = testCfg('sampledb', 'jwt-abc');
