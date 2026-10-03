@@ -108,15 +108,11 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaEvent(id: string, startDatetime: string) {
 	return {
@@ -147,19 +143,7 @@ function agendaWith(events: AgendaItem[]) {
 }
 
 function setAuthed(dbs: Array<{ db: string; name: string }>) {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((d) => [d.db, 'person-p'])),
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((d) => ({ db: d.db, name: d.name, personId: 'person-p' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0].db);
+	signIn({ collectives: dbs.map((d) => ({ db: d.db, name: d.name, personId: 'person-p' })) });
 	completionGateStore.set('complete');
 }
 
@@ -193,9 +177,7 @@ afterEach(() => {
 	listMyRsvpsMock.mockReset();
 	applyRsvpChangeMock.mockReset();
 	discoverMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 

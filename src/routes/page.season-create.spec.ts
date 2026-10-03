@@ -89,15 +89,10 @@ import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065'; // live sampledb collective id shape
 const CFG = testCfg('sampledb', 'jwt-abc');
@@ -171,19 +166,7 @@ function fixtureRows(): RosterRow[] {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -209,9 +192,7 @@ afterEach(() => {
 	gotoMock.mockReset();
 	findMyMemberIdMock.mockReset();
 	listMyRsvpsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -913,8 +894,7 @@ describe('agenda — the season-create conductor select tells its empties apart 
 	});
 });
 
-// (*MVOX:Tallis* — #132/T2 RED: [+ Season] entry point + inline form + conductor picker)
-// (*MVOX:Tallis* — #209 RED: conductor picker is a native <select>, PO standing rule 1)
+// (*MVOX:Tallis*)
 
 describe('the season-create conductor picker (#321 review F2)', () => {
 	const NOTICE = '[data-testid="season-create-conductor-partial-notice"]';
@@ -943,7 +923,7 @@ describe('the season-create conductor picker (#321 review F2)', () => {
 	});
 });
 
-// (*MVOX:Palestrina* — #132/T2 review fixes F1–F7)
+// (*MVOX:Palestrina*)
 
 describe('#361 — season-create conductor chip: the member name is marked', () => {
 	it('a picked conductor chip renders the name through PersonName — marked, and marked once', async () => {

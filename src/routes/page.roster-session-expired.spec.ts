@@ -1,26 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #107 — auth token expiry recovery on the ROSTER page.
-//
-// When the roster load fails BECAUSE THE SESSION EXPIRED (Entu 401 → the
-// entuFetch layer rejects with an error whose `name === 'AuthExpiredError'` —
-// contract in request.auth-expired.spec.ts), the page must render the
-// session-expired notice with a sign-in link — NOT the generic "Something went
-// wrong loading the roster" + Retry, and NEVER a silent empty state.
-//
-// INTEGRATION posture (review R2/F4, and the team's "partial assertions hide
-// bugs" lesson): this spec used to mock `$lib/roster/rosterData` and hand-throw a
-// duck-typed `{ name: 'AuthExpiredError' }`, which proved the page's catch but
-// not that a real 401 reaches it with the tag intact. That intermediate link is
-// exactly what broke in $lib/collectives/marker.ts, unnoticed. So the REAL
-// rosterData / profileData / sectionData and the REAL entuFetch run here; only
-// the wire (global fetch) and $app/navigation are stubbed.
-//
-// Contract pinned:
-//   - `data-testid="session-expired"` notice;
-//   - `data-testid="session-expired-signin"` <a> with href → `/auth/login`;
-//   - `roster-load-error` / `roster-retry-load` / `roster-empty` must NOT render
-//     for this failure class.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,20 +25,11 @@ const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
 
 import Page from './roster/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-// ── The WIRE stub. Everything below runs through the real entuFetch, so routing
-// is on the real URL. `profile` is the SECOND hop of loadRoster (one per member,
-// inside a Promise.all) — failing it alone is what proves the tag survives the
-// intermediate data-layer modules, not just the first call.
 type Route = 'member' | 'profile' | 'section' | 'other';
 
 function routeOf(url: string): Route {
@@ -88,7 +57,6 @@ const BODIES: Record<Route, unknown> = {
 	other: { count: 0, entities: [] }
 };
 
-/** `failing` maps a route to the status it should answer with; the rest are 200. */
 function stubWire(failing: Partial<Record<Route, number>> = {}) {
 	vi.stubGlobal(
 		'fetch',
@@ -105,19 +73,7 @@ function stubWire(failing: Partial<Record<Route, number>> = {}) {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 function expectSessionExpiredNotice(container: HTMLElement) {
@@ -129,11 +85,8 @@ function expectSessionExpiredNotice(container: HTMLElement) {
 	expect(signin, 'session-expired notice must carry a sign-in link').not.toBeNull();
 	expect(signin?.getAttribute('href') ?? '').toContain('/auth/login');
 
-	// Not the misleading generic failure (its Retry can never succeed against a
-	// dead token) …
 	expect(container.querySelector('[data-testid="roster-load-error"]')).toBeNull();
 	expect(container.querySelector('[data-testid="roster-retry-load"]')).toBeNull();
-	// … and not a silent "no members" lie either.
 	expect(container.querySelector('[data-testid="roster-empty"]')).toBeNull();
 }
 
@@ -147,17 +100,12 @@ afterEach(() => {
 	setAuthExpiredHandler(null);
 	cleanup();
 	vi.unstubAllGlobals();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	history.replaceState({}, '', '/');
 });
 
 describe('/roster — session expired (#107)', () => {
 	it('a real Entu 401 shows the session-expired notice with a sign-in link — not the generic load error, never a silent empty state', async () => {
-		// A dead token kills every read the page fires.
 		stubWire({ member: 401, section: 401 });
 		setAuthedWithOneCollective();
 
@@ -168,15 +116,10 @@ describe('/roster — session expired (#107)', () => {
 		});
 		expectSessionExpiredNotice(container);
 
-		// End-to-end: the recovery really fired, not just the copy.
 		await waitFor(() => expect(gotoMock).toHaveBeenCalled());
 		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
 	});
 
-	// The link the old mocked posture could not test: the 401 happens on the
-	// SECOND hop (per-member profile read, inside loadRoster's Promise.all), so
-	// the tag has to survive listMyProfiles -> listProfilesForPerson -> loadRoster
-	// before the page ever sees it. Any catch-and-remap in between turns this red.
 	it('a 401 on the per-member PROFILE hop still reaches the page tagged — the tag survives the data-layer chain', async () => {
 		stubWire({ profile: 401 });
 		setAuthedWithOneCollective();

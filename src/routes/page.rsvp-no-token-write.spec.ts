@@ -56,15 +56,15 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { clearAll } from '$lib/auth/storage';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const E1 = {
 	id: 'e1',
@@ -97,10 +97,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
@@ -119,15 +116,7 @@ describe('#550 — agenda RSVP with no token', () => {
 		);
 		h.findMyMemberIdMock.mockResolvedValue('member-1');
 		h.listMyRsvpsMock.mockResolvedValue(toListRead([]));
-		setToken('jwt-abc');
-		authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-		collectiveState.set({
-			status: 'ready',
-			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
+		signIn();
 		completionGateStore.set('complete');
 
 		const { container } = render(Page);

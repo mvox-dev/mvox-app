@@ -1,15 +1,7 @@
 // @vitest-environment happy-dom
-//
-// TS.3/#97 F5 — a failed section CREATE is SAID, not just logged. RE-DRIVEN
-// through the page-level `roster-new-section` entry (#470: the picker's inline
-// create form is RETIRED — "drop the new section creation" — and with it the
-// create+assign coupling; the page-level create has no member context, so the
-// old "created but assign failed" case dies with the entry). Same mocking
-// seams as the other page-level create specs.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -22,7 +14,6 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createSectio
 		unassignMock: vi.fn(),
 		createSectionMock: vi.fn()
 	}));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -40,15 +31,10 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_1 = 'org-1';
 
@@ -59,7 +45,6 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-/** The viewer ('person-p') has her own row → `currentDbEntityId` = ORG_1. */
 function fixtureRows(): RosterRow[] {
 	return [
 		{
@@ -82,19 +67,7 @@ function fixtureRows(): RosterRow[] {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -114,9 +87,7 @@ afterEach(() => {
 	assignMock.mockReset();
 	unassignMock.mockReset();
 	createSectionMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetAdmin();
 });
 
@@ -165,7 +136,6 @@ describe('/roster — a failed createSection is SAID, not just logged (re-driven
 		});
 		expect(error.getAttribute('role')).toBe('alert');
 		expect(error.textContent).toContain('roster_section_create_failed');
-		// Nothing was written, so nothing was added to the tree either.
 		expect(q(container, 'arrange-row-sec-new-1')).toBeNull();
 		expect(assignMock).not.toHaveBeenCalled();
 	});
@@ -188,6 +158,4 @@ describe('/roster — a failed createSection is SAID, not just logged (re-driven
 	});
 });
 
-// (*MVOX:Palestrina* — TS.3/#97 F5 code-review fixes)
-// (*MVOX:Tallis* — #470: re-driven through the page-level roster-new-section
-//  entry; the create+assign coupling died with the picker's create form)
+// (*MVOX:Palestrina*) (*MVOX:Tallis*)

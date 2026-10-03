@@ -16,16 +16,11 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065'; // the database entity — THE collective
 const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
@@ -109,19 +104,7 @@ function stubFetch(): void {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -135,9 +118,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	loadRosterMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetAdmin();
 });
 
@@ -260,5 +241,4 @@ describe('/roster #124 F2 — sub-section creation under a parent section (re-dr
 	});
 });
 
-// (*MVOX:Tallis* — #124 RED, gate #114 F1/F2: the create path end-to-end under
-// (*MVOX:Tallis* — #470: re-driven through the page-level roster-new-section
+// (*MVOX:Tallis*)

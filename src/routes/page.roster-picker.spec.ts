@@ -39,15 +39,10 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function fixtureTree(): SectionNode[] {
 	const sop1: SectionNode = {
@@ -82,19 +77,7 @@ function gateRows(): RosterRow[] {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 interface WireCall {
@@ -171,9 +154,7 @@ afterEach(() => {
 	loadRosterMock.mockReset();
 	listSectionsMock.mockReset();
 	entuFetchMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetAdmin();
 });
 
@@ -808,6 +789,4 @@ describe('/roster — a group card shows ITS OWN membership, not every membershi
 	});
 });
 
-// (*MVOX:Tallis*)
-// (*MVOX:Palestrina*)
-// (*MVOX:Josquin*)
+// (*MVOX:Tallis*) (*MVOX:Palestrina*) (*MVOX:Josquin*)

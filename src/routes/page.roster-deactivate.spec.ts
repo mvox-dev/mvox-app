@@ -70,32 +70,16 @@ vi.mock('$lib/roster/memberRecord', async (importActual) => ({
 
 import Page from './roster/+page.svelte';
 import { LibraryLookupError, resolveMyLibraryId } from '$lib/library/librarianStore';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 import { deferred } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 const rosterTwo = [
@@ -135,11 +119,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -436,22 +416,12 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		listSectionsMock.mockResolvedValue([altoSection]);
 		loadInactiveRosterMock.mockResolvedValue(toListRead(inactiveRoster));
 		const { container } = render(Page);
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 		adminStore.set('admin');
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-toggle"]')).not.toBeNull()
@@ -941,22 +911,12 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 	};
 
 	function setAuthedWithTwoCollectives() {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 	}
 
 	function holdInactiveLoads(): Array<(rows: InactiveRow[]) => void> {
@@ -1199,5 +1159,4 @@ describe('#388 — capture redaction: inactive row name marked; no unexplained r
 	});
 });
 
-// (*MVOX:Tallis*)
-// (*MVOX:Josquin*)
+// (*MVOX:Tallis*) (*MVOX:Josquin*)
