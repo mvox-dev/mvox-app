@@ -172,14 +172,20 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolvePersonParentId: vi.fn(),
 	resolveInviteParentId: vi.fn()
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 // #193 (review F1) — the RETURN leg lands on `/profile?link_error=<code>` or
 // `/profile?linked=1`; the page must read it off `page.url`. Mutable stub so each
 // test points the URL at its own outcome.
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './profile/+page.svelte';
 import { setUser, setLastProvider } from '$lib/auth/storage';

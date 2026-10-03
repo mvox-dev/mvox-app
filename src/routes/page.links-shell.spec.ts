@@ -24,8 +24,12 @@ vi.mock('$lib/links/linkActions', () => ({
 	reorderLinks: reorderLinksMock,
 	deleteLink: deleteLinkMock
 }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links') } }));
 
