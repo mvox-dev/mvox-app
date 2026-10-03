@@ -10,44 +10,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const {
-	listWorksMock,
-	listEditionsMock,
-	listCopiesMock,
-	listAllEditionsMock,
-	listAllCopiesMock,
-	listLendingsMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock,
-	resolveCopyChainsMock
-} = vi.hoisted(() => ({
-	listWorksMock: vi.fn(),
-	listEditionsMock: vi.fn(),
-	listCopiesMock: vi.fn(),
-	listAllEditionsMock: vi.fn(),
-	listAllCopiesMock: vi.fn(),
-	listLendingsMock: vi.fn(),
-	resolveBorrowerNamesMock: vi.fn(),
-	resolveCopyNamesMock: vi.fn(),
-	resolveCopyChainsMock: vi.fn()
-}));
-vi.mock('$lib/library/libraryData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>(
-		'$lib/library/libraryData'
-	);
-	return {
-		...actual, // keep the real, pure derive* helpers
-		listWorks: listWorksMock,
-		listEditions: listEditionsMock,
-		listCopies: listCopiesMock,
-		listAllEditions: listAllEditionsMock,
-		listAllCopies: listAllCopiesMock,
-		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock,
-		resolveCopyChains: resolveCopyChainsMock
-	};
-});
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
+);
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
 );
@@ -61,67 +26,47 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
-vi.mock('$lib/library/librarianStore', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>(
-		'$lib/library/librarianStore'
-	);
-	return {
-		...actual,
-		resolveLibrarian: resolveLibrarianMock
-	};
-});
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
+);
 
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
 );
 
-vi.mock('$lib/library/lendingActions', () => ({
-	createLending: vi.fn(),
-	returnLending: vi.fn(),
-	bulkCheckout: vi.fn()
-}));
+vi.mock('$lib/library/lendingActions', async () =>
+	(await import('$lib/testing/mocks/library')).lendingModule()
+);
 
-const { listSeasonsMock } = vi.hoisted(() => ({ listSeasonsMock: vi.fn() }));
-vi.mock('$lib/seasons/entuSeasons', async () => {
-	const actual = await vi.importActual<typeof import('$lib/seasons/entuSeasons')>(
-		'$lib/seasons/entuSeasons'
-	);
-	return {
-		...actual,
-		listSeasons: listSeasonsMock
-	};
-});
-const { listRepertoireItemsMock } = vi.hoisted(() => ({ listRepertoireItemsMock: vi.fn() }));
-vi.mock('$lib/repertoire/repertoireData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/repertoire/repertoireData')>(
-		'$lib/repertoire/repertoireData'
-	);
-	return {
-		...actual,
-		listRepertoireItems: listRepertoireItemsMock
-	};
-});
+vi.mock('$lib/seasons/entuSeasons', async () =>
+	(await import('$lib/testing/mocks/seasons')).entuSeasonsModule()
+);
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireOverRealModule()
+);
 
-vi.mock('$lib/entity/entityCreate', () => ({
-	createWork: vi.fn(),
-	createEdition: vi.fn()
-}));
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/library')).libraryCreateModule()
+);
 
-const { uploadEditionFilesMock, signFileUrlMock } = vi.hoisted(() => ({
+const { uploadEditionFilesMock } = vi.hoisted(() => ({
 	uploadEditionFilesMock: vi.fn(),
-	signFileUrlMock: vi.fn()
 }));
 vi.mock('$lib/library/editionFiles', () => ({
 	uploadEditionFiles: uploadEditionFilesMock,
 	formatFileSize: (bytes: number) => `${bytes} B`
 }));
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
+vi.mock('$lib/files/appLabelStore', async () =>
+	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
+);
 
 import Page from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
@@ -129,6 +74,21 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
+import {
+	listAllCopiesMock,
+	listAllEditionsMock,
+	listCopiesMock,
+	listEditionsMock,
+	listLendingsMock,
+	listWorksMock,
+	resolveBorrowerNamesMock,
+	resolveCopyChainsMock,
+	resolveCopyNamesMock
+} from '$lib/testing/mocks/library';
+import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
+import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 
 let fakeByteStore: FakeByteStore;
 

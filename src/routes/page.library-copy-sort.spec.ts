@@ -55,41 +55,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	listWorksMock,
-	listEditionsMock,
-	listCopiesMock,
-	listAllEditionsMock,
-	listAllCopiesMock,
-	listLendingsMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock
-} = vi.hoisted(() => ({
-	listWorksMock: vi.fn(),
-	listEditionsMock: vi.fn(),
-	listCopiesMock: vi.fn(),
-	listAllEditionsMock: vi.fn(),
-	listAllCopiesMock: vi.fn(),
-	listLendingsMock: vi.fn(),
-	resolveBorrowerNamesMock: vi.fn(),
-	resolveCopyNamesMock: vi.fn()
-}));
-vi.mock('$lib/library/libraryData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>(
-		'$lib/library/libraryData'
-	);
-	return {
-		...actual, // keep the real, pure derive* helpers
-		listWorks: listWorksMock,
-		listEditions: listEditionsMock,
-		listCopies: listCopiesMock,
-		listAllEditions: listAllEditionsMock,
-		listAllCopies: listAllCopiesMock,
-		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock
-	};
-});
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule({ chains: false })
+);
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
 );
@@ -103,40 +71,42 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
-vi.mock('$lib/library/librarianStore', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>(
-		'$lib/library/librarianStore'
-	);
-	return {
-		...actual, // keep the real writable store + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock
-	};
-});
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
+);
 
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
 );
 
-const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
-	createLendingMock: vi.fn(),
-	returnLendingMock: vi.fn(),
-	bulkCheckoutMock: vi.fn()
-}));
-vi.mock('$lib/library/lendingActions', () => ({
-	createLending: createLendingMock,
-	returnLending: returnLendingMock,
-	bulkCheckout: bulkCheckoutMock
-}));
+vi.mock('$lib/library/lendingActions', async () =>
+	(await import('$lib/testing/mocks/library')).lendingModule()
+);
 
 import Page from './library/+page.svelte';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import {
+	bulkCheckoutMock,
+	createLendingMock,
+	listAllCopiesMock,
+	listAllEditionsMock,
+	listCopiesMock,
+	listEditionsMock,
+	listLendingsMock,
+	listWorksMock,
+	resolveBorrowerNamesMock,
+	resolveCopyNamesMock,
+	returnLendingMock
+} from '$lib/testing/mocks/library';
+import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 
 function setAuthedWithOneCollective() {
 	signIn();

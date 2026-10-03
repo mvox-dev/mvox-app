@@ -7,59 +7,31 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
-	createSeasonMock,
-	createEventMock,
-	listEventSeriesForSeasonMock,
-	listSeriesOptionsForSeasonMock,
-	listEventsForSeasonMock,
-	updateSeasonFieldMock,
-	addSeasonConductorMock,
-	removeSeasonConductorMock,
-	getSeriesDefaultsMock,
 	listWorksMock,
-	listAllEditionsMock,
-	listRepertoireItemsMock
+	listAllEditionsMock
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	createSeasonMock: vi.fn(),
-	createEventMock: vi.fn(),
-	listEventSeriesForSeasonMock: vi.fn(),
-	listSeriesOptionsForSeasonMock: vi.fn(),
-	listEventsForSeasonMock: vi.fn(),
-	updateSeasonFieldMock: vi.fn(),
-	addSeasonConductorMock: vi.fn(),
-	removeSeasonConductorMock: vi.fn(),
-	getSeriesDefaultsMock: vi.fn(),
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
-	listRepertoireItemsMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: createSeasonMock,
-	createEventSeries: vi.fn(),
-	createEvent: createEventMock
-}));
-vi.mock('$lib/seasons/seasonManage', () => ({
-	listEventSeriesForSeason: listEventSeriesForSeasonMock,
-	listSeriesOptionsForSeason: listSeriesOptionsForSeasonMock,
-	listEventsForSeason: listEventsForSeasonMock,
-	updateSeasonField: updateSeasonFieldMock,
-	addSeasonConductor: addSeasonConductorMock,
-	removeSeasonConductor: removeSeasonConductorMock,
-	getSeriesDefaults: getSeriesDefaultsMock
-}));
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule(['season', 'event'])
+);
+vi.mock('$lib/seasons/seasonManage', async () =>
+	(await import('$lib/testing/mocks/seasons')).seasonManageModule()
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -78,15 +50,17 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: listWorksMock,
 	listAllEditions: listAllEditionsMock,
 	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
 }));
-vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: listRepertoireItemsMock
-}));
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
+);
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
@@ -96,7 +70,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -105,6 +79,18 @@ import {
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
+import { createEventMock, createSeasonMock } from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	addSeasonConductorMock,
+	getSeriesDefaultsMock,
+	listEventSeriesForSeasonMock,
+	listEventsForSeasonMock,
+	listRepertoireItemsMock,
+	listSeriesOptionsForSeasonMock,
+	removeSeasonConductorMock,
+	updateSeasonFieldMock
+} from '$lib/testing/mocks/seasons';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const FUTURE_SEASON_ID = 'season-future-1';

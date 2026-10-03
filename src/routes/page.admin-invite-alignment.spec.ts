@@ -58,61 +58,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => {
-	class RoleLockoutError extends Error {
-		readonly code = 'role-lockout';
-		constructor(entityId: string, personId: string) {
-			super(`lockout ${entityId}/${personId}`);
-			this.name = 'RoleLockoutError';
-		}
-	}
-	class RoleGrantMissingError extends Error {
-		readonly code = 'role-grant-missing';
-		constructor(entityId: string, personId: string) {
-			super(`missing ${entityId}/${personId}`);
-			this.name = 'RoleGrantMissingError';
-		}
-	}
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
-	return {
-		RoleLockoutError,
-		RoleGrantMissingError,
-		InviteCreateError,
-		listAdminsMock: vi.fn(),
-		addAdminMock: vi.fn(),
-		removeAdminMock: vi.fn(),
-		listLibrariansMock: vi.fn(),
-		addLibrarianMock: vi.fn(),
-		removeLibrarianMock: vi.fn(),
-		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn(),
-		listJoinStatesMock: vi.fn().mockResolvedValue({}),
-	};
-});
-vi.mock('$lib/admin/roleManagement', () => ({
-	RoleLockoutError: h.RoleLockoutError,
-	RoleGrantMissingError: h.RoleGrantMissingError,
-	fetchRights: vi.fn(),
-	listAdmins: h.listAdminsMock,
-	addAdmin: h.addAdminMock,
-	removeAdmin: h.removeAdminMock,
-	listLibrarians: h.listLibrariansMock,
-	addLibrarian: h.addLibrarianMock,
-	removeLibrarian: h.removeLibrarianMock
-}));
+vi.mock('$lib/admin/roleManagement', async () =>
+	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
+);
 vi.mock('$lib/nav/adminStore', async () =>
 	(await import('$lib/testing/mocks/admin')).adminStoreModule()
 );
@@ -134,12 +82,9 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 vi.mock('$lib/collectives/collectiveName', async () =>
 	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
 );
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -156,14 +101,27 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
+	addAdminMock,
+	addLibrarianMock,
+	createInviteMock,
+	listAdminsMock,
 	listJoinStatesMock,
+	listLibrariansMock,
+	removeAdminMock,
+	removeLibrarianMock,
 	resolveAdminMock,
 	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
 	resolveLibrarianMock,
 	resolveOwnerTierMock,
+	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+
+// Defaults the hoisted handles carried before they moved to the shared mocks.
+listJoinStatesMock.mockResolvedValue({});
+resolveOwnerTierMock.mockResolvedValue('error');
 
 const STANDALONE_ROOT_CLASSES = 'mx-auto flex w-full max-w-md flex-col gap-4';
 const EMBEDDED_ROOT_CLASSES = 'flex w-full flex-col gap-4';
@@ -176,11 +134,11 @@ function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	h.listAdminsMock.mockResolvedValue({
+	listAdminsMock.mockResolvedValue({
 		persons: [{ id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] }],
 		canManage: true
 	});
-	h.listLibrariansMock.mockResolvedValue({
+	listLibrariansMock.mockResolvedValue({
 		persons: [{ id: 'p-cilla', name: 'Cilla Cane', role: 'editor' as const, valueIds: ['pv-ed-cilla'] }],
 		canManage: true
 	});
@@ -191,8 +149,8 @@ function loadOk() {
 	listSectionsMock.mockResolvedValue([]);
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
 function inviteSurfaceRoot(scope: ParentNode, headingLevel: 'h1' | 'h2'): HTMLElement {
@@ -208,20 +166,20 @@ function inviteSurfaceRoot(scope: ParentNode, headingLevel: 'h1' | 'h2'): HTMLEl
 
 beforeEach(() => {
 	for (const mock of [
-		h.listAdminsMock,
-		h.addAdminMock,
-		h.removeAdminMock,
-		h.listLibrariansMock,
-		h.addLibrarianMock,
-		h.removeLibrarianMock,
+		listAdminsMock,
+		addAdminMock,
+		removeAdminMock,
+		listLibrariansMock,
+		addLibrarianMock,
+		removeLibrarianMock,
 		resolveAdminMock,
 		resolveLibrarianMock,
 		resolveDatabaseEntityIdMock,
 		loadRosterMock,
 		listSectionsMock,
-		h.resolveParentMock,
-		h.resolveInviteParentMock,
-		h.createInviteMock,
+		resolveParentMock,
+		resolveInviteParentMock,
+		createInviteMock,
 		resolveCollectiveNameMarkerMock,
 		updateCollectiveNameMock
 	]) {
@@ -275,8 +233,8 @@ describe('#235 — embedded InviteSurface on /admin (integration: real route pag
 describe('#235 — standalone /admin/invite stays pixel-identical (integration: real route page)', () => {
 	it("root div class string is byte-identical to today's — the component's own classes remain the sole centering mechanism on the full-bleed route", async () => {
 		selectSampledb();
-		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.resolveInviteParentMock.mockResolvedValue('org-1');
+		resolveParentMock.mockResolvedValue('parent-1');
+		resolveInviteParentMock.mockResolvedValue('org-1');
 
 		const { container } = render(InvitePage);
 		await waitFor(() => {

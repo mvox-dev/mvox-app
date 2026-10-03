@@ -62,61 +62,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => {
-	class RoleLockoutError extends Error {
-		readonly code = 'role-lockout';
-		constructor(entityId: string, personId: string) {
-			super(`lockout ${entityId}/${personId}`);
-			this.name = 'RoleLockoutError';
-		}
-	}
-	class RoleGrantMissingError extends Error {
-		readonly code = 'role-grant-missing';
-		constructor(entityId: string, personId: string) {
-			super(`missing ${entityId}/${personId}`);
-			this.name = 'RoleGrantMissingError';
-		}
-	}
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
-	return {
-		RoleLockoutError,
-		RoleGrantMissingError,
-		InviteCreateError,
-		listAdminsMock: vi.fn(),
-		addAdminMock: vi.fn(),
-		removeAdminMock: vi.fn(),
-		listLibrariansMock: vi.fn(),
-		addLibrarianMock: vi.fn(),
-		removeLibrarianMock: vi.fn(),
-		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn(),
-		listJoinStatesMock: vi.fn().mockResolvedValue({}),
-	};
-});
-vi.mock('$lib/admin/roleManagement', () => ({
-	RoleLockoutError: h.RoleLockoutError,
-	RoleGrantMissingError: h.RoleGrantMissingError,
-	fetchRights: vi.fn(),
-	listAdmins: h.listAdminsMock,
-	addAdmin: h.addAdminMock,
-	removeAdmin: h.removeAdminMock,
-	listLibrarians: h.listLibrariansMock,
-	addLibrarian: h.addLibrarianMock,
-	removeLibrarian: h.removeLibrarianMock
-}));
+vi.mock('$lib/admin/roleManagement', async () =>
+	(await import('$lib/testing/mocks/admin')).roleManagementModule({ errors: true })
+);
 vi.mock('$lib/nav/adminStore', async () =>
 	(await import('$lib/testing/mocks/admin')).adminStoreModule()
 );
@@ -138,12 +86,9 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 vi.mock('$lib/collectives/collectiveName', async () =>
 	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
 );
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -164,14 +109,27 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
+	addAdminMock,
+	addLibrarianMock,
+	createInviteMock,
+	listAdminsMock,
 	listJoinStatesMock,
+	listLibrariansMock,
+	removeAdminMock,
+	removeLibrarianMock,
 	resolveAdminMock,
 	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
 	resolveLibrarianMock,
 	resolveOwnerTierMock,
+	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+
+// Defaults the hoisted handles carried before they moved to the shared mocks.
+listJoinStatesMock.mockResolvedValue({});
+resolveOwnerTierMock.mockResolvedValue('error');
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 
@@ -214,16 +172,16 @@ function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
-	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
+	listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
+	listLibrariansMock.mockResolvedValue(listing([CILLA]));
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
-	h.addAdminMock.mockResolvedValue(undefined);
-	h.addLibrarianMock.mockResolvedValue(undefined);
-	h.removeAdminMock.mockResolvedValue(undefined);
-	h.removeLibrarianMock.mockResolvedValue(undefined);
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
+	addAdminMock.mockResolvedValue(undefined);
+	addLibrarianMock.mockResolvedValue(undefined);
+	removeAdminMock.mockResolvedValue(undefined);
+	removeLibrarianMock.mockResolvedValue(undefined);
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
 	resolveOwnerTierMock.mockResolvedValue('error');
@@ -275,20 +233,20 @@ async function pickPerson(select: HTMLSelectElement, personId: string): Promise<
 
 beforeEach(() => {
 	for (const mock of [
-		h.listAdminsMock,
-		h.addAdminMock,
-		h.removeAdminMock,
-		h.listLibrariansMock,
-		h.addLibrarianMock,
-		h.removeLibrarianMock,
+		listAdminsMock,
+		addAdminMock,
+		removeAdminMock,
+		listLibrariansMock,
+		addLibrarianMock,
+		removeLibrarianMock,
 		resolveAdminMock,
 		resolveLibrarianMock,
 		resolveDatabaseEntityIdMock,
 		loadRosterMock,
 		listSectionsMock,
-		h.resolveParentMock,
-		h.resolveInviteParentMock,
-		h.createInviteMock,
+		resolveParentMock,
+		resolveInviteParentMock,
+		createInviteMock,
 		resolveCollectiveNameMarkerMock,
 		updateCollectiveNameMock
 	]) {
@@ -308,8 +266,8 @@ describe('/admin — access gate', () => {
 			expect(q(container, 'admin-roles-no-collective')).not.toBeNull();
 		});
 		expect(resolveAdminMock).not.toHaveBeenCalled();
-		expect(h.listAdminsMock).not.toHaveBeenCalled();
-		expect(h.listLibrariansMock).not.toHaveBeenCalled();
+		expect(listAdminsMock).not.toHaveBeenCalled();
+		expect(listLibrariansMock).not.toHaveBeenCalled();
 	});
 
 	it("resolveAdmin → 'not-admin': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
@@ -324,8 +282,8 @@ describe('/admin — access gate', () => {
 		expect(container.textContent).toContain('administrator rights');
 		expect(q(container, 'admin-roles-admins')).toBeNull();
 		expect(q(container, 'admin-roles-librarians')).toBeNull();
-		expect(h.listAdminsMock).not.toHaveBeenCalled();
-		expect(h.listLibrariansMock).not.toHaveBeenCalled();
+		expect(listAdminsMock).not.toHaveBeenCalled();
+		expect(listLibrariansMock).not.toHaveBeenCalled();
 
 		expect(resolveAdminMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
@@ -382,14 +340,14 @@ describe('/admin — role lists', () => {
 			undefined,
 			'org-1'
 		);
-		expect(h.listAdminsMock).toHaveBeenCalledWith(
+		expect(listAdminsMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'org-1',
 			'admin-p',
 			undefined,
 			ROSTER
 		);
-		expect(h.listLibrariansMock).toHaveBeenCalledWith(
+		expect(listLibrariansMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'lib-1',
 			'admin-p',
@@ -402,7 +360,7 @@ describe('/admin — role lists', () => {
 		selectSampledb();
 		loadOk();
 		const ANNA_FOLDED = { ...ANNA, valueIds: ['pv-own-anna', 'pv-ed-anna'] };
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA_FOLDED, BELA]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA_FOLDED, BELA]));
 
 		const { container } = await renderReady();
 
@@ -435,7 +393,7 @@ describe('/admin — role lists', () => {
 			expect(q(container, 'admin-roles-admins')).not.toBeNull();
 			expect(q(container, 'admin-roles-no-library')).not.toBeNull();
 		});
-		expect(h.listLibrariansMock).not.toHaveBeenCalled();
+		expect(listLibrariansMock).not.toHaveBeenCalled();
 	});
 
 	it("resolveLibrarian → { state: 'error', libraryId: null }: the load-error state with retry — a FAILED library read is NEVER rendered as \"no library exists\"", async () => {
@@ -449,7 +407,7 @@ describe('/admin — role lists', () => {
 		});
 		expect(q(container, 'admin-roles-no-library')).toBeNull();
 		expect(container.textContent).not.toContain('No library entity is visible');
-		expect(h.listLibrariansMock).not.toHaveBeenCalled();
+		expect(listLibrariansMock).not.toHaveBeenCalled();
 
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
@@ -489,7 +447,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('changing the admin select to a person id calls addAdmin(cfg, dbEntityId, personId), the list refetches with the new entry, and the select RESETS to the prompt', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValueOnce(listing([ANNA, BELA]))
 			.mockResolvedValueOnce(listing([ANNA, BELA, DORA_ADMIN]));
@@ -501,14 +459,14 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		await pickPerson(select, 'p-dora');
 
 		await waitFor(() => {
-			expect(h.addAdminMock).toHaveBeenCalledWith(
+			expect(addAdminMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'org-1',
 				'p-dora'
 			);
 		});
 		await waitFor(() => {
-			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
+			expect(listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-dora')).not.toBeNull();
 		});
 		await waitFor(() => {
@@ -526,8 +484,8 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 
 		await fireEvent.change(select, { target: { value: '' } });
 
-		expect(h.addAdminMock).not.toHaveBeenCalled();
-		expect(h.addLibrarianMock).not.toHaveBeenCalled();
+		expect(addAdminMock).not.toHaveBeenCalled();
+		expect(addLibrarianMock).not.toHaveBeenCalled();
 	});
 
 	it('the librarian select (admin-add-librarian-select) excludes current librarians and a pick calls addLibrarian(cfg, libraryId, personId) and resets to the prompt', async () => {
@@ -546,7 +504,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		await pickPerson(select, 'p-dora');
 
 		await waitFor(() => {
-			expect(h.addLibrarianMock).toHaveBeenCalledWith(
+			expect(addLibrarianMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'lib-1',
 				'p-dora'
@@ -560,7 +518,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('option order is ROSTER order — section (listSections tree order), then position within section — NOT alphabetical (Gama ruling 3)', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([]));
 		loadRosterMock.mockReset().mockResolvedValue(
 			toListRead([
 				{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
@@ -584,7 +542,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 	it('EVERYONE already granted: the select stays MOUNTED but disabled and its prompt text becomes picker_everyone_added — never hidden, never an inert enabled select (Gama ruling 2)', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValue(listing([ANNA, BELA, CILLA, DORA_ADMIN]));
 
@@ -632,7 +590,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 		selectSampledb();
 		loadOk();
 		loadRosterMock.mockReset().mockResolvedValue(toListRead([]));
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([]));
 
 		const { container } = await renderReady();
 		const admins = section(container, 'admin-roles-admins');
@@ -695,7 +653,7 @@ describe('/admin — removing people', () => {
 	it('each admin entry carries a remove button; activating it calls removeAdmin(cfg, dbEntityId, personId) and the list refetches', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValueOnce(listing([ANNA, BELA]))
 			.mockResolvedValueOnce(listing([ANNA]));
@@ -706,14 +664,14 @@ describe('/admin — removing people', () => {
 		await fireEvent.click(removeBela!);
 
 		await waitFor(() => {
-			expect(h.removeAdminMock).toHaveBeenCalledWith(
+			expect(removeAdminMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'org-1',
 				'p-bela'
 			);
 		});
 		await waitFor(() => {
-			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
+			expect(listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-bela')).toBeNull();
 		});
 	});
@@ -734,7 +692,7 @@ describe('/admin — removing people', () => {
 	it('with TWO owners, BOTH owner remove buttons are enabled (the guard is about the last owner, not owners in general)', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValue(
 				listing([
@@ -752,7 +710,7 @@ describe('/admin — removing people', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
 		loadOk();
-		h.removeAdminMock.mockRejectedValue(new Error('remove failed: 500'));
+		removeAdminMock.mockRejectedValue(new Error('remove failed: 500'));
 
 		const { container } = await renderReady();
 		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!);
@@ -778,7 +736,7 @@ describe('/admin — removing people', () => {
 		await fireEvent.click(removeCilla!);
 
 		await waitFor(() => {
-			expect(h.removeLibrarianMock).toHaveBeenCalledWith(
+			expect(removeLibrarianMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'lib-1',
 				'p-cilla'
@@ -805,7 +763,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 		selectSampledb();
 		loadOk();
 		const EMIL = { id: 'p-emil', name: 'Emil Erg', role: 'owner' as const, valueIds: ['pv-own-emil'] };
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, EMIL, SELF_EDITOR]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, EMIL, SELF_EDITOR]));
 
 		const { container } = await renderReady();
 
@@ -818,7 +776,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	it('an owner among TWO owners still gets NO remove button on HER OWN row — self-lockout applies even when she is not the last owner (#164)', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_OWNER]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_OWNER]));
 
 		const { container } = await renderReady();
 
@@ -830,17 +788,17 @@ describe('/admin — self-lockout guard (#147)', () => {
 	it('with the self button unrendered there is nothing to click — removeAdmin is unreachable for the own row (#164)', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
 
 		const { container } = await renderReady();
 		expect(q(container, 'admin-remove-admin-p')).toBeNull();
-		expect(h.removeAdminMock).not.toHaveBeenCalled();
+		expect(removeAdminMock).not.toHaveBeenCalled();
 	});
 
 	it('a librarian sees HER OWN remove button disabled in the librarian list too — same guard, both sections', async () => {
 		selectSampledb();
 		loadOk();
-		h.listLibrariansMock
+		listLibrariansMock
 			.mockReset()
 			.mockResolvedValue(listing([CILLA, { ...SELF_EDITOR, valueIds: ['pv-ed-lib-self'] }]));
 
@@ -849,13 +807,13 @@ describe('/admin — self-lockout guard (#147)', () => {
 		expect(q<HTMLButtonElement>(container, 'librarian-remove-admin-p')!.disabled).toBe(true);
 		expect(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!.disabled).toBe(false);
 		await fireEvent.click(q<HTMLButtonElement>(container, 'librarian-remove-admin-p')!);
-		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
+		expect(removeLibrarianMock).not.toHaveBeenCalled();
 	});
 
 	it('renders the self-lockout reason as VISIBLE text under the admin list even though the own row carries no button', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, SELF_EDITOR]));
 
 		const { container } = await renderReady();
 
@@ -880,7 +838,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	it('renders the same visible reason under the librarian list', async () => {
 		selectSampledb();
 		loadOk();
-		h.listLibrariansMock
+		listLibrariansMock
 			.mockReset()
 			.mockResolvedValue(listing([CILLA, { ...SELF_EDITOR, valueIds: ['pv-ed-lib-self'] }]));
 
@@ -894,7 +852,7 @@ describe('/admin — self-lockout guard (#147)', () => {
 	it('shows no librarian self-lockout hint when the viewer is a library OWNER — her row renders no button at all (#148), so nothing is greyed out to explain', async () => {
 		selectSampledb();
 		loadOk();
-		h.listLibrariansMock
+		listLibrariansMock
 			.mockReset()
 			.mockResolvedValue(listing([CILLA, { ...SELF_OWNER, valueIds: ['pv-own-lib-self'] }]));
 
@@ -922,7 +880,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	it("route integration — Mihkel's exact scenario: two owners, viewer is one of them; HIS row renders name+badge but NO Remove button; the OTHER owner's button renders enabled", async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([DB_ROOT, SELF_OWNER]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([DB_ROOT, SELF_OWNER]));
 
 		const { container } = await renderReady();
 		const admins = section(container, 'admin-roles-admins');
@@ -943,7 +901,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	it("route integration — other admins' Remove buttons still WORK normally next to the buttonless own row: a click calls removeAdmin and the list refetches", async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValueOnce(listing([DB_ROOT, SELF_OWNER, BELA]))
 			.mockResolvedValueOnce(listing([DB_ROOT, SELF_OWNER]));
@@ -954,14 +912,14 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!);
 
 		await waitFor(() => {
-			expect(h.removeAdminMock).toHaveBeenCalledWith(
+			expect(removeAdminMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'org-1',
 				'p-bela'
 			);
 		});
 		await waitFor(() => {
-			expect(h.listAdminsMock).toHaveBeenCalledTimes(2);
+			expect(listAdminsMock).toHaveBeenCalledTimes(2);
 			expect(q(container, 'admin-entry-p-bela')).toBeNull();
 		});
 		expect(q(container, 'admin-entry-admin-p')).not.toBeNull();
@@ -971,7 +929,7 @@ describe('/admin — #164 self Remove button is NOT rendered on the own row', ()
 	it('a self row hides its button even when the viewer is the LAST owner — the own row never grows a control regardless of which guard also applies', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([SELF_OWNER, BELA]));
+		listAdminsMock.mockReset().mockResolvedValue(listing([SELF_OWNER, BELA]));
 
 		const { container } = await renderReady();
 
@@ -995,8 +953,8 @@ describe('/admin — write gate (canManage)', () => {
 	it("an org EDITOR (resolveAdmin 'admin', but no _owner value → canManage false) gets the lists READ-ONLY: no combobox, every Remove disabled, a localized explanation — the API would 403 every one of those writes", async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
-		h.listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
+		listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
 
 		const { container } = await renderReady();
 
@@ -1021,15 +979,15 @@ describe('/admin — write gate (canManage)', () => {
 	it('a non-owner viewer cannot reach the write functions even by activating a disabled Remove', async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
-		h.listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
+		listAdminsMock.mockReset().mockResolvedValue(listing([ANNA, BELA], false));
+		listLibrariansMock.mockReset().mockResolvedValue(listing([CILLA], false));
 
 		const { container } = await renderReady();
 		await fireEvent.click(q<HTMLButtonElement>(container, 'admin-remove-p-bela')!);
 		await fireEvent.click(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!);
 
-		expect(h.removeAdminMock).not.toHaveBeenCalled();
-		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
+		expect(removeAdminMock).not.toHaveBeenCalled();
+		expect(removeLibrarianMock).not.toHaveBeenCalled();
 	});
 
 	it('canManage true keeps the write controls: both person selects render (the gate is not "always off")', async () => {
@@ -1056,13 +1014,13 @@ describe('/admin — a library OWNER row', () => {
 			role: 'owner' as const,
 			valueIds: ['pv-own-anna-lib']
 		};
-		h.listLibrariansMock.mockReset().mockResolvedValue(listing([LIB_OWNER, CILLA]));
+		listLibrariansMock.mockReset().mockResolvedValue(listing([LIB_OWNER, CILLA]));
 
 		const { container } = await renderReady();
 
 		expect(q(container, 'librarian-entry-p-anna')).not.toBeNull();
 		expect(q(container, 'librarian-remove-p-anna')).toBeNull();
-		expect(h.removeLibrarianMock).not.toHaveBeenCalled();
+		expect(removeLibrarianMock).not.toHaveBeenCalled();
 		expect(q(container, 'admin-roles-action-error')).toBeNull();
 
 		expect(q<HTMLButtonElement>(container, 'librarian-remove-p-cilla')!.disabled).toBe(false);
@@ -1090,14 +1048,14 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		);
 		loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 		listSectionsMock.mockResolvedValue([]);
-		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
+		listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(
 				dbEntityId === 'org-alpha'
 					? listing([ANNA, BELA], true)
 					: listing([{ id: 'p-emil', name: 'Emil Erg', role: 'editor' as const, valueIds: ['pv-e'] }], false)
 			)
 		);
-		h.listLibrariansMock.mockImplementation(() => Promise.resolve(listing([], false)));
+		listLibrariansMock.mockImplementation(() => Promise.resolve(listing([], false)));
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -1120,7 +1078,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		expect(q(container, 'admin-entry-p-bela')).toBeNull();
 		expect(q(container, 'admin-roles-admins-read-only')).not.toBeNull();
 		expect(q(section(container, 'admin-roles-admins'), 'admin-add-admin-select')).toBeNull();
-		expect(h.listAdminsMock.mock.calls.map((c: unknown[]) => c[1])).not.toContain('org-alpha');
+		expect(listAdminsMock.mock.calls.map((c: unknown[]) => c[1])).not.toContain('org-alpha');
 	});
 });
 

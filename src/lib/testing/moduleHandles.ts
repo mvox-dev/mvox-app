@@ -34,9 +34,20 @@ function rsvpsByEventId(rsvps: RsvpRow[]) {
 	return map;
 }
 
-// 'member': only findMyMemberId; 'empty'/'records': the whole module, byEventId empty or keyed.
-export function rsvpHandlesModule(shape: 'member' | 'empty' | 'records') {
+// 'member': only findMyMemberId; 'list': listMyRsvps only, member-1 fixed;
+// 'empty'/'records': the whole module, byEventId empty or keyed.
+export function rsvpHandlesModule(shape: 'member' | 'list' | 'empty' | 'records') {
 	if (shape === 'member') return { findMyMemberId: findMyMemberIdMock };
+	if (shape === 'list')
+		return {
+			findMyMemberId: vi.fn().mockResolvedValue('member-1'),
+			findMyRsvpForEvent: vi.fn().mockResolvedValue(null),
+			listMyRsvps: listMyRsvpsMock,
+			rsvpsByEventId: () => ({}),
+			createRsvp: vi.fn(),
+			updateRsvpStatus: vi.fn(),
+			deleteRsvp: vi.fn()
+		};
 	return {
 		findMyMemberId: findMyMemberIdMock,
 		listMyRsvps: listMyRsvpsMock,
