@@ -2,21 +2,19 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-31 checkpoint 2026-10-02 05:47Z, Run 500 done]
+### [NEXT SESSION — MVOX-32 checkpoint 2026-10-02 17:00Z]
 
-**State:** main cc27564, tree clean. Mihkel (2026-10-01): refactoring rounds before features. No source file over 500; 400 register = 6 files (memberLifecycle.ts 471 largest).
+**State (2026-10-03 20:27Z, restart seam — Mihkel asked for fresh context):** main 6bb3246, tree clean apart from memory files. #711 in process: b1 merged (PR #772); next b2 admin+profile (32), then event 33, roster 35, season panel 21, agenda 21+21; plan in ~/workspace/scratchpad/711-inventory.md, scripts in scratchpad/711/. Spawn a fresh Josquin for b2 (point at the inventory + findings-mvox-29.md tail for rules) and a fresh Bentham (bentham.md has the traps). Then #712-#718 (research after #711), #723, then features #611 → #684 → #617, #618, #619, #615 → #616. #756 (swallowed reads) not ready yet; finds go to Gama for its body.
 
-**Landed since the last checkpoint:** consolidation-700 w1 e6c88f7 (#625-#630), w2 7ce9511 (#623 #624 #631-#633) · attribution-only rule 5abaea8 · Run 500 b1 a6bfd5e (#634 #635 #649 #652), b2 56bab05 (#641 #646 #648), b3 97aa11b (#636 #656 #651 #644), b4 74d2c96 (#639 #643 #650 + writeReach.ts fence), b5 965b82f (#642 #647 #654 #653), b6 cc27564 (#645 #638 #640 #637). Closed no-change: #655, D2.
+**Landed 10-03:** #708 (PRs #724-#733), #710 (#734-#739), #709 (#740-#771, closed e58ed92), #704, #711 b1.
 
-**In flight:** nothing building. Consolidation-500 (~/workspace/scratchpad/consolidation-500.md: 9 IDENTICAL, D1-D5) SENT to Gama 2026-10-02 05:53Z. Gama filed the merges as #667-#677 (no `ready` yet). Waiting: `ready` labels, D-rulings, the 400 step (6 files) → research-pack → branches. Mihkel called the day 09:02Z.
+**Batch rules (shared setup):** ≤40 files; mutation proof + 2 shuffled seeds; only last batch says Closes (GitHub acts on "Closes #N" anywhere in a PR body); author lines kept; comment rules on touched files.
 
-**Rules this session:** commits/PR bodies carry ONLY (*MVOX:Name*) (no Co-authored-by/email/session link; Mihkel). Gates: FOREGROUND, `ulimit -c 0` (vitest core dumps), split by path, ALL 510 spec files incl. scripts/. write-gate fence now follows imports (writeReach.ts); untraceable forms fail a guard.
+**Rules learned today:** labels per transition are steps in mvox-pickup/mvox-merge skills. research-pack markers: no regex metachars. Teammate subagent hand-backs land in team-lead: have them write files. Line report = po-team's tool, ask Gama.
 
-**Queue after refactor:** #611 (brief-611.md) → #615 pen → #616 → #617/#618/#619. #580's D3 prompt text with Mihkel. Mihkel live checks: #612 capture pixels/scroll, datalist Enter.
+**Nits:** soleCreatePath guard now a subset of rightsWrites (retire at next touch); t4-10-plan.ts:435 stale comment; resolveAdmin/resolveLibrarian auth-expired → load-error (pre-existing).
 
-**Nits for next touch:** EventConvertForm.svelte:294 indent; linkedIdentities.ts:40 stale path comment. josquin.md over 100 lines: next Josquin prunes it.
-
-**Team at seam:** perotin up; finn on consolidation-500; spawn josquin/bentham per branch.
+**Team at seam:** perotin up. Spawn fresh josquin/bentham/finn per task.
 
 (*MVOX:Palestrina*)
 

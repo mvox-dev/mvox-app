@@ -3,40 +3,14 @@
 Only Josquin writes here. History lives in git; this keeps what the #526–#529
 page splits need.
 
-## [PATTERN] How #508 split the agenda page (the template for #526–#529)
-
-- Markup components go in `src/lib/components/<area>/`, script-only modules in
-  `src/lib/<area>/`. The route file stays the mount point, so specs that render
-  `./+page.svelte` change nothing.
-- A form that only exists while open (EventCreateForm, SeasonCreateForm): mount
-  it only while open; reset fields and prefetch at construction (`untrack`). The
-  page keeps `open`, and `submitting`/`status` as `bind:` props.
-- A panel whose state must outlive open/close (SeasonManagePanel): always mount
-  it where its `{#if}` sat, with the `{#if}` inside. The page calls into it via
-  `bind:this` + `export function` (reset/open/close/refresh). The page keeps any
-  state its own code still reads.
-- Bound props write through to the parent even after the child unmounts (Svelte
-  `props.js`: the `bind:` setter has no destroyed check), so `submitting = false`
-  in a `finally` still lands.
-- A big load orchestrator (agendaLoad.ts): the page holds
-  `const ag = $state(createAgendaLoadState())` and reads `ag.x`; non-reactive
-  counters (requestId, load ids) sit in a plain `seq` object so reading them in
-  an effect tracks nothing; `createAgendaLoader(ag, seq, deps)` returns the
-  functions the page destructures. Script the rename; `pnpm check` finds misses.
-
 ## [GOTCHA load-bearing] After every await in a moved handler, check "closed meanwhile"
 
-The page used to read state after an `await` that told it the form had closed
-(`const origin = eventCreateOrigin`). The slice 2 move lost that read, so a
-collective switch mid-create ran the whole success tail from an unmounted form.
-The fix was a `mounted` flag cleared by `$effect(() => () => { mounted = false; })`,
-read right after the await. For every moved handler: list each post-await
-read of page state and keep it, through getters if the state stayed in the page
-(`currentRequestId: () => requestId`). Add a spec for any check you restore, run
-RED against the pre-fix commit (close the form mid-create by switching collective
-while the create promise is held).
+List each post-await read of page state and keep it (getters if state stayed in the page).
+A `mounted` flag cleared by `$effect(() => () => { mounted = false; })` fixed slice 2's loss.
 
 ## [GOTCHA load-bearing] Write gate: the page owns writes and the offline sentence
+
+Per export now (#643): `src/lib/testing/writeReach.ts` traces exports that reach a non-GET.
 
 `src/write-gate-coverage.spec.ts`: (1) a `.svelte` that value-imports a write
 seam (a lib module with a non-GET `method:`) must import `$lib/net/online`;
@@ -51,31 +25,11 @@ on eager access to a missing export.
 
 ## [PATTERN] Guard specs to retarget (paths and literals only, no assertion change)
 
-`--changed` never selects readFileSync specs; run them by path every time:
-`src/person-name-marker.spec.ts` (FILES + NOT_A_PERSONS_NAME; a file that no
-longer imports PersonName leaves FILES but keeps its closed-rule entry),
-`src/trashcan-sweep.spec.ts`, `src/routes/page.ux-polish-i18n.spec.ts`
-(CHANGED_SURFACES, FOCUS_STRIP_EXCEPTIONS), `src/write-gate-coverage.spec.ts`,
-`src/routes/page.write-offline-sweep.spec.ts`, plus every spec that reads the
-route source (`grep -rlE "routes/<x>/\+page\.svelte" src --include=*.spec.ts |
-xargs grep -l readFileSync`). Negative pins (`not.toContain`) should read route
-+ new module together, or a regression in the route goes unseen. Count pins
-can pass by coincidence after a move (agendaTypeFilter write count): report it.
-Touching a spec makes the #509 comment check apply to the whole file; trim its
-comments (≤3 lines, ≤100 chars, <10% share, no review/slice history).
-`src/lib/redact/redact.ts` + `redact.spec.ts`: leave untouched (pinned comment
-text vs comment rules; logged conflict).
-
-## [STATE] Line cap (#525, merged 950856e) — `src/lib/testing/lineCap.ts`
-
-STEP 1500, NEXT_STEP 1000. EXCEPTIONS (shrink-only; spec pins the original
-four): `src/routes/event/[id]/+page.svelte` 3464, `roster` 2911, `library` 2143,
-`profile` 1719. REGISTER = every source file over 1000: the four plus
-`src/routes/+page.svelte` 1452, `SeasonManagePanel.svelte` 1306,
-`src/lib/agenda/agendaLoad.ts` 1036. When a split lands: drop the route from
-EXCEPTIONS once it is ≤1500, and fix REGISTER both ways (add new files over
-1000, drop files now ≤1000). Every file a branch ADDS must be ≤1000.
-`test:changed` already runs the line-cap and comment specs by path.
+`--changed` never selects readFileSync specs; run them by path: person-name-marker,
+trashcan-sweep, page.ux-polish-i18n, write-gate-coverage, page.write-offline-sweep, plus
+`grep -rl <file> src --include=*.spec.ts | xargs grep -l readFileSync`. Negative pins read
+route + new module together. Count pins can pass by coincidence: report it.
+Leave `src/lib/redact/redact.ts` + spec untouched (pinned comment text vs comment rules).
 
 ## [PATTERN] Standing working rules
 
@@ -98,17 +52,13 @@ EXCEPTIONS once it is ≤1500, and fix REGISTER both ways (add new files over
 
 (*MVOX:Josquin*)
 
-## [GOTCHA] Touching a heavily commented spec pulls the whole file under the comment rules
+## [PATTERN] Comment-rule trims on touched files (cons-700 W1, cons-500 b1)
 
-#612: a new runtime dependency fails `workers/entu-rights-mcp/fences.spec.ts` (exact
-`dependencies` pin, designed to be refreshed). Editing it meant trimming every comment
-block in the file. Budget for that whenever a pin lives in an old spec.
-
-## [PATTERN] Comment-rule trims on touched files (consolidation-700 W1, 2026-10-01)
-
-Bulk trim: drop whole-line comment runs >3 lines or with review history, then drop short
-runs until the share is under 10%; keep directives. Check that `git diff -U0` removes only
-`//`, `*` or blank lines, then rewrite the top line by hand, because a cut run leaves it mid-sentence.
+Touching ANY old file (spec or source) puts all of it under the comment rules; budget for it.
+Fastest: script-strip every whole-line comment (keep directives), audit `git diff -U0` removes
+only `//`/`*`/blank lines, then hand-add a top line + a few one-line whys and the trailers.
+A shrink below 400 lines must leave LINE_CAP_REGISTER in `src/lib/testing/lineCap.ts`.
+Full suite split by path: src/lib, src/routes, scripts+workers, src/*.spec.ts (510 files).
 
 ## [GOTCHA] Spread attributes hide a control's class from unclassed-controls.spec (#633, 2026-10-01)
 
@@ -130,12 +80,6 @@ each mount re-ran load: an endless loop that only page.admin-lookup-reduction ca
 Wrap child resets in `untrack`. Run gates with `ulimit -c 0`: crashed vitest workers dumped
 2.4GB cores into the repo root and the runs then OOM-killed (#500 b4).
 
-## [PATTERN] Write gate is per export now (#643, 2026-10-02)
-
-`src/lib/testing/writeReach.ts` traces which exports reach a non-GET; WRITE_RELAYS is gone. A child
-.svelte that writes takes the write as a lazy prop from the route. Unsupported import/export
-forms fail a guard in write-gate-coverage.spec: teach writeReach or rewrite the import.
-
 ## [PATTERN] Pins whose code moves to a sibling: read the sibling too (#654, 2026-10-02)
 
 Keep `source` on the old file for positive pins; add `const core = readFileSync(sibling)` and
@@ -155,3 +99,9 @@ grep every spec for the file's path, not just `readFileSync` pins, before choosi
 vi.mock then throws "No X export". Single props are read lazily. Bundle only local functions.
 A child that binds nested fields of a prop object warns on ownership: pass each bound field
 as its own `$bindable` prop and bind it from the owner (`bind:x={flow.x}`).
+
+## [GOTCHA] Swapping a seed for signIn can silently replace a beforeEach token (#710 b6, 2026-10-03)
+
+A spec that sets `setToken('jwt-editor')` in a beforeEach and then calls a token-less seed
+gets 'jwt-abc' from signIn, and the tests still pass. Before swapping, grep each file for a
+setToken outside the seed and pass `token:` through. Also check for a local `function signIn(`.

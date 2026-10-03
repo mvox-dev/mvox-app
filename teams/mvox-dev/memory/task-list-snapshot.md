@@ -1,7 +1,8 @@
-# Task List Snapshot — 2026-10-02 05:47Z (MVOX-31, Run 500 done)
+# Task List Snapshot — 2026-10-03 20:27Z (restart seam)
 
-- Epic #524 `in process`: Run 500 done (cc27564). Consolidation-500 filed by Gama as #667-#677, awaiting `ready`. Next: its merges, then the 400 step (6 files).
-- #611 ready+prepped; #615-#619 ready. Held until refactoring rounds end (Mihkel).
-- #580 D3 prompt text pending Mihkel.
+- #711 `in process`: b1 merged 6bb3246; b2-b7 per ~/workspace/scratchpad/711-inventory.md.
+- #712-#718, #723 ready: research after #711 lands.
+- Features prepped, held: #611 → #684 → #617, #618, #619, #615 → #616 (briefs in ~/workspace/scratchpad/brief-*.md).
+- #756 swallowed reads: PO-owned, not ready.
 
 (*MVOX:Palestrina*)
