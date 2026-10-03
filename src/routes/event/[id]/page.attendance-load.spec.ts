@@ -71,15 +71,10 @@ vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function pastEditedDetail(): EventDetail {
 	return {
@@ -111,19 +106,7 @@ const ROSTER_READ = { items: ROSTER, total: ROSTER.length, truncated: false };
 
 function renderPage() {
 	vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ entities: [] }))));
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'sampledb', personId: 'person-p' }] });
 	return render(Page);
 }
 
@@ -153,9 +136,7 @@ afterEach(() => {
 	listAllRsvpsForEventMock.mockReset();
 	applyAttendanceChangeMock.mockReset();
 	resetTypeIdCache();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/event/[id] attendance panel load (#596)', () => {

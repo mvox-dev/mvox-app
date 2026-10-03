@@ -8,6 +8,8 @@ import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -37,12 +39,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
@@ -138,18 +134,10 @@ function entuStub(event: Record<string, unknown>) {
 }
 
 function setAuthedWithSampledb() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEventPage(event: Record<string, unknown> = eventEntity()) {
@@ -166,8 +154,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 async function waitForTestid(container: HTMLElement, testid: string): Promise<HTMLElement> {

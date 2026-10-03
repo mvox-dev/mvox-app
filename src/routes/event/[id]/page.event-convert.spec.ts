@@ -65,13 +65,8 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 import Page from './+page.svelte';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
@@ -152,19 +147,7 @@ function wireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}) {
 }
 
 function setAuthed() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }] });
 }
 
 function renderEventPage(eventOver?: Record<string, unknown>, opts: WireOpts = {}) {
@@ -192,9 +175,7 @@ afterEach(() => {
 	resolveDatabaseEntityIdMock.mockReset();
 	gotoMock.mockReset();
 	discoverMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {

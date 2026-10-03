@@ -35,12 +35,8 @@ import Page from './+page.svelte';
 import { updateEventField, type EditableEventField } from '$lib/events/eventFieldEdit';
 import { CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
-import { authStore } from '$lib/auth/session';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const cfg = testCfg('sampledb');
 
@@ -139,18 +135,10 @@ function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = 
 }
 
 function setAuthedWithSampledb() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
@@ -167,8 +155,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function allPosts(fetchStub: ReturnType<typeof vi.fn>) {

@@ -27,13 +27,10 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
@@ -257,18 +254,10 @@ function installWorld(options: WorldOptions = {}) {
 }
 
 function setAuthed(dbs: string[] = ['sampledb']) {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' }))
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0]);
 }
 
 function renderPage(dbs: string[] = ['sampledb']) {
@@ -349,8 +338,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	resetTypeIdCache();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	gotoMock.mockReset();
 	discoverMock.mockReset();
 });

@@ -42,15 +42,11 @@ vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore
 vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 let fakeByteStore: FakeByteStore;
 
@@ -122,18 +118,7 @@ function workRowFixture() {
 function renderPage() {
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-editor' });
 	loadWorksByEventIdMock.mockResolvedValue({ ev1: [workRowFixture()] });
 	return render(Page);
 }
@@ -158,8 +143,7 @@ afterEach(() => {
 	loadWorksByEventIdMock.mockReset();
 	signFileUrlMock.mockReset();
 	gotoMock.mockReset();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('#427 — the PDF affordance navigates to the in-app part viewer', () => {

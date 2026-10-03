@@ -56,14 +56,11 @@ import Page from './+page.svelte';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { REDACT_ATTR } from '$lib/redact/redact';
 import { loadEventDetail, EventDetailLoadError, type EventDetail } from '$lib/events/eventDetail';
-import { authStore } from '$lib/auth/session';
 import { IDBFactory } from 'fake-indexeddb';
 import { setReadCacheFactory } from '$lib/entu/readCache';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const cfg = testCfg('sampledb');
 
@@ -316,18 +313,10 @@ describe('loadEventDetail — conductor resolution (#77 model via resolveConduct
 });
 
 function setAuthedWithSampledb() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderEventPage(fixtures: Fixtures = {}) {
@@ -344,8 +333,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	setAppLocale('en');
 });
 
@@ -1280,21 +1268,13 @@ describe('/event/[id] — a write that settles after a collective switch never l
 		vi.stubGlobal('fetch', fetchStub);
 		pageStub.params = { id: 'ev1' };
 		pageStub.url = new URL('http://localhost/event/ev1');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'p-viewer', vox: 'p-viewer' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
+			token: 'jwt-editor',
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' },
 				{ db: 'vox', name: 'Vox', personId: 'p-viewer' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 		return { ...render(Page), fetchStub };
 	}
 
