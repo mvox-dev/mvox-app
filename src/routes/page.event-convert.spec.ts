@@ -4,19 +4,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get:
-				(_target, key) =>
-				(params?: Record<string, unknown>) =>
-					params && Object.keys(params).length > 0
-						? `${String(key)} ${JSON.stringify(params)}`
-						: String(key)
-		}
-	)
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('plain')
+);
 
 const {
 	loadFullAgendaMock,

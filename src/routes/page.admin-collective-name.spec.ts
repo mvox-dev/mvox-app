@@ -6,14 +6,9 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 const h = vi.hoisted(() => ({
 	listAdminsMock: vi.fn(),
