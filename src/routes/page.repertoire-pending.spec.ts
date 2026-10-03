@@ -22,14 +22,9 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: vi.fn(async () => ({ items: [], total: 0, truncated: false }))
 }));
