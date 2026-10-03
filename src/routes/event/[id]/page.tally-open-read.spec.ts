@@ -24,9 +24,6 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const { listAllRsvpsForEventMock } = vi.hoisted(() => ({
-	listAllRsvpsForEventMock: vi.fn()
-}));
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -36,12 +33,12 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/attendance/attendanceData')>()),
-	listAllRsvpsForEvent: listAllRsvpsForEventMock
-}));
+vi.mock('$lib/attendance/attendanceData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/events')).attendanceReadsModule(importOriginal, 'rsvps')
+);
 
 import Page from './+page.svelte';
+import { listAllRsvpsForEventMock } from '$lib/testing/mocks/events';
 
 function nonEditorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {

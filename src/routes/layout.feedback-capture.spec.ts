@@ -4,11 +4,8 @@ import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 
-const { resolveGateMock, resolveMembershipMock, domToBlobMock, sendMock } =
+const { sendMock } =
 	vi.hoisted(() => ({
-		resolveGateMock: vi.fn(),
-		resolveMembershipMock: vi.fn(),
-		domToBlobMock: vi.fn(),
 		sendMock: vi.fn()
 	}));
 vi.mock('$lib/collectives/discover', async () =>
@@ -22,15 +19,15 @@ vi.mock('$lib/entu-config', async () =>
 );
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/roster'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$lib/profile/completionGate', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
-	return { ...actual, resolveGate: resolveGateMock };
-});
-vi.mock('$lib/collective/membershipStore', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/collective/membershipStore')>();
-	return { ...actual, resolveMembership: resolveMembershipMock };
-});
-vi.mock('modern-screenshot', () => ({ domToBlob: domToBlobMock }));
+vi.mock('$lib/profile/completionGate', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).completionGateModule(importOriginal)
+);
+vi.mock('$lib/collective/membershipStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).membershipModule(importOriginal)
+);
+vi.mock('modern-screenshot', async () =>
+	(await import('$lib/testing/mocks/files')).screenshotModule()
+);
 vi.mock('$lib/feedback/sendFeedback', () => ({ sendFeedback: sendMock }));
 
 import Layout from './+layout.svelte';
@@ -39,6 +36,8 @@ import { resetMembership } from '$lib/collective/membershipStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { SAMPLEDB, signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
+import { domToBlobMock } from '$lib/testing/mocks/files';
+import { resolveGateMock, resolveMembershipMock } from '$lib/testing/mocks/session';
 
 const PNG = new Blob(['png'], { type: 'image/png' });
 

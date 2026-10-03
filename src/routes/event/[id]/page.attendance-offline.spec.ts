@@ -14,19 +14,6 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const {
-	loadEventDetailMock,
-	loadRosterMock,
-	listAttendanceMock,
-	listAllRsvpsForEventMock,
-	applyAttendanceChangeMock
-} = vi.hoisted(() => ({
-	loadEventDetailMock: vi.fn(),
-	loadRosterMock: vi.fn(),
-	listAttendanceMock: vi.fn(),
-	listAllRsvpsForEventMock: vi.fn(),
-	applyAttendanceChangeMock: vi.fn()
-}));
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -36,23 +23,18 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/events/eventDetail', async (importActual) => ({
-	...(await importActual<typeof import('$lib/events/eventDetail')>()),
-	loadEventDetail: loadEventDetailMock,
-	listEventLocations: vi.fn().mockResolvedValue([])
-}));
-vi.mock('$lib/roster/rosterData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/roster/rosterData')>()),
-	loadRoster: loadRosterMock
-}));
-vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/attendance/attendanceData')>()),
-	listAttendance: listAttendanceMock,
-	listAllRsvpsForEvent: listAllRsvpsForEventMock
-}));
-vi.mock('$lib/attendance/attendanceOptimistic', () => ({
-	applyAttendanceChange: applyAttendanceChangeMock
-}));
+vi.mock('$lib/events/eventDetail', async (importOriginal) =>
+	(await import('$lib/testing/mocks/events')).eventDetailModule(importOriginal)
+);
+vi.mock('$lib/roster/rosterData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/roster')).rosterOverRealModule(importOriginal)
+);
+vi.mock('$lib/attendance/attendanceData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/events')).attendanceReadsModule(importOriginal, 'both')
+);
+vi.mock('$lib/attendance/attendanceOptimistic', async () =>
+	(await import('$lib/testing/mocks/events')).attendanceOptimisticModule()
+);
 vi.mock('$lib/rsvp/rsvpData', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).rsvpViewerModule(await importOriginal())
 );
@@ -77,6 +59,13 @@ import type { EventDetail } from '$lib/events/eventDetail';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	applyAttendanceChangeMock,
+	listAllRsvpsForEventMock,
+	listAttendanceMock,
+	loadEventDetailMock
+} from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();

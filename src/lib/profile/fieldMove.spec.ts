@@ -4,14 +4,9 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { MyProfile } from './profileData';
 import { deferred, testCfg } from '$lib/testing/entuFetchKit';
 
-const { createOwnProfileMock, saveProfileFieldsMock } = vi.hoisted(() => ({
-	createOwnProfileMock: vi.fn(),
-	saveProfileFieldsMock: vi.fn()
-}));
-vi.mock('./profileData', () => ({
-	createOwnProfile: createOwnProfileMock,
-	saveProfileFields: saveProfileFieldsMock
-}));
+vi.mock('./profileData', async () =>
+	(await import('$lib/testing/mocks/session')).profileWritesModule()
+);
 
 import {
 	applyFieldMove,
@@ -21,6 +16,7 @@ import {
 	FieldMoveError,
 	type FieldMoveInput
 } from './fieldMove';
+import { createOwnProfileMock, saveProfileFieldsMock } from '$lib/testing/mocks/session';
 
 const cfg = testCfg('testdb');
 

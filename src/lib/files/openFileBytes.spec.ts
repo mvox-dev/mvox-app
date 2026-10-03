@@ -3,13 +3,15 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signFileUrlMock } = vi.hoisted(() => ({ signFileUrlMock: vi.fn() }));
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import { openFileBytes } from './openFileBytes';
 import { BYTE_STORE_CAP_BYTES } from './byteStore';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
 
 const CFG = testCfg('sampledb', 'jwt-abc');
 const A = { db: 'sampledb', personId: 'person-a' };

@@ -9,6 +9,7 @@ import type { AgendaItem } from '$lib/agenda/types';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 import type { AttendancePanel } from '$lib/attendance/types';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { localeMock } from '$lib/testing/mocks/session';
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
@@ -33,19 +34,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
-const localeMock = vi.hoisted(() => ({
-	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
-}));
-vi.mock('$lib/paraglide/runtime.js', async () => {
-	const { SvelteMap } = await import('svelte/reactivity');
-	localeMock.state ??= new SvelteMap<string, string>([['locale', 'en']]);
-	return {
-		getLocale: () => localeMock.state!.get('locale'),
-		setLocale: vi.fn(),
-		locales: ['en', 'et', 'lv', 'uk'],
-		overwriteGetLocale: vi.fn()
-	};
-});
+vi.mock('$lib/paraglide/runtime.js', async () =>
+	(await import('$lib/testing/mocks/session')).localeRuntimeModule()
+);
 function setAppLocale(locale: AppLocale): void {
 	localeMock.state?.set('locale', locale);
 }

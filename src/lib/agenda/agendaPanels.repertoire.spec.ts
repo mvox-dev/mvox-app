@@ -1,8 +1,9 @@
 // #683: the season panel keeps what loaded and reports each failed read to the problem-handler.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
-vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -11,6 +12,7 @@ import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from '.
 import type { AgendaLoadDeps } from './agendaLoad';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { reportProblem } from '$lib/testing/mocks/session';
 
 const CFG = testCfg('sampledb', 'jwt-1');
 const ITEM: RepertoireItem = {

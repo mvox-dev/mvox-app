@@ -2,20 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { testCfg } from '$lib/testing/entuFetchKit';
 
-const { createOwnProfileMock, saveProfileFieldsMock, assertDomainNamePersistedMock } = vi.hoisted(() => ({
-	createOwnProfileMock: vi.fn(),
-	saveProfileFieldsMock: vi.fn(),
+const { assertDomainNamePersistedMock } = vi.hoisted(() => ({
 	assertDomainNamePersistedMock: vi.fn()
 }));
-vi.mock('./profileData', () => ({
-	createOwnProfile: createOwnProfileMock,
-	saveProfileFields: saveProfileFieldsMock
-}));
+vi.mock('./profileData', async () =>
+	(await import('$lib/testing/mocks/session')).profileWritesModule()
+);
 vi.mock('./completionGate', () => ({
 	assertDomainNamePersisted: assertDomainNamePersistedMock
 }));
 
 import { applyProfileSave, ProfileSaveError } from './applyProfileSave';
+import { createOwnProfileMock, saveProfileFieldsMock } from '$lib/testing/mocks/session';
 
 const cfg = testCfg('testdb');
 const fields = { name: 'Ada', email: 'ada@example.com' };

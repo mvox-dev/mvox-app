@@ -2,10 +2,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 
-const { domToBlobMock } = vi.hoisted(() => ({ domToBlobMock: vi.fn() }));
-vi.mock('modern-screenshot', () => ({ domToBlob: domToBlobMock }));
+vi.mock('modern-screenshot', async () =>
+	(await import('$lib/testing/mocks/files')).screenshotModule()
+);
 
 import { captureScreen, copyInked, ClipboardImageUnsupported } from './capture';
+import { domToBlobMock } from '$lib/testing/mocks/files';
 
 const PNG = new Blob(['png'], { type: 'image/png' });
 

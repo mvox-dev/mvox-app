@@ -2,20 +2,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
 
-const { listAdminsMock, listLibrariansMock, listMyProfilesMock } = vi.hoisted(() => ({
+const { listAdminsMock, listLibrariansMock } = vi.hoisted(() => ({
 	listAdminsMock: vi.fn(),
 	listLibrariansMock: vi.fn(),
-	listMyProfilesMock: vi.fn()
 }));
 vi.mock('$lib/admin/roleManagement', async (importActual) => ({
 	...(await importActual<typeof import('$lib/admin/roleManagement')>()),
 	listAdmins: listAdminsMock,
 	listLibrarians: listLibrariansMock
 }));
-vi.mock('$lib/profile/profileData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/profile/profileData')>()),
-	listMyProfiles: listMyProfilesMock
-}));
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -29,6 +27,7 @@ import {
 	loadActiveAndArchivedRosters,
 	listDeactivateBlockers
 } from './memberLifecycle';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const cfg = testCfg('testdb');
 

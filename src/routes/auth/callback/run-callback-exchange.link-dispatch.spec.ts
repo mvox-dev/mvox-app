@@ -11,14 +11,15 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { exchangeSessionMock, exchangeInviteMock, setUserMock, setTokenMock } = vi.hoisted(() => ({
+const { exchangeSessionMock, setUserMock, setTokenMock } = vi.hoisted(() => ({
 	exchangeSessionMock: vi.fn(),
-	exchangeInviteMock: vi.fn(),
 	setUserMock: vi.fn(),
 	setTokenMock: vi.fn()
 }));
 vi.mock('$lib/auth/exchange', () => ({ exchangeSession: exchangeSessionMock }));
-vi.mock('$lib/invite/redeem', () => ({ exchangeSessionWithInvite: exchangeInviteMock }));
+vi.mock('$lib/invite/redeem', async () =>
+	(await import('$lib/testing/mocks/session')).redeemModule()
+);
 vi.mock('$lib/auth/storage', () => ({
 	setUser: setUserMock,
 	setToken: setTokenMock,
@@ -34,6 +35,7 @@ vi.mock('$lib/collectives/store', () => ({
 }));
 
 import { runCallbackExchange } from './run-callback-exchange';
+import { exchangeInviteMock } from '$lib/testing/mocks/session';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');

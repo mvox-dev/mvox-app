@@ -6,21 +6,17 @@ import type { OAuthState } from '$lib/auth/state';
 // and the two hydrate steps. parseInviteToken stays REAL (pure decode) — the
 // tokens below are genuine base64url JWTs so the real parse works in GREEN.
 const {
-	exchangeInviteMock,
 	setUserMock,
 	setTokenMock,
-	setLastProviderMock,
-	hydrateAuthMock,
-	hydrateCollectivesMock
+	setLastProviderMock
 } = vi.hoisted(() => ({
-	exchangeInviteMock: vi.fn(),
 	setUserMock: vi.fn(),
 	setTokenMock: vi.fn(),
 	setLastProviderMock: vi.fn(),
-	hydrateAuthMock: vi.fn(),
-	hydrateCollectivesMock: vi.fn()
 }));
-vi.mock('$lib/invite/redeem', () => ({ exchangeSessionWithInvite: exchangeInviteMock }));
+vi.mock('$lib/invite/redeem', async () =>
+	(await import('$lib/testing/mocks/session')).redeemModule()
+);
 vi.mock('$lib/auth/storage', () => ({
 	setUser: setUserMock,
 	setToken: setTokenMock,
@@ -30,10 +26,19 @@ vi.mock('$lib/auth/storage', () => ({
 	getLastProvider: vi.fn(),
 	clearAll: vi.fn()
 }));
-vi.mock('$lib/auth/session', () => ({ hydrateAuth: hydrateAuthMock }));
-vi.mock('$lib/collectives/store', () => ({ hydrateCollectives: hydrateCollectivesMock }));
+vi.mock('$lib/auth/session', async () =>
+	(await import('$lib/testing/mocks/session')).sessionModule()
+);
+vi.mock('$lib/collectives/store', async () =>
+	(await import('$lib/testing/mocks/session')).collectivesStoreModule()
+);
 
 import { runInviteCallbackExchange } from './run-invite-callback';
+import {
+	exchangeInviteMock,
+	hydrateAuthMock,
+	hydrateCollectivesMock
+} from '$lib/testing/mocks/session';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');

@@ -132,7 +132,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
 	listAttendanceMock,
 	listMyAttendanceMock,
 	listAllRsvpsForEventMock,
@@ -140,7 +139,6 @@ const {
 	updateAttendanceStatusMock,
 	deleteAttendanceMock
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn(),
@@ -166,9 +164,9 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	loadInactiveRoster: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	loadActiveAndArchivedRosters: vi.fn(async (...args: unknown[]) => ({
@@ -195,7 +193,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from '../../routes/+page.svelte';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
@@ -207,6 +207,7 @@ import {
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {

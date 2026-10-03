@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { signFileUrlMock } = vi.hoisted(() => ({ signFileUrlMock: vi.fn() }));
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import * as byteStoreModule from './byteStore';
 import {
@@ -16,6 +17,7 @@ import {
 } from './byteStore';
 import { openFileBytes } from './openFileBytes';
 import { createFakeAdapter, type FakeAdapter } from '$lib/testing/byteStoreFakes';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
 
 /** The #410 contract shape — an intersection until byteStore.ts declares it
  *  (the source pins below hold the interface itself to account; same idiom as

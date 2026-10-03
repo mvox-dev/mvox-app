@@ -1,8 +1,9 @@
 // #683: one failed picker read costs only its own list; the failure goes to the problem-handler.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { reportProblem } = vi.hoisted(() => ({ reportProblem: vi.fn() }));
-vi.mock('$lib/problems/reportProblem', () => ({ reportProblem }));
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -11,6 +12,7 @@ import { readManagePickers } from '$lib/repertoire/managePickers';
 import type { Edition, Work } from '$lib/library/libraryData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { reportProblem } from '$lib/testing/mocks/session';
 
 const CFG = testCfg('sampledb', 'jwt-1');
 const WORK = { id: 'work-1', title: 'Ave verum' } as unknown as Work;
