@@ -13,8 +13,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';

@@ -150,9 +150,15 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
