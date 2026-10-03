@@ -77,14 +77,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function eventEntity(startDatetime: string, over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -127,19 +122,10 @@ const RSVP_ROWS = [
 ];
 
 function setAuthedWithSampledb() {
-	setToken('jwt-token');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-token',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -158,10 +144,7 @@ afterEach(() => {
 	vi.useRealTimers();
 	vi.clearAllMocks();
 	localStorage.clear();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 function renderPage(event: Record<string, unknown>) {

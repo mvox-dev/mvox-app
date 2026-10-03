@@ -71,15 +71,11 @@ vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
@@ -113,19 +109,7 @@ const ROSTER = [
 ];
 
 function setAuthed(dbs: string[] = ['sampledb']) {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'person-p'])),
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0]);
+	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
 }
 
 function setFixtures(
@@ -177,9 +161,7 @@ afterEach(() => {
 	applyAttendanceChangeMock.mockReset();
 	discoverMock.mockReset();
 	resetTypeIdCache();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)', () => {

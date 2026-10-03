@@ -36,12 +36,9 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { loadEventDetail } from '$lib/events/eventDetail';
-import { authStore } from '$lib/auth/session';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const cfg = testCfg('sampledb');
 
@@ -204,25 +201,15 @@ function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}
 }
 
 function setAuthed(withCrede = false) {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: withCrede
-			? { sampledb: 'p-viewer', crede: 'p-crede' }
-			: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
+		token: 'jwt-editor',
 		collectives: withCrede
 			? [
 					{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' },
 					{ db: 'crede', name: 'Crede', personId: 'p-crede' }
 				]
-			: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
+			: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderSeriesPage(
@@ -243,8 +230,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q<T extends Element = HTMLElement>(container: HTMLElement, testid: string): T | null {

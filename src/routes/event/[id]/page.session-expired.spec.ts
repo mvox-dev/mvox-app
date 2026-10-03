@@ -1,30 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #107 review F2 — auth token expiry recovery on the EVENT DETAIL page.
-//
-// The first #107 pass covered the agenda, roster, profile and library but left
-// this one out, so a 401 here still landed in `status = 'load-error'`: the
-// generic "couldn't load" copy plus a Retry button firing `loadForSelected()`
-// against a token entuFetch had already deleted from localStorage — an action
-// that can never succeed. This is a primary member surface (every agenda row
-// links to it), so it is exactly the misleading-message class #107 set out to
-// remove.
-//
-// Why the tag survives to the catch: `loadEventDetail` only constructs an
-// `EventDetailLoadError` AFTER inspecting `eventRes.ok`, but entuFetch throws
-// AuthExpiredError before any response is returned — so the raw AuthExpiredError
-// propagates and must be recognised BEFORE the EventDetailLoadError/unavailable
-// branch.
-//
-// INTEGRATION posture inherited from page.spec.ts: the REAL data layer and the
-// REAL entuFetch run; only the wire (global fetch) and $app/navigation are
-// stubbed. That is what makes this exercise the actual 401 → recovery path
-// rather than a hand-thrown error.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-// Full-fallback paraglide mock — same Proxy stub page.spec.ts uses.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -47,38 +25,20 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { setAuthExpiredHandler } from '$lib/entu/request';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-// The teardown+redirect half of the recovery is registered into entuFetch rather
-// than imported by it, so $lib/entu/request stays node-importable for the 37
-// migration scripts (review R2/F1). Production installs it from the root layout's
-// module scope; this spec renders the page component alone, so it installs the
-// REAL one itself — the assertions below still exercise production code.
 beforeEach(() => {
 	install401Recovery();
 });
 
 function setAuthedWithSampledb() {
-	setToken('jwt-stale');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-stale',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderWithStatus(status: number) {
@@ -97,11 +57,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	gotoMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/event/[id] — session expired (#107 review F2)', () => {
@@ -115,7 +71,6 @@ describe('/event/[id] — session expired (#107 review F2)', () => {
 		expect(signin, 'the notice must carry a sign-in link').not.toBeNull();
 		expect(signin?.getAttribute('href') ?? '').toContain('/auth/login');
 
-		// The three misleading alternatives, all absent.
 		expect(container.querySelector('[data-testid="event-detail-load-error"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-retry"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-not-available"]')).toBeNull();

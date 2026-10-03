@@ -41,13 +41,8 @@ vi.mock('$lib/seasons/seasonManage', async (importOriginal) => ({
 
 import Page from './+page.svelte';
 import { EntityDeleteForbiddenError } from '$lib/seasons/deleteErrors';
-import { authStore } from '$lib/auth/session';
-import { setToken } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const CFG = testCfg('sampledb', 'jwt-token');
 
@@ -114,19 +109,10 @@ function readWireStub(eventOver?: Record<string, unknown>) {
 }
 
 function setAuthedWithSampledb() {
-	setToken(CFG.token);
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: CFG.token,
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 function renderPage(eventOver?: Record<string, unknown>) {
@@ -146,8 +132,7 @@ afterEach(() => {
 	deleteEventMock.mockReset();
 	gotoMock.mockReset();
 	localStorage.clear();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {

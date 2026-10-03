@@ -5,6 +5,8 @@ import { resolve } from 'node:path';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
@@ -41,13 +43,6 @@ vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 
 function nonEditorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -112,19 +107,10 @@ function wireStub(event: Record<string, unknown>) {
 }
 
 function setAuthedWithSampledb() {
-	setToken('jwt-token');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-token',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -137,10 +123,7 @@ afterEach(() => {
 	vi.useRealTimers();
 	vi.resetAllMocks();
 	localStorage.clear();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 function renderPage(event: Record<string, unknown>) {

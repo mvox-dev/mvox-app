@@ -44,11 +44,12 @@ vi.mock('$lib/files/appLabelStore', () => ({
 
 import EventPage from './+page.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
 
 let fakeByteStore: FakeByteStore;
 
@@ -229,9 +230,8 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	clearAll({ preserveProvider: false });
+	resetAppState();
 	setReadCacheFactory(undefined);
-	collectiveState.set({ status: 'loading' });
 });
 
 describe('#434 slice 5 — the event page links a part that is on the device', () => {

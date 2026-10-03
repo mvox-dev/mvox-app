@@ -35,14 +35,11 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { HOURS_24, MINUTES_5, optionValues, fillDateTime, commitDateTime, readDateTime } from '$lib/testing/timeControls';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -192,18 +189,10 @@ function scheduleWireStub(opts: WireOpts = {}) {
 }
 
 function setAuthed(dbs: string[] = ['sampledb']) {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p-viewer'])),
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' }))
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0]);
 }
 
 function renderSchedulePage(opts: WireOpts = {}, dbs: string[] = ['sampledb']) {
@@ -233,8 +222,7 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetTypeIdCache();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	const { timeFormatStore } = await import('$lib/preferences/timeFormat');
 	timeFormatStore.set('24h');
 });

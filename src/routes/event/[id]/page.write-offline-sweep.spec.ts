@@ -42,13 +42,7 @@ vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore
 
 import Page from './+page.svelte';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
-import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import {
 	goOffline,
 	goOnline,
@@ -58,6 +52,8 @@ import {
 	isWriteDisabled,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 // The viewer (`p-viewer`) is `_owner` on the event and `_editor` on the season, so every
@@ -160,18 +156,10 @@ function renderEventPage() {
 	vi.stubGlobal('fetch', stub);
 	pageStub.params = { id: 'ev1' };
 	pageStub.url = new URL('http://localhost/event/ev1');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p-viewer' },
-		expMs: Date.now() + 100_000
+	signIn({
+		token: 'jwt-editor',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 	return { ...render(Page), fetchStub: stub };
 }
 
@@ -180,8 +168,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetOnLine();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/event/[id] — no write control reaches the wire offline (#434 slice 6 fence)', () => {
