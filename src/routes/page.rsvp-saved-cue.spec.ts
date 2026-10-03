@@ -36,15 +36,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadFullAgendaMock,
-	discoverMock,
-	gotoMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	applyRsvpChangeMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	applyRsvpChangeMock: vi.fn()
@@ -52,8 +48,12 @@ const {
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
@@ -65,7 +65,9 @@ vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
 	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
 	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
 }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -108,6 +110,7 @@ import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { discoverMock } from '$lib/testing/routeMocks';
 
 function agendaEvent(id: string, startDatetime: string) {
 	return {

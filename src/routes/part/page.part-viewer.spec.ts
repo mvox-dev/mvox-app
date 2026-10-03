@@ -13,17 +13,17 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const { gotoMock, signFileUrlMock, afterNavigateCallbacks } = vi.hoisted(() => ({
-	gotoMock: vi.fn(),
+const { signFileUrlMock, afterNavigateCallbacks } = vi.hoisted(() => ({
 	signFileUrlMock: vi.fn(),
 	afterNavigateCallbacks: [] as Array<(nav: { type: string }) => void>
 }));
-vi.mock('$app/navigation', () => ({
-	goto: gotoMock,
-	afterNavigate: (cb: (nav: { type: string }) => void) => {
-		afterNavigateCallbacks.push(cb);
-	}
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({
+		afterNavigate: (cb: (nav: { type: string }) => void) => {
+			afterNavigateCallbacks.push(cb);
+		}
+	})
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 const labelWrites = vi.hoisted(
@@ -38,7 +38,9 @@ vi.mock('$lib/files/appLabelStore', () => ({
 		remove: async () => {}
 	})
 }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 const pdfjs = vi.hoisted(() => {
 	const destroy = vi.fn();
@@ -75,6 +77,7 @@ import { collectiveState } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import type { PartLabel } from '$lib/files/labelStore';
 import { resetAppState } from '$lib/testing/appReset';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 let fakeByteStore: FakeByteStore;
 

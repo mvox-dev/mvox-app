@@ -9,16 +9,20 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const { loadFullAgendaMock, discoverMock, gotoMock } = vi.hoisted(() => ({
+const { loadFullAgendaMock } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
 	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
@@ -44,6 +48,7 @@ import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 

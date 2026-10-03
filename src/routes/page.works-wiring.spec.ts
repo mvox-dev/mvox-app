@@ -15,15 +15,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 const {
 	loadFullAgendaMock,
 	listFullAgendaMock,
-	discoverMock,
-	gotoMock,
 	loadWorksByEventIdMock,
 	signFileUrlMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	listFullAgendaMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
 	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn()
 }));
@@ -32,8 +28,12 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock,
 	listFullAgenda: listFullAgendaMock
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
@@ -41,7 +41,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
 	})
 }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
+);
 const pageStub = vi.hoisted(() => ({
 	params: {} as Record<string, string>,
 	url: new URL('http://localhost/'),
@@ -95,6 +97,7 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import { resetRetentionForTests } from '$lib/files/retention';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 let fakeByteStore: FakeByteStore;
 

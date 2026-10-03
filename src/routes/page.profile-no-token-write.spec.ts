@@ -7,7 +7,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn(), gotoMock: vi.fn() }));
+const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
 vi.mock('$lib/profile/profileData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
 	return { ...actual, listMyProfiles: h.listMyProfilesMock };
@@ -15,11 +15,17 @@ vi.mock('$lib/profile/profileData', async (importOriginal) => {
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));
 vi.mock('$app/state', () => ({ page: pageStub }));
-vi.mock('$app/navigation', () => ({ goto: h.gotoMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './profile/+page.svelte';
 import { clearAll } from '$lib/auth/storage';
@@ -29,6 +35,7 @@ import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const q = (c: HTMLElement, testid: string) => c.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 
@@ -38,7 +45,7 @@ beforeEach(() => {
 	fetchStub = vi.fn<typeof fetch>(async () => new Response('{"entities":[]}', { status: 200 }));
 	vi.stubGlobal('fetch', fetchStub);
 	install401Recovery();
-	h.gotoMock.mockReset();
+	gotoMock.mockReset();
 	h.listMyProfilesMock.mockReset();
 	history.replaceState({}, '', '/profile');
 });
@@ -70,8 +77,8 @@ describe('#550 — a profile write with no token', () => {
 		await fireEvent.input(input, { target: { value: 'Ada L' } });
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
-		await waitFor(() => expect(h.gotoMock).toHaveBeenCalledTimes(1));
-		expect(String(h.gotoMock.mock.calls[0][0])).toContain('session_expired');
+		await waitFor(() => expect(gotoMock).toHaveBeenCalledTimes(1));
+		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
 		await settle();
 		expect(nonGetCalls(fetchStub)).toEqual([]);
 		expect(q(container, 'profile-load-error')).toBeNull();

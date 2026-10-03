@@ -11,8 +11,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadFullAgendaMock,
-	discoverMock,
-	gotoMock,
 	loadRosterMock,
 	listSectionsMock,
 	signFileUrlMock,
@@ -23,8 +21,6 @@ const {
 	countSeriesOccurrencesMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
@@ -36,9 +32,15 @@ const {
 }));
 
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -88,6 +90,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);

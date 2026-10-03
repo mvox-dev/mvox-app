@@ -13,8 +13,6 @@ const {
 	loadRosterMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
-	discoverMock,
-	gotoMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
@@ -27,8 +25,6 @@ const {
 	loadRosterMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
@@ -60,9 +56,15 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	resolveManageRights: resolveManageRightsMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
 	listMyRsvps: listMyRsvpsMock,
@@ -102,6 +104,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
