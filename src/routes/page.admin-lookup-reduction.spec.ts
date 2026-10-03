@@ -132,6 +132,10 @@ afterEach(() => {
 	resetAppState();
 });
 
+function fetchedPaths(): string[] {
+	return h.entuFetchMock.mock.calls.map((c) => String(c[1]));
+}
+
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
@@ -142,6 +146,8 @@ async function renderReady(): Promise<HTMLElement> {
 	await waitFor(() => {
 		expect(q(container, 'admin-roles-admins')).not.toBeNull();
 	});
+	// The admins' sign-in lookup is the load's last read; without it, it lands in the next test.
+	await waitFor(() => expect(fetchedPaths().some((p) => p.includes('props=entu_user'))).toBe(true));
 	return container;
 }
 
@@ -158,7 +164,7 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 		expect(h.listAdminsMock).toHaveBeenCalled();
 		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
-		const paths = h.entuFetchMock.mock.calls.map((c) => String(c[1]));
+		const paths = fetchedPaths();
 		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(2);
 		expect(paths.filter((p) => p.includes('_type.string=library'))).toHaveLength(1);
 		expect(paths.filter((p) => p.includes('props=entu_user'))).toHaveLength(1);
