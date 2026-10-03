@@ -7,8 +7,8 @@ import { resolve } from 'node:path';
 import type { AgendaItem } from '$lib/agenda/types';
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		agenda_duration_min: (params) => `${(params as { minutes: number }).minutes} min`,
 		agenda_filter_all: () => '[msg:filter-all]',
 		agenda_filter_group_label: () => '[msg:filter-group]',
@@ -18,13 +18,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		event_type_concert: () => '[msg:concert]',
 		event_type_social: () => '[msg:social]',
 		event_type_other: () => '[msg:other]'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock } =
 	vi.hoisted(() => ({

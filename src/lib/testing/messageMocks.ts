@@ -19,7 +19,8 @@ function echo(key: string, format: EchoFormat): Message {
 export function echoMessages(format: EchoFormat = 'params', copy: Copy = {}): { m: Copy } {
 	return {
 		m: new Proxy(copy, {
-			get: (target, key) => target[String(key)] ?? echo(String(key), format)
+			get: (target, key) =>
+				Object.hasOwn(target, key) ? target[String(key)] : echo(String(key), format)
 		})
 	};
 }
