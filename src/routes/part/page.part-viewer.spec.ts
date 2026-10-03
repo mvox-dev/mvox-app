@@ -105,6 +105,7 @@ function seedHeldPart(): void {
 	});
 }
 
+// collectives stay loading: the cold offline start
 function renderViewer(state: { partLabel?: PartLabel } = {}) {
 	pageStub.params = { fileId: 'file-score' };
 	pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
