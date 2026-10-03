@@ -42,18 +42,12 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
-}));
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: vi.fn().mockResolvedValue(null),
-	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).repertoireActionsModule(await importOriginal(), 'not-editor')
+);
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),

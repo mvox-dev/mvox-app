@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/runtime.js', () => ({ getLocale: () => 'en' }));
+vi.mock('$lib/paraglide/runtime.js', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
 
 import { groupByMonth, longDayFormatter, monthLabel, tallinnDayKey } from './timeFormat';
 

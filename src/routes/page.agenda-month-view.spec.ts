@@ -65,13 +65,9 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn((..._args: unknown[]) => {
-		const [, entityId, personId] = _args as [unknown, string, string];
-		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
-	})
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).repertoireActionsModule(await importOriginal())
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
 );
