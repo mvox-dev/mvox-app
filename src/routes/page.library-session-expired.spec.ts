@@ -20,12 +20,11 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { setAuthExpiredHandler } from '$lib/entu/request';
-import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { armLibraryRecovery } from '$lib/testing/pages/library';
 
 type Route = 'work' | 'edition-of-work' | 'copy-of-edition' | 'lending' | 'other';
 
@@ -67,12 +66,7 @@ function setAuthedWithOneCollective() {
 	signIn();
 }
 
-beforeEach(() => {
-	install401Recovery();
-	gotoMock.mockReset();
-	resetTypeIdCache();
-	history.replaceState({}, '', '/library');
-});
+beforeEach(armLibraryRecovery);
 
 afterEach(() => {
 	setAuthExpiredHandler(null);

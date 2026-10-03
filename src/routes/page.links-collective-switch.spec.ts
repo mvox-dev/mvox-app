@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // /links resets on a collective switch and drops the old collective's late reads.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,10 +32,8 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -43,6 +41,8 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
+import { cleanupClearAdmin, setAuthedWithTwoCollectives } from '$lib/testing/pages/links';
+import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): LinkRow[] {
 	return [
@@ -57,15 +57,6 @@ function rowsB(): LinkRow[] {
 	];
 }
 
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
-}
-
 beforeEach(() => {
 	setAuthedWithTwoCollectives();
 	adminStore.set('admin');
@@ -75,16 +66,7 @@ beforeEach(() => {
 	deleteLinkMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearAdmin);
 
 function rowNames(container: HTMLElement): string[] {
 	return Array.from(container.querySelectorAll('[data-testid="links-row"]')).map(

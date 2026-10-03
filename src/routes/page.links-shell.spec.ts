@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -28,9 +28,7 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { adminStore } from '$lib/nav/adminStore';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -38,6 +36,8 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
+import { cleanupClearAdmin, setAuthed } from '$lib/testing/pages/links';
+import { q } from '$lib/testing/pages/dom';
 
 const SHELL_CLASS = 'min-h-screen bg-paper px-6 py-10 text-ink';
 const COLUMN_CLASS = 'mx-auto flex w-full max-w-md flex-col gap-4';
@@ -59,10 +59,6 @@ function rowsFixture(): LinkRow[] {
 	];
 }
 
-function setAuthed() {
-	signIn();
-}
-
 beforeEach(() => {
 	setAuthed();
 	listLinksMock.mockResolvedValue(rowsFixture());
@@ -72,16 +68,7 @@ beforeEach(() => {
 	deleteLinkMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearAdmin);
 
 function shellMain(container: HTMLElement): HTMLElement | null {
 	const first = container.firstElementChild;

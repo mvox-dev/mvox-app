@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -40,8 +40,6 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 import Page from './library/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import {
 	listAllCopiesMock,
@@ -56,16 +54,18 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
-
-const DB_A = 'sampledb';
-const DB_B = 'other-choir';
+import {
+	DB_A,
+	DB_B,
+	cleanupClearReset,
+	editionsFor,
+	setAuthedWithTwoCollectives,
+	truncated
+} from '$lib/testing/pages/library';
+import { q } from '$lib/testing/pages/dom';
 
 const OPTIONS_OPTION = 'bulk-checkout-edition-partial-option';
 const MEMBERS_NOTICE = 'bulk-checkout-members-partial-notice';
-
-function truncated<T>(items: T[], total: number) {
-	return { items, total, truncated: true };
-}
 
 function worksFor(db: string) {
 	return db === DB_A
@@ -79,30 +79,6 @@ function worksFor(db: string) {
 			];
 }
 
-function editionsFor(db: string) {
-	return db === DB_A
-		? [
-				{
-					id: 'edition-a1',
-					name: 'Urtext A',
-					publisher: 'Bärenreiter',
-					workId: 'work-a1',
-					externalLinks: [],
-					files: []
-				}
-			]
-		: [
-				{
-					id: 'edition-b1',
-					name: 'Urtext B',
-					publisher: 'Carus',
-					workId: 'work-b1',
-					externalLinks: [],
-					files: []
-				}
-			];
-}
-
 function copiesFor(db: string) {
 	return db === DB_A
 		? [{ id: 'copy-a1', name: 'Copy A1', copyNumber: 1, editionId: 'edition-a1' }]
@@ -113,15 +89,6 @@ function membersFor(db: string) {
 	return db === DB_A
 		? [{ memberId: 'member-a1', personId: 'person-a1', sectionIds: [] }]
 		: [{ memberId: 'member-b1', personId: 'person-b1', sectionIds: [] }];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
-			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
-		]
-	});
 }
 
 beforeEach(() => {
@@ -153,15 +120,7 @@ beforeEach(() => {
 	resolveCopyChainsMock.mockResolvedValue(new Map());
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearReset);
 
 async function openEditionStep(): Promise<HTMLElement> {
 	setAuthedWithTwoCollectives();

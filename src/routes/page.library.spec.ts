@@ -3,64 +3,12 @@
 // T6.3/#63 — the /library page: the works -> editions -> copies accordion, each level
 // fetched lazily, per-copy availability derived from the pre-loaded lendings.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_create_work_button: () => 'Add work',
-		library_edition_file_attach: () => 'Attach files',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_error: () => 'Could not create the work.',
-		// #271 — the create-edition button shows once a work's editions are idle; this spec
-		// never opens the form, so this one key is enough.
-		library_create_edition_button: () => 'Add edition',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) => `${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`,
-		// #76 — inline checkout on browse tree
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		// #112/#88 — copy-list sort controls
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since',
-		// #128 — collapsed-available summary line
-		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -104,9 +52,13 @@ vi.mock('$lib/library/lendingActions', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { surfacesUnder } from '$lib/testing/svelteSurfaces';
-import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
+import {
+	expectNameMarkedOnce,
+	expectWholeTextMarkedOnce,
+	markerOf,
+	textNodesContaining
+} from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
@@ -127,26 +79,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
-
-const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
-
-function setAuthedWithOneCollective() {
-	signIn();
-	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	// #434 — the live resolution every checkout and create makes for its own `_parent`.
-	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
-	// Default: no active membership, unless a test overrides findMyMemberIdMock afterward.
-	findMyMemberIdMock.mockResolvedValue(null);
-	// Default: empty copy names, unless a test overrides.
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	// Default: empty loan chains, unless a test overrides. (#129)
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-	// Default: empty checkout data, unless a test overrides.
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-}
+import { LIBRARY_SURFACES, signInLibraryReader } from '$lib/testing/pages/library';
 
 function setNoCollective() {
 	signIn({ collectives: [] });
@@ -177,7 +110,7 @@ describe('/library — loading state', () => {
 	it('shows the skeleton while the initial load is in flight', async () => {
 		listWorksMock.mockReturnValue(new Promise(() => {}));
 		listLendingsMock.mockReturnValue(new Promise(() => {}));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -195,7 +128,7 @@ describe('/library — ready state', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -228,7 +161,7 @@ describe('/library — ready state', () => {
 				files: [{ id: 'file-1', filename: 'spem-vocal-score.pdf', filesize: 1937, filetype: 'application/pdf' }]
 			}
 		]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -248,7 +181,7 @@ describe('/library — empty state', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -264,7 +197,7 @@ describe('/library — load-error state', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		listWorksMock.mockRejectedValue(new Error('boom 500'));
 		listLendingsMock.mockResolvedValue(toListRead([]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -320,7 +253,7 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }
 		]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -375,7 +308,7 @@ describe('/library — work expand -> edition expand -> copy availability', () =
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
 		listEditionsMock.mockResolvedValue(toListRead([]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -406,7 +339,7 @@ describe('/library — unresolved borrower name', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-x', '']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: 'Ed', publisher: 'Pub' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 }]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 		await waitFor(() => expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull());
@@ -429,7 +362,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
 
 		const { container } = render(Page);
@@ -445,7 +378,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
@@ -460,7 +393,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
@@ -475,7 +408,7 @@ describe('#72 — librarian tools composition', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
@@ -503,7 +436,7 @@ describe('#73 — my loans', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
 		const { container } = render(Page);
@@ -520,7 +453,7 @@ describe('#73 — my loans', () => {
 			{ id: 'lend-returned', copyId: 'copy-2', memberId: 'member-mine', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-07-15' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
 		const { container } = render(Page);
@@ -537,7 +470,7 @@ describe('#73 — my loans', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2020-01-01', assignedUntil: '2020-02-01', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
 		const { container } = render(Page);
@@ -561,7 +494,7 @@ describe('#73 — my loans', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2020-01-01', assignedUntil, returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
 		const { container } = render(Page);
@@ -582,7 +515,7 @@ describe('#73 — my loans', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 
 		const { container } = render(Page);
@@ -611,7 +544,7 @@ describe('#73 — librarian return', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
@@ -634,7 +567,7 @@ describe('#73 — librarian return', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
@@ -663,7 +596,7 @@ describe('#73 — librarian return', () => {
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -761,7 +694,7 @@ describe('#76 — inline checkout on browse tree', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -778,7 +711,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// ── 2. inline dropdown on available copy rows (librarian) ───────────────
 	it('an AVAILABLE copy row shows an inline member dropdown for a librarian; a lent copy row does not', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -798,7 +731,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// ── 3. non-librarian: label only, no dropdown ───────────────────────────
 	it('the inline dropdown is NOT rendered for a non-librarian — just the availability label', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
@@ -833,7 +766,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// ── 4. double-lending guard: borrower disabled, lending date shown ──────
 	it('a member with an active lending for the same edition is disabled in the picker and shows the lending date', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -856,7 +789,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// ── 5. free members are selectable ──────────────────────────────────────
 	it('a member without an active lending for the edition is a selectable (enabled) option', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -877,7 +810,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// ── 6. selecting a member checks out immediately, server-confirmed ──────
 	it('selecting a member calls createLending with the copy + member and re-fetches lendings on success', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const today = new Date().toISOString().slice(0, 10);
@@ -934,7 +867,7 @@ describe('#76 — inline checkout on browse tree', () => {
 	// through PersonName; the inline-checkout <option>s are recorded in #361.
 	it('#361 — the lent-to badge: the whole "Out — {name}" text sits in exactly one marker', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -953,7 +886,7 @@ describe('#76 — inline checkout on browse tree', () => {
 
 	it('#361 — bulk checkout: both member-list branches (already-lent row, checkbox label) mark the name once', async () => {
 		mockTreeWithOneLending();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		mockLibrarianCheckoutData();
 
 		const { container } = render(Page);
@@ -983,7 +916,7 @@ describe('#74 — bulk checkout + return', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 
 		const { container } = render(Page);
@@ -998,7 +931,7 @@ describe('#74 — bulk checkout + return', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
@@ -1018,7 +951,7 @@ describe('#74 — bulk checkout + return', () => {
 			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1044,7 +977,7 @@ describe('#74 — bulk checkout + return', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
@@ -1062,7 +995,7 @@ describe('#74 — bulk checkout + return', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
@@ -1085,7 +1018,7 @@ describe('#74 — bulk checkout + return', () => {
 		listWorksMock.mockResolvedValue(toListRead([]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1 },
@@ -1113,7 +1046,7 @@ describe('#74 — bulk checkout + return', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Bärenreiter', workId: 'work-1' }
@@ -1154,7 +1087,7 @@ describe('#74 — bulk checkout + return', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1218,7 +1151,7 @@ describe('#74 — bulk checkout refinements', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		// Editions carry workId so the picker can filter by selected work
 		listAllEditionsMock.mockResolvedValue(toListRead([
@@ -1268,7 +1201,7 @@ describe('#74 — bulk checkout refinements', () => {
 			{ id: 'lend-2', copyId: 'copy-2', memberId: 'member-b', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '2026-07-15' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1306,7 +1239,7 @@ describe('#74 — bulk checkout refinements', () => {
 			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-07-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1349,7 +1282,7 @@ describe('#74 — bulk checkout refinements', () => {
 		listWorksMock.mockResolvedValue(toListRead([{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }]));
 		listLendingsMock.mockResolvedValue(toListRead([])); // no active lendings -> all copies available
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1418,7 +1351,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-1', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-1', 'Ada']]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1451,7 +1384,7 @@ describe('#76 — consolidated corrections', () => {
 		]));
 		listLendingsMock.mockResolvedValue(toListRead([]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		// Explicitly non-librarian
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
@@ -1478,7 +1411,7 @@ describe('#76 — consolidated corrections', () => {
 		listCopiesMock.mockResolvedValue(toListRead([
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }
 		]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext edition', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1516,7 +1449,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 		resolveCopyChainsMock.mockResolvedValue(
 			new Map([['copy-abc', { copyNumber: 7, workName: 'Spem in alium', editionName: '40-part original' }]])
@@ -1547,7 +1480,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 		resolveCopyChainsMock.mockResolvedValue(
 			new Map([['copy-abc', { copyNumber: 0, workName: 'Spem in alium', editionName: '40-part original' }]])
@@ -1576,7 +1509,7 @@ describe('#76 — consolidated corrections', () => {
 			{ id: 'lend-mine', copyId: 'copy-1', memberId: 'member-mine', assignedAt: '2026-08-01', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
@@ -1617,7 +1550,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada Lovelace']]));
 		listEditionsMock.mockResolvedValue(toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter' }]));
 		listCopiesMock.mockResolvedValue(toListRead([{ id: 'copy-2', name: 'Copy #2', copyNumber: 2 }]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 
 		const { container } = render(Page);
 
@@ -1643,7 +1576,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 			{ id: 'lend-mine', copyId: 'copy-abc', memberId: 'member-mine', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '2099-01-01T00:00:00.000Z', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map());
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		findMyMemberIdMock.mockResolvedValue('member-mine');
 		// #129 — chain deliberately digit-free (no copy number, digit-free work/
 		// edition names) so the year anchors below can only come from rendered
@@ -1678,7 +1611,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 			{ id: 'lend-1', copyId: 'copy-1', memberId: 'member-a', assignedAt: '2026-07-01T00:00:00.000Z', assignedUntil: '', returnedAt: '' }
 		]));
 		resolveBorrowerNamesMock.mockResolvedValue(new Map([['member-a', 'Ada']]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: 'Urtext', publisher: 'Baerenreiter', workId: 'work-1' }
@@ -1719,7 +1652,7 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 			{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' },
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		]));
-		setAuthedWithOneCollective();
+		signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		listAllEditionsMock.mockResolvedValue(toListRead([
 			{ id: 'edition-1', name: '40-part original', publisher: 'Baerenreiter', workId: 'work-1' }

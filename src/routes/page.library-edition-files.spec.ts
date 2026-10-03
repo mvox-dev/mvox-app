@@ -3,77 +3,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total}`,
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since',
-		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`,
-		library_create_work_button: () => 'Add work',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_cancel: () => 'Cancel',
-		library_create_work_name_required: () => 'Work title is required.',
-		library_create_work_created: (p: { name: string }) => `${p.name} created.`,
-		library_create_work_error: () => 'Could not create the work.',
-		library_create_edition_button: () => 'Add edition',
-		library_create_edition_name_label: () => 'Name',
-		library_create_edition_publisher_label: () => 'Publisher',
-		library_create_edition_submit: () => 'Create edition',
-		library_create_edition_cancel: () => 'Cancel',
-		library_create_edition_name_required: () => 'Edition name is required.',
-		library_create_edition_created: (p: { name: string }) => `${p.name} created.`,
-		library_create_edition_error: () => 'Could not create the edition.',
-		library_edition_file_attach: () => 'Attach files',
-		library_edition_file_open: () => 'Open',
-		library_edition_file_uploading: () => 'Uploading…',
-		library_edition_file_uploaded: (p: { filenames: string }) => `${p.filenames} attached.`,
-		library_edition_file_failed: (p: { filename: string }) => `Could not attach ${p.filename}.`,
-		library_edition_file_broken: (p: { filename: string }) =>
-			`${p.filename} failed and could not be cleaned up.`,
-		library_edition_file_error: () => 'Could not attach files.',
-		library_edition_file_not_created: (p: { filename: string }) =>
-			`${p.filename} was not attached — the server returned nothing for it.`,
-		file_presence_on_device: () => 'On this device',
-		file_presence_needs_network: () => 'Needs network'
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -136,7 +66,7 @@ vi.mock('$lib/files/appLabelStore', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
@@ -158,21 +88,15 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import {
+	expandEdition,
+	expandWork,
+	mockLibrarian,
+	renderReady,
+	signInLibraryReader
+} from '$lib/testing/pages/library';
 
 let fakeByteStore: FakeByteStore;
-
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-	listSeasonsMock.mockResolvedValue([]);
-	listRepertoireItemsMock.mockResolvedValue([]);
-}
 
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(toListRead([
@@ -200,10 +124,6 @@ function mockBaselineLibrary() {
 	listCopiesMock.mockResolvedValue(toListRead([]));
 	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
-}
-
-function mockLibrarian() {
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
 function stubByteFetch() {
@@ -244,37 +164,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-async function renderReady(): Promise<HTMLElement> {
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull();
-	});
-	return container;
-}
-
-async function expandWork(container: HTMLElement, workId: string): Promise<void> {
-	await fireEvent.click(
-		container.querySelector(`[data-testid="library-work-toggle-${workId}"]`) as Element
-	);
-	await waitFor(() => {
-		expect(container.querySelector(`#library-editions-${workId}`)).not.toBeNull();
-	});
-}
-
-async function expandEdition(container: HTMLElement, editionId: string): Promise<void> {
-	await waitFor(() => {
-		expect(
-			container.querySelector(`[data-testid="library-edition-toggle-${editionId}"]`)
-		).not.toBeNull();
-	});
-	await fireEvent.click(
-		container.querySelector(`[data-testid="library-edition-toggle-${editionId}"]`) as Element
-	);
-	await waitFor(() => {
-		expect(container.querySelector(`#library-copies-${editionId}`)).not.toBeNull();
-	});
-}
-
 async function renderWithEditionOpen(editionId: string): Promise<HTMLElement> {
 	const container = await renderReady();
 	await expandWork(container, 'work-1');
@@ -299,7 +188,7 @@ function makeFile(name: string, bytes: number, type: string): File {
 describe('#275 — the files list renders inside the expanded edition (integration)', () => {
 	it('an edition WITH files shows one row per file — filename AND human filesize (via the shared formatFileSize) — inside the expanded edition block', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -328,7 +217,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('the list renders only in the EXPANDED edition — present after expanding, gone again after collapsing', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderReady();
 		await expandWork(container, 'work-1');
@@ -355,7 +244,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('zero files is normal and UNREMARKABLE: the zero-files edition renders NO files list, NO empty-state message — for a non-librarian, exactly as today (no #275 testid exists under it at all), while the SIBLING edition with files shows its list (the absence is not vacuous)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 		await expandEdition(container, 'edition-2');
@@ -377,7 +266,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('the files list is a READ path — it renders for the non-librarian member too', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -390,7 +279,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 
 	it('LAYOUT sanity at phone width (class contract; happy-dom computes no layout): the files container adds NO third ml-4 indent level, and filenames WRAP — break-words/break-all present, truncate/whitespace-nowrap absent throughout the rows', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -418,7 +307,7 @@ describe('#275 — the files list renders inside the expanded edition (integrati
 describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-rendered; the click navigates', () => {
 	it('no URL is rendered or pre-signed: at render, signFileUrl has NOT been called, the row holds no <a href>, and the open control is a BUTTON', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -438,7 +327,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 
 	it('clicking Open NAVIGATES — goto(/part/<file property id>?db=<db>) with the part LABEL in the navigation state, full shape, and NO tab opens (#427)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		const openMock = vi.fn(() => null);
 		vi.stubGlobal('open', openMock);
 		stubByteFetch(); // a live wire, to prove the click needs none of it
@@ -475,7 +364,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 
 	it('the click signs NOTHING, fetches NOTHING, stores NOTHING and raises NO per-file error — the /part viewer owns the read (#427)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		vi.stubGlobal('open', vi.fn(() => null));
 		const fetchMock = stubByteFetch();
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
@@ -503,7 +392,7 @@ describe('#275/#427 — the Open affordance: nothing pre-signed, nothing pre-ren
 describe('#427 — a part already on the device navigates the same way', () => {
 	it('with every network path dead and the file in the store, the click still just navigates — same URL, no signing, no fetch, no error', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		vi.stubGlobal('open', vi.fn(() => null));
 		const fetchMock = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
@@ -553,7 +442,7 @@ describe('#427 — a part already on the device navigates the same way', () => {
 describe('#275 — the attach control: librarian-only native <input type=file multiple>', () => {
 	it('for the librarian it renders inside the expanded edition — a NATIVE file input, multiple, labelled — on the zero-files edition too (attach is how files ever appear)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderWithEditionOpen('edition-2');
@@ -575,7 +464,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 
 	it('ABSENT — not disabled — for the non-librarian: no attach control exists anywhere, while the files list still renders', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 
 		const container = await renderWithEditionOpen('edition-1');
 
@@ -587,7 +476,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 
 	it('hidden while resolveLibrarian is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderWithEditionOpen('edition-1');
@@ -602,7 +491,7 @@ describe('#275 — the attach control: librarian-only native <input type=file mu
 describe('#275 — selecting files uploads them through uploadEditionFiles', () => {
 	it('a change with two Files calls uploadEditionFiles ONCE with (cfg, the edition id, the Files) — and no listEditions refetch afterwards; the new rows appear LOCALLY with the sr-only announcement naming exactly what landed', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -657,7 +546,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 
 	it('a JUST-uploaded file opens the same way as an existing one — its Open navigates to /part/<NEW property id> (#427)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		vi.stubGlobal('open', vi.fn(() => null));
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-new');
@@ -709,7 +598,7 @@ describe('#275 — selecting files uploads them through uploadEditionFiles', () 
 describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated choice)', () => {
 	it("while edition-2's batch uploads: ITS attach input is disabled and an uploading indicator shows — edition-1's attach input stays enabled; on settle the indicator clears and the input re-enables", async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		let resolveUpload: (r: unknown) => void = () => {};
 		uploadEditionFilesMock.mockReturnValue(
@@ -763,7 +652,7 @@ describe('#275 — in-flight state is keyed PER EDITION (per-batch, the stated c
 describe('#275 — a failed file is reported by NAME and never renders as an attachment', () => {
 	it('file 2 of 3 fails (cleaned up): rows for 1 and 3 render, NO row for 2, and a visible per-file failure names it — while the announcement names what DID land', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -816,7 +705,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a "not-created" file is named in the visible error with its OWN message — distinct from the created-then-cleaned-up wording, and no row for it', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [
@@ -856,7 +745,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a delete-failed phantom renders as a BROKEN row — visibly failed, no Open control, never a normal attachment', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockResolvedValue({
 			uploaded: [],
@@ -891,7 +780,7 @@ describe('#275 — a failed file is reported by NAME and never renders as an att
 
 	it('a REJECTED upload (step-1 transport failure — nothing created) shows the batch error, inserts nothing, and re-enables the attach control for a retry', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		uploadEditionFilesMock.mockRejectedValue(new Error('HTTP 403'));
 

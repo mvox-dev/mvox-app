@@ -1,58 +1,11 @@
 // @vitest-environment happy-dom
 // A late librarian answer from a retry must not overwrite a newer load (#546).
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_create_work_button: () => 'Add work',
-		library_edition_file_attach: () => 'Attach files',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_error: () => 'Could not create the work.',
-		library_create_edition_button: () => 'Add edition',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) => `${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) => `${p.available}/${p.total}`,
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since',
-		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -89,102 +42,21 @@ vi.mock('$lib/library/lendingActions', async () =>
 
 import Page from './library/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { get } from 'svelte/store';
 import { librarianStore } from '$lib/library/librarianStore';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
-import {
-	listAllCopiesMock,
-	listAllEditionsMock,
-	listLendingsMock,
-	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyChainsMock,
-	resolveCopyNamesMock,
-	resolveMyLibraryIdMock
-} from '$lib/testing/mocks/library';
-import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import {
+	DB_A,
+	DB_B,
+	cleanupClearReset,
+	seedTwoLibraries,
+	setAuthedWithTwoCollectives
+} from '$lib/testing/pages/library';
+import { q } from '$lib/testing/pages/dom';
 
-const DB_A = 'sampledb';
-const DB_B = 'other-choir';
+beforeEach(seedTwoLibraries);
 
-function worksFor(db: string) {
-	return db === DB_A
-		? [
-				{ id: 'work-a1', name: 'Spem in alium', composer: 'Thomas Tallis' },
-				{ id: 'work-a2', name: 'Ave verum corpus', composer: 'William Byrd' }
-			]
-		: [
-				{ id: 'work-b1', name: 'Cantique de Jean Racine', composer: 'Gabriel Fauré' },
-				{ id: 'work-b2', name: 'Os justi', composer: 'Anton Bruckner' }
-			];
-}
-
-function editionsFor(db: string) {
-	return db === DB_A
-		? [{ id: 'edition-a1', name: 'Urtext A', publisher: 'Bärenreiter', workId: 'work-a1', externalLinks: [], files: [] }]
-		: [{ id: 'edition-b1', name: 'Urtext B', publisher: 'Carus', workId: 'work-b1', externalLinks: [], files: [] }];
-}
-
-function copiesFor(db: string) {
-	return db === DB_A
-		? [
-				{ id: 'copy-a1', name: 'Copy A1', copyNumber: 1, editionId: 'edition-a1' },
-				{ id: 'copy-a2', name: 'Copy A2', copyNumber: 2, editionId: 'edition-a1' }
-			]
-		: [{ id: 'copy-b1', name: 'Copy B1', copyNumber: 1, editionId: 'edition-b1' }];
-}
-
-function membersFor(db: string) {
-	return db === DB_A
-		? [
-				{ memberId: 'member-a1', personId: 'person-a1', sectionIds: [] },
-				{ memberId: 'member-a2', personId: 'person-a2', sectionIds: [] }
-			]
-		: [{ memberId: 'member-b1', personId: 'person-b1', sectionIds: [] }];
-}
-
-function borrowerNamesFor(db: string) {
-	return db === DB_A
-		? new Map([
-				['member-a1', 'Ada Lovelace'],
-				['member-a2', 'Bea Noe']
-			])
-		: new Map([['member-b1', 'Bob Bass']]);
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }, { db: DB_B, name: 'Other Choir', personId: 'person-q' }] });
-}
-
-beforeEach(() => {
-	listWorksMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(worksFor(cfg.db))));
-	listLendingsMock.mockResolvedValue(toListRead([]));
-	resolveBorrowerNamesMock.mockImplementation((cfg: { db: string }) => Promise.resolve(borrowerNamesFor(cfg.db)));
-	listAllEditionsMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(editionsFor(cfg.db))));
-	listAllCopiesMock.mockImplementation((cfg: { db: string }) => Promise.resolve(toListRead(copiesFor(cfg.db))));
-	listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(membersFor(cfg.db)))
-	);
-	resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve({ state: 'librarian', libraryId: cfg.db === DB_A ? 'lib-a' : 'lib-b' })
-	);
-	resolveMyLibraryIdMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === DB_A ? 'lib-a' : 'lib-b')
-	);
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-});
-
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 type Answer = { state: string; libraryId: string | null };
 
@@ -194,10 +66,6 @@ function answersForA(queue: Array<Promise<Answer>>) {
 			? (queue.shift() ?? Promise.resolve({ state: 'librarian', libraryId: 'lib-a' }))
 			: Promise.resolve({ state: 'librarian', libraryId: 'lib-b' })
 	);
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 async function settle() {

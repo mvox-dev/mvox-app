@@ -32,6 +32,14 @@ export function echoMessages(
 	return { ...Object.fromEntries(named.map((k) => [k, m[k]])), m };
 }
 
+// A page's base copy plus one spec's overrides; each override must name a base key.
+export function copyWith<B extends Copy>(base: B, overrides: Partial<B> = {}): Copy {
+	for (const key of Object.keys(overrides)) {
+		if (!Object.hasOwn(base, key)) throw new Error(`copy override ${key} is not in the base`);
+	}
+	return { ...base, ...overrides };
+}
+
 export function englishMessages(copy: Copy): MessagesModule {
 	return { ...copy, m: copy }; // no echo: other keys are undefined, named or on m
 }

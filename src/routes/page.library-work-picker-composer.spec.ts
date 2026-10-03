@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -39,8 +39,7 @@ vi.mock('$lib/library/lendingActions', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -54,6 +53,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { cleanupClearReset } from '$lib/testing/pages/library';
 
 function setAuthedLibrarian() {
 	signIn();
@@ -68,11 +68,7 @@ function setAuthedLibrarian() {
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 describe('/library — bulk-checkout work picker shows composer (#204)', () => {
 	it('work-select option labels read "Name - Composer"; empty composer → name only, no dangling " - "', async () => {
