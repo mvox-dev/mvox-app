@@ -104,11 +104,9 @@ vi.mock('$lib/schedule/scheduleData', async (importOriginal) => ({
 	listScheduleItemsByEventId: vi.fn().mockResolvedValue({})
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
-vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
-}));
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/moduleStubs')).libraryDataModule()
+);
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
 }));

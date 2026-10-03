@@ -89,7 +89,9 @@ vi.mock('$lib/library/libraryData', async () => {
 		resolveCopyNames: resolveCopyNamesMock
 	};
 });
-vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
+vi.mock('$lib/paraglide/runtime', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );

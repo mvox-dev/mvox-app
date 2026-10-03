@@ -112,11 +112,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor here, so the page's loadManagePickers fires —
 // stub its reads or they hit the network.
-vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
-}));
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/moduleStubs')).libraryDataModule()
+);
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
 }));

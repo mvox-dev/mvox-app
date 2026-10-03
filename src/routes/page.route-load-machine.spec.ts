@@ -5,11 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vite
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
-vi.mock('$lib/paraglide/runtime', () => ({
-	getLocale: () => 'en',
-	setLocale: vi.fn(),
-	locales: ['en', 'et', 'lv', 'uk']
-}));
+vi.mock('$lib/paraglide/runtime', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );

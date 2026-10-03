@@ -65,14 +65,9 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	listSections: listSectionsMock
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: vi.fn().mockResolvedValue(null),
-	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
+);
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn().mockResolvedValue([]),
 	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
