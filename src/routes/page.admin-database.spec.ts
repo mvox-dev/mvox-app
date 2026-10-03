@@ -18,10 +18,8 @@ const h = vi.hoisted(() => ({
 	resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 	listJoinStatesMock: vi.fn().mockResolvedValue({}),
 	resolveLibrarianMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	resolveCollectiveNameMarkerMock: vi.fn(),
@@ -48,20 +46,18 @@ vi.mock('$lib/library/librarianStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/library/librarianStore')>();
 	return { ...actual, resolveLibrarian: h.resolveLibrarianMock };
 });
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
 vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStatesMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -88,6 +84,7 @@ import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 
@@ -106,7 +103,7 @@ function selectSampledb() {
 
 beforeEach(() => {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
+	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	h.entuFetchMock.mockRejectedValue(
 		new Error(
 			'wire disabled in this spec — collective resolution must go through resolveDatabaseEntityId'
@@ -116,7 +113,7 @@ beforeEach(() => {
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({
 		personId: 'p-new',
@@ -150,8 +147,8 @@ describe('/admin — the role lists are keyed to the DATABASE entity (#161)', ()
 	it('reaches ready via resolveDatabaseEntityId and hands ITS id to listAdmins — no member/organization wire walk', async () => {
 		await renderReady();
 
-		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalled();
-		expect(h.resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalled();
+		expect(resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 
 		expect(h.listAdminsMock).toHaveBeenCalled();
 		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);

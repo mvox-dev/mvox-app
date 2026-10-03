@@ -13,8 +13,7 @@ const {
 	unassignMock,
 	createSectionMock,
 	reorderMock,
-	deleteMock,
-	resolveDatabaseEntityIdMock
+	deleteMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	assignMock: vi.fn(),
@@ -22,7 +21,6 @@ const {
 	createSectionMock: vi.fn(),
 	reorderMock: vi.fn(),
 	deleteMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
@@ -35,10 +33,9 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reorderSections: reorderMock,
 	deleteSection: deleteMock
 }));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -57,7 +54,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';

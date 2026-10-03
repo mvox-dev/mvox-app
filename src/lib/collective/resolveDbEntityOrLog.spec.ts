@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { resolveDatabaseEntityIdMock } = vi.hoisted(() => ({ resolveDatabaseEntityIdMock: vi.fn() }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: resolveDatabaseEntityIdMock
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 
 import { resolveDbEntityOrLog } from './resolveDbEntityOrLog';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const CFG = testCfg('sampledb', 't');
 const LABEL = { area: 'agenda', action: 'event create' };

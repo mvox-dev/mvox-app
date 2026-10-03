@@ -24,12 +24,10 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 const {
 	convertEventToSeriesMock,
-	createEventMock,
-	resolveDatabaseEntityIdMock
+	createEventMock
 } = vi.hoisted(() => ({
 	convertEventToSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn()
 }));
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
@@ -49,10 +47,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: createEventMock
 }));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 
 import Page from './+page.svelte';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
@@ -60,6 +57,7 @@ import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

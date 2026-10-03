@@ -14,7 +14,6 @@ const h = vi.hoisted(() => ({
 	listDeactivateBlockersMock: vi.fn(),
 	deactivateMemberMock: vi.fn(),
 	reinstateMemberMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	assignMock: vi.fn(),
 	unassignMock: vi.fn(),
 	createSectionMock: vi.fn(),
@@ -55,10 +54,9 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reparentSection: h.reparentMock,
 	renameSection: h.renameMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
 	mintSelfLinkInvite: h.mintSelfLinkInviteMock,
@@ -102,6 +100,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -149,7 +148,7 @@ beforeEach(async () => {
 	h.listDeactivateBlockersMock.mockResolvedValue([]);
 	h.deactivateMemberMock.mockResolvedValue(undefined);
 	h.reinstateMemberMock.mockResolvedValue(undefined);
-	h.listSectionsMock.mockResolvedValue(fixtureTree());
+	listSectionsMock.mockResolvedValue(fixtureTree());
 	h.assignMock.mockResolvedValue(undefined);
 	h.unassignMock.mockResolvedValue(undefined);
 	h.createSectionMock.mockResolvedValue('sec-created');

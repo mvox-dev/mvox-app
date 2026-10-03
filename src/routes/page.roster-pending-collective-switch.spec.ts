@@ -10,7 +10,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	listSectionsMock,
 	assignMock,
 	unassignMock,
 	createMock,
@@ -28,7 +27,6 @@ const {
 	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	assignMock: vi.fn(),
 	unassignMock: vi.fn(),
 	createMock: vi.fn(),
@@ -46,10 +44,9 @@ const {
 	loadMemberRecordMock: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
-	return { ...actual, listSections: listSectionsMock };
-});
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/sections/sectionActions', () => ({
 	assignMemberSection: assignMock,
 	unassignMemberSection: unassignMock,
@@ -99,6 +96,7 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';

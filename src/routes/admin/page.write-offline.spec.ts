@@ -16,9 +16,7 @@ const h = vi.hoisted(() => ({
 	resolveAdminMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn(),
 	resolveLibrarianMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	resolveInviteParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
@@ -43,14 +41,13 @@ vi.mock('$lib/nav/adminStore', () => ({
 }));
 vi.mock('$lib/library/librarianStore', () => ({ resolveLibrarian: h.resolveLibrarianMock }));
 vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStatesMock }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -84,6 +81,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const REASON = '[write_unavailable_no_signal]';
 const HELD = '[write_held_no_signal]';
@@ -100,12 +98,12 @@ const ROSTER = [
 
 function loadOk() {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
+	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA, BELA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [CILLA], canManage: true });
 	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
 	h.removeAdminMock.mockResolvedValue(undefined);

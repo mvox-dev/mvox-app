@@ -102,9 +102,7 @@ const h = vi.hoisted(() => {
 		resolveAdminMock: vi.fn(),
 		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
-		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
-		listSectionsMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
@@ -134,16 +132,15 @@ vi.mock('$lib/library/librarianStore', () => ({
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listJoinStates: h.listJoinStatesMock
 }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -172,6 +169,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 
@@ -212,12 +210,12 @@ function selectSampledb() {
 
 function loadOk() {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
+	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
 	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
 	h.removeAdminMock.mockResolvedValue(undefined);
@@ -283,9 +281,9 @@ beforeEach(() => {
 		h.removeLibrarianMock,
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
-		h.resolveDatabaseEntityIdMock,
+		resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
-		h.listSectionsMock,
+		listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,
@@ -373,7 +371,7 @@ describe('/admin — role lists', () => {
 		expect(q(librarians, 'librarian-entry-p-cilla')).not.toBeNull();
 		expect(librarians.textContent).toContain('Cilla Cane');
 
-		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
 		expect(h.resolveLibrarianMock).toHaveBeenCalledWith(
@@ -569,7 +567,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 				{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '', sectionIds: ['sec-s'] }
 			])
 		);
-		h.listSectionsMock.mockReset().mockResolvedValue([
+		listSectionsMock.mockReset().mockResolvedValue([
 			{ id: 'sec-s', name: 'Sopran', displayOrder: 1, parentId: null, depth: 0, children: [] },
 			{ id: 'sec-t', name: 'Tenor', displayOrder: 2, parentId: null, depth: 0, children: [] }
 		]);
@@ -607,7 +605,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 	it('listSections rejects: the page still reaches READY (lists, remove buttons, invite section intact), both selects still offer the whole roster in name order, and each says its order degraded', async () => {
 		selectSampledb();
 		loadOk();
-		h.listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
 
 		const { container } = await renderReady();
 
@@ -1079,7 +1077,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 		});
 
 		h.resolveAdminMock.mockResolvedValue('admin');
-		h.resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
+		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			cfg.db === 'alpha' ? alphaGate.then(() => 'org-alpha') : Promise.resolve('org-beta')
 		);
 		h.resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
@@ -1089,7 +1087,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			})
 		);
 		h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-		h.listSectionsMock.mockResolvedValue([]);
+		listSectionsMock.mockResolvedValue([]);
 		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(
 				dbEntityId === 'org-alpha'
@@ -1101,7 +1099,7 @@ describe('/admin — a collective switch that lands mid-load', () => {
 
 		const { container } = render(Page);
 		await waitFor(() => {
-			expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+			expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 				expect.objectContaining({ db: 'alpha' })
 			);
 		});
