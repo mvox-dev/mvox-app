@@ -7,25 +7,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { loadRosterMock, assignMock, unassignMock, createMock, reorderMock, deleteMock } = vi.hoisted(() => ({
-		loadRosterMock: vi.fn(),
-		assignMock: vi.fn(),
-		unassignMock: vi.fn(),
-		createMock: vi.fn(),
-		reorderMock: vi.fn(),
-		deleteMock: vi.fn()
-	}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/sections/sectionActions', () => ({
-	assignMemberSection: assignMock,
-	unassignMemberSection: unassignMock,
-	createSection: createMock,
-	reorderSections: reorderMock,
-	deleteSection: deleteMock
-}));
+vi.mock('$lib/sections/sectionActions', async () =>
+	(await import('$lib/testing/mocks/sections')).sectionActionsModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -45,6 +35,14 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	assignMock,
+	createMock,
+	deleteMock,
+	reorderMock,
+	unassignMock
+} from '$lib/testing/mocks/sections';
 
 function fixtureTree(): SectionNode[] {
 	return [

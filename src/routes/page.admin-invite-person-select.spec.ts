@@ -60,18 +60,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => {
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
 	class SelfLinkMintError extends Error {
 		readonly phase: 'identity-read' | 'stale-invite-cleanup' | 'mint';
 		readonly reason: 'http' | 'contract' | 'missing-self-editor';
@@ -89,11 +77,7 @@ const h = vi.hoisted(() => {
 		}
 	}
 	return {
-		InviteCreateError,
 		SelfLinkMintError,
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn(),
 		mintSelfLinkInviteMock: vi.fn(),
 		listJoinStatesMock: vi.fn(),
 		listLinkedIdentitiesMock: vi.fn(),
@@ -120,12 +104,9 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 vi.mock('$lib/collectives/collectiveName', async () =>
 	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
 );
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
+vi.mock('$lib/invite/inviteData', async () => ({
+	...(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true }),
 	SelfLinkMintError: h.SelfLinkMintError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock,
 	mintSelfLinkInvite: h.mintSelfLinkInviteMock
 }));
 vi.mock('$lib/profile/linkedIdentities', () => ({
@@ -148,12 +129,16 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
+	InviteCreateError,
+	createInviteMock,
 	listAdminsMock,
 	listLibrariansMock,
 	resolveAdminMock,
 	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
 	resolveLibrarianMock,
 	resolveOwnerTierMock,
+	resolveParentMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -194,8 +179,8 @@ function loadOk() {
 	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
 	h.listJoinStatesMock.mockResolvedValue({ ...JOIN_STATES });
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
@@ -250,6 +235,9 @@ beforeEach(() => {
 	resolveLibrarianMock.mockReset();
 	resolveOwnerTierMock.mockReset();
 	updateCollectiveNameMock.mockReset();
+	createInviteMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	resolveParentMock.mockReset();
 });
 
 afterEach(() => {
@@ -306,7 +294,7 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 	it('default ("a new person") + submit → createInvite exactly as today; mintSelfLinkInvite is NOT called', async () => {
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
 			inviteToken: MINTED_TOKEN
@@ -318,8 +306,8 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 		await waitFor(() => {
 			expect(q(container, 'invite-admin-result')).not.toBeNull();
 		});
-		expect(h.createInviteMock).toHaveBeenCalledTimes(1);
-		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
+		const [cfgArg, inputArg] = createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
 			{ dbEntityId: string }
 		];
@@ -345,7 +333,7 @@ describe('#301 /admin invite — two behaviours, one button', () => {
 		const mintCall = h.mintSelfLinkInviteMock.mock.calls[0];
 		expect(mintCall[0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(mintCall[1]).toBe('p-cilla');
-		expect(h.createInviteMock).not.toHaveBeenCalled();
+		expect(createInviteMock).not.toHaveBeenCalled();
 
 		expect(q(container, 'invite-link')).toBeNull();
 		expect(q(container, 'invite-copy')).not.toBeNull();
@@ -384,7 +372,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 			'p-cilla': 'joined',
 			'p-dora': 'invited'
 		});
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
 			inviteToken: MINTED_TOKEN
@@ -400,14 +388,14 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		await waitFor(() => {
 			expect(q(container, 'invite-admin-result')).not.toBeNull();
 		});
-		expect(h.createInviteMock).toHaveBeenCalledTimes(1);
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('non-owner admin (editor tier) → no select, the existing owner-rights explanation, and the blank invite still works unchanged', async () => {
 		selectSampledb();
 		loadOk();
 		resolveOwnerTierMock.mockResolvedValue('editor');
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
 			inviteToken: MINTED_TOKEN
@@ -427,7 +415,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		await waitFor(() => {
 			expect(q(container, 'invite-admin-result')).not.toBeNull();
 		});
-		expect(h.createInviteMock).toHaveBeenCalledTimes(1);
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
 		expect(h.mintSelfLinkInviteMock).not.toHaveBeenCalled();
 	});
 
@@ -450,7 +438,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		h.listJoinStatesMock.mockRejectedValue(
 			new Error('listLinkedIdentities: identity read failed: HTTP 500')
 		);
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
 			inviteToken: MINTED_TOKEN
@@ -472,7 +460,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		await waitFor(() => {
 			expect(q(container, 'invite-admin-result')).not.toBeNull();
 		});
-		expect(h.createInviteMock).toHaveBeenCalledTimes(1);
+		expect(createInviteMock).toHaveBeenCalledTimes(1);
 
 		consoleSpy.mockRestore();
 	});
@@ -611,8 +599,8 @@ describe('#301 /admin invite — the two error surfaces never cross paths', () =
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockRejectedValue(
-			new h.InviteCreateError('invite create failed: HTTP 500', {
+		createInviteMock.mockRejectedValue(
+			new InviteCreateError('invite create failed: HTTP 500', {
 				phase: 'person',
 				reason: 'http'
 			})

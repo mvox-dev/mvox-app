@@ -15,12 +15,11 @@ const h = vi.hoisted(() => {
 			this.createdProfileId = createdProfileId;
 		}
 	}
-	return { ProfileSaveError, listMyProfilesMock: vi.fn() };
+	return { ProfileSaveError };
 });
-vi.mock('$lib/profile/profileData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 vi.mock('$lib/profile/applyProfileSave', () => ({
 	applyProfileSave: vi.fn(),
 	ProfileSaveError: h.ProfileSaveError
@@ -41,6 +40,7 @@ import Page from './profile/+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
@@ -53,7 +53,7 @@ function selectSampledb() {
 }
 
 beforeEach(() => {
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 });
 
 afterEach(() => {
@@ -64,7 +64,7 @@ afterEach(() => {
 
 describe('/profile — session expired (#107)', () => {
 	it('an auth-expired profile load shows the session-expired notice with a sign-in link — not the generic load error', async () => {
-		h.listMyProfilesMock.mockRejectedValue(authExpiredError());
+		listMyProfilesMock.mockRejectedValue(authExpiredError());
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -83,7 +83,7 @@ describe('/profile — session expired (#107)', () => {
 
 	it('a GENERIC profile load failure still shows the loud load error + retry (auth handling must not swallow it)', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		h.listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
+		listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
 		selectSampledb();
 
 		const { container } = render(Page);

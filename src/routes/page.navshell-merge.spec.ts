@@ -20,18 +20,6 @@ vi.mock('$lib/paraglide/messages.js', async (importOriginal) =>
 );
 
 const h = vi.hoisted(() => {
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
 	class RoleLockoutError extends Error {
 		readonly code = 'role-lockout';
 	}
@@ -39,7 +27,6 @@ const h = vi.hoisted(() => {
 		readonly code = 'role-grant-missing';
 	}
 	return {
-		InviteCreateError,
 		RoleLockoutError,
 		RoleGrantMissingError,
 		listAdminsMock: vi.fn(),
@@ -48,14 +35,6 @@ const h = vi.hoisted(() => {
 		listLibrariansMock: vi.fn(),
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
-		resolveAdminMock: vi.fn(),
-		resolveLibrarianMock: vi.fn(),
-		loadRosterMock: vi.fn(),
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn(),
-		resolveCollectiveNameMarkerMock: vi.fn(),
-		updateCollectiveNameMock: vi.fn()
 	};
 });
 vi.mock('$lib/admin/roleManagement', () => ({
@@ -69,31 +48,27 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: h.addLibrarianMock,
 	removeLibrarian: h.removeLibrarianMock
 }));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({
-	resolveLibrarian: h.resolveLibrarianMock
-}));
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule('admin')
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: h.loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -114,6 +89,16 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	createInviteMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
+	resolveLibrarianMock,
+	resolveParentMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
@@ -153,20 +138,20 @@ function selectSampledb() {
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead([
+	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }
 	]));
 	listSectionsMock.mockResolvedValue([]);
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
+	createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 beforeEach(() => {
@@ -177,16 +162,16 @@ beforeEach(() => {
 		h.listLibrariansMock,
 		h.addLibrarianMock,
 		h.removeLibrarianMock,
-		h.resolveAdminMock,
-		h.resolveLibrarianMock,
+		resolveAdminMock,
+		resolveLibrarianMock,
 		resolveDatabaseEntityIdMock,
-		h.loadRosterMock,
+		loadRosterMock,
 		listSectionsMock,
-		h.resolveParentMock,
-		h.resolveInviteParentMock,
-		h.createInviteMock,
-		h.resolveCollectiveNameMarkerMock,
-		h.updateCollectiveNameMock
+		resolveParentMock,
+		resolveInviteParentMock,
+		createInviteMock,
+		resolveCollectiveNameMarkerMock,
+		updateCollectiveNameMock
 	]) {
 		mock.mockReset();
 	}
@@ -303,7 +288,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		await fireEvent.click(submit);
 
 		await waitFor(() => {
-			expect(h.createInviteMock).toHaveBeenCalledWith(
+			expect(createInviteMock).toHaveBeenCalledWith(
 				expect.objectContaining({ db: 'sampledb' }),
 				expect.objectContaining({ dbEntityId: expect.any(String) })
 			);
@@ -318,7 +303,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 	it('non-admin (no-access): NO invite functionality renders on /admin either', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveAdminMock.mockResolvedValue('not-admin');
+		resolveAdminMock.mockResolvedValue('not-admin');
 
 		const { container } = render(AdminPage);
 		await waitFor(() => {
@@ -326,7 +311,7 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 		});
 		expect(q(container, 'admin-invite-section')).toBeNull();
 		expect(q(container, 'invite-admin-submit')).toBeNull();
-		expect(h.createInviteMock).not.toHaveBeenCalled();
+		expect(createInviteMock).not.toHaveBeenCalled();
 	});
 });
 
@@ -376,13 +361,13 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 		await fireEvent.click(submit);
 
 		await waitFor(() => {
-			expect(h.createInviteMock).toHaveBeenCalledTimes(1);
+			expect(createInviteMock).toHaveBeenCalledTimes(1);
 		});
-		expect(h.createInviteMock).toHaveBeenCalledWith(
+		expect(createInviteMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' }),
 			expect.objectContaining({ dbEntityId: 'org-ram' })
 		);
-		expect(h.createInviteMock).not.toHaveBeenCalledWith(
+		expect(createInviteMock).not.toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ dbEntityId: 'org-poly' })
 		);
@@ -390,7 +375,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 
 	it('the embedded surface never self-resolves the org — it adopts the page-resolved pair', async () => {
 		await renderMergedReadyMulti();
-		expect(h.resolveInviteParentMock).not.toHaveBeenCalled();
+		expect(resolveInviteParentMock).not.toHaveBeenCalled();
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' })
 		);

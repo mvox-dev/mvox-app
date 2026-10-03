@@ -7,14 +7,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-vi.mock('$lib/profile/profileData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
-}));
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -36,6 +34,7 @@ import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const q = (c: HTMLElement, testid: string) => c.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 
@@ -46,7 +45,7 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', fetchStub);
 	install401Recovery();
 	gotoMock.mockReset();
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 	history.replaceState({}, '', '/profile');
 });
 
@@ -62,7 +61,7 @@ afterEach(() => {
 describe('#550 — a profile write with no token', () => {
 	it('an Enter-save sends nothing and goes to session-expired, not load-error', async () => {
 		signIn({ token: 'jwt-member' });
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);

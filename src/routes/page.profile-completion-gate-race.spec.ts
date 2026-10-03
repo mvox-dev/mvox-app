@@ -83,48 +83,18 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => ({
-	listMyProfilesMock: vi.fn(),
-	applyProfileSaveMock: vi.fn(),
-	resolveGateMock: vi.fn()
-}));
-
-vi.mock('$lib/profile/profileData', () => {
-	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
-	return {
-		listMyProfiles: h.listMyProfilesMock,
-		profilesByLevel: (ps: Array<{ _sharing: string }>) => {
-			const by: Record<string, unknown> = {};
-			for (const p of ps) by[p._sharing] = p;
-			return by;
-		},
-		NARROWNESS,
-		resolveField: (
-			ps: Array<{ _id: string; name: string; email: string; _sharing: string }>,
-			field: 'name' | 'email'
-		) => {
-			const withValue = ps
-				.filter((p) => p[field] !== '')
-				.slice()
-				.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
-			return {
-				value: withValue.length > 0 ? withValue[0][field] : '',
-				holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
-			};
-		}
-	};
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: class ProfileSaveError extends Error {}
-}));
-vi.mock('$lib/profile/completionGate', async (importActual) => {
-	const actual = await importActual<typeof import('$lib/profile/completionGate')>();
-	return { ...actual, resolveGate: h.resolveGateMock };
-});
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listLinkedIdentities: vi.fn().mockResolvedValue({ identities: [] })
-}));
+vi.mock('$lib/profile/profileData', async () =>
+	(await import('$lib/testing/mocks/profile')).profileDataModule()
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('bare')
+);
+vi.mock('$lib/profile/completionGate', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).completionGateModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -143,6 +113,8 @@ import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock, resolveGateMock } from '$lib/testing/mocks/session';
 
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -152,7 +124,7 @@ const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 function wireProfilesPerCollective(): void {
-	h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
+	listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 		cfg.db === 'bravura'
 			? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' }]
 			: [{ _id: 'prof-a-dom', name: 'Ada', email: '', _sharing: 'domain' }]
@@ -203,7 +175,7 @@ async function saveNameToInitiateGateRead(
 	const nameInput = await openEditor(container, 'name');
 	await fireEvent.input(nameInput, { target: { value: newName } });
 	await fireEvent.blur(nameInput);
-	await waitFor(() => expect(h.resolveGateMock).toHaveBeenCalledTimes(expectedCalls));
+	await waitFor(() => expect(resolveGateMock).toHaveBeenCalledTimes(expectedCalls));
 }
 
 async function switchCollective(container: HTMLElement, db: string, showsName: string): Promise<void> {
@@ -213,9 +185,9 @@ async function switchCollective(container: HTMLElement, db: string, showsName: s
 
 afterEach(() => {
 	cleanup();
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
-	h.resolveGateMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
+	resolveGateMock.mockReset();
 	resetAppState();
 	resetGate();
 });
@@ -223,17 +195,17 @@ afterEach(() => {
 describe('#260 — a stale resolveGate settle after a collective switch must not write the SSOT', () => {
 	it("THE RACE (deterministic): A's read held → switch to B (gate 'incomplete') → A settles 'complete' → the store stays on B's 'incomplete', never A's stale answer", async () => {
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const staleRead = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(staleRead.promise);
+		resolveGateMock.mockReturnValueOnce(staleRead.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);
 		await waitReadyShowing(container, 'Ada');
 
 		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
-		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
-		expect(h.resolveGateMock.mock.calls[0][1]).toBe('person-p');
+		expect(resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
+		expect(resolveGateMock.mock.calls[0][1]).toBe('person-p');
 
 		await switchCollective(container, 'bravura', 'Bea');
 
@@ -247,9 +219,9 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 	it("variant: with B's own resolve still pending, a stale A settle leaves the store on 'loading' — never A's answer", async () => {
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const staleRead = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(staleRead.promise);
+		resolveGateMock.mockReturnValueOnce(staleRead.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);
@@ -268,9 +240,9 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 	it("happy path unchanged: a same-collective settle still lands on the store normally", async () => {
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const read = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(read.promise);
+		resolveGateMock.mockReturnValueOnce(read.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);
@@ -286,11 +258,11 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 	it("rapid A→B→A: only the LAST requested context's result lands — B's late settle from a left context never overwrites it", async () => {
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-x' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-x' });
 		const readA1 = deferred<GateState>();
 		const readB = deferred<GateState>();
 		const readA2 = deferred<GateState>();
-		h.resolveGateMock
+		resolveGateMock
 			.mockReturnValueOnce(readA1.promise)
 			.mockReturnValueOnce(readB.promise)
 			.mockReturnValueOnce(readA2.promise);
@@ -305,10 +277,10 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		await switchCollective(container, 'sampledb', 'Ada');
 		await saveNameToInitiateGateRead(container, 'Ada N.', 3);
 
-		expect(h.resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
-		expect(h.resolveGateMock.mock.calls[1][0]).toMatchObject({ db: 'bravura' });
-		expect(h.resolveGateMock.mock.calls[1][1]).toBe('person-b');
-		expect(h.resolveGateMock.mock.calls[2][0]).toMatchObject({ db: 'sampledb' });
+		expect(resolveGateMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
+		expect(resolveGateMock.mock.calls[1][0]).toMatchObject({ db: 'bravura' });
+		expect(resolveGateMock.mock.calls[1][1]).toBe('person-b');
+		expect(resolveGateMock.mock.calls[2][0]).toMatchObject({ db: 'sampledb' });
 
 		readA1.resolve('incomplete');
 		await flushMicrotasks();
@@ -323,9 +295,9 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 
 	it('a REJECTED stale read after a switch is also ignored: no write, no stale error state from a context the user left', async () => {
 		wireProfilesPerCollective();
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
 		const staleRead = deferred<GateState>();
-		h.resolveGateMock.mockReturnValueOnce(staleRead.promise);
+		resolveGateMock.mockReturnValueOnce(staleRead.promise);
 		signInWithTwoCollectives();
 
 		const { container } = render(Page);

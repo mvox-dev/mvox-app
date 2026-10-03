@@ -16,6 +16,9 @@ export const removeLibrarianMock = vi.fn();
 export const resolveParentMock = vi.fn();
 export const resolveInviteParentMock = vi.fn();
 export const createInviteMock = vi.fn();
+export const mintSelfLinkInviteMock = vi.fn();
+export const withdrawInviteMock = vi.fn();
+export const listJoinStateDetailsMock = vi.fn();
 
 export class InviteCreateError extends Error {
 	readonly phase: string;
@@ -101,6 +104,31 @@ export async function inviteDataOverRealModule(importOriginal: () => Promise<unk
 		resolvePersonParentId: resolveParentMock,
 		createInvite: createInviteMock
 	};
+}
+
+type Real = () => Promise<unknown>;
+const real = async (importOriginal: Real) => (await importOriginal()) as object;
+
+// withdraw: withdrawInvite is a shared handle too.
+export async function inviteWritesModule(importOriginal: Real, opts: { withdraw: boolean }) {
+	return {
+		...(await real(importOriginal)),
+		createInvite: createInviteMock,
+		mintSelfLinkInvite: mintSelfLinkInviteMock,
+		...(opts.withdraw ? { withdrawInvite: withdrawInviteMock } : {})
+	};
+}
+
+export async function joinStateDetailsModule(importOriginal: Real) {
+	return {
+		...(await real(importOriginal)),
+		listJoinStates: listJoinStatesMock,
+		listJoinStateDetails: listJoinStateDetailsMock
+	};
+}
+
+export async function ownerTierOverRealModule(importOriginal: Real) {
+	return { ...(await real(importOriginal)), resolveOwnerTier: resolveOwnerTierMock };
 }
 
 // (*MVOX:Josquin*)

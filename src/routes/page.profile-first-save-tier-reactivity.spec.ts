@@ -8,34 +8,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => {
-	class ProfileSaveError extends Error {
-		readonly createdProfileId?: string;
-		constructor(message: string, createdProfileId?: string) {
-			super(message);
-			this.name = 'ProfileSaveError';
-			this.createdProfileId = createdProfileId;
-		}
-	}
-	return {
-		ProfileSaveError,
-		listMyProfilesMock: vi.fn(),
-		applyProfileSaveMock: vi.fn(),
-		applyFieldMoveMock: vi.fn()
-	};
-});
-vi.mock('$lib/profile/profileData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: h.ProfileSaveError
-}));
-vi.mock('$lib/profile/fieldMove', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/fieldMove')>();
-	return { ...actual, applyFieldMove: h.applyFieldMoveMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('shared')
+);
+vi.mock('$lib/profile/fieldMove', async (importOriginal) =>
+	(await import('$lib/testing/mocks/profile')).fieldMoveModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -52,6 +33,12 @@ import Page from './profile/+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import {
+	ProfileSaveError,
+	applyFieldMoveMock,
+	applyProfileSaveMock
+} from '$lib/testing/mocks/profile';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-member' });
@@ -86,9 +73,9 @@ async function openEditor(
 const CREATED_DOMAIN = { _id: 'server-dom-1', name: 'Ada', email: '', _sharing: 'domain' as const };
 
 function armFirstTimeUserThenCreated() {
-	h.listMyProfilesMock.mockResolvedValueOnce([]); // initial load — clean db
-	h.listMyProfilesMock.mockResolvedValue([CREATED_DOMAIN]); // any read after the create
-	h.applyProfileSaveMock.mockResolvedValue({ profileId: CREATED_DOMAIN._id });
+	listMyProfilesMock.mockResolvedValueOnce([]); // initial load — clean db
+	listMyProfilesMock.mockResolvedValue([CREATED_DOMAIN]); // any read after the create
+	applyProfileSaveMock.mockResolvedValue({ profileId: CREATED_DOMAIN._id });
 }
 
 async function renderFirstTimeProfile(): Promise<HTMLElement> {
@@ -102,8 +89,8 @@ async function typeNameAndSave(container: HTMLElement, value: string): Promise<v
 	const nameInput = await openEditor(container, 'name');
 	await fireEvent.input(nameInput, { target: { value } });
 	await fireEvent.blur(nameInput);
-	await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-	expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+	await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+	expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 		level: 'domain',
 		existingId: null,
 		fields: { name: value, email: '' }
@@ -111,9 +98,9 @@ async function typeNameAndSave(container: HTMLElement, value: string): Promise<v
 }
 
 beforeEach(() => {
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
-	h.applyFieldMoveMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
+	applyFieldMoveMock.mockReset();
 });
 
 afterEach(() => {
@@ -181,12 +168,12 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 		await typeNameAndSave(container, 'Ada');
 		await waitFor(() => expect(btn(container, 'profile-vis-name-public').disabled).toBe(false));
 
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: CREATED_DOMAIN._id });
+		applyProfileSaveMock.mockResolvedValue({ profileId: CREATED_DOMAIN._id });
 		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.org' } });
 		await fireEvent.blur(emailInput);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2));
-		expect(h.applyProfileSaveMock.mock.calls[1][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(2));
+		expect(applyProfileSaveMock.mock.calls[1][0]).toMatchObject({
 			level: 'domain',
 			existingId: CREATED_DOMAIN._id,
 			fields: { name: 'Ada', email: 'ada@example.org' }
@@ -199,11 +186,11 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 			).toBe(false)
 		);
 
-		h.applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
+		applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
 		await fireEvent.click(btn(container, 'profile-vis-email-public'));
 
-		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyFieldMoveMock).toHaveBeenCalledTimes(1));
+		expect(applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
 			field: 'email',
 			fromLevel: 'domain',
 			toLevel: 'public',
@@ -226,15 +213,15 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 			targetId: string;
 			sourceId: string;
 		}>();
-		h.applyFieldMoveMock.mockReturnValueOnce(d.promise);
+		applyFieldMoveMock.mockReturnValueOnce(d.promise);
 
 		await waitFor(() =>
 			expect(btn(container, 'profile-vis-name-public').disabled).toBe(false)
 		);
 		await fireEvent.click(btn(container, 'profile-vis-name-public'));
 
-		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyFieldMoveMock).toHaveBeenCalledTimes(1));
+		expect(applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
 			field: 'name',
 			fromLevel: 'domain',
 			toLevel: 'public',
@@ -243,7 +230,7 @@ describe('/profile — #160 sharing tier reactivity on first save', () => {
 			dstId: null
 		});
 
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'server-pub-1', name: 'Ada', email: '', _sharing: 'public' }
 		]);
 		d.resolve({
@@ -270,7 +257,7 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 	};
 
 	async function renderWithLoaded(profiles: typeof LOADED_DOMAIN[]): Promise<HTMLElement> {
-		h.listMyProfilesMock.mockResolvedValue(profiles);
+		listMyProfilesMock.mockResolvedValue(profiles);
 		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
@@ -298,13 +285,13 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 
 	it('re-saving a loaded field REPLACES its holder — one domain entry, no conflict or repair banner', async () => {
 		const container = await renderWithLoaded([LOADED_DOMAIN]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_DOMAIN._id });
+		applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_DOMAIN._id });
 
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada Lovelace' } });
 		await fireEvent.blur(nameInput);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 			level: 'domain',
 			existingId: LOADED_DOMAIN._id,
 			fields: { name: 'Ada Lovelace', email: '' }
@@ -316,12 +303,12 @@ describe('/profile — #160 no regression on the already-loaded profile', () => 
 		expect(q(container, '[data-testid="profile-visibility-repair-name"]')).toBeNull();
 		expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).toBeNull();
 
-		h.applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
+		applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
 		expect(btn(container, 'profile-vis-name-public').disabled).toBe(false);
 		await fireEvent.click(btn(container, 'profile-vis-name-public'));
 
-		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyFieldMoveMock).toHaveBeenCalledTimes(1));
+		expect(applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
 			field: 'name',
 			fromLevel: 'domain',
 			toLevel: 'public',
@@ -341,7 +328,7 @@ describe('/profile — #160 a save that CLEARS a field still releases its saving
 	};
 
 	async function renderLoadedAtPublic(): Promise<HTMLElement> {
-		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC]);
+		listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC]);
 		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
@@ -352,12 +339,12 @@ describe('/profile — #160 a save that CLEARS a field still releases its saving
 		const container = await renderLoadedAtPublic();
 		expect(btn(container, 'profile-vis-name-public').getAttribute('aria-pressed')).toBe('true');
 
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_PUBLIC._id });
+		applyProfileSaveMock.mockResolvedValue({ profileId: LOADED_PUBLIC._id });
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: '' } });
 		await fireEvent.blur(nameInput);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 			level: 'public',
 			existingId: LOADED_PUBLIC._id,
 			fields: { name: '', email: 'ada@example.org' }
@@ -388,19 +375,19 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 	};
 
 	async function renderThenFailEmailCreate(): Promise<HTMLElement> {
-		h.listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC_NAME]);
+		listMyProfilesMock.mockResolvedValue([LOADED_PUBLIC_NAME]);
 		selectSampledb();
 		const { container } = render(Page);
 		await waitFor(() => expect(displayValue(container, 'name')).toBe('Ada'));
 
-		h.applyProfileSaveMock.mockRejectedValueOnce(
-			new h.ProfileSaveError('field write failed after create', 'server-dom-1')
+		applyProfileSaveMock.mockRejectedValueOnce(
+			new ProfileSaveError('field write failed after create', 'server-dom-1')
 		);
 		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.org' } });
 		await fireEvent.blur(emailInput);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 			level: 'domain',
 			existingId: null
 		});
@@ -422,12 +409,12 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 	it('is REUSED by the retry — the second save UPDATES it instead of creating a duplicate', async () => {
 		const container = await renderThenFailEmailCreate();
 
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const emailInput = await openEditor(container, 'email');
 		await fireEvent.input(emailInput, { target: { value: 'ada@example.com' } });
 		await fireEvent.blur(emailInput);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(2));
-		expect(h.applyProfileSaveMock.mock.calls[1][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(2));
+		expect(applyProfileSaveMock.mock.calls[1][0]).toMatchObject({
 			level: 'domain',
 			existingId: 'server-dom-1'
 		});
@@ -439,12 +426,12 @@ describe('/profile — #160 the created-but-unconfirmed shell', () => {
 	it('is the DESTINATION of a later move into that tier — no second domain entity', async () => {
 		const container = await renderThenFailEmailCreate();
 
-		h.applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
+		applyFieldMoveMock.mockReturnValueOnce(new Promise(() => {})); // never settles
 		expect(btn(container, 'profile-vis-name-domain').disabled).toBe(false);
 		await fireEvent.click(btn(container, 'profile-vis-name-domain'));
 
-		await waitFor(() => expect(h.applyFieldMoveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyFieldMoveMock).toHaveBeenCalledTimes(1));
+		expect(applyFieldMoveMock.mock.calls[0][0]).toMatchObject({
 			field: 'name',
 			fromLevel: 'public',
 			toLevel: 'domain',

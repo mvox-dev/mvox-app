@@ -7,34 +7,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => {
-	class ProfileSaveError extends Error {
-		readonly createdProfileId?: string;
-		constructor(message: string, createdProfileId?: string) {
-			super(message);
-			this.name = 'ProfileSaveError';
-			this.createdProfileId = createdProfileId;
-		}
-	}
-	return {
-		ProfileSaveError,
-		listMyProfilesMock: vi.fn(),
-		applyProfileSaveMock: vi.fn(),
-		applyFieldMoveMock: vi.fn()
-	};
-});
-vi.mock('$lib/profile/profileData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/profileData')>();
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: h.ProfileSaveError
-}));
-vi.mock('$lib/profile/fieldMove', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/profile/fieldMove')>();
-	return { ...actual, applyFieldMove: h.applyFieldMoveMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('shared')
+);
+vi.mock('$lib/profile/fieldMove', async (importOriginal) =>
+	(await import('$lib/testing/mocks/profile')).fieldMoveModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -51,6 +32,8 @@ import Page from './profile/+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 type Field = 'name' | 'email';
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -61,7 +44,7 @@ const input = (c: HTMLElement, field: Field) =>
 
 async function renderSeeded(): Promise<HTMLElement> {
 	signIn({ token: 'jwt-member' });
-	h.listMyProfilesMock.mockResolvedValue([
+	listMyProfilesMock.mockResolvedValue([
 		{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 	]);
 	const { container } = render(Page);
@@ -78,9 +61,9 @@ async function openEditor(c: HTMLElement, field: Field): Promise<HTMLInputElemen
 }
 
 beforeEach(() => {
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
-	h.applyFieldMoveMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
+	applyFieldMoveMock.mockReset();
 });
 
 afterEach(() => {
@@ -94,14 +77,14 @@ describe('#565 — Enter-save returns focus to the edit button once the save set
 	for (const field of ['name', 'email'] as const) {
 		it(`${field}: focus lands on profile-${field}-edit after a held save resolves`, async () => {
 			let settle!: (v: { profileId: string }) => void;
-			h.applyProfileSaveMock.mockReturnValue(new Promise((r) => (settle = r)));
+			applyProfileSaveMock.mockReturnValue(new Promise((r) => (settle = r)));
 			const container = await renderSeeded();
 
 			const el = await openEditor(container, field);
 			await fireEvent.input(el, { target: { value: edits[field] } });
 			await fireEvent.keyDown(el, { key: 'Enter' });
 
-			await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
+			await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
 			expect(input(container, field)).toBeNull();
 			expect(activator(container, field)?.disabled, 'disabled while the save runs').toBe(true);
 
@@ -118,18 +101,18 @@ describe('#565 — Enter-save returns focus to the edit button once the save set
 		await fireEvent.keyDown(el, { key: 'Enter' });
 
 		await waitFor(() => expect(document.activeElement).toBe(activator(container, 'name')));
-		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+		expect(applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
 	it('a focus move made during the save is not taken back', async () => {
 		let settle!: (v: { profileId: string }) => void;
-		h.applyProfileSaveMock.mockReturnValue(new Promise((r) => (settle = r)));
+		applyProfileSaveMock.mockReturnValue(new Promise((r) => (settle = r)));
 		const container = await renderSeeded();
 
 		const el = await openEditor(container, 'name');
 		await fireEvent.input(el, { target: { value: 'Ada L' } });
 		await fireEvent.keyDown(el, { key: 'Enter' });
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
 
 		const other = activator(container, 'email') as HTMLButtonElement;
 		other.focus();

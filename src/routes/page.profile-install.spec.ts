@@ -20,13 +20,9 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-vi.mock('$lib/profile/profileData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
-		'$lib/profile/profileData'
-	);
-	return { ...actual, listMyProfiles: h.listMyProfilesMock };
-});
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
 
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
@@ -34,6 +30,7 @@ import { startInstallAffordance } from '$lib/install/installState';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const installButton = (c: HTMLElement) =>
@@ -95,7 +92,7 @@ function bootApp(): void {
 async function renderProfileReady(): Promise<HTMLElement> {
 	bootApp();
 	selectSampledb();
-	h.listMyProfilesMock.mockResolvedValue([]);
+	listMyProfilesMock.mockResolvedValue([]);
 	const { container } = render(ProfilePage);
 	await waitFor(() =>
 		expect(q(container, '[data-testid="profile-time-format"]')).not.toBeNull()
@@ -105,7 +102,7 @@ async function renderProfileReady(): Promise<HTMLElement> {
 
 beforeEach(() => {
 	localStorage.clear();
-	h.listMyProfilesMock.mockReset();
+	listMyProfilesMock.mockReset();
 	stubNavigator({ userAgent: CHROME_UA, platform: 'Win32', maxTouchPoints: 0 });
 	stubDisplayModeStandalone(false);
 });
@@ -175,7 +172,7 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 	it('is app chrome — present even with NO collective selected', async () => {
 		bootApp();
 		signIn({ token: 'jwt-member', collectives: [] });
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-no-collective"]')).not.toBeNull()
@@ -213,7 +210,7 @@ describe('#408 review F1 — the install adapter is app-lifetime, owned by the r
 		window.dispatchEvent(evt);
 
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
 		await waitFor(() => expect(installButton(container)).not.toBeNull());
 

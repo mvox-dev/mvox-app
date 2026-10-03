@@ -85,55 +85,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => {
-	class ProfileSaveError extends Error {
-		readonly createdProfileId?: string;
-		constructor(message: string, createdProfileId?: string) {
-			super(message);
-			this.name = 'ProfileSaveError';
-			this.createdProfileId = createdProfileId;
-		}
-	}
-	return {
-		ProfileSaveError,
-		listMyProfilesMock: vi.fn(),
-		applyProfileSaveMock: vi.fn(),
-		applyConflictResolutionMock: vi.fn()
-	};
-});
-vi.mock('$lib/profile/fieldMove', async () => {
-	const actual = await vi.importActual<typeof import('$lib/profile/fieldMove')>('$lib/profile/fieldMove');
-	return { ...actual, applyConflictResolution: h.applyConflictResolutionMock };
-});
-vi.mock('$lib/profile/profileData', () => {
-	const NARROWNESS: Record<string, number> = { private: 0, domain: 1, public: 2 };
-	return {
-		listMyProfiles: h.listMyProfilesMock,
-		profilesByLevel: (ps: Array<{ _sharing: string }>) => {
-			const by: Record<string, unknown> = {};
-			for (const p of ps) by[p._sharing] = p;
-			return by;
-		},
-		NARROWNESS,
-		resolveField: (
-			ps: Array<{ _id: string; name: string; email: string; _sharing: string }>,
-			field: 'name' | 'email'
-		) => {
-			const withValue = ps
-				.filter((p) => p[field] !== '')
-				.slice()
-				.sort((a, b) => NARROWNESS[a._sharing] - NARROWNESS[b._sharing]);
-			return {
-				value: withValue.length > 0 ? withValue[0][field] : '',
-				holders: withValue.map((p) => ({ level: p._sharing, id: p._id }))
-			};
-		}
-	};
-});
-vi.mock('$lib/profile/applyProfileSave', () => ({
-	applyProfileSave: h.applyProfileSaveMock,
-	ProfileSaveError: h.ProfileSaveError
-}));
+vi.mock('$lib/profile/fieldMove', async () =>
+	(await import('$lib/testing/mocks/profile')).conflictResolutionModule()
+);
+vi.mock('$lib/profile/profileData', async () =>
+	(await import('$lib/testing/mocks/profile')).profileDataModule()
+);
+vi.mock('$lib/profile/applyProfileSave', async () =>
+	(await import('$lib/testing/mocks/profile')).applyProfileSaveModule('shared')
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -152,6 +112,8 @@ import { get } from 'svelte/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { applyConflictResolutionMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-member' });
@@ -186,9 +148,9 @@ async function openEditor(
 
 beforeEach(() => {
 	vi.useFakeTimers();
-	h.listMyProfilesMock.mockReset();
-	h.applyProfileSaveMock.mockReset();
-	h.applyConflictResolutionMock.mockReset();
+	listMyProfilesMock.mockReset();
+	applyProfileSaveMock.mockReset();
+	applyConflictResolutionMock.mockReset();
 });
 
 afterEach(() => {
@@ -201,7 +163,7 @@ afterEach(() => {
 describe('/profile v2 — render + seed', () => {
 	it('renders name and email whole-field activators once loaded (#205 — the raw inputs no longer live-mount)', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
 		expect(q(container, '[data-testid="profile-name-edit"]')).not.toBeNull();
@@ -210,7 +172,7 @@ describe('/profile v2 — render + seed', () => {
 
 	it('seeds the displays from the narrowest non-empty holder, and the editor opens pre-filled', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -224,7 +186,7 @@ describe('/profile v2 — render + seed', () => {
 	it('shows load error with retry', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
-		h.listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
+		listMyProfilesMock.mockRejectedValue(new Error('listMyProfiles failed: 500'));
 		const { container } = render(Page);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-load-error"]')).not.toBeNull()
@@ -236,7 +198,7 @@ describe('/profile v2 — render + seed', () => {
 
 	it('renders a sign-out link to /auth/logout (#59 — moved from agenda page)', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
 		const signOut = q(container, 'a[href="/auth/logout"]');
@@ -248,7 +210,7 @@ describe('/profile v2 — render + seed', () => {
 		selectSampledb();
 		setUser({ _id: 'u1', email: 'mihkel@example.com', name: 'Mihkel' });
 		setLastProvider('google');
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
 		const identity = q(container, '[data-testid="profile-identity"]');
@@ -260,7 +222,7 @@ describe('/profile v2 — render + seed', () => {
 		selectSampledb();
 		setUser({ _id: 'u1', name: 'Mihkel' });
 		setLastProvider('smart-id');
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(Page);
 		await waitReady(container);
 		const identity = q(container, '[data-testid="profile-identity"]');
@@ -282,7 +244,7 @@ describe('/profile v2 — render + seed', () => {
 			selectSampledb();
 			setUser({ ...user });
 			if (provider) setLastProvider(provider);
-			h.listMyProfilesMock.mockResolvedValue([]);
+			listMyProfilesMock.mockResolvedValue([]);
 			const { container } = render(Page);
 			await waitReady(container);
 			const identity = q(container, '[data-testid="profile-identity"]');
@@ -297,8 +259,8 @@ describe('/profile v2 — render + seed', () => {
 describe('/profile v2 — autosave on blur', () => {
 	it('typing then blurring the name input triggers an autosave', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
+		listMyProfilesMock.mockResolvedValue([]);
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -306,8 +268,8 @@ describe('/profile v2 — autosave on blur', () => {
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 		await fireEvent.blur(nameInput);
 
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		const arg = h.applyProfileSaveMock.mock.calls[0][0];
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		const arg = applyProfileSaveMock.mock.calls[0][0];
 		expect(arg).toMatchObject({
 			level: 'domain',
 			existingId: null,
@@ -320,27 +282,27 @@ describe('/profile v2 — autosave on blur', () => {
 describe('/profile v2 — autosave on idle', () => {
 	it('typing then waiting 2 seconds triggers an autosave', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
+		listMyProfilesMock.mockResolvedValue([]);
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'server-dom-1' });
 		const { container } = render(Page);
 		await waitReady(container);
 
 		const nameInput = await openEditor(container, 'name');
 		await fireEvent.input(nameInput, { target: { value: 'Ada' } });
 
-		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+		expect(applyProfileSaveMock).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(2_000);
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
 	});
 });
 
 describe('/profile v2 — autosave on visibility change', () => {
 	it('clicking a visibility icon on a dirty field saves before moving', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -353,8 +315,8 @@ describe('/profile v2 — autosave on visibility change', () => {
 		) as HTMLButtonElement;
 		await fireEvent.click(pubBtn);
 
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		expect(h.applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		expect(applyProfileSaveMock.mock.calls[0][0]).toMatchObject({
 			level: 'domain',
 			fields: { name: 'Ada M.', email: 'ada@x.io' }
 		});
@@ -364,11 +326,11 @@ describe('/profile v2 — autosave on visibility change', () => {
 describe('/profile v2 — save feedback on active button', () => {
 	it('while saving, the active visibility button shows Saving and is disabled', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
 		const d = deferred<{ profileId: string }>();
-		h.applyProfileSaveMock.mockReturnValueOnce(d.promise);
+		applyProfileSaveMock.mockReturnValueOnce(d.promise);
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -389,7 +351,7 @@ describe('/profile v2 — save feedback on active button', () => {
 		});
 
 		d.resolve({ profileId: 'prof-dom' });
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada M.', email: '', _sharing: 'domain' }
 		]);
 		await waitFor(() => {
@@ -406,8 +368,8 @@ describe('/profile v2 — save feedback on active button', () => {
 describe('/profile v2 — save failure shows per-field error', () => {
 	it('a rejected autosave shows an error under the field', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([]);
-		h.applyProfileSaveMock.mockRejectedValueOnce(new Error('save failed'));
+		listMyProfilesMock.mockResolvedValue([]);
+		applyProfileSaveMock.mockRejectedValueOnce(new Error('save failed'));
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -425,7 +387,7 @@ describe('/profile v2 — save failure shows per-field error', () => {
 describe('/profile v2 — name-private guard', () => {
 	it('the private visibility button for name is always disabled', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -440,7 +402,7 @@ describe('/profile v2 — name-private guard', () => {
 
 	it('the private visibility button for email is NOT disabled (email can be private)', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -455,7 +417,7 @@ describe('/profile v2 — name-private guard', () => {
 
 	it('name-private guard on the save path throws (never silent)', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' }
 		]);
 		const { container } = render(Page);
@@ -469,7 +431,7 @@ describe('/profile v2 — name-private guard', () => {
 
 	it('name-private guard on the move path: button is disabled', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -486,11 +448,11 @@ describe('/profile v2 — name-private guard', () => {
 describe('/profile v2 — sibling value pinned (privacy leak prevention)', () => {
 	it('a name autosave while email lives at a different level pins sibling to the target entity value', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' },
 			{ _id: 'prof-priv', name: '', email: 'secret@x.io', _sharing: 'private' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-dom' });
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -498,8 +460,8 @@ describe('/profile v2 — sibling value pinned (privacy leak prevention)', () =>
 		await fireEvent.input(nameInput, { target: { value: 'Ada M.' } });
 		await fireEvent.blur(nameInput);
 
-		await waitFor(() => expect(h.applyProfileSaveMock).toHaveBeenCalledTimes(1));
-		const arg = h.applyProfileSaveMock.mock.calls[0][0];
+		await waitFor(() => expect(applyProfileSaveMock).toHaveBeenCalledTimes(1));
+		const arg = applyProfileSaveMock.mock.calls[0][0];
 		expect(arg).toMatchObject({
 			level: 'domain',
 			existingId: 'prof-dom',
@@ -511,7 +473,7 @@ describe('/profile v2 — sibling value pinned (privacy leak prevention)', () =>
 describe('/profile v2 — #39 name prefill from EntuUser', () => {
 	it('prefills domain name from EntuUser.name when no domain profile exists', async () => {
 		setUser({ _id: 'u1', name: 'Ada Lovelace' });
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -525,7 +487,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 
 	it('does NOT overwrite an existing domain name with EntuUser.name', async () => {
 		setUser({ _id: 'u1', name: 'Ada Lovelace' });
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-d', name: 'Her Chosen Name', email: 'a@b.c', _sharing: 'domain' }
 		]);
 		selectSampledb();
@@ -539,7 +501,7 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 
 	it('leaves domain name empty when EntuUser has no name', async () => {
 		setUser({ _id: 'u1' });
-		h.listMyProfilesMock.mockResolvedValue([]);
+		listMyProfilesMock.mockResolvedValue([]);
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -553,11 +515,11 @@ describe('/profile v2 — #39 name prefill from EntuUser', () => {
 describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => {
 	it('a move is blocked while an autosave is in flight', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const d = deferred<{ profileId: string }>();
-		h.applyProfileSaveMock.mockReturnValueOnce(d.promise);
+		applyProfileSaveMock.mockReturnValueOnce(d.promise);
 		const { container } = render(Page);
 		await waitReady(container);
 
@@ -574,7 +536,7 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 		});
 
 		d.resolve({ profileId: 'prof-dom' });
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada M.', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 	});
@@ -583,11 +545,11 @@ describe('/profile v2 — cross-queue lock (save in flight blocks move)', () => 
 describe('/profile v2 — T4.8 completion gate SSOT', () => {
 	it('the completion banner clears after a domain name autosave', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValueOnce([]);
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValueOnce([]);
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'dp-1', name: 'Ann', email: '', _sharing: 'domain' }
 		]);
-		h.applyProfileSaveMock.mockResolvedValue({ profileId: 'dp-1' });
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'dp-1' });
 		completionGateStore.set('incomplete');
 
 		const { container } = render(Page);
@@ -609,7 +571,7 @@ describe('/profile v2 — T4.8 completion gate SSOT', () => {
 describe('/profile v2 — repair banners still work', () => {
 	it('an interrupted-move duplicate shows the repair banner', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Ada', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' }
 		]);
@@ -625,7 +587,7 @@ describe('/profile v2 — repair banners still work', () => {
 describe('/profile v2 — distinct-value conflict', () => {
 	it('a field holding DIFFERENT values at two levels shows a conflict note', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-priv', name: 'Alice', email: '', _sharing: 'private' },
 			{ _id: 'prof-pub', name: 'Alice Smith', email: '', _sharing: 'public' }
 		]);
@@ -642,7 +604,7 @@ describe('/profile v2 — distinct-value conflict', () => {
 describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () => {
 	it('AC1: a conflicting tier\'s visibility button is NOT disabled (previously always disabled)', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
@@ -656,7 +618,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	it('AC2: first tap on a conflicting tier previews its value + shows the "tap again" hint', async () => {
 		vi.useRealTimers();
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
@@ -672,21 +634,21 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).not.toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 		});
-		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+		expect(applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 
 	it('AC3: second tap on the SAME tier resolves — syncs every OTHER holder to the previewed value', async () => {
 		vi.useRealTimers(); // see AC2 comment
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValueOnce([
+		listMyProfilesMock.mockResolvedValueOnce([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
-		h.applyConflictResolutionMock.mockResolvedValue({ field: 'name', syncedIds: ['prof-dom'] });
+		applyConflictResolutionMock.mockResolvedValue({ field: 'name', syncedIds: ['prof-dom'] });
 		const { container } = render(Page);
 		await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 
@@ -697,8 +659,8 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 		);
 		await fireEvent.click(pubBtn); // 2nd tap — resolve
 
-		await waitFor(() => expect(h.applyConflictResolutionMock).toHaveBeenCalledTimes(1));
-		expect(h.applyConflictResolutionMock.mock.calls[0][0]).toMatchObject({
+		await waitFor(() => expect(applyConflictResolutionMock).toHaveBeenCalledTimes(1));
+		expect(applyConflictResolutionMock.mock.calls[0][0]).toMatchObject({
 			field: 'name',
 			value: 'Annie',
 			sync: [{ id: 'prof-dom', sibling: '' }]
@@ -713,7 +675,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	it('AC4: tapping a DIFFERENT conflicting tier during preview switches the preview (no resolve)', async () => {
 		vi.useRealTimers(); // see AC2 comment
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-pri', name: 'Ann', email: '', _sharing: 'private' },
 			{ _id: 'prof-dom', name: 'Annie', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'A. Smith', email: '', _sharing: 'public' }
@@ -736,12 +698,12 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			expect(q(container, '[data-testid="profile-vis-name-public-preview"]')).not.toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-domain-preview"]')).toBeNull();
 		});
-		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+		expect(applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 
 	it('AC5: a non-conflicting field renders no conflict/preview markers — happy path unchanged', async () => {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -758,7 +720,7 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 	it('AC6: pressing Escape while previewing dismisses the preview back to the active value', async () => {
 		vi.useRealTimers(); // see AC2 comment
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ann', email: '', _sharing: 'domain' },
 			{ _id: 'prof-pub', name: 'Annie', email: '', _sharing: 'public' }
 		]);
@@ -781,14 +743,14 @@ describe('/profile v2 — #131 conflict resolution (browse-then-confirm)', () =>
 			expect(q(container, '[data-testid="profile-vis-name-preview-note"]')).toBeNull();
 			expect(q(container, '[data-testid="profile-vis-name-conflict-note"]')).not.toBeNull();
 		});
-		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
+		expect(applyConflictResolutionMock).not.toHaveBeenCalled();
 	});
 });
 
 describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 	async function renderProfile(): Promise<HTMLElement> {
 		selectSampledb();
-		h.listMyProfilesMock.mockResolvedValue([
+		listMyProfilesMock.mockResolvedValue([
 			{ _id: 'prof-dom', name: 'Ada', email: 'ada@x.io', _sharing: 'domain' }
 		]);
 		const { container } = render(Page);
@@ -868,7 +830,7 @@ describe('/profile — visibility tier group: roving tabindex (#156)', () => {
 		priv.focus();
 		await fireEvent.keyDown(priv, { key: 'ArrowRight' });
 		await fireEvent.keyDown(pub, { key: 'ArrowRight' });
-		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
+		expect(applyProfileSaveMock).not.toHaveBeenCalled();
 	});
 
 	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the tier still activates', async () => {

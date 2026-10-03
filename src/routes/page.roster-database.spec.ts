@@ -8,18 +8,16 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { entuFetchMock, assignMock, unassignMock, createSectionMock, wireLog } = vi.hoisted(() => ({
-	entuFetchMock: vi.fn(),
+const { assignMock, unassignMock, createSectionMock, wireLog } = vi.hoisted(() => ({
 	assignMock: vi.fn(),
 	unassignMock: vi.fn(),
 	createSectionMock: vi.fn(),
 	wireLog: [] as string[]
 }));
 
-vi.mock('$lib/entu/request', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/entu/request')>();
-	return { ...actual, entuFetch: entuFetchMock };
-});
+vi.mock('$lib/entu/request', async (importOriginal) =>
+	(await import('$lib/testing/mocks/seasons')).entuRequestModule(importOriginal)
+);
 vi.mock('$lib/sections/sectionActions', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionActions')>();
 	return {
@@ -43,6 +41,7 @@ import Page from './roster/+page.svelte';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { entuFetchMock } from '$lib/testing/mocks/seasons';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
 const CFG = testCfg('sampledb', 'jwt-abc');

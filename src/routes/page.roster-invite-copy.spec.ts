@@ -7,74 +7,37 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
-	deactivateMemberMock,
-	reinstateMemberMock,
-	loadInactiveRosterMock,
-	listInactiveMembersMock,
-	listDeactivateBlockersMock,
-	createInviteMock,
-	mintSelfLinkInviteMock,
-	withdrawInviteMock,
-	listJoinStatesMock,
-	listJoinStateDetailsMock,
-	resolveOwnerTierMock,
-	loadMemberRecordMock,
 	createCopierSpy
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	deactivateMemberMock: vi.fn(),
-	reinstateMemberMock: vi.fn(),
-	loadInactiveRosterMock: vi.fn(),
-	listInactiveMembersMock: vi.fn(),
-	listDeactivateBlockersMock: vi.fn(),
-	createInviteMock: vi.fn(),
-	mintSelfLinkInviteMock: vi.fn(),
-	withdrawInviteMock: vi.fn(),
-	listJoinStatesMock: vi.fn(),
-	listJoinStateDetailsMock: vi.fn(),
-	resolveOwnerTierMock: vi.fn(),
-	loadMemberRecordMock: vi.fn(),
 	createCopierSpy: vi.fn()
 }));
 
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/roster/memberLifecycle', () => ({
-	deactivateMember: deactivateMemberMock,
-	reinstateMember: reinstateMemberMock,
-	loadInactiveRoster: loadInactiveRosterMock,
-	listInactiveMembers: listInactiveMembersMock,
-	listDeactivateBlockers: listDeactivateBlockersMock
-}));
-vi.mock('$lib/invite/inviteData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/invite/inviteData')>()),
-	createInvite: createInviteMock,
-	mintSelfLinkInvite: mintSelfLinkInviteMock,
-	withdrawInvite: withdrawInviteMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/roster/memberLifecycle', async () =>
+	(await import('$lib/testing/mocks/roster')).memberLifecycleModule()
+);
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: true })
+);
 vi.mock('$lib/invite/copy-invite-link', async (importActual) => {
 	const actual = await importActual<typeof import('$lib/invite/copy-invite-link')>();
 	createCopierSpy.mockImplementation(actual.createInviteLinkCopier);
 	return { ...actual, createInviteLinkCopier: createCopierSpy };
 });
-vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
-	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
-	listJoinStates: listJoinStatesMock,
-	listJoinStateDetails: listJoinStateDetailsMock
-}));
-vi.mock('$lib/nav/adminStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/nav/adminStore')>()),
-	resolveOwnerTier: resolveOwnerTierMock
-}));
-vi.mock('$lib/roster/memberRecord', async (importActual) => ({
-	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
-	loadMemberRecord: loadMemberRecordMock
-}));
-vi.mock('$lib/library/librarianStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/library/librarianStore')>()),
-	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
-	resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
-}));
+vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
+);
+vi.mock('$lib/nav/adminStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+);
+vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
+	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
+);
+vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -96,6 +59,23 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	createInviteMock,
+	listJoinStateDetailsMock,
+	listJoinStatesMock,
+	mintSelfLinkInviteMock,
+	resolveOwnerTierMock,
+	withdrawInviteMock
+} from '$lib/testing/mocks/admin';
+import {
+	deactivateMemberMock,
+	listDeactivateBlockersMock,
+	listInactiveMembersMock,
+	loadInactiveRosterMock,
+	loadMemberRecordMock,
+	loadRosterMock,
+	reinstateMemberMock
+} from '$lib/testing/mocks/roster';
 
 const ORG_A = 'org-a';
 
