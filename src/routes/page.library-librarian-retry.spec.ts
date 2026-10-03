@@ -118,12 +118,12 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { get } from 'svelte/store';
 import { librarianStore } from '$lib/library/librarianStore';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const DB_A = 'sampledb';
 const DB_B = 'other-choir';
@@ -174,22 +174,7 @@ function borrowerNamesFor(db: string) {
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB_A]: 'person-p', [DB_B]: 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [
-			{ db: DB_A, name: 'Sampledb', personId: 'person-p' },
-			{ db: DB_B, name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(DB_A);
+	signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }, { db: DB_B, name: 'Other Choir', personId: 'person-q' }] });
 }
 
 beforeEach(() => {
@@ -215,11 +200,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 type Answer = { state: string; libraryId: string | null };

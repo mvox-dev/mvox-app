@@ -82,13 +82,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function item(
 	id: string,
@@ -147,18 +144,7 @@ function stubScheduleWire(wire: ScheduleWire) {
 }
 
 function setAuthed(dbs: string[] = ['sampledb']) {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'p1'])),
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'p1' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0]);
+	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'p1' })) });
 }
 
 const DEFAULT_SCHEDULE: ScheduleWire = {
@@ -206,8 +192,7 @@ afterEach(async () => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	const prefs = await import('$lib/preferences/agendaView').catch(() => null);
 	prefs?.setAgendaView('list');
 	if (typeof localStorage !== 'undefined') localStorage.clear();

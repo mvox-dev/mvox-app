@@ -1,29 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #356 RED (agenda integration) — 'Take attendance' on a recent row is gated
-// on EVENT RIGHTS (canMarkAttendance: manageRightsFrom(owners, editors,
-// personId) === 'editor'), NOT on the conductor seat.
-//
-// Before #356 the row's button keyed off conductorEventIds (the seat set from
-// conductorStore). These tests pin the replacement, on the REAL +page.svelte:
-//   • an event EDITOR with NO seat anywhere sees the button, opens the panel,
-//     and records (createAttendance fires) — the rights data already rides the
-//     agenda read (item.owners/item.editors, #91 review F1: no new requests);
-//   • an event OWNER with no seat sees it too (ownership subsumes editing);
-//   • the SEAT ALONE no longer shows it — no affordance, no empty panel, and
-//     no attendance reads fired for a viewer who cannot write anyway.
-//
-// The seat's LAST gate consumer (canExpand — the season summary expand) moves
-// to season rights in #365, taking conductorStore with it (epic #362).
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// The strings these tests key off are spelled out; anything else falls back to
-// its own key. The season-editor case below mounts the whole admin surface (the
-// #201 onboarding steps, [+ Season], the pickers), whose copy is Comenius's and
-// says nothing about this gate — without the fallback its messages throw
-// mid-render and the assertions never run.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const copy: Record<string, (...args: never[]) => string> = {
 		picker_partial_members_notice: () => 'Not every member is listed here',
@@ -114,11 +93,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -161,15 +135,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(
 	id: string,
@@ -190,26 +159,10 @@ function agendaItem(
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
-/** One recent event; the caller decides who holds what on it. `seasonConductors`
- *  is a parameter so each test pins the seat/rights split it is about, and
- *  `season` so a test can pin that SEASON rights do not leak into the EVENT
- *  gate. */
 function setRecentFixture(
 	item: ReturnType<typeof agendaItem>,
 	seasonConductors: string[],
@@ -237,7 +190,6 @@ function setRecentFixture(
 	setAuthedWithOneCollective('person-p');
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
@@ -252,9 +204,7 @@ afterEach(() => {
 	createAttendanceMock.mockReset();
 	updateAttendanceStatusMock.mockReset();
 	deleteAttendanceMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -263,8 +213,6 @@ const BTN = `${ROW} [data-testid="take-attendance-btn"]`;
 
 describe('+page — the recent row marking gate is EVENT RIGHTS, not the seat (#356)', () => {
 	it('an event EDITOR with NO conductor seat sees Take attendance, opens the panel, and records', async () => {
-		// person-p holds `_editor` on the event and NO seat anywhere — before
-		// #356 this viewer had no affordance at all.
 		setRecentFixture(
 			agendaItem('past-1', '2026-06-10T16:00:00.000Z', { editors: ['person-p'] }),
 			['other-person']
@@ -284,7 +232,6 @@ describe('+page — the recent row marking gate is EVENT RIGHTS, not the seat (#
 			expect(container.querySelector('[data-testid="attendance-row-m1"]')).not.toBeNull();
 		});
 
-		// …and she can RECORD: the per-tap write fires for this event.
 		createAttendanceMock.mockResolvedValue('new-att-1');
 		await fireEvent.click(container.querySelector('[data-testid="attendance-toggle-m1-present"]')!);
 		await waitFor(() => {
@@ -309,8 +256,6 @@ describe('+page — the recent row marking gate is EVENT RIGHTS, not the seat (#
 	});
 
 	it('the conductor SEAT alone shows NOTHING — no button, no empty panel, no attendance reads (#356 retires the seat as a gate)', async () => {
-		// person-p inherits the seat season-wide (the exact fixture that used to
-		// light the button) but holds no `_owner`/`_editor` on the event.
 		setRecentFixture(agendaItem('past-1', '2026-06-10T16:00:00.000Z'), ['person-p']);
 		const { container } = render(Page);
 
@@ -319,16 +264,11 @@ describe('+page — the recent row marking gate is EVENT RIGHTS, not the seat (#
 		});
 		expect(container.querySelector(BTN)).toBeNull();
 		expect(container.querySelector('[data-testid="attendance-panel"]')).toBeNull();
-		// The gate is upstream of IO — a viewer who cannot write triggers no reads.
 		expect(listAttendanceMock).not.toHaveBeenCalled();
 		expect(listAllRsvpsForEventMock).not.toHaveBeenCalled();
 	});
 
 	it('SEASON `_editor` without rights on the EVENT shows nothing — so this surface answers what /event/[id] answers', async () => {
-		// /event/[id] never consults the season: `canMarkAttendanceForEvent` asks
-		// `detail.ownerIds`/`detail.editorIds` only. A season term in the agenda's
-		// gate would hand this viewer a button here and none there — one event,
-		// two answers. Pinned so it cannot come back.
 		setRecentFixture(agendaItem('past-1', '2026-06-10T16:00:00.000Z'), [], {
 			seasonEditors: ['person-p']
 		});

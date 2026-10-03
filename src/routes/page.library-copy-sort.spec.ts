@@ -1,26 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #112/#88 RED — the copy list inside an unfolded edition gets SORT controls:
-// nr (copy number) / member (borrower name) / since (lending date).
-//
-// Today the copies render in whatever order listCopies delivered them — no
-// controls, no ordering guarantee. The contract pinned here:
-//
-//   - three labeled sort controls per unfolded edition, testids
-//     copy-sort-nr-<editionId> / copy-sort-member-<editionId> /
-//     copy-sort-since-<editionId>, with aria-checked marking the active key;
-//   - default sort is nr, ascending — REGARDLESS of fetch order;
-//   - member sorts by borrower name (A→Z), since sorts by lending start date
-//     (oldest loan first — longest-out copies surface for the librarian);
-//   - null/undefined sorts LAST under EVERY key: a copy with no borrower and
-//     no lending date (unassigned) lands at the bottom under member and since;
-//     a copy with no copy number lands at the bottom under nr.
-//
-// Route-level integration tests on the REAL /library +page.svelte (same
-// composition page.library.spec.ts drives): render the route, expand the real
-// work → edition nodes, click the real controls, assert on DOM order — so an
-// implementation that only makes a sort helper's unit test pass without wiring
-// the controls into the page cannot go green here.
 import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -49,10 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',
 		library_create_work_error: () => 'Could not create the work.',
-		// #271 — the create-edition button renders unconditionally in the
-		// librarian tree once a work's editions are idle, same as create-work's
-		// button above; this spec never opens the form, so only this one key
-		// is needed (same minimal footprint as the create-work set here).
 		library_create_edition_button: () => 'Add edition',
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
@@ -73,13 +47,10 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_inline_checkout_placeholder: () => 'Select member',
 		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
 		library_inline_checkout_error: () => 'Checkout failed',
-		// #112/#88 — the copy-sort controls' labels (GREEN adds the real keys to
-		// messages/*.json; the mock pins the key NAMES the page must use).
 		library_copy_sort_label: () => 'Sort copies by',
 		library_copy_sort_nr: () => 'Nr',
 		library_copy_sort_member: () => 'Member',
 		library_copy_sort_since: () => 'Since',
-		// #128 — collapsed-available summary line
 		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
 	}
 }));
@@ -122,9 +93,6 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// vi.importActual for $lib/library/libraryData pulls entuFetch -> $lib/entu-config,
-// which reads $env/dynamic/public — unavailable outside a SvelteKit request
-// context under happy-dom. Same fix as page.library.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -156,34 +124,12 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
-	// #128 collapses available copies into a summary for MEMBER view, which
-	// would hide the individual rows this spec sorts. Sort mechanics
-	// (sortCopies) are unaffected by librarian status, and #128 explicitly
-	// leaves the librarian view unchanged, so render as librarian here to
-	// keep every copy an individually-sortable row.
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -192,19 +138,6 @@ function setAuthedWithOneCollective() {
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
-/**
- * One work, one edition, FOUR copies delivered deliberately OUT of nr order —
- * so the default-sort assertion can only pass if the page actually sorts:
- *
- *   fetch order:  copy-a (nr 3, unassigned)
- *                 copy-d (no nr, unassigned)      ← null on EVERY sort key
- *                 copy-b (nr 1, Zara Zilch,  since 2026-07-15)
- *                 copy-c (nr 2, Adam Aber,   since 2026-06-01)
- *
- *   by nr:      b(1), c(2), a(3), d(no nr → last)
- *   by member:  c(Adam), b(Zara), then the unassigned {a, d} last
- *   by since:   c(2026-06-01), b(2026-07-15), then the unassigned {a, d} last
- */
 function setSortFixture() {
 	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
@@ -248,7 +181,6 @@ function setSortFixture() {
 const sortBtn = (key: 'nr' | 'member' | 'since') =>
 	`[data-testid="copy-sort-${key}-edition-1"]`;
 
-/** The copy rows of edition-1, as copy ids, in DOM order. */
 function copyOrder(container: HTMLElement): string[] {
 	return [
 		...container.querySelectorAll(
@@ -272,8 +204,6 @@ async function renderWithEditionUnfolded() {
 	await fireEvent.click(
 		container.querySelector('[data-testid="library-edition-toggle-edition-1"]')!
 	);
-	// Librarian state settled (tools revealed) before asserting rows — matches
-	// #128's own settling pattern, avoiding a transient not-librarian render.
 	await waitFor(() =>
 		expect(container.querySelector('[data-testid="librarian-tools"]')).not.toBeNull()
 	);
@@ -299,9 +229,7 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/library — copy list sort controls (#112/#88)', () => {
@@ -315,13 +243,10 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		expect(member).not.toBeNull();
 		expect(since).not.toBeNull();
 
-		// Labeled — each control carries its human-readable label.
 		expect(nr!.textContent).toContain('Nr');
 		expect(member!.textContent).toContain('Member');
 		expect(since!.textContent).toContain('Since');
 
-		// And they live INSIDE the unfolded edition node, next to the list they
-		// sort — not in some page-level toolbar.
 		for (const el of [nr, member, since]) {
 			expect(el!.closest('[data-testid="library-edition-edition-1"]')).not.toBeNull();
 		}
@@ -330,11 +255,8 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 	it('default sort is by nr, ascending — even though the fetch delivered the copies out of order', async () => {
 		const container = await renderWithEditionUnfolded();
 
-		// nr 1, 2, 3, then the number-less copy last (null sorts last under
-		// EVERY key, including the default).
 		expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
 
-		// The active key is marked — nr checked, the others not.
 		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-checked')).toBe('true');
 		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-checked')).toBe(
 			'false'
@@ -355,10 +277,7 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		});
 
 		const order = copyOrder(container);
-		// Adam Aber (copy-c) before Zara Zilch (copy-b)…
 		expect(order.slice(0, 2)).toEqual(['copy-c', 'copy-b']);
-		// …and BOTH unassigned copies after every assigned one (their relative
-		// order among themselves is not pinned here).
 		expect(new Set(order.slice(2))).toEqual(new Set(['copy-a', 'copy-d']));
 	});
 
@@ -373,9 +292,7 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		});
 
 		const order = copyOrder(container);
-		// 2026-06-01 (copy-c) before 2026-07-15 (copy-b) — longest-out first…
 		expect(order.slice(0, 2)).toEqual(['copy-c', 'copy-b']);
-		// …and the never-lent copies land at the bottom.
 		expect(new Set(order.slice(2))).toEqual(new Set(['copy-a', 'copy-d']));
 	});
 
@@ -392,29 +309,15 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		await waitFor(() => {
 			expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
 		});
-		// The checked marker followed the switch back.
 		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-checked')).toBe('true');
 		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-checked')).toBe(
 			'false'
 		);
 
-		// Re-sorting is a VIEW concern — no refetch of the copies.
 		expect(listCopiesMock).toHaveBeenCalledTimes(1);
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #113 TU.5 — a11y pass over the sort controls: they must be a NAMED group of
-// native (keyboard-operable) buttons, with aria-checked as the single source of
-// "which key is active". Route-level, same composition as above.
-//
-// #156 — the group is a role="radiogroup" of role="radio" buttons, and the
-// state pin moved off the old pressed-state, which is an invalid ARIA mix on
-// role="radio" (the same trap page.sections-a11y.spec.ts caught on
-// role="option"). The role is load-bearing rather than cosmetic: arrow keys
-// here MOVE AND SELECT, which is radiogroup behaviour, whereas the app's other
-// roving groups are role="toolbar" and only move focus.
-// ---------------------------------------------------------------------------
 describe('/library — copy-sort controls a11y (#113)', () => {
 	it('the three controls live in a role="radiogroup" with an m.* accessible name, each a role="radio"', async () => {
 		const container = await renderWithEditionUnfolded();
@@ -451,12 +354,6 @@ describe('/library — copy-sort controls a11y (#113)', () => {
 	});
 });
 
-// ---------------------------------------------------------------------------
-// #156 — roving tabindex on the copy-sort chips. RADIOGROUP semantics: arrows
-// MOVE focus AND SELECT, matching the role in the markup. (The app's other
-// roving groups are role="toolbar" and only move focus — the two must stay
-// distinguishable to assistive tech, which is why the roles are asserted.)
-// ---------------------------------------------------------------------------
 describe('/library — copy-sort chips: roving tabindex (#156)', () => {
 	const KEYS = ['nr', 'member', 'since'] as const;
 

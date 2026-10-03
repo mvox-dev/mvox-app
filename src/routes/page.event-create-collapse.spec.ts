@@ -151,14 +151,10 @@ import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { setAgendaView } from '$lib/preferences/agendaView';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
@@ -227,19 +223,7 @@ function fixtureRows(): RosterRow[] {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -285,9 +269,7 @@ afterEach(() => {
 	addSeasonConductorMock.mockReset();
 	removeSeasonConductorMock.mockReset();
 	getSeriesDefaultsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 // ── helpers ─────────────────────────────────────────────────────────────────────
@@ -637,22 +619,7 @@ describe('#508 — a create that lands after its form closed runs no success tai
 					resolveCreate = r;
 				})
 		);
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', otherdb: 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-				{ db: 'otherdb', name: 'Otherdb', personId: 'person-p' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
+		signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'otherdb', name: 'Otherdb', personId: 'person-p' }] });
 		const { container } = render(Page);
 		await waitFor(() => {
 			expect(q(container as HTMLElement, 'season-card-expand')).not.toBeNull();

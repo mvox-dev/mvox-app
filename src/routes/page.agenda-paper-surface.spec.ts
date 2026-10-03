@@ -1,24 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #474 RED — the desk background is GONE, the agenda sits on plain paper.
-//
-// Mihkel (2026-09-23, verbatim): "Lets reopen the background task - instead of
-// disabling the animation, lets remove it altogether". Supersedes #463, which
-// stood the gradients still; this removes the surface component entirely and
-// leaves the front page on the ordinary paper background (bg-paper, the house
-// token — src/app.css --color-paper).
-//
-// Two halves:
-//   1. INTEGRATION — the real +page.svelte in the authenticated,
-//      collectives-ready agenda state (harness family of
-//      page.agenda-event-types.spec.ts): no desk wrapper attribute, no wood
-//      background class anywhere in the rendered tree, the agenda's root
-//      column painted bg-paper itself, and the agenda list still rendering.
-//   2. SOURCE SWEEP — no file under src/ mentions the surface component or
-//      its CSS machinery any more, so it cannot quietly return (walker
-//      precedent: src/lib/invite/no-rendered-invite-link.sweep.spec.ts).
-//      NOTE: every needle below is built by concatenation so THIS file does
-//      not trip the sweep (or the done-when `git grep` gate) itself.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -87,27 +67,12 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p1' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
 }
 
 function item(id: string, name: string, startDatetime: string): AgendaItem {
@@ -124,7 +89,6 @@ function item(id: string, name: string, startDatetime: string): AgendaItem {
 	} as AgendaItem;
 }
 
-// Far-future date: AgendaList's relative-day decoration reads the real clock.
 const REHEARSAL = item('ev-proov', 'Tavaline proov', '2030-06-10T16:00:00.000Z');
 
 findMyMemberIdMock.mockResolvedValue(null);
@@ -135,11 +99,9 @@ afterEach(() => {
 	loadFullAgendaMock.mockReset();
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue(toListRead([]));
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
-// ── needles, concatenated so this spec never matches itself ─────────────────
 const COMPONENT_NAME = 'Desk' + 'Surface'; // the removed wrapper component
 const DESK_ATTR_SELECTOR = '[data' + '-desk]'; // its marker attribute
 const WOOD_CLASS = 'wood' + '-bg'; // its background class
@@ -148,14 +110,6 @@ const SWEEP_NEEDLES = [
 	WOOD_CLASS,
 	'--' + 'dx1', // first of the six offset custom properties
 	'data' + '-desk',
-	// #474 review F2 — NARROWED (and, like every needle here, concatenated so
-	// this file does not match itself). The bare at-rule name alone also spells
-	// the standard JSDoc/TSDoc tag, so the first unrelated typedef comment
-	// anywhere under src/ would have failed this suite with a message about a
-	// desk background — misleading enough to invite deleting the guard rather
-	// than reading it. All six registrations we sweep for declared offset
-	// custom properties whose names start with the two letters below, so the
-	// needle carries that prefix and a JSDoc tag can no longer trip it.
 	'@' + 'property ' + '--d', // the CSS custom-property registrations
 	'wood' + '-orbit'
 ];
@@ -201,25 +155,11 @@ describe('#474 — the front page agenda sits on plain paper (integration)', () 
 });
 
 describe('#474 review F1 — the paper paint is full-bleed, not column-width', () => {
-	// The regression this pins: `bg-paper` moved from the removed surface's
-	// `w-full` wrapper onto the agenda's centered `max-w-md` column, which is
-	// 28rem — so every viewport wider than that showed a paper strip on the
-	// browser's default white, and `/` became the only route not fully on paper
-	// (every HOUSE_SHELL route paints a full-width `min-h-screen bg-paper`
-	// <main>). Asserting only that SOME element carries bg-paper cannot see
-	// that, so assert the full-bleed painter itself.
-	//
-	// The full-bleed element in a SPA with no server-rendered shell is <body>:
-	// app.html ships no style on it, +layout.svelte paints nothing, and
-	// NavShell's .nav-content is order/flex/overflow-y only. So the guard reads
-	// app.css. jsdom/happy-dom never applies the stylesheet, which is exactly
-	// why this has to be a source assertion rather than a computed-style one.
 	const css = readFileSync(join(process.cwd(), 'src', 'app.css'), 'utf-8').replace(
 		/\/\*[\s\S]*?\*\//g,
 		''
 	);
 
-	/** Body of the FIRST top-level `@layer <name> { … }` block, brace-matched. */
 	function layerBody(source: string, name: string): string | null {
 		const open = source.search(new RegExp(`@layer\\s+${name}\\s*\\{`));
 		if (open === -1) return null;
@@ -263,14 +203,6 @@ describe('#474 review F1 — the paper paint is full-bleed, not column-width', (
 	});
 });
 
-// ── the source sweep: the surface cannot quietly return ─────────────────────
-
-/**
- * Every file under src/ — specs included, mirroring the done-when
- * `git grep … -- src` gate. Generated, GITIGNORED paraglide output is skipped
- * (git grep only sees tracked files; its runtime.js carries JSDoc tags that
- * are not ours) — same exclusion as the #360 sweep's walker.
- */
 function allSourceFiles(dir: string, out: string[] = []): string[] {
 	for (const name of readdirSync(dir)) {
 		const full = join(dir, name);

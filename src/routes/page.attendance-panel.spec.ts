@@ -134,15 +134,11 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(
 	id: string,
@@ -171,19 +167,7 @@ function agendaItem(
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
@@ -238,9 +222,7 @@ afterEach(() => {
 	createAttendanceMock.mockReset();
 	updateAttendanceStatusMock.mockReset();
 	deleteAttendanceMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -548,18 +530,11 @@ describe('+page — the attendance panel states a truncated roster (#321 review 
 describe('#471 — a collective switch resets Recent to one card ({#key current?.db})', () => {
 	function setTwoCollectivesFixture() {
 		setTwoConductedRecentEventsFixture();
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', otherdb: 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'otherdb', name: 'Otherdb', personId: 'person-p' }
-			],
-			erroredDbs: []
+			]
 		});
 	}
 

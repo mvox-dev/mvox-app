@@ -114,14 +114,10 @@ import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { WorkRow } from '$lib/repertoire/types';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const FUTURE_SEASON_ID = 'season-future-1';
@@ -195,19 +191,7 @@ function flush(): Promise<void> {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -260,9 +244,7 @@ afterEach(() => {
 	listWorksMock.mockReset();
 	listAllEditionsMock.mockReset();
 	listRepertoireItemsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -495,22 +477,7 @@ describe('#167 review F2 — the database-entity answer is not applied to one ga
 
 describe('#167 review F3 — the database-entity probe is not paid per agenda load', () => {
 	function setAuthedWithTwoCollectives() {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { 'org-a': 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [
-				{ db: 'org-a', name: 'Org A', personId: 'person-p' },
-				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('org-a');
+		signIn({ collectives: [{ db: 'org-a', name: 'Org A', personId: 'person-p' }, { db: 'org-b', name: 'Org B', personId: 'person-p' }] });
 	}
 
 	it('switching A → B → A costs ONE probe pair per collective, not one per load (the trigger is every ordinary member’s normal read)', async () => {

@@ -1,25 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #126 (#114 F6) RED — copy-list sort: PARTITION-THEN-SORT, not uniform
-// nulls-last. Corrected spec (PO, supersedes the earlier nulls-last spec):
-//
-//   1. LENT-OUT copies first, sorted by the ACTIVE sort key (nr/member/since).
-//      The sort buttons control only this group's ordering.
-//   2. AVAILABLE copies below — ALWAYS sorted by nr, regardless of which key
-//      is active. A static block at the bottom.
-//
-// Within each partition the existing nulls-last comparator still applies:
-//   - a lent copy with a nameless borrower (resolveBorrowerName -> '', not
-//     null — see libraryData.ts) sorts LAST among the lent group under 'member';
-//   - a lent copy with no assigned_at (undated active lending, live shape
-//     probed 2026-08-12 on the dev/test collective) sorts LAST among the lent
-//     group under 'since';
-//   - an available copy with no copy number sorts LAST among the available
-//     group (which is always nr-sorted).
-//
-// Route-level on the REAL /library +page.svelte, same composition as
-// page.library-copy-sort.spec.ts — order is asserted on rendered DOM rows, so
-// a helper-only fix that isn't wired into the page cannot go green.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -48,10 +27,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_work_composer_label: () => 'Composer',
 		library_create_work_submit: () => 'Create work',
 		library_create_work_error: () => 'Could not create the work.',
-		// #271 — the create-edition button renders unconditionally in the
-		// librarian tree once a work's editions are idle, same as create-work's
-		// button above; this spec never opens the form, so only this one key
-		// is needed (same minimal footprint as the create-work set here).
 		library_create_edition_button: () => 'Add edition',
 		library_librarian_load_error: () => 'Could not check librarian access.',
 		library_librarian_retry: () => 'Retry',
@@ -117,9 +92,6 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
-// vi.importActual for $lib/library/libraryData pulls entuFetch -> $lib/entu-config,
-// which reads $env/dynamic/public — unavailable outside a SvelteKit request
-// context under happy-dom. Same fix as page.library.spec.ts.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
@@ -151,35 +123,12 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
-	// #128 collapses available copies into a summary for MEMBER view, which
-	// would hide the individual rows this spec sorts. Partition-then-sort
-	// mechanics (sortCopies) are unaffected by librarian status, and #128
-	// explicitly leaves the librarian view unchanged, so render as librarian
-	// here to keep every copy an individually-sortable row (same fix as
-	// page.library-copy-sort.spec.ts).
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -188,32 +137,6 @@ function setAuthedWithOneCollective() {
 	listActiveMembersMock.mockResolvedValue(toListRead([]));
 }
 
-/**
- * One work, one edition, SIX copies — three LENT (active lending), three
- * AVAILABLE (no active lending) — delivered deliberately OUT of order so
- * neither partition nor within-partition order can pass by fetch-order
- * accident.
- *
- *   LENT (nr 5, 2, 8):
- *     lent-beta  — nr 5, "Beta Person",  since 2026-07-01
- *     lent-none  — nr 2, nameless member (resolves to ''), since 2026-06-15
- *     lent-alpha — nr 8, "Alpha Person", since '' (undated — live shape,
- *                  active lending with no assigned_at, e.g. the dev/test
- *                  collective's lendings …307ed5/…307ee7)
- *
- *   AVAILABLE (nr 1, 3, 0/none):
- *     avail-one  — nr 1
- *     avail-three— nr 3
- *     avail-none — nr 0 (falsy — "no nr")
- *
- * Expected DOM order under every key: the three lent copies ALWAYS precede
- * the three available copies. Only the lent group's internal order changes
- * with the active key; the available group is always nr-sorted:
- *
- *   by nr:     lent-none(2), lent-beta(5), lent-alpha(8) | avail-one(1), avail-three(3), avail-none(-)
- *   by member: lent-alpha(Alpha), lent-beta(Beta), lent-none(nameless, last) | avail-one, avail-three, avail-none
- *   by since:  lent-none(06-15), lent-beta(07-01), lent-alpha(undated, last) | avail-one, avail-three, avail-none
- */
 function setPartitionFixture() {
 	listWorksMock.mockResolvedValue(toListRead([
 		{ id: 'work-1', name: 'Spem in alium', composer: 'Thomas Tallis' }
@@ -234,7 +157,6 @@ function setPartitionFixture() {
 			id: 'lend-alpha',
 			copyId: 'lent-alpha',
 			memberId: 'member-alpha',
-			// live shape: active lending, assigned_at absent
 			assignedAt: '',
 			assignedUntil: '',
 			returnedAt: ''
@@ -260,7 +182,6 @@ function setPartitionFixture() {
 		new Map([
 			['member-alpha', 'Alpha Person'],
 			['member-beta', 'Beta Person'],
-			// resolveBorrowerName's documented no-readable-name result: '' (NOT null)
 			['member-noname', '']
 		])
 	);
@@ -270,7 +191,6 @@ function setPartitionFixture() {
 const sortBtn = (key: 'nr' | 'member' | 'since') =>
 	`[data-testid="copy-sort-${key}-edition-1"]`;
 
-/** The copy rows of edition-1, as copy ids, in DOM order. */
 function copyOrder(container: HTMLElement): string[] {
 	return [
 		...container.querySelectorAll(
@@ -300,7 +220,6 @@ async function renderWithEditionUnfolded() {
 	return container;
 }
 
-/** Click a sort control and wait for it to become the active (checked) key. */
 async function activate(container: HTMLElement, key: 'nr' | 'member' | 'since') {
 	await fireEvent.click(container.querySelector(sortBtn(key))!);
 	await waitFor(() => {
@@ -326,15 +245,12 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/library — copy sort is PARTITION-then-sort: lent group first, available group always nr-sorted (#126 / #114 F6)', () => {
 	it('nr: lent copies sorted by nr, then available copies sorted by nr — partition boundary holds', async () => {
 		const container = await renderWithEditionUnfolded();
-		// default key is nr — no click needed
 		expect(copyOrder(container)).toEqual([
 			'lent-none',
 			'lent-beta',
@@ -350,10 +266,7 @@ describe('/library — copy sort is PARTITION-then-sort: lent group first, avail
 		await activate(container, 'member');
 
 		const order = copyOrder(container);
-		// Lent group, by member: Alpha, Beta, then the nameless borrower last —
-		// nulls-last still applies WITHIN the partition.
 		expect(order.slice(0, 3)).toEqual(['lent-alpha', 'lent-beta', 'lent-none']);
-		// Available group, unaffected by the 'member' key — still nr order.
 		expect(order.slice(3)).toEqual(['avail-one', 'avail-three', 'avail-none']);
 	});
 
@@ -362,9 +275,7 @@ describe('/library — copy sort is PARTITION-then-sort: lent group first, avail
 		await activate(container, 'since');
 
 		const order = copyOrder(container);
-		// Lent group, by since: oldest loan first, undated loan last.
 		expect(order.slice(0, 3)).toEqual(['lent-none', 'lent-beta', 'lent-alpha']);
-		// Available group, unaffected by the 'since' key — still nr order.
 		expect(order.slice(3)).toEqual(['avail-one', 'avail-three', 'avail-none']);
 	});
 

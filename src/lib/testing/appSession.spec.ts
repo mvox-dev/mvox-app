@@ -10,6 +10,7 @@ import { getToken, setLastProvider, getLastProvider } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
+	selectedDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { resetAppState } from './appReset';
@@ -23,7 +24,7 @@ afterEach(() => {
 });
 
 describe('signIn', () => {
-	it('defaults to one sampledb collective', () => {
+	it('defaults to one sampledb collective, picked by fallback', () => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(NOW);
 		signIn();
@@ -39,7 +40,8 @@ describe('signIn', () => {
 			erroredDbs: []
 		});
 		expect(get(urlCollectiveDbStore)).toBeNull();
-		expect(get(selectedCollectiveDbStore)).toBe('sampledb');
+		expect(get(selectedCollectiveDbStore)).toBeNull();
+		expect(get(selectedDbStore)).toBe('sampledb');
 	});
 
 	it('takes the token, collectives, selection and lifetime', () => {
@@ -60,10 +62,6 @@ describe('signIn', () => {
 		expect(get(selectedCollectiveDbStore)).toBe('other-choir');
 	});
 
-	it('leaves nothing selected when asked', () => {
-		signIn({ selected: null });
-		expect(get(selectedCollectiveDbStore)).toBeNull();
-	});
 });
 
 describe('resetAppState', () => {
@@ -71,6 +69,7 @@ describe('resetAppState', () => {
 		signIn();
 		setLastProvider('google');
 		urlCollectiveDbStore.set('sampledb');
+		selectedCollectiveDbStore.set('sampledb');
 		resetAppState();
 		expect(getToken()).toBeNull();
 		expect(getLastProvider()).toBeNull();
