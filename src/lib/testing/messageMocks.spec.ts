@@ -47,11 +47,28 @@ describe('echoMessages', () => {
 	});
 });
 
+describe('echoMessages with the real module', () => {
+	it('exports each of its names, echoed or from the copy, and keeps m', () => {
+		const real = { nav_agenda: () => 'Agenda', nav_links: () => 'Links', m: {} };
+		const mod = echoMessages('bracket', { nav_links: () => 'Lingikogu' }, real);
+		expect(Object.keys(mod).sort()).toEqual(['m', 'nav_agenda', 'nav_links']);
+		expect(call(mod, 'nav_agenda')()).toBe('[nav_agenda]');
+		expect(call(mod, 'nav_links')()).toBe('Lingikogu');
+		expect(call(mod.m, 'nav_agenda')()).toBe('[nav_agenda]');
+	});
+});
+
 describe('englishMessages', () => {
 	it('has only the keys in the copy', () => {
 		const { m } = englishMessages({ agenda_today: () => 'Today' });
 		expect(call(m, 'agenda_today')()).toBe('Today');
 		expect(m).not.toHaveProperty('agenda_retry');
+	});
+
+	it('exports the copy keys as named exports too', () => {
+		const mod = englishMessages({ nav_agenda: () => 'Agenda' });
+		expect(call(mod, 'nav_agenda')()).toBe('Agenda');
+		expect(mod).not.toHaveProperty('nav_links');
 	});
 });
 

@@ -4,8 +4,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).echoMessages()
+vi.mock('$lib/paraglide/messages.js', async (importOriginal) =>
+	(await import('$lib/testing/messageMocks')).echoMessages('params', {}, await importOriginal())
 );
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
@@ -25,14 +25,9 @@ vi.mock('$lib/profile/profileData', async () => {
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
 import { startInstallAffordance } from '$lib/install/installState';
-import { setToken } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const installButton = (c: HTMLElement) =>
@@ -83,14 +78,7 @@ function makeBeforeInstallPrompt(): BipEvent {
 }
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member', selected: 'sampledb' });
 }
 
 let stopAdapter: (() => void) | null = null;
@@ -180,8 +168,7 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 
 	it('is app chrome — present even with NO collective selected', async () => {
 		bootApp();
-		setToken('jwt-member');
-		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
+		signIn({ token: 'jwt-member', collectives: [] });
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
 		await waitFor(() =>
