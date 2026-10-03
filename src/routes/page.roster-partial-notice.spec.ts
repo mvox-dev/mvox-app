@@ -1,30 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #321 review F2 — /roster says when its member list is partial.
-//
-// The finding: the roster surface had zero #321 treatment although its reads are
-// the same reachable shape the branch itself gave detection elsewhere. Fixed by
-// widening `listActiveMembers` / `listRecordNamesByPerson` / `listInactiveMembers`
-// (and the two orchestrators over them) to the shared `ListRead` and raising ONE
-// page-level notice off the result.
-//
-// Pinned here, deliberately in the SAME shape the library and agenda notices are
-// pinned in (page.library-partial-notice.spec.ts / page.agenda-partial-notice.spec.ts):
-//   - VISIBLE and persistent: a real <p>, never sr-only, `role="status"`, its own
-//     testid, copy through i18n (the KEY is pinned here, the four locales'
-//     sentences in page.partial-notice-i18n.spec.ts);
-//   - ABSENT FROM THE DOM (not merely hidden) when every read is complete;
-//   - raised by EITHER page read — the main roster load (active members or the
-//     admin_member_record overlay behind the real names) and the archived-member
-//     panel — because the reader needs the same thing to know either way;
-//   - NEVER leaked across a collective switch: a truncation detected in A must not
-//     keep asserting itself over B's roster.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Key-echo message mock (page.roster-deactivate.spec.ts's pattern): this file is
-// about WHICH key the notice renders and when, not about the sentence — the copy
-// itself is pinned per-locale in page.partial-notice-i18n.spec.ts.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
 		get:
@@ -65,15 +42,11 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const NOTICE = '[data-testid="roster-partial-notice"]';
 
@@ -99,58 +72,27 @@ const inactiveRows = [
 	}
 ];
 
-/** A ListRead the server reported as PARTIAL (count above the rows returned). */
 function partial<T>(items: T[], total: number) {
 	return { items, total, truncated: true };
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', otherdb: 'person-o' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'otherdb', name: 'Other', personId: 'person-o' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rows));
 	listSectionsMock.mockResolvedValue([]);
 	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
-	// #469 review F1 — /roster reads BOTH member lists through the ONE-PASS
-	// producer `loadActiveAndArchivedRosters` (one real-names overlay for the two
-	// lists it can have on screen at once), not `loadRoster` + `loadInactiveRoster`
-	// side by side. This double COMPOSES the two per-half mocks the tests here
-	// already drive, so each half is still steered and counted exactly as before:
-	// `loadInactiveRosterMock` IS the archived half's read. The real producer
-	// reports truncation per half (its own raw read OR'd with the overlay's); a
-	// double has no overlay, so each half simply keeps its own flag.
 	loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => {
 		const [active, inactive] = await Promise.all([
 			loadRosterMock(cfg),
@@ -164,11 +106,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -194,7 +132,6 @@ describe('#321 /roster — the partial notice', () => {
 		expect(notice.getAttribute('role')).toBe('status');
 		expect(notice.className).not.toContain('sr-only');
 		expect(notice.textContent?.trim()).toBe('[roster_partial_notice]');
-		// It is a standing fact, not a toast: still there after the load settles.
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull()
 		);
@@ -214,14 +151,9 @@ describe('#321 /roster — the partial notice', () => {
 		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
 
 		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
-		// ONE notice for the page, not one per read.
 		expect(container.querySelectorAll(NOTICE).length).toBe(1);
 	});
 
-	// #321 review F3 — the notice is PAGE-level, so a truncation detected in the
-	// archived panel kept standing over the ACTIVE roster once the panel closed: a
-	// claim about a list no longer on screen, read as a claim about the one that
-	// is. `toggleInactive` returned early on close without dropping it.
 	it('closing the archived panel takes its notice down with it (the active roster is complete)', async () => {
 		loadInactiveRosterMock.mockResolvedValue(partial(inactiveRows, 812));
 		const { container } = await renderReady();
@@ -232,7 +164,6 @@ describe('#321 /roster — the partial notice', () => {
 
 		await fireEvent.click(toggle);
 
-		// The panel really is shut (its rows are gone) and the claim went with it.
 		await waitFor(() =>
 			expect(container.querySelector('[data-testid="roster-inactive-list"]')).toBeNull()
 		);
@@ -254,4 +185,4 @@ describe('#321 /roster — the partial notice', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #321 review F2)
+// (*MVOX:Josquin*)

@@ -1,88 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #294 RED — roster join state + owner-only invite controls, at the ROUTE
-// level, so GREEN cannot satisfy the data layer without wiring the feature
-// into the actual /roster page.
-//
-// The contract, from the issue's rulings (they supersede the body — the
-// body's "an admin cannot read another member's redemption state" premise was
-// DISPROVED by live probe):
-//
-//   STATE (per row, read from person.entu_user CONTENTS, never presence —
-//   producer: listJoinStates, pinned in linkedIdentities.joinStates.spec.ts):
-//     absent  → never invited        → control: kutsu
-//     invited → live unredeemed link → controls: saada uuesti + tühista kutse
-//     joined  → bound identity       → no controls
-//   `kutsu` reachable on a row that already has a live link is a
-//   STATE-ROUTING BUG, not a case to handle — pinned as unreachable.
-//
-//   WHO SEES WHAT — the DISPLAY (#454, Mihkel 2026-09-22, supersedes the
-//   2026-09-09 role framing for this half): the READ is the gate. A chip
-//   renders when `listJoinStates` returned a state for that row, and not
-//   otherwise — no app-computed role (`admin`, `ownerTier`) is consulted. A
-//   `_viewer`-level read already returns the placeholder shape, so everyone
-//   Entu lets read sees the true state, and a reader Entu refuses sees no
-//   chip rather than a guessed one.
-//
-//   A refusal reaches this page in TWO shapes, and the reachable one is not
-//   the loud one:
-//     • PER-PERSON, silent, and the ONLY shape an ordinary member actually
-//       meets: HTTP 200 with the private bucket withheld. mvox `person`
-//       entities are `_sharing: domain` while the `entu_user` prop-def is
-//       `_sharing: private`, so a reader admitted by TIER alone — domain,
-//       no explicit grant — receives only the domain bucket (ER-1/ER-4,
-//       docs/architecture/entu-rights-and-visibility-model.md:109,198). No
-//       error: the body is `{ entity: { _id } }` and the property is simply
-//       not in it. `listJoinStates` detects it via the rights tell and OMITS
-//       that personId (linkedIdentities.ts, THE WITHHELD-BUCKET TELL); the
-//       page's `joinStates[row.personId] !== undefined` then renders nothing.
-//       This is the shape (B) below drives through the real producer.
-//     • WHOLE-CALL, loud: an HTTP failure on any one person rejects the
-//       `Promise.all` fan-out, and the page's catch
-//       (roster/+page.svelte:517-520) blanks the entire record. The #294
-//       probe observed this against a `_sharing: private` entity (a clean
-//       total 403) — real, but not what a domain-shared person produces.
-//   Both shapes are pinned in (A) below.
-//
-//   WHO SEES WHAT — the CONTROLS (PO ruling 2026-09-09, probe-verified,
-//   UNCHANGED by #454): `_owner` ONLY (probe: `_owner` mint → HTTP 200;
-//   `_editor` → HTTP 403 "User not in _owner property"). An editor-admin
-//   gets ONE LINE where the controls would be — NOT three disabled buttons,
-//   NOT three failing buttons, NOT silence.
-//
-//   ACTIONS: kutsu and saada uuesti mint onto the EXISTING person via
-//   mintSelfLinkInvite (sweep-then-mint — the one-live-link invariant is
-//   pinned at the wire in inviteData.withdraw.spec.ts); the roster NEVER
-//   calls createInvite (that creates a second person+member). tühista kutse
-//   is withdrawInvite — all-or-report; on success the row collapses to the
-//   never-invited state (Mihkel ruling: withdrawn and never-invited are the
-//   SAME state — the person REAPPEARS in the needs-inviting population, and
-//   that is correct).
-//
-// Out of scope, deliberately: listActiveMembers' fail-loud throw on an
-// unreadable `person` reference (rosterData.ts:123) is a DIFFERENT field and
-// stays untouched; no test here asserts the invite token's lifetime (source
-// says 7d, #23 measured 24h live — unresolved, neither number may be pinned).
-//
-// Copy (kutsu / saada uuesti / tühista kutse) rides the paraglide keys the
-// i18n phase adds; the testids below are this suite's contract.
-//
-// #302 (Gama's on-issue ruling): the invite controls moved INSIDE the opened
-// record editor and the JOINED badge went silent. Drive paths below gained an
-// `openCard` step (reaching a control is navigation, changed on purpose);
-// behaviour assertions are untouched — EXCEPT the joined-badge existence
-// pins, which #302 item 2 falsifies by design (joined = no chip at all) and
-// which are rewritten here against the new display contract.
-//
-// #467 (Mihkel 2026-09-23): the chip becomes ONE DATED STATUS LINE and block
-// (A) is rewritten again — four display states (absent/invited/expired/
-// joined, `expired` computed display-only from invited + INVITE_LIFETIME_MS),
-// joined UN-silenced ("member since <date>"), dates from the member's
-// `_created` (absent) or the entu_user value's `created.at` via
-// listJoinStateDetails (invited/expired/joined). The producer record the page
-// reads is now `listJoinStateDetails`; the bare 3-value `joinStates` the
-// CONTROLS route on is DERIVED from that one answer — the controls contract
-// (B)–(I) is byte-unchanged, and an expired-by-time invite routes as invited.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -136,19 +52,12 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: listDeactivateBlockersMock
 }));
-// The three controls' producers. createInvite is mocked as a TRAP: the roster
-// acts on EXISTING persons, so it must never run from this page — a call is a
-// duplicate person+member, caught here as a call rather than a network error.
 vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
 	createInvite: createInviteMock,
 	mintSelfLinkInvite: mintSelfLinkInviteMock,
 	withdrawInvite: withdrawInviteMock
 }));
-// #467 — the page reads through listJoinStateDetails (state + dated stamp,
-// ONE round of reads) and derives the bare `joinStates` record from the same
-// result for the owner-controls routing; both producers are mocked so either
-// read path is observable.
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
 	listJoinStates: listJoinStatesMock,
@@ -158,8 +67,6 @@ vi.mock('$lib/nav/adminStore', async (importActual) => ({
 	...(await importActual<typeof import('$lib/nav/adminStore')>()),
 	resolveOwnerTier: resolveOwnerTierMock
 }));
-// #302 — opening a card runs the editor's record lookup; resolve it so the
-// editor (and the controls now inside it) can mount.
 vi.mock('$lib/roster/memberRecord', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
 	loadMemberRecord: loadMemberRecordMock
@@ -180,33 +87,16 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-// #467 — the dated lines' formatter: en-CA yyyy-mm-dd, NO timeZone argument
-// (the InviteSurface.svelte:160 convention, #207 rule 7).
 import { isoDateFormatter } from '$lib/preferences/timeFormat';
-
-// ── two collectives (the #287 bug class: per-row state must not survive a
-//    switch), disjoint fixtures ─────────────────────────────────────────────
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
 
-// m1 is the VIEWER's own membership; m2 joined, m3 invited-unredeemed, m4
-// never invited — one row per state, all unassigned (rows live under the
-// Unassigned toggle; groups default collapsed).
-//
-// #467 — every row carries the member record's own `_created` datetime as
-// `createdAt` (threaded by rosterData.ts): the DATE SOURCE for the absent
-// state's "not invited since" line. Cast per-row while RosterRow gains the
-// field at GREEN (the joinStates.spec dynamic-shape idiom, type-level).
 const CREATED_AT: Record<string, string> = {
 	m1: '2026-05-02T12:00:00.000Z',
 	m2: '2026-05-03T12:00:00.000Z',
@@ -243,21 +133,11 @@ function treeB(): SectionNode[] {
 }
 
 type JoinState = 'absent' | 'invited' | 'joined';
-// #467 — the dated producer's per-person answer (state + the property value's
-// created.at; absent never carries `at` — its display date is row.createdAt).
 type JoinStateDetail = { state: JoinState; at?: string };
 
-// Mutable per-test join-state fixture: action tests flip a person's state here
-// and the pinned REFRESH re-read makes the row follow the CONTENTS.
 let joinStatesByDb: Record<string, Record<string, JoinState>>;
-// #467 — the invited/joined stamp per person (placeholder's / identity's
-// created.at). Mutable alongside joinStatesByDb so a flipped state finds its
-// date. m3's default is RELATIVE (1 h ago): a fixed past instant would read
-// as EXPIRED under the 24 h lifetime, which is its own dedicated test below.
 let joinDatesByDb: Record<string, Record<string, string>>;
 
-/** The detail record the mocked listJoinStateDetails answers with, derived
- *  from the same mutable fixtures the bare-state mock reads. */
 function detailsFor(db: string, personIds: string[]): Record<string, JoinStateDetail> {
 	return Object.fromEntries(
 		personIds.map((id) => {
@@ -269,22 +149,12 @@ function detailsFor(db: string, personIds: string[]): Record<string, JoinStateDe
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -292,8 +162,6 @@ beforeEach(() => {
 		sampledb: { 'person-p': 'joined', 'pp-2': 'joined', 'pp-3': 'invited', 'pp-4': 'absent' },
 		'other-choir': { 'p-bob': 'absent' }
 	};
-	// #467 — a stamp for EVERY person, so any state an action test flips to
-	// still finds its date (absent rows never read from here, see detailsFor).
 	joinDatesByDb = {
 		sampledb: {
 			'person-p': '2026-05-06T12:00:00.000Z',
@@ -316,9 +184,6 @@ beforeEach(() => {
 			)
 		)
 	);
-	// #467 — the dated sibling reads the SAME fixtures, so every existing
-	// action/routing test keeps its state flips regardless of which producer
-	// the page calls.
 	listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) =>
 		Promise.resolve(detailsFor(cfg.db, personIds))
 	);
@@ -336,17 +201,12 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	// #346 — restore the clipboard the G-block copy drives installed.
 	if (originalClipboardDesc) {
 		Object.defineProperty(navigator, 'clipboard', originalClipboardDesc);
 	} else {
 		Reflect.deleteProperty(navigator, 'clipboard');
 	}
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -354,12 +214,6 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-// #360 — the linkValue helper is GONE with the rendered value itself: the
-// composed URL is now observable only as the clipboard payload.
-
-// ── #346 clipboard control — page.admin-invite-copy.spec.ts's idiom verbatim:
-//    per-property defineProperty on the navigator INSTANCE, restored from the
-//    captured original descriptor (never vi.stubGlobal on navigator). ────────
 const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
 function setClipboard(value: unknown): void {
@@ -370,7 +224,6 @@ function setClipboard(value: unknown): void {
 	});
 }
 
-/** Every invite-control element on the page, whatever row it sits on. */
 function allControls(container: HTMLElement): Element[] {
 	return [
 		...container.querySelectorAll(
@@ -407,9 +260,6 @@ async function switchToOtherChoir(container: HTMLElement) {
 	await waitFor(() => expect(q(container, 'roster-row-m-bob')).not.toBeNull());
 }
 
-// #302 drive-path step: the invite controls render inside the opened record
-// editor, so reaching them takes an open-the-card step first. Idempotent —
-// re-opening an already-open editor is skipped so mid-test re-drives are safe.
 async function openCard(container: HTMLElement, memberId: string) {
 	const li = q(container, `roster-row-${memberId}`);
 	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
@@ -424,30 +274,10 @@ async function openCard(container: HTMLElement, memberId: string) {
 	);
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('(A) dated status lines — #467: one line per row, four display states, the read still the gate', () => {
-	// #467 REWRITE (the assertion class this issue falsifies by design): the
-	// three-state CHIP becomes ONE dated status line, and the #302 "joined is
-	// the silent default" rule INVERTS — joined now renders "member since
-	// <date>". Four DISPLAY states (absent/invited/expired/joined); `expired`
-	// is DISPLAY-ONLY, computed as invited + at older than INVITE_LIFETIME_MS
-	// (24 h — docs/architecture/invite-flow.md §7, live figure authoritative),
-	// never a fourth producer value: the owner-controls block keeps branching
-	// on the bare 3-value JoinState exactly as before.
-	//
-	// Date per state: absent → the row's own member `_created` (row.createdAt);
-	// invited/expired → the placeholder value's created.at (detail.at);
-	// joined → the identity value's created.at (detail.at). A row the answer
-	// omits (withheld bucket) renders NOTHING; a state whose date is undefined
-	// renders NOTHING for that row — no guessed line, no bare label (#467
-	// done-when 3). Dates format via isoDateFormatter() — en-CA yyyy-mm-dd,
-	// NO timeZone argument, the InviteSurface.svelte:160 convention (#207 rule
-	// 7: ISO calendar date, never browser locale).
 
 	const fmtDate = isoDateFormatter();
 
-	/** The paraglide-mock rendering of a dated line: `[key {"date":"…"}]`. */
 	function lineLabel(display: 'absent' | 'invited' | 'expired' | 'joined', at: string): string {
 		return `[roster_member_join_state_${display} ${JSON.stringify({ date: fmtDate.format(new Date(at)) })}]`;
 	}
@@ -461,9 +291,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		);
 	}
 
-	/** The full sampledb expectation, computed from the LIVE fixtures so the
-	 *  relative invited stamp stays honest. ALL FOUR rows render — m1/m2
-	 *  (joined) included, where #302 rendered nothing. */
 	function expectedLinesSampledb(): Record<string, { state: string; label: string }> {
 		return {
 			'roster-row-join-state-m1': {
@@ -499,8 +326,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 	});
 
 	it("EXPIRED is display-only: a placeholder minted 25 h ago renders data-join-state='expired' with the expired copy — while the OWNER CONTROLS still route it exactly as invited (saada uuesti + tühista kutse, no kutsu)", async () => {
-		// 25 h > INVITE_LIFETIME_MS (24 h). A wrong lifetime (the pinned
-		// source's 7 d) would render this as a live invite.
 		const at25hAgo = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
 		joinDatesByDb.sampledb['pp-3'] = at25hAgo;
 		const { container } = await renderRoster();
@@ -509,9 +334,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		expect(q(container, 'roster-row-join-state-m3')!.textContent?.trim()).toBe(
 			lineLabel('expired', at25hAgo)
 		);
-		// The controls block branches on the UNWIDENED 3-value JoinState — an
-		// expired-by-time invite is still 'invited' to it. Anything else strands
-		// an admin with no reinvite/withdraw on exactly the rows that need them.
 		await openCard(container, 'm3');
 		await waitFor(() => expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull());
 		expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull();
@@ -568,7 +390,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		const { container } = await renderRoster();
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m4')).not.toBeNull());
 		expect(q(container, 'roster-row-m3'), 'the row itself still renders').not.toBeNull();
-		// Built inline: the shared helper would format m3's now-deleted stamp.
 		expect(chipSet(container)).toEqual({
 			'roster-row-join-state-m1': {
 				state: 'joined',
@@ -585,16 +406,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		});
 	});
 
-	// #467 review F1 — the two UNPARSEABLE date shapes, one test per date
-	// source. Neither extractor validates (`readPropertyCreatedAt` returns
-	// `body.created?.at`; rosterData takes `_created[0].datetime`), so a JSON
-	// `null` or a malformed value reaches the page typed `string`. Unguarded
-	// they are two different bugs: `new Date(null)` formats 1970-01-01 (the
-	// fabricated date done-when 3 forbids) and `new Date('not-a-date')` makes
-	// `Intl.DateTimeFormat.format` THROW `RangeError: Invalid time value` out
-	// of the row snippet, taking the WHOLE roster render down (#101 F1's trap).
-	// Both must land where an unreadable date already lands: no line, no throw,
-	// the row itself intact.
 	for (const [shape, bad] of [
 		['a JSON null', null],
 		['a garbage string', 'not-a-date']
@@ -652,9 +463,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 				new Response(JSON.stringify({ entity: { _id: id } }), { status: 200 })
 			);
 		}) as unknown as typeof fetch;
-		// Route BOTH module boundaries through the real producers over the
-		// withheld wire body, so whichever read the page issues is the
-		// producer's own omission, not the mock's.
 		listJoinStatesMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
 			actual.listJoinStates(cfg, ids, withheldFetch)
 		);
@@ -699,8 +507,6 @@ describe('(A) dated status lines — #467: one line per row, four display states
 			return cfg.db === 'sampledb' && ['pp-2', 'pp-3', 'pp-4'].every((id) => ids.includes(id));
 		});
 		expect(matching).toBe(true);
-		// One round of reads, not two: the bare 3-value record the controls
-		// branch on is DERIVED from the same answer.
 		expect(listJoinStatesMock).not.toHaveBeenCalled();
 	});
 
@@ -742,8 +548,6 @@ describe('(B) controls route by state — owner-admin', () => {
 
 	it('joined rows (m1, m2): no controls at all — even with their own editors OPEN (#302: the absence must be meaningful, not just the closed-editor default)', async () => {
 		const { container } = await renderRoster();
-		// Readiness: the fan-out landed (an invited row's chip is on screen), so
-		// an absence below is the CONTRACT, not an unresolved load.
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		for (const memberId of ['m1', 'm2']) {
 			await openCard(container, memberId); // #302 drive-path edit (one at a time)
@@ -757,13 +561,9 @@ describe('(B) controls route by state — owner-admin', () => {
 describe('(C) the controls gate on _owner ONLY — PO ruling 2026-09-09, probe-observed boundary', () => {
 	it('an editor-admin gets ZERO control elements — not three disabled buttons, not three failing buttons — and ONE LINE saying invites require owner rights, not silence', async () => {
 		const { container } = await renderRoster({ tier: 'editor' });
-		// The display still renders (previous block) — wait on it so the controls
-		// had their chance to appear before we assert their absence.
 		await waitFor(() =>
 			expect(q(container, 'roster-row-join-state-m3')).not.toBeNull()
 		);
-		// #302 drive-path edit: the controls' new home is the opened editor —
-		// open one so the absence is asserted where they would render.
 		await openCard(container, 'm3');
 		expect(allControls(container)).toHaveLength(0);
 		const notes = container.querySelectorAll('[data-testid="roster-invite-owner-note"]');
@@ -813,17 +613,12 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 		expect(mintSelfLinkInviteMock.mock.calls[0][0].db).toBe('sampledb');
 		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-4');
-		// A createInvite here would manufacture a SECOND person+member for Dora.
 		expect(createInviteMock).not.toHaveBeenCalled();
-		// #360 — the fresh link surfaces as a COPY BUTTON only, never rendered.
 		const copyButton = await waitFor(() => {
 			const el = q(container, 'roster-invite-copy-m4');
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		// #346's composition claim, kept OBSERVABLE at the clipboard: the payload
-		// is the composed absolute URL (scheme+host+/invite/<token>), never a
-		// bare JWT — a bare JWT pasted into a browser is a search query.
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		setClipboard({ writeText });
 		await fireEvent.click(copyButton);
@@ -832,7 +627,6 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 		expect(payload).toContain('tok-fresh-1');
 		expect(payload).toContain('/invite/');
 		expect(payload.startsWith(window.location.origin)).toBe(true);
-		// #360 — and the token never reaches the DOM.
 		expect(container.textContent).not.toContain('tok-fresh-1');
 	});
 
@@ -865,7 +659,6 @@ describe('(D) kutsu — first invite, minted onto the EXISTING person', () => {
 			return el!;
 		});
 		expect(alertEl.getAttribute('role')).toBe('alert');
-		// #360 — the panel's affordance is the copy button now.
 		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
 		expect(q(container, 'roster-member-invite-m4')).not.toBeNull();
 	});
@@ -880,15 +673,11 @@ describe('(E) saada uuesti — atomic replace via the sweep-then-mint producer',
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 		expect(mintSelfLinkInviteMock.mock.calls[0][1]).toBe('pp-3');
 		expect(createInviteMock).not.toHaveBeenCalled();
-		// #360 — copy-only on the resend path too: same button, same payload.
 		const copyButton = await waitFor(() => {
 			const el = q(container, 'roster-invite-copy-m3');
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		// #346 — `kutsu` and `saada uuesti` share handleMintInvite AND this
-		// panel: the resend path must yield the SAME composed absolute URL,
-		// observable at the clipboard (never in the DOM).
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		setClipboard({ writeText });
 		await fireEvent.click(copyButton);
@@ -934,7 +723,6 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 			return el!;
 		});
 		expect(alertEl.getAttribute('role')).toBe('alert');
-		// The truthful state: the link may still be live, so the row still says so.
 		expect(q(container, 'roster-member-reinvite-m3')).not.toBeNull();
 		expect(q(container, 'roster-member-withdraw-m3')).not.toBeNull();
 		expect(q(container, 'roster-member-invite-m3')).toBeNull();
@@ -944,20 +732,12 @@ describe('(F) tühista kutse — a revocation; withdrawn collapses to never-invi
 
 describe('(G) collective switch — the #287 bug class, kept out of the new feature', () => {
 	it("a minted link from collective A does not survive the switch, and B's join states are read fresh with B's cfg", async () => {
-		// entu_user is PER-COLLECTIVE (a person entity exists per db): nothing
-		// read or minted under A may leak into B's rows. Any armed/minted-link
-		// state belongs in routeLoad's reset({isSwitch}) block
-		// (roster/+page.svelte:116) alongside the #287 resets.
 		const { container } = await renderRoster();
 		await openCard(container, 'm4'); // #302 drive-path edit
 		await waitFor(() => expect(q(container, 'roster-member-invite-m4')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(q(container, 'roster-invite-copy-m4')).not.toBeNull());
 
-		// #346 — COPY under A too (via the #360 copy button), so the switch has
-		// copied-state to clear: the per-row copy state belongs in the SAME
-		// reset({isSwitch}) block (and onNoCollective) as `inviteLinkByMemberId`
-		// itself.
 		const writeText = vi.fn().mockResolvedValue(undefined);
 		setClipboard({ writeText });
 		await fireEvent.click(q(container, 'roster-invite-copy-m4')!);
@@ -968,14 +748,10 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 		);
 
 		await switchToOtherChoir(container);
-		// #360 — the panel's affordance is the copy button; none survives the switch.
 		expect(q(container, 'roster-invite-copy-m4')).toBeNull();
-		// #346 — the status nodes mount WITH the link panel: none may survive it.
 		expect(
 			container.querySelectorAll('[data-testid^="roster-invite-copy-status-"]')
 		).toHaveLength(0);
-		// #467 — B's join read goes through whichever producer the page calls
-		// (the dated sibling once GREEN lands); either way it must be B's cfg.
 		await waitFor(() =>
 			expect(
 				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(
@@ -987,8 +763,6 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 			).toBe(true)
 		);
 
-		// #346 — mint under B: the fresh panel's status region starts EMPTY —
-		// nothing copied under A announces over B's row.
 		await openCard(container, 'm-bob');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
@@ -1016,7 +790,6 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 			container.querySelectorAll('[data-testid^="roster-invite-copy-error-"]')
 		).toHaveLength(0);
 
-		// Mint under B: the fresh panel starts CLEAN — no failure carried over.
 		await openCard(container, 'm-bob');
 		await waitFor(() => expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull());
 		await fireEvent.click(q(container, 'roster-member-invite-m-bob')!);
@@ -1025,12 +798,7 @@ describe('(G) collective switch — the #287 bug class, kept out of the new feat
 	});
 });
 
-
-// ═════════════════════════════════════════════════════════════════════════════
-
 describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
-	/** Renders with collective A's join-state fan-out held open, then switches to
-	 *  B and lets B settle fully. Returns the settle function for A's tail. */
 	async function renderWithHeldFanOut(
 		aTail: (
 			resolve: (v: Record<string, JoinState>) => void,
@@ -1048,9 +816,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 				Object.fromEntries(personIds.map((id) => [id, joinStatesByDb[cfg.db]?.[id] ?? 'absent']))
 			);
 		});
-		// #467 — the SAME hold on the dated sibling: whichever producer the page
-		// reads through, A's tail stays open until settleA. A resolving tail maps
-		// the bare states through the standard detail fixture.
 		listJoinStateDetailsMock.mockImplementation((cfg: { db: string }, personIds: string[]) => {
 			if (cfg.db === 'sampledb') {
 				return new Promise<Record<string, JoinStateDetail>>((resolve, reject) => {
@@ -1065,7 +830,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		const utils = render(Page);
 		setAuthedWithTwoCollectives();
 		adminStore.set('admin');
-		// A's fan-out is now in flight and blocking A's own load body.
 		await waitFor(() =>
 			expect(
 				[...listJoinStatesMock.mock.calls, ...listJoinStateDetailsMock.mock.calls].some(
@@ -1073,7 +837,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 				)
 			).toBe(true)
 		);
-		// Switch to B and let it complete END TO END — rows, join states, controls.
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
 		await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
@@ -1083,7 +846,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		return { ...utils, settleA };
 	}
 
-	/** Let the released tail run its continuation and any resulting render. */
 	async function flush() {
 		await new Promise((r) => setTimeout(r, 0));
 		await tick();
@@ -1095,9 +857,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		);
 		settleA();
 		await flush();
-		// Person entities are PER-DB, so A's personId-keyed record shares no key
-		// with B's rows: writing it here would blank m-bob's badge and all three
-		// controls until the next load, with nothing to heal it.
 		expect(q(container, 'roster-row-join-state-m-bob')).not.toBeNull();
 		expect(q(container, 'roster-row-join-state-m-bob')!.getAttribute('data-join-state')).toBe(
 			'absent'
@@ -1117,7 +876,6 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 			'absent'
 		);
 		expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull();
-		// A superseded load's failure is not this page's failure to report.
 		expect(
 			errSpy.mock.calls.some((c) => String(c[0]).includes('join-state load failed'))
 		).toBe(false);
@@ -1125,19 +883,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 	});
 });
 
-// #302 GUARD-DELETION CHECK (ruled on-issue, REQUIRED at GREEN, both tests
-// below — their drive paths gained openCard steps): delete the guard each
-// pins — the route-load reset callback's unconditional
-// `inviteActionPending = false` clear (roster/+page.svelte, #294 review
-// block) — confirm BOTH tests FAIL, restore, confirm they pass. Opening
-// editors before/after the bump must not have detached the tests from the
-// guard. [GREEN 2026-09-10: guard (line 233, reset callback's unconditional
-// `inviteActionPending = false`) commented out — BOTH tests below FAILED
-// (`disabled` stayed `true` instead of `false`). Restored — both PASS.]
 describe('(I) a generation bump during an in-flight invite write re-enables the controls (#287 discipline)', () => {
-	/** Holds mintSelfLinkInvite open so `inviteActionPending` is true across the
-	 *  bump; the write's own `finally` is generation-guarded and will not clear
-	 *  it, so only the route-load reset can. */
 	function heldMint() {
 		let release: () => void = () => {};
 		mintSelfLinkInviteMock.mockImplementation(
@@ -1176,17 +922,11 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 		await fireEvent.click(q(container, 'roster-member-invite-m4')!);
 		await waitFor(() => expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
 
-		// Any successful deactivate calls loadForSelected() — a generation bump
-		// with no collective switch at all.
-		// #302 drive-path edit: the deactivate trigger lives inside m2's opened
-		// editor now (opening it closes m4's — one editor at a time; the held
-		// mint is page-level state, untouched by which editor is open).
 		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);
 		await waitFor(() => expect(q(container, 'member-deactivate-confirm-m2')).not.toBeNull());
 		await fireEvent.click(q(container, 'member-deactivate-confirm-m2')!);
 		await waitFor(() => expect(deactivateMemberMock).toHaveBeenCalledTimes(1));
-		// The reload re-derives the tree, so the groups come back collapsed.
 		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(2));
 		release();
 		await new Promise((r) => setTimeout(r, 0));
@@ -1196,8 +936,6 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 		}
 		await waitFor(() => expect(q(container, 'roster-row-m4')).not.toBeNull());
 
-		// #302 drive-path edit: the reload's reset closed every editor — reopen
-		// m4's to reach the control the assertion pins.
 		await openCard(container, 'm4');
 		const control = q(container, 'roster-member-invite-m4');
 		expect(control).not.toBeNull();
@@ -1205,18 +943,4 @@ describe('(I) a generation bump during an in-flight invite write re-enables the 
 	});
 });
 
-// (*MVOX:Tallis* — #294 RED: route-level wiring for three-state display,
-//  owner-only controls, mint/resend/withdraw actions, and switch hygiene;
-//  fixtures/idiom from page.roster-deactivate.spec.ts and
-//  page.roster-pending-collective-switch.spec.ts)
-// (*MVOX:Byrd* — #294 review fixes: blocks (H) and (I) pin the two stale-load
-//  seams — a superseded join-state fan-out (resolve OR reject) writing last,
-//  and a generation bump stranding `inviteActionPending`)
-// (*MVOX:Tallis* — #346 RED: D/E now pin the COMPOSED absolute URL on both
-//  producers, and (G) pins that the per-row copy state joins the same
-//  collective-switch resets as the link map itself)
-// (*MVOX:Tallis* — #467 RED: (A) rewritten to dated status lines — four display
-//  states, display-only `expired`, joined un-silenced, per-state date sources,
-//  page reads through listJoinStateDetails and derives the controls' record)
-// (*MVOX:Josquin* — #467 review F1: unparseable dates (null, garbage) render no
-//  line and never throw out of the row snippet — both date sources)
+// (*MVOX:Tallis*) (*MVOX:Byrd*) (*MVOX:Josquin*)

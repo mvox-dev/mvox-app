@@ -1,46 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #302 RED — the roster member card's interaction model, at the ROUTE level so
-// GREEN cannot satisfy any of it without wiring the actual /roster page.
-// Contract: issue #302 body + Gama's on-issue ruling (drive-path edits allowed
-// in the pre-existing specs, assertion edits forbidden — this file carries the
-// NEW claims; the frozen behaviour claims stay where they were written).
-//
-//   (1) CARD AS ACTIVATOR — the pencil (`roster-row-record-edit-{memberId}`)
-//       is GONE. The collapsed card itself carries the interactive role:
-//       `roster-row-card-{memberId}`, a REAL <button> (native Enter/Space +
-//       tab-reachability — never a div-onclick), accessible name
-//       content-derived per #262 (action label + THAT member's name inside the
-//       element, no templated aria-label). The editor renders INSIDE the same
-//       row block, so the collapsed card and the open editor are mutually
-//       exclusive states: opening REPLACES the activator with the form —
-//       interactive controls are never nested inside an interactive parent
-//       (the arrange-row WCAG 4.1.2 lesson, roster/+page.svelte:4630+). The
-//       record editor keeps NO self-row exclusion: the admin's own card opens.
-//   (2) CHIPS — the join-state line moves DIRECTLY under name+email (before
-//       the section name). #467 (Mihkel 2026-09-23): the chip became ONE
-//       DATED status line — joined now RENDERS ("member since <date>"), never
-//       silent; not-invited and invited-awaiting keep their own dated lines.
-//       Still contents-derived via listJoinStateDetails, still every admin.
-//   (3) RELOCATION — the invite controls (kutsu / saada uuesti / tühista
-//       kutse, owner-only, routed purely off state) and the deactivate
-//       armed-pair render ONLY inside an opened record editor. The self-row
-//       asymmetry survives the shared container: the admin's OWN card opens
-//       but carries no deactivate control (`row.personId !== selected?.personId`
-//       does not merge with the editor's deliberate no-exclusion). Handlers
-//       and their generation guards are UNTOUCHED — this is a relocation; the
-//       behaviour claims stay frozen in the #286/#287/#294/#296 specs, whose
-//       drive paths gained only an open-the-editor step. The owner note
-//       (`roster-invite-owner-note`) stays page-level.
-//
-//   ARMED-PAIR EXCEPTION (narrow, deliberate): this file pins the REST state
-//   only — a collapsed row carries no deactivate control. It does NOT pin the
-//   armed/in-flight state to the open editor: the #286 "second row cannot be
-//   armed mid-flight" test (page.roster-deactivate.spec.ts) freezes the claim
-//   that an in-flight row's confirm/cancel pair stays MOUNTED even while
-//   another row's editor opens (opening another editor closes this one), so an
-//   armed pair must survive its editor closing. Destructive in-flight UI never
-//   silently unmounts.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -99,9 +57,6 @@ vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	mintSelfLinkInvite: mintSelfLinkInviteMock,
 	withdrawInvite: withdrawInviteMock
 }));
-// #467 — the page reads through `listJoinStateDetails`; mocked alongside the
-// bare producer so the invite/reinvite/withdraw routing this suite exercises
-// still works (both answer the SAME fixture states).
 vi.mock('$lib/profile/linkedIdentities', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/linkedIdentities')>()),
 	listJoinStates: listJoinStatesMock,
@@ -131,23 +86,11 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-// m1 is the VIEWER's own membership (person-p); m2 joined, m3 invited, m4
-// never invited — all unassigned. m5 is invited AND carries a section, for the
-// line-before-section-name placement pin (flat view renders section names).
-// #467 — m4's own `createdAt` is the date source for its "not invited since"
-// line; the others' dates come from `listJoinStateDetailsMock` below.
-// #468 — every row carries the READER's person id ('person-p') in `ownerIds` so
-// the picker gate stays open throughout this file's own (unrelated) concerns.
 function rows(): RosterRow[] {
 	return [
 		{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'org-a', ownerIds: ['person-p'] },
@@ -165,19 +108,7 @@ function tree(): SectionNode[] {
 }
 
 function setAuthed() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -195,9 +126,6 @@ beforeEach(() => {
 			)
 		)
 	);
-	// #467 — the SAME fixture states, dated. m3/m5 (invited) get a
-	// RELATIVE recent stamp — a fixed past instant would read as EXPIRED
-	// under the 24h lifetime, which is not what this file pins.
 	const JOIN_DATE: Record<string, { state: 'absent' | 'invited' | 'joined'; at?: string }> = {
 		'person-p': { state: 'joined', at: '2026-05-06T12:00:00.000Z' },
 		'pp-2': { state: 'joined', at: '2026-09-10T12:00:00.000Z' },
@@ -224,11 +152,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -242,7 +166,6 @@ function rowLi(container: HTMLElement, memberId: string): HTMLElement {
 	return li!;
 }
 
-// Groups default COLLAPSED — expand Unassigned (m1–m4 land there).
 async function renderRosterAs(
 	admin: 'admin' | 'not-admin',
 	tier: 'owner' | 'editor' = 'owner'
@@ -257,7 +180,6 @@ async function renderRosterAs(
 	return utils;
 }
 
-// The #302 drive: activate the collapsed card, wait for THAT row's editor.
 async function openCard(container: HTMLElement, memberId: string) {
 	const card = q(container, `roster-row-card-${memberId}`);
 	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
@@ -273,8 +195,6 @@ const INVITE_CONTROL_SELECTOR =
 	'[data-testid^="roster-member-invite-"], [data-testid^="roster-member-reinvite-"], [data-testid^="roster-member-withdraw-"]';
 const DEACTIVATE_CONTROL_SELECTOR =
 	'[data-testid^="member-deactivate-"]:not([data-testid^="member-deactivate-refused-"]):not([data-testid^="member-deactivate-failed-"])';
-
-// ═════════════════════════════════════════════════════════════════════════════
 
 describe('(1) the collapsed card is the activator — pencil gone, real button, content-derived name', () => {
 	it('the pencil is GONE: no roster-row-record-edit-* element renders anywhere', async () => {
@@ -295,8 +215,6 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		const card = q(container, 'roster-row-card-m2')!;
 		expect(card.textContent).toContain('[roster_record_edit_label]');
 		expect(card.textContent).toContain('Berta Bass');
-		// aria-label would OVERRIDE descendant content with identical text for
-		// every row — the exact defect #262 removed.
 		expect(card.getAttribute('aria-label')).toBeNull();
 	});
 
@@ -308,58 +226,26 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		).toBeNull();
 	});
 
-	// #302 review F1 — the claim above ("nests nothing") is satisfied by TWO very
-	// different shapes, and the first GREEN shipped the wrong one: a self-sized
-	// sibling (`block w-full min-h-11`) that painted as an empty strip between
-	// the section name and the picker. Every behavioural test in this file still
-	// passed — they all click the activator by testid, which a blank strip
-	// answers just as well as a real card — while a human clicking the member's
-	// NAME got nothing. So the shape needs its own pin. happy-dom has no layout
-	// engine and no Tailwind stylesheet, so the classes ARE the observable here;
-	// asserting them is what makes "the whole card is the hit region" checkable
-	// at this level at all.
 	it('the activator COVERS the card: a stretched overlay over a positioned row, not a strip of its own', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
-		// The row is the positioning context the overlay stretches over.
 		expect(li.className.split(/\s+/)).toContain('relative');
 		const cls = card.className.split(/\s+/);
 		expect(cls).toContain('absolute');
 		expect(cls).toContain('inset-0');
-		// Any self-sizing utility means it is laying itself out as a sibling box
-		// again — the regression this test exists for.
 		for (const sizing of ['block', 'w-full', 'min-h-11', 'mt-1']) {
 			expect(cls, `activator must not size itself (${sizing})`).not.toContain(sizing);
 		}
-		// The 44px touch-target floor moved to the row, since the overlay now
-		// takes its height FROM the row.
 		expect(li.className.split(/\s+/)).toContain('min-h-11');
-		// It must stay visible at rest: the ✎ glyph it replaced was at least a
-		// visible affordance, and a transparent overlay with no box of its own
-		// would leave the card looking inert.
 		expect(cls.some((c) => c === 'border' || c.startsWith('border-'))).toBe(true);
 		expect(cls.some((c) => c.startsWith('focus-visible:'))).toBe(true);
 	});
 
-	// #302 review F1 / #468 — the overlay covers the WHOLE row, so anything
-	// still interactive on a collapsed row has to be lifted above it or it is
-	// dead to the pointer. Two things can: the SectionPicker (every row its
-	// reader may move) and an armed/in-flight deactivate pair (the armed-pair
-	// exception). The deactivate pair is lifted with a bare `relative`; the
-	// picker (#468) is lifted AND corner-positioned with `absolute top-1
-	// right-1`, anchored to the already-`relative` <li> — both are written
-	// AFTER the activator, so positioned siblings at `z-index: auto` paint in
-	// tree order, which is the whole mechanism. Deliberately NOT `z-10`: a
-	// z-index would make each row a stacking context and trap the picker's own
-	// `absolute z-10` drop-down, which must hang over the FOLLOWING rows,
-	// inside its own row.
 	it('the SectionPicker on a collapsed row is lifted above the overlay, and comes after it in tree order', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
-		// #470 — queried by PREFIX: the lift/position mechanics are #468's and
-		// survive the picker's internals changing (popup trigger → native controls).
 		const trigger = li.querySelector('[data-testid^="section-picker-"]') as HTMLElement | null;
 		expect(trigger, 'the picker renders on a collapsed admin row').not.toBeNull();
 		const lifted = trigger!.closest('.absolute');
@@ -374,8 +260,6 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 
 	it('an armed deactivate pair left on a COLLAPSED row is lifted above the overlay', async () => {
 		const { container } = await renderRosterAs('admin');
-		// Arm m2 from its editor, then open m3's card — one editor at a time, so
-		// m2 collapses while its armed pair stays mounted (#286).
 		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);
 		await waitFor(() => expect(q(container, 'member-deactivate-confirm-m2')).not.toBeNull());
@@ -399,7 +283,6 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		await openCard(container, 'm2');
 		const li = rowLi(container, 'm2');
 		expect(li.querySelector('[data-testid="roster-record-name"]')).not.toBeNull();
-		// One editor at a time — m3's row is untouched.
 		expect(
 			rowLi(container, 'm3').querySelector('[data-testid="roster-record-name"]')
 		).toBeNull();
@@ -408,7 +291,6 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 	it('an OPEN card is a form, not a button: the activator is replaced, and no editor field sits inside an interactive parent', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openCard(container, 'm2');
-		// The collapsed activator and the open editor are mutually exclusive.
 		expect(q(container, 'roster-row-card-m2')).toBeNull();
 		for (const testid of [
 			'roster-record-name',
@@ -445,7 +327,6 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 describe('(2) dated status lines — #467: joined RENDERS, every state keeps its own dated line, directly under name+email', () => {
 	it('a JOINED member now shows a dated line (m1, m2) — silence is gone', async () => {
 		const { container } = await renderRosterAs('admin');
-		// Readiness: an invited row's line is on screen, so the fan-out landed.
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m3')).not.toBeNull());
 		expect(q(container, 'roster-row-join-state-m1')).not.toBeNull();
 		expect(q(container, 'roster-row-join-state-m1')!.getAttribute('data-join-state')).toBe('joined');
@@ -462,7 +343,6 @@ describe('(2) dated status lines — #467: joined RENDERS, every state keeps its
 
 	it('the line renders directly under name+email: after the email, BEFORE the section name', async () => {
 		const { container } = await renderRosterAs('admin');
-		// Flat view renders every row with its section name (m5: Alto, invited).
 		await fireEvent.click(q(container, 'roster-sort-toggle')!);
 		await waitFor(() => expect(q(container, 'roster-flat-list')).not.toBeNull());
 		await waitFor(() => expect(q(container, 'roster-row-join-state-m5')).not.toBeNull());
@@ -528,11 +408,9 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	it("SELF-ROW ASYMMETRY: the admin's OWN card opens, but no deactivate control renders in it — the two guards do not merge", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openCard(container, 'm1');
-		// The editor is open (form on screen) …
 		expect(
 			rowLi(container, 'm1').querySelector('[data-testid="roster-record-name"]')
 		).not.toBeNull();
-		// … and the deactivate surface is ABSENT here, by render condition.
 		expect(q(container, 'member-deactivate-m1')).toBeNull();
 		expect(q(container, 'member-deactivate-confirm-m1')).toBeNull();
 	});
@@ -549,7 +427,6 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 		const notes = container.querySelectorAll('[data-testid="roster-invite-owner-note"]');
 		expect(notes).toHaveLength(1);
 		expect(notes[0].closest('li[data-testid^="roster-row-"]')).toBeNull();
-		// Opening a card neither moves nor duplicates it.
 		await openCard(container, 'm4');
 		expect(container.querySelectorAll('[data-testid="roster-invite-owner-note"]')).toHaveLength(1);
 	});
@@ -565,6 +442,4 @@ describe('(3) relocation — invite controls and the deactivate pair live inside
 	});
 });
 
-// (*MVOX:Tallis* — #302 RED: card-as-activator, silent-joined chips, control
-//  relocation. Drive-path idiom (openCard) mirrored into the pre-existing
-//  #286/#287/#294/#296 specs per the on-issue ruling; their assertions frozen.)
+// (*MVOX:Tallis*)

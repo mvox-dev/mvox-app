@@ -1,10 +1,4 @@
 // @vitest-environment happy-dom
-//
-// T3.3/#19 RED — the /roster page. Renders whatever `loadRoster` returns; row-level
-// gated-exclusion (a nameless member never appearing) is a DATA-LAYER property
-// (rosterData.spec.ts), NOT re-tested here — the page's job is only "renders
-// whatever loadRoster returns" (correct separation: page tests shouldn't re-derive
-// business rules the data layer already owns).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,20 +9,11 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		roster_load_error: () => 'Something went wrong loading the roster.',
 		roster_retry: () => 'Retry',
 		roster_empty: () => 'No members to show yet.',
-		// TS.1/#95 — this file's own concerns (loading/ready/empty/error/
-		// no-collective/staleness) are section-agnostic; these three keys exist
-		// only so the grouped rewrite renders without throwing here.
 		roster_unassigned: () => 'Unassigned',
 		roster_column_name: () => 'Name',
 		roster_sort_alphabetical: () => 'Sort A–Z',
 		roster_sort_grouped: () => 'Group by section',
-		// F3 code-review fix — banner shown when the section-tree load fails but
-		// the roster itself loaded fine.
 		roster_sections_load_error: () => 'Section grouping failed to load.',
-		// #155/S1 — the view-mode chip selector above the groups (supersedes the
-		// old collapse-all/expand-all toggle); this file's concerns don't touch
-		// it, the keys just need to resolve so the grouped view renders without
-		// throwing.
 		roster_view_modes_label: () => 'Roster view',
 		roster_view_collapsed: () => 'Collapsed',
 		roster_view_expanded: () => 'Expanded',
@@ -40,62 +25,27 @@ const { loadRosterMock, listSectionsMock } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-// TS.1/#95 — the page now ALSO loads the section tree; this file's concerns
-// (loading/ready/empty/error/no-collective/staleness) are section-agnostic, so
-// listSections is pinned to an empty tree (every member renders under Unassigned;
-// roster-row-* testids must survive the grouped rewrite). groupBySection stays REAL
-// (partial mock) — the page must run the genuine grouping.
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
 	return { ...actual, listSections: listSectionsMock };
 });
-// Severs the entu-config → $env/dynamic/public import under happy-dom (same pattern
-// as page.rsvp-membership.spec.ts / page.profile.spec.ts / collectives/store.spec.ts):
-// $lib/collectives/store imports discoverCollectives (real chain touches $env, which
-// throws outside a SvelteKit request context under this environment).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-// Same severing, for the OTHER real chain this page now pulls in: sectionData's
-// mock below keeps groupBySection real (importOriginal), which loads sectionData.ts's
-// own `entuFetch` import (→ $lib/entu-config → $env/dynamic/public) at module scope.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 function setNoCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: {},
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(null);
+	signIn({ collectives: [] });
 }
 
 beforeEach(() => {
@@ -106,9 +56,7 @@ afterEach(() => {
 	cleanup();
 	loadRosterMock.mockReset();
 	listSectionsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/roster — loading state', () => {
@@ -134,9 +82,6 @@ describe('/roster — ready state', () => {
 
 		const { container } = render(Page);
 
-		// TU.2/#110 finding #9 — sections (incl. the Unassigned pseudo-group, which
-		// is where every member here lands — `listSectionsMock` is pinned to an
-		// empty tree) default COLLAPSED; expand it to get rows on screen.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull();
 		});
@@ -184,10 +129,8 @@ describe('/roster — load-error state', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="roster-load-error"]')).not.toBeNull();
 		});
-		// Generic message shown, raw error NOT shown
 		expect(container.textContent).toContain('Something went wrong loading the roster.');
 		expect(container.textContent).not.toContain('boom 500');
-		// Detail logged to console
 		expect(consoleSpy).toHaveBeenCalled();
 		const loggedArgs = consoleSpy.mock.calls.flat();
 		const loggedDetail = loggedArgs.some(
@@ -196,7 +139,6 @@ describe('/roster — load-error state', () => {
 		expect(loggedDetail).toBe(true);
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 
-		// Retry still works
 		const retryBtn = container.querySelector('[data-testid="roster-retry-load"]') as HTMLButtonElement;
 		expect(retryBtn).not.toBeNull();
 		await fireEvent.click(retryBtn);
@@ -224,7 +166,6 @@ describe('/roster — no-collective state', () => {
 
 describe('/roster — staleness guard (generation discipline)', () => {
 	it('a stale (superseded) load resolving after a collective switch does not clobber the newer result', async () => {
-		// #321 — the producer resolves a ListRead now, so the held settler takes one.
 		let resolveFirst!: (read: { items: unknown[]; total: number; truncated: boolean }) => void;
 		loadRosterMock.mockImplementationOnce(
 			() =>
@@ -237,8 +178,6 @@ describe('/roster — staleness guard (generation discipline)', () => {
 
 		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(1));
 
-		// Switch collective before the first load resolves — this should start a second,
-		// newer load.
 		loadRosterMock.mockResolvedValueOnce(toListRead([
 			{ memberId: 'member-2', personId: 'person-b', name: 'Second Collective Member', email: '' }
 		]));
@@ -254,13 +193,10 @@ describe('/roster — staleness guard (generation discipline)', () => {
 
 		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(2));
 
-		// Now resolve the FIRST (stale) call, with a member from the earlier collective.
 		resolveFirst(
 			toListRead([{ memberId: 'member-1', personId: 'person-a', name: 'Stale Member', email: '' }])
 		);
 
-		// TU.2/#110 finding #9 — expand Unassigned to get member-2's row on screen
-		// (every member here is Unassigned; listSectionsMock is pinned to []).
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull();
 		});

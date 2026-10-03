@@ -1,42 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #268 RED — admin member records: the in-row editor on the roster (real name,
-// phone, email, date of birth), pinned at the ROUTE level so GREEN cannot
-// satisfy the unit layer without wiring the feature into the actual page.
-// Contract: issue #268 body + release comment ("in-row expansion, roster only,
-// labels as proposed").
-//
-//   (A) Activator affordance on the member row — since #302 the WHOLE
-//       collapsed card (`roster-row-card-{memberId}`, replacing the retired
-//       pencil `roster-row-record-edit-{memberId}`), admin-only via
-//       whole-block gating (ABSENT — not disabled — for non-admin/loading/
-//       error, the page's fail-closed precedent). NO self-row exclusion: the
-//       contract doesn't ask for one, so the activator is pinned PRESENT on
-//       the admin's OWN row (guards against copy-pasting the deactivate
-//       control's self-exclusion). Accessible name per the #262 lesson:
-//       static sr-only label composed with the row's visible name INSIDE the
-//       button — never a templated aria-label.
-//   (B) Editor opens IN PLACE inside the same <li> (#222 same-frame idiom —
-//       no drawer/dialog/overlay; SectionPicker's dropdown is the WRONG
-//       precedent). One editor open at a time. Close-without-save creates
-//       nothing.
-//   (C) Prefill (first open, no-record only — R4): name from the ROSTER'S OWN
-//       domain-or-public resolution (row.name — exactly the name the roster
-//       shows; NEVER resolveField, which prefers private-first and would
-//       promote a private-only profile name into the domain-shared record
-//       name — the #28/#58 leak class, ruling confirmed 2026-09-07). Email
-//       matches the roster's email column. Phone + date of birth start EMPTY.
-//       Once a record EXISTS the editor shows the RECORD only — never
-//       re-prefills, never merges, never overwrites a cleared field.
-//   (D) One record per member: >1 found = DAMAGED DATA — loud role=alert
-//       naming the member, no writes, no self-repair (#264).
-//   (E) Saves are server-confirmed, never optimistic; #259 generation guard;
-//       collective switch mid-edit closes/discards; success announces via a
-//       NEW fifth sr-only role=status region (roster-member-record-status);
-//       failure tells the truth and keeps the typed values; partial failure
-//       says exactly what landed (#253).
-//   (F) Privacy fences: no field value in logs; editor fields absent from the
-//       DOM for non-admins.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -75,9 +37,6 @@ const {
 	updateMemberRecordMock: vi.fn(),
 	listMyProfilesMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: deactivateMemberMock,
@@ -86,20 +45,12 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	listInactiveMembers: listInactiveMembersMock,
 	listDeactivateBlockers: listDeactivateBlockersMock
 }));
-// The record data layer is MOCKED at the module seam — these assertions are the
-// integration pins that force GREEN to call the real module from the page.
-// importActual keeps MemberRecordPartialSaveError real for the partial-failure
-// case.
 vi.mock('$lib/roster/memberRecord', async (importActual) => ({
 	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
 	loadMemberRecord: loadMemberRecordMock,
 	createMemberRecord: createMemberRecordMock,
 	updateMemberRecord: updateMemberRecordMock
 }));
-// LEAK GUARD (prefill C): if GREEN wrongly re-resolves the name via
-// listMyProfiles + resolveField (private-first), it will surface 'Secret
-// Private Name' — the pins below fail on that. A GREEN that prefills from
-// row.name never calls this mock and passes.
 vi.mock('$lib/profile/profileData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/profile/profileData')>()),
 	listMyProfiles: listMyProfilesMock
@@ -124,54 +75,27 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
 import { MemberRecordPartialSaveError, type MemberRecordLookup } from '$lib/roster/memberRecord';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { REDACT_ATTR } from '$lib/redact/redact';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
-// m1 is the VIEWER's own membership; m2 is another member (unassigned).
 const rosterTwo: RosterRow[] = [
 	{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'db-1' },
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
@@ -205,8 +129,6 @@ beforeEach(() => {
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 	createMemberRecordMock.mockResolvedValue('rec-new');
 	updateMemberRecordMock.mockResolvedValue(undefined);
-	// Leak-guard fixture: the person's PRIVATE profile carries a name she never
-	// shared beyond private tier. The roster shows 'Berta Bass' (domain).
 	listMyProfilesMock.mockResolvedValue([
 		{ _id: 'pr-priv', name: 'Secret Private Name', email: 'berta@example.com', _sharing: 'private' },
 		{ _id: 'pr-dom', name: 'Berta Bass', email: 'berta@example.com', _sharing: 'domain' }
@@ -216,15 +138,10 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
-// Groups default COLLAPSED — expand Unassigned (fixture members land there).
 async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	const utils = render(Page);
 	setAuthedWithOneCollective();
@@ -237,8 +154,6 @@ async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	return utils;
 }
 
-// #302 drive-path edit (Gama's on-issue ruling): the activator is the whole
-// collapsed card now — same one-click open, new target. Assertions untouched.
 async function openEditor(container: HTMLElement, memberId: string) {
 	const card = q(container, `roster-row-card-${memberId}`);
 	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
@@ -257,16 +172,9 @@ const emailInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-email"]') as HTMLInputElement;
 const birthdateInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-birthdate"]') as HTMLInputElement;
-// #285 — KEBAB testid, the file's unbroken convention ('roster-record-idcode'
-// would be its only violation).
 const idCodeInput = (c: HTMLElement) =>
 	c.querySelector('[data-testid="roster-record-id-code"]') as HTMLInputElement;
 
-// #302 — these existence pins were written against the pencil, an element the
-// issue deletes on purpose; they are REWRITTEN against the whole-card
-// activator (`roster-row-card-{memberId}`), which inherits the pencil's whole
-// contract: admin-only, no self-row exclusion, #262 content-derived name,
-// present in every display view that renders member rows.
 describe('(A) card activator — admin-only, whole-block, every display view (#302: pencil retired)', () => {
 	it("admin sees the card activator on another member's row", async () => {
 		const { container } = await renderRosterAs('admin');
@@ -288,7 +196,6 @@ describe('(A) card activator — admin-only, whole-block, every display view (#3
 		const btn = q(container, 'roster-row-card-m2')!;
 		expect(btn.textContent).toContain('[roster_record_edit_label]');
 		expect(btn.textContent).toContain('Berta Bass');
-		// aria-label would OVERRIDE descendant content and swallow the name.
 		expect(btn.getAttribute('aria-label')).toBeNull();
 	});
 
@@ -456,16 +363,9 @@ describe('(C) prefill — first open, no-record only (R4)', () => {
 });
 
 describe('(D) damaged data — more than one record (#264: loud, no guessing, no writes)', () => {
-	// #388 — the alert no longer NAMES the member (a capture marker cannot
-	// blank part of a sentence; Mihkel 2026-09-27): the message takes no
-	// params, and #487's EntuRef to the PERSON (duplicate detection is keyed on
-	// personId; the details to fix live on the person) sits right after the
-	// sentence, inside the same alert.
 	it('surfaces a role=alert that names NO member and carries an EntuRef to the person, renders NO editor fields, and never writes', async () => {
 		loadMemberRecordMock.mockResolvedValue({ state: 'damaged', count: 2 });
 		const { container } = await renderRosterAs('admin');
-		// #302 drive-path edit: inline (helper's waitFor on roster-record-name
-		// never resolves on damaged data) — same new activator target.
 		await fireEvent.click(q(container, 'roster-row-card-m2')!);
 		const alert = await waitFor(() => {
 			const el = q(container, 'roster-record-damaged-m2');
@@ -473,9 +373,6 @@ describe('(D) damaged data — more than one record (#264: loud, no guessing, no
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// The i18n params proxy stringifies params — `[roster_record_damaged]`
-		// with no JSON means the message was called with NO name. The only
-		// other text is the EntuRef's short id (shortEntuId('pp-2') = 'pp-2').
 		expect((alert.textContent ?? '').replace(/\s+/g, '')).toBe('[roster_record_damaged]pp-2');
 		expect(alert.textContent).not.toContain('Berta Bass');
 		expect(alert.textContent).not.toContain('berta@example.com');
@@ -514,8 +411,6 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 			phone: '+372 5559876',
 			email: 'berta@example.com',
 			birthdate: '',
-			// #285 — the fifth field rides in the create input, empty here (no
-			// prefill source exists for it; empty-as-empty like birthdate).
 			id_code: ''
 		});
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
@@ -550,11 +445,6 @@ describe('(E) save — lazy create, server-confirmed, announced', () => {
 				'roster_record_saved'
 			)
 		);
-		// Second member, second save. A deferred create lets us look at the region
-		// BETWEEN the two announcements: with the stale "Member details saved."
-		// still sitting there, the success below would reassign the IDENTICAL
-		// string, the text node would never change, and aria-live="polite" would
-		// announce NOTHING for the admin's second successful save.
 		let release!: () => void;
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-2')))
@@ -620,12 +510,10 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('[roster_record_save_failed]');
-		// FAILURE TELLS THE TRUTH: values kept, no retyping.
 		expect(nameInput(container).value).toBe('Typed Secret Name');
 		expect(phoneInput(container).value).toBe('+372 5550000');
 		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
-		// PRIVACY FENCE: static strings + status codes only — never field values.
 		const logged = consoleErrorSpy.mock.calls.map((c) => c.map(String).join(' ')).join(' ');
 		expect(logged).not.toContain('Typed Secret Name');
 		expect(logged).not.toContain('+372 5550000');
@@ -662,11 +550,9 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		// Distinct copy naming what landed — NOT the all-or-nothing message.
 		expect(alert.textContent).toContain('roster_record_save_partial');
 		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
 		expect(alert.textContent).not.toContain('failed@secret.example');
-		// Typed values still in the form.
 		expect(emailInput(container).value).toBe('failed@secret.example');
 	});
 
@@ -676,8 +562,6 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
 		});
-		// The commonest failure there is: a single changed field whose one write
-		// 500s. `updateMemberRecord` throws with landedFields === [].
 		updateMemberRecordMock.mockRejectedValue(new MemberRecordPartialSaveError([], 'phone'));
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -688,11 +572,8 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 			expect(el).not.toBeNull();
 			return el!;
 		});
-		// Nothing landed, so the message says nothing was saved — NOT the partial
-		// copy with an empty field list (#253 lying-banner class).
 		expect(alert.textContent).toContain('[roster_record_save_failed]');
 		expect(alert.textContent).not.toContain('roster_record_save_partial');
-		// The typed value stays and the failed FIELD is still what gets logged.
 		expect(phoneInput(container).value).toBe('+372 5550000');
 		const logged = consoleErrorSpy.mock.calls.map((c) => c.map(String).join(' ')).join(' ');
 		expect(logged).toContain('phone');
@@ -717,7 +598,6 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
 			'[roster_record_save_failed]'
 		);
-		// The accessibility tree must not carry both stories at once.
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 		consoleErrorSpy.mockRestore();
 	});
@@ -785,35 +665,11 @@ describe('(E) collective switch — #259 generation discipline', () => {
 		expect(container.querySelector('[data-testid="roster-record-name"]')).toBeNull();
 	});
 
-	// #279 — pins the PRE-write guard on the save's fresh RE-READ, one suspension
-	// point EARLIER than the test above (which holds the create — the write
-	// itself — and exercises the POST-write guard). Since 0d1af3d the
-	// one-record-per-person check lives in `saveRecordEditor`: it re-reads the
-	// record via `loadMemberRecord` before branching create-vs-update, and that
-	// await is a second window a collective switch can open. The guard under
-	// test sits immediately after the re-read in roster/+page.svelte
-	// (`if (!routeLoad.isCurrent(g) || recordEditorMemberId !== memberId) return;`).
-	//
-	// WHY THIS PIN IS LOAD-BEARING (fails if that guard line is deleted): the
-	// switch bumps the route-load generation, so with the guard present the
-	// resumed save returns early and no write is attempted. With the guard line
-	// deleted, execution falls through to `if (fresh.state === 'none')` — true
-	// for the released value — and calls `createMemberRecord` (the fixture's
-	// `row.dbEntityId` is populated, so that branch does not throw first). The
-	// `not.toHaveBeenCalled()` assertion on the create then FAILS.
-	//
-	// HONEST LIMIT: a collective switch bumps the generation AND nulls
-	// `recordEditorMemberId` in the same reset() pass, so this scenario cannot
-	// isolate the guard's two `||` disjuncts — deleting either clause alone
-	// leaves the other catching this exact race. The pin proves the guard LINE
-	// must exist; it does not prove both disjuncts are independently
-	// load-bearing.
 	it('a held save RE-READ settling after the switch writes NOTHING: neither create nor update fires (the pre-write guard on the fresh lookup, #279)', async () => {
 		let release!: (v: MemberRecordLookup) => void;
 		loadMemberRecordMock
 			.mockResolvedValueOnce({ state: 'none' }) // the editor-open read
 			.mockImplementationOnce(
-				// the save's re-read — held open across the collective switch
 				() => new Promise<MemberRecordLookup>((res) => (release = res))
 			);
 		const { container } = await renderTwoCollectivesAsAdmin();
@@ -831,12 +687,6 @@ describe('(E) collective switch — #259 generation discipline', () => {
 });
 
 describe('(E) review F2 — the required NAME is enforced where the write happens', () => {
-	// `required` on the input is inert: the editor is not wrapped in a <form>
-	// and the save control is a type="button" with an onclick, so browser
-	// constraint validation never runs. Entu's `mandatory` prop-def flag is a UI
-	// hint too. The gate therefore has to live in the save handler — and `name`
-	// is the DOMAIN-shared field, so an empty one would publish a nameless
-	// domain-visible record.
 	it('CREATE path: an emptied name refuses the save — createMemberRecord never fires, the refusal is a role=alert, and the other typed values stay', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -850,11 +700,9 @@ describe('(E) review F2 — the required NAME is enforced where the write happen
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('[roster_record_name_required]');
-		// Its OWN copy — not the all-or-nothing failure message.
 		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		// Editor stays open, typed values intact, save re-armable.
 		expect(nameInput(container)).not.toBeNull();
 		expect(phoneInput(container).value).toBe('+372 5559876');
 		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
@@ -905,11 +753,6 @@ describe('(E) review F2 — the required NAME is enforced where the write happen
 });
 
 describe('(E) review F3 — the in-flight guard is ROW-SCOPED, never cleared by another row', () => {
-	// replaceProperty.ts's header: the atomic overwrite is NOT a compare-and-
-	// swap, so two overlapping replaces of the same property both land 200 and
-	// leave a duplicate value. The calling surface's single-flight guard is the
-	// only thing left standing between a double-fire and that duplicate — so it
-	// must not be clearable by a path that knows nothing about the write.
 	it("opening a DIFFERENT row's editor does not free the guard: the second row's save stays disabled and refuses to fire while the first write is on the wire", async () => {
 		let release!: () => void;
 		createMemberRecordMock.mockImplementation(
@@ -921,17 +764,14 @@ describe('(E) review F3 — the in-flight guard is ROW-SCOPED, never cleared by 
 		await tick();
 		expect(createMemberRecordMock).toHaveBeenCalledTimes(1);
 
-		// The pencil on the OTHER row — the path that used to reset the flag.
 		await openEditor(container, 'm1');
 		const save = q(container, 'roster-record-save') as HTMLButtonElement;
 		expect(save.disabled).toBe(true);
 		await fireEvent.click(save);
 		await flush();
 		await tick();
-		// Still exactly the FIRST row's create — the second never started.
 		expect(createMemberRecordMock).toHaveBeenCalledTimes(1);
 
-		// Once the in-flight write settles the guard frees itself, and only then.
 		release();
 		await waitFor(() =>
 			expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false)
@@ -986,7 +826,6 @@ describe('(E) review F1 — clearing the date of birth reaches the data layer as
 		await fireEvent.input(birthdateInput(container), { target: { value: '' } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(nameInput(container)).toBeNull());
-		// The record now reads back with no birthdate.
 		loadMemberRecordMock.mockResolvedValue({
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
@@ -997,11 +836,6 @@ describe('(E) review F1 — clearing the date of birth reaches the data layer as
 });
 
 describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at editor-open', () => {
-	// #268's check-then-create invariant guards the WRITE. Branching on the
-	// lookup cached when the editor opened let a create fire on a stale reading:
-	// a retry after an ambiguous create failure, or a second admin saving the
-	// same pre-record member, produced a SECOND record — `state: 'damaged'`,
-	// which #264 forbids the app to repair. The save therefore re-reads first.
 	it('the save re-reads the record before writing — a second lookup for the same person', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1015,8 +849,6 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 	it('a record that appeared AFTER the editor opened turns the save into an UPDATE against the freshly-read id — createMemberRecord never fires, so no duplicate is ever made', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2'); // opened on 'none' — the create path
-		// Between open and save the record came into existence: the admin's own
-		// retry after an ambiguous create failure, or a second admin's save.
 		loadMemberRecordMock.mockResolvedValue({
 			state: 'one',
 			record: { _id: 'rec-raced', name: 'Berta Bass', phone: '', email: '', birthdate: '' }
@@ -1025,16 +857,7 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock.mock.calls[0][1]).toBe('rec-raced');
-		// #280 REWROTE this expectation. It used to require the prefilled
-		// name/email be sent ("the write carries the prefilled values it
-		// holds") — a guarantee that is right for the three fields that open
-		// EMPTY but wrong for the two #265 prefills: an untouched prefill is a
-		// DISPLAY of the profile, not an assertion about the record, and
-		// sending it here silently overwrote whatever the other writer had
-		// saved into name/email. Nothing in this scenario was touched, so the
-		// update asserts NOTHING and every raced-record value survives.
 		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({});
-		// Server-confirmed all the same: editor collapses, success announced.
 		await waitFor(() => expect(nameInput(container)).toBeNull());
 		expect(q(container, 'roster-member-record-status')!.textContent).toContain(
 			'roster_record_saved'
@@ -1055,29 +878,12 @@ describe('(E) review r3 F2 — the one-record check runs AT THE SAVE, not at edi
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		// Nothing pretends to have been saved, and the save guard frees itself.
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 		expect(q(container, 'roster-record-save-error')).toBeNull();
 	});
 });
 
 describe('(E) #280 — create-turned-update asserts ONLY touched fields; an untouched prefill never wins a write', () => {
-	// #265 prefills name+email from the profile on first open, so on the
-	// create-turned-update path those two are non-empty WITHOUT the admin
-	// having typed anything. Diffed against the empty fallback baseline they
-	// counted as "changed", and the untouched prefill silently overwrote the
-	// other writer's admin-entered values. The discriminator is not "does a
-	// record exist" but WHICH FIELDS THE SAVER ACTUALLY ASSERTED (#280 —
-	// superseding the PO's earlier refuse-the-save ruling: the save must
-	// still complete, because the commonest cause of a record existing at
-	// save time is the admin's own retry).
-	//
-	// The raced record deliberately carries values that DIFFER from the
-	// prefill in every field: an implementation that diffs the form against
-	// the FRESH record instead of tracking what the admin touched would still
-	// send the untouched prefill here, and must fail these pins. The write
-	// layer needs no help — updateMemberRecord skips absent keys, so omission
-	// leaves a field untouched server-side and can never clear it.
 	const racedRecord = {
 		state: 'one' as const,
 		record: {
@@ -1099,7 +905,6 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock.mock.calls[0][1]).toBe('rec-raced');
 		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({});
-		// Not refused, not stranded: the editor collapses and success announces.
 		await waitFor(() => expect(nameInput(container)).toBeNull());
 		expect(q(container, 'roster-member-record-status')!.textContent).toContain(
 			'roster_record_saved'
@@ -1113,8 +918,6 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 		loadMemberRecordMock.mockResolvedValue(racedRecord);
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(updateMemberRecordMock).toHaveBeenCalledTimes(1));
-		// toEqual is exact: name present, email ABSENT — the admin asserted one
-		// field, the other is still only a display of the profile.
 		expect(updateMemberRecordMock.mock.calls[0][2]).toEqual({ name: 'Corrected Name' });
 	});
 
@@ -1129,14 +932,6 @@ describe('(E) #280 — create-turned-update asserts ONLY touched fields; an unto
 	});
 
 	it('edit-then-REVERT: a name typed and then restored to the exact prefilled value is NOT sent — the final value equals the display, so it asserts nothing (#280 pinned choice)', async () => {
-		// PINNED CHOICE, not an accident of implementation: the diff is by
-		// VALUE against the prefilled baseline, not by input-event history. An
-		// admin who typed and then put back exactly what was shown ended on
-		// the profile display — sending it would overwrite the other writer's
-		// entry with a profile value nobody chose for the RECORD, which is the
-		// precise harm #280 forbids. The failure asymmetry seals it: not
-		// sending a re-affirmed display loses nothing (the record keeps the
-		// other admin's real entry); sending it destroys data silently.
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
 		await fireEvent.input(nameInput(container), { target: { value: 'Corrected Name' } });
@@ -1155,16 +950,12 @@ describe('(F) privacy fence — non-admins never get the fields in the DOM', () 
 		expect(container.querySelector('[data-testid="roster-record-phone"]')).toBeNull();
 		expect(container.querySelector('[data-testid="roster-record-email"]')).toBeNull();
 		expect(container.querySelector('[data-testid="roster-record-birthdate"]')).toBeNull();
-		// #285 — the fifth field is fenced identically: absent, not disabled.
 		expect(container.querySelector('[data-testid="roster-record-id-code"]')).toBeNull();
 	});
 });
 
 describe('(#283) environment smoke — the guard primitives hold in THIS environment, not by inference', () => {
-	// Toolchain note: `/\p{L}/u` has ZERO precedent in this codebase, so its
-	// behaviour is pinned HERE, inside the suite's own environment (esnext
 	// target, Node 22, happy-dom via @vitest-environment above) — not inferred
-	// from spec sheets.
 	it('/\\p{L}/u matches letters in ANY alphabet (õ, š, Cyrillic А) and rejects digits, +, spaces, parens, hyphens and dots', () => {
 		expect(/\p{L}/u.test('õ')).toBe(true);
 		expect(/\p{L}/u.test('š')).toBe(true);
@@ -1176,12 +967,6 @@ describe('(#283) environment smoke — the guard primitives hold in THIS environ
 		expect(/\p{L}/u.test('+1-555-0100')).toBe(false);
 	});
 
-	// Gama's #283 ruling routes the email guard through the BROWSER'S OWN
-	// constraint validation — `checkValidity()` on the type=email element, no
-	// hand-rolled regex. That only works if this suite's DOM implementation
-	// actually computes email validity; pin it directly so a happy-dom upgrade
-	// that stops validating turns THIS test red instead of silently hollowing
-	// out the guard tests below.
 	it("happy-dom computes type=email validity: 'not an email' invalid, 'a@b' valid, '' valid (optional-field semantics), 'a@b@c' invalid", () => {
 		const el = document.createElement('input');
 		el.type = 'email';
@@ -1197,14 +982,6 @@ describe('(#283) environment smoke — the guard primitives hold in THIS environ
 });
 
 describe('(#283) phone guard — letters refuse the save; + and friends survive (name-required idiom)', () => {
-	// Joosep, verbatim: "ei luba tähti salvestada aga + märki lubab" — a guard
-	// on the WRITE, not a filter on typing. The rule is rejection-of-letters
-	// ONLY (`/\p{L}/u`): the issue explicitly forbids an allowlist, because an
-	// allowlist that forgets a legitimate character rejects a valid number
-	// while claiming to be a fix. Placement is the name-required slot in
-	// `saveRecordEditor`: a refusal is NOT a write — it must never arm the
-	// single-flight lock, never reach the fresh-lookup re-read, never touch
-	// the partial/damaged/failed error kinds.
 	it("CREATE path: 'tel: 555' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1219,19 +996,13 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// The guard's OWN copy — never the all-or-nothing failure message.
 		expect(alert.textContent).toContain('[roster_record_phone_invalid]');
 		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		// PLACEMENT: the refusal fired BEFORE the fresh-lookup suspension point —
-		// still only the editor-open read.
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
-		// PLACEMENT: the single-flight lock was never armed — save re-armable,
-		// the row's own cancel never went disabled.
 		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'roster-record-cancel') as HTMLButtonElement).disabled).toBe(false);
-		// Editor stays open with everything the admin typed still in it.
 		expect(nameInput(container).value).toBe('Berta Real');
 		expect(birthdateInput(container).value).toBe('1990-03-15');
 		expect(phoneInput(container).value).toBe('tel: 555');
@@ -1301,8 +1072,6 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 		});
 	});
 
-	// NO ALLOWLIST — the issue's explicit trap warning: spaces, parens, hyphens
-	// and dots are not letters, so every one of these legitimate shapes passes.
 	it.each(['+44 (0)20 7946 0958', '372.5555.5555', '+1-555-0100'])(
 		"'%s' saves verbatim — rejection-of-letters only, never an allowlist",
 		async (phone) => {
@@ -1384,9 +1153,6 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 });
 
 describe("(#283) email guard — the browser's OWN constraint validation, weakest-rule fence", () => {
-	// Gama's ruling on #283: the guard is `emailInputEl && !emailInputEl.
-	// checkValidity()` — the browser's deliberately-permissive email rule, NO
-	// hand-rolled regex of ours to write, argue about, or later "improve".
 	it("'not an email' refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1410,11 +1176,6 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 	});
 
-	// WEAKEST-RULE FENCE (Gama, #283, verbatim law): "The rule must stay the
-	// weakest thing that closes the reported hole." A future guard that rejects
-	// 'a@b' is a CONTRACT VIOLATION — it would start rejecting real addresses
-	// to catch a class of typo nobody has reported. This passing pin IS the
-	// fence: improvement is refused on sight, with a reason.
 	it("WEAKEST-RULE FENCE: 'a@b' SAVES — a stricter guard that rejects it is a regression, not an improvement", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1618,13 +1379,6 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 });
 
 describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict where the spec is closed', () => {
-	// The promotion comment's framing, kept visible: this is a third guard in
-	// the ESTABLISHED slot (after the #283 email guard, BEFORE the generation
-	// capture and single-flight arm), not new machinery. And the strictness is
-	// deliberate where #283's email leniency was deliberate: an isikukood has a
-	// precise, closed, checksummable specification; an email address does not.
-	// Do NOT harmonise them — 'a@b' keeps saving three lines away while
-	// '5000101001' is refused here.
 	it("CREATE path: a wrong check digit ('50001010011' — stage 1 says 7) refuses the save — its OWN role=alert copy, no write, no lookup re-read, no single-flight arming; sibling typed fields survive", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1638,18 +1392,13 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 			return el!;
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
-		// The guard's OWN copy — never the all-or-nothing failure message.
 		expect(alert.textContent).toContain('[roster_record_id_code_invalid]');
 		expect(alert.textContent).not.toContain('[roster_record_save_failed]');
-		// A REFUSAL IS NOT A WRITE (the #283 shapes, all four):
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		// …it never reaches the fresh-lookup re-read…
 		expect(loadMemberRecordMock).toHaveBeenCalledTimes(1);
-		// …never arms the single-flight lock…
 		expect((q(container, 'roster-record-save') as HTMLButtonElement).disabled).toBe(false);
 		expect((q(container, 'roster-record-cancel') as HTMLButtonElement).disabled).toBe(false);
-		// …and keeps the editor open with everything typed still in it.
 		expect(phoneInput(container).value).toBe('+372 5559876');
 		expect(idCodeInput(container).value).toBe('50001010011');
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
@@ -1813,15 +1562,6 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 	});
 });
 
-// ── #388 RED — capture redaction outside the record editor ──
-//
-// Every name and email /roster renders as ELEMENT CONTENT sits inside the
-// shared display marker (RedactedText, carrying REDACT_ATTR) — the collapsed
-// row's name and email, and the name inside the card activator's sr-only
-// label. Each marked element holds EXACTLY the personal value (tight marker:
-// the sr-only label's static copy and the row's other text stay outside), so
-// a wrapper around the whole row cannot pass. The attribute name is read off
-// $lib/redact/redact, never a literal.
 function textNodesContaining(root: Element, needle: string): Text[] {
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
 	const hits: Text[] = [];
@@ -1867,20 +1607,10 @@ describe('#388 — the collapsed row\'s name and email and the sr-only edit labe
 		expect(label, 'the sr-only edit label renders inside the card').not.toBeNull();
 		expect(label!.textContent).toContain('[roster_record_edit_label]');
 		expectTightlyMarked(label!, 'Berta Bass', 'sr-only edit label');
-		// The static copy itself is not blanked.
 		const copy = textNodesContaining(label!, '[roster_record_edit_label]');
 		expect(copy).toHaveLength(1);
 		expect(copy[0].parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
 	});
 });
 
-// (*MVOX:Tallis* — #268 RED, route-level)
-// (*MVOX:Josquin* — #268 review F1/F2/F3 pins)
-// (*MVOX:Josquin* — #268 review r3 pins: empty-landed failure copy, save-time
-//  existence check)
-// (*MVOX:Tallis* — #283 RED: phone letters + email checkValidity save guards,
-//  weakest-rule fence)
-// (*MVOX:Tallis* — #285 RED: Isikukood fifth field + checksum guard, third in
-//  the refusal slot; over-validation canary)
-// (*MVOX:Tallis* — #388 RED: damaged alert names no member + EntuRef to the
-//  person; row name/email and sr-only label name inside the capture marker)
+// (*MVOX:Tallis*) (*MVOX:Josquin*)

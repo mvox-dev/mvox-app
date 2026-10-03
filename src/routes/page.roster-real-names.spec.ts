@@ -18,16 +18,12 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './roster/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 interface DbWire {
 	dbEntityId: string;
@@ -177,38 +173,16 @@ function rowNameSpan(c: HTMLElement, memberId: string): HTMLElement {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-b' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-b' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 async function renderRosterAs(admin: 'admin' | 'not-admin') {
@@ -226,11 +200,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.clearAllMocks();
 	resetTypeIdCache();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 });
 
@@ -485,10 +455,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 
 		cleanup();
 		vi.unstubAllGlobals();
-		authStore.set({ status: 'loading' });
-		collectiveState.set({ status: 'loading' });
-		selectedCollectiveDbStore.set(null);
-		urlCollectiveDbStore.set(null);
+		resetAppState();
 		resetAdmin();
 		resetTypeIdCache();
 
