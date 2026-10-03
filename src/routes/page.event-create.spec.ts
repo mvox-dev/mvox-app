@@ -4,22 +4,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get: (_target, key) => {
-				const k = String(key);
-				if (k === 'event_created')
-					return (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`;
-				if (k === 'event_create_inherited_from_series')
-					return (p: { value: string }) => `event_create_inherited_from_series ${p.value}`;
-				if (k === 'agenda_duration_min') return (p: { minutes: number }) => `${p.minutes} min`;
-				return () => k;
-			}
-		}
-	)
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare', {
+		event_created: (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`,
+		event_create_inherited_from_series: (p: { value: string }) =>
+			`event_create_inherited_from_series ${p.value}`,
+		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
+	})
+);
 
 const {
 	loadFullAgendaMock,
