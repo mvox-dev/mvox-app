@@ -19,7 +19,8 @@ export const returnLendingMock = vi.fn();
 export const bulkCheckoutMock = vi.fn();
 
 // Keeps the real, pure derive* / formatLoanChainLabel helpers.
-export async function libraryReadsModule() {
+// chains: false leaves resolveCopyChains out, as the older specs had it.
+export async function libraryReadsModule(opts: { chains?: boolean } = {}) {
 	const actual = await vi.importActual<object>('$lib/library/libraryData');
 	return {
 		...actual,
@@ -31,17 +32,18 @@ export async function libraryReadsModule() {
 		listLendings: listLendingsMock,
 		resolveBorrowerNames: resolveBorrowerNamesMock,
 		resolveCopyNames: resolveCopyNamesMock,
-		resolveCopyChains: resolveCopyChainsMock
+		...(opts.chains === false ? {} : { resolveCopyChains: resolveCopyChainsMock })
 	};
 }
 
 // Keeps the real writable store and resetLibrarian.
-export async function librarianOverRealModule() {
+// libraryId: false leaves resolveMyLibraryId to the real module.
+export async function librarianOverRealModule(opts: { libraryId?: boolean } = {}) {
 	const actual = await vi.importActual<object>('$lib/library/librarianStore');
 	return {
 		...actual,
 		resolveLibrarian: resolveLibrarianMock,
-		resolveMyLibraryId: resolveMyLibraryIdMock
+		...(opts.libraryId === false ? {} : { resolveMyLibraryId: resolveMyLibraryIdMock })
 	};
 }
 
@@ -51,6 +53,10 @@ export function lendingModule() {
 		returnLending: returnLendingMock,
 		bulkCheckout: bulkCheckoutMock
 	};
+}
+
+export function libraryCreateModule() {
+	return { createWork: vi.fn(), createEdition: vi.fn() };
 }
 
 // (*MVOX:Josquin*)

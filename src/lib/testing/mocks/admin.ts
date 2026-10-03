@@ -17,6 +17,35 @@ export const resolveParentMock = vi.fn();
 export const resolveInviteParentMock = vi.fn();
 export const createInviteMock = vi.fn();
 
+export class InviteCreateError extends Error {
+	readonly phase: string;
+	readonly reason: string;
+	readonly personId?: string;
+	constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
+		super(message);
+		this.name = 'InviteCreateError';
+		this.phase = opts.phase;
+		this.reason = opts.reason;
+		this.personId = opts.personId;
+	}
+}
+
+export class RoleLockoutError extends Error {
+	readonly code = 'role-lockout';
+	constructor(entityId: string, personId: string) {
+		super(`lockout ${entityId}/${personId}`);
+		this.name = 'RoleLockoutError';
+	}
+}
+
+export class RoleGrantMissingError extends Error {
+	readonly code = 'role-grant-missing';
+	constructor(entityId: string, personId: string) {
+		super(`missing ${entityId}/${personId}`);
+		this.name = 'RoleGrantMissingError';
+	}
+}
+
 // 'admin': only resolveAdmin; 'both': resolveOwnerTier too.
 export function adminStoreModule(wired: 'admin' | 'both' = 'both') {
 	if (wired === 'admin') return { resolveAdmin: resolveAdminMock };
@@ -47,16 +76,19 @@ const roleHandles = () => ({
 	removeLibrarian: removeLibrarianMock
 });
 
-export function roleManagementModule() {
-	return { fetchRights: vi.fn(), ...roleHandles() };
+// errors: the module's error classes are the shared ones above.
+export function roleManagementModule(opts: { errors?: boolean } = {}) {
+	const errors = opts.errors ? { RoleLockoutError, RoleGrantMissingError } : {};
+	return { ...errors, fetchRights: vi.fn(), ...roleHandles() };
 }
 
 export async function roleManagementOverRealModule(importOriginal: () => Promise<unknown>) {
 	return { ...((await importOriginal()) as object), ...roleHandles() };
 }
 
-export function inviteDataModule() {
+export function inviteDataModule(opts: { errors?: boolean } = {}) {
 	return {
+		...(opts.errors ? { InviteCreateError } : {}),
 		resolvePersonParentId: resolveParentMock,
 		resolveInviteParentId: resolveInviteParentMock,
 		createInvite: createInviteMock

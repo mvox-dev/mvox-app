@@ -9,10 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const { listMyRsvpsMock } = vi.hoisted(() => ({
-		listMyRsvpsMock: vi.fn()
-	}));
-
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -28,16 +24,12 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	findMyRsvpForEvent: vi.fn().mockResolvedValue(null),
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('list')
+);
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
 );
@@ -47,7 +39,11 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { loadFullAgendaMock, loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
+import {
+	listMyRsvpsMock,
+	loadFullAgendaMock,
+	loadWorksByEventIdMock
+} from '$lib/testing/moduleHandles';
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 

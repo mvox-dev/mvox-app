@@ -6,32 +6,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => {
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
-	return {
-		InviteCreateError,
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn()
-	};
-});
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -45,6 +22,12 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './admin/invite/+page.svelte';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import {
+	InviteCreateError,
+	createInviteMock,
+	resolveInviteParentMock,
+	resolveParentMock
+} from '$lib/testing/mocks/admin';
 
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
@@ -57,9 +40,9 @@ function selectSampledb() {
 }
 
 beforeEach(() => {
-	h.resolveParentMock.mockReset();
-	h.resolveInviteParentMock.mockReset();
-	h.createInviteMock.mockReset();
+	resolveParentMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	createInviteMock.mockReset();
 });
 
 afterEach(() => {
@@ -69,8 +52,8 @@ afterEach(() => {
 
 describe('/admin/invite — session expired (#107 review F2)', () => {
 	it('an auth-expired PREREQUISITE load shows the session-expired notice — not the generic load error, and never "not admin"', async () => {
-		h.resolveParentMock.mockRejectedValue(authExpiredError());
-		h.resolveInviteParentMock.mockRejectedValue(authExpiredError());
+		resolveParentMock.mockRejectedValue(authExpiredError());
+		resolveInviteParentMock.mockRejectedValue(authExpiredError());
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -87,9 +70,9 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 	});
 
 	it('an auth-expired CREATE shows the session-expired notice — not "invite creation failed"', async () => {
-		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.resolveInviteParentMock.mockResolvedValue('org-1');
-		h.createInviteMock.mockRejectedValue(authExpiredError());
+		resolveParentMock.mockResolvedValue('parent-1');
+		resolveInviteParentMock.mockResolvedValue('org-1');
+		createInviteMock.mockRejectedValue(authExpiredError());
 		selectSampledb();
 
 		const { container } = render(Page);
@@ -113,8 +96,8 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 
 	it('a GENERIC prerequisite failure still shows the loud load error + retry, and not-visible still shows no-access', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		h.resolveParentMock.mockRejectedValue(new Error('network down'));
-		h.resolveInviteParentMock.mockRejectedValue(new Error('network down'));
+		resolveParentMock.mockRejectedValue(new Error('network down'));
+		resolveInviteParentMock.mockRejectedValue(new Error('network down'));
 		selectSampledb();
 
 		const generic = render(Page);
@@ -127,11 +110,11 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 		expect(generic.container.querySelector('[data-testid="session-expired"]')).toBeNull();
 		cleanup();
 
-		h.resolveParentMock.mockRejectedValue(
-			new h.InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
+		resolveParentMock.mockRejectedValue(
+			new InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
 		);
-		h.resolveInviteParentMock.mockRejectedValue(
-			new h.InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
+		resolveInviteParentMock.mockRejectedValue(
+			new InviteCreateError('not visible', { phase: 'prerequisites', reason: 'not-visible' })
 		);
 		selectSampledb();
 

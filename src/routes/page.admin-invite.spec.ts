@@ -27,32 +27,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => {
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
-	return {
-		InviteCreateError,
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn()
-	};
-});
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -64,6 +41,12 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/invite/+page.svelte';
+import {
+	InviteCreateError,
+	createInviteMock,
+	resolveInviteParentMock,
+	resolveParentMock
+} from '$lib/testing/mocks/admin';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -87,8 +70,8 @@ function selectTwoCollectives() {
 }
 
 function loadOk() {
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
 async function submitForm(container: HTMLElement) {
@@ -99,9 +82,9 @@ async function submitForm(container: HTMLElement) {
 }
 
 beforeEach(() => {
-	h.resolveParentMock.mockReset();
-	h.resolveInviteParentMock.mockReset();
-	h.createInviteMock.mockReset();
+	resolveParentMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	createInviteMock.mockReset();
 });
 
 afterEach(() => {
@@ -116,15 +99,15 @@ describe('/admin/invite — prerequisites', () => {
 			expect(container.querySelector('[data-testid="invite-admin-no-collective"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
-		expect(h.resolveParentMock).not.toHaveBeenCalled();
-		expect(h.resolveInviteParentMock).not.toHaveBeenCalled();
+		expect(resolveParentMock).not.toHaveBeenCalled();
+		expect(resolveInviteParentMock).not.toHaveBeenCalled();
 	});
 
 	it("a not-visible org resolution → the no-access state (#67 — resolveInviteParentId replaces listOrganizations as the org-parent source; #161 review fix round 2 — loadPrerequisites resolves ONLY via resolveInviteParentId now, resolvePersonParentId is no longer called from the page)", async () => {
 		selectSampledb();
-		h.resolveParentMock.mockResolvedValue('parent-1');
-		h.resolveInviteParentMock.mockRejectedValue(
-			new h.InviteCreateError('no organization entity is readable', {
+		resolveParentMock.mockResolvedValue('parent-1');
+		resolveInviteParentMock.mockRejectedValue(
+			new InviteCreateError('no organization entity is readable', {
 				phase: 'org-resolve',
 				reason: 'not-visible'
 			})
@@ -140,8 +123,8 @@ describe('/admin/invite — prerequisites', () => {
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
-		h.resolveInviteParentMock.mockRejectedValue(
-			new h.InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
+		resolveInviteParentMock.mockRejectedValue(
+			new InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
 		);
 
 		const { container } = render(Page);
@@ -195,8 +178,8 @@ describe('/admin/invite — ready form', () => {
 			expect(submit.disabled).toBe(false); // db chosen + org resolved internally
 		});
 
-		expect(h.resolveInviteParentMock).toHaveBeenCalledTimes(1);
-		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
+		expect(resolveInviteParentMock).toHaveBeenCalledTimes(1);
+		expect(resolveInviteParentMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'sampledb', token: 'jwt-admin' })
 		);
 	});
@@ -218,13 +201,13 @@ describe('/admin/invite — ready form', () => {
 			'[data-testid="invite-admin-submit"]'
 		) as HTMLButtonElement;
 		expect(submit.disabled).toBe(true);
-		expect(h.resolveInviteParentMock).not.toHaveBeenCalled(); // no fetch until a db is chosen
+		expect(resolveInviteParentMock).not.toHaveBeenCalled(); // no fetch until a db is chosen
 
 		await fireEvent.change(select, { target: { value: 'ramkoor' } });
 		await waitFor(() => {
 			expect(submit.disabled).toBe(false);
 		});
-		expect(h.resolveInviteParentMock).toHaveBeenCalledWith(
+		expect(resolveInviteParentMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor', token: 'jwt-admin' })
 		);
 	});
@@ -251,7 +234,7 @@ describe('/admin/invite — done (show-once link)', () => {
 	it('calls createInvite with the selected db + the internally-resolved org, shows the link + always-visible bearer warning, and the token NEVER touches storage', async () => {
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p1',
 			memberId: 'm1',
 			inviteToken: MINTED_TOKEN
@@ -270,7 +253,7 @@ describe('/admin/invite — done (show-once link)', () => {
 			expect(container.querySelector('[data-testid="invite-admin-result"]')).not.toBeNull();
 		});
 
-		const [cfgArg, inputArg] = h.createInviteMock.mock.calls[0] as [
+		const [cfgArg, inputArg] = createInviteMock.mock.calls[0] as [
 			{ db: string; token: string },
 			{ dbEntityId: string; email?: string; memberName?: string }
 		];
@@ -305,7 +288,7 @@ describe('/admin/invite — done (show-once link)', () => {
 	it('#207 rule 7: the show-once expiry date renders as ISO YYYY-MM-DD', async () => {
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockResolvedValue({
+		createInviteMock.mockResolvedValue({
 			personId: 'p1',
 			memberId: 'm1',
 			inviteToken: MINTED_TOKEN
@@ -340,8 +323,8 @@ describe('/admin/invite — create-error', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockRejectedValue(
-			new h.InviteCreateError('member create failed: 500', {
+		createInviteMock.mockRejectedValue(
+			new InviteCreateError('member create failed: 500', {
 				phase: 'member-create',
 				reason: 'http',
 				personId: 'p1'
@@ -385,8 +368,8 @@ describe('/admin/invite — create-error', () => {
 	it('an error WITHOUT a personId (nothing created yet) shows the phased error but NO orphan warning', async () => {
 		selectSampledb();
 		loadOk();
-		h.createInviteMock.mockRejectedValue(
-			new h.InviteCreateError('person create failed: 403', { phase: 'person-create', reason: 'http' })
+		createInviteMock.mockRejectedValue(
+			new InviteCreateError('person create failed: 403', { phase: 'person-create', reason: 'http' })
 		);
 
 		const { container } = render(Page);

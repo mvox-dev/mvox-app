@@ -93,36 +93,21 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
 
-const { resolveLibrarianMock, resolveMyLibraryIdMock } = vi.hoisted(() => ({
-	resolveLibrarianMock: vi.fn(),
-	resolveMyLibraryIdMock: vi.fn()
-}));
-vi.mock('$lib/library/librarianStore', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
-	return {
-		...actual, // keep the real writable store + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock,
-		resolveMyLibraryId: resolveMyLibraryIdMock
-	};
-});
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
+);
 
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
 );
 
-const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
-	createLendingMock: vi.fn(),
-	returnLendingMock: vi.fn(),
-	bulkCheckoutMock: vi.fn()
-}));
-vi.mock('$lib/library/lendingActions', () => ({
-	createLending: createLendingMock,
-	returnLending: returnLendingMock,
-	bulkCheckout: bulkCheckoutMock
-}));
+vi.mock('$lib/library/lendingActions', async () =>
+	(await import('$lib/testing/mocks/library')).lendingModule()
+);
 
 import Page from './library/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -130,6 +115,9 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import { bulkCheckoutMock, resolveMyLibraryIdMock } from '$lib/testing/mocks/library';
+import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 
 const DB_A = 'sampledb';
 const DB_B = 'other-choir';

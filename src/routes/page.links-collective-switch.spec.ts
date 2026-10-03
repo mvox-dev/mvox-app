@@ -13,21 +13,12 @@ vi.mock('$lib/paraglide/messages', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { listLinksMock, createLinkMock, updateLinkMock, reorderLinksMock, deleteLinkMock } =
-	vi.hoisted(() => ({
-		listLinksMock: vi.fn(),
-		createLinkMock: vi.fn(),
-		updateLinkMock: vi.fn(),
-		reorderLinksMock: vi.fn(),
-		deleteLinkMock: vi.fn()
-	}));
-vi.mock('$lib/links/linkData', () => ({ listLinks: listLinksMock }));
-vi.mock('$lib/links/linkActions', () => ({
-	createLink: createLinkMock,
-	updateLink: updateLinkMock,
-	reorderLinks: reorderLinksMock,
-	deleteLink: deleteLinkMock
-}));
+vi.mock('$lib/links/linkData', async () =>
+	(await import('$lib/testing/mocks/links')).linkDataModule()
+);
+vi.mock('$lib/links/linkActions', async () =>
+	(await import('$lib/testing/mocks/links')).linkActionsModule()
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -35,7 +26,9 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-vi.mock('$app/state', () => ({ page: { url: new URL('https://dev.mvox.eu/links') } }));
+vi.mock('$app/state', async () =>
+	(await import('$lib/testing/mocks/links')).linksPageStateModule()
+);
 
 import Page from './links/+page.svelte';
 import type { LinkRow } from '$lib/links/linkData';
@@ -43,6 +36,13 @@ import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import {
+	createLinkMock,
+	deleteLinkMock,
+	listLinksMock,
+	reorderLinksMock,
+	updateLinkMock
+} from '$lib/testing/mocks/links';
 
 function rowsA(): LinkRow[] {
 	return [

@@ -10,6 +10,7 @@ export const removeSeasonConductorMock = vi.fn();
 export const getSeriesDefaultsMock = vi.fn();
 export const listRepertoireItemsMock = vi.fn();
 export const entuFetchMock = vi.fn();
+export const listSeasonsMock = vi.fn();
 
 export function seasonManageModule() {
 	return {
@@ -32,6 +33,17 @@ export function repertoireDataModule(read: 'empty' | 'handle') {
 
 export async function entuRequestModule(importOriginal: () => Promise<unknown>) {
 	return { ...((await importOriginal()) as object), entuFetch: entuFetchMock };
+}
+
+export async function repertoireOverRealModule() {
+	const actual = await vi.importActual<object>('$lib/repertoire/repertoireData');
+	return { ...actual, listRepertoireItems: listRepertoireItemsMock };
+}
+
+// Keeps resolveTypeId and the rest of the real module.
+export async function entuSeasonsModule() {
+	const actual = await vi.importActual<object>('$lib/seasons/entuSeasons');
+	return { ...actual, listSeasons: listSeasonsMock };
 }
 
 // (*MVOX:Josquin*)

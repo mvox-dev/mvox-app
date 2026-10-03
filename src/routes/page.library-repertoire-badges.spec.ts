@@ -52,50 +52,37 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
 
-const { resolveLibrarianMock } = vi.hoisted(() => ({ resolveLibrarianMock: vi.fn() }));
-vi.mock('$lib/library/librarianStore', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/librarianStore')>('$lib/library/librarianStore');
-	return {
-		...actual, // keep the real writable store + resetLibrarian
-		resolveLibrarian: resolveLibrarianMock
-	};
-});
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
+);
 
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
 );
 
-vi.mock('$lib/library/lendingActions', () => ({
-	createLending: vi.fn(),
-	returnLending: vi.fn(),
-	bulkCheckout: vi.fn()
-}));
+vi.mock('$lib/library/lendingActions', async () =>
+	(await import('$lib/testing/mocks/library')).lendingModule()
+);
 
-const { listSeasonsMock } = vi.hoisted(() => ({ listSeasonsMock: vi.fn() }));
-vi.mock('$lib/seasons/entuSeasons', async () => {
-	const actual = await vi.importActual<typeof import('$lib/seasons/entuSeasons')>('$lib/seasons/entuSeasons');
-	return {
-		...actual, // keep resolveTypeId etc. + the EntuCfg type surface
-		listSeasons: listSeasonsMock
-	};
-});
-const { listRepertoireItemsMock } = vi.hoisted(() => ({ listRepertoireItemsMock: vi.fn() }));
-vi.mock('$lib/repertoire/repertoireData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/repertoire/repertoireData')>('$lib/repertoire/repertoireData');
-	return {
-		...actual,
-		listRepertoireItems: listRepertoireItemsMock
-	};
-});
+vi.mock('$lib/seasons/entuSeasons', async () =>
+	(await import('$lib/testing/mocks/seasons')).entuSeasonsModule()
+);
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireOverRealModule()
+);
 
 import Page from './library/+page.svelte';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
+import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 
 const SEASONS = [
 	{

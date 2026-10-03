@@ -10,7 +10,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 const h = vi.hoisted(() => ({
 	resolveAdminMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
-	listJoinStatesMock: vi.fn().mockResolvedValue({}),
 	resolveLibrarianMock: vi.fn(),
 }));
 
@@ -72,6 +71,9 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
+
+// Defaults the hoisted handles carried before they moved to the shared mocks.
+listJoinStatesMock.mockResolvedValue({});
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 

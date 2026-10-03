@@ -25,32 +25,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const h = vi.hoisted(() => {
-	class InviteCreateError extends Error {
-		readonly phase: string;
-		readonly reason: string;
-		readonly personId?: string;
-		constructor(message: string, opts: { phase: string; reason: string; personId?: string }) {
-			super(message);
-			this.name = 'InviteCreateError';
-			this.phase = opts.phase;
-			this.reason = opts.reason;
-			this.personId = opts.personId;
-		}
-	}
-	return {
-		InviteCreateError,
-		resolveParentMock: vi.fn(),
-		resolveInviteParentMock: vi.fn(),
-		createInviteMock: vi.fn()
-	};
-});
-vi.mock('$lib/invite/inviteData', () => ({
-	InviteCreateError: h.InviteCreateError,
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -65,6 +42,11 @@ import Page from './admin/invite/+page.svelte';
 import { goto } from '$app/navigation';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import {
+	createInviteMock,
+	resolveInviteParentMock,
+	resolveParentMock
+} from '$lib/testing/mocks/admin';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -82,9 +64,9 @@ function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: 
 
 async function renderDone(): Promise<{ container: HTMLElement }> {
 	selectSampledb();
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.createInviteMock.mockResolvedValue({
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
+	createInviteMock.mockResolvedValue({
 		personId: 'p1',
 		memberId: 'm1',
 		inviteToken: MINTED_TOKEN
@@ -136,9 +118,9 @@ function flush(): Promise<void> {
 }
 
 beforeEach(() => {
-	h.resolveParentMock.mockReset();
-	h.resolveInviteParentMock.mockReset();
-	h.createInviteMock.mockReset();
+	resolveParentMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	createInviteMock.mockReset();
 	vi.mocked(goto).mockReset();
 });
 

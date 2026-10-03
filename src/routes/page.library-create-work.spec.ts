@@ -58,44 +58,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	listWorksMock,
-	listEditionsMock,
-	listCopiesMock,
-	listAllEditionsMock,
-	listAllCopiesMock,
-	listLendingsMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock,
-	resolveCopyChainsMock
-} = vi.hoisted(() => ({
-	listWorksMock: vi.fn(),
-	listEditionsMock: vi.fn(),
-	listCopiesMock: vi.fn(),
-	listAllEditionsMock: vi.fn(),
-	listAllCopiesMock: vi.fn(),
-	listLendingsMock: vi.fn(),
-	resolveBorrowerNamesMock: vi.fn(),
-	resolveCopyNamesMock: vi.fn(),
-	resolveCopyChainsMock: vi.fn()
-}));
-vi.mock('$lib/library/libraryData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/library/libraryData')>(
-		'$lib/library/libraryData'
-	);
-	return {
-		...actual, // keep the real, pure derive* helpers
-		listWorks: listWorksMock,
-		listEditions: listEditionsMock,
-		listCopies: listCopiesMock,
-		listAllEditions: listAllEditionsMock,
-		listAllCopies: listAllCopiesMock,
-		listLendings: listLendingsMock,
-		resolveBorrowerNames: resolveBorrowerNamesMock,
-		resolveCopyNames: resolveCopyNamesMock,
-		resolveCopyChains: resolveCopyChainsMock
-	};
-});
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
+);
 vi.mock('$lib/paraglide/runtime', async () =>
 	(await import('$lib/testing/moduleStubs')).runtimeModule()
 );
@@ -110,8 +75,9 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-const { listActiveMembersMock } = vi.hoisted(() => ({ listActiveMembersMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ listActiveMembers: listActiveMembersMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
 
 // The new work's `_parent` is resolved live at submit time (`resolveMyLibraryId`), not read
 // off a store the cache-backed librarian resolution filled.
@@ -134,33 +100,17 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
 );
 
-vi.mock('$lib/library/lendingActions', () => ({
-	createLending: vi.fn(),
-	returnLending: vi.fn(),
-	bulkCheckout: vi.fn()
-}));
+vi.mock('$lib/library/lendingActions', async () =>
+	(await import('$lib/testing/mocks/library')).lendingModule()
+);
 
 // Quiet seams for the #92 repertoire-badge side reads (not under test here).
-const { listSeasonsMock } = vi.hoisted(() => ({ listSeasonsMock: vi.fn() }));
-vi.mock('$lib/seasons/entuSeasons', async () => {
-	const actual = await vi.importActual<typeof import('$lib/seasons/entuSeasons')>(
-		'$lib/seasons/entuSeasons'
-	);
-	return {
-		...actual, // keep resolveTypeId etc. + the EntuCfg type surface
-		listSeasons: listSeasonsMock
-	};
-});
-const { listRepertoireItemsMock } = vi.hoisted(() => ({ listRepertoireItemsMock: vi.fn() }));
-vi.mock('$lib/repertoire/repertoireData', async () => {
-	const actual = await vi.importActual<typeof import('$lib/repertoire/repertoireData')>(
-		'$lib/repertoire/repertoireData'
-	);
-	return {
-		...actual,
-		listRepertoireItems: listRepertoireItemsMock
-	};
-});
+vi.mock('$lib/seasons/entuSeasons', async () =>
+	(await import('$lib/testing/mocks/seasons')).entuSeasonsModule()
+);
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireOverRealModule()
+);
 
 // #198 — the write seam under test: the shared entity CREATE layer. The page
 // must call THIS module's createWork (same layer as createSeason), never roll
@@ -182,6 +132,19 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import {
+	listAllCopiesMock,
+	listAllEditionsMock,
+	listCopiesMock,
+	listEditionsMock,
+	listLendingsMock,
+	listWorksMock,
+	resolveBorrowerNamesMock,
+	resolveCopyChainsMock,
+	resolveCopyNamesMock
+} from '$lib/testing/mocks/library';
+import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 
 function setAuthedWithOneCollective() {
 	signIn();
