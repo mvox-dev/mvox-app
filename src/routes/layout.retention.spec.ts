@@ -24,9 +24,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
 );
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-vi.mock('$lib/files/appLabelStore', () => ({
-	getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} })
-}));
+vi.mock('$lib/files/appLabelStore', async () =>
+	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
+);
 
 import Layout from './+layout.svelte';
 import { authStore } from '$lib/auth/session';

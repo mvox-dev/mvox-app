@@ -99,16 +99,11 @@ const h = vi.hoisted(() => {
 		listLibrariansMock: vi.fn(),
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
-		resolveAdminMock: vi.fn(),
 		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
-		resolveLibrarianMock: vi.fn(),
-		loadRosterMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
 		listJoinStatesMock: vi.fn().mockResolvedValue({}),
-		resolveCollectiveNameMarkerMock: vi.fn(),
-		updateCollectiveNameMock: vi.fn()
 	};
 });
 vi.mock('$lib/admin/roleManagement', () => ({
@@ -122,29 +117,27 @@ vi.mock('$lib/admin/roleManagement', () => ({
 	addLibrarian: h.addLibrarianMock,
 	removeLibrarian: h.removeLibrarianMock
 }));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock,
-	resolveOwnerTier: h.resolveOwnerTierMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({
-	resolveLibrarian: h.resolveLibrarianMock
-}));
-vi.mock('$lib/profile/linkedIdentities', () => ({
-	listJoinStates: h.listJoinStatesMock
-}));
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
+vi.mock('$lib/profile/linkedIdentities', async () =>
+	(await import('$lib/testing/mocks/admin')).joinStatesModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: h.loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	resolvePersonParentId: h.resolveParentMock,
@@ -170,6 +163,15 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	listJoinStatesMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveLibrarianMock,
+	resolveOwnerTierMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 
@@ -209,12 +211,12 @@ function selectSampledb() {
 }
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
 	h.listLibrariansMock.mockResolvedValue(listing([CILLA]));
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
 	h.addAdminMock.mockResolvedValue(undefined);
 	h.addLibrarianMock.mockResolvedValue(undefined);
@@ -222,10 +224,10 @@ function loadOk() {
 	h.removeLibrarianMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
-	h.resolveOwnerTierMock.mockResolvedValue('error');
-	h.listJoinStatesMock.mockResolvedValue({});
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveOwnerTierMock.mockResolvedValue('error');
+	listJoinStatesMock.mockResolvedValue({});
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -279,16 +281,16 @@ beforeEach(() => {
 		h.listLibrariansMock,
 		h.addLibrarianMock,
 		h.removeLibrarianMock,
-		h.resolveAdminMock,
-		h.resolveLibrarianMock,
+		resolveAdminMock,
+		resolveLibrarianMock,
 		resolveDatabaseEntityIdMock,
-		h.loadRosterMock,
+		loadRosterMock,
 		listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,
-		h.resolveCollectiveNameMarkerMock,
-		h.updateCollectiveNameMock
+		resolveCollectiveNameMarkerMock,
+		updateCollectiveNameMock
 	]) {
 		mock.mockReset();
 	}
@@ -305,7 +307,7 @@ describe('/admin — access gate', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-roles-no-collective')).not.toBeNull();
 		});
-		expect(h.resolveAdminMock).not.toHaveBeenCalled();
+		expect(resolveAdminMock).not.toHaveBeenCalled();
 		expect(h.listAdminsMock).not.toHaveBeenCalled();
 		expect(h.listLibrariansMock).not.toHaveBeenCalled();
 	});
@@ -313,7 +315,7 @@ describe('/admin — access gate', () => {
 	it("resolveAdmin → 'not-admin': the no-access block, and NO role data is fetched (the lists are rights-bearing reads)", async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveAdminMock.mockResolvedValue('not-admin');
+		resolveAdminMock.mockResolvedValue('not-admin');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -325,7 +327,7 @@ describe('/admin — access gate', () => {
 		expect(h.listAdminsMock).not.toHaveBeenCalled();
 		expect(h.listLibrariansMock).not.toHaveBeenCalled();
 
-		expect(h.resolveAdminMock).toHaveBeenCalledWith(
+		expect(resolveAdminMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
 			undefined,
@@ -336,7 +338,7 @@ describe('/admin — access gate', () => {
 	it("resolveAdmin → 'error': the load-error state with retry — a network failure is NEVER rendered as not-admin", async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveAdminMock.mockResolvedValueOnce('error');
+		resolveAdminMock.mockResolvedValueOnce('error');
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -344,7 +346,7 @@ describe('/admin — access gate', () => {
 		});
 		expect(q(container, 'admin-roles-no-access')).toBeNull();
 
-		h.resolveAdminMock.mockResolvedValue('admin');
+		resolveAdminMock.mockResolvedValue('admin');
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry!);
@@ -374,7 +376,7 @@ describe('/admin — role lists', () => {
 		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
-		expect(h.resolveLibrarianMock).toHaveBeenCalledWith(
+		expect(resolveLibrarianMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'admin-p',
 			undefined,
@@ -426,7 +428,7 @@ describe('/admin — role lists', () => {
 	it('resolveLibrarian answering libraryId: null → the no-library state; listLibrarians is NOT called; the admin list still renders', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
+		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -439,7 +441,7 @@ describe('/admin — role lists', () => {
 	it("resolveLibrarian → { state: 'error', libraryId: null }: the load-error state with retry — a FAILED library read is NEVER rendered as \"no library exists\"", async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveLibrarianMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
+		resolveLibrarianMock.mockResolvedValueOnce({ state: 'error', libraryId: null });
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -449,7 +451,7 @@ describe('/admin — role lists', () => {
 		expect(container.textContent).not.toContain('No library entity is visible');
 		expect(h.listLibrariansMock).not.toHaveBeenCalled();
 
-		h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+		resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 		const retry = q<HTMLButtonElement>(container, 'admin-roles-retry-load');
 		expect(retry).not.toBeNull();
 		await fireEvent.click(retry!);
@@ -466,7 +468,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		loadOk();
 
 		const { container } = await renderReady();
-		expect(h.loadRosterMock).toHaveBeenCalledWith(expect.objectContaining(CFG));
+		expect(loadRosterMock).toHaveBeenCalledWith(expect.objectContaining(CFG));
 
 		const admins = section(container, 'admin-roles-admins');
 		const select = personSelect(admins, 'admin-add-admin-select');
@@ -559,7 +561,7 @@ describe('/admin — adding people (native <select>, roster-fed, #209)', () => {
 		selectSampledb();
 		loadOk();
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
-		h.loadRosterMock.mockReset().mockResolvedValue(
+		loadRosterMock.mockReset().mockResolvedValue(
 			toListRead([
 				{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: ['sec-t'] },
 				{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '', sectionIds: [] },
@@ -629,7 +631,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 	it('an EMPTY roster is not "everyone is already added": the prompt says there is nobody to add', async () => {
 		selectSampledb();
 		loadOk();
-		h.loadRosterMock.mockReset().mockResolvedValue(toListRead([]));
+		loadRosterMock.mockReset().mockResolvedValue(toListRead([]));
 		h.listAdminsMock.mockReset().mockResolvedValue(listing([]));
 
 		const { container } = await renderReady();
@@ -644,7 +646,7 @@ describe('/admin — a failed section read costs the pickers their order, not th
 
 describe('/admin — #321 review F2: a truncated roster makes a member ungrantable, so the selects say so', () => {
 	function truncatedRoster() {
-		h.loadRosterMock.mockReset().mockResolvedValue({
+		loadRosterMock.mockReset().mockResolvedValue({
 			items: ROSTER,
 			total: 500,
 			truncated: true
@@ -1076,17 +1078,17 @@ describe('/admin — a collective switch that lands mid-load', () => {
 			releaseAlpha = resolve;
 		});
 
-		h.resolveAdminMock.mockResolvedValue('admin');
+		resolveAdminMock.mockResolvedValue('admin');
 		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			cfg.db === 'alpha' ? alphaGate.then(() => 'org-alpha') : Promise.resolve('org-beta')
 		);
-		h.resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
+		resolveLibrarianMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve({
 				state: 'librarian',
 				libraryId: cfg.db === 'alpha' ? 'lib-alpha' : 'lib-beta'
 			})
 		);
-		h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+		loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 		listSectionsMock.mockResolvedValue([]);
 		h.listAdminsMock.mockImplementation((_cfg: unknown, dbEntityId: string) =>
 			Promise.resolve(

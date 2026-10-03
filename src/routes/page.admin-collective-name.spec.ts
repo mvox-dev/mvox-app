@@ -10,55 +10,30 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => ({
-	listAdminsMock: vi.fn(),
-	addAdminMock: vi.fn(),
-	removeAdminMock: vi.fn(),
-	listLibrariansMock: vi.fn(),
-	addLibrarianMock: vi.fn(),
-	removeLibrarianMock: vi.fn(),
-	resolveAdminMock: vi.fn(),
-	resolveLibrarianMock: vi.fn(),
-	loadRosterMock: vi.fn(),
-	resolveParentMock: vi.fn(),
-	resolveInviteParentMock: vi.fn(),
-	createInviteMock: vi.fn(),
-	resolveCollectiveNameMarkerMock: vi.fn(),
-	updateCollectiveNameMock: vi.fn()
-}));
-vi.mock('$lib/admin/roleManagement', () => ({
-	fetchRights: vi.fn(),
-	listAdmins: h.listAdminsMock,
-	addAdmin: h.addAdminMock,
-	removeAdmin: h.removeAdminMock,
-	listLibrarians: h.listLibrariansMock,
-	addLibrarian: h.addLibrarianMock,
-	removeLibrarian: h.removeLibrarianMock
-}));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({
-	resolveLibrarian: h.resolveLibrarianMock
-}));
+vi.mock('$lib/admin/roleManagement', async () =>
+	(await import('$lib/testing/mocks/admin')).roleManagementModule()
+);
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule('admin')
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: h.loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/invite/inviteData', () => ({
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule()
+);
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -74,6 +49,17 @@ import { selectedCollectiveStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	listAdminsMock,
+	listLibrariansMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
+	resolveLibrarianMock,
+	resolveParentMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 
@@ -87,17 +73,17 @@ function selectSampledb() {
 }
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
-	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
+	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -137,7 +123,15 @@ async function openEditor(container: HTMLElement): Promise<HTMLInputElement> {
 }
 
 beforeEach(() => {
-	for (const mock of Object.values(h)) mock.mockReset();
+	listAdminsMock.mockReset();
+	listLibrariansMock.mockReset();
+	loadRosterMock.mockReset();
+	resolveAdminMock.mockReset();
+	resolveCollectiveNameMarkerMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	resolveLibrarianMock.mockReset();
+	resolveParentMock.mockReset();
+	updateCollectiveNameMock.mockReset();
 	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 });
@@ -155,7 +149,7 @@ describe('/admin — collective name display', () => {
 		const { container, nameEl, pencil } = await renderWithName();
 
 		expect(nameEl.textContent).toContain('Koor Sampledb');
-		expect(h.resolveCollectiveNameMarkerMock).toHaveBeenCalledWith(
+		expect(resolveCollectiveNameMarkerMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
 		expect(pencil.disabled).toBe(false);
@@ -175,11 +169,11 @@ describe('/admin — collective name display', () => {
 	it('no marker in the db (resolution → null): neither name nor pencil — nothing to edit', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveCollectiveNameMarkerMock.mockResolvedValue(null);
+		resolveCollectiveNameMarkerMock.mockResolvedValue(null);
 
 		const { container } = await renderReady();
 
-		expect(h.resolveCollectiveNameMarkerMock).toHaveBeenCalledWith(
+		expect(resolveCollectiveNameMarkerMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG)
 		);
 		expect(q(container, 'admin-collective-name')).toBeNull();
@@ -189,7 +183,7 @@ describe('/admin — collective name display', () => {
 	it('an empty-name marker renders a labelled, non-blank placeholder control — never a blank heading', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: '' });
+		resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: '' });
 
 		const { container } = await renderReady();
 
@@ -206,7 +200,7 @@ describe('/admin — collective name display', () => {
 	it('a FAILED marker read lands in load-error + retry — never rendered as "no name" (house rule)', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveCollectiveNameMarkerMock.mockRejectedValueOnce(new Error('marker query 500'));
+		resolveCollectiveNameMarkerMock.mockRejectedValueOnce(new Error('marker query 500'));
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -232,7 +226,7 @@ describe('/admin — collective name editing', () => {
 		expect(input.value).toBe('Koor Sampledb');
 		expect((input.getAttribute('aria-label') ?? '').trim()).not.toBe('');
 		expect(q(container, 'admin-collective-name-edit')).toBeNull();
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('Enter confirms: updateCollectiveName(cfg, markerId, draft) fires ONCE and the display shows the new name without a reload', async () => {
@@ -245,9 +239,9 @@ describe('/admin — collective name editing', () => {
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => {
-			expect(h.updateCollectiveNameMock).toHaveBeenCalledTimes(1);
+			expect(updateCollectiveNameMock).toHaveBeenCalledTimes(1);
 		});
-		expect(h.updateCollectiveNameMock).toHaveBeenCalledWith(
+		expect(updateCollectiveNameMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'marker-1',
 			'Uus Koorinimi'
@@ -285,9 +279,9 @@ describe('/admin — collective name editing', () => {
 		await fireEvent.keyDown(input, { key: 'Enter' });
 
 		await waitFor(() => {
-			expect(h.updateCollectiveNameMock).toHaveBeenCalledTimes(1);
+			expect(updateCollectiveNameMock).toHaveBeenCalledTimes(1);
 		});
-		expect(h.updateCollectiveNameMock).toHaveBeenCalledWith(
+		expect(updateCollectiveNameMock).toHaveBeenCalledWith(
 			expect.objectContaining(CFG),
 			'marker-1',
 			'Uus Koorinimi'
@@ -309,7 +303,7 @@ describe('/admin — collective name editing', () => {
 		await waitFor(() => {
 			expect(q(container, 'admin-collective-name-input')).toBeNull();
 		});
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 	});
 
@@ -343,7 +337,7 @@ describe('/admin — collective name editing', () => {
 			expect(pencil).not.toBeNull();
 			expect(document.activeElement).toBe(pencil);
 		});
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('Escape dismisses: editor closes, the OLD name stands, NOTHING is written', async () => {
@@ -360,7 +354,7 @@ describe('/admin — collective name editing', () => {
 		});
 		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
 		expect(q(container, 'admin-collective-name')!.textContent).not.toContain('Peaaegu Muudetud');
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('blur dismisses too — #165 pins blur-cancels for THIS surface (unlike the event page\'s blur-confirms)', async () => {
@@ -376,14 +370,14 @@ describe('/admin — collective name editing', () => {
 			expect(q(container, 'admin-collective-name-input')).toBeNull();
 		});
 		expect(q(container, 'admin-collective-name')!.textContent).toContain('Koor Sampledb');
-		expect(h.updateCollectiveNameMock).not.toHaveBeenCalled();
+		expect(updateCollectiveNameMock).not.toHaveBeenCalled();
 	});
 
 	it('the pencil is DISABLED while the write is in flight, re-enabled when it settles (#165 AC)', async () => {
 		selectSampledb();
 		loadOk();
 		const gate = deferred<void>();
-		h.updateCollectiveNameMock.mockReturnValue(gate.promise);
+		updateCollectiveNameMock.mockReturnValue(gate.promise);
 
 		const { container } = await renderWithName();
 		const input = await openEditor(container);
@@ -407,7 +401,7 @@ describe('/admin — collective name editing', () => {
 	it('a FAILED write reverts the display to the pre-edit name and shows a visible alert — never a silent success', async () => {
 		selectSampledb();
 		loadOk();
-		h.updateCollectiveNameMock.mockRejectedValue(new Error('POST failed: 403'));
+		updateCollectiveNameMock.mockRejectedValue(new Error('POST failed: 403'));
 
 		const { container } = await renderWithName();
 		const input = await openEditor(container);

@@ -44,7 +44,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from './+page.svelte';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';

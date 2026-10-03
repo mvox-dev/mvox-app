@@ -4,6 +4,12 @@ import { vi } from 'vitest';
 export const loadEventDetailMock = vi.fn();
 export const convertEventToSeriesMock = vi.fn();
 export const createEventMock = vi.fn();
+export const createSeasonMock = vi.fn();
+export const createEventSeriesMock = vi.fn();
+export const listMyAttendanceMock = vi.fn();
+export const createAttendanceMock = vi.fn();
+export const updateAttendanceStatusMock = vi.fn();
+export const deleteAttendanceMock = vi.fn();
 export const applyAttendanceChangeMock = vi.fn();
 export const listAttendanceMock = vi.fn();
 export const listAllRsvpsForEventMock = vi.fn();
@@ -23,8 +29,17 @@ export async function eventConvertModule(importOriginal: Real) {
 	return { ...(await real(importOriginal)), convertEventToSeries: convertEventToSeriesMock };
 }
 
-export function entityCreateModule() {
-	return { createSeason: vi.fn(), createEventSeries: vi.fn(), createEvent: createEventMock };
+type Created = 'season' | 'series' | 'event';
+
+// Each create in `wired` is the shared handle; the others are bare vi.fn()s.
+export function entityCreateModule(wired: Created[] = ['event']) {
+	const pick = (k: Created, mock: ReturnType<typeof vi.fn>) =>
+		wired.includes(k) ? mock : vi.fn();
+	return {
+		createSeason: pick('season', createSeasonMock),
+		createEventSeries: pick('series', createEventSeriesMock),
+		createEvent: pick('event', createEventMock)
+	};
 }
 
 export function attendanceOptimisticModule() {
@@ -38,6 +53,41 @@ export async function attendanceReadsModule(importOriginal: Real, reads: 'both' 
 		...(await real(importOriginal)),
 		...lists,
 		listAllRsvpsForEvent: listAllRsvpsForEventMock
+	};
+}
+
+type AttendanceRecord = { attendanceId: string; memberId: string; status: string };
+
+function byMemberId(records: AttendanceRecord[]) {
+	const map: Record<string, { attendanceId: string; status: string }> = {};
+	for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
+	return map;
+}
+
+// lists/writes: shared handles or bare vi.fn(); mine: listMyAttendance as handle, empty or absent.
+export function attendanceHandlesModule(opts: {
+	lists: boolean;
+	writes: boolean;
+	mine: 'handle' | 'empty' | 'none';
+}) {
+	const h = (on: boolean, mock: ReturnType<typeof vi.fn>) => (on ? mock : vi.fn());
+	const mine =
+		opts.mine === 'none'
+			? {}
+			: {
+					listMyAttendance:
+						opts.mine === 'handle'
+							? listMyAttendanceMock
+							: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
+				};
+	return {
+		listAttendance: h(opts.lists, listAttendanceMock),
+		...mine,
+		listAllRsvpsForEvent: h(opts.lists, listAllRsvpsForEventMock),
+		createAttendance: h(opts.writes, createAttendanceMock),
+		updateAttendanceStatus: h(opts.writes, updateAttendanceStatusMock),
+		deleteAttendance: h(opts.writes, deleteAttendanceMock),
+		attendanceByMemberId: byMemberId
 	};
 }
 
