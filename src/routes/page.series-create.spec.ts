@@ -82,19 +82,12 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: vi.fn()
 }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule()
+);
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),

@@ -40,15 +40,9 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	deleteRsvp: vi.fn()
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
+);
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';

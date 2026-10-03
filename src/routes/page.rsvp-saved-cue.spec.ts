@@ -61,10 +61,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
 	})
 }));
-vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
-	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
-	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
-}));
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -83,25 +82,12 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/rsvp/rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMock }));
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: (
-		records: Array<{ attendanceId: string; memberId: string; status: string }>
-	) => {
-		const map: Record<string, { attendanceId: string; status: string }> = {};
-		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
-		return map;
-	}
-}));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare', byMember: 'records' })
+);
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
