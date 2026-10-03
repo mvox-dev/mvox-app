@@ -3,8 +3,8 @@ import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const copy: Record<string, (...args: never[]) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare', {
 		picker_partial_members_notice: () => 'Not every member is listed here',
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
@@ -55,11 +55,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_member_rate: (p: { attended: number; total: number }) =>
 			`${p.attended} of ${p.total}`,
 		attendance_all_members: () => 'All members'
-	};
-	return {
-		m: new Proxy(copy, { get: (target, key) => target[key as string] ?? (() => String(key)) })
-	};
-});
+	})
+);
 
 const {
 	loadFullAgendaMock,

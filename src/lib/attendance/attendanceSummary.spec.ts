@@ -78,8 +78,8 @@ describe('deriveAllMemberRates', () => {
 	});
 });
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const known = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('params', {
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 		agenda_today: () => 'Today',
@@ -128,20 +128,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_all_members: () => 'All members',
 		attendance_season_loading: () => 'Loading…',
 		attendance_season_load_error: () => "Couldn't load member rates."
-	};
-	const lookup = known as unknown as Record<
-		string,
-		((params?: Record<string, unknown>) => string) | undefined
-	>;
-	return {
-		m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
-			get: (_t, key) =>
-				lookup[String(key)] ??
-				((params?: Record<string, unknown>) =>
-					params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 const {
 	loadFullAgendaMock,

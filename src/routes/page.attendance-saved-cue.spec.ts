@@ -5,8 +5,8 @@ import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p) => `${(p as { minutes: number }).minutes} min`,
 		agenda_today: () => 'Today',
@@ -65,13 +65,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		},
 		attendance_all_members: () => 'All members',
 		picker_partial_members_notice: () => 'Not every member is listed here'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 const {
 	loadFullAgendaMock,

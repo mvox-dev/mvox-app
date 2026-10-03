@@ -1,67 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #327 RED (component half) — Attendance: the saved state gets its own cue.
-//
-// The defect (issue #327, delta-verified in research-323-328-delta.json):
-// AttendanceSurface mirrors RsvpControl line for line — optimistic value,
-// silent-disable pending (PO-ruled, STAYS), per-row failure alert — and has NO
-// saved state: a P/A/L value whose write reconciled renders byte-identical to
-// one that was never attempted. The live tally derives from the optimistic
-// attendanceByMemberId, so it confirms nothing either.
-//
-// CONTRACT — the shape MIRRORS #326 (its RSVP sibling landed earlier in this
-// run; consistency is #326's own stated pin, and Gama's ruling — #328 comment
-// 5637755878, applied by reference in #327's build note — says shared cue
-// SHAPE, own NODE per surface):
-//
-//   SAVED CUE (per-(event,member) granularity):
-//     • A new `savedMemberIds?: ReadonlySet<string>` prop, sibling to the
-//       existing pendingMemberIds/failedMemberIds — the same per-key Set
-//       pattern, per the research pin ("no new reset site").
-//     • Each member ROW owns a PERSISTENT announcement node,
-//       [data-testid="attendance-saved-status-{memberId}"], role="status"
-//       aria-live="polite", mounted from first render (a live region must
-//       pre-exist its first text change to be announced — the #267 rule) and
-//       BLANK until that member's write reconciles. This is the exact per-row
-//       mirror of #326's rsvp-saved-status (one node per row surface, never a
-//       panel-wide region announcing settles on rows the user isn't watching —
-//       the Gama ruling's point).
-//     • VISIBLE, not sr-only — #326 GREEN's stated choice (a): one combined
-//       visible+aria-live node, following #323's links-reorder-status over
-//       #267's sr-only reference shape. The sibling stays consistent.
-//     • Text through i18n: m.attendance_saved() — this surface's OWN key,
-//       per #326's stated choice (c) (per-surface convention: rsvp_saved /
-//       links_reorder_saved / repertoire_manage_saved).
-//     • `saved` never disables anything and is not aria-busy — a settled
-//       state, the row stays fully interactive.
-//
-//   THE TALLY (issue Done-when bullet 3 — RED's stated choice of the two
-//   permitted behaviours): the tally stays derived from the optimistic map
-//   but is VISIBLY MARKED optimistic exactly while any member's write is in
-//   flight (pendingMemberIds non-empty), via
-//   [data-testid="attendance-tally-unconfirmed"] INSIDE the existing
-//   [data-testid="attendance-tally"] line, carrying
-//   m.attendance_tally_unconfirmed() — and ABSENT when no write is pending
-//   (then every counted value is server-settled, so the counts ARE
-//   confirmed). The alternative (a second, server-confirmed map threaded
-//   through both host pages) buys the same honesty for a much wider diff;
-//   pending-set marking needs no new state at all. A failed write is NOT
-//   marked: revert restores the pre-tap server truth, so the tally is
-//   accurate again (the per-row alert carries the failure).
-//
-//   BYTE-PRESERVED (task pin 4): the pending silent-disable (aria-busy +
-//   aria-disabled, no per-row text) and the per-row failure alert
-//   (attendance-save-failed-{memberId}, role="alert") render exactly as
-//   today; #321's membersPartial notice is untouched and coexists with the
-//   cue.
+// Each member row owns a persistent, visible role=status node, blank until that member's write
+// settles, then m.attendance_saved(). The tally is marked unconfirmed while any write is pending.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AttendanceSurface from './AttendanceSurface.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
 		attendance_status_late: () => 'Late',
@@ -87,13 +34,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		rsvp_status_not_going: () => 'Not going',
 		rsvp_status_maybe: () => 'Maybe',
 		rsvp_status_late: () => 'Running late'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 afterEach(cleanup);
 
@@ -377,14 +319,10 @@ describe('AttendanceSurface — the tally says when its counts are unconfirmed (
 	});
 });
 
-// (*MVOX:Tallis* — #327 RED)
+// (*MVOX:Tallis*)
 
-// ── #361 — the member row's name carries the capture-redaction marker ──────
-//
-// The visible name renders through PersonName. The three aria-labels that
-// carry the name (attendance_rsvp_aria_label, attendance_group_label,
-// attendance_toggle_aria_label) are attributes — no marker can cover them;
-// they are recorded in redact.ts's uncovered channels instead.
+// ── the member row's name carries the capture-redaction marker ──────────────
+// The name's aria-labels are attributes no marker can cover; redact.ts lists them.
 describe('#361 — AttendanceSurface member rows: the name is marked', () => {
 	it('every member row name sits inside exactly one marker', () => {
 		const { container } = render(AttendanceSurface, baseProps());
@@ -393,4 +331,4 @@ describe('#361 — AttendanceSurface member rows: the name is marked', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #361 RED: attendance member row marked)
+// (*MVOX:Tallis*)

@@ -5,11 +5,9 @@ import RepertoireElement from './RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 import type { Work } from '$lib/library/libraryData';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
-		get: (_target, key) => () => `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
+);
 
 afterEach(cleanup);
 

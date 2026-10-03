@@ -14,8 +14,8 @@ import {
 
 // Paraglide mock: real English for the known keys; a Proxy fallback renders "<key> <params>",
 // so a label naming the section holds for any key shape.
-vi.mock('$lib/paraglide/messages.js', () => {
-	const known: Record<string, (p?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('spaced', {
 		roster_title: () => 'Roster',
 		roster_no_collective: () => 'Select a collective to view the roster.',
 		roster_load_error: () => 'Something went wrong loading the roster.',
@@ -37,17 +37,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		roster_section_parent_label: () => 'Parent section',
 		roster_section_create_failed: () => "The section couldn't be created — nothing was saved.",
 		roster_section_write_failed: () => "The section change couldn't be saved."
-	};
-	const m = new Proxy(known, {
-		get(target, prop) {
-			const key = String(prop);
-			if (key in target) return target[key];
-			return (params?: Record<string, unknown>) =>
-				[key, ...(params ? Object.values(params).map(String) : [])].join(' ');
-		}
-	});
-	return { m };
-});
+	})
+);
 
 // Page seams: groupBySection runs real; only the fetch and write seams are mocked.
 const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, reorderMock } =

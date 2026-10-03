@@ -8,11 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const SERVICE_WORKER_PATH = fileURLToPath(new URL('../service-worker.ts', String(import.meta.url)));
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
-		get: (_target, key) => () => `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
+);
 
 const {
 	loadFullAgendaMock,

@@ -10,13 +10,13 @@ import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
 // Unknown keys fall back to "<key> <param values...>", so a label assertion like "contains the
 // member name" holds for any key that takes the name as a param.
-vi.mock('$lib/paraglide/messages.js', () => {
-	const known: Record<string, (p?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('spaced', {
 		agenda_empty_no_events: () => 'No upcoming events.',
-		agenda_duration_min: (p) => `${p?.minutes} min`,
+		agenda_duration_min: (p?: Record<string, unknown>) => `${p?.minutes} min`,
 		agenda_today: () => 'Today',
 		agenda_tomorrow: () => 'Tomorrow',
-		agenda_gap_weeks: (p) => `${p?.weeks} weeks later`,
+		agenda_gap_weeks: (p?: Record<string, unknown>) => `${p?.weeks} weeks later`,
 		agenda_recent: () => 'Recent',
 		agenda_take_attendance: () => 'Take attendance',
 		rsvp_status_going: () => 'Going',
@@ -35,28 +35,21 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		// #113 review F4 — the panel's loading state now carries an sr-only
 		// role="status" saying so (focus lands in the panel while it loads).
 		attendance_loading: () => 'Loading attendance…',
-		attendance_ready: (p) => `Attendance loaded, ${p?.count} members`,
+		attendance_ready: (p?: Record<string, unknown>) => `Attendance loaded, ${p?.count} members`,
 		attendance_save_failed: () => "Couldn't save attendance.",
-		attendance_tally: (p) => `${p?.present} present · ${p?.absent} absent · ${p?.late} late`,
+		attendance_tally: (p?: Record<string, unknown>) =>
+			`${p?.present} present · ${p?.absent} absent · ${p?.late} late`,
 		attendance_close: () => 'Close',
 		attendance_season_summary: () => 'This season',
-		attendance_season_rate: (p) => `Attended ${p?.attended} of ${p?.total} events`,
-		attendance_member_rate: (p) => `${p?.attended} of ${p?.total}`,
+		attendance_season_rate: (p?: Record<string, unknown>) =>
+			`Attended ${p?.attended} of ${p?.total} events`,
+		attendance_member_rate: (p?: Record<string, unknown>) => `${p?.attended} of ${p?.total}`,
 		attendance_all_members: () => 'All members',
 		attendance_season_loading: () => 'Loading…',
 		attendance_season_load_error: () => "Couldn't load member rates.",
 		attendance_badge_aria_label: (p?: Record<string, unknown>) => `Attendance: ${p?.status}`
-	};
-	const m = new Proxy(known, {
-		get(target, prop) {
-			const key = String(prop);
-			if (key in target) return target[key];
-			return (params?: Record<string, unknown>) =>
-				[key, ...(params ? Object.values(params).map(String) : [])].join(' ');
-		}
-	});
-	return { m };
-});
+	})
+);
 
 import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svelte';
 import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
