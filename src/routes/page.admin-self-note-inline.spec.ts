@@ -134,6 +134,8 @@ async function renderReady() {
 
 beforeEach(() => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 });
 
 afterEach(() => {

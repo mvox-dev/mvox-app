@@ -251,6 +251,8 @@ beforeEach(() => {
 			(mock as ReturnType<typeof vi.fn>).mockReset();
 		}
 	}
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 });
 
 afterEach(() => {

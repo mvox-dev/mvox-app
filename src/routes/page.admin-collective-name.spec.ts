@@ -138,6 +138,8 @@ async function openEditor(container: HTMLElement): Promise<HTMLInputElement> {
 
 beforeEach(() => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 });
 
 afterEach(() => {

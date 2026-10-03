@@ -118,6 +118,8 @@ function loadOk() {
 
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
+	resolveDatabaseEntityIdMock.mockReset();
 	loadOk();
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 	await goOnline();
@@ -226,6 +228,8 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listSectionsMock.mockClear();
+		resolveDatabaseEntityIdMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container);
 

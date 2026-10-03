@@ -138,6 +138,7 @@ function setAuthed() {
 
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
 	h.loadRosterMock.mockResolvedValue(toListRead(ROWS));
 	h.loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 	h.loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => ({
@@ -266,6 +267,7 @@ describe('/roster — the member surface while offline (#434 slice 6 review F1)'
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container);
 
@@ -320,6 +322,7 @@ describe('/roster — the arrange surface while offline (#434 slice 6 review F1)
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container, {
 			skip: ['roster-view-chip-collapsed', 'roster-view-chip-expanded']
