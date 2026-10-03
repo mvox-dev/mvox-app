@@ -34,13 +34,9 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn((..._args: unknown[]) => {
-		const [, entityId, personId] = _args as [unknown, string, string];
-		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
-	})
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).repertoireActionsModule(await importOriginal())
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
 );
@@ -64,14 +60,9 @@ const pdfjs = vi.hoisted(() => ({
 }));
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: { workerSrc: '' }, getDocument: pdfjs.getDocument }));
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-worker.mjs' }));
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: vi.fn().mockResolvedValue('member-1'),
-	listMyRsvps: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: vi.fn(),
