@@ -2,9 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, type Readable } from 'svelte/store';
 
-const { discoverMock, gotoMock } = vi.hoisted(() => ({ discoverMock: vi.fn(), gotoMock: vi.fn() }));
-vi.mock('./discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('./discover', async () => (await import('$lib/testing/routeMocks')).discoverModule());
+vi.mock('$app/navigation', async () => (await import('$lib/testing/routeMocks')).navigationModule());
 
 import {
 	collectiveState,
@@ -22,6 +21,7 @@ import type { Collective } from './types';
 import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
 import { resetAppState } from '$lib/testing/appReset';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 
 const A: Collective = { db: 'sampledb', name: 'Sampledb', personId: 'p1' };
 const B: Collective = { db: 'ww', name: 'WW Choir', personId: 'w1' };
