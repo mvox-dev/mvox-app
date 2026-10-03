@@ -1,21 +1,12 @@
 // @vitest-environment happy-dom
-//
-// #255 done-when 2 — the RSVP-comparison panel is naturally ghost-safe: its
-// row set is ROSTER-DRIVEN ({#each members}), so a deactivated member's rsvp
-// map entry has no row to hang on and renders nothing. Guard pin (passes
-// today) so nobody later "fixes" the panel into iterating the rsvp map and
-// resurrects her as a phantom row.
+// The RSVP panel iterates the roster, not the rsvp map, so a deactivated member's
+// rsvp entry renders no phantom row.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 import AttendanceSurface from './AttendanceSurface.svelte';
 import type { AgendaItem } from '$lib/agenda/types';

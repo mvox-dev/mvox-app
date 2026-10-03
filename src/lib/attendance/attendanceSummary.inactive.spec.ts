@@ -1,40 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #255 done-when 3 + acceptance §2 RED — HISTORY KEEPS ITS SUBJECT, in-slice.
-// The conductor's season summary currently derives its row set from the ACTIVE
-// roster (deriveAllMemberRates over RosterRow[], attendanceSummary.ts:42), so
-// deactivating a member silently vanishes her whole history from the one
-// surface that most embodies "past attendance keeps its subject" — the reason
-// deactivate beat delete. Pinned here:
-//
-//   - deriveAllMemberRates grows a 4th param: the INACTIVE members' rows. Their
-//     entries stay, marked inactive, with the attended COUNT and NO rate — no
-//     `total`, no denominator, no percentage, anywhere (Gama: `total` counts
-//     events occurring after she was gone, so any percentage is wrong in a way
-//     that reads as a judgement about the person; there is no honest
-//     denominator without a deactivation date, which done-when 1 forbids).
-//   - That reasoning must live in a CODE COMMENT AT THE SITE (Gama binding) —
-//     pinned below via a source-marker assertion (the phrase "no honest
-//     denominator" must appear in attendanceSummary.ts). Stated choice: marker
-//     assertion, not left to review.
-//   - SeasonSummary renders an inactive entry as a marked row with the count
-//     and WITHOUT the rate message.
-//
-// The RED calls cast around the current 3-arg signature so this file compiles
-// against the unmodified module and fails on ASSERTIONS, not on types.
+// A deactivated member keeps her history in the season summary: marked inactive, with the
+// attended count and no rate (without a deactivation date no denominator is honest).
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 import { deriveAllMemberRates, type MemberAttendanceRate } from './attendanceSummary';
 import type { EventAttendance } from './attendanceData';
@@ -56,7 +30,6 @@ const records: EventAttendance[] = [
 	{ attendanceId: 'a4', memberId: 'm9', status: 'absent' }
 ] as EventAttendance[];
 
-// The widened signature GREEN implements; RED casts to call it today.
 const derive = deriveAllMemberRates as unknown as (
 	allAttendances: EventAttendance[],
 	members: RosterRow[],

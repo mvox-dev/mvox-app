@@ -16,14 +16,9 @@ beforeEach(() => {
 	vi.setSystemTime(NOW);
 });
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 const pageStub = vi.hoisted(() => ({
 	params: { id: 'ev1' } as Record<string, string>,

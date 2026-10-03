@@ -2,11 +2,15 @@
 type Message = (params?: Record<string, unknown>) => string;
 export type Copy = Record<string, (params: never) => string>;
 
-export type EchoFormat = 'params' | 'bracket' | 'bare'; // [key {"n":1}] | [key] | key
+// [key {"n":1}] | key {"n":1} | [key] | key; 'plain' drops empty params
+export type EchoFormat = 'params' | 'plain' | 'bracket' | 'bare';
 
 function echo(key: string, format: EchoFormat): Message {
 	if (format === 'bare') return () => key;
 	if (format === 'bracket') return () => `[${key}]`;
+	if (format === 'plain')
+		return (params) =>
+			params && Object.keys(params).length > 0 ? `${key} ${JSON.stringify(params)}` : key;
 	return (params) => (params ? `[${key} ${JSON.stringify(params)}]` : `[${key}]`);
 }
 

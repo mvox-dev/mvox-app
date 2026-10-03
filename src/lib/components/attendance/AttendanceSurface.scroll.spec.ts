@@ -1,30 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #158 — the attendance panel scrolls itself into view once its DATA has
-// landed, not when it merely opened.
-//
-// Why this file exists (review F4): the fix is one `$effect` keyed on the
-// `loading` prop, and NOTHING else in the suite observes scrolling — the panel
-// specs all assert on rendered rows, which look identical whether the scroll
-// fires on mount, on every re-render, or never. A future refactor that moves
-// the call into `onMount` would restore exactly the bug #158 reports (the page
-// scrolls against the three-row loading skeleton and lands short of the roster
-// once the real rows expand it) with a fully green suite. These pin the edge
-// the scroll hangs off, not just that a scroll happens.
+// The panel scrolls into view when its data lands, not when it opens: scrolling on mount
+// lands short against the loading skeleton, and nothing else in the suite sees scrolling.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import AttendanceSurface from './AttendanceSurface.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { RosterRow } from '$lib/roster/rosterData';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 afterEach(() => {
 	cleanup();
@@ -140,4 +125,4 @@ describe('#158 — AttendanceSurface auto-scroll', () => {
 	});
 });
 
-// (*MVOX:Palestrina* — #157/#158 review round 1, F4)
+// (*MVOX:Palestrina*)

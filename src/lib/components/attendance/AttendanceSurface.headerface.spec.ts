@@ -1,22 +1,11 @@
 // @vitest-environment happy-dom
-//
-// #290 (ruling (a), narrow — 2026-09-09) — the attendance panel's header span
-// (the EVENT name beside the close button) is the smallest truncated user text
-// in the app and must NOT use the display face. Size/truncation/layout stay as
-// they are (`truncate text-sm`); only `font-display` goes. This test is the
-// pin against a later "consistency restoration" re-adding the face — the other
-// font-display uses across the app are deliberately kept.
+// The panel's header span (event name) is the smallest truncated user text: no display face.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 import AttendanceSurface from './AttendanceSurface.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
