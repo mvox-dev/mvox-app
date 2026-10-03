@@ -1,29 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #107 RED — auth token expiry recovery on the AGENDA page (integration).
-//
-// When the agenda load fails BECAUSE THE SESSION EXPIRED (Entu 401 → the
-// entuFetch layer rejects with an error whose `name === 'AuthExpiredError'` —
-// see request.auth-expired.spec.ts for that contract), the page must say so:
-// a session-expired notice with a sign-in link — NOT the misleading
-// "Couldn't load the agenda" + Retry (retrying with a dead token can never
-// succeed).
-//
-// CONTRACT (for the GREEN implementer):
-//   - detection via `isAuthExpiredError` from `$lib/entu/request` (name-tag
-//     duck typing — this spec constructs a plain Error with the name set, so
-//     the check must NOT be instanceof);
-//   - `data-testid="session-expired"` — the notice container;
-//   - `data-testid="session-expired-signin"` — an <a> whose href points at
-//     `/auth/login`;
-//   - Paraglide keys `session_expired_message` / `session_expired_signin`
-//     (mocked below);
-//   - the generic `agenda-error` / `agenda-retry` UI must NOT render for this
-//     failure class. (Generic failures keep it — page.agenda-error.spec.ts
-//     already pins that regression side.)
-//
-// Mock scaffolding is inherited verbatim from page.agenda-error.spec.ts — the
-// page pulls the same module graph regardless of which failure we exercise.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -36,18 +11,12 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		agenda_gap_weeks: (params: { weeks: number }) => `In ${params.weeks} weeks`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
 		agenda_filter_empty: () => 'No events match this filter.',
-		// #107 — the session-expired notice this RED spec introduces.
 		session_expired_message: () => 'Your session has expired. Please sign in again.',
 		session_expired_signin: () => 'Sign in'
 	}
@@ -64,18 +33,10 @@ const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRs
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
-// Same boundary severing as page.agenda-error.spec.ts (see the rationale
-// comments there): $env is unavailable outside a SvelteKit request context
-// under happy-dom, and the write layers are not this spec's subject.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -109,9 +70,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 		return map;
 	}
 }));
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -119,17 +77,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-/** The error shape the entuFetch layer rejects with on 401 — duck-typed by
- *  name so the page's detection works across module boundaries (contract in
- *  request.auth-expired.spec.ts). */
 function authExpiredError(): Error {
 	const e = new Error('Entu returned 401 — session expired');
 	e.name = 'AuthExpiredError';
@@ -137,18 +88,7 @@ function authExpiredError(): Error {
 }
 
 function setAuthedWithOneCollective() {
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'p1' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
 }
 
 findMyMemberIdMock.mockResolvedValue(null);
@@ -160,8 +100,7 @@ afterEach(() => {
 	findMyMemberIdMock.mockReset().mockResolvedValue(null);
 	listMyRsvpsMock.mockReset().mockResolvedValue([]);
 	gotoMock.mockReset();
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/ (agenda) — session expired (#107)', () => {
@@ -174,15 +113,12 @@ describe('/ (agenda) — session expired (#107)', () => {
 			expect(container.querySelector('[data-testid="agenda-skeleton"]')).toBeNull();
 		});
 
-		// The truthful state: session expired, with a way back in.
 		const notice = container.querySelector('[data-testid="session-expired"]');
 		expect(notice, 'session-expired notice must render').not.toBeNull();
 		const signin = container.querySelector('[data-testid="session-expired-signin"]');
 		expect(signin, 'session-expired notice must carry a sign-in link').not.toBeNull();
 		expect(signin?.getAttribute('href') ?? '').toContain('/auth/login');
 
-		// The misleading state: a data-loading error with a Retry that can never
-		// succeed against a dead token.
 		expect(container.querySelector('[data-testid="agenda-error"]')).toBeNull();
 		expect(container.querySelector('[data-testid="agenda-retry"]')).toBeNull();
 	});

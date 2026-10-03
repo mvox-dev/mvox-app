@@ -1,38 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #400 RED — the series-delete trigger asks the SERIES' own rights, on the
-// ACTUAL agenda route (integration: real +page.svelte, real season-manage
-// panel; only the data seams are mocked — same harness family as
-// page.season-manage-delete.spec.ts).
-//
-// WHY (issue #400, epic #362 rules 1-2): the season-manage panel's gate is
-// season-level (`_owner`/`_editor` on the SEASON), but Entu's entity DELETE
-// checks `_owner` on the TARGET — the series itself ("Only _owner users can
-// delete an entity"). A season _editor who did not create a series inherits
-// _editor on it (tier-for-tier), holds no `_owner`, and every delete they were
-// shown was a foreseeable 403 the app papered over with the `forbidden`
-// fallback copy. Entu's grants are the only authority: the delete trigger
-// renders ONLY when the caller's personId is among that series' OWN `_owner`
-// refs (`ownerIds` on the list row — seasonManage.seriesOwner.spec.ts pins the
-// wire side).
-//
-// Pinned contract (GREEN must implement):
-//   - series whose ownerIds INCLUDE the caller → `season-manage-series-delete-
-//     {id}` renders, as before;
-//   - series whose ownerIds EXCLUDE the caller — or are [] (private bucket
-//     withheld: no grant visible IS no grant) → NO delete trigger on that row,
-//     while the row itself (name, event count) stays;
-//   - the `forbidden` fallback copy stays in code (page.season-manage-delete.
-//     spec.ts pins it) but is UNREACHABLE from a rendered control: a not-owned
-//     series offers no click path to the delete write at all;
-//   - every OTHER control behind the season-level gate is untouched: panel
-//     entry, season delete, name/date edit, conductor chips + select,
-//     add-series, add-event all render exactly as before for a season editor.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; no new strings in #400.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -152,21 +122,12 @@ vi.mock('$lib/repertoire/repertoireData', () => ({
 import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
-
-// ── fixtures ────────────────────────────────────────────────────────────────────
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
-/** The viewer. A season EDITOR (the panel's gate) — deliberately NOT the
- *  creator/owner of every series inside it: that is issue #400's exact case. */
 const VIEWER = 'person-p';
 
 function isoDate(offsetDays: number): string {
@@ -179,8 +140,6 @@ function currentSeason(): Season {
 		name: 'Season 2026',
 		startDate: isoDate(-30),
 		endDate: isoDate(60),
-		// One conductor, so the chip + its × render — part of the "every other
-		// control unchanged" pin below.
 		conductors: ['cond-1'],
 		owners: [],
 		editors: [VIEWER]
@@ -198,8 +157,6 @@ function agendaResult() {
 	});
 }
 
-/** A series row as the widened data layer returns it — `ownerIds` is the
- *  series' OWN `_owner` refs, ids only (ER-26). */
 interface OwnedSeriesRow {
 	id: string;
 	name: string;
@@ -207,13 +164,6 @@ interface OwnedSeriesRow {
 	ownerIds: string[];
 }
 
-/** The three #400 cases side by side, in ONE list:
- *   - mine:    the viewer IS among the series' owners (they created it) → keeps
- *              its delete trigger;
- *   - theirs:  owners visible but the viewer is NOT among them → no trigger;
- *   - opaque:  `_owner` came back absent (private bucket withheld — the caller
- *              holds no grant on that series at all) → no trigger, same as
- *              theirs: no visible grant IS no grant, fail closed. */
 function threeSeries(): OwnedSeriesRow[] {
 	return [
 		{ id: 'series-mine', name: 'Monday rehearsals', eventCount: 12, ownerIds: [VIEWER, 'person-x'] },
@@ -225,19 +175,7 @@ function threeSeries(): OwnedSeriesRow[] {
 let seriesRows: OwnedSeriesRow[] = [];
 
 function setAuthedWithOneCollective(): void {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: VIEWER },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: VIEWER }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: VIEWER }] });
 }
 
 beforeEach(() => {
@@ -287,9 +225,7 @@ afterEach(() => {
 	countSeriesOccurrencesMock.mockReset();
 	countSeasonScopeMock.mockReset();
 	deleteSeasonMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -305,7 +241,6 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-/** Expand the season card, wait for the panel AND the series rows. */
 async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
 	const panel = await openSeasonCardPanel(container);
 	await waitFor(() => {
@@ -314,14 +249,9 @@ async function openPanelWithRows(container: HTMLElement): Promise<HTMLElement> {
 	return panel;
 }
 
-/** Every rendered series-delete AFFORDANCE on the page — trigger and armed
- *  confirm alike (both share the `season-manage-series-delete-` prefix), so
- *  "no affordance" means no click path to the delete write at all. */
 function allSeriesDeleteAffordances(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll('[data-testid^="season-manage-series-delete-"]'));
 }
-
-// ── #400: the trigger derives from the SERIES' own _owner ───────────────────────
 
 describe('agenda — #400 series-delete renders only with _owner on the series itself (integration: real route)', () => {
 	it('a series whose _owner includes the caller keeps its delete trigger', async () => {
@@ -339,14 +269,11 @@ describe('agenda — #400 series-delete renders only with _owner on the series i
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
-		// The row is readable data — never hidden behind an app predicate.
 		const row = q(container, 'season-manage-series-series-theirs') as HTMLElement;
 		expect(row).not.toBeNull();
 		expect(row.textContent).toContain('Sectionals');
-		// The event-count sentence survives too (a control left, not the row).
 		expect(row.textContent).toContain('season_manage_series_event_count');
 
-		// The write's grant is not in hand → the write's control does not render.
 		expect(q(container, 'season-manage-series-delete-series-theirs')).toBeNull();
 	});
 
@@ -373,8 +300,6 @@ describe('agenda — #400 series-delete renders only with _owner on the series i
 	});
 });
 
-// ── #400: the forbidden fallback stays, but no rendered control reaches it ──────
-
 describe('agenda — #400 the forbidden fallback is unreachable from a rendered control', () => {
 	it('with only NOT-owned series in the list there is NO series-delete affordance anywhere, and the delete write is never called', async () => {
 		seriesRows = [
@@ -384,17 +309,11 @@ describe('agenda — #400 the forbidden fallback is unreachable from a rendered 
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
-		// No trigger, no armed confirm — no click path to the cascade at all.
-		// (The `season_manage_delete_forbidden` copy itself stays in code as the
-		// backstop for a grant revoked mid-session; its rendering contract is
-		// pinned in page.season-manage-delete.spec.ts and does not move.)
 		expect(allSeriesDeleteAffordances(container)).toHaveLength(0);
 		expect(deleteEventSeriesMock).not.toHaveBeenCalled();
 		expect(countSeriesOccurrencesMock).not.toHaveBeenCalled();
 	});
 });
-
-// ── #400: everything ELSE behind the season-level gate is untouched ─────────────
 
 describe('agenda — #400 the season-level gate still wraps every other control unchanged', () => {
 	it('a season editor with NO grant on any listed series still gets: panel entry, season delete, name/date edit, conductor chip + × + select, add-series, add-event', async () => {
@@ -404,22 +323,17 @@ describe('agenda — #400 the season-level gate still wraps every other control 
 		const container = await renderReady();
 		await openPanelWithRows(container);
 
-		// Panel entry (the card) opened above; the panel is standing.
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
-		// The season's own delete — the SEASON gate's control, not the series'.
 		expect(q(container, 'season-manage-delete-season')).not.toBeNull();
-		// Field edit activators: name + both date bounds.
 		expect(q(container, 'season-edit-btn-name')).not.toBeNull();
 		expect(q(container, 'season-edit-btn-start_date')).not.toBeNull();
 		expect(q(container, 'season-edit-btn-end_date')).not.toBeNull();
-		// Conductor management: the chip, its remove ×, and the add select.
 		expect(q(container, 'season-manage-conductor-cond-1')).not.toBeNull();
 		expect(q(container, 'season-manage-conductor-remove-cond-1')).not.toBeNull();
 		expect(q(container, 'season-manage-conductor-select')).not.toBeNull();
-		// Creation entry points.
 		expect(q(container, 'season-manage-add-series')).not.toBeNull();
 		expect(q(container, 'season-manage-add-event')).not.toBeNull();
 	});
 });
 
-// (*MVOX:Tallis* — #400 RED)
+// (*MVOX:Tallis*)

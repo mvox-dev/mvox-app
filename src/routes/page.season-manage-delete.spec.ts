@@ -146,15 +146,11 @@ import {
 	SEASON_CARD_COLLAPSE
 } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { testCfg } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
@@ -219,19 +215,7 @@ function resetRows(): void {
 }
 
 function setAuthedWithOneCollective(): void {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -288,9 +272,7 @@ afterEach(() => {
 	countSeriesOccurrencesMock.mockReset();
 	countSeasonScopeMock.mockReset();
 	deleteSeasonMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -981,22 +963,12 @@ describe('agenda — #217 season delete is a TWO-step confirm quoting the LIVE s
 	});
 
 	it('a scope read still in flight when the operator switches collective never lands in the NEW collective’s confirm', async () => {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 
 		let landSampledbRead!: (scope: PageScope) => void;
 		let reads = 0;
@@ -1162,22 +1134,12 @@ describe('agenda — #217/#216/#236 ONE progress counter at CARD level, for BOTH
 	});
 
 	it('a collective switch mid-cascade clears the counter — and a late tick from the abandoned run never resurrects it', async () => {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 
 		const run = hangingDeleteSeason();
 		const { container } = render(Page);
@@ -1208,22 +1170,12 @@ describe('agenda — #217/#216/#236 ONE progress counter at CARD level, for BOTH
 	});
 
 	it('#217 review F3 — a cascade that COMPLETES after the collective switch lands nowhere: no reload of the new collective, no announcement of the old one', async () => {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p', 'org-b': 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
+		signIn({
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 
 		const run = hangingDeleteSeason();
 		const { container } = render(Page);
