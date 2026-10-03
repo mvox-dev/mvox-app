@@ -2,9 +2,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import { collectiveState, hydrateCollectives } from './store';
 import { checkCollectiveMarker } from './marker';
@@ -15,6 +18,7 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetAppState } from '$lib/testing/appReset';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 function stubFetchStatus(status: number) {
 	vi.stubGlobal(

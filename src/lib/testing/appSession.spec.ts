@@ -3,7 +3,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 
 import { authStore } from '$lib/auth/session';
 import { getToken, setLastProvider, getLastProvider } from '$lib/auth/storage';
