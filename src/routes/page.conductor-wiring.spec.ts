@@ -82,20 +82,9 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 }));
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: (
-		records: Array<{ attendanceId: string; memberId: string; status: string }>
-	) => {
-		const map: Record<string, { attendanceId: string; status: string }> = {};
-		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
-		return map;
-	}
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare', byMember: 'records' })
+);
 
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())

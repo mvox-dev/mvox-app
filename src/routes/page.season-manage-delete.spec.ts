@@ -100,22 +100,15 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 	updateRsvpStatus: vi.fn(),
 	deleteRsvp: vi.fn()
 }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn().mockResolvedValue([]),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule()
+);
 // #234 — importOriginal for collectSources/buildWorkRows: the panel's new
 // repertoire section calls them for real (pure, no fetch); only
 // loadWorksByEventId (the fetching entry point) is mocked here.
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 // The viewer IS a season editor here, so the page's loadManagePickers fires —
 // stub its reads or they hit the network.
