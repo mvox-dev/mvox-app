@@ -3,65 +3,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total}`,
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since',
-		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`,
-		library_create_work_button: () => 'Add work',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_cancel: () => 'Cancel',
-		library_create_work_name_required: () => 'Work title is required.',
-		library_create_work_created: (p: { name: string }) => `${p.name} created.`,
-		library_create_work_error: () => 'Could not create the work.',
-		library_create_edition_button: () => 'Add edition',
-		library_create_edition_name_label: () => 'Name',
-		library_create_edition_publisher_label: () => 'Publisher',
-		library_create_edition_submit: () => 'Create edition',
-		library_create_edition_cancel: () => 'Cancel',
-		library_create_edition_name_required: () => 'Edition name is required.',
-		library_create_edition_created: (p: { name: string }) => `${p.name} created.`,
-		library_create_edition_error: () => 'Could not create the edition.'
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -120,7 +62,7 @@ vi.mock('$lib/entity/entityCreate', async () => {
 
 import Page from './library/+page.svelte';
 import { clearAll } from '$lib/auth/storage';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
@@ -139,19 +81,8 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
-
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-	listSeasonsMock.mockResolvedValue([]);
-	listRepertoireItemsMock.mockResolvedValue([]);
-}
+import { expandWork, mockLibrarian, signInLibraryReader } from '$lib/testing/pages/library';
+import { expectTouchTarget } from '$lib/testing/pages/dom';
 
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(toListRead([
@@ -175,10 +106,6 @@ function mockBaselineLibrary() {
 	);
 	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
-}
-
-function mockLibrarian() {
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
 afterEach(() => {
@@ -211,19 +138,10 @@ async function renderReady(): Promise<HTMLElement> {
 	return container;
 }
 
-async function expandWork(container: HTMLElement, workId: string): Promise<void> {
-	await fireEvent.click(
-		container.querySelector(`[data-testid="library-work-toggle-${workId}"]`) as Element
-	);
-	await waitFor(() => {
-		expect(container.querySelector(`#library-editions-${workId}`)).not.toBeNull();
-	});
-}
-
 describe('#271 — create-edition control placement on /library (integration)', () => {
 	it('a POPULATED work offers it: the button renders INSIDE #library-editions-{workId}, alongside the edition list (sibling after the list, not a replacement of it)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -246,7 +164,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a ZERO-EDITIONS work offers it TOO — the empty message and the button render together (the empty branch is mutually exclusive with the list branch, so an in-branch insert would hide the control exactly when a new work needs it most)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -264,7 +182,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a work whose editions are still LOADING does not offer it', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2'
@@ -290,7 +208,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('a work whose edition read ERRORED does not offer it — the retry affordance owns that state', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 		listEditionsMock.mockImplementation((_cfg: unknown, workId: string) =>
 			workId === 'work-2' ? Promise.reject(new Error('boom')) : Promise.resolve(toListRead([]))
@@ -309,7 +227,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('ABSENT (not disabled) for a non-librarian — the editions still render (inline gate on the tree, fail-closed)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 
 		const container = await renderReady();
@@ -323,7 +241,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 
 	it('hidden while resolveLibrarian is still pending (hidden-if-undeterminable)', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		resolveLibrarianMock.mockReturnValue(new Promise(() => {}));
 
 		const container = await renderReady();
@@ -339,7 +257,7 @@ describe('#271 — create-edition control placement on /library (integration)', 
 describe('#271 — form state is keyed per work (expandedWorks is a Set: several works open at once)', () => {
 	it('opening the form under work-2 leaves work-1 formless, and what was typed under work-2 never appears under work-1', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -382,7 +300,7 @@ describe('#271 — form state is keyed per work (expandedWorks is a Set: several
 
 async function renderWithFormOpen(workId = 'work-2'): Promise<HTMLElement> {
 	mockBaselineLibrary();
-	setAuthedWithOneCollective();
+	signInLibraryReader({ chains: true, seasons: true });
 	mockLibrarian();
 	const container = await renderReady();
 	await expandWork(container, workId);
@@ -403,7 +321,7 @@ async function renderWithFormOpen(workId = 'work-2'): Promise<HTMLElement> {
 describe('#271 — inline create-edition form', () => {
 	it('no form in the DOM until the button is clicked; clicking reveals the inline form with a name input and a publisher input, both labelled, plus a submit control', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();
@@ -625,19 +543,10 @@ describe('#271 — the form is escapable, and open/close CLEAR state', () => {
 	});
 });
 
-function expectTouchTarget(container: HTMLElement, testid: string): void {
-	const el = container.querySelector(`[data-testid="${testid}"]`) as HTMLElement | null;
-	expect(el, `${testid} must be in the DOM`).not.toBeNull();
-	expect(
-		Array.from((el as HTMLElement).classList),
-		`${testid} must reserve a 44px-tall touch target (min-h-11)`
-	).toContain('min-h-11');
-}
-
 describe('#271 — create-edition controls are focusable, labelled 44px touch targets', () => {
 	it('the entry-point button reserves min-h-11, is keyboard-reachable (no negative tabindex) and carries its accessible name as text', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		mockLibrarian();
 
 		const container = await renderReady();

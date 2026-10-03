@@ -3,7 +3,7 @@
 // #93 TR.5 — i18n + a11y for the Repertoire 1.0 surfaces: RepertoireElement (the agenda
 // Works element) and the library tree's repertoire badges. Source scans for i18n,
 // rendered-DOM tests for aria semantics (the #86/TA.5 precedent).
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -94,39 +94,22 @@ import type { ComponentProps } from 'svelte';
 import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 import LibraryPage from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 import {
 	listAllCopiesMock,
 	listAllEditionsMock,
-	listCopiesMock,
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
 	resolveBorrowerNamesMock,
 	resolveCopyNamesMock
 } from '$lib/testing/mocks/library';
+import { resetRepertoireBadgeMocks } from '$lib/testing/pages/library';
 
-afterEach(() => {
-	cleanup();
-	listWorksMock.mockReset();
-	listEditionsMock.mockReset();
-	listCopiesMock.mockReset();
-	listAllEditionsMock.mockReset();
-	listAllCopiesMock.mockReset();
-	listLendingsMock.mockReset();
-	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listActiveMembersMock.mockReset();
-	listSeasonsMock.mockReset();
-	listRepertoireItemsMock.mockReset();
-	resetAppState();
-});
+afterEach(resetRepertoireBadgeMocks);
 
 // Fixtures
 function workRow(id: string, overrides: Partial<WorkRow> = {}): WorkRow {

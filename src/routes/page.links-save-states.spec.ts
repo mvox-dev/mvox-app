@@ -34,7 +34,6 @@ import type { LinkRow } from '$lib/links/linkData';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -42,39 +41,14 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
-
-function rows(): LinkRow[] {
-	return [
-		{
-			id: 'l-rec',
-			name: 'Salvestused',
-			url: 'https://f.io/GCkGMr5J',
-			description: 'Crede recordings',
-			displayOrder: 1
-		},
-		{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 2 },
-		{
-			id: 'l-site',
-			name: 'Website',
-			url: 'https://crede.ee',
-			description: 'Choir website',
-			displayOrder: 3
-		}
-	];
-}
-
-function setAuthed() {
-	signIn();
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
-}
+import {
+	rowEls,
+	rowNames,
+	rows,
+	setAuthed,
+	setAuthedWithTwoCollectives
+} from '$lib/testing/pages/links';
+import { q, qa } from '$lib/testing/pages/dom';
 
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -101,24 +75,6 @@ async function flush(): Promise<void> {
 	await Promise.resolve();
 	await new Promise((r) => setTimeout(r, 0));
 	await tick();
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-function qa(container: HTMLElement, testid: string): HTMLElement[] {
-	return Array.from(container.querySelectorAll(`[data-testid="${testid}"]`));
-}
-
-function rowEls(container: HTMLElement): HTMLElement[] {
-	return qa(container, 'links-row');
-}
-
-function rowNames(container: HTMLElement): string[] {
-	return rowEls(container).map(
-		(r) => r.querySelector('[data-testid="links-row-name"]')?.textContent?.trim() ?? ''
-	);
 }
 
 function arrowButtons(container: HTMLElement): HTMLButtonElement[] {

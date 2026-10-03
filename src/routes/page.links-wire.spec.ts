@@ -1,6 +1,6 @@
 // /links driven against the real link data layer: list order, create body, renumber wire.
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -26,31 +26,15 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
-
-const DB_ENTITY = 'db-ent-1';
-const TYPE_ID = 'type-link-1';
-
-interface WireCall {
-	db: string;
-	path: string;
-	method: string;
-	body: unknown;
-}
-
-function wireCalls(): WireCall[] {
-	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>).map(
-		([db, path, , init]) => ({
-			db,
-			path: String(path),
-			method: init?.method ?? 'GET',
-			body: init?.body ? JSON.parse(String(init.body)) : undefined
-		})
-	);
-}
+import {
+	DB_ENTITY,
+	TYPE_ID,
+	cleanupClearAdmin,
+	setAuthedAdmin,
+	wireCalls
+} from '$lib/testing/pages/links';
+import { q } from '$lib/testing/pages/dom';
 
 function installWireRouter() {
 	entuFetchMock.mockImplementation((_db: string, path: string, _token: string, init?: RequestInit) => {
@@ -96,27 +80,13 @@ function installWireRouter() {
 	});
 }
 
-function setAuthedAdmin() {
-	signIn();
-	adminStore.set('admin');
-}
-
 beforeEach(() => {
 	resetTypeIdCache();
 	installWireRouter();
 	setAuthedAdmin();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearAdmin);
 
 function rowEls(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));

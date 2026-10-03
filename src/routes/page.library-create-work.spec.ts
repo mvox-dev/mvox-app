@@ -4,58 +4,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total}`,
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since',
-		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`,
-		// #198 — create-work affordance
-		library_create_work_button: () => 'Add work',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_cancel: () => 'Cancel',
-		library_create_work_name_required: () => 'Work title is required.',
-		library_create_work_created: (p: { name: string }) => `${p.name} created.`,
-		library_create_work_error: () => 'Could not create the work.'
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -117,7 +66,7 @@ vi.mock('$lib/entity/entityCreate', async () => {
 
 import Page from './library/+page.svelte';
 import { clearAll } from '$lib/auth/storage';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
@@ -136,6 +85,8 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import { mockLibrarian } from '$lib/testing/pages/library';
+import { expectTouchTarget } from '$lib/testing/pages/dom';
 
 function setAuthedWithOneCollective() {
 	signIn();
@@ -160,10 +111,6 @@ function mockBaselineLibrary() {
 	]));
 	listLendingsMock.mockResolvedValue(toListRead([]));
 	resolveBorrowerNamesMock.mockResolvedValue(new Map());
-}
-
-function mockLibrarian() {
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
 afterEach(() => {
@@ -361,18 +308,6 @@ async function renderWithFormOpen(): Promise<HTMLElement> {
 		expect(container.querySelector('[data-testid="create-work-form"]')).not.toBeNull();
 	});
 	return container;
-}
-
-// happy-dom computes no layout, so the testable truth is the CLASS contract —
-// Tailwind spacing 11 = 2.75rem = 44px (WCAG 2.5.5). Same helper shape as
-// page.agenda-admin.spec.ts's expectTouchTarget.
-function expectTouchTarget(container: HTMLElement, testid: string): void {
-	const el = container.querySelector(`[data-testid="${testid}"]`) as HTMLElement | null;
-	expect(el, `${testid} must be in the DOM`).not.toBeNull();
-	expect(
-		Array.from((el as HTMLElement).classList),
-		`${testid} must reserve a 44px-tall touch target (min-h-11)`
-	).toContain('min-h-11');
 }
 
 describe('#198 — create-work controls are 44px touch targets', () => {

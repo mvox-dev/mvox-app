@@ -72,7 +72,6 @@ import Page from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
 import {
@@ -89,6 +88,12 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
+import {
+	expandEdition,
+	expandWork,
+	renderReady,
+	signInLibraryReader
+} from '$lib/testing/pages/library';
 
 let fakeByteStore: FakeByteStore;
 
@@ -110,19 +115,6 @@ function pdfData() {
 		filetype: 'application/pdf',
 		sha256: 'sha-fixture'
 	};
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-	listSeasonsMock.mockResolvedValue([]);
-	listRepertoireItemsMock.mockResolvedValue([]);
 }
 
 function mockBaselineLibrary() {
@@ -174,37 +166,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-async function renderReady(): Promise<HTMLElement> {
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="library-work-work-1"]')).not.toBeNull();
-	});
-	return container;
-}
-
-async function expandWork(container: HTMLElement, workId: string): Promise<void> {
-	await fireEvent.click(
-		container.querySelector(`[data-testid="library-work-toggle-${workId}"]`) as Element
-	);
-	await waitFor(() => {
-		expect(container.querySelector(`#library-editions-${workId}`)).not.toBeNull();
-	});
-}
-
-async function expandEdition(container: HTMLElement, editionId: string): Promise<void> {
-	await waitFor(() => {
-		expect(
-			container.querySelector(`[data-testid="library-edition-toggle-${editionId}"]`)
-		).not.toBeNull();
-	});
-	await fireEvent.click(
-		container.querySelector(`[data-testid="library-edition-toggle-${editionId}"]`) as Element
-	);
-	await waitFor(() => {
-		expect(container.querySelector(`#library-copies-${editionId}`)).not.toBeNull();
-	});
-}
-
 async function renderWithFilesVisible(): Promise<HTMLElement> {
 	const container = await renderReady();
 	await expandWork(container, 'work-1');
@@ -220,7 +181,7 @@ async function renderWithFilesVisible(): Promise<HTMLElement> {
 describe('#351 — /library: one indicator, two states, on every file row (integration)', () => {
 	it('a held file badges on-device, an unheld file badges needs-network — both states in the SAME render, each INSIDE its own file row', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		installPresence();
 
@@ -242,7 +203,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('THE trap: rendering asks presence ONCE for the whole list — never get() — and asks for the CURRENT identity partition', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		const presenceSpy = installPresence();
 		const getSpy = vi.spyOn(fakeByteStore, 'get');
@@ -258,7 +219,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('while the store has NOT answered, NEITHER badge renders — no default-then-correct', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		const pending = deferred<string[]>();
 		installPresence(() => pending.promise);
 
@@ -284,7 +245,7 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 
 	it('the badge is NOT a control: no button/link semantics, and clicking it signs nothing and opens nothing — the row Open affordance is untouched beside it', async () => {
 		mockBaselineLibrary();
-		setAuthedWithOneCollective();
+		signInLibraryReader({ chains: true, seasons: true });
 		fakeByteStore.seed(IDENTITY, 'file-held', pdfData());
 		installPresence();
 		const openSpy = vi.spyOn(window, 'open');

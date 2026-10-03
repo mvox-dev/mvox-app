@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -46,23 +46,14 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
-import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 import {
-	listAllCopiesMock,
-	listAllEditionsMock,
-	listCopiesMock,
-	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
+import { resetRepertoireBadgeMocks, signInLibraryReader } from '$lib/testing/pages/library';
 
 const SEASONS = [
 	{
@@ -100,16 +91,6 @@ const REPERTOIRE_ITEMS = [
 	{ id: 'rep-4', workId: 'work-dropped', editionId: '', status: 'dropped', name: 'Os justi' }
 ];
 
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-}
-
 function mockHappyPath() {
 	listWorksMock.mockResolvedValue(toListRead(WORKS));
 	listLendingsMock.mockResolvedValue(toListRead([]));
@@ -126,28 +107,12 @@ async function renderReady() {
 	return container;
 }
 
-afterEach(() => {
-	cleanup();
-	listWorksMock.mockReset();
-	listEditionsMock.mockReset();
-	listCopiesMock.mockReset();
-	listAllEditionsMock.mockReset();
-	listAllCopiesMock.mockReset();
-	listLendingsMock.mockReset();
-	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listActiveMembersMock.mockReset();
-	listSeasonsMock.mockReset();
-	listRepertoireItemsMock.mockReset();
-	resetAppState();
-});
+afterEach(resetRepertoireBadgeMocks);
 
 describe('#92 TR.4 — library browse tree repertoire badges', () => {
 	it('queries the CURRENT season repertoire once on load — listRepertoireItems(cfg, currentSeasonId)', async () => {
 		mockHappyPath();
-		setAuthedWithOneCollective();
+		signInLibraryReader();
 
 		await renderReady();
 
@@ -161,7 +126,7 @@ describe('#92 TR.4 — library browse tree repertoire badges', () => {
 
 	it('a work in the repertoire shows a badge with its status: active = green dot, learning = amber dot', async () => {
 		mockHappyPath();
-		setAuthedWithOneCollective();
+		signInLibraryReader();
 
 		const container = await renderReady();
 
@@ -194,7 +159,7 @@ describe('#92 TR.4 — library browse tree repertoire badges', () => {
 
 	it('a work NOT in the current season repertoire shows no badge', async () => {
 		mockHappyPath();
-		setAuthedWithOneCollective();
+		signInLibraryReader();
 
 		const container = await renderReady();
 
@@ -210,7 +175,7 @@ describe('#92 TR.4 — library browse tree repertoire badges', () => {
 
 	it('retired and dropped repertoire works show NO badge to a member (AC-8 carried over)', async () => {
 		mockHappyPath();
-		setAuthedWithOneCollective();
+		signInLibraryReader();
 
 		const container = await renderReady();
 

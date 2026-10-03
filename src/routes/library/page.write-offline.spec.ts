@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -60,7 +60,6 @@ import {
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import {
 	bulkCheckoutMock,
@@ -79,18 +78,7 @@ import {
 	returnLendingMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
-	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	resolveCopyChainsMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-}
+import { signInLibraryReader } from '$lib/testing/pages/library';
 
 afterEach(() => {
 	cleanup();
@@ -142,7 +130,7 @@ function mockLibrarianTree() {
 			{ id: 'copy-2', name: 'Copy #2', copyNumber: 2, editionId: 'edition-1' }
 		])
 	);
-	setAuthedWithOneCollective();
+	signInLibraryReader({ myLibraryId: 'lib-1', chains: true });
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	listAllEditionsMock.mockResolvedValue(
 		toListRead([{ id: 'edition-1', name: '40-part original', publisher: 'Bärenreiter', workId: 'work-1' }])

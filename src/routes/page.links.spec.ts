@@ -27,11 +27,8 @@ const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
-import type { LinkRow } from '$lib/links/linkData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -39,32 +36,10 @@ import {
 	reorderLinksMock,
 	updateLinkMock
 } from '$lib/testing/mocks/links';
+import { cleanupClearAdmin, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
+import { q, qa } from '$lib/testing/pages/dom';
 
 const CFG = testCfg('sampledb', 'jwt-abc');
-
-function rows(): LinkRow[] {
-	return [
-		{
-			id: 'l-rec',
-			name: 'Salvestused',
-			url: 'https://f.io/GCkGMr5J',
-			description: 'Crede recordings',
-			displayOrder: 1
-		},
-		{ id: 'l-scores', name: 'Scores', url: 'example.com/x', description: null, displayOrder: 2 },
-		{
-			id: 'l-site',
-			name: 'Website',
-			url: 'https://crede.ee',
-			description: 'Choir website',
-			displayOrder: 3
-		}
-	];
-}
-
-function setAuthed() {
-	signIn();
-}
 
 beforeEach(() => {
 	setAuthed();
@@ -75,30 +50,7 @@ beforeEach(() => {
 	deleteLinkMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-function qa(container: HTMLElement, testid: string): HTMLElement[] {
-	return Array.from(container.querySelectorAll(`[data-testid="${testid}"]`));
-}
-
-function rowEls(container: HTMLElement): HTMLElement[] {
-	return qa(container, 'links-row');
-}
-
-function rowNames(container: HTMLElement): string[] {
-	return rowEls(container).map(
-		(r) => r.querySelector('[data-testid="links-row-name"]')?.textContent?.trim() ?? ''
-	);
-}
+afterEach(cleanupClearAdmin);
 
 async function renderReady(tier: 'admin' | 'not-admin') {
 	adminStore.set(tier);

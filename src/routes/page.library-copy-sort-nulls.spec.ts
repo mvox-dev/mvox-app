@@ -1,57 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		library_title: () => 'Library',
-		library_no_collective: () => 'Select a collective to view the library.',
-		library_load_error: () => 'Something went wrong loading the library.',
-		library_retry: () => 'Retry',
-		library_empty: () => 'Nothing in the library yet.',
-		library_work_composer_unknown: () => 'Unknown composer',
-		library_editions_empty: () => 'No editions yet.',
-		library_edition_publisher_unknown: () => 'Unknown publisher',
-		library_copies_empty: () => 'No copies yet.',
-		library_copy_available: () => 'Available',
-		library_copy_lent_to: (p: { name: string }) => `Out — ${p.name}`,
-		library_borrower_unknown: () => 'an unnamed member',
-		library_copy_name_unknown: () => 'Untitled copy',
-		library_lent_since: (p: { date: string }) => `since ${p.date}`,
-		library_node_load_error: () => 'Could not load.',
-		library_node_retry: () => 'Retry',
-		library_librarian_tools: () => 'Librarian tools',
-		library_create_work_button: () => 'Add work',
-		library_edition_file_attach: () => 'Attach files',
-		library_create_work_name_label: () => 'Title',
-		library_create_work_composer_label: () => 'Composer',
-		library_create_work_submit: () => 'Create work',
-		library_create_work_error: () => 'Could not create the work.',
-		library_create_edition_button: () => 'Add edition',
-		library_librarian_load_error: () => 'Could not check librarian access.',
-		library_librarian_retry: () => 'Retry',
-		library_my_loans_title: (p: { count: number }) => `My loans (${p.count})`,
-		library_my_loans_copy_label: (p: { copyName: string }) => `${p.copyName}`,
-		library_my_loans_overdue: () => 'Overdue',
-		library_checkout_submit: () => 'Checkout',
-		library_return: () => 'Return',
-		library_bulk_checkout_title: () => 'Bulk checkout',
-		library_bulk_checkout_edition_placeholder: () => 'Select edition',
-		library_bulk_checkout_work_placeholder: () => 'Select work',
-		library_bulk_checkout_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total} available`,
-		library_bulk_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_bulk_checkout_too_many: () => 'Not enough copies available',
-		library_work_availability: (p: { available: number; total: number }) =>
-			`${p.available}/${p.total}`,
-		library_inline_checkout_placeholder: () => 'Select member',
-		library_inline_checkout_already_lent: (p: { date: string }) => `Lent since ${p.date}`,
-		library_inline_checkout_error: () => 'Checkout failed',
-		library_copy_sort_label: () => 'Sort copies by',
-		library_copy_sort_nr: () => 'Nr',
-		library_copy_sort_member: () => 'Member',
-		library_copy_sort_since: () => 'Since'
-	})
+	(await import('$lib/testing/pages/libraryCopy')).libraryMessages()
 );
 
 vi.mock('$lib/library/libraryData', async () =>
@@ -87,35 +39,20 @@ vi.mock('$lib/library/lendingActions', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
-	bulkCheckoutMock,
-	createLendingMock,
-	listAllCopiesMock,
-	listAllEditionsMock,
 	listCopiesMock,
 	listEditionsMock,
 	listLendingsMock,
 	listWorksMock,
-	resolveBorrowerNamesMock,
-	resolveCopyNamesMock,
-	returnLendingMock
+	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
-import { listActiveMembersMock } from '$lib/testing/mocks/roster';
-import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
-
-function setAuthedWithOneCollective() {
-	signIn();
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	findMyMemberIdMock.mockResolvedValue(null);
-	resolveCopyNamesMock.mockResolvedValue(new Map());
-	listAllEditionsMock.mockResolvedValue(toListRead([]));
-	listAllCopiesMock.mockResolvedValue(toListRead([]));
-	listActiveMembersMock.mockResolvedValue(toListRead([]));
-}
+import {
+	copyOrder,
+	resetCopyListMocks,
+	signInLibraryReader,
+	sortBtn
+} from '$lib/testing/pages/library';
 
 function setPartitionFixture() {
 	listWorksMock.mockResolvedValue(toListRead([
@@ -165,18 +102,7 @@ function setPartitionFixture() {
 			['member-noname', '']
 		])
 	);
-	setAuthedWithOneCollective();
-}
-
-const sortBtn = (key: 'nr' | 'member' | 'since') =>
-	`[data-testid="copy-sort-${key}-edition-1"]`;
-
-function copyOrder(container: HTMLElement): string[] {
-	return [
-		...container.querySelectorAll(
-			'[data-testid="library-edition-edition-1"] [data-testid^="library-copy-"]'
-		)
-	].map((el) => el.getAttribute('data-testid')!.replace('library-copy-', ''));
+	signInLibraryReader({ librarian: true });
 }
 
 async function renderWithEditionUnfolded() {
@@ -209,24 +135,7 @@ async function activate(container: HTMLElement, key: 'nr' | 'member' | 'since') 
 
 const LENT_IDS = new Set(['lent-alpha', 'lent-beta', 'lent-none']);
 
-afterEach(() => {
-	cleanup();
-	listWorksMock.mockReset();
-	listEditionsMock.mockReset();
-	listCopiesMock.mockReset();
-	listLendingsMock.mockReset();
-	resolveBorrowerNamesMock.mockReset();
-	resolveCopyNamesMock.mockReset();
-	resolveLibrarianMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listAllEditionsMock.mockReset();
-	listAllCopiesMock.mockReset();
-	listActiveMembersMock.mockReset();
-	createLendingMock.mockReset();
-	returnLendingMock.mockReset();
-	bulkCheckoutMock.mockReset();
-	resetAppState();
-});
+afterEach(resetCopyListMocks);
 
 describe('/library — copy sort is PARTITION-then-sort: lent group first, available group always nr-sorted (#126 / #114 F6)', () => {
 	it('nr: lent copies sorted by nr, then available copies sorted by nr — partition boundary holds', async () => {

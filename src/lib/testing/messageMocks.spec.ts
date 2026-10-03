@@ -1,6 +1,6 @@
 // The shared message mocks return exactly the text the specs that import them assert.
 import { describe, expect, it } from 'vitest';
-import { echoMessages, englishMessages } from './messageMocks';
+import { copyWith, echoMessages, englishMessages } from './messageMocks';
 
 type Call = (params?: Record<string, unknown>) => string;
 const call = (m: Record<string, unknown>, key: string) => m[key] as Call;
@@ -75,6 +75,22 @@ describe('englishMessages', () => {
 		const mod = englishMessages({ nav_agenda: () => 'Agenda' });
 		expect(call(mod, 'nav_agenda')()).toBe('Agenda');
 		expect(mod).not.toHaveProperty('nav_links');
+	});
+});
+
+describe('copyWith', () => {
+	const base = { agenda_today: () => 'Today', agenda_retry: () => 'Retry' };
+
+	it('replaces the overridden keys and keeps the rest', () => {
+		const copy = copyWith(base, { agenda_today: () => 'Now' });
+		expect(call(copy, 'agenda_today')()).toBe('Now');
+		expect(call(copy, 'agenda_retry')()).toBe('Retry');
+		expect(base.agenda_today()).toBe('Today');
+	});
+
+	it('throws on an override key the base does not have', () => {
+		const stray = { agenda_tomorrow: () => 'Tomorrow' } as Partial<typeof base>;
+		expect(() => copyWith(base, stray)).toThrow('copy override agenda_tomorrow is not in the base');
 	});
 });
 

@@ -27,31 +27,11 @@ vi.mock('$app/state', async () =>
 
 import Page from './links/+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { resetAdmin } from '$lib/nav/adminStore';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
-
-const DB_ENTITY = 'db-ent-1';
-const TYPE_ID = 'type-link-1';
-
-interface WireCall {
-	db: string;
-	path: string;
-	method: string;
-	body: unknown;
-}
-
-function wireCalls(): WireCall[] {
-	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>).map(
-		([db, path, , init]) => ({
-			db,
-			path: String(path),
-			method: init?.method ?? 'GET',
-			body: init?.body ? JSON.parse(String(init.body)) : undefined
-		})
-	);
-}
+import { DB_ENTITY, TYPE_ID, rowNames, setAuthedAdmin, wireCalls } from '$lib/testing/pages/links';
+import { q } from '$lib/testing/pages/dom';
 
 interface ServerLink {
 	_id: string;
@@ -109,11 +89,6 @@ function installWireRouter() {
 	);
 }
 
-function setAuthedAdmin() {
-	signIn();
-	adminStore.set('admin');
-}
-
 let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
@@ -138,18 +113,8 @@ afterEach(() => {
 	resetAdmin();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 function rowEls(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));
-}
-
-function rowNames(container: HTMLElement): string[] {
-	return rowEls(container).map(
-		(r) => r.querySelector('[data-testid="links-row-name"]')?.textContent?.trim() ?? ''
-	);
 }
 
 async function renderReady() {

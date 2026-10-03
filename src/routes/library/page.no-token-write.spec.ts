@@ -37,9 +37,7 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 
 import Page from './+page.svelte';
 import { clearAll } from '$lib/auth/storage';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { setAuthExpiredHandler } from '$lib/entu/request';
-import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
@@ -60,6 +58,7 @@ import {
 	resolveMyLibraryIdMock
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
+import { armLibraryRecovery } from '$lib/testing/pages/library';
 
 function stubWire() {
 	const fetchStub = vi.fn(async (input: RequestInfo | URL) => {
@@ -141,12 +140,7 @@ async function expectSessionExpiredAndNothingSent(fetchStub: ReturnType<typeof s
 	expect(nonGetCalls(fetchStub)).toEqual([]);
 }
 
-beforeEach(() => {
-	install401Recovery();
-	gotoMock.mockReset();
-	resetTypeIdCache();
-	history.replaceState({}, '', '/library');
-});
+beforeEach(armLibraryRecovery);
 
 afterEach(() => {
 	setAuthExpiredHandler(null);

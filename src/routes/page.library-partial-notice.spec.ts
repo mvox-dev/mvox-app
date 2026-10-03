@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -40,8 +40,6 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 import Page from './library/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import {
 	listAllCopiesMock,
@@ -56,25 +54,22 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
-
-const DB_A = 'sampledb';
-const DB_B = 'other-choir';
+import {
+	DB_A,
+	DB_B,
+	cleanupClearReset,
+	setAuthedWithTwoCollectives,
+	truncated
+} from '$lib/testing/pages/library';
 
 function complete<T>(items: T[]) {
 	return { items, total: items.length, truncated: false };
-}
-function truncated<T>(items: T[], total: number) {
-	return { items, total, truncated: true };
 }
 
 function worksFor(db: string) {
 	return db === DB_A
 		? [{ id: 'work-a1', name: 'Spem in alium', composer: 'Thomas Tallis' }]
 		: [{ id: 'work-b1', name: 'Os justi', composer: 'Anton Bruckner' }];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }, { db: DB_B, name: 'Other Choir', personId: 'person-q' }] });
 }
 
 beforeEach(() => {
@@ -93,11 +88,7 @@ beforeEach(() => {
 	resolveCopyChainsMock.mockResolvedValue(new Map());
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 function notice(container: HTMLElement): HTMLElement | null {
 	return container.querySelector('[data-testid="library-partial-notice"]');
