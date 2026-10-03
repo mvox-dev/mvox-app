@@ -10,14 +10,14 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const { loadFullAgendaMock, findMyMemberIdMock, listMyRsvpsMock, applyRsvpChangeMock } =
-	vi.hoisted(() => ({
-		loadFullAgendaMock: vi.fn(),
+const { findMyMemberIdMock, listMyRsvpsMock, applyRsvpChangeMock } = vi.hoisted(() => ({
 		findMyMemberIdMock: vi.fn(),
 		listMyRsvpsMock: vi.fn(),
 		applyRsvpChangeMock: vi.fn()
 	}));
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -71,6 +71,7 @@ import { goOffline, goOnline, resetOnLine, settle, expectVisibleReason } from '$
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 function agendaEvent(id: string, startDatetime: string): AgendaItem {
 	return {

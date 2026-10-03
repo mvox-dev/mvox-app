@@ -8,7 +8,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
@@ -26,7 +25,6 @@ const {
 	countSeasonScopeMock,
 	deleteSeasonMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
@@ -45,7 +43,9 @@ const {
 	deleteSeasonMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -111,6 +111,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';

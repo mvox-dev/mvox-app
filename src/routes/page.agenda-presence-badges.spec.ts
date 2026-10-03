@@ -12,7 +12,6 @@ const {
 	loadWorksByEventIdMock,
 	signFileUrlMock,
 	loadRosterMock,
-	listSectionsMock,
 	listRepertoireItemsMock,
 	listWorksMock,
 	listAllEditionsMock,
@@ -22,7 +21,6 @@ const {
 	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	listRepertoireItemsMock: vi.fn(),
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
@@ -49,10 +47,9 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
 );
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
@@ -108,6 +105,7 @@ import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

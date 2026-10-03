@@ -7,10 +7,8 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, reorderMock, deleteMock } =
-	vi.hoisted(() => ({
+const { loadRosterMock, assignMock, unassignMock, createMock, reorderMock, deleteMock } = vi.hoisted(() => ({
 		loadRosterMock: vi.fn(),
-		listSectionsMock: vi.fn(),
 		assignMock: vi.fn(),
 		unassignMock: vi.fn(),
 		createMock: vi.fn(),
@@ -18,10 +16,9 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, 
 		deleteMock: vi.fn()
 	}));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
-	return { ...actual, listSections: listSectionsMock };
-});
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/sections/sectionActions', () => ({
 	assignMemberSection: assignMock,
 	unassignMemberSection: unassignMock,
@@ -47,6 +44,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 function fixtureTree(): SectionNode[] {
 	return [

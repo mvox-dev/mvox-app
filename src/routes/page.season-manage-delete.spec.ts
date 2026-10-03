@@ -13,7 +13,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
@@ -31,7 +30,6 @@ const {
 	countSeasonScopeMock,
 	deleteSeasonMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
@@ -50,7 +48,9 @@ const {
 	deleteSeasonMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 // The season-management data layer — the ONE seam the panel may read/write
 // through. #197 widens it with the two delete functions.
 vi.mock('$lib/seasons/seasonManage', () => ({
@@ -137,6 +137,7 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 

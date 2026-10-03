@@ -30,21 +30,19 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	applyRsvpChangeMock,
 	resolveManageRightsMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	applyRsvpChangeMock: vi.fn(),
 	resolveManageRightsMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({
-	loadFullAgenda: loadFullAgendaMock
-}));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -102,6 +100,7 @@ import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const EVENT = {
 	id: 'e1',

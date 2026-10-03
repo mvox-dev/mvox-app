@@ -10,9 +10,7 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
-	listSectionsMock,
 	resolveDatabaseEntityIdMock,
 	resolveManageRightsMock,
 	findMyMemberIdMock,
@@ -31,9 +29,7 @@ const {
 	countSeasonScopeMock,
 	deleteSeasonMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
@@ -53,7 +49,9 @@ const {
 	deleteSeasonMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	listEventsForSeason: listEventsForSeasonMock,
@@ -82,10 +80,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	updateRepertoireStatus: updateRepertoireStatusMock
 }));
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -124,6 +121,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
