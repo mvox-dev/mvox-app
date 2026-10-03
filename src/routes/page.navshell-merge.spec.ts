@@ -3,26 +3,21 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const msgs = vi.hoisted(() => {
-	const nav = {
-		nav_agenda: () => 'Agenda',
-		nav_roster: () => 'Roster',
-		nav_profile: () => 'Profile',
-		nav_library: () => 'Library',
-		nav_invite: () => 'Invite',
-		nav_admin: () => 'Admin',
-		nav_links: () => 'Links'
-	};
-	const anyMessage = new Proxy({} as Record<string, (...args: unknown[]) => string>, {
-		get: (_t, prop) => {
-			if (prop in nav) return nav[prop as keyof typeof nav];
-			return () => `[${String(prop)}]`;
-		}
-	});
-	return { nav, anyMessage };
-});
-vi.mock('$lib/paraglide/messages', () => ({ ...msgs.nav, m: msgs.anyMessage }));
-vi.mock('$lib/paraglide/messages.js', () => ({ ...msgs.nav, m: msgs.anyMessage }));
+const nav = vi.hoisted(() => ({
+	nav_agenda: () => 'Agenda',
+	nav_roster: () => 'Roster',
+	nav_profile: () => 'Profile',
+	nav_library: () => 'Library',
+	nav_invite: () => 'Invite',
+	nav_admin: () => 'Admin',
+	nav_links: () => 'Links'
+}));
+vi.mock('$lib/paraglide/messages', async (importOriginal) =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', nav, await importOriginal())
+);
+vi.mock('$lib/paraglide/messages.js', async (importOriginal) =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', nav, await importOriginal())
+);
 
 const h = vi.hoisted(() => {
 	class InviteCreateError extends Error {

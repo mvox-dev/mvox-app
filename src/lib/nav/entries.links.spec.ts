@@ -1,28 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 
-// #256 RED — the Lingikogu nav entry. NAV_ENTRIES grew 6 → 7: a 'links'
-// entry, routed to /links, visible to EVERYONE (members READ the collection;
-// only the page's admin controls are tier-gated — the codebase-wide
-// "absent, not disabled" idiom lives on the page, not the nav).
-//
-// #338 — back to 6: the 'collectives' entry dies with its page (the picker
-// moved into the agenda header; src/no-collectives-route.spec.ts guards the
-// route's death). The companion pins in page.navshell-merge.spec.ts (the two
-// hardcoded nav-count assertions) are flipped 7 → 6 in that same RED —
-// a legitimate spec flip, cited there.
-//
-// GREP DECOY (blast finding): the bare string 'link' is overloaded by OAuth
-// account-linking (`intent: 'link'`). This feature's key is 'links' (plural),
-// its i18n key 'nav_links' — never bare 'link'.
+// The links entry (key 'links', i18n key 'nav_links') is visible to everyone; admin-only
+// controls live on the page. The bare string 'link' belongs to OAuth account-linking.
 
-vi.mock('$lib/paraglide/messages', () => ({
-	nav_agenda: () => 'Agenda',
-	nav_roster: () => 'Roster',
-	nav_profile: () => 'Profile',
-	nav_library: () => 'Library',
-	nav_admin: () => 'Admin',
-	nav_links: () => 'Lingikogu'
-}));
+vi.mock('$lib/paraglide/messages', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
+		nav_agenda: () => 'Agenda',
+		nav_roster: () => 'Roster',
+		nav_profile: () => 'Profile',
+		nav_library: () => 'Library',
+		nav_admin: () => 'Admin',
+		nav_links: () => 'Lingikogu'
+	})
+);
 
 import { NAV_ENTRIES } from './entries';
 
@@ -57,4 +47,4 @@ describe('#256 — NAV_ENTRIES carries the links entry', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #256 RED)
+// (*MVOX:Tallis*)
