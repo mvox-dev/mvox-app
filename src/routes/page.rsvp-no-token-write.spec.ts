@@ -27,10 +27,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
 	})
 }));
-vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
-	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
-	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
-}));
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -49,10 +48,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';

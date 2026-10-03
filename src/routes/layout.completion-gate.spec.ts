@@ -8,7 +8,9 @@ vi.mock('$lib/collectives/discover', async () => (await import('$lib/testing/rou
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
 );
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$lib/profile/completionGate', async (importActual) => {

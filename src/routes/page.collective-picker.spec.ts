@@ -23,7 +23,9 @@ const {
 }));
 vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
 vi.mock('$lib/collectives/discover', async () => (await import('$lib/testing/routeMocks')).discoverModule());
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/collectives/store', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/collectives/store')>()),
 	hydrateCollectives: hydrateCollectivesMock
@@ -35,10 +37,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
 	})
 }));
-vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
-	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
-	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
-}));
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
+);
 vi.mock('$app/navigation', async () => (await import('$lib/testing/routeMocks')).navigationModule());
 vi.mock('$lib/rsvp/rsvpData', () => ({
 	findMyMemberId: findMyMemberIdMock,
@@ -68,10 +69,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 		return map;
 	}
 }));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
