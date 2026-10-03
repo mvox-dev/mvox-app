@@ -67,10 +67,9 @@ vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 	listAllRsvpsForEvent: listAllRsvpsForEventMock,
 	listAttendance: listAttendanceMock
 }));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';

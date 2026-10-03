@@ -39,7 +39,9 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 // Sever the $env chain preemptively (harmless if the page never imports it).
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Page from './invite/[token]/+page.svelte';
 

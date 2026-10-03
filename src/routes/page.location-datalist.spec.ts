@@ -96,10 +96,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	deleteAttendance: vi.fn(),
 	attendanceByMemberId: () => ({})
 }));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
 vi.mock('$lib/schedule/scheduleData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/schedule/scheduleData')>()),
 	listScheduleItemsByEventId: vi.fn().mockResolvedValue({})

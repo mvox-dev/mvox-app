@@ -58,14 +58,12 @@ vi.mock('$lib/rsvp/rsvpData', async (importActual) => ({
 	findMyMemberId: vi.fn().mockResolvedValue('member-viewer'),
 	findMyRsvpForEvent: vi.fn().mockResolvedValue(null)
 }));
-vi.mock('$lib/repertoire/workRows', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: vi.fn().mockResolvedValue({})
-}));
-vi.mock('$lib/collective/databaseEntity', async (importActual) => ({
-	...(await importActual<typeof import('$lib/collective/databaseEntity')>()),
-	resolveDatabaseEntityId: vi.fn().mockResolvedValue(null)
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
+);
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
+);
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
