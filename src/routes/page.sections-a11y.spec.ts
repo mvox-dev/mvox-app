@@ -41,15 +41,16 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 // Page seams: groupBySection runs real; only the fetch and write seams are mocked.
-const { loadRosterMock, assignMock, unassignMock, createMock, reorderMock } = vi.hoisted(() => ({
-		loadRosterMock: vi.fn(),
+const { assignMock, unassignMock, createMock, reorderMock } = vi.hoisted(() => ({
 		assignMock: vi.fn(),
 		unassignMock: vi.fn(),
 		createMock: vi.fn(),
 		reorderMock: vi.fn()
 	}));
 // /roster reads the opt-in real-names producer; `loadRoster` stays profile-names-only.
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -78,6 +79,7 @@ import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 

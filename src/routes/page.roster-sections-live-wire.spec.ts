@@ -6,8 +6,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bare')
 );
 
-const { loadRosterMock } = vi.hoisted(() => ({ loadRosterMock: vi.fn() }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -24,6 +25,7 @@ import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 const SEC_SOPRANO = '69c7f8728489bfcb0e81b07b';

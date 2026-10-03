@@ -110,7 +110,9 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: vi.fn().mockResolvedValue({
 		items: [{ id: 'work-1', name: 'Missa Brevis', composer: 'Palestrina' }],

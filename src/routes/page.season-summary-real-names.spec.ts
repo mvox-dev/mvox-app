@@ -7,16 +7,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const {
-	listAttendanceMock,
-	listMyAttendanceMock,
-	listAllRsvpsForEventMock
-} = vi.hoisted(() => ({
-	listAttendanceMock: vi.fn(),
-	listMyAttendanceMock: vi.fn(),
-	listAllRsvpsForEventMock: vi.fn()
-}));
-
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -35,19 +25,15 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
 );
-vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/attendance/attendanceData')>()),
-	listAttendance: listAttendanceMock,
-	listMyAttendance: listMyAttendanceMock,
-	listAllRsvpsForEvent: listAllRsvpsForEventMock,
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn()
-}));
+vi.mock('$lib/attendance/attendanceData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/events')).attendanceListsOverRealModule(importOriginal)
+);
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from './+page.svelte';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
@@ -62,6 +48,11 @@ import {
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import {
+	listAllRsvpsForEventMock,
+	listAttendanceMock,
+	listMyAttendanceMock
+} from '$lib/testing/mocks/events';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {

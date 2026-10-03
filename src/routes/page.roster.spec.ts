@@ -21,10 +21,9 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const { loadRosterMock } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -44,6 +43,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function setAuthedWithOneCollective() {
 	signIn();

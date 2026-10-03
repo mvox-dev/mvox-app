@@ -13,8 +13,7 @@ const pageStub = vi.hoisted(() => ({
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 
-const { signFileUrlMock, afterNavigateCallbacks } = vi.hoisted(() => ({
-	signFileUrlMock: vi.fn(),
+const { afterNavigateCallbacks } = vi.hoisted(() => ({
 	afterNavigateCallbacks: [] as Array<(nav: { type: string }) => void>
 }));
 vi.mock('$app/navigation', async () =>
@@ -24,7 +23,9 @@ vi.mock('$app/navigation', async () =>
 		}
 	})
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 const labelWrites = vi.hoisted(
 	() => [] as Array<{ identity: unknown; fileId: string; label: unknown }>
@@ -68,7 +69,9 @@ vi.mock('pdfjs-dist', () => ({
 	GlobalWorkerOptions: { workerSrc: '' },
 	getDocument: pdfjs.getDocument
 }));
-vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-worker.mjs' }));
+vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', async () =>
+	(await import('$lib/testing/mocks/files')).pdfWorkerUrlModule()
+);
 
 import Page from './[fileId]/+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -78,6 +81,7 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import type { PartLabel } from '$lib/files/labelStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
 
 let fakeByteStore: FakeByteStore;
 

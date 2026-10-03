@@ -10,57 +10,24 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const {
-	loadRosterMock,
-	deactivateMemberMock,
-	reinstateMemberMock,
-	loadInactiveRosterMock,
-	listInactiveMembersMock,
-	listDeactivateBlockersMock,
-	loadMemberRecordMock,
-	createMemberRecordMock,
-	updateMemberRecordMock,
-	listMyProfilesMock
-} = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	deactivateMemberMock: vi.fn(),
-	reinstateMemberMock: vi.fn(),
-	loadInactiveRosterMock: vi.fn(),
-	listInactiveMembersMock: vi.fn(),
-	listDeactivateBlockersMock: vi.fn(),
-	loadMemberRecordMock: vi.fn(),
-	createMemberRecordMock: vi.fn(),
-	updateMemberRecordMock: vi.fn(),
-	listMyProfilesMock: vi.fn()
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/roster/memberLifecycle', () => ({
-	deactivateMember: deactivateMemberMock,
-	reinstateMember: reinstateMemberMock,
-	loadInactiveRoster: loadInactiveRosterMock,
-	listInactiveMembers: listInactiveMembersMock,
-	listDeactivateBlockers: listDeactivateBlockersMock
-}));
-vi.mock('$lib/roster/memberRecord', async (importActual) => ({
-	...(await importActual<typeof import('$lib/roster/memberRecord')>()),
-	loadMemberRecord: loadMemberRecordMock,
-	createMemberRecord: createMemberRecordMock,
-	updateMemberRecord: updateMemberRecordMock
-}));
-vi.mock('$lib/profile/profileData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/profile/profileData')>()),
-	listMyProfiles: listMyProfilesMock
-}));
-vi.mock('$lib/library/librarianStore', async (importActual) => ({
-	...(await importActual<typeof import('$lib/library/librarianStore')>()),
-	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
-	resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
-}));
-vi.mock('$lib/invite/inviteData', async (importActual) => ({
-	...(await importActual<typeof import('$lib/invite/inviteData')>()),
-	createInvite: vi.fn(),
-	mintSelfLinkInvite: vi.fn()
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/roster/memberLifecycle', async () =>
+	(await import('$lib/testing/mocks/roster')).memberLifecycleModule()
+);
+vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
+	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal, { writes: true })
+);
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/library/librarianStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
+);
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -82,6 +49,18 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	createMemberRecordMock,
+	deactivateMemberMock,
+	listDeactivateBlockersMock,
+	listInactiveMembersMock,
+	loadInactiveRosterMock,
+	loadMemberRecordMock,
+	loadRosterMock,
+	reinstateMemberMock,
+	updateMemberRecordMock
+} from '$lib/testing/mocks/roster';
+import { listMyProfilesMock } from '$lib/testing/mocks/session';
 
 function setAuthedWithOneCollective() {
 	signIn();

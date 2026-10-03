@@ -34,11 +34,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	applyRsvpChangeMock
-} = vi.hoisted(() => ({
-	applyRsvpChangeMock: vi.fn()
-}));
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -60,16 +55,22 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
 );
-vi.mock('$lib/rsvp/rsvpOptimistic', () => ({ applyRsvpChange: applyRsvpChangeMock }));
+vi.mock('$lib/rsvp/rsvpOptimistic', async () =>
+	(await import('$lib/testing/mocks/events')).rsvpOptimisticModule()
+);
 
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare', byMember: 'records' })
 );
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -83,6 +84,7 @@ import {
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import { applyRsvpChangeMock } from '$lib/testing/mocks/events';
 
 function agendaEvent(id: string, startDatetime: string) {
 	return {

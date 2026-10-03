@@ -10,16 +10,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadRosterMock,
-	signFileUrlMock,
 	listEventsForSeasonMock,
 	deleteEventMock,
 	listEventSeriesForSeasonMock,
 	deleteEventSeriesMock,
 	countSeriesOccurrencesMock
 } = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	signFileUrlMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
 	deleteEventMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
@@ -52,16 +48,18 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 	countSeasonScope: vi.fn(),
 	deleteSeason: vi.fn()
 }));
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: vi.fn(),
-	createEventSeries: vi.fn(),
-	createEvent: vi.fn()
-}));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/entity/entityCreate', async () =>
+	(await import('$lib/testing/mocks/events')).entityCreateModule([])
+);
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
 );
@@ -76,8 +74,10 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import { listSectionsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);

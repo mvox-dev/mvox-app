@@ -11,6 +11,11 @@ export const getSeriesDefaultsMock = vi.fn();
 export const listRepertoireItemsMock = vi.fn();
 export const entuFetchMock = vi.fn();
 export const listSeasonsMock = vi.fn();
+export const deleteEventMock = vi.fn();
+export const deleteEventSeriesMock = vi.fn();
+export const countSeriesOccurrencesMock = vi.fn();
+export const countSeasonScopeMock = vi.fn();
+export const deleteSeasonMock = vi.fn();
 
 export function seasonManageModule() {
 	return {
@@ -21,6 +26,23 @@ export function seasonManageModule() {
 		addSeasonConductor: addSeasonConductorMock,
 		removeSeasonConductor: removeSeasonConductorMock,
 		getSeriesDefaults: getSeriesDefaultsMock
+	};
+}
+
+// The season panel with its delete flows; deleteEvent: the single-event delete is wired too.
+export function seasonManageWritesModule(opts: { deleteEvent: boolean }) {
+	return {
+		listEventSeriesForSeason: listEventSeriesForSeasonMock,
+		listEventsForSeason: listEventsForSeasonMock,
+		updateSeasonField: updateSeasonFieldMock,
+		addSeasonConductor: addSeasonConductorMock,
+		removeSeasonConductor: removeSeasonConductorMock,
+		getSeriesDefaults: getSeriesDefaultsMock,
+		...(opts.deleteEvent ? { deleteEvent: deleteEventMock } : {}),
+		deleteEventSeries: deleteEventSeriesMock,
+		countSeriesOccurrences: countSeriesOccurrencesMock,
+		countSeasonScope: countSeasonScopeMock,
+		deleteSeason: deleteSeasonMock
 	};
 }
 
