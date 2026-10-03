@@ -8,55 +8,30 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const h = vi.hoisted(() => ({
-	listAdminsMock: vi.fn(),
-	addAdminMock: vi.fn(),
-	removeAdminMock: vi.fn(),
-	listLibrariansMock: vi.fn(),
-	addLibrarianMock: vi.fn(),
-	removeLibrarianMock: vi.fn(),
-	resolveAdminMock: vi.fn(),
-	resolveLibrarianMock: vi.fn(),
-	loadRosterMock: vi.fn(),
-	resolveParentMock: vi.fn(),
-	resolveInviteParentMock: vi.fn(),
-	createInviteMock: vi.fn(),
-	resolveCollectiveNameMarkerMock: vi.fn(),
-	updateCollectiveNameMock: vi.fn()
-}));
-vi.mock('$lib/admin/roleManagement', () => ({
-	fetchRights: vi.fn(),
-	listAdmins: h.listAdminsMock,
-	addAdmin: h.addAdminMock,
-	removeAdmin: h.removeAdminMock,
-	listLibrarians: h.listLibrariansMock,
-	addLibrarian: h.addLibrarianMock,
-	removeLibrarian: h.removeLibrarianMock
-}));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({
-	resolveLibrarian: h.resolveLibrarianMock
-}));
+vi.mock('$lib/admin/roleManagement', async () =>
+	(await import('$lib/testing/mocks/admin')).roleManagementModule()
+);
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule('admin')
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: h.loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/invite/inviteData', () => ({
-	resolvePersonParentId: h.resolveParentMock,
-	resolveInviteParentId: h.resolveInviteParentMock,
-	createInvite: h.createInviteMock
-}));
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/invite/inviteData', async () =>
+	(await import('$lib/testing/mocks/admin')).inviteDataModule()
+);
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -72,6 +47,18 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	listAdminsMock,
+	listLibrariansMock,
+	removeAdminMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveInviteParentMock,
+	resolveLibrarianMock,
+	resolveParentMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 const CFG = testCfg('sampledb', 'jwt-admin');
 const SELF_HINT_KEY = '[admin_roles_remove_self_hint]';
@@ -106,18 +93,18 @@ function selectSampledb() {
 }
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
+	resolveAdminMock.mockResolvedValue('admin');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	h.listAdminsMock.mockResolvedValue({ persons: [DB_ROOT, SELF_OWNER], canManage: true });
-	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	listAdminsMock.mockResolvedValue({ persons: [DB_ROOT, SELF_OWNER], canManage: true });
+	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
-	h.removeAdminMock.mockResolvedValue(undefined);
-	h.resolveParentMock.mockResolvedValue('parent-1');
-	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	removeAdminMock.mockResolvedValue(undefined);
+	resolveParentMock.mockResolvedValue('parent-1');
+	resolveInviteParentMock.mockResolvedValue('org-1');
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -133,7 +120,16 @@ async function renderReady() {
 }
 
 beforeEach(() => {
-	for (const mock of Object.values(h)) mock.mockReset();
+	listAdminsMock.mockReset();
+	listLibrariansMock.mockReset();
+	loadRosterMock.mockReset();
+	removeAdminMock.mockReset();
+	resolveAdminMock.mockReset();
+	resolveCollectiveNameMarkerMock.mockReset();
+	resolveInviteParentMock.mockReset();
+	resolveLibrarianMock.mockReset();
+	resolveParentMock.mockReset();
+	updateCollectiveNameMock.mockReset();
 	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
 });
@@ -214,7 +210,7 @@ describe('/admin — #175 self-removal note renders inline in the own row', () =
 	it("route integration — other admins' rows keep their working Remove button next to the note-bearing own row: rendered, enabled, click reaches removeAdmin", async () => {
 		selectSampledb();
 		loadOk();
-		h.listAdminsMock
+		listAdminsMock
 			.mockReset()
 			.mockResolvedValueOnce({ persons: [DB_ROOT, SELF_OWNER, BELA], canManage: true })
 			.mockResolvedValueOnce({ persons: [DB_ROOT, SELF_OWNER], canManage: true });
@@ -235,7 +231,7 @@ describe('/admin — #175 self-removal note renders inline in the own row', () =
 
 		await fireEvent.click(removeBela!);
 		await waitFor(() => {
-			expect(h.removeAdminMock).toHaveBeenCalledWith(
+			expect(removeAdminMock).toHaveBeenCalledWith(
 				expect.objectContaining(CFG),
 				'org-1',
 				'p-bela'

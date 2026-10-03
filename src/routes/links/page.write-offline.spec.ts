@@ -11,11 +11,9 @@ vi.mock('$lib/paraglide/messages', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-const { entuFetchMock } = vi.hoisted(() => ({ entuFetchMock: vi.fn() }));
-vi.mock('$lib/entu/request', async (importActual) => ({
-	...(await importActual<typeof import('$lib/entu/request')>()),
-	entuFetch: entuFetchMock
-}));
+vi.mock('$lib/entu/request', async (importOriginal) =>
+	(await import('$lib/testing/mocks/seasons')).entuRequestModule(importOriginal)
+);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -39,6 +37,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { entuFetchMock } from '$lib/testing/mocks/seasons';
 
 const DB_ENTITY = 'db-ent-1';
 const TYPE_ID = 'type-link-1';

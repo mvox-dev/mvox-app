@@ -14,8 +14,6 @@ const h = vi.hoisted(() => ({
 	resolveLibrarianMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	resolveCollectiveNameMarkerMock: vi.fn(),
-	updateCollectiveNameMock: vi.fn()
 }));
 
 vi.mock('$lib/admin/roleManagement', async (importOriginal) => ({
@@ -39,10 +37,9 @@ vi.mock('$lib/library/librarianStore', async (importOriginal) => ({
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/invite/inviteData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/invite/inviteData')>()),
 	resolvePersonParentId: h.resolveParentMock,
@@ -71,6 +68,10 @@ import { expectNameMarkedOnce, expectWholeTextMarkedOnce } from '$lib/testing/na
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	resolveCollectiveNameMarkerMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
@@ -85,8 +86,8 @@ beforeEach(() => {
 	listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY_ID);
 	h.createInviteMock.mockResolvedValue({ personId: 'p', memberId: 'm', inviteToken: 'a.b.c' });
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {

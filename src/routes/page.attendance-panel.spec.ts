@@ -59,21 +59,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	loadRosterMock,
-	listAttendanceMock,
-	listAllRsvpsForEventMock,
-	createAttendanceMock,
-	updateAttendanceStatusMock,
-	deleteAttendanceMock
-} = vi.hoisted(() => ({
-	loadRosterMock: vi.fn(),
-	listAttendanceMock: vi.fn(),
-	listAllRsvpsForEventMock: vi.fn(),
-	createAttendanceMock: vi.fn(),
-	updateAttendanceStatusMock: vi.fn(),
-	deleteAttendanceMock: vi.fn()
-}));
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -92,28 +77,19 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: loadRosterMock
-}));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: listAttendanceMock,
-	listAllRsvpsForEvent: listAllRsvpsForEventMock,
-	createAttendance: createAttendanceMock,
-	updateAttendanceStatus: updateAttendanceStatusMock,
-	deleteAttendance: deleteAttendanceMock,
-	attendanceByMemberId: (
-		records: Array<{ attendanceId: string; memberId: string; status: string }>
-	) => {
-		const map: Record<string, { attendanceId: string; status: string }> = {};
-		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
-		return map;
-	}
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/mocks/events')).attendanceHandlesModule({ lists: true, writes: true, mine: 'none' })
+);
 
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -127,6 +103,14 @@ import {
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import {
+	createAttendanceMock,
+	deleteAttendanceMock,
+	listAllRsvpsForEventMock,
+	listAttendanceMock,
+	updateAttendanceStatusMock
+} from '$lib/testing/mocks/events';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function agendaItem(
 	id: string,

@@ -9,10 +9,8 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
 
 const {
-	listMyAttendanceMock,
 	hydrateCollectivesMock
 } = vi.hoisted(() => ({
-	listMyAttendanceMock: vi.fn(),
 	hydrateCollectivesMock: vi.fn()
 }));
 vi.mock('$lib/agenda/agendaData', async () =>
@@ -36,26 +34,18 @@ vi.mock('$app/navigation', async () => (await import('$lib/testing/routeMocks'))
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: listMyAttendanceMock,
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: (
-		records: Array<{ attendanceId: string; memberId: string; status: string }>
-	) => {
-		const map: Record<string, { attendanceId: string; status: string }> = {};
-		for (const r of records) map[r.memberId] = { attendanceId: r.attendanceId, status: r.status };
-		return map;
-	}
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/mocks/events')).attendanceHandlesModule({ lists: false, writes: false, mine: 'handle' })
+);
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 
 import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
@@ -74,6 +64,7 @@ import {
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import { listMyAttendanceMock } from '$lib/testing/mocks/events';
 
 const DB_A = 'sampledb';
 const DB_B = 'orlando';

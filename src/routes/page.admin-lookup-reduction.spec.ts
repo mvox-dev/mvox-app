@@ -9,55 +9,29 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	listAdminsMock: vi.fn(),
-	addAdminMock: vi.fn(),
-	removeAdminMock: vi.fn(),
-	listLibrariansMock: vi.fn(),
-	addLibrarianMock: vi.fn(),
-	removeLibrarianMock: vi.fn(),
-	entuFetchMock: vi.fn(),
-	loadRosterMock: vi.fn(),
-	resolveParentMock: vi.fn(),
-	createInviteMock: vi.fn(),
-	resolveCollectiveNameMarkerMock: vi.fn(),
-	updateCollectiveNameMock: vi.fn()
 }));
 
-vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/admin/roleManagement')>();
-	return {
-		...actual,
-		listAdmins: h.listAdminsMock,
-		addAdmin: h.addAdminMock,
-		removeAdmin: h.removeAdminMock,
-		listLibrarians: h.listLibrariansMock,
-		addLibrarian: h.addLibrarianMock,
-		removeLibrarian: h.removeLibrarianMock
-	};
-});
+vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/entu/request', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/entu/request')>();
-	return { ...actual, entuFetch: h.entuFetchMock };
-});
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
+vi.mock('$lib/entu/request', async (importOriginal) =>
+	(await import('$lib/testing/mocks/seasons')).entuRequestModule(importOriginal)
+);
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
-vi.mock('$lib/invite/inviteData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/invite/inviteData')>();
-	return {
-		...actual,
-		resolvePersonParentId: h.resolveParentMock,
-		createInvite: h.createInviteMock
-	};
-});
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteDataOverRealModule(importOriginal)
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -73,6 +47,16 @@ import type { RolePerson } from '$lib/admin/roleManagement';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	createInviteMock,
+	listAdminsMock,
+	listLibrariansMock,
+	resolveCollectiveNameMarkerMock,
+	resolveParentMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { entuFetchMock } from '$lib/testing/mocks/seasons';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
 const VIEWER = 'admin-p';
@@ -92,7 +76,7 @@ function selectSampledb() {
 
 beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
-	h.entuFetchMock.mockImplementation((_db: string, path: string) => {
+	entuFetchMock.mockImplementation((_db: string, path: string) => {
 		if (path.startsWith(`entity/${DB_ENTITY}?props=_owner`)) {
 			return Promise.resolve(
 				json({ entity: { _id: DB_ENTITY, _owner: [{ reference: VIEWER }], _editor: [] } })
@@ -115,18 +99,18 @@ beforeEach(() => {
 			new Error(`unexpected wire traffic during admin load: ${path} (#173 harness)`)
 		);
 	});
-	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
-	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
+	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
-	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
-	h.createInviteMock.mockResolvedValue({
+	resolveParentMock.mockResolvedValue(DB_ENTITY);
+	createInviteMock.mockResolvedValue({
 		personId: 'p-new',
 		memberId: 'm-new',
 		inviteToken: 'a.b.c'
 	});
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -136,7 +120,7 @@ afterEach(() => {
 });
 
 function fetchedPaths(): string[] {
-	return h.entuFetchMock.mock.calls.map((c) => String(c[1]));
+	return entuFetchMock.mock.calls.map((c) => String(c[1]));
 }
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -164,8 +148,8 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 	it('same data, fewer fetches — the id still reaches listAdmins and the rights/library reads still happen', async () => {
 		await renderReady();
 
-		expect(h.listAdminsMock).toHaveBeenCalled();
-		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
+		expect(listAdminsMock).toHaveBeenCalled();
+		expect(listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
 		const paths = fetchedPaths();
 		expect(paths.filter((p) => p.startsWith(`entity/${DB_ENTITY}?props=_owner`))).toHaveLength(2);

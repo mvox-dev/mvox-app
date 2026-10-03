@@ -91,55 +91,35 @@ const h = vi.hoisted(() => {
 	return {
 		InviteCreateError,
 		SelfLinkMintError,
-		listAdminsMock: vi.fn(),
-		addAdminMock: vi.fn(),
-		removeAdminMock: vi.fn(),
-		listLibrariansMock: vi.fn(),
-		addLibrarianMock: vi.fn(),
-		removeLibrarianMock: vi.fn(),
-		resolveAdminMock: vi.fn(),
-		resolveOwnerTierMock: vi.fn(),
-		resolveLibrarianMock: vi.fn(),
-		loadRosterMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
 		mintSelfLinkInviteMock: vi.fn(),
 		listJoinStatesMock: vi.fn(),
 		listLinkedIdentitiesMock: vi.fn(),
-		resolveCollectiveNameMarkerMock: vi.fn(),
-		updateCollectiveNameMock: vi.fn()
 	};
 });
-vi.mock('$lib/admin/roleManagement', () => ({
-	fetchRights: vi.fn(),
-	listAdmins: h.listAdminsMock,
-	addAdmin: h.addAdminMock,
-	removeAdmin: h.removeAdminMock,
-	listLibrarians: h.listLibrariansMock,
-	addLibrarian: h.addLibrarianMock,
-	removeLibrarian: h.removeLibrarianMock
-}));
-vi.mock('$lib/nav/adminStore', () => ({
-	resolveAdmin: h.resolveAdminMock,
-	resolveOwnerTier: h.resolveOwnerTierMock
-}));
-vi.mock('$lib/library/librarianStore', () => ({
-	resolveLibrarian: h.resolveLibrarianMock
-}));
+vi.mock('$lib/admin/roleManagement', async () =>
+	(await import('$lib/testing/mocks/admin')).roleManagementModule()
+);
+vi.mock('$lib/nav/adminStore', async () =>
+	(await import('$lib/testing/mocks/admin')).adminStoreModule()
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/admin')).librarianStoreModule()
+);
 vi.mock('$lib/collective/databaseEntity', async () =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule()
 );
-vi.mock('$lib/roster/rosterData', () => ({
-	loadRoster: h.loadRosterMock
-}));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
-vi.mock('$lib/collectives/collectiveName', () => ({
-	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
-	updateCollectiveName: h.updateCollectiveNameMock
-}));
+vi.mock('$lib/collectives/collectiveName', async () =>
+	(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+);
 vi.mock('$lib/invite/inviteData', () => ({
 	InviteCreateError: h.InviteCreateError,
 	SelfLinkMintError: h.SelfLinkMintError,
@@ -167,6 +147,16 @@ import { expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	listAdminsMock,
+	listLibrariansMock,
+	resolveAdminMock,
+	resolveCollectiveNameMarkerMock,
+	resolveLibrarianMock,
+	resolveOwnerTierMock,
+	updateCollectiveNameMock
+} from '$lib/testing/mocks/admin';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -195,19 +185,19 @@ function selectSampledb() {
 }
 
 function loadOk() {
-	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveOwnerTierMock.mockResolvedValue('owner');
+	resolveAdminMock.mockResolvedValue('admin');
+	resolveOwnerTierMock.mockResolvedValue('owner');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
-	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
+	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+	listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
+	listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
+	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
 	listSectionsMock.mockResolvedValue([]);
 	h.listJoinStatesMock.mockResolvedValue({ ...JOIN_STATES });
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
-	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	h.updateCollectiveNameMock.mockResolvedValue(undefined);
+	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
+	updateCollectiveNameMock.mockResolvedValue(undefined);
 }
 
 function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
@@ -253,6 +243,13 @@ beforeEach(() => {
 	}
 	listSectionsMock.mockReset();
 	resolveDatabaseEntityIdMock.mockReset();
+	listAdminsMock.mockReset();
+	listLibrariansMock.mockReset();
+	resolveAdminMock.mockReset();
+	resolveCollectiveNameMarkerMock.mockReset();
+	resolveLibrarianMock.mockReset();
+	resolveOwnerTierMock.mockReset();
+	updateCollectiveNameMock.mockReset();
 });
 
 afterEach(() => {
@@ -297,8 +294,8 @@ describe('#301 /admin invite — the person select (owner, uninvited persons pre
 		expect(jsCfg).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect([...jsIds].sort()).toEqual(['p-anna', 'p-bela', 'p-cilla', 'p-dora']);
 
-		expect(h.resolveOwnerTierMock).toHaveBeenCalled();
-		const tierCall = h.resolveOwnerTierMock.mock.calls[0];
+		expect(resolveOwnerTierMock).toHaveBeenCalled();
+		const tierCall = resolveOwnerTierMock.mock.calls[0];
 		expect(tierCall[0]).toMatchObject({ db: 'sampledb', token: 'jwt-admin' });
 		expect(tierCall[1]).toBe('admin-p');
 		expect(tierCall[3]).toBe('org-1');
@@ -409,7 +406,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	it('non-owner admin (editor tier) → no select, the existing owner-rights explanation, and the blank invite still works unchanged', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveOwnerTierMock.mockResolvedValue('editor');
+		resolveOwnerTierMock.mockResolvedValue('editor');
 		h.createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
@@ -437,10 +434,10 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 	it("owner tier 'error' → no select (an affordance is never rendered off an unresolved rights answer)", async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveOwnerTierMock.mockResolvedValue('error');
+		resolveOwnerTierMock.mockResolvedValue('error');
 		const { section } = await renderInviteReady();
 		await waitFor(() => {
-			expect(h.resolveOwnerTierMock).toHaveBeenCalled();
+			expect(resolveOwnerTierMock).toHaveBeenCalled();
 		});
 		expect(q(section, 'invite-person-select')).toBeNull();
 		expect(section.querySelector('select')).toBeNull();
@@ -651,13 +648,13 @@ describe('#301 /admin invite — the uninvited-list read is owner-gated', () => 
 	it('an editor-tier admin triggers NO listJoinStates fan-out, and still gets the owner-rights explanation', async () => {
 		selectSampledb();
 		loadOk();
-		h.resolveOwnerTierMock.mockResolvedValue('editor');
+		resolveOwnerTierMock.mockResolvedValue('editor');
 		const { section } = await renderInviteReady();
 
 		await waitFor(() => {
 			expect(q(section, 'invite-owner-note')).not.toBeNull();
 		});
-		expect(h.resolveOwnerTierMock).toHaveBeenCalled();
+		expect(resolveOwnerTierMock).toHaveBeenCalled();
 		expect(h.listJoinStatesMock).not.toHaveBeenCalled();
 		expect(q(section, 'invite-person-list-error')).toBeNull();
 		expect(q(section, 'invite-person-select')).toBeNull();
@@ -672,7 +669,7 @@ describe('/admin invite — the person select states a truncated roster (#321 re
 	it('a truncated roster read renders the shared role="status" notice in the invite section', async () => {
 		selectSampledb();
 		loadOk();
-		h.loadRosterMock.mockReset().mockResolvedValue({ items: ROSTER, total: 500, truncated: true });
+		loadRosterMock.mockReset().mockResolvedValue({ items: ROSTER, total: 500, truncated: true });
 
 		const { section } = await renderInviteReady();
 

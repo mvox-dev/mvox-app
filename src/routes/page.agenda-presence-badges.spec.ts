@@ -9,17 +9,11 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	signFileUrlMock,
-	loadRosterMock,
-	listRepertoireItemsMock,
 	listWorksMock,
 	listAllEditionsMock,
 	listAllCopiesMock,
 	listEventSeriesForSeasonMock
 } = vi.hoisted(() => ({
-	signFileUrlMock: vi.fn(),
-	loadRosterMock: vi.fn(),
-	listRepertoireItemsMock: vi.fn(),
 	listWorksMock: vi.fn(),
 	listAllEditionsMock: vi.fn(),
 	listAllCopiesMock: vi.fn(),
@@ -44,7 +38,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule(null)
 );
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
 vi.mock('$lib/sections/sectionData', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
 );
@@ -54,15 +50,17 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
+vi.mock('$lib/repertoire/fileUrls', async () =>
+	(await import('$lib/testing/mocks/files')).fileUrlsModule()
+);
 vi.mock('$lib/library/libraryData', () => ({
 	listWorks: listWorksMock,
 	listAllEditions: listAllEditionsMock,
 	listAllCopies: listAllCopiesMock
 }));
-vi.mock('$lib/repertoire/repertoireData', () => ({
-	listRepertoireItems: listRepertoireItemsMock
-}));
+vi.mock('$lib/repertoire/repertoireData', async () =>
+	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: listEventSeriesForSeasonMock,
 	updateSeasonField: vi.fn(),
@@ -83,13 +81,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEdition: vi.fn()
 }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-vi.mock('$lib/files/appLabelStore', () => ({
-	getAppLabelStore: () => ({
-		putLabel: async () => {},
-		labelsFor: async () => new Map(),
-		remove: async () => {}
-	})
-}));
+vi.mock('$lib/files/appLabelStore', async () =>
+	(await import('$lib/testing/mocks/files')).appLabelStoreModule()
+);
 
 import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
@@ -106,6 +100,9 @@ import {
 	loadFullAgendaMock,
 	loadWorksByEventIdMock
 } from '$lib/testing/moduleHandles';
+import { signFileUrlMock } from '$lib/testing/mocks/files';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
 
 let fakeByteStore: FakeByteStore;
 
