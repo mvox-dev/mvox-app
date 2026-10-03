@@ -828,3 +828,38 @@ export/import, `export * as ns`, `export { default as x }`, `const w = await imp
 caught only the first (a .svelte default-importing a writing module). None exist in src/lib today. **When a
 review adds a default export or a dynamic import to src/lib, re-run that probe** — the fence will pass silently.
 (*MVOX:Bentham*)
+
+## [LEARNED 2026-10-02] wave #675-#701 review notes
+- A route-load `gate` hook that writes page state after an await needs its own `isCurrent()` check: the machine only
+  re-checks after the gate returns, so a superseded gate can overwrite state the newer load reads (#702 gatedDbEntityId).
+- Text-scan guards: probe the committed scanner from /tmp with `node --experimental-strip-types` on planted forms.
+  rightsWrites.ts (#721) treats `x || '_owner'` as a union member and misses it; DELETE-via-helper is invisible.
+- Rights sweeps read the private bucket: "absent" can mean unreadable; Entu docs name no `inherited: true` marker.
+(*MVOX:Bentham*)
+
+## [GOTCHA-SHARED-HANDLE-RESETMODULES] 2026-10-03, #748 (#709 Part R/S)
+Shared mock handles (spec imports `gotoMock` from a helper; the vi.mock factory dynamic-imports the same helper)
+are one instance per file ONLY until `vi.resetModules()`: then the factory re-runs, imports a fresh helper, and
+the page and the spec hold different vi.fns. Probe: request.auth-expired converted in /tmp → 5/11 red, and its
+`not.toHaveBeenCalled()` tests pass vacuously. Every Part R/S batch: grep the batch for resetModules first.
+(*MVOX:Bentham*)
+
+## [GOTCHA-HANDLE-LEAVES-RESET-LOOP] 2026-10-03, #762 (#709 S6)
+Moving a handle out of a hoisted `h`/`H` object onto a shared module also drops it from that file's
+`for (const m of Object.values(h)) m.mockReset()` loop. Nothing fails if the handle is re-set each test and never
+asserted, but calls pile up across tests. Per batch: for every `h.X` → `X` rename, check the file's reset still
+covers X (explicit list or vi.clearAllMocks).
+(*MVOX:Bentham*)
+
+## [FACT-VITEST4-MOCKRESET] 2026-10-03, #769
+vitest 4.1.10 (probed): `mockReset()` restores the impl given to `vi.fn(impl)` but drops `mockResolvedValue`/`mockImplementation`
+(returns undefined); `vi.clearAllMocks()` clears calls only and keeps resolved values. When a handle with a default moves
+to a shared module, check whether any mockReset in the file covers it: a module-level `.mockResolvedValue` default dies on reset.
+(*MVOX:Bentham*)
+
+## [LEARNED 2026-10-03] copy inventories: normalise before grouping (#709 S14, #771)
+Grouping vi.mock bodies by whitespace-collapsed text missed 8 copies: a `// comment` inside one body, `importActual( 'x' )`
+spacing, and block vs expression spread forms. Strip comments and spaces, unify `importOriginal/importActual`, and fold the
+`{ const actual = await IO(); return { ...actual, … } }` form into `({ ...(await IO()), … })` before counting. Also compare
+each single-file shape against the existing factories: a "single" can be an exact copy of one.
+(*MVOX:Bentham*)
