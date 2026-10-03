@@ -16,8 +16,12 @@ vi.mock('$lib/entu/request', async (importActual) => ({
 	...(await importActual<typeof import('$lib/entu/request')>()),
 	entuFetch: entuFetchMock
 }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 const pageStub = vi.hoisted(() => ({ url: new URL('https://dev.mvox.eu/links') }));
 vi.mock('$app/state', () => ({ page: pageStub }));

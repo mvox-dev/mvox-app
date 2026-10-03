@@ -41,9 +41,15 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reparentSection: reparentMock,
 	renameSection: renameMock
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
