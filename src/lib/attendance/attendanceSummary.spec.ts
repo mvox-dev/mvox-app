@@ -1,38 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #85 TA.4 RED — "my attendance" display + season summary.
-//
-// Two layers under test:
-//
-//   1. PURE derivations (./attendanceSummary — new module):
-//      - deriveAttendanceRate(attendances, totalEvents) → { attended, total }
-//        for the singer's own season line. `late` COUNTS as attended — she
-//        showed up; the rate answers "was she there", not "was she punctual".
-//        `absent` does not count. A past event with NO record does not count
-//        (never defaulted to attended).
-//      - deriveAllMemberRates(allAttendances, members, totalEvents) — the
-//        conductor's full-roster rates: one entry per ROSTER member (roster
-//        order preserved), zero-filled for members with no records at all.
-//
-//   2. PAGE composition (routes/+page.svelte):
-//      - every RECENT (past) row carries an attendance badge with one of four
-//        states: present / absent / late / not-recorded (a past event the
-//        conductor never marked). The state rides on `data-status` — the
-//        green/red/amber/grey dot is CSS keyed off that attribute.
-//      - the season summary is ALWAYS visible at the top of the Recent
-//        section — zero attendance data renders "Attended 0 of N", it never
-//        hides the block.
-//      - a member sees her OWN rate ("Attended 12 of 15 events").
-//      - a CONDUCTOR can expand the summary into the full-roster per-member
-//        rates; a non-conductor has no expand affordance at all.
 
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deriveAttendanceRate, deriveAllMemberRates } from './attendanceSummary';
 import type { EventAttendance, MyAttendance } from './attendanceData';
-
-// ── 1. deriveAttendanceRate — the singer's own season line ────────────────────
 
 function mine(eventId: string, status: MyAttendance['status']): MyAttendance {
 	return { attendanceId: `att-${eventId}`, eventId, status };
@@ -58,13 +30,10 @@ describe('deriveAttendanceRate', () => {
 	});
 
 	it('late COUNTS as attended (she was there), absent and not-recorded do not', () => {
-		// 5 events this season: present, late, absent, and two never recorded.
 		const records = [mine('e1', 'present'), mine('e2', 'late'), mine('e3', 'absent')];
 		expect(deriveAttendanceRate(records, 5)).toEqual({ attended: 2, total: 5 });
 	});
 });
-
-// ── 2. deriveAllMemberRates — the conductor's full-roster view ────────────────
 
 function att(eventId: string, memberId: string, status: EventAttendance['status']): EventAttendance {
 	return { attendanceId: `att-${eventId}-${memberId}`, memberId, status };
@@ -78,8 +47,6 @@ const roster = [
 
 describe('deriveAllMemberRates', () => {
 	it('returns one entry per ROSTER member, in roster order — including members with zero records', () => {
-		// Flattened attendance across the season's past events: m1 was at both,
-		// m2 was marked absent once, m3 was never recorded anywhere.
 		const all = [
 			att('e1', 'm1', 'present'),
 			att('e2', 'm1', 'late'),
@@ -111,12 +78,6 @@ describe('deriveAllMemberRates', () => {
 	});
 });
 
-// ── 3. Page composition — badges + season summary ─────────────────────────────
-
-// #365 — the editor grant in setConductorFixture makes the page's admin
-// surfaces (onboarding checklist, toolbar) render too; their keys are not this
-// file's subject, so unknown keys fall back to a `[key]` stub instead of
-// crashing the render. Assertions keep matching the real copy listed below.
 vi.mock('$lib/paraglide/messages.js', () => {
 	const known = {
 		agenda_empty_no_events: () => 'No upcoming events.',
@@ -126,18 +87,12 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
 		agenda_load_error: () => "Couldn't load the agenda.",
 		agenda_retry: () => 'Retry',
-		// #214 — the filter chip row renders whenever the agenda has any
-		// events at all, so its message keys must exist in every mock that
-		// renders the real +page.svelte with a non-empty agenda.
 		agenda_filter_all: () => 'All',
 		agenda_filter_group_label: () => 'Filter by event type',
-		// #247 — the view toggle sits WITH the filter chips, so it renders
-		// whenever the chip row does; same "every mock needs it" rule as #214.
 		agenda_view_toggle_label: () => 'Agenda view',
 		agenda_view_list: () => 'List',
 		agenda_view_month: () => 'Month',
 		agenda_filter_empty: () => 'No events match this filter.',
-		// #101 TE.1 -- every agenda row now carries an event-detail link.
 		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
 		rsvp_status_going: () => 'Going',
 		rsvp_status_not_going: () => 'Not going',
@@ -152,7 +107,6 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_status_present: () => 'Present',
 		attendance_status_absent: () => 'Absent',
 		attendance_status_late: () => 'Late',
-		// #85 — the fourth badge state: a past event with no record for me.
 		attendance_status_not_recorded: () => 'Not recorded',
 		attendance_toggle_aria_label: (p: { name: string; status: string }) => `Mark ${p.name} as ${p.status}`,
 		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
@@ -160,15 +114,12 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		attendance_rsvp_none: () => 'No answer',
 		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) => `RSVP for ${p.name}: ${p.rsvp}`,
 		attendance_load_error: () => "Couldn't load attendance.",
-		// #113 review F4 — the panel's loading state now carries an sr-only
-		// role="status" saying so (focus lands in the panel while it loads).
 		attendance_loading: () => 'Loading attendance…',
 		attendance_ready: (p: { count: number }) => `Attendance loaded, ${p.count} members`,
 		attendance_save_failed: () => 'Could not save attendance.',
 		attendance_tally: (p: { present: number; absent: number; late: number }) =>
 			`${p.present} present · ${p.absent} absent · ${p.late} late`,
 		attendance_close: () => 'Close',
-		// #85 — season summary strings.
 		attendance_season_rate: (p: { attended: number; total: number }) =>
 			`Attended ${p.attended} of ${p.total} events`,
 		attendance_member_rate: (p: { attended: number; total: number }) =>
@@ -223,18 +174,7 @@ vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: loadFullAgendaMock
 }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-// #91 TR.3 — +page.svelte now imports the repertoire WRITE layer (and the
-// library reads that feed its pickers), which reaches entuFetch ->
-// $lib/entu-config -> $env/dynamic/public: unavailable outside a SvelteKit
-// request context under happy-dom. Same one-line fix the library/profile specs
-// already use; the real modules keep running, only the base url is stubbed.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-// ...and the page resolves management rights per season/event on every load.
-// Only that ONE call is stubbed (the pure helpers and the write functions stay
-// real): left alone it issues a live request per agenda event, which is both a
-// network call from a unit test and a source of teardown AbortErrors. The
-// management surface itself is covered end-to-end in
-// page.repertoire-manage-wiring.spec.ts.
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
 	resolveManageRights: vi.fn().mockResolvedValue('not-editor')
@@ -255,14 +195,6 @@ vi.mock('$lib/rsvp/rsvpData', () => ({
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: loadRosterMock
 }));
-// #255 done-when 3 — the season-summary expand handler unions in the archived
-// members too; #469 review F1 — through ONE producer
-// (`loadActiveAndArchivedRosters`), so the real-names overlay runs once per
-// panel open. This file isn't exercising deactivation at all, so the archived
-// half stays empty and the active half is whatever `loadRoster` answers here —
-// every existing assertion in this suite (including the rejecting-read one)
-// keeps its exact shape. The union itself is pinned separately in
-// page.season-summary-inactive.spec.ts.
 vi.mock('$lib/roster/memberLifecycle', () => ({
 	loadInactiveRoster: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	loadActiveAndArchivedRosters: vi.fn(async (...args: unknown[]) => ({
@@ -270,8 +202,6 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 		inactive: { items: [], total: 0, truncated: false }
 	}))
 }));
-// NOTE: ./attendanceSummary is deliberately NOT mocked — the page must run the
-// REAL derive functions; these route tests cover the wiring end to end.
 vi.mock('$lib/attendance/attendanceData', () => ({
 	listAttendance: listAttendanceMock,
 	listMyAttendance: listMyAttendanceMock,
@@ -288,14 +218,6 @@ vi.mock('$lib/attendance/attendanceData', () => ({
 	}
 }));
 
-// #90 TR.2 — the page now resolves each row's Works element and signs PDFs on
-// click. Mocked here for the same reason agendaData/rsvpData are: both modules
-// pull in $lib/entu/request -> $env/dynamic/public, which is unavailable
-// outside a SvelteKit request context under happy-dom (and neither belongs in
-// these specs' subject).
-// #234 — importOriginal for collectSources/buildWorkRows: the panel's new
-// repertoire section calls them for real (pure, no fetch); only
-// loadWorksByEventId (the fetching entry point) is mocked here.
 vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
 	loadWorksByEventId: vi.fn().mockResolvedValue({})
@@ -303,15 +225,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from '../../routes/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string, conductors: string[] = []) {
 	return {
@@ -327,27 +244,10 @@ function agendaItem(id: string, startDatetime: string, conductors: string[] = []
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
-/**
- * A MEMBER (not conductor) with four past rehearsals this season and one
- * upcoming. Her own records: present @ past-1, absent @ past-2, late @ past-3;
- * past-4 was never recorded.
- */
 function setMemberFixture() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 		upcoming: [agendaItem('up-1', '2027-06-17T16:00:00.000Z')],
@@ -369,13 +269,6 @@ function setMemberFixture() {
 	setAuthedWithOneCollective('person-p');
 }
 
-/**
- * A CONDUCTOR (who is also member m1) with two past rehearsals. Full-event
- * attendance: past-1 → m1 present + m2 absent; past-2 → m1 late (m2 unrecorded).
- * Expected rates: m1 attended 2 of 2, m2 attended 0 of 2.
- * #365 — the expand affordance opens on SEASON RIGHTS, so she holds `_editor`
- * on the season; the conductor seat stays as display data only.
- */
 function setConductorFixture() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 		upcoming: [],
@@ -409,7 +302,6 @@ function setConductorFixture() {
 	setAuthedWithOneCollective('person-p');
 }
 
-// Safe defaults so unrelated resolve calls don't hang.
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
 afterEach(() => {
@@ -424,9 +316,7 @@ afterEach(() => {
 	createAttendanceMock.mockReset();
 	updateAttendanceStatusMock.mockReset();
 	deleteAttendanceMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetGate();
 });
 
@@ -438,8 +328,6 @@ describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="attendance-badge-past-1"]')).not.toBeNull();
 		});
-		// #471 — only past-1's card renders until asked; reveal the rest before
-		// reading their badges.
 		const showMore = container.querySelector('[data-testid="agenda-recent-show-more"]');
 		expect(showMore, '#471 show-more button').not.toBeNull();
 		await fireEvent.click(showMore!);
@@ -448,15 +336,11 @@ describe('+page — attendance badges on Recent rows (#85 TA.4)', () => {
 			['past-1', 'present', 'Present'],
 			['past-2', 'absent', 'Absent'],
 			['past-3', 'late', 'Late'],
-			// past-4 has NO record — an explicit not-recorded badge, never a blank
-			// and never a defaulted status.
 			['past-4', 'not-recorded', 'Not recorded']
 		];
 		for (const [eventId, status, label] of expected) {
 			const badge = container.querySelector(`[data-testid="attendance-badge-${eventId}"]`)!;
 			expect(badge).not.toBeNull();
-			// The state rides on data-status — the green/red/amber/grey dot is CSS
-			// keyed off this attribute, so this IS the visual contract.
 			expect(badge.getAttribute('data-status')).toBe(status);
 			expect(badge.textContent).toContain(label);
 		}
@@ -495,20 +379,16 @@ describe('+page — season summary (#85 TA.4)', () => {
 		});
 
 		const summary = container.querySelector('[data-testid="season-summary"]')!;
-		// Inside the Recent section, ABOVE the first recent row.
 		expect(container.querySelector('[data-testid="agenda-recent"]')!.contains(summary)).toBe(true);
 		const firstRow = container.querySelector('[data-testid="agenda-recent-row-past-1"]')!;
 		expect(
 			// eslint-disable-next-line no-bitwise
 			summary.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
-		// Not conditional on data: zero records renders the zero rate, not nothing.
 		expect(summary.textContent).toContain('Attended 0 of 4 events');
 	});
 
 	it("a member sees her OWN rate — late counts as attended: 'Attended 2 of 4 events'", async () => {
-		// present @ past-1 + late @ past-3 = 2 attended; absent @ past-2 and
-		// unrecorded past-4 do not count. 4 past events total.
 		setMemberFixture();
 		const { container } = render(Page);
 
@@ -534,12 +414,9 @@ describe('+page — conductor full-roster rates in the expanded summary (#85 TA.
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="member-rate-m1"]')).not.toBeNull();
 		});
-		// m1: present @ past-1 + late @ past-2 → 2 of 2 (late counts as attended).
 		const m1 = container.querySelector('[data-testid="member-rate-m1"]')!;
 		expect(m1.textContent).toContain('Alice Alto');
 		expect(m1.textContent).toContain('2 of 2');
-		// m2: absent @ past-1, unrecorded @ past-2 → 0 of 2 — she still gets a row
-		// (roster-driven, zero-filled), she does not vanish for lack of records.
 		const m2 = container.querySelector('[data-testid="member-rate-m2"]')!;
 		expect(m2).not.toBeNull();
 		expect(m2.textContent).toContain('Berta Bass');
@@ -560,9 +437,6 @@ describe('+page — conductor full-roster rates in the expanded summary (#85 TA.
 
 describe('+page — F1 fix: cross-season records must not inflate season rate', () => {
 	it('records from a PREVIOUS season do not inflate the current season rate', async () => {
-		// Setup: member with attendance records for 5 events, but only 2 of those
-		// events are in the current season's recentItems. Without the F1 fix,
-		// mySeasonRate would be { attended: 4, total: 2 } — "Attended 4 of 2".
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			upcoming: [],
 			recent: [
@@ -573,8 +447,6 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		}));
 		findMyMemberIdMock.mockResolvedValue('m-me');
-		// 5 records: 2 for current-season events, 3 for old-season events.
-		// listMyAttendance returns ALL (no season filter on the server side).
 		listMyAttendanceMock.mockResolvedValue(toListRead([
 			{ attendanceId: 'a1', eventId: 'current-1', status: 'present' },
 			{ attendanceId: 'a2', eventId: 'current-2', status: 'late' },
@@ -589,28 +461,14 @@ describe('+page — F1 fix: cross-season records must not inflate season rate', 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
 		});
-		// Correct: 2 attended out of 2 current-season events (both present/late
-		// count). The 3 old-season records must NOT inflate the count.
 		expect(container.querySelector('[data-testid="my-season-rate"]')!.textContent).toContain(
 			'Attended 2 of 2 events'
 		);
 	});
 });
 
-// #194/#202 review F1 — the season rate after the event_type filter came off.
-//
-// `recentItems` used to be rehearsals-only (the data layer filtered
-// `event_type.string=rehearsal`), so "Attended {n} of {total} rehearsals" was
-// true by construction. With #194 the same list carries concerts, meetings and
-// free-text types too. The resolution is (b) from the review: keep the whole
-// calendar in the denominator — attendance records hang off EVENTS, not off
-// rehearsals — and make the sentence event-neutral in all four locales. This
-// spec is the pin: a mixed-type Recent list must count EVERY past event, and
-// the rendered sentence must not say "rehearsals".
 describe('+page — season rate denominator covers ALL event types (#194/#202 review F1)', () => {
 	it('a mixed-type season counts every past event, and the sentence is event-neutral', async () => {
-		// 4 past events: 2 rehearsals (one 'rehearsal', one free-text 'proov'),
-		// 1 concert, 1 meeting. She was there for both rehearsals and the concert.
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({
 			upcoming: [],
 			recent: [
@@ -637,9 +495,7 @@ describe('+page — season rate denominator covers ALL event types (#194/#202 re
 			expect(container.querySelector('[data-testid="my-season-rate"]')).not.toBeNull();
 		});
 		const rate = container.querySelector('[data-testid="my-season-rate"]')!;
-		// Denominator = 4 (all past events), not 2 (the rehearsal-shaped ones).
 		expect(rate.textContent).toContain('Attended 3 of 4 events');
-		// And the noun must not have survived the widening.
 		expect(rate.textContent).not.toContain('rehearsals');
 	});
 });
@@ -647,7 +503,6 @@ describe('+page — season rate denominator covers ALL event types (#194/#202 re
 describe('+page — F2 fix: season roster rates error state', () => {
 	it('a failed roster-rate load renders an error marker, not an empty member list', async () => {
 		setConductorFixture();
-		// Make the roster load (used by the expand) fail.
 		loadRosterMock.mockRejectedValue(new Error('network'));
 
 		const { container } = render(Page);
@@ -663,7 +518,6 @@ describe('+page — F2 fix: season roster rates error state', () => {
 		expect(container.querySelector('[data-testid="season-rates-error"]')!.textContent).toContain(
 			"Couldn't load member rates."
 		);
-		// No phantom member rows.
 		expect(container.querySelector('[data-testid="member-rate-m1"]')).toBeNull();
 	});
 });
@@ -676,7 +530,6 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			seasonId: 's1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		}));
-		// Confirmed non-member (null member id).
 		findMyMemberIdMock.mockResolvedValue(null);
 		listMyAttendanceMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective('person-p');
@@ -686,7 +539,6 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="agenda-recent-row-past-1"]')).not.toBeNull();
 		});
-		// The Recent section renders, but summary and badges are hidden.
 		expect(container.querySelector('[data-testid="season-summary"]')).toBeNull();
 		expect(container.querySelector('[data-testid="attendance-badge-past-1"]')).toBeNull();
 	});
@@ -698,7 +550,6 @@ describe('+page — F4 fix: summary and badges are gated on membership', () => {
 			seasonId: 's1',
 			seasonConductors: [], seasonOwners: [], seasonEditors: [], seasons: []
 		}));
-		// Member lookup hangs forever — membership stays 'loading'.
 		findMyMemberIdMock.mockReturnValue(new Promise(() => {}));
 		listMyAttendanceMock.mockResolvedValue(toListRead([]));
 		setAuthedWithOneCollective('person-p');

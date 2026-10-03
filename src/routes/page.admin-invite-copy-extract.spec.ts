@@ -1,18 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #346 RED — the EXTRACT seam on the admin surface. #346 moves #345's copy
-// semantics into the shared module (`createInviteLinkCopier`,
-// $lib/invite/copy-invite-link) so the roster row can ride the SAME
-// implementation. page.admin-invite-copy.spec.ts stays black-box and
-// UNMODIFIED — it is the refactor's behavioral fence. THIS suite pins the one
-// thing that fence cannot: that InviteSurface's copy actually runs THROUGH
-// the shared module after the extract, not through a retained inline clone
-// (two implementations = two drifting failure semantics, the exact thing
-// issue #346 forbids).
-//
-// Scaffolding is page.admin-invite-copy.spec.ts's renderDone, trimmed to the
-// two seam assertions; the clipboard mock is the same per-property
-// defineProperty idiom.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -66,8 +52,6 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
-// #346 — the seam: spy-wrap the REAL shared module, so a call through it is
-// distinguishable from an inline clone producing identical clipboard traffic.
 vi.mock('$lib/invite/copy-invite-link', async (importActual) => {
 	const actual = await importActual<typeof import('$lib/invite/copy-invite-link')>();
 	h.createCopierSpy.mockImplementation(actual.createInviteLinkCopier);
@@ -78,12 +62,8 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './admin/invite/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -92,14 +72,7 @@ function jwt(payload: object): string {
 const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
 
 function selectSampledb(): void {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 function q<T extends HTMLElement = HTMLElement>(container: HTMLElement, testid: string): T | null {
@@ -155,16 +128,10 @@ afterEach(() => {
 	} else {
 		Reflect.deleteProperty(navigator, 'clipboard');
 	}
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('#346/#360 InviteSurface rides the shared copy module', () => {
-	// #360 — the readonly input (and its click trigger) is GONE: the button is
-	// the only affordance, so the seam pin re-targets to it. The former
-	// input-click variant of this test is DELETED deliberately, not drifted.
 	it('a BUTTON-click copy runs through createInviteLinkCopier, and its getText yields the surface\'s own inviteLink', async () => {
 		const { container } = await renderDone();
 		const writeText = installWriteText();
@@ -182,5 +149,3 @@ describe('#346/#360 InviteSurface rides the shared copy module', () => {
 });
 
 // (*MVOX:Tallis* — #346 RED: the extract's wiring pin — InviteSurface's copy
-//  must run through $lib/invite/copy-invite-link; #360 re-targets the pin to
-//  the button, the sole remaining trigger)

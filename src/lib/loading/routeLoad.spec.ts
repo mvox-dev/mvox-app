@@ -11,13 +11,14 @@ import {
 	ROUTE_LOAD_STATUSES,
 	type RouteLoadStatus
 } from '$lib/loading/routeLoad';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
 	selectedCollectiveStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
 
 type InviteStatus = RouteLoadStatus | 'no-access' | 'creating' | 'done' | 'create-error';
 const _extends: InviteStatus = 'session-expired' satisfies RouteLoadStatus;
@@ -102,10 +103,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('routeLoad — exported status union', () => {

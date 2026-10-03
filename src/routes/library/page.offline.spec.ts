@@ -37,11 +37,12 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import LibraryPage from './+page.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
 import { json } from '$lib/testing/entuFetchKit';
+import { resetAppState } from '$lib/testing/appReset';
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -351,9 +352,8 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
-	clearAll({ preserveProvider: false });
+	resetAppState();
 	setReadCacheFactory(undefined);
-	collectiveState.set({ status: 'loading' });
 });
 
 describe('#434 slice 4 — the library renders offline from the read cache', () => {

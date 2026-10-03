@@ -1,22 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 review F1 — /admin writes are gated while offline, on the REAL
-// page (harness: src/routes/page.admin.spec.ts — every data seam mocked at its
-// module boundary, so "no write" is observable per named handle).
-//
-// THE FINDING: slice 6 gated the three offline-READ routes and stopped. /admin
-// carried role grant/revoke, the collective rename and the embedded invite mint
-// fully enabled offline with no reason text, and no fence covered it.
-//
-// CONTRACT — an owner-tier admin on a loaded page, the signal offline:
-//   • both person selects, every remove button and the collective-name field are
-//     disabled;
-//   • ONE visible sentence [data-testid="admin-write-unavailable"];
-//   • the SWEEP: operating every still-enabled control calls none of
-//     addAdmin/removeAdmin/addLibrarian/removeLibrarian/updateCollectiveName;
-//   • a name confirm refused by the signal KEEPS the typed draft (review F2's
-//     rule) and says so;
-//   • back online: enabled again, the sentence gone, a grant writes.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -89,12 +71,6 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
 	goOffline,
@@ -105,6 +81,8 @@ import {
 	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const REASON = '[write_unavailable_no_signal]';
 const HELD = '[write_held_no_signal]';
@@ -135,8 +113,6 @@ function loadOk() {
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
-	// Inert invite surface — its own gate is pinned by the component's spec; here
-	// it must simply not hang mid-load.
 	h.resolveOwnerTierMock.mockResolvedValue('error');
 	h.listJoinStatesMock.mockResolvedValue({});
 }
@@ -144,23 +120,13 @@ function loadOk() {
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
 	loadOk();
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 	await goOnline();
 });
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetOnLine();
 });
 
@@ -251,12 +217,8 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 		expectVisibleReason(container, 'admin-name-held-offline', HELD);
 	});
 
-	// The sweep: every ENABLED control, re-queried after each interaction, so a
-	// write control nobody remembered to list fails here rather than in the hall.
 	it('offline: nothing operable is left, and operating what there is calls no write seam', async () => {
 		const { container } = await renderReadyOnline();
-		// Non-vacuity, measured ONLINE on the same page: there really are live
-		// controls here for the gate to close.
 		const enabledOnline = Array.from(
 			container.querySelectorAll<HTMLElement>('button, select, input, textarea')
 		).filter((el) => !isWriteDisabled(el));
@@ -268,10 +230,6 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 
 		const touched = await exerciseEveryEnabledControl(container);
 
-		// On this surface every control IS a write control, so the gate leaves
-		// nothing enabled at all — and `exerciseEveryEnabledControl` skips disabled
-		// controls by design. An empty sweep here is the strongest outcome, not a
-		// vacuous one: the count above is what rules out "the page rendered nothing".
 		expect(touched).toEqual([]);
 		noWriteSeamCalled();
 	});
@@ -293,4 +251,4 @@ describe('/admin — writes while offline (#434 slice 6 review F1)', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)

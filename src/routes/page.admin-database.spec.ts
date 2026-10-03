@@ -1,22 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #161 RED — the /admin page resolves the collective as the DATABASE entity
-// (integration: real admin/+page.svelte + embedded InviteSurface; data seams
-// mocked — same harness family as page.admin.spec.ts).
-//
-// Pinned wiring contract (GREEN must implement):
-//   - the page imports `resolveDatabaseEntityId` ($lib/collective/databaseEntity)
-//     — the #161 successor of `resolveMyDbEntityId` — and threads ITS id into
-//     `listAdmins`/`addAdmin`/`removeAdmin` (signature-compatible: an entity id
-//     is an entity id) and into the embedded InviteSurface's preset, so the
-//     member created by an invite is parented to the DATABASE entity.
-//   - NO wire traffic resolves the collective besides that seam: `entuFetch` is
-//     stubbed to REJECT, so a leftover member/organization walk fails loudly.
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -35,15 +21,9 @@ const h = vi.hoisted(() => ({
 	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	// #209 — the section tree behind ROSTER ORDER; this file has no opinion on
-	// picker ordering (mocked at the sectionData boundary so it doesn't fall
-	// through the disabled `entuFetch` wire below).
 	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
-	// #165 — the page's `load()` now also resolves the collective-name marker.
-	// Mocked here purely as scaffolding (this file has no opinion on that
-	// surface) so it doesn't fall through the disabled `entuFetch` wire below.
 	resolveCollectiveNameMarkerMock: vi.fn(),
 	updateCollectiveNameMock: vi.fn()
 }));
@@ -62,41 +42,30 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
 });
 vi.mock('$lib/nav/adminStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/nav/adminStore')>();
-	// #301 — the embedded InviteSurface's owner-tier gate is a NEW seam this
-	// file predates; mocked inert here (same posture as resolveAdmin above) so
-	// "every seam mocked, the page has no business on the wire" (line ~191)
-	// keeps meaning what it says.
 	return { ...actual, resolveAdmin: h.resolveAdminMock, resolveOwnerTier: h.resolveOwnerTierMock };
 });
 vi.mock('$lib/library/librarianStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/library/librarianStore')>();
 	return { ...actual, resolveLibrarian: h.resolveLibrarianMock };
 });
-// #161 — THE resolution seam (see module header).
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
 	return { ...actual, resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock };
 });
-// Every OTHER wire path is disabled — a leftover resolveMyDbEntityId walk rejects.
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
-// #301 — InviteSurface's uninvited-list seam, mocked inert (see adminStore note).
 vi.mock('$lib/profile/linkedIdentities', () => ({ listJoinStates: h.listJoinStatesMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
 	listSections: h.listSectionsMock
 }));
-// #165 scaffolding (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
 }));
-// InviteSurface's data seam — createInvite captured so the spec can assert the
-// member's structural parent; resolvePersonParentId mocked (its own #161-correct
-// database read would otherwise hit the disabled wire).
 vi.mock('$lib/invite/inviteData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/invite/inviteData')>();
 	return {
@@ -111,12 +80,8 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 
@@ -130,14 +95,7 @@ const ANNA: RolePerson = {
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 beforeEach(() => {
@@ -159,7 +117,6 @@ beforeEach(() => {
 		memberId: 'm-new',
 		inviteToken: 'a.b.c'
 	});
-	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 });
@@ -167,8 +124,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
@@ -192,11 +148,8 @@ describe('/admin — the role lists are keyed to the DATABASE entity (#161)', ()
 		expect(h.resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject({ db: 'sampledb' });
 
 		expect(h.listAdminsMock).toHaveBeenCalled();
-		// listAdmins(cfg, <collective entity id>, viewerId, …) — the collective
-		// entity IS the database entity now.
 		expect(h.listAdminsMock.mock.calls[0][1]).toBe(DB_ENTITY);
 
-		// With every seam mocked, the page itself has no business on the wire.
 		expect(h.entuFetchMock).not.toHaveBeenCalled();
 	});
 });

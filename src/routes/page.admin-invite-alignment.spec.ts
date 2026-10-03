@@ -1,40 +1,10 @@
 // @vitest-environment happy-dom
-//
-// #235 RED — InviteSurface root-layout class contract, per mount site.
-//
-// Defect (Mihkel live-gate, 2026-09-03): InviteSurface's root div hardcodes
-// `mx-auto flex w-full max-w-md flex-col gap-4` (InviteSurface.svelte:285).
-// Correct on the standalone /admin/invite route (full-bleed main — the
-// component's own classes are the SOLE centering mechanism there). But /admin
-// embeds the same component inside its own centered `max-w-2xl` column
-// (admin/+page.svelte:501), whose sibling sections (Administrators,
-// Librarians) are plain `flex flex-col gap-3` — full column width. The
-// embedded invite section is the ONLY one that re-constrains its own width,
-// so it renders as a narrower block centered INSIDE the column: its h2 and
-// content sit indented relative to the page h1 and the sibling h2s on any
-// viewport wider than ~28rem.
-//
-// Contract pinned here (nothing pinned these classes before — full-string
-// assertions, house partial-assertion rule):
-// - EMBEDDED (/admin, the real route page — integration mount): the
-//   InviteSurface root div carries NO mx-auto and NO max-w-md; its class
-//   string is exactly today's minus those two tokens, so the section fills
-//   the column flush like its siblings.
-// - STANDALONE (/admin/invite, the real route page): the root div class
-//   string stays byte-identical to today's — pixel-identity regression pin
-//   (this one is GREEN at RED time by design; the embedded pins are the
-//   failing half).
-//
-// Mechanism (engineer's call, GREEN): expected to follow the existing
-// `heading` prop pattern — a layout/embedded prop defaulting to today's
-// standalone classes, gated off at the /admin embed only.
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: {
-		// /admin role-management surface
 		admin_roles_title: () => 'Role management',
 		admin_roles_no_collective: () => 'Select a collective to manage roles.',
 		admin_roles_no_access: () => 'Managing roles requires administrator rights.',
@@ -60,7 +30,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_collective_name_edit_aria_label: () => 'Edit collective name',
 		admin_collective_name_save_error: () => "Couldn't save.",
 		nav_admin: () => 'Admin',
-		// InviteSurface (both mounts)
 		admin_invite_title: () => 'Invite a new member',
 		admin_invite_no_collective: () => 'Select a collective before creating invites.',
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
@@ -79,10 +48,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
 		admin_invite_create_another: () => 'Create another invite',
-		// #301 — the embedded InviteSurface now also resolves an owner-tier +
-		// uninvited-list prerequisite pair on every mount; this file has no
-		// opinion on that feature (kept inert below) but needs every key the
-		// component can reach in ANY of its states.
 		admin_invite_person_label: () => 'Who are you inviting?',
 		admin_invite_person_new: () => 'A new person',
 		admin_invite_submit_person: (p: { name: string }) => `Invite ${p.name}`,
@@ -93,9 +58,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 	}
 }));
 
-// Mock every data seam at its module boundary — same discipline and shapes as
-// page.admin.spec.ts / page.admin-invite.spec.ts (error classes inside the
-// hoisted block so `instanceof` checks in the pages match).
 const h = vi.hoisted(() => {
 	class RoleLockoutError extends Error {
 		readonly code = 'role-lockout';
@@ -134,10 +96,6 @@ const h = vi.hoisted(() => {
 		addLibrarianMock: vi.fn(),
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
-		// #301 — the embedded InviteSurface's owner-tier gate. Defaulted to
-		// 'error' HERE (not reset per-test — this file has no opinion on the
-		// feature) so the new person-select stays inert and this pin's own
-		// class-string assertions are unaffected.
 		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
@@ -146,8 +104,6 @@ const h = vi.hoisted(() => {
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
-		// #301 — InviteSurface's uninvited-list read. Defaulted here, same
-		// reasoning as resolveOwnerTierMock above.
 		listJoinStatesMock: vi.fn().mockResolvedValue({}),
 		resolveCollectiveNameMarkerMock: vi.fn(),
 		updateCollectiveNameMock: vi.fn()
@@ -171,7 +127,6 @@ vi.mock('$lib/nav/adminStore', () => ({
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-// #301 — InviteSurface's uninvited-list seam.
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listJoinStates: h.listJoinStatesMock
 }));
@@ -201,32 +156,17 @@ vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.inval
 
 import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-// The exact root class string InviteSurface ships today. The STANDALONE mount
-// must keep this byte-identical (pixel-identity); the EMBEDDED mount must drop
-// exactly the two centering tokens and keep the rest byte-identical.
 const STANDALONE_ROOT_CLASSES = 'mx-auto flex w-full max-w-md flex-col gap-4';
 const EMBEDDED_ROOT_CLASSES = 'flex w-full flex-col gap-4';
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
 }
 
 function loadOk() {
-	// /admin's own resolutions
 	h.resolveAdminMock.mockResolvedValue('admin');
 	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
@@ -245,14 +185,10 @@ function loadOk() {
 	h.listSectionsMock.mockResolvedValue([]);
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
-	// InviteSurface's prerequisite resolution (both mounts)
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 }
 
-/** InviteSurface's root div, located structurally: the element rendering the
- *  invite title heading is the root div's first child — robust against the
- *  class changes this very spec pins. */
 function inviteSurfaceRoot(scope: ParentNode, headingLevel: 'h1' | 'h2'): HTMLElement {
 	const headings = Array.from(scope.querySelectorAll(headingLevel)).filter(
 		(el) => el.textContent?.trim() === 'Invite a new member'
@@ -289,10 +225,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('#235 — embedded InviteSurface on /admin (integration: real route page)', () => {
@@ -312,31 +245,22 @@ describe('#235 — embedded InviteSurface on /admin (integration: real route pag
 		const { section } = await renderAdminReady();
 		const root = inviteSurfaceRoot(section, 'h2');
 
-		// Readable diagnostics first: the two tokens that cause the mis-indent.
 		expect(Array.from(root.classList)).not.toContain('mx-auto');
 		expect(Array.from(root.classList)).not.toContain('max-w-md');
-		// No self-width-constraint of ANY size when embedded — the max-w-2xl
-		// column (admin/+page.svelte:501) is the only width authority.
 		expect(Array.from(root.classList).filter((c) => c.startsWith('max-w-'))).toEqual([]);
 
-		// Full-string pin (house rule — partial assertions hide bugs): every
-		// OTHER token stays byte-identical, in today's order.
 		expect(root.getAttribute('class')).toBe(EMBEDDED_ROOT_CLASSES);
 	});
 
 	it('aligns like its siblings: Administrators/Librarians sections carry no width/centering of their own, and neither does the invite section wrapper', async () => {
 		const { container, section } = await renderAdminReady();
 
-		// Sibling oracle — the sections the invite block must sit flush with.
 		for (const testid of ['admin-roles-admins', 'admin-roles-librarians']) {
 			const sibling = container.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 			expect(sibling, `expected [data-testid="${testid}"]`).not.toBeNull();
 			expect(sibling!.getAttribute('class')).toBe('flex flex-col gap-3');
 		}
-		// The invite section wrapper itself already matches that pattern…
 		expect(section.getAttribute('class')).toBe('flex flex-col gap-3');
-		// …so the ONLY way the invite content can sit indented is InviteSurface's
-		// own root re-centering itself. Pin the whole subtree free of the tokens.
 		expect(section.querySelector('.mx-auto')).toBeNull();
 		expect(section.querySelector('.max-w-md')).toBeNull();
 	});
@@ -356,9 +280,6 @@ describe('#235 — standalone /admin/invite stays pixel-identical (integration: 
 		const root = inviteSurfaceRoot(container, 'h1');
 		expect(root.getAttribute('class')).toBe(STANDALONE_ROOT_CLASSES);
 
-		// The route wrapper stays a full-bleed main with no width constraint of
-		// its own (admin/invite/+page.svelte:15) — pinned so a "fix" cannot move
-		// the centering problem out here and silently change the standalone page.
 		const main = container.querySelector('main');
 		expect(main).not.toBeNull();
 		expect(main!.getAttribute('class')).toBe('min-h-screen bg-paper px-6 py-10 text-ink');

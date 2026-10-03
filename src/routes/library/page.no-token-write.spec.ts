@@ -61,14 +61,14 @@ const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }
 vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
+import { clearAll } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function stubWire() {
 	const fetchStub = vi.fn(async (input: RequestInfo | URL) => {
@@ -81,15 +81,7 @@ function stubWire() {
 }
 
 function mockLibrarianTree() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	resolveMyLibraryIdMock.mockResolvedValue('lib-1');
 	findMyMemberIdMock.mockResolvedValue(null);
@@ -170,10 +162,7 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
+	resetAppState();
 	history.replaceState({}, '', '/');
 });
 
