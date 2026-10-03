@@ -1,42 +1,29 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 review F3 — the write gate is not `navigator.onLine` alone.
-//
-// The finding: on rehearsal-hall wifi with no uplink — the case #434's user
-// story names — `navigator.onLine` is TRUE while every fetch rejects. The
-// screen already knows: its reads came out of `$lib/entu/readCache` and it is
-// showing an "as of" line. Gating writes on `navigator.onLine` alone left every
-// control enabled there, so a tap reached the wire and the member got a generic
-// write error instead of "No signal".
-//
-// CONTRACT:
-//   writesAvailable ($lib/net/online) = online AND NOT readFellBackToCache
-//   readFellBackToCache ($lib/net/cacheFallback) is written by readCache:
-//     • set when a live GET rejects and the cache answers it in its place;
-//     • cleared when a live read gets through (NOT a latch — one transient
-//       fallback must not wedge writes off for the session);
-//     • cleared at every load boundary (resetServedFromCache).
-//   A store-only cached read (no serve half) never sets it.
+// Writes need a live uplink, not just navigator.onLine: hall wifi with no uplink reports online
+// while every read falls back to the cache. writesAvailable = online AND NOT readFellBackToCache.
 import { IDBFactory } from 'fake-indexeddb';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Severs the $env/dynamic/public chain, same as readCache.spec.ts.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
-// Review round 3 — the root layout owns the load-boundary clear. Its
-// `afterNavigate` callbacks are captured here so a navigation can be driven.
-const { afterNavigateCallbacks, discoverMock } = vi.hoisted(() => ({
-	afterNavigateCallbacks: [] as Array<(nav: unknown) => void>,
-	discoverMock: vi.fn()
+// The root layout owns the load-boundary clear; its afterNavigate callbacks are captured here.
+const { afterNavigateCallbacks } = vi.hoisted(() => ({
+	afterNavigateCallbacks: [] as Array<(nav: unknown) => void>
 }));
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn(),
-	afterNavigate: (cb: (nav: unknown) => void) => {
-		afterNavigateCallbacks.push(cb);
-	}
-}));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({
+		afterNavigate: (cb: (nav: unknown) => void) => {
+			afterNavigateCallbacks.push(cb);
+		}
+	})
+);
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
 
 import { CACHED_READ, CACHED_READ_STORE_ONLY, entuFetch } from '$lib/entu/request';
 import {
@@ -55,6 +42,7 @@ import {
 import { online, writesAvailable } from './online';
 import { cleanup, render } from '@testing-library/svelte';
 import Layout from '../../routes/+layout.svelte';
+import { discoverMock } from '$lib/testing/routeMocks';
 
 const DB = 'sampledb';
 const PERSON = 'person-a';
@@ -242,11 +230,8 @@ describe('readFellBackToCache — written by the read path, not by the browser f
 	});
 });
 
-// #434 slice 6 review round 3, F1 — the fallback flag is global, but its two
-// original clears (a live opted-in read, a page's resetServedFromCache) belong
-// to the three cache-opted pages. Without these, one cache-served read wedged
-// writes off under "No signal" on /roster, /links, /profile and /admin while
-// fully online, and a reconnect on a mounted page never reopened the gate.
+// The fallback flag is global, so every navigation and reconnect clears it; otherwise one cached
+// read wedges writes off under "No signal" on pages that never read through the cache.
 describe('the write gate recovers without a cache-opted page', () => {
 	it('after a fallback, the browser online event reopens writesAvailable', async () => {
 		const unsubscribe = writesAvailable.subscribe(() => undefined);
@@ -287,4 +272,4 @@ describe('the write gate recovers without a cache-opted page', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F3)
+// (*MVOX:Josquin*)

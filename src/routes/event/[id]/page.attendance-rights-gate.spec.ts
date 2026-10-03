@@ -15,25 +15,27 @@ const pageStub = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 const {
-	gotoMock,
-	discoverMock,
 	loadEventDetailMock,
 	loadRosterMock,
 	listAttendanceMock,
 	listAllRsvpsForEventMock,
 	applyAttendanceChangeMock
 } = vi.hoisted(() => ({
-	gotoMock: vi.fn(),
-	discoverMock: vi.fn(),
 	loadEventDetailMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn(),
 	applyAttendanceChangeMock: vi.fn()
 }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/events/eventDetail', async (importActual) => ({
 	...(await importActual<typeof import('$lib/events/eventDetail')>()),
 	loadEventDetail: loadEventDetailMock,
@@ -70,6 +72,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { discoverMock } from '$lib/testing/routeMocks';
 
 function isoAt(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();

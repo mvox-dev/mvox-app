@@ -1,61 +1,25 @@
 // @vitest-environment happy-dom
-//
-// #107 RED — auth token expiry recovery at the entuFetch layer.
-//
-// Bug: when Entu answers 401 (expired/revoked/IP-mismatched JWT — the local
-// `exp` check in guard.ts cannot catch those), every page surfaces a misleading
-// data-loading error ("Couldn't load …") while the stale token stays in
-// localStorage, so a reload just fails the same way.
-//
-// NOTE ON THE TASK WORDING: the issue speaks of "the BFF's entuFetch layer" and
-// "clear the auth cookie" / "server-side load function". This app is a pure
-// client-side SPA (ssr = false, localStorage JWT — see +layout.ts and
-// auth/storage.ts): there is no BFF, no cookie, and no server load. The
-// architectural equivalents pinned here are:
-//   - BFF entuFetch layer  → `$lib/entu/request.entuFetch` (the one data seam)
-//   - clear the auth cookie → `clearAll({ preserveProvider: true })` on storage
-//   - server redirect       → a single client `goto` to the sign-in page
-//
-// CONTRACT (for the GREEN implementer), all in `$lib/entu/request`:
-//   - `entuFetch` receiving a 401 response must:
-//       1. clear the localStorage auth session (provider preserved, so re-auth
-//          pre-selects it — same choice hydrateAuth makes for locally-expired
-//          tokens);
-//       2. trigger exactly ONE `goto('/auth/login?…')` whose URL carries a
-//          `session_expired` flag — single-flight across CONCURRENT 401s (an
-//          agenda load fans out many requests; they must not stampede goto);
-//       3. reject with an error whose `name === 'AuthExpiredError'`.
-//   - `isAuthExpiredError(e: unknown): boolean` is exported and detects BY THE
-//     `name` TAG, not instanceof — page specs (and any future module-boundary
-//     duplication) construct duck-typed errors, and instanceof is brittle
-//     across vitest module graphs.
-//   - Non-401 responses keep resolving as plain Responses, and a network
-//     rejection propagates unchanged — the data-loading error paths of every
-//     caller stay exactly as they are (regression guard below).
+// A 401 from Entu clears the session, fires one goto to the sign-in page carrying
+// session_expired, and rejects with an AuthExpiredError; other responses pass unchanged.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+// Not routeMocks: vi.resetModules() would hand the factory a new routeMocks with other handles.
 const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-// Severs the $env/dynamic/public chain (unavailable outside a SvelteKit request
-// context under happy-dom) — same one-liner every page spec uses.
+// Severs the $env/dynamic/public chain, unavailable outside SvelteKit.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-// The single-flight redirect guard is module state — every test gets a FRESH
-// module instance so one test's fired redirect can't leak into the next.
-// Typed as an intersection with the not-yet-existing surface so this RED spec
-// still typechecks before GREEN lands (`isAuthExpiredError` is optional here;
-// the tests assert it exists at runtime).
+// The single-flight redirect guard is module state, so every test gets a fresh module instance;
+// one test's fired redirect can't leak into the next.
 type AuthExpiredApi = { isAuthExpiredError?: (e: unknown) => boolean };
 async function freshModules() {
 	vi.resetModules();
 	const req = (await import('./request')) as typeof import('./request') & AuthExpiredApi;
 	const storage = await import('$lib/auth/storage');
 	const session = await import('$lib/auth/session');
-	// The teardown+redirect half lives behind a registration seam so node
-	// migration scripts can still import this module (review R2/F1). The app
-	// installs it from the root layout's module scope; the spec installs the
-	// REAL one here, so every assertion below still exercises production code.
+	// The teardown+redirect half sits behind a registration seam so node scripts can import
+	// request; the spec installs the real one, so every assertion exercises production code.
 	const { install401Recovery } = await import('$lib/auth/install-401-recovery');
 	install401Recovery();
 	return { req, storage, session };
@@ -65,8 +29,7 @@ const resp = (status: number, body = '{}') => new Response(body, { status });
 
 beforeEach(() => {
 	gotoMock.mockReset();
-	// The recovery URL now embeds the CURRENT location as its `redirect` target,
-	// so each test starts from a known path.
+	// The recovery URL embeds the current location as its redirect target.
 	history.replaceState({}, '', '/');
 });
 
@@ -152,13 +115,10 @@ describe('entuFetch — 401 handling (#107)', () => {
 	});
 });
 
-// ── #107 review round 1 — the gaps the first GREEN pass left.
+// ── teardown, return path, latch release, writes ─────────────────────────────
 describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
-	// F1: clearing localStorage alone left `authStore` asserting 'authenticated'.
-	// The recovery is a client-side `goto` (no document reload), so nothing
-	// re-hydrates the store: NavShell keeps rendering the full signed-in nav on
-	// the sign-in page, and the layout's auth-keyed effects keep firing Entu
-	// reads with an empty Bearer. The teardown must be the SAME one sign-out uses.
+	// The recovery is a client-side goto with no reload, so nothing re-hydrates the store:
+	// the teardown must be the same one sign-out uses.
 	it('resets the IN-MEMORY auth state to anonymous, not just localStorage', async () => {
 		const { req, storage, session } = await freshModules();
 		storage.setToken('jwt-stale');
@@ -174,10 +134,8 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		expect(get(session.authStore)).toEqual({ status: 'anonymous' });
 	});
 
-	// F3: every other redirect in the app carries the return path
-	// (resolveGuardRedirect emits `?redirect=<encoded target>`, and the login page
-	// reads exactly that to build each provider's `return_to`). Dropping it made
-	// the 401 path strictly worse than the ordinary expired-token guard path.
+	// Like every other redirect, it carries ?redirect=, which the login page turns into each
+	// provider's return_to.
 	it('carries BOTH the session-expired flag and the return path, so re-auth lands back where the session died', async () => {
 		history.replaceState({}, '', '/event/ev123?tab=works');
 		const { req, storage } = await freshModules();
@@ -192,11 +150,8 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		expect(target.searchParams.get('redirect')).toBe('/event/ev123?tab=works');
 	});
 
-	// F5: the single-flight latch was set and NEVER reset — no reset export, no
-	// assignment back to false anywhere. Once latched, every later 401 in that
-	// page's lifetime skipped BOTH the teardown and the redirect and only threw.
-	// Deliberately NO vi.resetModules() between the two expiries: this is the one
-	// test that exercises an ALREADY-LATCHED module.
+	// A latch that never resets makes every later 401 skip teardown and redirect. Deliberately
+	// no vi.resetModules() between the two expiries: this test exercises a latched module.
 	it('releases the single-flight latch once the navigation settles — a LATER 401 recovers again', async () => {
 		const { req, storage, session } = await freshModules();
 		storage.setToken('jwt-stale');
@@ -224,10 +179,8 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 		expect(get(session.authStore)).toEqual({ status: 'anonymous' });
 	});
 
-	// F6: the write paths (rsvp/attendance/repertoire/profile queues) surface a
-	// rejection through their own "couldn't save" UI. That stays as-is — the
-	// redirect is the handling — but it only bounds the damage if a 401 on a
-	// WRITE fires the identical recovery. Pinned here.
+	// Write paths show their own "couldn't save" UI; the redirect only bounds the damage if a
+	// 401 on a write fires the identical recovery.
 	it('a 401 on a WRITE (POST) fires the same recovery as a read', async () => {
 		const { req, storage, session } = await freshModules();
 		storage.setToken('jwt-stale');

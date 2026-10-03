@@ -8,9 +8,11 @@ import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { RsvpByEventId } from '$lib/rsvp/rsvpData';
 import type { AttendancePanel } from '$lib/attendance/types';
-import { goto } from '$app/navigation';
+import { gotoMock } from '$lib/testing/routeMocks';
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
@@ -688,7 +690,6 @@ describe('#220 — AM/PM preference on agenda times', () => {
 });
 
 describe('#466 whole card opens the event', () => {
-	const gotoMock = vi.mocked(goto);
 	beforeEach(() => {
 		gotoMock.mockClear();
 	});
@@ -848,7 +849,6 @@ describe('#466 whole card opens the event', () => {
 });
 
 describe('#471 Recent shows one card until asked', () => {
-	const gotoMock = vi.mocked(goto);
 	beforeEach(() => {
 		gotoMock.mockClear();
 	});

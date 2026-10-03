@@ -23,21 +23,23 @@ const pageStub = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 const {
-	gotoMock,
-	discoverMock,
 	convertEventToSeriesMock,
 	createEventMock,
 	resolveDatabaseEntityIdMock
 } = vi.hoisted(() => ({
-	gotoMock: vi.fn(),
-	discoverMock: vi.fn(),
 	convertEventToSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
 	resolveDatabaseEntityIdMock: vi.fn()
 }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/events/eventConvert', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/events/eventConvert')>();
 	return { ...actual, convertEventToSeries: convertEventToSeriesMock };
@@ -57,6 +59,7 @@ import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/
 import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

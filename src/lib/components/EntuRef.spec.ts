@@ -1,41 +1,17 @@
 // @vitest-environment happy-dom
-//
-// #487 RED — EntuRef: a clickable reference to an entity in the Entu app,
-// showing a short form of its `_id` instead of any personal value (no name,
-// no email), so a screen capture of the message leaks nothing.
-//
-// CONTRACT (GREEN implements src/lib/components/EntuRef.svelte, Svelte 5 runes):
-//
-//   PROPS  id: string (required) — the full 24-char Entu `_id`
-//          db?: string — the Entu database; when omitted the component reads
-//                        the signed-in db from `selectedDbStore`
-//                        (src/lib/collectives/store.ts) — dual mode, like
-//                        InviteSurface.svelte's controlled/standalone split.
-//          ...rest spread onto the root element (data-testid etc.), like
-//          DeleteTrigger.
-//
-//   WITH a db: exactly one native
-//     <a href="https://entu.app/{db}/{id}" target="_blank"
-//        rel="noopener noreferrer" title={id}
-//        aria-label={m.entu_ref_aria_label({ short })} class="font-mono …">
-//   whose visible text is ONLY shortEntuId(id) (last 6 chars).
-//
-//   WITHOUT a db (no prop, store null): a plain <span title={id}> with the
-//   short id — NO href, NO link role. No guessed db, no link to a wrong
-//   database.
-//
-//   No Entu API call, no rights read. No caller in this slice — wiring into
-//   roster_record_damaged / roster_member_deactivate_failed is #388.
+// EntuRef links to an entity in the Entu app by a short form of its _id, never a personal value,
+// so a screen capture leaks nothing. Without a db it renders a plain span: no guessed link.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Severs the entu-config → $env/dynamic/public import under happy-dom (same
-// pattern as page.roster.spec.ts / collectives/store.spec.ts): importing
-// $lib/collectives/store pulls in $lib/entu/auth-expired → $lib/entu-config →
-// $env/dynamic/public, which throws outside a real SvelteKit request context.
+// Severs the store → entu-config → $env/dynamic/public chain, which throws outside SvelteKit;
 // $app/navigation likewise can't run outside an app.
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 import {
 	collectiveState,
@@ -133,4 +109,4 @@ describe('#487 — EntuRef with no db anywhere renders no link', () => {
 	});
 });
 
-// (*MVOX:Tallis* — #487 RED)
+// (*MVOX:Tallis*)
