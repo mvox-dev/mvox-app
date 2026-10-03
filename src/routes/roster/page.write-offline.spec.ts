@@ -1,26 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 review F1 — /roster writes are gated while offline, on the REAL
-// page (harness composed from page.roster-deactivate.spec.ts + page.roster-
-// arrange-crud.spec.ts: every read and every WRITE seam mocked at its module
-// boundary, so "no write" is observable per named handle).
-//
-// THE FINDING: slice 6 gated the three offline-READ routes and stopped. /roster
-// carried deactivate/reinstate, the member-record create/update, seven
-// section-CRUD actions and invite mint/withdraw fully enabled offline with no
-// reason text, and no fence covered it.
-//
-// CONTRACT — an admin+owner on a loaded roster, the signal offline:
-//   • ONE visible sentence [data-testid="roster-write-unavailable"];
-//   • the member surface: roster-record-save, the invite trio, the deactivate
-//     arm/confirm and the section picker are all disabled;
-//   • Arrange mode: arrange-rename-*, arrange-indent-*, arrange-unindent-*,
-//     section-remove-* and roster-new-section are disabled;
-//   • the SWEEP on both surfaces: operating every still-enabled control calls
-//     none of the write seams;
-//   • an open rename input KEEPS its text (review F2's rule — a refusal is not
-//     a discard);
-//   • back online: enabled again, the sentence gone, a rename writes.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -110,14 +88,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
 import Page from './+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
 	goOffline,
@@ -128,11 +99,11 @@ import {
 	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const REASON = '[write_unavailable_no_signal]';
 
-// m1 is the viewer's own membership; m2 is another member (the only legitimate
-// deactivate / invite target).
 const ROWS = [
 	{
 		memberId: 'm1',
@@ -156,28 +127,13 @@ const ROWS = [
 
 function fixtureTree(): SectionNode[] {
 	return [
-		// `dbEntityId` matters: the page keeps only the ROOT sections whose org
-		// matches the roster's own `currentDbEntityId` (#124), and the fixture rows
-		// below carry 'db-1'.
 		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] },
 		{ id: 'sec-bass', name: 'Bass', displayOrder: 2, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] }
 	];
 }
 
 function setAuthed() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(async () => {
@@ -205,8 +161,6 @@ beforeEach(async () => {
 	h.updateMemberRecordMock.mockResolvedValue(undefined);
 	h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: 'tok' });
 	h.withdrawInviteMock.mockResolvedValue(undefined);
-	// Owner tier + a known join state per person: what makes the invite trio
-	// render at all.
 	h.resolveOwnerTierMock.mockResolvedValue('owner');
 	h.listJoinStateDetailsMock.mockResolvedValue({
 		'person-p': { state: 'linked' },
@@ -218,11 +172,7 @@ beforeEach(async () => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 	resetOnLine();
 });
@@ -231,8 +181,6 @@ function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
-/** The record editor's name box — RedactedField may wrap the <input>, so this
- *  resolves either shape. */
 function recordNameInput(container: HTMLElement): HTMLInputElement {
 	const node = container.querySelector('[data-testid="roster-record-name"]');
 	expect(node, 'the record editor must be open').not.toBeNull();
@@ -259,8 +207,6 @@ function noWriteSeamCalled() {
 	expect(h.withdrawInviteMock).not.toHaveBeenCalled();
 }
 
-/** Grouped view, Unassigned expanded, m2's record card open (the deactivate and
- *  invite controls live inside it — #302). */
 async function renderMemberSurface() {
 	setAuthed();
 	adminStore.set('admin');
@@ -323,8 +269,6 @@ describe('/roster — the member surface while offline (#434 slice 6 review F1)'
 
 		const touched = await exerciseEveryEnabledControl(container);
 
-		// The record editor's own text boxes stay typeable (a draft is the viewer's
-		// work, not a write), so this sweep is never vacuous.
 		expect(touched.length).toBeGreaterThan(2);
 		noWriteSeamCalled();
 	});
@@ -377,8 +321,6 @@ describe('/roster — the arrange surface while offline (#434 slice 6 review F1)
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
 
-		// The three view chips are skipped: they write nothing, and leaving Arrange
-		// mid-sweep would hide the very controls this fence exists to reach.
 		const touched = await exerciseEveryEnabledControl(container, {
 			skip: ['roster-view-chip-collapsed', 'roster-view-chip-expanded']
 		});
@@ -410,4 +352,4 @@ describe('/roster — the arrange surface while offline (#434 slice 6 review F1)
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)

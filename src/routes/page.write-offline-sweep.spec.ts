@@ -144,15 +144,10 @@ import {
 	isWriteDisabled,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
@@ -260,25 +255,11 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	for (const value of Object.values(H)) value.mockReset();
 	resetOnLine();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function setAuthed(): void {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 async function renderPanelOpenOnline(): Promise<HTMLElement> {

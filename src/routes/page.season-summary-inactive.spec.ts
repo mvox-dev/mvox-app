@@ -1,15 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #255 done-when 3 RED — the season summary CALL SITE keeps a deactivated
-// member's history. deriveAllMemberRates' row set comes from `loadRoster`
-// (active-only) at +page.svelte's expand handler, so today her rows VANISH
-// (row-drop, census read 6) — silently violating "past attendance keeps its
-// subject", the reason deactivate beat delete. This spec forces the page to
-// ALSO read the archived members (memberLifecycle — `loadInactiveRoster` at
-// first, `loadActiveAndArchivedRosters` since #469 review F1, which folds both
-// halves into one read so the real-names overlay runs once) and to
-// render her as a marked, count-only, rate-free row. The derive mechanics are
-// pinned in attendanceSummary.inactive.spec.ts; this file pins the wiring.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,11 +40,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights now ALSO gates the agenda's rsvp control
-	// (called as (cfg, personId, personId)): grant her editor on her OWN
-	// person while every other entity (season/event/database) stays
-	// 'not-editor', so this file's existing rights-suppressed assertions
-	// are untouched.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -79,8 +63,6 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),
 	loadInactiveRoster: vi.fn(),
-	// #469 review F1 — the season panel reads the active AND archived halves
-	// through ONE producer, so the real-names overlay runs once per panel open.
 	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: vi.fn(),
 	listDeactivateBlockers: vi.fn()
@@ -101,15 +83,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -125,25 +102,11 @@ function agendaItem(id: string, startDatetime: string) {
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
 beforeEach(() => {
-	// #365 — the expand affordance opens on SEASON RIGHTS (owner-or-editor on
-	// the current season), not on the conductor list. person-p holds `_owner`.
 	loadFullAgendaMock.mockResolvedValue(
 		fullAgendaResult({
 			seasons: [],
@@ -162,8 +125,6 @@ beforeEach(() => {
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listMyAttendanceMock.mockResolvedValue(toListRead([]));
 	listAllRsvpsForEventMock.mockResolvedValue([]);
-	// ACTIVE roster: Alice only. Gone Girl (m9) is deactivated — she exists only
-	// in the archived half of the read and in the attendance records.
 	loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
 	]));
@@ -189,11 +150,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
@@ -249,36 +206,6 @@ describe('season summary — a deactivated member keeps her rows (done-when 3, i
 	});
 });
 
-// ── #321 review F2, second pass: the rate table says when rows are missing ──────
-//
-// The PO's correction (2026-09-11): the reachability test EXTENDED the
-// display-list criterion to option-lists, it did not replace it, so "nothing is
-// picked in a roll-up" does not exempt this surface — a read that silently drops
-// singers is the defect the issue was filed about. And this table is a
-// particularly bad place for it: it invites comparison between named people, so a
-// dropped singer is absent from a comparison the others are being judged in.
-//
-// EITHER member read raises it (active roster or archived), because the reader
-// needs the same thing to know either way.
-//
-// NO collective-switch pin here, deliberately, and for TWO reasons — the order
-// matters, because the second one is contingent and the first is not:
-//
-//   1. PRIMARY — `seasonRatesPartial` is cleared in BOTH switch teardowns, right
-//      beside the `seasonMemberRates` it describes. The claim therefore cannot
-//      outlive the rows under any render state, which is the property that makes
-//      a leak impossible rather than merely unobservable.
-//   2. SECONDARY — those teardowns also collapse the surface
-//      (`seasonSummaryExpanded = false`), so today the notice unmounts with the
-//      rows and no DOM-level leak is reachable for a spec to catch.
-//
-// Reason 2 alone would be a stale premise the day this summary defaults to
-// expanded (or any surface keeps it mounted across a switch): the notice would
-// then still be on screen after the switch, and only reason 1 keeps it honest.
-// So the absent pin rests on the flag-clear, not on the unmount — and if that
-// default ever changes, the pin becomes writable and worth adding, without this
-// argument having to be re-derived.
-
 describe('season summary — the rate table states a truncated member read (#321 review F2)', () => {
 	const NOTICE = '[data-testid="season-summary-partial-notice"]';
 
@@ -301,7 +228,6 @@ describe('season summary — the rate table states a truncated member read (#321
 		const notice = container.querySelector(NOTICE)!;
 		expect(notice.getAttribute('role')).toBe('status');
 		expect(notice.className).not.toMatch(/sr-only|hidden/);
-		// Inside the members region, ahead of the rows it is about.
 		const region = container.querySelector('[data-testid="season-summary-members"]')!;
 		expect(region.querySelector(NOTICE)).not.toBeNull();
 		const row = container.querySelector('[data-testid="member-rate-m1"]')!;
@@ -324,7 +250,6 @@ describe('season summary — the rate table states a truncated member read (#321
 		const { container } = await renderExpandedSummary();
 
 		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
-		// ONE notice for the table, not one per read.
 		expect(container.querySelectorAll(NOTICE).length).toBe(1);
 	});
 
@@ -336,5 +261,4 @@ describe('season summary — the rate table states a truncated member read (#321
 	});
 });
 
-// (*MVOX:Tallis*)
-// (*MVOX:Josquin* — #321 review F2 second pass: the rate table's partial notice)
+// (*MVOX:Tallis*) (*MVOX:Josquin*)

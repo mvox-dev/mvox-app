@@ -89,15 +89,11 @@ import Page from './+page.svelte';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function isoDate(offsetDays: number): string {
 	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
@@ -287,19 +283,7 @@ function installWorld(options: WorldOptions) {
 }
 
 function setAuthed(dbs: string[] = ['sampledb']) {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: Object.fromEntries(dbs.map((db) => [db, 'person-p'])),
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })),
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(dbs[0]);
+	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
 }
 
 beforeEach(() => {
@@ -326,9 +310,7 @@ afterEach(() => {
 	countSeriesOccurrencesMock.mockReset();
 	discoverMock.mockReset();
 	gotoMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 function q(scope: ParentNode, testid: string): HTMLElement | null {

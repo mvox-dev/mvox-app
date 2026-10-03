@@ -1,30 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #365 (epic #362) RED — the season-summary comparison opens on RIGHTS, not on
-// the conductor list.
-//
-// `canExpand` (the SeasonSummary expand affordance + the full-roster
-// member-rate comparison behind it) currently reads `isConductor` from
-// conductorStore.ts — a seat computed from the season's `conductor` refs. The
-// paradigm (#362, ratified): Entu's grants are the only authority; a control
-// renders only when the grant on the entity the write/read targets is in hand.
-// The expand must derive from the CURRENT season's `_owner`/`_editor` refs —
-// the page's existing `seasonManageRights` signal, set from
-// `manageRightsFrom(seasonOwners, seasonEditors, personId)` on data the agenda
-// load already carries. No new IO.
-//
-// With #356 having taken the marking side, the expand was `isConductor`'s LAST
-// gate consumer, so `isConductor` and conductorStore.ts go entirely (issue
-// done-when 2) — the fence describe at the bottom pins the deletion.
-//
-// Done-when 3 (conductor NAMES still render where they did) is pinned by
-// existing specs that drive the display path (conductorLogic.resolveConductors
-// + roster data, never conductorStore):
-//   - event detail conductor line: src/routes/event/[id]/page.spec.ts
-//     ("renders conductor names comma-separated, in resolved order" —
-//     event-detail-conductors, name fixture 'Mihkel Putrinš, Alice Smith')
-//   - season-manage conductor chips: src/routes/page.season-manage.spec.ts
-//     (season-manage-conductor-p-grace, name fixture 'Grace Hopper')
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -68,11 +42,6 @@ vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock 
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
 	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	// #372 — resolveManageRights gates the agenda's rsvp control (called as
-	// (cfg, personId, personId)): grant her editor on her OWN person while
-	// every other entity stays 'not-editor'. The season-rights gate under test
-	// here must NOT route through this call — it derives from the
-	// seasonOwners/seasonEditors the agenda read already carried.
 	resolveManageRights: vi.fn((..._args: unknown[]) => {
 		const [, entityId, personId] = _args as [unknown, string, string];
 		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
@@ -96,7 +65,6 @@ vi.mock('$lib/roster/memberLifecycle', () => ({
 	deactivateMember: vi.fn(),
 	reinstateMember: vi.fn(),
 	loadInactiveRoster: vi.fn(),
-	// #469 review F1 — the season panel reads both halves through ONE producer.
 	loadActiveAndArchivedRosters: loadActiveAndArchivedRostersMock,
 	listInactiveMembers: vi.fn(),
 	listDeactivateBlockers: vi.fn()
@@ -117,15 +85,10 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -140,11 +103,6 @@ function agendaItem(id: string, startDatetime: string) {
 	};
 }
 
-/**
- * Two past events in the current season; who may expand is driven ONLY by the
- * season-rights overrides. The conductor list is a separate axis (display
- * data), overridden independently to prove the seat does not count.
- */
 function agendaFixture(overrides: {
 	seasonOwners?: string[];
 	seasonEditors?: string[];
@@ -165,19 +123,7 @@ function agendaFixture(overrides: {
 }
 
 function setAuthedWithOneCollective(personId = 'person-p') {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: personId },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
 	completionGateStore.set('complete');
 }
 
@@ -203,11 +149,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
@@ -249,7 +191,6 @@ describe('#365 — the season-summary comparison opens on season rights', () => 
 	});
 
 	it('the conductor SEAT does not count: on the conductor list but holding no grant → NO expand', async () => {
-		// The exact divergence #365 exists for — the seat without the grant.
 		loadFullAgendaMock.mockResolvedValue(
 			agendaFixture({ seasonConductors: ['person-p'], seasonOwners: [], seasonEditors: [] })
 		);
@@ -258,7 +199,6 @@ describe('#365 — the season-summary comparison opens on season rights', () => 
 	});
 
 	it('no affordance while the agenda (and with it the rights answer) is still loading', async () => {
-		// The load never resolves: rights are unknown, so the gate is closed.
 		loadFullAgendaMock.mockReturnValue(new Promise(() => {}));
 		const { container } = render(Page);
 		setAuthedWithOneCollective();
@@ -267,14 +207,6 @@ describe('#365 — the season-summary comparison opens on season rights', () => 
 		expect(container.querySelector(EXPAND)).toBeNull();
 	});
 });
-
-// ── the deletion fence (issue done-when 2) ─────────────────────────────────
-//
-// Same shape as src/no-collectives-route.spec.ts: the dead module must be
-// GONE, and no live source may keep reaching for it. `isConductor` had one
-// gate consumer left (this expand); with it moved to rights, the store — and
-// with it the last "membership-list stands in for a grant" signal — has no
-// reason to exist (#362 paradigm).
 
 const SRC_ROOT = resolve(__dirname, '..');
 

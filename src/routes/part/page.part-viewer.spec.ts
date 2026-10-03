@@ -1,40 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #427 RED — A singer reads her part fullscreen, offline.
-//
-// The viewer is a full-viewport in-app route, /part/[fileId] (100dvh, edge to
-// edge, dark paper-black surround, no nav shell — allowlisted in
-// src/page-shell.spec.ts with its reason). "Fullscreen" is the ROUTE: where
-// Element.requestFullscreen exists (Android) it is called on entry as an
-// enhancement; where it does not (iOS Safari has no Fullscreen API) the
-// route alone is the fullscreen and nothing is called.
-//
-// DATA PATH: the route reads bytes through the EXISTING openFileBytes
-// read-through (src/lib/files/openFileBytes.ts) under the identity resolved
-// from the ?db= query param against the collectives the session already
-// holds — a cache hit touches no network (the offline promise), a miss
-// online signs + fetches + stores (that write is #334's existing behaviour,
-// not this slice's). pdf.js renders ONE page at a time to a <canvas>, whole
-// page contained in the viewport.
-//
-// PAGE TURNS (Mihkel's ruling on #333): TAPS on two invisible zones — the
-// left and right ~25% of the viewport, full height — turn pages; a tap is
-// pointerdown→pointerup within 300 ms and under 10 px of movement. Any
-// gesture that moves further is NOT a page turn (native scroll/pinch stay
-// available; swiping never turns a page). ArrowRight/ArrowLeft and
-// PageDown/PageUp turn too (a11y). The 'n / N' indicator is Inter, plain.
-//
-// NOTHING DRAWN, NOTHING STORED: the structural half of that fence lives in
-// src/part-viewer-fence.spec.ts; here the behavioural half — the viewer only
-// READS (a dead network plus a held file is a working viewer; a dead network
-// plus a missing file is a plain notice, no retry loop).
-//
-// HOUSE SUBSTITUTIONS (the #343 page-spec posture): the REAL route component
-// renders; only the platform seams are doubled — the byte store
-// ($lib/files/appByteStore → createFakeByteStore), signFileUrl, global fetch
-// (stubbed per test, networkGuard forbids the real wire), and pdf.js itself
-// (module-mocked: getDocument → numPages/getPage/render — no real renderer
-// runs under happy-dom).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -50,9 +14,6 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 const pageStub = vi.hoisted(() => ({
 	params: { fileId: 'file-score' } as Record<string, string>,
 	url: new URL('http://localhost/part/file-score?db=sampledb'),
-	// #427 review finding 3 — `goto`'s page state is how the event/library
-	// entry handlers hand the part's NAME to the viewer, which is where the
-	// bytes land and so where #353's label write belongs.
 	state: {} as { partLabel?: PartLabel }
 }));
 vi.mock('$app/state', () => ({ page: pageStub }));
@@ -60,10 +21,6 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 const { gotoMock, signFileUrlMock, afterNavigateCallbacks } = vi.hoisted(() => ({
 	gotoMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
-	// #427 review round 3, finding 4 — the route registers an afterNavigate
-	// callback at init to learn HOW it was entered. Captured here so a test
-	// can drive both entries: a cold document load ('enter') and an in-app
-	// navigation from the library/event page ('goto').
 	afterNavigateCallbacks: [] as Array<(nav: { type: string }) => void>
 }));
 vi.mock('$app/navigation', () => ({
@@ -74,8 +31,6 @@ vi.mock('$app/navigation', () => ({
 }));
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
-// The #353 LABEL INDEX — a different store from the byte store, and the one
-// surface of it this route touches (see the route's own fence note).
 const labelWrites = vi.hoisted(
 	() => [] as Array<{ identity: unknown; fileId: string; label: unknown }>
 );
@@ -88,18 +43,8 @@ vi.mock('$lib/files/appLabelStore', () => ({
 		remove: async () => {}
 	})
 }));
-// $lib/collectives/store pulls in discover.ts -> marker.ts -> entu/request.ts
-// -> entu-config.ts's `$env/dynamic/public` read, which the vitest node
-// environment has no value for — same seam the event/library page specs
-// substitute for the same transitive reason.
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
-// pdf.js, mocked at the module seam: the real library is a multi-MB renderer
-// with a worker — none of that runs here. The mock mirrors the real API
-// shape (getDocument(src) → the LOADING TASK, synchronously, with its own
-// destroy() — the resolved `.promise` value is the PDFDocumentProxy, which
-// carries getPage/numPages but, in the real library, no destroy of its own;
-// page.render → { promise }) so the route exercises its real call sites.
 const pdfjs = vi.hoisted(() => {
 	const destroy = vi.fn();
 	const renderCalls: unknown[] = [];
@@ -126,32 +71,24 @@ vi.mock('pdfjs-dist', () => ({
 	GlobalWorkerOptions: { workerSrc: '' },
 	getDocument: pdfjs.getDocument
 }));
-// The worker ships as a static asset via Vite's ?url import (precached by
-// the SW — see swPolicy.spec.ts). Mocked so no worker file need exist here.
 vi.mock('pdfjs-dist/build/pdf.worker.min.mjs?url', () => ({ default: '/mock-pdf-worker.mjs' }));
 
 import Page from './[fileId]/+page.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import { collectiveState } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import type { PartLabel } from '$lib/files/labelStore';
+import { resetAppState } from '$lib/testing/appReset';
 
 let fakeByteStore: FakeByteStore;
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
 
-/** How `fetch` rejects when nothing can be reached — a TypeError, every
- *  engine, and the signal the route classifies on (see wireUnreachable in
- *  the route). A signing stub that rejected with a plain Error would be
- *  claiming a server ANSWERED, which is the opposite case. */
 function deadWire(): TypeError {
 	return new TypeError('Failed to fetch');
 }
 
-/** Every test runs with the WIRE DEAD unless it says otherwise: the offline
- *  promise is the point, so network unreachability is the default, not the
- *  exception. */
 function deadFetch() {
 	const fetchMock = vi.fn(async () => {
 		throw deadWire();
@@ -168,14 +105,7 @@ function seedHeldPart(): void {
 	});
 }
 
-/**
- * The house render. COLLECTIVE DISCOVERY IS LEFT UNRESOLVED on purpose
- * (#427 review finding 2): `collectiveState` is filled by a network call per
- * db, so on the cold offline start this issue is about it never answers.
- * Every test in this file therefore runs the viewer with that store at
- * 'loading' — identity comes off the decoded token and the `?db=` param
- * alone, or the offline promise is not kept.
- */
+// collectives stay loading: the cold offline start
 function renderViewer(state: { partLabel?: PartLabel } = {}) {
 	pageStub.params = { fileId: 'file-score' };
 	pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
@@ -190,9 +120,6 @@ function renderViewer(state: { partLabel?: PartLabel } = {}) {
 	return render(Page);
 }
 
-/** How the route learns it was entered: 'enter' is a fresh document load
- *  (PWA launch, bookmark, reload); 'goto' is the in-app navigation the
- *  library and event pages make. SvelteKit fires this after mount. */
 function reportEntry(type: 'enter' | 'goto' | 'link' | 'popstate'): void {
 	for (const cb of afterNavigateCallbacks) cb({ type });
 }
@@ -214,8 +141,6 @@ async function loaded(container: HTMLElement): Promise<void> {
 	});
 }
 
-/** A TAP: pointerdown→pointerup, same spot, no dwell — the gesture that
- *  turns a page. */
 async function tap(zone: Element, x: number, y: number): Promise<void> {
 	await fireEvent.pointerDown(zone, {
 		pointerId: 1,
@@ -243,9 +168,6 @@ function zonePrev(container: HTMLElement): Element {
 
 type FullscreenProto = { requestFullscreen?: () => Promise<void> };
 
-/** Install (or remove) Element.requestFullscreen for one test; returns the
- *  restore handle. happy-dom may or may not ship one — the descriptor is
- *  saved either way. */
 function setRequestFullscreen(impl: (() => Promise<void>) | undefined): () => void {
 	const proto = Element.prototype as unknown as FullscreenProto;
 	const original = Object.getOwnPropertyDescriptor(Element.prototype, 'requestFullscreen');
@@ -272,9 +194,7 @@ afterEach(() => {
 	afterNavigateCallbacks.length = 0;
 	labelWrites.length = 0;
 	pageStub.state = {};
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('#427 — a held part renders with the network dead (the offline promise)', () => {
@@ -287,17 +207,14 @@ describe('#427 — a held part renders with the network dead (the offline promis
 			const { container } = renderViewer();
 			await loaded(container);
 
-			// Full shape on the indicator text — page 1 of 3, nothing else.
 			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
 			expect(container.querySelector('[data-testid="part-viewer-canvas"]')).not.toBeNull();
 
-			// pdf.js was fed the object URL openFileBytes minted from the store.
 			expect(pdfjs.getDocument).toHaveBeenCalledTimes(1);
 			const arg = pdfjs.getDocument.mock.calls[0][0];
 			const src = typeof arg === 'string' ? arg : (arg as { url?: string }).url;
 			expect(String(src)).toMatch(/^blob:/);
 
-			// The offline promise, pinned: no signing, no fetch, no store write.
 			expect(signFileUrlMock).not.toHaveBeenCalled();
 			expect(fetchMock).not.toHaveBeenCalled();
 			expect(fakeByteStore.puts).toEqual([]);
@@ -345,15 +262,8 @@ describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #3
 		try {
 			const container = await renderLoaded();
 			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
-			// ONE rasterisation for the first paint (#427 review round 2,
-			// finding 1). Every assertion below pins the running total: a
-			// page turn costs exactly one more render, and a turn refused at
-			// a bound costs none. Two drivers racing on the same page turn
-			// would show up here as 2, 4, 6 — the serialised render chain
-			// hides the doubling everywhere else.
 			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(1));
 
-			// Left bound holds: page 1 stays page 1 — and nothing re-renders.
 			await tap(zonePrev(container), 40, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_1_OF_3));
 			expect(pdfjs.renderCalls.length).toBe(1);
@@ -365,7 +275,6 @@ describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #3
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_3_OF_3));
 			await waitFor(() => expect(pdfjs.renderCalls.length).toBe(3));
 
-			// Right bound holds: page 3 stays page 3, and no render either.
 			await tap(zoneNext(container), 980, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_3_OF_3));
 			expect(pdfjs.renderCalls.length).toBe(3);
@@ -408,7 +317,6 @@ describe('#427 — page turns: corner taps, never swipes (Mihkel\'s ruling on #3
 
 			expect(indicator(container)).toEqual(INDICATOR_1_OF_3);
 
-			// Sanity in the same DOM: a clean tap right after still turns.
 			await tap(zone, 980, 400);
 			await waitFor(() => expect(indicator(container)).toEqual(INDICATOR_2_OF_3));
 		} finally {
@@ -462,11 +370,6 @@ describe('#427 — close and fullscreen', () => {
 		}
 	});
 
-	// #427 review round 3, finding 4 — the headline entry of this whole
-	// issue is a cold one: an installed-PWA launch or a bookmarked
-	// /part/<fileId> at a no-signal rehearsal. Nothing in the app is behind
-	// it, so history.back() either does nothing (she is stuck on a fullscreen
-	// page with no nav chrome) or leaves the app.
 	it('entered COLD (a PWA launch or a bookmark, no in-app history): close goes to the agenda instead of walking her out of the app', async () => {
 		deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
@@ -489,9 +392,6 @@ describe('#427 — close and fullscreen', () => {
 		}
 	});
 
-	// The not-on-device notice is the other place the close button lives, and
-	// it is the MOST likely cold entry of all: a bookmark to a part that was
-	// never downloaded.
 	it('the not-on-device notice\'s close also lands in the app on a cold entry', async () => {
 		deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
@@ -547,7 +447,6 @@ describe('#427 — a part NOT on the device, with no network', () => {
 	it('renders the plain not-on-device notice and a close button — no page, no retry loop', async () => {
 		const fetchMock = deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
-		// Store deliberately empty: the file was never opened at home.
 		const restore = setRequestFullscreen(undefined);
 		try {
 			const { container } = renderViewer();
@@ -559,19 +458,15 @@ describe('#427 — a part NOT on the device, with no network', () => {
 			});
 			expect(notice.textContent?.trim()).toEqual('[part_viewer_not_on_device]');
 
-			// No page and no renderer: nothing to show is nothing shown.
 			expect(container.querySelector('[data-testid="part-viewer-canvas"]')).toBeNull();
 			expect(container.querySelector('[data-testid="part-viewer-page-indicator"]')).toBeNull();
 			expect(pdfjs.getDocument).not.toHaveBeenCalled();
 
-			// The way out is the same close button, classed and native.
 			const close = container.querySelector('[data-testid="part-viewer-close"]') as HTMLElement;
 			expect(close).not.toBeNull();
 			expect(close.tagName).toBe('BUTTON');
 			expect(close.getAttribute('class')).toBeTruthy();
 
-			// No retry loop: one open attempt, and the dead wire was tried at
-			// most once by the read-through itself.
 			expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(1);
 		} finally {
 			restore();
@@ -590,16 +485,11 @@ describe('#427 review finding 2 — a COLD entry: identity is derived from the t
 			pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
 			pageStub.state = {};
 			setToken('jwt-abc');
-			// The cold-start truth: this component mounts BEFORE the layout's
-			// hydrateAuth resolves, and collective discovery (a network call
-			// per db) never resolves at all with no signal.
 			collectiveState.set({ status: 'loading' });
 			authStore.set({ status: 'loading' });
 
 			const { container } = render(Page);
 
-			// Nothing claimed while auth is unresolved: a "not on this device"
-			// notice here would be a lie the effect could never take back.
 			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
 			expect(pdfjs.getDocument).not.toHaveBeenCalled();
 
@@ -689,17 +579,11 @@ describe('#427 review finding 3 — the part LABEL the entry page handed down', 
 
 describe('#427 review finding 4 — a DEGRADED delivery must not dead-end', () => {
 	it('a byte fetch blocked by CORS hands the SIGNED url to the browser — pdf.js is never fed it, and no false not-on-device notice appears', async () => {
-		// Signing works; the byte GET rejects — the documented dev/preview CORS
-		// case (#343 finding 1(a)). openFileBytes reports
-		// 'fallback-navigation' and hands back the signed url itself, NOT a
-		// blob. Re-issuing that url from the page origin (what pdf.js would do)
-		// re-runs the request that was just blocked.
 		const fetchMock = vi.fn(async () => {
 			throw new TypeError('Failed to fetch');
 		});
 		vi.stubGlobal('fetch', fetchMock);
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
-		// Store deliberately empty — this is the online miss, not a cache hit.
 		const restore = setRequestFullscreen(undefined);
 		try {
 			const { container } = renderViewer();
@@ -716,10 +600,6 @@ describe('#427 review finding 4 — a DEGRADED delivery must not dead-end', () =
 
 describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim about her device', () => {
 	it('signing that answers 500 shows the open-failure notice, never "not saved on this device"', async () => {
-		// Good wifi, a part she has never cached, and Entu's signing call
-		// answers 500. openFileBytes propagates (a signing failure is a
-		// delivery failure, by design), and the loop must not report that as
-		// an absent offline copy.
 		const fetchMock = vi.fn(async () => {
 			throw new Error('the byte GET is never reached');
 		});
@@ -727,7 +607,6 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 		signFileUrlMock.mockRejectedValue(
 			new Error('signFileUrl: file file-score signing failed: 500')
 		);
-		// Store deliberately empty — nothing on the device to fall back to.
 		const restore = setRequestFullscreen(undefined);
 		try {
 			const { container } = renderViewer();
@@ -737,12 +616,10 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 				expect(el).not.toBeNull();
 				return el as HTMLElement;
 			});
-			// The house open-error copy, not a new part_viewer_ key.
 			expect(notice.textContent?.trim()).toEqual('[repertoire_pdf_error]');
 			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
 			expect(pdfjs.getDocument).not.toHaveBeenCalled();
 
-			// The way out is the same close button, classed and native.
 			const close = container.querySelector('[data-testid="part-viewer-close"]') as HTMLElement;
 			expect(close).not.toBeNull();
 			expect(close.tagName).toBe('BUTTON');
@@ -753,10 +630,6 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 	});
 
 	it('a byte GET the bucket answers 403 shows the same open-failure notice', async () => {
-		// Signing works; the bucket refuses the signed GET (an expired
-		// signature). openFileBytes throws `byte fetch failed: 403` — a
-		// server that answered, so no passthrough navigation and no device
-		// claim.
 		signFileUrlMock.mockResolvedValue('https://s3.example/signed-1');
 		const fetchMock = vi.fn(
 			async () =>
@@ -778,7 +651,6 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 			});
 			expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).toBeNull();
 			expect(pdfjs.getDocument).not.toHaveBeenCalled();
-			// Not a fallback-navigation: nothing was handed to the browser.
 			expect(window.location.href).toBe(hrefBefore);
 			expect(fakeByteStore.puts).toEqual([]);
 		} finally {
@@ -787,8 +659,6 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 	});
 
 	it('a dead wire with no stored copy still reads as not-on-device — the two are never collapsed', async () => {
-		// The mirror of the two above, on the same code path: nothing
-		// ANSWERED, so the device claim is the truthful one.
 		deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
 		const restore = setRequestFullscreen(undefined);
@@ -805,4 +675,4 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 	});
 });
 
-// (*MVOX:Tallis* — #427 RED; review-fix rounds 1+2 *MVOX:Josquin*)
+// (*MVOX:Tallis*) (*MVOX:Josquin*)

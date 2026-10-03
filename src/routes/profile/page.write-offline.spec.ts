@@ -1,22 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 review F1 — /profile writes are gated while offline, on the
-// REAL page (harness: src/routes/page.profile.spec.ts — the profile read and the
-// save primitive are module-mocked, so "no write" is observable).
-//
-// THE FINDING, and why this page is the awkward one: its main write has NO
-// BUTTON. A 2-second idle autosave fires on its own, with no user click to
-// disable — so the gate had to land in `onAutosave` itself (nothing writes) and
-// in `handleValueChange` (nothing is even scheduled), not only on controls.
-//
-// CONTRACT — a loaded profile, the signal offline:
-//   • ONE visible sentence [data-testid="profile-write-unavailable"];
-//   • the whole-field activators, the visibility buttons, the roster-names
-//     toggle and the account-link controls are disabled;
-//   • an editor already open keeps its typed text, and NEITHER the 2s idle timer
-//     NOR a blur writes anything (nothing queued — no retry when the signal
-//     returns either);
-//   • back online: enabled again, the sentence gone, an edit autosaves.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -96,13 +78,7 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { resetGate } from '$lib/profile/completionGate';
 import {
 	goOffline,
@@ -113,20 +89,14 @@ import {
 	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const REASON = '[write_unavailable_no_signal]';
-/** The page's own idle window (createAutosave({ idleMs: 2_000 })). */
 const IDLE_MS = 2_000;
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 beforeEach(async () => {
@@ -156,10 +126,7 @@ beforeEach(async () => {
 afterEach(() => {
 	vi.useRealTimers();
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetAdmin();
 	resetGate();
 	resetOnLine();
@@ -190,9 +157,6 @@ function writeControls(container: HTMLElement): HTMLElement[] {
 		q(container, 'profile-email-edit') as HTMLElement,
 		q(container, 'profile-roster-names') as HTMLElement,
 		q(container, 'profile-link-another') as HTMLElement,
-		// BUTTONS only: the visibility group also renders non-control nodes under a
-		// `profile-vis-*` testid (the per-level state hint), and a <p> has nothing to
-		// disable.
 		...Array.from(container.querySelectorAll<HTMLElement>('button[data-testid^="profile-vis-"]'))
 	].filter((el): el is HTMLElement => el !== null);
 }
@@ -212,15 +176,12 @@ describe('/profile — writes while offline (#434 slice 6 review F1)', () => {
 		expect(container.querySelectorAll('[data-testid="profile-write-unavailable"]')).toHaveLength(1);
 	});
 
-	// The heart of the finding: the write with no button.
 	it('offline: the 2s idle autosave never fires, and the typed text survives', async () => {
 		const container = await renderReadyOnline();
 		const input = await openNameEditor(container);
 		await goOffline();
 		h.applyProfileSaveMock.mockClear();
 
-		// Fake timers ONLY here — `settle()` and testing-library's waitFor are real
-		// -timer helpers, and the render above is already done.
 		vi.useFakeTimers();
 		await fireEvent.input(input, { target: { value: 'Ada Lovelace' } });
 		vi.advanceTimersByTime(IDLE_MS * 3);
@@ -243,7 +204,6 @@ describe('/profile — writes while offline (#434 slice 6 review F1)', () => {
 		await settle();
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
 
-		// The signal comes back: still nothing writes ON ITS OWN (no queue).
 		await goOnline();
 		await settle();
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
@@ -263,7 +223,6 @@ describe('/profile — writes while offline (#434 slice 6 review F1)', () => {
 		expect(select.value).toBe('profile');
 	});
 
-	// The sweep: every enabled control, re-queried after each interaction.
 	it('offline: operating every enabled control calls no write seam', async () => {
 		const container = await renderReadyOnline();
 		await goOffline();
@@ -275,8 +234,6 @@ describe('/profile — writes while offline (#434 slice 6 review F1)', () => {
 
 		const touched = await exerciseEveryEnabledControl(container);
 
-		// Not vacuous: the language / time-format / install chrome and the storage
-		// section are all local-only controls that stay live offline by design.
 		expect(touched.length).toBeGreaterThan(1);
 		expect(h.applyProfileSaveMock).not.toHaveBeenCalled();
 		expect(h.applyConflictResolutionMock).not.toHaveBeenCalled();
@@ -302,4 +259,4 @@ describe('/profile — writes while offline (#434 slice 6 review F1)', () => {
 	});
 });
 
-// (*MVOX:Josquin* — #434 slice 6 review F1)
+// (*MVOX:Josquin*)
