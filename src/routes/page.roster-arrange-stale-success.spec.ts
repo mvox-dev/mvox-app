@@ -1,27 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #264 item 4 RED — the generation-guard gap on performReorder/performReparent
-// SUCCESS branches (the #259/#260 class, PO ruling item 4).
-//
-// Both write paths capture `g = routeLoad.generation` at entry and check it
-// ONLY on the failure/refetch branches. The SUCCESS branch checks nothing: a
-// reorder/reparent response that settles AFTER a collective switch writes the
-// OLD collective's outcome into the page — the `roster-reorder-status` live
-// region announces a move of a section that is not on screen (and the reparent
-// path computes its follow-up renumber against the NEW collective's tree).
-//
-// Pinned: a success response settling after a collective switch writes NOTHING
-// — no status/announcement, no banner, no tree state — for the stale
-// collective.
-//
-// House method for timing proofs (#259's deterministic race construction): the
-// write mock is release-controlled — a test-held deferred on the async
-// boundary ONLY. Ordering is hold → switch → settle-success; the failure trips
-// on the live-region assertion, never on a timeout.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — key + params echoed; structural assertions only.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy(
 		{},
@@ -55,9 +35,6 @@ const {
 	deleteMock: vi.fn(),
 	reparentMock: vi.fn()
 }));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -78,17 +55,11 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── two collectives, two disjoint fixtures ──────────────────────────────────
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';
@@ -122,22 +93,12 @@ function rowsB(): RosterRow[] {
 }
 
 function setAuthedWithTwoCollectives() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p', 'other-choir': 'person-q' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
+	signIn({
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		],
-		erroredDbs: []
+		]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 beforeEach(() => {
@@ -165,9 +126,7 @@ afterEach(() => {
 	reorderMock.mockReset();
 	deleteMock.mockReset();
 	reparentMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetAdmin();
 });
 
@@ -201,7 +160,6 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 
 async function switchToOtherChoir(container: HTMLElement) {
 	selectedCollectiveDbStore.set('other-choir');
-	// Collective B's tree is on screen before anything stale settles.
 	await waitFor(() => {
 		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
 	});
@@ -221,8 +179,6 @@ describe('/roster — a structural-write SUCCESS settling after a collective swi
 		);
 		const container = await renderInArrangeMode();
 
-		// Keyboard reorder on collective A: grab Soprano, move it down one slot
-		// provisionally, drop — the commit awaits the held write.
 		let target = q(container, 'arrange-row-sec-sop') as HTMLElement;
 		target.focus();
 		await fireEvent.keyDown(target, { key: 'Enter' });
@@ -234,18 +190,11 @@ describe('/roster — a structural-write SUCCESS settling after a collective swi
 			expect(reorderMock).toHaveBeenCalledTimes(1);
 		});
 
-		// Switch mid-flight; B renders. The drop cleared the live region when the
-		// attempt started, so anything in it after the settle came from the
-		// STALE success.
 		await switchToOtherChoir(container);
 
 		release();
 		await flush();
 
-		// THE pin: the stale success wrote nothing. Pre-fix, performReorder's
-		// success branch sets `roster_section_moved` (and the keyboard drop path
-		// its committed-drop wording) with no generation check — announcing
-		// collective A's move while collective B is on screen.
 		expect(statusText(container)).toBe('');
 		expect(q(container, 'section-reorder-error')).toBeNull();
 		expect(rowOrder(container)).toEqual(['arrange-row-sec-b1', 'arrange-row-sec-b2']);
@@ -261,7 +210,6 @@ describe('/roster — a structural-write SUCCESS settling after a collective swi
 		);
 		const container = await renderInArrangeMode();
 
-		// Indent Alto under Soprano on collective A; the write is held.
 		await fireEvent.click(q(container, 'arrange-indent-sec-alto') as HTMLElement);
 		await waitFor(() => {
 			expect(reparentMock).toHaveBeenCalledTimes(1);
@@ -272,14 +220,8 @@ describe('/roster — a structural-write SUCCESS settling after a collective swi
 		release();
 		await flush();
 
-		// The stale success must not announce collective A's indent over
-		// collective B's roster …
 		expect(statusText(container)).toBe('');
 		expect(q(container, 'section-reorder-error')).toBeNull();
-		// … and the second-phase renumber must not fire at all — before the
-		// guard, the success branch computed the destination sibling group
-		// against whatever tree is CURRENT (collective B's) and wrote status for
-		// the stale collective.
 		expect(reorderMock).not.toHaveBeenCalled();
 		expect(rowOrder(container)).toEqual(['arrange-row-sec-b1', 'arrange-row-sec-b2']);
 	});

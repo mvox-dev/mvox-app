@@ -132,14 +132,11 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 10; i++) await Promise.resolve();
@@ -157,14 +154,11 @@ function wireProfilesPerCollective(): void {
 }
 
 function signInWithTwoCollectives(): void {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
+	signIn({
+		token: 'jwt-member',
 		collectives: [COLLECTIVE_A, COLLECTIVE_B],
-		erroredDbs: []
+		selected: 'sampledb'
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -216,10 +210,7 @@ afterEach(() => {
 	h.listMyProfilesMock.mockReset();
 	h.applyProfileSaveMock.mockReset();
 	h.resolveGateMock.mockReset();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 

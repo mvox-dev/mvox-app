@@ -136,25 +136,16 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: { sampledb: 'person-p' }, expMs: Date.now() + 100_000 });
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	// Default: not-librarian, unless a test overrides resolveLibrarianMock afterward.
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	// #434 — the live resolution every checkout and create makes for its own `_parent`.
@@ -172,11 +163,7 @@ function setAuthedWithOneCollective() {
 }
 
 function setNoCollective() {
-	setToken('jwt-abc');
-	authStore.set({ status: 'authenticated', personIdByDb: {}, expMs: Date.now() + 100_000 });
-	collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set(null);
+	signIn({ collectives: [] });
 }
 
 afterEach(() => {
@@ -197,9 +184,7 @@ afterEach(() => {
 	createLendingMock.mockReset();
 	returnLendingMock.mockReset();
 	bulkCheckoutMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/library — loading state', () => {

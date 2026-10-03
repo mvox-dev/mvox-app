@@ -317,7 +317,7 @@ describe('integration — /profile route (#123)', () => {
 	});
 
 	it('renders the language selector even with no collective selected', async () => {
-		signIn({ collectives: [], selected: null });
+		signIn({ collectives: [] });
 		const { container } = render(ProfilePage);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-no-collective"]')).not.toBeNull()

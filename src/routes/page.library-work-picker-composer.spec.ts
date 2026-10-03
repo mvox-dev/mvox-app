@@ -1,13 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #204 RED — the /library bulk-checkout WORK picker shows the composer
-// alongside the work name: "Silmavalgus - P. Uusberg". A work with an empty
-// composer renders the name only — never a dangling trailing " - ".
-//
-// Integration at the page route: the options are asserted on the REAL
-// library/+page.svelte render, fed through the same mocked libraryData seam
-// page.library.spec.ts uses — so GREEN cannot satisfy this by fixing a label
-// helper nobody wires into the page.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -81,25 +72,12 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function setAuthedLibrarian() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
@@ -114,15 +92,11 @@ function setAuthedLibrarian() {
 afterEach(() => {
 	cleanup();
 	vi.clearAllMocks();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 describe('/library — bulk-checkout work picker shows composer (#204)', () => {
 	it('work-select option labels read "Name - Composer"; empty composer → name only, no dangling " - "', async () => {
-		// TWO works on purpose: a single work would auto-select (#74) and the
-		// placeholder shape stops mattering; two keeps the full option list.
 		listWorksMock.mockResolvedValue(toListRead([
 			{ id: 'work-1', name: 'Silmavalgus', composer: 'P. Uusberg' },
 			{ id: 'work-2', name: 'Anonymous chant', composer: '' }

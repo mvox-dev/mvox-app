@@ -53,15 +53,11 @@ vi.mock('$lib/library/libraryData', async () => {
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
 import ProfilePage from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 let fakeByteStore: FakeByteStore;
 
@@ -176,15 +172,8 @@ function mockLibraryMetadata(): void {
 	);
 }
 
-function signIn(): void {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+function signInMember(): void {
+	signIn({ token: 'jwt-member' });
 }
 
 async function renderReady(): Promise<{ container: HTMLElement; controls: StorageControls }> {
@@ -192,7 +181,7 @@ async function renderReady(): Promise<{ container: HTMLElement; controls: Storag
 	h.listMyProfilesMock.mockResolvedValue([
 		{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' as const }
 	]);
-	signIn();
+	signInMember();
 	const { container } = render(ProfilePage);
 	await waitFor(() => {
 		expect(q(container, 'profile-field-name')).not.toBeNull();
@@ -235,10 +224,7 @@ beforeEach(() => {
 afterEach(() => {
 	cleanup();
 	localStorage.clear();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 // ── the section: mine named, others counted-and-sized only ──────────────────
@@ -292,10 +278,7 @@ describe('/profile — storage section: this account on this device', () => {
 		seedDevice();
 		mockLibraryMetadata();
 		installStorageControls();
-		setToken('jwt-member');
-		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set(null);
+		signIn({ token: 'jwt-member', collectives: [] });
 		const { container } = render(ProfilePage);
 		await waitFor(() => expect(q(container, 'profile-no-collective')).not.toBeNull());
 		expect(q(container, 'profile-storage')).toBeNull();

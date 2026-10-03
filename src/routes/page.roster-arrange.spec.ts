@@ -1,70 +1,7 @@
 // @vitest-environment happy-dom
-//
-// #155/S1 RED — roster VIEW-MODE CHIP SELECTOR + ARRANGE MODE SHELL, on the
-// ACTUAL /roster page route (integration).
-//
-// Design (#155, Gama 2026-08-15): the collapse-all/expand-all toggle is
-// REPLACED by a 3-chip selector — Collapsed / Expanded / Arrange. Collapsed and
-// Expanded are display modes; Arrange (rights-gated, editors only) is where ALL
-// section management will live. S1 ships the selector and the arrange-mode
-// SHELL only: a compact section list (name + member count, nesting by
-// indentation, no member lists, NO management controls yet — S2–S4 add those).
-//
-// Same integration discipline as page.roster-sections-ux.spec.ts: the REAL page
-// component renders, `groupBySection` runs real, only the fetch seams and the
-// sectionActions write seam are mocked — GREEN cannot pass by building the
-// selector or the arrange list in isolation without wiring them into the route.
-//
-// Pinned wiring contract (GREEN must implement):
-//
-//   TESTIDS
-//     roster-view-modes            the chip selector container; rendered ABOVE
-//                                  the groups (same document-order contract the
-//                                  old sections-toggle-all held)
-//     roster-view-chip-collapsed   ┐ the chips, in THIS document order. Radio
-//     roster-view-chip-expanded    │ single selection: the group is a
-//     roster-view-chip-arrange     ┘ role="radiogroup" and each chip a
-//                                  role="radio" carrying aria-checked,
-//                                  EXACTLY ONE "true". (#156 moved the pin off
-//                                  the old pressed-state: it is an invalid
-//                                  ARIA mix on role="radio", the same trap
-//                                  page.sections-a11y.spec.ts caught on
-//                                  role="option". Arrow keys MOVE AND SELECT
-//                                  here — radiogroup behaviour — unlike the
-//                                  app's role="toolbar" roving groups.)
-//                                  The arrange chip renders ONLY for
-//                                  admin === 'admin' (fail-closed on
-//                                  'loading'/'error', same as every other
-//                                  admin control on this page).
-//     roster-arrange-list          arrange-mode container; rendered ONLY while
-//                                  the arrange chip is active; REPLACES
-//                                  roster-groups on screen
-//     arrange-row-<sectionId>      one row per section (every nesting level),
-//                                  in tree PRE-ORDER; carries
-//                                  data-depth="<depth>"; its text contains the
-//                                  section name and the RECURSIVE member count
-//                                  (groupBySection's memberCount — the same
-//                                  number the grouped header "(n)" shows)
-//
-//   REPLACEMENT: sections-toggle-all no longer renders. NOTE FOR GREEN — this
-//   SUPERSEDES the toggle-all pins in page.roster-sections-ux.spec.ts
-//   (finding #9 describe block) and any helper that clicks it (e.g. the
-//   placeFocusAfterRemove fallback target in roster/+page.svelte and the
-//   toggle-all reflections in page.roster-sections-ux.spec.ts's F3 block);
-//   those specs must be UPDATED to the chip contract, not worked around.
-//
-//   DEFAULT: Collapsed stays the default mode (finding #9's collapsed-by-
-//   default is unchanged — the chip selector only renames how it is driven).
-//   The Expanded chip shows every section's members, sub-sections included
-//   (what expand-all used to do); the Collapsed chip returns to no member rows.
-//
-//   DATA: the arrange list is derived from the SAME loadRoster/listSections
-//   load the page already did — switching modes refetches NOTHING ("runs once
-//   at load", the page's standing contract).
 import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Lenient message mock — structural assertions only; real copy is Comenius's.
 vi.mock('$lib/paraglide/messages.js', () => ({
 	m: new Proxy({}, { get: (_target, key) => () => String(key) })
 }));
@@ -79,9 +16,6 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, 
 		reorderMock: vi.fn(),
 		deleteMock: vi.fn()
 	}));
-// #269 review F1/F2 — /roster calls the OPT-IN real-names producer; the SHARED,
-// profile-names-only `loadRoster` belongs to the agenda / event page / admin roles
-// (Henry's roster-only scope ruling — see rosterData.ts for both contracts).
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/sections/sectionData', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
@@ -94,8 +28,6 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reorderSections: reorderMock,
 	deleteSection: deleteMock
 }));
-// Severs the entu-config → $env/dynamic/public import under happy-dom (same
-// pattern as page.roster-sections-ux.spec.ts).
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
@@ -103,20 +35,10 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-
-// ── fixtures ────────────────────────────────────────────────────────────────────
-// Soprano (roll-up 3: Ada direct + Eva in Soprano 1 + Selma in Soprano 2)
-//   ▸ Soprano 1 (1), Soprano 2 (1); Alto (1); Tenor (1); Bass (0, empty leaf).
-// Every member assigned → no Unassigned group.
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 function fixtureTree(): SectionNode[] {
 	return [
@@ -148,19 +70,7 @@ function fixtureRows(): RosterRow[] {
 }
 
 function setAuthedWithOneCollective() {
-	setToken('jwt-abc');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
-		expMs: Date.now() + 100_000
-	});
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn();
 }
 
 beforeEach(() => {
@@ -182,9 +92,7 @@ afterEach(() => {
 	createMock.mockReset();
 	reorderMock.mockReset();
 	deleteMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 	resetAdmin();
 });
 
@@ -193,10 +101,6 @@ async function renderReady(admin: AdminState = 'admin') {
 	adminStore.set(admin);
 	const { container } = render(Page);
 	await waitFor(() => {
-		// roster-groups is the ready anchor: the page ALWAYS starts in the
-		// grouped/collapsed default (arrange is only reachable via a chip click
-		// after load), so this holds at RED and at GREEN alike — and each test
-		// then fails on its own chip/arrange assertion, not in this helper.
 		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
 	});
 	return container;
@@ -210,7 +114,6 @@ function chip(container: HTMLElement, mode: 'collapsed' | 'expanded' | 'arrange'
 	return q(container, `roster-view-chip-${mode}`);
 }
 
-/** aria-checked of the three chips, in document order — the radio-style pin. */
 function pressedStates(container: HTMLElement): Record<string, string | null> {
 	return {
 		collapsed: chip(container, 'collapsed')?.getAttribute('aria-checked') ?? null,
@@ -235,8 +138,6 @@ function memberRowCount(container: HTMLElement): number {
 	return container.querySelectorAll('[data-testid^="roster-row-"]').length;
 }
 
-// ── 1. the chip selector ────────────────────────────────────────────────────────
-
 describe('/roster — the 3-chip view-mode selector replaces the collapse/expand toggle (#155/S1)', () => {
 	it('admin: roster-view-modes renders ABOVE the groups with Collapsed, Expanded and Arrange chips in that document order, each with an accessible name', async () => {
 		const container = await renderReady('admin');
@@ -252,12 +153,9 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 		expect(arrange).not.toBeNull();
 		for (const c of [collapsed, expanded, arrange]) {
 			expect(c?.getAttribute('aria-label') || c?.textContent?.trim()).toBeTruthy();
-			// The chips live INSIDE the selector container — one widget, not three
-			// scattered buttons.
 			expect(selector?.contains(c as HTMLElement)).toBe(true);
 		}
 
-		// Document order: Collapsed → Expanded → Arrange.
 		expect(
 			(collapsed as HTMLElement).compareDocumentPosition(expanded as HTMLElement) &
 				Node.DOCUMENT_POSITION_FOLLOWING
@@ -267,7 +165,6 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 				Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 
-		// Above the groups, same slot contract the old toggle held.
 		const groups = q(container, 'roster-groups') as HTMLElement;
 		expect(groups).not.toBeNull();
 		expect(
@@ -304,7 +201,6 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 		await waitFor(() => {
 			expect(q(container, 'roster-row-m-ada')).not.toBeNull();
 		});
-		// Sub-section members too — Expanded is what expand-all used to be.
 		expect(q(container, 'roster-row-m-eva')).not.toBeNull();
 		expect(q(container, 'roster-row-m-sel')).not.toBeNull();
 	});
@@ -336,15 +232,12 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 			expect(chip(container, 'arrange')).toBeNull();
 			expect(chip(container, 'collapsed')).not.toBeNull();
 			expect(chip(container, 'expanded')).not.toBeNull();
-			// Exactly two chips — no third control under another name either.
 			expect(
 				container.querySelectorAll('[data-testid^="roster-view-chip-"]')
 			).toHaveLength(2);
 		}
 	);
 });
-
-// ── 2. arrange mode rendering (the S1 shell) ────────────────────────────────────
 
 describe('/roster — the Arrange chip renders the compact arrange-mode shell (#155/S1)', () => {
 	it('activating Arrange makes it the one active chip and swaps roster-groups out for roster-arrange-list', async () => {
@@ -397,15 +290,8 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 		const expectRow = (id: string, name: string, count: number) => {
 			const row = q(container, `arrange-row-${id}`) as HTMLElement;
 			expect(row, `arrange row for ${id}`).not.toBeNull();
-			// #205 — the NAME is rendered by the rename activator beside the row
-			// (that containment is what makes "tap the name" open the editor), and
-			// review F1 (round 2) put the count in its own span right AFTER it.
-			// Together they read "Soprano (3)", which is also what the row states
-			// as its own accessible name.
 			const nameText = q(container, `arrange-rename-${id}`)?.textContent ?? '';
 			expect(nameText, `name for ${id}`).toContain(name);
-			// The count is its own number — "(n)", the page's standing header
-			// convention.
 			expect((q(container, `arrange-count-${id}`)?.textContent ?? '').trim()).toBe(
 				`(${count})`
 			);
@@ -428,10 +314,6 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 
 		const root = q(container, 'arrange-row-sec-sop') as HTMLElement;
 		const sub = q(container, 'arrange-row-sec-sop1') as HTMLElement;
-		// Mechanism is GREEN's choice (margin, padding, a per-depth class) — but
-		// the two rows' rendered attributes must not be identical, or "nesting
-		// shown by visual indentation" is not on screen. data-depth alone (an
-		// invisible attribute) does not satisfy this.
 		const fingerprint = (el: HTMLElement) => `${el.className}|${el.getAttribute('style') ?? ''}`;
 		expect(fingerprint(sub)).not.toBe(fingerprint(root));
 	});
@@ -460,9 +342,6 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 				`no "${prefix}*" control inside the arrange list`
 			).toHaveLength(0);
 		}
-		// #155/S4 — "+ New section" relocated INTO Arrange mode (was page-level,
-		// unconditional-on-viewMode); it now sits OUTSIDE the row list itself
-		// (arrange-mode-only chrome, not a per-row control).
 		expect(list.querySelectorAll('[data-testid^="roster-new-section"]')).toHaveLength(0);
 	});
 
@@ -499,8 +378,6 @@ describe('/roster — the Arrange chip renders the compact arrange-mode shell (#
 		expect(q(container, 'roster-groups')).not.toBeNull();
 	});
 });
-
-// ── 3. integration: mode switching rides the EXISTING load ──────────────────────
 
 describe('/roster — the view modes are a rendering switch over the one existing load (#155/S1)', () => {
 	it('cycling Collapsed → Arrange → Expanded → Collapsed refetches NOTHING: loadRoster and listSections each ran exactly once, at page load', async () => {
@@ -557,17 +434,10 @@ describe('/roster — the view modes are a rendering switch over the one existin
 			'arrange-row-sec-men',
 			'arrange-row-sec-men1'
 		]);
-		// Men's roll-up counts its sub-section's one member.
 		expect((q(container, 'arrange-count-sec-men') as HTMLElement).textContent).toContain('(1)');
 		expect(q(container, 'arrange-row-sec-sop')).toBeNull();
 	});
 });
-
-// ── #156: roving tabindex on the chip selector ───────────────────────────────
-// RADIOGROUP semantics — arrows MOVE the focus AND SELECT, which is what the
-// role in the markup promises. (The app's other roving groups are
-// role="toolbar" and only move focus; the two behaviours must stay
-// distinguishable to a screen-reader user, hence the role assertions here.)
 
 describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 	function chips(container: HTMLElement): HTMLButtonElement[] {
@@ -615,7 +485,6 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 			expect(arrange.getAttribute('aria-checked')).toBe('true');
 		});
 
-		// …and round the end back to the first chip.
 		await fireEvent.keyDown(arrange, { key: 'ArrowRight' });
 		await waitFor(() => {
 			expect(chip(container, 'collapsed')!.getAttribute('aria-checked')).toBe('true');

@@ -1,32 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #408 RED — the "Install as app" button on /profile (Profiililt saab mvoxi
-// seadmesse rakendusena paigaldada). INTEGRATION: the ACTUAL profile route
-// renders (house rule — only the network read seams are substituted), so
-// GREEN cannot satisfy this by wiring the affordance module in isolation.
-//
-// CONTRACT (GREEN must implement in src/routes/profile/+page.svelte, wired
-// to $lib/install/installState — see installState.spec.ts for the module):
-//   - the control sits with the account-level block (sign-out / language /
-//     time-format) and, like those, is app chrome: NOT gated on collective
-//     selection.
-//   - 'prompt' state: ONE native classed
-//     <button type="button" data-testid="profile-install-button"> labelled
-//     from profile_install_button; pressing it calls the stashed
-//     beforeinstallprompt event's prompt().
-//   - 'ios-hint' state: the SAME button; pressing it reveals ONE hint line
-//     [data-testid="profile-install-ios-hint"] with profile_install_ios_hint
-//     (the Share-menu instruction) — a native button + a plain text line,
-//     no dialog widget. The hint is NOT in the DOM before the press.
-//   - 'none' state: NOTHING renders — no disabled button, no explanation;
-//     no [data-testid^="profile-install-"] node exists at all.
-//
-// review F1 — WHO starts the browser adapter is part of the contract. The
-// page is a pure `$installAffordance` subscriber; `startInstallAffordance`
-// is an APP-lifetime bootstrap in the root layout, because Chromium fires
-// `beforeinstallprompt` once per page LOAD and never again on a client-side
-// navigation. `bootApp()` below stands in for that layout boot in the
-// page-level cases; the last describe renders the REAL layout and pins it.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -48,7 +20,6 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-// Mock ONLY the network read; keep the pure helpers real.
 vi.mock('$lib/profile/profileData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
 		'$lib/profile/profileData'
@@ -59,20 +30,19 @@ vi.mock('$lib/profile/profileData', async () => {
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
 import { startInstallAffordance } from '$lib/install/installState';
-import { clearAll, setToken } from '$lib/auth/storage';
+import { setToken } from '$lib/auth/storage';
 import {
 	collectiveState,
 	selectedCollectiveDbStore,
 	urlCollectiveDbStore
 } from '$lib/collectives/store';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { resetAppState } from '$lib/testing/appReset';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const installButton = (c: HTMLElement) =>
 	q(c, '[data-testid="profile-install-button"]') as HTMLButtonElement | null;
 const iosHint = (c: HTMLElement) => q(c, '[data-testid="profile-install-ios-hint"]');
-
-// ── environment stubs (mirrors installState.spec.ts) ────────────────────────
 
 const CHROME_UA =
 	'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
@@ -128,10 +98,6 @@ function selectSampledb() {
 	selectedCollectiveDbStore.set('sampledb');
 }
 
-/** Stands in for the root layout's `onMount`: starts the browser adapter for
- *  the whole "app session" a test represents. Idempotent, so a test that boots
- *  deliberately EARLY (before rendering the page) is not re-booted underneath
- *  itself by the render helper. */
 let stopAdapter: (() => void) | null = null;
 function bootApp(): void {
 	if (!stopAdapter) stopAdapter = startInstallAffordance();
@@ -142,7 +108,6 @@ async function renderProfileReady(): Promise<HTMLElement> {
 	selectSampledb();
 	h.listMyProfilesMock.mockResolvedValue([]);
 	const { container } = render(ProfilePage);
-	// page-ready marker: the time-format control is unconditional app chrome
 	await waitFor(() =>
 		expect(q(container, '[data-testid="profile-time-format"]')).not.toBeNull()
 	);
@@ -157,18 +122,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	// Contract-defined reset while the adapter is still listening: appinstalled
-	// clears the module-scope stash -> 'none'. Then stop the adapter, so no
-	// listener (and no stash) leaks into the next test's "app session".
 	window.dispatchEvent(new Event('appinstalled'));
 	stopAdapter?.();
 	stopAdapter = null;
 	cleanup();
 	localStorage.clear();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	vi.restoreAllMocks();
 });
 
@@ -188,13 +147,11 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 		const button = installButton(container)!;
 		expect(button.tagName).toBe('BUTTON');
 		expect(button.getAttribute('type')).toBe('button');
-		// native-controls fence: the house button carries a class
 		expect((button.getAttribute('class') ?? '').trim()).not.toBe('');
 		expect(button.textContent).toContain('[profile_install_button]');
 		expect(
 			container.querySelectorAll('[data-testid="profile-install-button"]').length
 		).toBe(1);
-		// no iOS hint in the prompt state
 		expect(iosHint(container)).toBeNull();
 	});
 
@@ -211,7 +168,6 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 	it('a REJECTED prompt() removes the button and logs — never an inert control', async () => {
 		const container = await renderProfileReady();
 		const evt = makeBeforeInstallPrompt();
-		// Chromium's failure mode: the banner had already been consumed.
 		const invalidState = Object.assign(
 			new Error('The prompt() method may only be called once.'),
 			{ name: 'InvalidStateError' }
@@ -223,8 +179,6 @@ describe("/profile — install button, 'prompt' state (#408)", () => {
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 		await fireEvent.click(installButton(container)!);
 
-		// The stash is spent, so the affordance collapses: there is no button
-		// left to press uselessly (the issue body's one explicit "no").
 		await waitFor(() => expect(installButton(container)).toBeNull());
 		expect(consoleError).toHaveBeenCalledWith('profile: install prompt failed', invalidState);
 	});
@@ -264,38 +218,19 @@ describe("/profile — install button, 'ios-hint' state (#408)", () => {
 	});
 });
 
-// ── review F1: the adapter's LIFETIME, not its decision logic ──────────────
-//
-// The field bug: Chromium fires `beforeinstallprompt` once per page LOAD. In
-// the ordinary flow she lands on `/` (or returns from the OAuth callback) and
-// then clicks Profile in the nav — a client-side navigation, so the event has
-// already fired and been dropped by the time the profile component exists. A
-// listener attached in the PAGE's `onMount` is attached too late, every time,
-// and the button never appears on Chromium at all.
-//
-// The first case is the PIN: it mounts the layout and nothing else, so it goes
-// red the moment ownership moves back onto the page. The second documents the
-// ordering the stash exists for.
-
 describe('#408 review F1 — the install adapter is app-lifetime, owned by the root layout', () => {
 	it('the ROOT LAYOUT alone catches beforeinstallprompt; the profile mounted later shows the button', async () => {
-		// No profile page in sight — just the app shell, as on `/`.
 		render(Layout);
 		const evt = makeBeforeInstallPrompt();
 		window.dispatchEvent(evt);
 
-		// ...and only NOW does she navigate to the profile.
 		selectSampledb();
 		h.listMyProfilesMock.mockResolvedValue([]);
 		const { container } = render(ProfilePage);
 		await waitFor(() => expect(installButton(container)).not.toBeNull());
 
-		// The stashed event survived the wait and is still the one that prompts.
 		await fireEvent.click(installButton(container)!);
 		await waitFor(() => expect(evt.prompt).toHaveBeenCalledTimes(1));
-		// Teardown: this case boots the adapter through the layout's own
-		// `onMount`, so afterEach's `cleanup()` unmounts it and the listeners go
-		// with it — nothing for `stopAdapter` to do.
 	});
 
 	it('an event that fired BEFORE the page mounted is not lost', async () => {
@@ -306,8 +241,6 @@ describe('#408 review F1 — the install adapter is app-lifetime, owned by the r
 		expect(installButton(container)).not.toBeNull();
 	});
 });
-
-// ── locale parity: the two #408 keys, present + non-empty in ALL FOUR files ──
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 const NEW_KEYS = ['profile_install_button', 'profile_install_ios_hint'] as const;
@@ -332,8 +265,6 @@ describe('locale parity — #408 keys exist, non-empty, in en/et/lv/uk', () => {
 	it("the Estonian copy is Mihkel's drafted default (issue #408 body, verbatim)", () => {
 		const et = readMessages('et');
 		expect(et.profile_install_button).toBe('Paigalda mvox seadmesse');
-		// The iOS menu item's wording is the platform's, not ours — the draft
-		// ships and gets checked against a real device (noted in the commit body).
 		expect(et.profile_install_ios_hint).toBe('Ava jagamismenüü ja vali «Lisa avakuvale».');
 	});
 });

@@ -138,28 +138,18 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 import Page from './profile/+page.svelte';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { get } from 'svelte/store';
 import { completionGateStore, resetGate, type GateState } from '$lib/profile/completionGate';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 async function flushMicrotasks(): Promise<void> {
 	for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
@@ -194,10 +184,7 @@ afterEach(() => {
 	h.applyProfileSaveMock.mockReset();
 	h.applyDuplicateRepairMock.mockReset();
 	h.resolveGateMock.mockReset();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 	resetGate();
 });
 
@@ -344,17 +331,13 @@ describe('#257 — repair confirmation announcement (profile_repair_done)', () =
 	});
 
 	it('a superseded post-repair reload never announces: switching collectives mid-reload leaves the new profile silent', async () => {
-		setToken('jwt-member');
-		collectiveState.set({
-			status: 'ready',
+		signIn({
+			token: 'jwt-member',
 			collectives: [
 				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
 				{ db: 'bravura', name: 'Bravura', personId: 'person-b' }
-			],
-			erroredDbs: []
+			]
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 		h.listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
 			cfg.db === 'bravura'
 				? [{ _id: 'prof-b-dom', name: 'Bea', email: '', _sharing: 'domain' }]
@@ -472,14 +455,11 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 	}
 
 	function signInWithTwoCollectives(): void {
-		setToken('jwt-member');
-		collectiveState.set({
-			status: 'ready',
+		signIn({
+			token: 'jwt-member',
 			collectives: [COLLECTIVE_A, COLLECTIVE_B],
-			erroredDbs: []
+			selected: 'sampledb'
 		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
 	}
 
 	function displayValue(container: HTMLElement, field: 'name' | 'email'): string {

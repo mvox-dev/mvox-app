@@ -129,10 +129,9 @@ import type { ComponentProps } from 'svelte';
 import RepertoireElement from '$lib/agenda/RepertoireElement.svelte';
 import type { WorkRow } from '$lib/repertoire/types';
 import LibraryPage from './library/+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
-import { collectiveState, selectedCollectiveDbStore, urlCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 afterEach(() => {
 	cleanup();
@@ -149,9 +148,7 @@ afterEach(() => {
 	listActiveMembersMock.mockReset();
 	listSeasonsMock.mockReset();
 	listRepertoireItemsMock.mockReset();
-	clearAll({ preserveProvider: false });
-	authStore.set({ status: 'loading' });
-	collectiveState.set({ status: 'loading' });
+	resetAppState();
 });
 
 // Fixtures
@@ -689,19 +686,7 @@ describe('#93 — a11y: library repertoire badges are readable without color', (
 	];
 
 	async function renderLibraryWithBadges() {
-		setToken('jwt-abc');
-		authStore.set({
-			status: 'authenticated',
-			personIdByDb: { sampledb: 'person-p' },
-			expMs: Date.now() + 100_000
-		});
-		collectiveState.set({
-			status: 'ready',
-			collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-			erroredDbs: []
-		});
-		urlCollectiveDbStore.set(null);
-		selectedCollectiveDbStore.set('sampledb');
+		signIn();
 		resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 		findMyMemberIdMock.mockResolvedValue(null);
 		resolveCopyNamesMock.mockResolvedValue(new Map());

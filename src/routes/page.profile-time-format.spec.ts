@@ -1,27 +1,4 @@
 // @vitest-environment happy-dom
-//
-// #207 RED — the time-format preference control on /profile (PO standing
-// rule 5: 24h is the default; AM/PM display exists ONLY as a profile
-// preference) and the four-locale key parity for every key part 1 adds.
-//
-// CONTRACT (GREEN must implement in src/routes/profile/+page.svelte):
-//   - a NATIVE <select data-testid="profile-time-format"> (rule 1 — native
-//     controls only; a custom widget is a YELLOW), Tab-reachable, labelled
-//     from profile_time_format_label, with exactly two options:
-//     '24h' (profile_time_format_24h) and 'ampm' (profile_time_format_ampm)
-//   - current value comes from $lib/preferences/timeFormat's timeFormatStore;
-//     changing it writes the store AND localStorage 'mvox.time_format'
-//     IMMEDIATELY — no network, no autosave queue, no rights (Gama ruling
-//     2026-09-02: localStorage, per-device, no schema change)
-//   - ONE muted hint line DIRECTLY UNDER the select,
-//     [data-testid="profile-time-format-hint"], from profile_time_format_hint
-//     — a fact about the storage ("Applies on this device."), Gama 01:59
-//   - app chrome like the language selector (#123): NOT gated on collective
-//     selection. Rule 4 does not bind (this is not an in-situ text field) but
-//     the control is native and Tab-reachable.
-//
-// Harness mirrors page.language-selector.spec.ts — the integration precedent
-// for a small app-chrome preference on the actual /profile route.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -35,7 +12,6 @@ vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
 
 const h = vi.hoisted(() => ({ listMyProfilesMock: vi.fn() }));
-// Mock ONLY the network read; keep resolveField/profilesByLevel real.
 vi.mock('$lib/profile/profileData', async () => {
 	const actual = await vi.importActual<typeof import('$lib/profile/profileData')>(
 		'$lib/profile/profileData'
@@ -44,16 +20,10 @@ vi.mock('$lib/profile/profileData', async () => {
 });
 
 import ProfilePage from './profile/+page.svelte';
-// Does not exist yet — the whole file is RED with "Failed to resolve import"
-// until GREEN creates src/lib/preferences/timeFormat.ts.
 import { timeFormatStore, TIME_FORMAT_KEY } from '$lib/preferences/timeFormat';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const control = (c: HTMLElement) =>
@@ -61,14 +31,7 @@ const control = (c: HTMLElement) =>
 const hint = (c: HTMLElement) => q(c, '[data-testid="profile-time-format-hint"]');
 
 function selectSampledb() {
-	setToken('jwt-member');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }],
-		erroredDbs: []
-	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ token: 'jwt-member' });
 }
 
 async function renderProfileReady(): Promise<HTMLElement> {
@@ -89,10 +52,7 @@ afterEach(() => {
 	cleanup();
 	localStorage.clear();
 	timeFormatStore.set('24h');
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
 
 describe('/profile — time-format preference control (#207 rule 5)', () => {
@@ -105,7 +65,6 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 		for (const option of select.querySelectorAll('option')) {
 			expect(option.textContent?.trim(), `option ${option.value} needs a visible label`).toBeTruthy();
 		}
-		// Accessible name: aria-label / aria-labelledby / an associated <label>.
 		const named =
 			(select.getAttribute('aria-label') ?? '').trim() !== '' ||
 			(select.getAttribute('aria-labelledby') ?? '').trim() !== '' ||
@@ -141,8 +100,6 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 		expect(localStorage.getItem(TIME_FORMAT_KEY)).toBe('24h');
 		expect(get(timeFormatStore)).toBe('24h');
 
-		// No profile write path involved: the ONLY data seam this page owns
-		// saw no extra traffic from flipping the preference.
 		expect(h.listMyProfilesMock.mock.calls.length).toBe(fetchCallsBefore);
 	});
 
@@ -152,7 +109,6 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 		const hintEl = hint(container);
 		expect(hintEl, 'profile-time-format-hint missing').not.toBeNull();
 		expect(hintEl!.textContent?.trim()).toBeTruthy();
-		// DIRECTLY UNDER: the hint follows the select in document order.
 		expect(
 			select.compareDocumentPosition(hintEl!) & Node.DOCUMENT_POSITION_FOLLOWING,
 			'the hint must come after the select in document order'
@@ -160,8 +116,7 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 	});
 
 	it('is app chrome like the language selector — present even with NO collective selected', async () => {
-		setToken('jwt-member');
-		collectiveState.set({ status: 'ready', collectives: [], erroredDbs: [] });
+		signIn({ token: 'jwt-member', collectives: [] });
 		const { container } = render(ProfilePage);
 		await waitFor(() =>
 			expect(q(container, '[data-testid="profile-no-collective"]')).not.toBeNull()
@@ -170,19 +125,13 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 	});
 });
 
-// ── locale parity: every key part 1 adds, present + non-empty in ALL FOUR files ──
-
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 const NEW_KEYS = [
-	// TimeSelect (rule 5 — labelled native selects)
 	'time_select_hour_label',
 	'time_select_minute_label',
 	'time_select_ampm_label',
-	// the date half of the same composite — rendered on the event-create form
-	// and the event-detail start_datetime editor (#207 review F2)
 	'time_select_date_label',
-	// profile preference control
 	'profile_time_format_label',
 	'profile_time_format_24h',
 	'profile_time_format_ampm',

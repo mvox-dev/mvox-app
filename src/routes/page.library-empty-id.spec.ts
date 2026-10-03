@@ -85,7 +85,6 @@ vi.mock('$lib/library/lendingActions', () => ({
 }));
 
 import Page from './library/+page.svelte';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
@@ -118,8 +117,7 @@ function installFetchStub(lendingEntities: unknown[]) {
 }
 
 function setAuthedWithOneCollective() {
-	signIn({ selected: null });
-	selectedCollectiveDbStore.set('sampledb');
+	signIn({ selected: 'sampledb' });
 	resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	findMyMemberIdMock.mockResolvedValue(null);
 	listActiveMembersMock.mockResolvedValue(toListRead([]));

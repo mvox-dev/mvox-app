@@ -1,43 +1,8 @@
 // @vitest-environment happy-dom
-//
-// #140/S3 RED — NavShell tab merge: the separate "Invite" and "Admin" nav
-// entries collapse into a SINGLE admin-only "Admin" tab (Mihkel ruling). Nav
-// goes 7 → 6 top-level entries, fixing the narrow-viewport overflow by design.
-// Contract:
-//
-// - NAV_ENTRIES (the REAL list the root layout hands to NavShell) carries no
-//   'invite' entry any more: 6 entries total, exactly one of them admin-only
-//   and routing to /admin
-// - NavShell (the ACTUAL component, fed the ACTUAL entries — integration, not
-//   fixtures) renders exactly 6 entries for a full-context admin
-//   (isAdmin + hasMultipleCollectives) and never an /admin/invite entry
-// - non-admins see neither Admin nor any invite affordance (4 entries:
-//   agenda, roster, profile, library)
-// - active-route matching: the Admin tab is the single highlighted entry on
-//   BOTH /admin and /admin/invite (longest-wins prefix matching — previously
-//   the separate Invite entry stole /admin/invite)
-// - the /admin route (actual page component) contains BOTH the role-management
-//   surface (#134) AND the invite functionality, the latter inside a
-//   data-testid="admin-invite-section" wrapper whose create affordance is the
-//   existing invite-admin-submit control — and it is LIVE (a submit reaches
-//   createInvite and surfaces the minted /invite/<token> link), not a
-//   skin-only placeholder
-// - non-admin / no-access renders NO invite functionality on /admin either
-// - backward compat: externally-held invite links live at /invite/<token>
-//   (buildInviteUrl — covered standalone by page.invite-landing.spec.ts) and
-//   are NOT this merge's to move; the old admin surface URL /admin/invite must
-//   not dead-end — it either redirects to /admin or still renders the invite
-//   surface standalone
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// ── paraglide: ONE factory for BOTH import shapes ──────────────────────────────
-// entries.ts does `import * as m from '$lib/paraglide/messages'` (namespace →
-// needs real named exports); the admin + invite pages do
-// `import { m } from '$lib/paraglide/messages.js'` (an `m` object). The nav
-// labels are pinned (they are asserted on); everything else answers through a
-// Proxy so this spec does not have to enumerate two pages' message catalogs.
 const msgs = vi.hoisted(() => {
 	const nav = {
 		nav_agenda: () => 'Agenda',
@@ -46,8 +11,6 @@ const msgs = vi.hoisted(() => {
 		nav_library: () => 'Library',
 		nav_invite: () => 'Invite',
 		nav_admin: () => 'Admin',
-		// #256 — the Lingikogu entry joins the nav; #338 dropped collectives, so
-		// it is the 6th and last (the counts pinned below).
 		nav_links: () => 'Links'
 	};
 	const anyMessage = new Proxy({} as Record<string, (...args: unknown[]) => string>, {
@@ -61,11 +24,6 @@ const msgs = vi.hoisted(() => {
 vi.mock('$lib/paraglide/messages', () => ({ ...msgs.nav, m: msgs.anyMessage }));
 vi.mock('$lib/paraglide/messages.js', () => ({ ...msgs.nav, m: msgs.anyMessage }));
 
-// ── data seams, mocked at their module boundaries ──────────────────────────────
-// Same discipline as page.admin.spec.ts + page.admin-invite.spec.ts — this spec
-// renders BOTH surfaces (the merged /admin page must carry both), so it mocks
-// the union of their seams. Error classes live INSIDE the hoisted block so the
-// pages' `instanceof` checks match.
 const h = vi.hoisted(() => {
 	class InviteCreateError extends Error {
 		readonly phase: string;
@@ -89,7 +47,6 @@ const h = vi.hoisted(() => {
 		InviteCreateError,
 		RoleLockoutError,
 		RoleGrantMissingError,
-		// role management (#134)
 		listAdminsMock: vi.fn(),
 		addAdminMock: vi.fn(),
 		removeAdminMock: vi.fn(),
@@ -100,16 +57,10 @@ const h = vi.hoisted(() => {
 		resolveLibrarianMock: vi.fn(),
 		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
-		// #209 — the section tree behind ROSTER ORDER; this file has no opinion
-		// on picker ordering, so [] (every person Unassigned) keeps it out of
-		// the way.
 		listSectionsMock: vi.fn(),
-		// invite (#31/T4.5)
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
-		// #165 — the merged /admin page's `load()` also resolves the
-		// collective-name marker. Mocked here purely as scaffolding.
 		resolveCollectiveNameMarkerMock: vi.fn(),
 		updateCollectiveNameMock: vi.fn()
 	};
@@ -141,7 +92,6 @@ vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
 	listSections: h.listSectionsMock
 }));
-// #165 scaffolding (see the hoisted mock's comment above).
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -152,8 +102,6 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolveInviteParentId: h.resolveInviteParentMock,
 	createInvite: h.createInviteMock
 }));
-// Sever the $env chain the collectives store pulls in (discover → marker →
-// entu-config) and the store's `goto` import.
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
@@ -162,18 +110,12 @@ import { goto } from '$app/navigation';
 import NavShell from '$lib/components/nav/NavShell.svelte';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { buildInviteUrl } from '$lib/invite/invite-links';
-import { setToken, clearAll } from '$lib/auth/storage';
-import {
-	collectiveState,
-	selectedCollectiveDbStore,
-	urlCollectiveDbStore
-} from '$lib/collectives/store';
 import AdminPage from './admin/+page.svelte';
 import AdminInvitePage from './admin/invite/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAppState } from '$lib/testing/appReset';
+import { signIn } from '$lib/testing/session';
 
-// `children` is a required Snippet prop on NavShell — same stand-in as
-// NavShell.spec.ts.
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
 }));
@@ -203,20 +145,15 @@ function navAnchors(container: HTMLElement): HTMLAnchorElement[] {
 }
 
 function selectSampledb() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }],
-		erroredDbs: []
+	signIn({
+		token: 'jwt-admin',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }]
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('sampledb');
 }
 
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
 
 function loadOk() {
-	// role management ready
 	h.resolveAdminMock.mockResolvedValue('admin');
 	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
@@ -226,11 +163,9 @@ function loadOk() {
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }
 	]));
 	h.listSectionsMock.mockResolvedValue([]);
-	// invite prerequisites ready
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
-	// #165 scaffolding — benign resolution, see the hoisted mock's comment.
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 }
@@ -261,13 +196,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	cleanup();
-	clearAll({ preserveProvider: false });
-	collectiveState.set({ status: 'loading' });
-	selectedCollectiveDbStore.set(null);
-	urlCollectiveDbStore.set(null);
+	resetAppState();
 });
-
-// ── the entry list itself ───────────────────────────────────────────────────────
 
 describe('#140 — NAV_ENTRIES after the merge', () => {
 	it('carries exactly 6 entries — the separate invite entry is gone; links joined (#256); collectives left with its page (#338)', () => {
@@ -286,8 +216,6 @@ describe('#140 — NAV_ENTRIES after the merge', () => {
 		expect(admin.visible({ isAdmin: false, hasMultipleCollectives: true })).toBe(false);
 	});
 });
-
-// ── NavShell rendering the REAL entries (integration) ───────────────────────────
 
 describe('#140 — NavShell × real NAV_ENTRIES', () => {
 	it('renders exactly 6 top-level nav entries for a full-context admin (#256 added links; #338 removed collectives)', () => {
@@ -338,18 +266,14 @@ describe('#140 — NavShell × real NAV_ENTRIES', () => {
 	});
 });
 
-// ── the merged /admin surface (actual page component — integration) ─────────────
-
 describe('#140 — /admin carries BOTH role management AND invite functionality', () => {
 	async function renderMergedReady() {
 		selectSampledb();
 		loadOk();
 		const rendered = render(AdminPage);
 		await waitFor(() => {
-			// role management (#134) is still there…
 			expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
 			expect(q(rendered.container, 'admin-roles-librarians')).not.toBeNull();
-			// …and the invite surface now lives INSIDE the same page.
 			expect(q(rendered.container, 'admin-invite-section')).not.toBeNull();
 		});
 		return rendered;
@@ -358,8 +282,6 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 	it('ready: the invite section renders inside /admin, carrying the invite create affordance', async () => {
 		const { container } = await renderMergedReady();
 		const inviteSection = q<HTMLElement>(container, 'admin-invite-section')!;
-		// The create control lives INSIDE the invite section — the existing
-		// invite-admin-submit contract, now reachable from /admin.
 		expect(q(inviteSection, 'invite-admin-submit')).not.toBeNull();
 	});
 
@@ -387,11 +309,6 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 				expect.objectContaining({ dbEntityId: expect.any(String) })
 			);
 		});
-		// #360 — the mint result surfaces COPY-ONLY: the invite-copy button
-		// renders, the link input does not exist, and the token never reaches
-		// the DOM. (The external URL shape /invite/<token> stays pinned by the
-		// buildInviteUrl backward-compat test below and by the copy-suite
-		// clipboard payloads.)
 		await waitFor(() => {
 			expect(q(container, 'invite-copy')).not.toBeNull();
 		});
@@ -414,36 +331,21 @@ describe('#140 — /admin carries BOTH role management AND invite functionality'
 	});
 });
 
-// ── multi-collective: the embedded surface may not re-target its db ────────────
-//
-// Review F1 — the embedded (controlled) invite surface used to render its own
-// collective picker while blocking the org re-resolution that picker depends
-// on: switching it moved the write's `db` to collective B while `dbEntityId` stayed
-// the parent's org of collective A, minting a member parented under an entity
-// id that does not exist in B (silently orphaned — the TU.1/#109 failure
-// class). Multi-collective is first class (the agenda header carries the
-// #338 collective picker), so it gets a spec.
-
 function selectRamkoorOfTwo() {
-	setToken('jwt-admin');
-	collectiveState.set({
-		status: 'ready',
+	signIn({
+		token: 'jwt-admin',
 		collectives: [
 			{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' },
 			{ db: 'ramkoor', name: 'RAM Koor', personId: 'admin-p2' }
 		],
-		erroredDbs: []
+		selected: 'ramkoor'
 	});
-	urlCollectiveDbStore.set(null);
-	selectedCollectiveDbStore.set('ramkoor');
 }
 
 describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 	async function renderMergedReadyMulti() {
 		selectRamkoorOfTwo();
 		loadOk();
-		// Org ids are per-database — an org id from one collective is meaningless
-		// (and unresolvable) in another.
 		h.resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'ramkoor' ? 'org-ram' : 'org-poly')
 		);
@@ -481,8 +383,6 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 			expect.objectContaining({ db: 'ramkoor' }),
 			expect.objectContaining({ dbEntityId: 'org-ram' })
 		);
-		// Never the OTHER collective's org — the mismatched pair that silently
-		// orphans the created member.
 		expect(h.createInviteMock).not.toHaveBeenCalledWith(
 			expect.anything(),
 			expect.objectContaining({ dbEntityId: 'org-poly' })
@@ -498,14 +398,8 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 	});
 });
 
-// ── backward compat ─────────────────────────────────────────────────────────────
-
 describe('#140 — backward compat for existing invite URLs', () => {
 	it('externally-held invite links stay at /invite/<token> — the merge does not move the landing URL space', () => {
-		// Minted links (the only invite URLs that leave the app) are built by
-		// buildInviteUrl; the landing route itself is covered by
-		// page.invite-landing.spec.ts. This pins the URL shape the merge must
-		// not touch.
 		expect(buildInviteUrl('https://mvox.app', 'tok-1')).toBe('https://mvox.app/invite/tok-1');
 	});
 
