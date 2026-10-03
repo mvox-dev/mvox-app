@@ -10,7 +10,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 const {
 	loadRosterMock,
 	createSeasonMock,
-	resolveDatabaseEntityIdMock,
 	entuFetchMock,
 	resolveManageRightsMock,
 	findMyMemberIdMock,
@@ -18,7 +17,6 @@ const {
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	createSeasonMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
@@ -33,10 +31,9 @@ vi.mock('$lib/entity/entityCreate', () => ({
 	createEventSeries: vi.fn(),
 	createEvent: vi.fn()
 }));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: entuFetchMock };
@@ -88,8 +85,11 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-import { listSectionsMock } from '$lib/testing/moduleHandles';
+import {
+	listSectionsMock,
+	loadFullAgendaMock,
+	resolveDatabaseEntityIdMock
+} from '$lib/testing/moduleHandles';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 const CFG = testCfg('sampledb', 'jwt-abc');

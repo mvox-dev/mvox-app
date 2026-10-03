@@ -9,11 +9,12 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const h = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: h.loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -60,6 +61,7 @@ import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const E1 = {
 	id: 'e1',
@@ -98,7 +100,7 @@ afterEach(() => {
 
 describe('#550 — agenda RSVP with no token', () => {
 	it('sends nothing and goes to session-expired', async () => {
-		h.loadFullAgendaMock.mockResolvedValue(
+		loadFullAgendaMock.mockResolvedValue(
 			fullAgendaResult({
 				seasons: [],
 				upcoming: [E1],

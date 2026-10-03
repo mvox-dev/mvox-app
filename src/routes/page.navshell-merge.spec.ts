@@ -50,9 +50,7 @@ const h = vi.hoisted(() => {
 		removeLibrarianMock: vi.fn(),
 		resolveAdminMock: vi.fn(),
 		resolveLibrarianMock: vi.fn(),
-		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
-		listSectionsMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
@@ -77,16 +75,15 @@ vi.mock('$lib/nav/adminStore', () => ({
 vi.mock('$lib/library/librarianStore', () => ({
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -116,6 +113,7 @@ import AdminInvitePage from './admin/invite/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
@@ -156,14 +154,14 @@ const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds
 
 function loadOk() {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
+	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(toListRead([
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }
 	]));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue('parent-1');
 	h.resolveInviteParentMock.mockResolvedValue('org-1');
 	h.createInviteMock.mockResolvedValue({ inviteToken: 'tok-123' });
@@ -181,9 +179,9 @@ beforeEach(() => {
 		h.removeLibrarianMock,
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
-		h.resolveDatabaseEntityIdMock,
+		resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
-		h.listSectionsMock,
+		listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,
@@ -347,7 +345,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 	async function renderMergedReadyMulti() {
 		selectRamkoorOfTwo();
 		loadOk();
-		h.resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
+		resolveDatabaseEntityIdMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(cfg.db === 'ramkoor' ? 'org-ram' : 'org-poly')
 		);
 		const rendered = render(AdminPage);
@@ -393,7 +391,7 @@ describe('#140 — embedded invite surface with MULTIPLE collectives', () => {
 	it('the embedded surface never self-resolves the org — it adopts the page-resolved pair', async () => {
 		await renderMergedReadyMulti();
 		expect(h.resolveInviteParentMock).not.toHaveBeenCalled();
-		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledWith(
 			expect.objectContaining({ db: 'ramkoor' })
 		);
 	});

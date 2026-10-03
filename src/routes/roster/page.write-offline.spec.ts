@@ -14,7 +14,6 @@ const h = vi.hoisted(() => ({
 	listDeactivateBlockersMock: vi.fn(),
 	deactivateMemberMock: vi.fn(),
 	reinstateMemberMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	assignMock: vi.fn(),
 	unassignMock: vi.fn(),
 	createSectionMock: vi.fn(),
@@ -55,10 +54,9 @@ vi.mock('$lib/sections/sectionActions', () => ({
 	reparentSection: h.reparentMock,
 	renameSection: h.renameMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/invite/inviteData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/invite/inviteData')>()),
 	mintSelfLinkInvite: h.mintSelfLinkInviteMock,
@@ -102,6 +100,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -139,6 +138,7 @@ function setAuthed() {
 
 beforeEach(async () => {
 	for (const mock of Object.values(h)) mock.mockReset();
+	listSectionsMock.mockReset();
 	h.loadRosterMock.mockResolvedValue(toListRead(ROWS));
 	h.loadInactiveRosterMock.mockResolvedValue(toListRead([]));
 	h.loadActiveAndArchivedRostersMock.mockImplementation(async (cfg: unknown) => ({
@@ -149,7 +149,7 @@ beforeEach(async () => {
 	h.listDeactivateBlockersMock.mockResolvedValue([]);
 	h.deactivateMemberMock.mockResolvedValue(undefined);
 	h.reinstateMemberMock.mockResolvedValue(undefined);
-	h.listSectionsMock.mockResolvedValue(fixtureTree());
+	listSectionsMock.mockResolvedValue(fixtureTree());
 	h.assignMock.mockResolvedValue(undefined);
 	h.unassignMock.mockResolvedValue(undefined);
 	h.createSectionMock.mockResolvedValue('sec-created');
@@ -267,6 +267,7 @@ describe('/roster — the member surface while offline (#434 slice 6 review F1)'
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container);
 
@@ -321,6 +322,7 @@ describe('/roster — the arrange surface while offline (#434 slice 6 review F1)
 		await goOffline();
 		await settle();
 		for (const mock of Object.values(h)) mock.mockClear();
+		listSectionsMock.mockClear();
 
 		const touched = await exerciseEveryEnabledControl(container, {
 			skip: ['roster-view-chip-collapsed', 'roster-view-chip-expanded']

@@ -15,10 +15,8 @@ const h = vi.hoisted(() => ({
 	listLibrariansMock: vi.fn(),
 	addLibrarianMock: vi.fn(),
 	removeLibrarianMock: vi.fn(),
-	resolveDatabaseEntityIdMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	resolveCollectiveNameMarkerMock: vi.fn(),
@@ -37,19 +35,17 @@ vi.mock('$lib/admin/roleManagement', async (importOriginal) => {
 		removeLibrarian: h.removeLibrarianMock
 	};
 });
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/collective/databaseEntity')>();
-	return { ...actual, resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock };
-});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
 vi.mock('$lib/entu/request', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/entu/request')>();
 	return { ...actual, entuFetch: h.entuFetchMock };
 });
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: h.loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -76,6 +72,7 @@ import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
 const VIEWER = 'admin-p';
@@ -94,7 +91,7 @@ function selectSampledb() {
 }
 
 beforeEach(() => {
-	h.resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
+	resolveDatabaseEntityIdMock.mockResolvedValue(DB_ENTITY);
 	h.entuFetchMock.mockImplementation((_db: string, path: string) => {
 		if (path.startsWith(`entity/${DB_ENTITY}?props=_owner`)) {
 			return Promise.resolve(
@@ -121,7 +118,7 @@ beforeEach(() => {
 	h.listAdminsMock.mockResolvedValue({ persons: [ANNA], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
 	h.loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY);
 	h.createInviteMock.mockResolvedValue({
 		personId: 'p-new',
@@ -161,7 +158,7 @@ describe('/admin — one database-entity resolution per load (#173)', () => {
 	it('reaches ready with resolveDatabaseEntityId called exactly ONCE', async () => {
 		await renderReady();
 
-		expect(h.resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
+		expect(resolveDatabaseEntityIdMock).toHaveBeenCalledTimes(1);
 	});
 
 	it('same data, fewer fetches — the id still reaches listAdmins and the rights/library reads still happen', async () => {

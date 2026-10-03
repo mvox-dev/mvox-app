@@ -8,7 +8,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const H = vi.hoisted(() => ({
-	loadFullAgenda: vi.fn(),
 	loadRoster: vi.fn(),
 	listSections: vi.fn(),
 	resolveDatabaseEntityId: vi.fn(),
@@ -45,7 +44,9 @@ const H = vi.hoisted(() => ({
 	deleteAttendance: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: H.loadFullAgenda }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/seasons/seasonManage', () => ({
 	listEventSeriesForSeason: H.listEventSeriesForSeason,
 	listSeriesOptionsForSeason: H.listSeriesOptionsForSeason,
@@ -147,6 +148,7 @@ import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const ORG = '69c7f8718489bfcb0e81b065';
 const SEASON_ID = 'season-1';
@@ -209,7 +211,7 @@ beforeEach(() => {
 		async () => new Response(JSON.stringify({ entities: [] }), { status: 200 })
 	);
 	vi.stubGlobal('fetch', fetchStub);
-	H.loadFullAgenda.mockResolvedValue(agendaResult());
+	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	H.loadRoster.mockResolvedValue(
 		toListRead([
 			{
@@ -255,6 +257,7 @@ afterEach(() => {
 	for (const value of Object.values(H)) value.mockReset();
 	gotoMock.mockReset();
 	discoverMock.mockReset();
+	loadFullAgendaMock.mockReset();
 	resetOnLine();
 	resetAppState();
 });

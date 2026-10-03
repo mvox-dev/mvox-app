@@ -12,7 +12,6 @@ const h = vi.hoisted(() => ({
 	resolveAdminMock: vi.fn(),
 	resolveOwnerTierMock: vi.fn(),
 	resolveLibrarianMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	resolveParentMock: vi.fn(),
 	createInviteMock: vi.fn(),
 	resolveCollectiveNameMarkerMock: vi.fn(),
@@ -37,10 +36,9 @@ vi.mock('$lib/library/librarianStore', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/library/librarianStore')>()),
 	resolveLibrarian: h.resolveLibrarianMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -72,6 +70,7 @@ import {
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
@@ -83,7 +82,7 @@ beforeEach(() => {
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'not-librarian', libraryId: null });
 	h.listAdminsMock.mockResolvedValue({ persons: [], canManage: true });
 	h.listLibrariansMock.mockResolvedValue({ persons: [], canManage: true });
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.resolveParentMock.mockResolvedValue(DB_ENTITY_ID);
 	h.createInviteMock.mockResolvedValue({ personId: 'p', memberId: 'm', inviteToken: 'a.b.c' });
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });

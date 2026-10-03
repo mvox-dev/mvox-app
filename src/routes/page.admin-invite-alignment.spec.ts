@@ -98,9 +98,7 @@ const h = vi.hoisted(() => {
 		resolveAdminMock: vi.fn(),
 		resolveOwnerTierMock: vi.fn().mockResolvedValue('error'),
 		resolveLibrarianMock: vi.fn(),
-		resolveDatabaseEntityIdMock: vi.fn(),
 		loadRosterMock: vi.fn(),
-		listSectionsMock: vi.fn(),
 		resolveParentMock: vi.fn(),
 		resolveInviteParentMock: vi.fn(),
 		createInviteMock: vi.fn(),
@@ -130,16 +128,15 @@ vi.mock('$lib/library/librarianStore', () => ({
 vi.mock('$lib/profile/linkedIdentities', () => ({
 	listJoinStates: h.listJoinStatesMock
 }));
-vi.mock('$lib/collective/databaseEntity', () => ({
-	resolveDatabaseEntityId: h.resolveDatabaseEntityIdMock
-}));
+vi.mock('$lib/collective/databaseEntity', async () =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule()
+);
 vi.mock('$lib/roster/rosterData', () => ({
 	loadRoster: h.loadRosterMock
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/sections/sectionData')>()),
-	listSections: h.listSectionsMock
-}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/collectiveName', () => ({
 	resolveCollectiveNameMarker: h.resolveCollectiveNameMarkerMock,
 	updateCollectiveName: h.updateCollectiveNameMock
@@ -164,6 +161,7 @@ import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 
 const STANDALONE_ROOT_CLASSES = 'mx-auto flex w-full max-w-md flex-col gap-4';
 const EMBEDDED_ROOT_CLASSES = 'flex w-full flex-col gap-4';
@@ -174,7 +172,7 @@ function selectSampledb() {
 
 function loadOk() {
 	h.resolveAdminMock.mockResolvedValue('admin');
-	h.resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
+	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	h.resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 	h.listAdminsMock.mockResolvedValue({
 		persons: [{ id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] }],
@@ -188,7 +186,7 @@ function loadOk() {
 		{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
 		{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' }
 	]));
-	h.listSectionsMock.mockResolvedValue([]);
+	listSectionsMock.mockResolvedValue([]);
 	h.resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	h.updateCollectiveNameMock.mockResolvedValue(undefined);
 	h.resolveParentMock.mockResolvedValue('parent-1');
@@ -216,9 +214,9 @@ beforeEach(() => {
 		h.removeLibrarianMock,
 		h.resolveAdminMock,
 		h.resolveLibrarianMock,
-		h.resolveDatabaseEntityIdMock,
+		resolveDatabaseEntityIdMock,
 		h.loadRosterMock,
-		h.listSectionsMock,
+		listSectionsMock,
 		h.resolveParentMock,
 		h.resolveInviteParentMock,
 		h.createInviteMock,

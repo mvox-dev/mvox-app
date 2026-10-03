@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 
 const {
 	loadRosterMock,
-	listSectionsMock,
 	deactivateMemberMock,
 	reinstateMemberMock,
 	loadInactiveRosterMock,
@@ -24,7 +23,6 @@ const {
 	loadMemberRecordMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
-	listSectionsMock: vi.fn(),
 	deactivateMemberMock: vi.fn(),
 	reinstateMemberMock: vi.fn(),
 	loadInactiveRosterMock: vi.fn(),
@@ -71,10 +69,9 @@ vi.mock('$lib/library/librarianStore', async (importActual) => ({
 	resolveMyLibraryId: vi.fn().mockResolvedValue('lib-1'),
 	resolveLibrarian: vi.fn().mockResolvedValue({ state: 'ready', libraryId: 'lib-1' })
 }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
-	return { ...actual, listSections: listSectionsMock };
-});
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -94,6 +91,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { isoDateFormatter } from '$lib/preferences/timeFormat';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const ORG_A = 'org-a';
 const ORG_B = 'org-b';

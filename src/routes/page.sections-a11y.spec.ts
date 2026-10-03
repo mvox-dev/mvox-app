@@ -41,10 +41,8 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 // Page seams: groupBySection runs real; only the fetch and write seams are mocked.
-const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, reorderMock } =
-	vi.hoisted(() => ({
+const { loadRosterMock, assignMock, unassignMock, createMock, reorderMock } = vi.hoisted(() => ({
 		loadRosterMock: vi.fn(),
-		listSectionsMock: vi.fn(),
 		assignMock: vi.fn(),
 		unassignMock: vi.fn(),
 		createMock: vi.fn(),
@@ -52,10 +50,9 @@ const { loadRosterMock, listSectionsMock, assignMock, unassignMock, createMock, 
 	}));
 // /roster reads the opt-in real-names producer; `loadRoster` stays profile-names-only.
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/sections/sectionData')>();
-	return { ...actual, listSections: listSectionsMock };
-});
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
 vi.mock('$lib/sections/sectionActions', () => ({
 	assignMemberSection: assignMock,
 	unassignMemberSection: unassignMock,
@@ -80,6 +77,7 @@ import { toListRead } from '$lib/testing/listReadFixtures';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 
 const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
