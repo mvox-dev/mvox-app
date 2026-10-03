@@ -4,9 +4,9 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_target, key) => () => String(key) })
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare')
+);
 
 const { entuFetchMock, assignMock, unassignMock, createSectionMock, wireLog } = vi.hoisted(() => ({
 	entuFetchMock: vi.fn(),

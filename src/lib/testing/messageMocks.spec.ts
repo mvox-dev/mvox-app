@@ -39,6 +39,12 @@ describe('echoMessages', () => {
 		expect(call(m, 'agenda_today')()).toBe('Today');
 		expect(call(m, 'agenda_retry')()).toBe('[agenda_retry]');
 	});
+
+	it('echoes key names the copy object inherits', () => {
+		const { m } = echoMessages('bracket', { agenda_today: () => 'Today' });
+		expect(call(m, 'toString')()).toBe('[toString]');
+		expect(call(m, 'constructor')()).toBe('[constructor]');
+	});
 });
 
 describe('englishMessages', () => {

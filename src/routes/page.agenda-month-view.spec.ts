@@ -7,8 +7,8 @@ import { resolve } from 'node:path';
 import type { AgendaItem } from '$lib/agenda/types';
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		agenda_view_list: () => '[msg:view-list]',
 		agenda_view_month: () => '[msg:view-month]',
 		agenda_view_toggle_label: () => '[msg:view-toggle]',
@@ -29,13 +29,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		event_type_rehearsal: () => '[msg:rehearsal]',
 		event_type_concert: () => '[msg:concert]',
 		event_type_social: () => '[msg:social]'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({

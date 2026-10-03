@@ -5,12 +5,12 @@ import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({}, { get: (_t, key) => () => String(key) })
-}));
-vi.mock('$lib/paraglide/messages', () => ({
-	m: new Proxy({}, { get: (_t, key) => () => String(key) })
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare')
+);
+vi.mock('$lib/paraglide/messages', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bare')
+);
 
 const { loadFullAgendaMock, discoverMock, gotoMock, findMyMemberIdMock, listMyRsvpsMock, listMyAttendanceMock } =
 	vi.hoisted(() => ({

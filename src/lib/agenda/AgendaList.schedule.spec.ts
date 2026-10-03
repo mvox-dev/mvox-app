@@ -5,8 +5,8 @@ import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { ScheduleItem } from '$lib/schedule/scheduleData';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (params) => `${(params as { minutes: number }).minutes} min`,
 		agenda_today: () => 'Today',
@@ -20,13 +20,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		rsvp_save_failed: () => 'Could not save your answer.',
 		agenda_row_link_label: (params) => `View details for ${(params as { event: string }).event}`,
 		agenda_row_link_label_unnamed: () => 'View event details'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({
