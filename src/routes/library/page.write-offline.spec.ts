@@ -62,8 +62,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 const { createWorkMock, createEditionMock } = vi.hoisted(() => ({
 	createWorkMock: vi.fn(),
@@ -99,6 +100,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 function setAuthedWithOneCollective() {
 	signIn();

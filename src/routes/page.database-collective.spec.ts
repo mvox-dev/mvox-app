@@ -11,16 +11,12 @@ const {
 	loadRosterMock,
 	createSeasonMock,
 	entuFetchMock,
-	resolveManageRightsMock,
-	findMyMemberIdMock,
-	listMyRsvpsMock
+	resolveManageRightsMock
 } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),
 	createSeasonMock: vi.fn(),
 	entuFetchMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn()
 }));
 
 vi.mock('$lib/agenda/agendaData', async () =>
@@ -55,14 +51,9 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
@@ -86,6 +77,8 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
 	listSectionsMock,
 	loadFullAgendaMock,
 	resolveDatabaseEntityIdMock

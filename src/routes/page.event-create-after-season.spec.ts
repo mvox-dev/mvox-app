@@ -11,8 +11,6 @@ const {
 	createSeasonMock,
 	createEventMock,
 	resolveManageRightsMock,
-	findMyMemberIdMock,
-	listMyRsvpsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -29,8 +27,6 @@ const {
 	createSeasonMock: vi.fn(),
 	createEventMock: vi.fn(),
 	resolveManageRightsMock: vi.fn(),
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -78,14 +74,9 @@ vi.mock('$lib/entu-config', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
+);
 vi.mock('$lib/attendance/attendanceData', async () =>
 	(await import('$lib/testing/moduleStubs')).attendanceModule()
 );
@@ -112,7 +103,12 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
-import { loadFullAgendaMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	loadFullAgendaMock,
+	resolveDatabaseEntityIdMock
+} from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const FUTURE_SEASON_ID = 'season-future-1';

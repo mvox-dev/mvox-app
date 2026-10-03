@@ -22,10 +22,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const { findMyMemberIdMock, listMyRsvpsMock } = vi.hoisted(() => ({
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn()
-}));
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -44,18 +40,9 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: (rsvps: Array<{ rsvpId: string; eventId: string; status: string }>) => {
-		const map: Record<string, { rsvpId: string; status: string }> = {};
-		for (const r of rsvps) map[r.eventId] = { rsvpId: r.rsvpId, status: r.status };
-		return map;
-	},
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('records')
+);
 
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
 vi.mock('$lib/attendance/attendanceData', async () =>
@@ -72,7 +59,11 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	loadFullAgendaMock
+} from '$lib/testing/moduleHandles';
 
 function setAuthedWithOneCollective() {
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
