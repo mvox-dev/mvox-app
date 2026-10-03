@@ -1,44 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #218 RED — every visible string on the sign-in surface resolves through
-// Paraglide, in ALL FOUR locales (en/et/lv/uk).
-//
-// Today the page hardcodes English for the heading, three of the four error
-// branches (csrf_mismatch, missing_session_token, and the generic fallback —
-// only session_expired already rides m.session_expired_message, #107 F4), and
-// the '· last used' marker; the google CTA still reads 'Continue with Google'.
-//
-// CONTRACT (for the GREEN implementer):
-//   - keys login_heading, login_error_csrf_mismatch,
-//     login_error_missing_session_token, login_error_generic, login_last_used
-//     in all four locale files; ENGLISH VALUES VERBATIM-EQUAL to today's
-//     hardcoded strings so page.signin-picker.spec.ts (regex /·\s*last used/i)
-//     and page.session-expired.spec.ts (negative match on 'something went
-//     wrong') stay green;
-//   - login_last_used is the WHOLE marker including the '·' separator; the
-//     &nbsp; before it stays in the markup;
-//   - Gama ruling (issue #218, 2026-09-02): the heading KEEPS the product name
-//     in every locale (en 'Sign in to mvox', et 'Logi mvoxi sisse'; lv/uk
-//     natural with 'mvox' kept) — after #206 this is the single signed-out
-//     surface and carries no wordmark;
-//   - provider CTAs render {provider.label()} from AUTH_PROVIDERS whose labels
-//     are the auth_provider_* message functions (see
-//     src/lib/auth/providers.spec.ts) — google reads 'Google', bare noun, on
-//     this page too.
-//
-// This is an integration spec on the REAL route component with the REAL
-// paraglide surface — the four locale files are the source of truth, so the
-// per-locale assertions read messages/<locale>.json and require the rendered
-// text to BE that value (and not the English one — a copied-over English value
-// is not a translation).
+// Every visible string on the sign-in page comes from the real locale files, in all four
+// locales; a non-English locale must not render the English text.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 // Mutable $app/state stub — same pattern as page.session-expired.spec.ts.
 const pageStub = vi.hoisted(() => ({
@@ -49,6 +20,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 import Page from './+page.svelte';
 import { setLastProvider } from '$lib/auth/storage';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 const OTHER_LOCALES = ['et', 'lv', 'uk'] as const;
@@ -59,8 +31,7 @@ function messages(locale: string): MessageFile {
 	) as MessageFile;
 }
 
-// The message-file value as a plain string. None of the #218 keys is a variant
-// message; failing on the type here keeps a missing key loud and readable.
+// None of these keys is a variant message; failing on the type keeps a missing key loud.
 function msg(locale: string, key: string): string {
 	const value = messages(locale)[key];
 	expect(typeof value, `messages/${locale}.json must carry ${key} as a plain string`).toBe(
@@ -164,8 +135,7 @@ describe('et copy ruled by Gama on #218', () => {
 	});
 });
 
-// ── i18n — every #218 key present, non-empty, in ALL FOUR locales ───────────────
-// (pattern: page.profile-linked-accounts.spec.ts locale-parity block)
+// ── i18n — every sign-in key present, non-empty, in all four locales ─────────────
 
 describe('locale parity — every #218 key present and non-empty in en/et/lv/uk', () => {
 	const KEYS = [
@@ -209,4 +179,4 @@ describe('locale parity — every #218 key present and non-empty in en/et/lv/uk'
 	});
 });
 
-// (*MVOX:Tallis* — #218 RED: the sign-in surface reads the locale files, all four)
+// (*MVOX:Tallis*)

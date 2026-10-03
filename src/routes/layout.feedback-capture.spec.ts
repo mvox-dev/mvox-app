@@ -4,17 +4,22 @@ import { createRawSnippet } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 
-const { discoverMock, resolveGateMock, resolveMembershipMock, domToBlobMock, sendMock } =
+const { resolveGateMock, resolveMembershipMock, domToBlobMock, sendMock } =
 	vi.hoisted(() => ({
-		discoverMock: vi.fn(),
 		resolveGateMock: vi.fn(),
 		resolveMembershipMock: vi.fn(),
 		domToBlobMock: vi.fn(),
 		sendMock: vi.fn()
 	}));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/roster'), params: {} }));
 vi.mock('$app/state', () => ({ page: pageStub }));
 vi.mock('$lib/profile/completionGate', async (importActual) => {
@@ -33,6 +38,7 @@ import { resetGate } from '$lib/profile/completionGate';
 import { resetMembership } from '$lib/collective/membershipStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { SAMPLEDB, signIn } from '$lib/testing/session';
+import { discoverMock } from '$lib/testing/routeMocks';
 
 const PNG = new Blob(['png'], { type: 'image/png' });
 

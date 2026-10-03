@@ -1,28 +1,12 @@
 // @vitest-environment happy-dom
-//
-// #206 RED — the sign-in page ALWAYS shows the provider picker.
-//
-// The remembered-provider "fast path" (silent goto to the last provider on
-// mount) is retired: a returning user lands on the picker every time, with the
-// remembered provider emphasised IN PLACE — never floated to the top, never
-// auto-followed. (The old `?picker=1` escape hatch is retired along with the
-// redirect; nothing references it any more.)
-//
-// CONTRACT (for the GREEN implementer):
-//   - mounting /auth/login with a remembered provider does NOT goto anywhere;
-//   - the picker renders ALL providers, in the canonical AUTH_PROVIDERS order:
-//     smart-id, mobile-id, id-card, e-mail, google, apple;
-//   - the remembered provider keeps its fixed array position and carries the
-//     "· last used" emphasis marker; no other CTA carries it.
-//
-// This is an integration spec on the REAL route component
-// (src/routes/auth/login/+page.svelte) — the order and the no-redirect rule
-// must hold on the page users hit, not just in the shared list.
+// The sign-in page always shows the full provider picker in canonical order, never redirects
+// on mount, and marks the remembered provider in place with '· last used'.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 // Mutable $app/state stub — same pattern as page.session-expired.spec.ts.
 const pageStub = vi.hoisted(() => ({
@@ -32,6 +16,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './+page.svelte';
 import { setLastProvider } from '$lib/auth/storage';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const CANONICAL_ORDER = ['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple'];
 

@@ -3,13 +3,15 @@ import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-const { discoverMock, gotoMock } = vi.hoisted(() => ({
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn()
-}));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import Layout from './+layout.svelte';
 import { entuFetch } from '$lib/entu/request';
@@ -17,6 +19,7 @@ import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 function setAuthedAuthStore() {
 	setToken('jwt-abc');

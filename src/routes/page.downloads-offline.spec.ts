@@ -11,9 +11,12 @@ vi.mock('$lib/paraglide/messages', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 vi.mock('$lib/auth/storage', () => ({
 	getToken: () => 'tok-1',
@@ -63,6 +66,7 @@ import { authStore } from '$lib/auth/session';
 import { NAV_ENTRIES } from '$lib/nav/entries';
 import { HOUSE_SHELL } from '../page-shell';
 import { createRouteLoadMachine } from '$lib/loading/routeLoad';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const LABEL: PartLabel = {
 	work: 'Bogoróditse Djévo',
