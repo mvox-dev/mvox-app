@@ -1,16 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (component half) — attendance marking is gated offline.
-//
-// CONTRACT: AttendanceSurface reads the ONE signal store ($lib/net/online)
-// itself, like RsvpControl, so both host pages get the gate for free:
-//   • offline → every attendance-toggle-* is write-disabled (`aria-disabled`
-//     = "true", the surface's existing focusable-disable shape — `disabled`
-//     also passes) and ONE visible sentence
-//     [data-testid="attendance-write-unavailable"] inside attendance-panel
-//     carries m.write_unavailable_no_signal() — once per panel, not per row.
-//   • a toggle click while offline never reaches `ontoggle`.
-//   • back online → toggles enabled, sentence gone.
+// Offline, every attendance toggle is write-disabled with one visible sentence per panel,
+// and a click never reaches ontoggle. Back online the toggles return and the sentence goes.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import AttendanceSurface from './AttendanceSurface.svelte';
@@ -23,14 +13,9 @@ import {
 	resetOnLine
 } from '$lib/testing/networkSignal';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -108,4 +93,4 @@ describe('AttendanceSurface — offline gates marking and says why (#434 slice 6
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)

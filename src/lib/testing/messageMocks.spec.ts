@@ -16,6 +16,13 @@ describe('echoMessages', () => {
 		expect(call(echoMessages('bracket').m, 'event_when')({ n: 1 })).toBe('[event_when]');
 	});
 
+	it('echoes key, with non-empty params, in plain format', () => {
+		const { m } = echoMessages('plain');
+		expect(call(m, 'event_when')({ n: 1 })).toBe('event_when {"n":1}');
+		expect(call(m, 'event_when')({})).toBe('event_when');
+		expect(call(m, 'event_when')()).toBe('event_when');
+	});
+
 	it('echoes the bare key in bare format', () => {
 		expect(call(echoMessages('bare').m, 'event_when')({ n: 1 })).toBe('event_when');
 	});

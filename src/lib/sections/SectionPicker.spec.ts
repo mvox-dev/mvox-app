@@ -1,76 +1,14 @@
 // @vitest-environment happy-dom
-//
-// #470 RED — SectionPicker.svelte REWRITTEN contract: NATIVE single-choice
-// pickers, one per membership, plus a [+]. The custom listbox popup (trigger /
-// menu / role="option" / toggle-onpick) is RETIRED — this file supersedes the
-// TS.2/#96 popup pins wholesale. The component stays PRESENTATIONAL (no fetch,
-// no cfg): the write dispatch + optimistic state live in the roster page
-// (page.roster-picker.spec.ts), same split as before.
-//
-// Props (the contract this file pins; the shape CHANGES this slice, hence the
-// deliberate render-time cast below):
-//
-//   memberId      string
-//   memberName    string — names every control ("whose sections?"); the CALLER
-//                 picks which name is in scope (the roster page passes the
-//                 PROFILE name — see page.roster-real-names.spec.ts)
-//   sections      SectionNode[] — the tree from listSections
-//   selectedIds   string[] — the member's CURRENT section entity ids, ALL of
-//                 them; the set every option list subtracts
-//   renderIds     string[] — which of `selectedIds` THIS instance draws a
-//                 select for (the roster's grouped view passes one card's
-//                 single membership; the flat list passes the whole set).
-//                 Review round 3: separate from `selectedIds`, because a
-//                 scoped exclusion set makes her other held section look free
-//                 — see page.roster-picker.spec.ts's option-list suite. These
-//                 unit cases are the UNSCOPED shape, so `renderIds` defaults
-//                 to `selectedIds` in `renderPicker` below
-//   busy          boolean — freeze: every select AND the [+] disabled, root
-//                 aria-busy (Mihkel: "the controls get freezed while entu
-//                 syncs"); nothing visual beyond the native disabled state
-//   onassign(sectionId)        blank picker chose a section
-//   onunassign(sectionId)      a held section's picker chose Määramata ('')
-//   onmove(fromId, toId)       a held section's picker chose another section
-//
-// Pinned markup contract (GREEN must implement):
-//   - root: flex column, aria-busy={busy}
-//   - one native <select data-testid="section-picker-select-<memberId>-<sectionId>">
-//     PER HELD SECTION, value = that section id; options = Määramata (value '',
-//     m.roster_unassigned()) + that section + every section NOT held by this
-//     member, labels depth-indented (NBSP — the parentOptionLabel shape)
-//   - Mihkel 1a/1b/1c: no section → just the [+]; the [+] opens ONE blank
-//     <select data-testid="section-picker-select-<memberId>-blank"> valued '',
-//     options = Määramata + the sections she is NOT in (nothing to gain by
-//     choosing one twice — Gama); choosing one fires onassign(id)
-//   - the [+] `section-picker-add-<memberId>`: native <button type="button">,
-//     aria-label m.roster_section_add_label({ name }), matching title, inline
-//     aria-hidden SVG; HIDDEN while a blank picker is open (Mihkel's rule)
-//   - one-way `value=` + explicit `onchange`, NOT bind:value (InviteSurface's
-//     controlled-select house shape)
-//   - every select carries a visually-hidden <label> naming the member (and
-//     the section) — native controls with real labels, the standing rule
-//   - NO listbox, NO popup, NO create form, NO oncreate prop: creation left
-//     the assignment flow entirely (`roster-new-section` in arrange mode is
-//     the only entry — #124/#155, untouched)
+// Native single-choice pickers, one per held section, plus a [+] that opens one blank picker.
+// Presentational: the write and optimistic state live in the roster page.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ComponentProps } from 'svelte';
 
-// Param-echoing message mock — labels must carry the member's NAME, so the
-// mock renders "<key> <json-params>"; real copy is Comenius's.
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy(
-		{},
-		{
-			get:
-				(_target, key) =>
-				(params?: Record<string, unknown>) =>
-					params && Object.keys(params).length > 0
-						? `${String(key)} ${JSON.stringify(params)}`
-						: String(key)
-		}
-	)
-}));
+// Labels must carry the member's name, so the mock echoes the params.
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('plain')
+);
 
 import SectionPicker from './SectionPicker.svelte';
 import type { SectionNode } from './sectionData';
@@ -107,9 +45,6 @@ interface PickerProps {
 	onmove: (fromId: string, toId: string) => void;
 }
 
-// The Props interface changes shape THIS slice (selectedIds+onpick+oncreate →
-// per-membership handlers + busy) — the cast keeps `pnpm check` honest about
-// everything else while these specs stay RED against the old component.
 function renderPicker(overrides: Partial<PickerProps> = {}) {
 	const selectedIds = overrides.selectedIds ?? [];
 	const props: PickerProps = {
@@ -179,7 +114,7 @@ function accessibleName(el: HTMLElement): string {
 	const id = el.getAttribute('id');
 	// Faithful to how a browser resolves `label[for]`: the label attaches to the
 	// FIRST element carrying that id, so an element whose id is a duplicate has no
-	// label at all — the failure mode #470's per-membership rows exposed.
+	// label at all, which the per-membership rows would hit.
 	if (id && el.ownerDocument.getElementById(id) === el) {
 		const label = el.ownerDocument.querySelector(`label[for="${id}"]`);
 		if (label) return (label.textContent ?? '').trim();
@@ -274,12 +209,9 @@ describe('SectionPicker #470 — 1b: a member in ONE section shows that picker +
 
 describe('SectionPicker #470 — a select shows the membership it REPRESENTS, never the choice the parent refused', () => {
 	it('after a move choice the held select is back on its own section: `selectedIds` alone decides what is displayed (F1 review fix — the parent may legitimately not patch)', async () => {
-		// The parent owns the optimistic state; when its write fails it patches
-		// nothing and re-renders with the SAME selectedIds. `value={sectionId}` is
-		// one-way and `sectionId` never changes, so without the component putting
-		// the value back the user's own DOM change would stand forever — showing a
-		// section she is not in, and (the value already being the target) blocking
-		// the very retry the page's error banner invites.
+		// A failed write re-renders with the same selectedIds and the one-way value never
+		// changes, so unless the component puts the value back, the DOM shows a section
+		// she is not in and blocks the retry.
 		const { container, props } = renderPicker({ selectedIds: ['sec-sop'] });
 		const held = selectFor(container, 'sec-sop') as HTMLSelectElement;
 
@@ -392,10 +324,8 @@ describe('SectionPicker #470 — native controls with real labels; creation is G
 			expect(name, `${select.getAttribute('data-testid')} names the member`).toContain(
 				'Ada Lovelace'
 			);
-			// F2 review fix: the grouped roster mounts this component once per
-			// MEMBERSHIP, so a document-unique `id` + `<label for>` pair cannot name
-			// the later copies (label[for] resolves to the first match). The name has
-			// to live on the control.
+			// The grouped roster mounts this once per membership, and label[for] resolves
+			// to the first id match, so the name has to live on the control.
 			expect(
 				select.getAttribute('aria-label'),
 				`${select.getAttribute('data-testid')} names itself, not through an id`
@@ -414,5 +344,4 @@ describe('SectionPicker #470 — native controls with real labels; creation is G
 	});
 });
 
-// (*MVOX:Tallis* — #470 RED: native per-membership pickers + [+]; supersedes the
-//  TS.2/#96 popup-listbox contract)
+// (*MVOX:Tallis*)

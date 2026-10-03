@@ -1,18 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #434 slice 6/6 RED (component half) — RSVP is gated while offline.
-//
-// CONTRACT: RsvpControl's disable-REASON set (block comment :5-13) grows a
-// second reason, `offline`, read from the ONE signal store
-// ($lib/net/online — `online`), subscribed INSIDE the component so every host
-// (agenda row, event page) gets it without new wiring:
-//   • offline → all four buttons `disabled`, and a VISIBLE sentence
-//     [data-testid="rsvp-write-unavailable"] inside rsvp-control carrying
-//     m.write_unavailable_no_signal() — not a tooltip, not sr-only. Unlike
-//     `pending` (silent-disable, PO ruling), offline SAYS why.
-//   • a click while offline never reaches `onchange` — nothing is queued.
-//   • back online → enabled again, the sentence gone from the DOM.
-//   • `pending` stays silent: pending alone never shows the offline sentence.
+// Offline, RSVP is disabled and says why in a visible sentence; a click queues nothing.
+// Back online it is enabled again. `pending` alone stays a silent disable.
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import RsvpControl from './RsvpControl.svelte';
@@ -23,14 +11,9 @@ import {
 	resetOnLine
 } from '$lib/testing/networkSignal';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 const REASON = '[write_unavailable_no_signal]';
 const STATUSES = ['going', 'not_going', 'maybe', 'late'] as const;
@@ -97,4 +80,4 @@ describe('RsvpControl — offline is a disable reason that says why (#434 slice 
 	});
 });
 
-// (*MVOX:Tallis* — #434 slice 6 RED)
+// (*MVOX:Tallis*)
