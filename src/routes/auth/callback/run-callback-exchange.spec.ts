@@ -4,36 +4,33 @@ import { get } from 'svelte/store';
 import { encodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 import { getToken } from '$lib/auth/storage';
 
-// Mock the Entu exchange at its module boundary. This keeps the test a true unit
-// (no network) AND severs the transitive `$env/dynamic/public` import that
-// entu-config pulls in — that virtual module doesn't resolve under happy-dom.
-// Mock the collective-discovery boundary too (severs the same $env chain via
-// marker.ts → entu-config) and `$app/navigation` (the store imports `goto`), so
-// the post-exchange `hydrateCollectives` runs against a fake discovery result.
-const { exchangeMock, discoverMock, gotoMock, inviteCallbackMock, linkCallbackMock } = vi.hoisted(
+// The exchange, discovery and navigation are mocked at their module boundaries: no network,
+// no $env chain, and hydrateCollectives runs against a fake discovery result.
+const { exchangeMock, inviteCallbackMock, linkCallbackMock } = vi.hoisted(
 	() => ({
 		exchangeMock: vi.fn(),
-		discoverMock: vi.fn(),
-		gotoMock: vi.fn(),
 		inviteCallbackMock: vi.fn(),
 		linkCallbackMock: vi.fn()
 	})
 );
 vi.mock('$lib/auth/exchange', () => ({ exchangeSession: exchangeMock }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 // T4.5: the invite-intent branch — mocked at its module boundary so this spec
 // stays a unit of the NON-invite path plus the delegation decision.
 vi.mock('./run-invite-callback', () => ({ runInviteCallbackExchange: inviteCallbackMock }));
-// #193: the link-intent branch — same rationale as the invite mock above (it
-// transitively pulls in $lib/invite/redeem -> $lib/entu-config ->
-// $env/dynamic/public, which doesn't resolve under happy-dom). The dedicated
-// dispatch-wiring pin lives in run-callback-exchange.link-dispatch.spec.ts.
+// The link-intent branch likewise; its dispatch wiring is pinned in
+// run-callback-exchange.link-dispatch.spec.ts.
 vi.mock('./run-link-callback', () => ({ runLinkCallbackExchange: linkCallbackMock }));
 
 // Imported after the mock is registered (vi.mock is hoisted above imports anyway).
 import { runCallbackExchange } from './run-callback-exchange';
 import { collectiveState } from '$lib/collectives/store';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 function jwt(payload: object): string {
 	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
@@ -64,9 +61,7 @@ beforeEach(() => {
 	sessionStorage.clear();
 	exchangeMock.mockReset();
 	discoverMock.mockReset();
-	// Safe default: successful-exchange tests that don't care about discovery still
-	// drive the (now-wired) post-auth hydrateCollectives, which destructures this
-	// result. Individual tests override for the shape they assert on.
+	// Post-auth hydrateCollectives destructures this result; tests override it as needed.
 	discoverMock.mockResolvedValue({ collectives: [], erroredDbs: [] });
 	gotoMock.mockReset();
 	inviteCallbackMock.mockReset();

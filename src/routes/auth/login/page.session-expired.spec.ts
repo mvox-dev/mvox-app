@@ -1,33 +1,12 @@
 // @vitest-environment happy-dom
-//
-// #107 RED — the sign-in page must SAY "session expired" when the entuFetch
-// layer's 401 recovery lands the user here.
-//
-// The task's "server-side load function receiving 401 → responds with redirect
-// to sign-in (or sets session-expired flag)" adapts to this SPA (ssr = false,
-// no server loads) as: entuFetch redirects to `/auth/login?error=session_expired`
-// (single-flight — pinned in request.auth-expired.spec.ts), and THIS page
-// renders that flag as a human-readable session-expired message. Today the
-// unknown error code falls into the generic "Something went wrong" branch.
-//
-// CONTRACT (for the GREEN implementer):
-//   - `?error=session_expired` renders an explicit session-expired message in
-//     the existing role="alert" slot (text mentions the session having
-//     expired), NOT the generic fallback;
-//   - the provider CTAs stay rendered (the message must not replace the way
-//     back in);
-//   - an error arrival must NOT silently auto-redirect to the remembered
-//     provider (the user deserves to read WHY they were signed out).
-//     #206 update: the page performs NO navigation on mount at all — the
-//     remembered-provider auto-redirect (and the `if (error) return` early-out
-//     that used to guard it) is gone, the picker always renders. So this
-//     assertion now pins the absence of ANY mount-time redirect, not an
-//     error-guarded exception to one.
+// ?error=session_expired renders a session-expired message in the alert slot, keeps the
+// provider CTAs, and the page performs no navigation on mount.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 // Mutable $app/state stub — same pattern as page.invite-landing.spec.ts.
 const pageStub = vi.hoisted(() => ({
@@ -37,14 +16,14 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './+page.svelte';
 import { setLastProvider } from '$lib/auth/storage';
-// The REAL paraglide surface — deliberately NOT mocked here. This page is the
-// durable session-expired surface (the per-page notice only flashes past before
-// the redirect lands), so the copy has to come from the four locale files.
+// The real paraglide surface, deliberately not mocked: this page is where the user reads
+// why they were signed out, so the copy has to come from the locale files.
 import { m } from '$lib/paraglide/messages.js';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import etMessages from '../../../../messages/et.json';
 import lvMessages from '../../../../messages/lv.json';
 import ukMessages from '../../../../messages/uk.json';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 function renderAt(search: string) {
 	pageStub.url = new URL(`http://localhost/auth/login${search}`);
@@ -83,10 +62,7 @@ describe('/auth/login — session expired flag (#107)', () => {
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
 
-	// ── #107 review F4 — the copy must be TRANSLATED, not a hardcoded English
-	// literal duplicating the key that was just added to all four locale files.
-	// An Estonian/Latvian/Ukrainian singer whose session expires reads this page,
-	// not the notice that flashed past.
+	// ── the copy is translated, not a hardcoded English literal ──
 	it('renders the paraglide message, so the login copy and the locale files cannot drift', () => {
 		const { container } = renderAt('?error=session_expired');
 

@@ -20,7 +20,6 @@ const h = vi.hoisted(() => {
 	}
 	return {
 		InviteCreateError,
-		gotoMock: vi.fn(),
 		postThrough: async (cfg: { db: string; token: string }) => {
 			const { entuFetch } = await import('$lib/entu/request');
 			return entuFetch(cfg.db, 'entity', cfg.token, { method: 'POST' });
@@ -77,9 +76,15 @@ vi.mock('$lib/invite/inviteData', () => ({
 	resolveInviteParentId: vi.fn().mockResolvedValue('org-1'),
 	createInvite: vi.fn(h.postThrough)
 }));
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: h.gotoMock }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 
 import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
@@ -89,6 +94,7 @@ import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 function selectSampledb() {
 	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
@@ -104,7 +110,7 @@ beforeEach(() => {
 	fetchStub = vi.fn<typeof fetch>(async () => new Response('{}', { status: 200 }));
 	vi.stubGlobal('fetch', fetchStub);
 	install401Recovery();
-	h.gotoMock.mockReset();
+	gotoMock.mockReset();
 	history.replaceState({}, '', '/admin');
 });
 
@@ -117,8 +123,8 @@ afterEach(() => {
 });
 
 async function expectSessionExpiredAndNothingSent() {
-	await waitFor(() => expect(h.gotoMock).toHaveBeenCalledTimes(1));
-	expect(String(h.gotoMock.mock.calls[0][0])).toContain('session_expired');
+	await waitFor(() => expect(gotoMock).toHaveBeenCalledTimes(1));
+	expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
 	await settle();
 	expect(nonGetCalls(fetchStub)).toEqual([]);
 }

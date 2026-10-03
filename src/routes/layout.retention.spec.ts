@@ -3,16 +3,20 @@ import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 
-const { discoverMock, gotoMock, listFullAgendaMock, loadWorksByEventIdMock } = vi.hoisted(() => ({
-	discoverMock: vi.fn(),
-	gotoMock: vi.fn(),
+const { listFullAgendaMock, loadWorksByEventIdMock } = vi.hoisted(() => ({
 	listFullAgendaMock: vi.fn(),
 	loadWorksByEventIdMock: vi.fn()
 }));
 
-vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: discoverMock }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock, afterNavigate: vi.fn() }));
-vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule({ afterNavigate: vi.fn() })
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/agenda/agendaData', () => ({
 	loadFullAgenda: vi.fn(),
 	listFullAgenda: listFullAgendaMock
@@ -33,6 +37,7 @@ import { collectiveState } from '$lib/collectives/store';
 import { resetRetentionForTests } from '$lib/files/retention';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
+import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 
 let fakeByteStore: FakeByteStore;
 

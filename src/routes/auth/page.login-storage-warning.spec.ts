@@ -1,23 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #442 RED — the login screen warns when the browser refuses to store data.
-//
-// The page runs a proactive storage self-test on mount (canPersistLocally from
-// $lib/auth/storage — the REAL module, not mocked) and, when the browser
-// refuses to persist, shows ONE notice. CONTRACT (for the GREEN implementer):
-//   - one mount-time $state read mirroring the lastProvider pattern
-//     (`typeof window !== 'undefined' ? canPersistLocally() : true`);
-//   - one INDEPENDENT sibling notice block above the provider list:
-//     {#if !canPersist}<p class="text-sm text-red-700" role="alert"
-//     data-testid="login-storage-warning">{m.login_storage_warning()}</p>{/if}
-//     — separate from the URL {#if error} block, so both can co-exist;
-//   - the {#each AUTH_PROVIDERS} render is untouched: the provider buttons
-//     render either way;
-//   - i18n key `login_storage_warning` in all four locales; et is the issue
-//     body's copy VERBATIM; no browser settings named in any locale.
-//
-// SCOPE IS THE WARNING ONLY — the OAuth state-blob loop under refused storage
-// (callback → csrf_mismatch) is a separate, unfiled matter.
+// When the browser refuses to store data, the login screen shows one storage warning above
+// the provider buttons, which still render.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -26,8 +9,9 @@ import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { withBlockedStorage, withRefusedWrites } from '$lib/testing/blockedStorage';
 import { strategy } from '$lib/paraglide/runtime.js';
 
-const { gotoMock } = vi.hoisted(() => ({ gotoMock: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: gotoMock }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
 
 // Mutable $app/state stub — same pattern as login/page.signin-picker.spec.ts.
 const pageStub = vi.hoisted(() => ({
@@ -37,6 +21,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './login/+page.svelte';
 import { m } from '$lib/paraglide/messages.js';
+import { gotoMock } from '$lib/testing/routeMocks';
 
 const CANONICAL_ORDER = ['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple'];
 const WARNING_SELECTOR = '[data-testid="login-storage-warning"]';
@@ -75,9 +60,8 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 	});
 
 	it('setItem throws → the warning renders with role=alert and the i18n text; every provider CTA still renders', () => {
-		// Writes refused for the WHOLE render (quota exhausted / Safari private),
-		// not a one-shot spy: a mount that renders only because the refusal
-		// expired after the probe's single setItem proves nothing.
+		// Writes refused for the whole render, not a one-shot spy: a refusal that expires
+		// after the probe's single setItem proves nothing.
 		const { container } = withRefusedWrites(() => renderAt());
 
 		const warning = container.querySelector(WARNING_SELECTOR);
@@ -87,13 +71,8 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 		assertAllProvidersRender(container);
 	});
 
-	// The headline case the slice was written for: a browser set to block site
-	// data outright, where reading the `localStorage` PROPERTY throws before any
-	// method call (see $lib/testing/blockedStorage). Nothing on the render path
-	// may be left unguarded — the page's own getLastProvider()/probe, and the
-	// locale resolution behind every m.*() call. There is no +error.svelte, so a
-	// single unguarded read replaces this screen with SvelteKit's error page,
-	// i.e. the exact user this notice was written for never sees it.
+	// Blocked site data: reading the localStorage property itself throws. One unguarded read
+	// on the render path replaces this screen with SvelteKit's error page.
 	it('storage access itself throws (site data blocked) → the warning renders and every provider CTA still renders', () => {
 		const { container } = withBlockedStorage(() => renderAt());
 
@@ -122,10 +101,8 @@ describe('/auth/login — storage-refused warning (#442)', () => {
 });
 
 // ── the render path must be storage-free all the way down ─────────────────────
-// The notice is only reachable if NOTHING on the way to it reads localStorage.
-// Paraglide's generated runtime both reads and writes localStorage when that
-// strategy is enabled, so every m.*() call threw in exactly the browser this
-// screen addresses; the strategy list is where that is fixed (vite.config.ts).
+// Paraglide's localStorage strategy would make every m.*() call throw in exactly this browser;
+// the strategy list in vite.config.ts keeps it out.
 
 describe('locale resolution never touches localStorage (#442)', () => {
 	it("'localStorage' is absent from the paraglide strategy list", () => {
@@ -133,8 +110,7 @@ describe('locale resolution never touches localStorage (#442)', () => {
 	});
 });
 
-// ── i18n — login_storage_warning present, non-empty, in ALL FOUR locales ───────
-// (pattern: login/page.login-i18n.spec.ts locale-parity block)
+// ── i18n — login_storage_warning present, non-empty, in all four locales ───────
 
 describe('locale parity — login_storage_warning present and non-empty in en/et/lv/uk (#442)', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
@@ -160,4 +136,4 @@ describe('locale parity — login_storage_warning present and non-empty in en/et
 	});
 });
 
-// (*MVOX:Tallis* — #442 RED: the login screen warns when the browser refuses to store data)
+// (*MVOX:Tallis*)
