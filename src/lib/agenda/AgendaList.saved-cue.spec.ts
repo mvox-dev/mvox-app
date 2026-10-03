@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import AgendaList from './AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
 
-vi.mock('$lib/paraglide/messages.js', () => {
-	const keys: Record<string, (params?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (params) => `${(params as { minutes: number }).minutes} min`,
 		agenda_today: () => 'Today',
@@ -21,13 +21,8 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		rsvp_saved: () => 'Saved.',
 		agenda_row_link_label: (params) => `View details for ${(params as { event: string }).event}`,
 		agenda_row_link_label_unnamed: () => 'View event details'
-	};
-	return {
-		m: new Proxy(keys, {
-			get: (target, key) => target[String(key)] ?? (() => `[${String(key)}]`)
-		})
-	};
-});
+	})
+);
 
 afterEach(cleanup);
 
