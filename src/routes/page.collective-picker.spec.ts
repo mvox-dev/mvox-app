@@ -9,19 +9,19 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 vi.mock('$lib/paraglide/messages', async () => (await import('$lib/testing/messageMocks')).echoMessages());
 
 const {
-	loadFullAgendaMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	listMyAttendanceMock,
 	hydrateCollectivesMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	hydrateCollectivesMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () => (await import('$lib/testing/routeMocks')).discoverModule());
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
@@ -82,6 +82,7 @@ import {
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const DB_A = 'sampledb';
 const DB_B = 'orlando';

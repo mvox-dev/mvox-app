@@ -11,7 +11,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
 	createEventSeriesMock,
 	createEventMock,
@@ -26,7 +25,6 @@ const {
 	removeSeasonConductorMock,
 	getSeriesDefaultsMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	createEventSeriesMock: vi.fn(),
 	createEventMock: vi.fn(),
@@ -42,7 +40,9 @@ const {
 	getSeriesDefaultsMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: vi.fn(),
 	createEventSeries: createEventSeriesMock,
@@ -89,11 +89,9 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
 );
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: vi.fn() }));
-vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllEditions: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
-}));
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/moduleStubs')).libraryDataModule()
+);
 vi.mock('$lib/repertoire/repertoireData', () => ({
 	listRepertoireItems: vi.fn().mockResolvedValue([])
 }));
@@ -110,6 +108,7 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');

@@ -12,15 +12,14 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const { loadFullAgendaMock, findMyMemberIdMock, listMyRsvpsMock } =
+const { findMyMemberIdMock, listMyRsvpsMock } =
 	vi.hoisted(() => ({
-		loadFullAgendaMock: vi.fn(),
 		findMyMemberIdMock: vi.fn(),
 		listMyRsvpsMock: vi.fn()
 	}));
-vi.mock('$lib/agenda/agendaData', () => ({
-	loadFullAgenda: loadFullAgendaMock
-}));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -57,6 +56,7 @@ import Page from './+page.svelte';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 function setAuthedWithOneCollective() {
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });

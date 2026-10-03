@@ -10,7 +10,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadRosterMock,
@@ -19,7 +18,6 @@ const {
 	listMyAttendanceMock,
 	listAllRsvpsForEventMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	findMyMemberIdMock: vi.fn(),
 	listMyRsvpsMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -28,20 +26,18 @@ const {
 	listMyAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn()
 }));
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: vi.fn((..._args: unknown[]) => {
-		const [, entityId, personId] = _args as [unknown, string, string];
-		return Promise.resolve(entityId === personId ? 'editor' : 'not-editor');
-	})
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleStubs')).repertoireActionsModule(await importOriginal())
+);
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
@@ -85,6 +81,7 @@ import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {

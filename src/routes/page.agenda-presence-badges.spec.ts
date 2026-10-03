@@ -9,7 +9,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadWorksByEventIdMock,
 	signFileUrlMock,
 	loadRosterMock,
@@ -20,7 +19,6 @@ const {
 	listAllCopiesMock,
 	listEventSeriesForSeasonMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn(),
 	loadRosterMock: vi.fn(),
@@ -32,7 +30,9 @@ const {
 	listEventSeriesForSeasonMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -107,6 +107,7 @@ import { openFileBytes } from '$lib/files/openFileBytes';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

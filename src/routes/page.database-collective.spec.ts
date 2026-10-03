@@ -8,7 +8,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	loadFullAgendaMock,
 	loadRosterMock,
 	listSectionsMock,
 	createSeasonMock,
@@ -18,7 +17,6 @@ const {
 	findMyMemberIdMock,
 	listMyRsvpsMock
 } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
 	loadRosterMock: vi.fn(),
 	listSectionsMock: vi.fn(),
 	createSeasonMock: vi.fn(),
@@ -29,7 +27,9 @@ const {
 	listMyRsvpsMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/entity/entityCreate', () => ({
 	createSeason: createSeasonMock,
 	createEventSeries: vi.fn(),
@@ -91,6 +91,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
 const CFG = testCfg('sampledb', 'jwt-abc');

@@ -9,12 +9,13 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const { loadFullAgendaMock, listMyRsvpsMock } = vi.hoisted(() => ({
-	loadFullAgendaMock: vi.fn(),
+const { listMyRsvpsMock } = vi.hoisted(() => ({
 	listMyRsvpsMock: vi.fn()
 }));
 
-vi.mock('$lib/agenda/agendaData', () => ({ loadFullAgenda: loadFullAgendaMock }));
+vi.mock('$lib/agenda/agendaData', async () =>
+	(await import('$lib/testing/moduleHandles')).agendaDataModule()
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -42,6 +43,7 @@ import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
