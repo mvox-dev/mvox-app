@@ -4,14 +4,9 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (params?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 const pageStub = vi.hoisted(() => ({ url: new URL('http://localhost/profile') }));

@@ -4,14 +4,9 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: new Proxy({} as Record<string, (p?: Record<string, unknown>) => string>, {
-		get:
-			(_t, key) =>
-			(params?: Record<string, unknown>) =>
-				params ? `[${String(key)} ${JSON.stringify(params)}]` : `[${String(key)}]`
-	})
-}));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));
