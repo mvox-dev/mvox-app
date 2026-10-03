@@ -1,20 +1,13 @@
 // @vitest-environment happy-dom
-//
-// T4.5/#31 — the unauthed invite landing at /invite/[token]. Contract:
-// - valid token   → landing with db + expiry + one CTA per provider
-// - invalid token → error, NO CTA
-// - client-expired→ warning but CTAs KEPT (the server is the authority; a fast
-//                   client clock must not brick a valid invite)
-// - ?outcome=dead|conflict|unexpected|error → the callback's post-exchange states
-// Bearer-secret hygiene is asserted at the admin page + storage level; this page
-// only ever moves the token into hrefs built by buildInviteProviderHref.
+// The unauthed invite landing: a valid token shows one CTA per provider, an invalid one none;
+// a client-side expiry warns but keeps the CTAs, since the server is the authority.
 import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AUTH_PROVIDERS } from '$lib/auth/providers';
 import { OAUTH_STATE_KEY } from '$lib/auth/state';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		invite_landing_title: () => "You're invited",
 		invite_landing_intro: (p: { db: string }) => `You have been invited to join ${p.db} on mvox.`,
 		invite_landing_expires: (p: { date: string }) => `Valid until ${p.date}.`,
@@ -28,19 +21,16 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		invite_error_unexpected: () => 'Something inconsistent happened.',
 		invite_error_failed: () => 'Redeeming the invite failed.',
 		invite_retry: () => 'Try again',
-		// #218 — provider labels resolve through Paraglide. AUTH_PROVIDERS binds
-		// `label` to these message functions AT MODULE LOAD, so a missing key
-		// here would make every provider-CTA render throw, not fall back.
-		// Bare nouns per Gama's #218 ruling — google is 'Google', not
-		// 'Continue with Google'.
+		// AUTH_PROVIDERS binds its labels at module load, so a missing key here
+		// makes every provider CTA throw. Bare nouns: 'Google', not 'Continue with'.
 		auth_provider_smart_id: () => 'Smart-ID',
 		auth_provider_mobile_id: () => 'Mobile-ID',
 		auth_provider_id_card: () => 'ID-card',
 		auth_provider_e_mail: () => 'E-mail',
 		auth_provider_google: () => 'Google',
 		auth_provider_apple: () => 'Apple'
-	}
-}));
+	})
+);
 
 // Mutable $app/state stub — each test points `page` at its own params/url.
 const pageStub = vi.hoisted(() => ({
@@ -86,11 +76,8 @@ describe('/invite/[token] — ready (valid token)', () => {
 		}
 	});
 
-	// #207 rule 7 (PO standing rule, Gama 2026-09-02) — the expiry is numeric
-	// date text on a public, unauthenticated page: it renders as the ISO
-	// calendar date `YYYY-MM-DD`, never a browser-locale rendering. The message
-	// mock above echoes its `date` param, so this pins the string the page
-	// actually derives from the token's own exp.
+	// On this public page the expiry renders as the ISO date YYYY-MM-DD, never a
+	// browser-locale date; the mock echoes its `date` param, pinning the real string.
 	it('#207 rule 7: the expiry date renders as ISO YYYY-MM-DD', () => {
 		const { container } = renderAt(TOKEN);
 		// The oracle mirrors the required production mechanism (en-CA Intl → ISO)

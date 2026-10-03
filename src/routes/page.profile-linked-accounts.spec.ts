@@ -9,8 +9,8 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		profile_title: () => 'Your profile',
 		profile_intro: () => 'Fill in your name and email.',
 		profile_completion_required: () => 'Please add your name to continue.',
@@ -96,8 +96,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		auth_provider_e_mail: () => 'E-mail',
 		auth_provider_google: () => 'Google',
 		auth_provider_apple: () => 'Apple'
-	}
-}));
+	})
+);
 
 const h = vi.hoisted(() => {
 	class SelfLinkMintError extends Error {

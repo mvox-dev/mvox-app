@@ -2,8 +2,8 @@
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		library_title: () => 'Library',
 		library_no_collective: () => 'Select a collective to view the library.',
 		library_load_error: () => 'Something went wrong loading the library.',
@@ -61,8 +61,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_create_edition_name_required: () => 'Edition name is required.',
 		library_create_edition_created: (p: { name: string }) => `${p.name} created.`,
 		library_create_edition_error: () => 'Could not create the edition.'
-	}
-}));
+	})
+);
 
 const {
 	listWorksMock,

@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		admin_roles_title: () => 'Role management',
 		admin_roles_no_collective: () => 'Select a collective to manage roles.',
 		admin_roles_no_access: () => 'Managing roles requires administrator rights.',
@@ -59,8 +59,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_mint_error: (p: { name: string }) => `Could not invite ${p.name}.`,
 		admin_invite_mint_owner_only: () => 'Inviting an existing person requires owner rights.',
 		roster_member_invite_owner_only: () => 'Managing invites requires owner rights.'
-	}
-}));
+	})
+);
 
 const h = vi.hoisted(() => {
 	class RoleLockoutError extends Error {

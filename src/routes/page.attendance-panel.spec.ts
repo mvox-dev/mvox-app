@@ -5,8 +5,8 @@ import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		picker_partial_members_notice: () => 'Not every member is listed here',
 		agenda_empty_no_events: () => 'No upcoming events.',
 		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
@@ -56,8 +56,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 			`Attended ${p.attended} of ${p.total} events`,
 		attendance_member_rate: (p: { attended: number; total: number }) => `${p.attended} of ${p.total}`,
 		attendance_all_members: () => 'All members'
-	}
-}));
+	})
+);
 
 const {
 	loadFullAgendaMock,

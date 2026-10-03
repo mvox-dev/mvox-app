@@ -2,8 +2,8 @@
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		roster_title: () => 'Roster',
 		roster_no_collective: () => 'Select a collective to view the roster.',
 		roster_load_error: () => 'Something went wrong loading the roster.',
@@ -16,8 +16,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		roster_sections_load_error: () => 'Section grouping failed to load.',
 		session_expired_message: () => 'Your session has expired. Please sign in again.',
 		session_expired_signin: () => 'Sign in'
-	}
-}));
+	})
+);
 
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));
 vi.mock('$lib/entu-config', () => ({ ENTU_API_BASE: 'https://api.entu-test.invalid/' }));

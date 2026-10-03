@@ -4,8 +4,8 @@ import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		library_title: () => 'Library',
 		library_no_collective: () => 'Select a collective to view the library.',
 		library_load_error: () => 'Something went wrong loading the library.',
@@ -50,8 +50,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		library_copy_sort_member: () => 'Member',
 		library_copy_sort_since: () => 'Since',
 		library_available_summary: (p: { count: number }) => `${p.count} copies available for lending`
-	}
-}));
+	})
+);
 
 vi.mock('$lib/paraglide/runtime', () => ({ getLocale: () => 'en' }));
 vi.mock('$lib/collectives/discover', () => ({ discoverCollectives: vi.fn() }));

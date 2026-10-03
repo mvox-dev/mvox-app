@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		admin_invite_title: () => 'Invite a new member',
 		admin_invite_no_collective: () => 'Select a collective before creating invites.',
 		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
@@ -24,8 +24,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		admin_invite_partial_failure: (p: { personId: string }) =>
 			`A person entity (${p.personId}) was already created and carries a live invite token.`,
 		admin_invite_create_another: () => 'Create another invite'
-	}
-}));
+	})
+);
 
 const h = vi.hoisted(() => {
 	class InviteCreateError extends Error {

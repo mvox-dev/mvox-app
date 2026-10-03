@@ -2,8 +2,8 @@
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		roster_title: () => 'Roster',
 		roster_no_collective: () => 'Select a collective to view the roster.',
 		roster_load_error: () => 'Something went wrong loading the roster.',
@@ -18,8 +18,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		roster_view_collapsed: () => 'Collapsed',
 		roster_view_expanded: () => 'Expanded',
 		roster_view_arrange: () => 'Arrange'
-	}
-}));
+	})
+);
 
 const { loadRosterMock, listSectionsMock } = vi.hoisted(() => ({
 	loadRosterMock: vi.fn(),

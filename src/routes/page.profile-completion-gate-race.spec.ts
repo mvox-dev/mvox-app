@@ -4,8 +4,8 @@ import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
-vi.mock('$lib/paraglide/messages.js', () => ({
-	m: {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).englishMessages({
 		profile_title: () => 'Your profile',
 		profile_intro: () => 'Fill in your name and email.',
 		profile_completion_required: () => 'Please add your name to continue.',
@@ -80,8 +80,8 @@ vi.mock('$lib/paraglide/messages.js', () => ({
 		auth_provider_e_mail: () => 'E-mail',
 		auth_provider_google: () => 'Google',
 		auth_provider_apple: () => 'Apple'
-	}
-}));
+	})
+);
 
 const h = vi.hoisted(() => ({
 	listMyProfilesMock: vi.fn(),
