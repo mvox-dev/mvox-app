@@ -12,8 +12,8 @@ import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 // Paraglide mock: real English for existing keys, and a Proxy fallback that renders
 // "<key> <param values...>", so a label holds the work name whatever its key.
-vi.mock('$lib/paraglide/messages.js', () => {
-	const known: Record<string, (p?: Record<string, unknown>) => string> = {
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages('spaced', {
 		repertoire_no_edition: () => 'No pinned edition',
 		repertoire_pdf_link: () => 'PDF',
 		repertoire_borrow_link: () => 'Borrow',
@@ -31,21 +31,12 @@ vi.mock('$lib/paraglide/messages.js', () => {
 		// #272 — the placeholder names the CHOICE, the button names the ACTION.
 		repertoire_add_programme_label: () => 'Select edition',
 		repertoire_add_programme_button: () => 'Add to programme',
-		repertoire_inactive_count: (p) => `+${p?.count} inactive`,
+		repertoire_inactive_count: (p?: Record<string, unknown>) => `+${p?.count} inactive`,
 		// The badge screen-reader label GREEN is expected to add — named here so
 		// the "contains Repertoire" assertions read against realistic copy.
 		repertoire_badge_aria_label: (p?: Record<string, unknown>) => `Repertoire: ${p?.status}`
-	};
-	const m = new Proxy(known, {
-		get(target, prop) {
-			const key = String(prop);
-			if (key in target) return target[key];
-			return (params?: Record<string, unknown>) =>
-				[key, ...(params ? Object.values(params).map(String) : [])].join(' ');
-		}
-	});
-	return { m };
-});
+	})
+);
 
 // ── Library page seams for the TR.4 badge tests (page.library-repertoire-badges.spec.ts
 // set); RepertoireElement imports none of them.

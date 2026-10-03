@@ -3,8 +3,8 @@ type Message = (params?: Record<string, unknown>) => string;
 export type Copy = Record<string, (params: never) => string>;
 type MessagesModule = Record<string, unknown> & { m: Copy };
 
-// [key {"n":1}] | key {"n":1} | [key] | key; 'plain' drops empty params, 'raw' keeps them
-export type EchoFormat = 'params' | 'plain' | 'raw' | 'bracket' | 'bare';
+// [key {"n":1}] | key {"n":1} | key 1 | [key] | key; 'plain' drops empty params, 'raw' keeps them
+export type EchoFormat = 'params' | 'plain' | 'raw' | 'spaced' | 'bracket' | 'bare';
 
 function echo(key: string, format: EchoFormat): Message {
 	if (format === 'bare') return () => key;
@@ -12,6 +12,8 @@ function echo(key: string, format: EchoFormat): Message {
 	if (format === 'plain')
 		return (params) =>
 			params && Object.keys(params).length > 0 ? `${key} ${JSON.stringify(params)}` : key;
+	if (format === 'spaced')
+		return (params) => [key, ...Object.values(params ?? {}).map(String)].join(' ');
 	if (format === 'raw')
 		return (params) => (params === undefined ? key : `${key} ${JSON.stringify(params)}`);
 	return (params) => (params ? `[${key} ${JSON.stringify(params)}]` : `[${key}]`);

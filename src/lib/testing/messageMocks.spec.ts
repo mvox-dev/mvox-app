@@ -30,6 +30,12 @@ describe('echoMessages', () => {
 		expect(call(m, 'event_when')()).toBe('event_when');
 	});
 
+	it('echoes key and the param values, space-joined, in spaced format', () => {
+		const { m } = echoMessages('spaced');
+		expect(call(m, 'event_when')({ name: 'Ada', n: 1 })).toBe('event_when Ada 1');
+		expect(call(m, 'event_when')()).toBe('event_when');
+	});
+
 	it('echoes the bare key in bare format', () => {
 		expect(call(echoMessages('bare').m, 'event_when')({ n: 1 })).toBe('event_when');
 	});
