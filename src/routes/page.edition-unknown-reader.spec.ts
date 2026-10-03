@@ -9,19 +9,16 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
 );
 
-const { loadWorksByEventIdMock, listMyRsvpsMock } =
-	vi.hoisted(() => ({
-		loadWorksByEventIdMock: vi.fn(),
+const { listMyRsvpsMock } = vi.hoisted(() => ({
 		listMyRsvpsMock: vi.fn()
 	}));
 
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
 );
@@ -50,7 +47,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import { loadFullAgendaMock, loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 

@@ -29,11 +29,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-const {
-	resolveManageRightsMock
-} = vi.hoisted(() => ({
-	resolveManageRightsMock: vi.fn()
-}));
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -43,10 +38,9 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).databaseEntityModule(await importOriginal())
 );
@@ -75,7 +69,8 @@ import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
-	loadFullAgendaMock
+	loadFullAgendaMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const EVENT = {

@@ -15,12 +15,10 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 const {
 	loadFullAgendaMock,
 	listFullAgendaMock,
-	loadWorksByEventIdMock,
 	signFileUrlMock
 } = vi.hoisted(() => ({
 	loadFullAgendaMock: vi.fn(),
 	listFullAgendaMock: vi.fn(),
-	loadWorksByEventIdMock: vi.fn(),
 	signFileUrlMock: vi.fn()
 }));
 
@@ -64,19 +62,12 @@ vi.mock('$lib/rsvp/rsvpData', async () =>
 	(await import('$lib/testing/moduleStubs')).rsvpDataModule()
 );
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: vi.fn() }));
-vi.mock('$lib/attendance/attendanceData', () => ({
-	listAttendance: vi.fn(),
-	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
-	listAllRsvpsForEvent: vi.fn(),
-	createAttendance: vi.fn(),
-	updateAttendanceStatus: vi.fn(),
-	deleteAttendance: vi.fn(),
-	attendanceByMemberId: () => ({})
-}));
-vi.mock('$lib/repertoire/workRows', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/repertoire/workRows')>()),
-	loadWorksByEventId: loadWorksByEventIdMock
-}));
+vi.mock('$lib/attendance/attendanceData', async () =>
+	(await import('$lib/testing/moduleStubs')).attendanceModule({ lists: 'bare' })
+);
+vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).worksModule(await importOriginal())
+);
 vi.mock('$lib/repertoire/fileUrls', () => ({ signFileUrl: signFileUrlMock }));
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 vi.mock('$lib/files/appLabelStore', () => ({ getAppLabelStore: () => ({ putLabel: async () => {}, labelsFor: async () => new Map(), remove: async () => {} }) }));
@@ -89,6 +80,7 @@ import { resetRetentionForTests } from '$lib/files/retention';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

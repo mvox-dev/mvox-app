@@ -12,7 +12,6 @@ const {
 	loadRosterMock,
 	createEventMock,
 	convertEventToSeriesMock,
-	resolveManageRightsMock,
 	listEventSeriesForSeasonMock,
 	listSeriesOptionsForSeasonMock,
 	listEventsForSeasonMock,
@@ -24,7 +23,6 @@ const {
 	loadRosterMock: vi.fn(),
 	createEventMock: vi.fn(),
 	convertEventToSeriesMock: vi.fn(),
-	resolveManageRightsMock: vi.fn(),
 	listEventSeriesForSeasonMock: vi.fn(),
 	listSeriesOptionsForSeasonMock: vi.fn(),
 	listEventsForSeasonMock: vi.fn(),
@@ -58,10 +56,9 @@ vi.mock('$lib/seasons/seasonManage', () => ({
 vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
-vi.mock('$lib/repertoire/repertoireActions', async (importActual) => ({
-	...(await importActual<typeof import('$lib/repertoire/repertoireActions')>()),
-	resolveManageRights: resolveManageRightsMock
-}));
+vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
+);
 vi.mock('$lib/roster/rosterData', () => ({ loadRoster: loadRosterMock }));
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
@@ -102,7 +99,8 @@ import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock
+	resolveDatabaseEntityIdMock,
+	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
