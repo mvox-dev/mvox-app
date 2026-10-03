@@ -99,14 +99,16 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 import Page from './library/+page.svelte';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 

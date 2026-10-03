@@ -128,8 +128,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 // T6.4/#73 — "my loans" resolves the viewer's own active member the same way
 // RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
 // org scoping in the single-collective dev/test db). Reused, not re-derived.
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 // #74 — mock lendingActions to verify submit triggers the action layer
 const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
@@ -149,6 +150,7 @@ import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 const LIBRARY_SURFACES = surfacesUnder('src/routes/library/', 'src/lib/library/');
 

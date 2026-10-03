@@ -129,8 +129,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 vi.mock('$lib/library/lendingActions', () => ({
 	createLending: vi.fn(),
@@ -180,6 +181,7 @@ import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 function setAuthedWithOneCollective() {
 	signIn();

@@ -8,14 +8,10 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 );
 
 const {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
 	listAttendanceMock,
 	listMyAttendanceMock,
 	listAllRsvpsForEventMock
 } = vi.hoisted(() => ({
-	findMyMemberIdMock: vi.fn(),
-	listMyRsvpsMock: vi.fn(),
 	listAttendanceMock: vi.fn(),
 	listMyAttendanceMock: vi.fn(),
 	listAllRsvpsForEventMock: vi.fn()
@@ -36,14 +32,9 @@ vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: findMyMemberIdMock,
-	listMyRsvps: listMyRsvpsMock,
-	rsvpsByEventId: () => ({}),
-	createRsvp: vi.fn(),
-	updateRsvpStatus: vi.fn(),
-	deleteRsvp: vi.fn()
-}));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
+);
 vi.mock('$lib/attendance/attendanceData', async (importActual) => ({
 	...(await importActual<typeof import('$lib/attendance/attendanceData')>()),
 	listAttendance: listAttendanceMock,
@@ -66,7 +57,11 @@ import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
+import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
+	loadFullAgendaMock
+} from '$lib/testing/moduleHandles';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {

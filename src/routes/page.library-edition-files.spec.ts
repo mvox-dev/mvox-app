@@ -141,8 +141,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 vi.mock('$lib/library/lendingActions', () => ({
 	createLending: vi.fn(),
@@ -196,6 +197,7 @@ import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreF
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 let fakeByteStore: FakeByteStore;
 

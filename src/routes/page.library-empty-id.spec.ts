@@ -78,8 +78,9 @@ vi.mock('$lib/library/librarianStore', async () => {
 	};
 });
 
-const { findMyMemberIdMock } = vi.hoisted(() => ({ findMyMemberIdMock: vi.fn() }));
-vi.mock('$lib/rsvp/rsvpData', () => ({ findMyMemberId: findMyMemberIdMock }));
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 const { createLendingMock, returnLendingMock, bulkCheckoutMock } = vi.hoisted(() => ({
 	createLendingMock: vi.fn(),
@@ -96,6 +97,7 @@ import Page from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 const EMPTY_ID_ENTITY_URL = /\/entity\/(\?|$)/;
 
