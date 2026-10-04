@@ -49,7 +49,7 @@ import { q } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import { fill } from '$lib/testing/pages/seasonPanel';
-import { messages } from '$lib/testing/pages/messageFiles';
+import { readMessages as messages } from '$lib/testing/pages/files';
 
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
