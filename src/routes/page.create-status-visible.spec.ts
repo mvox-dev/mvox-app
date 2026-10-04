@@ -65,11 +65,9 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fillDateTime } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
@@ -94,13 +92,17 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
+import { q } from '$lib/testing/pages/dom';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	SEASON_ID,
+	fill,
+	isoDate,
+	openEventFormFromPanel,
+	openSeasonForm,
+	selectValue
+} from '$lib/testing/pages/seasonPanel';
+import { fixtureRows } from '$lib/testing/pages/seasonEventCreate';
 
 function editorSeason(): Season {
 	return {
@@ -133,19 +135,6 @@ function upcomingRehearsal(): AgendaItem {
 		editors: [],
 		eventType: 'rehearsal'
 	} as AgendaItem;
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
 }
 
 async function flushMicrotasks(): Promise<void> {
@@ -198,10 +187,6 @@ afterEach(() => {
 	getSeriesDefaultsMock.mockReset();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 function region(container: HTMLElement, testid: string): HTMLElement {
 	const el = q(container, testid);
@@ -261,24 +246,6 @@ async function renderReadyWithRehearsal(): Promise<HTMLElement> {
 	return container;
 }
 
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function openSeasonForm(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-create')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-create') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-create-form')).not.toBeNull();
-	});
-}
-
 async function submitSeasonCreate(container: HTMLElement, name: string): Promise<void> {
 	await openSeasonForm(container);
 	await fill(container, 'season-create-name', name);
@@ -287,17 +254,6 @@ async function submitSeasonCreate(container: HTMLElement, name: string): Promise
 	await fireEvent.click(q(container, 'season-create-submit') as HTMLElement);
 	await waitFor(() => {
 		expect(createSeasonMock).toHaveBeenCalled();
-	});
-}
-
-async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-event')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'event-create-form')).not.toBeNull();
 	});
 }
 

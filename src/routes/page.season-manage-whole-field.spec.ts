@@ -72,14 +72,9 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -89,17 +84,12 @@ import {
 	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-const SEASON_START = isoDate(-30);
-const SEASON_END = isoDate(60);
+import { q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { SEASON_END, SEASON_ID, SEASON_START, openPanel } from '$lib/testing/pages/seasonPanel';
+import { fixtureRows } from '$lib/testing/pages/seasonFields';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function currentSeason(): Season {
 	return {
@@ -122,31 +112,6 @@ function agendaResult() {
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -180,23 +145,6 @@ afterEach(() => {
 	removeSeasonConductorMock.mockReset();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-}
 
 const FIELDS = ['name', 'start_date', 'end_date'] as const;
 

@@ -103,6 +103,9 @@ import {
 import { signFileUrlMock } from '$lib/testing/mocks/files';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { isoDate } from '$lib/testing/pages/seasonPanel';
+import { q } from '$lib/testing/pages/seasonRepertoire';
 
 let fakeByteStore: FakeByteStore;
 
@@ -123,10 +126,6 @@ function pdfData() {
 		filetype: 'application/pdf',
 		sha256: 'sha-fixture'
 	};
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 function setAuthedWithTwoCollectives() {
@@ -210,10 +209,6 @@ function mockBaselineAgenda() {
 	});
 }
 
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
 function editorSeason(): Season {
 	return {
 		id: 'season-1',
@@ -224,10 +219,6 @@ function editorSeason(): Season {
 		owners: [],
 		editors: ['person-p']
 	};
-}
-
-function q(scope: ParentNode, testid: string): HTMLElement | null {
-	return scope.querySelector(`[data-testid="${testid}"]`);
 }
 
 async function renderAgendaReady(): Promise<HTMLElement> {

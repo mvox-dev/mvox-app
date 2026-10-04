@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -80,12 +80,9 @@ import {
 	SEASON_CARD_COLLAPSE
 } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -107,28 +104,19 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	type PageOnProgress,
+	SEASON_ID,
+	armSeasonDelete,
+	cleanupResetSeasonDeleteMocks,
+	currentSeason
+} from '$lib/testing/pages/seasonPanel';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/seasonManage';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(viewerIsEditor: boolean): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
 
 function agendaResult(opts: { editor?: boolean } = {}) {
 	const { editor = true } = opts;
@@ -170,10 +158,6 @@ function resetRows(): void {
 	cascadeDeletedCount = { 'series-1': 9, 'series-2': 0 };
 }
 
-function setAuthedWithOneCollective(): void {
-	signIn();
-}
-
 beforeEach(() => {
 	resetRows();
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
@@ -207,33 +191,7 @@ beforeEach(() => {
 	deleteSeasonMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
 });
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	loadRosterMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
-	resolveManageRightsMock.mockReset();
-	discoverMock.mockReset();
-	gotoMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listMyRsvpsMock.mockReset();
-	listEventSeriesForSeasonMock.mockReset();
-	listEventsForSeasonMock.mockReset();
-	updateSeasonFieldMock.mockReset();
-	addSeasonConductorMock.mockReset();
-	removeSeasonConductorMock.mockReset();
-	getSeriesDefaultsMock.mockReset();
-	deleteEventMock.mockReset();
-	deleteEventSeriesMock.mockReset();
-	countSeriesOccurrencesMock.mockReset();
-	countSeasonScopeMock.mockReset();
-	deleteSeasonMock.mockReset();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetSeasonDeleteMocks);
 
 async function renderReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
@@ -713,24 +671,10 @@ describe('agenda — #313 the panel lists series only; the standalone-event rows
 	});
 });
 
-type PageOnProgress = (current: number, total: number, kind: string) => void;
 interface PageScope {
 	series: number;
 	events: number;
 	repertoireItems: number;
-}
-
-/** Tap the season's own trashcan (#261: it lives on the OPENED title row, so
- *  expand the card first), wait for the confirm that replaces it. */
-async function armSeasonDelete(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-delete-season')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-delete-season') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-delete-season-confirm')).not.toBeNull();
-	});
 }
 
 async function armAndConfirmSeasonDelete(container: HTMLElement): Promise<void> {

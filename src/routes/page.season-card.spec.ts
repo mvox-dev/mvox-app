@@ -70,9 +70,7 @@ import {
 import type { Season } from '$lib/seasons/types';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -101,27 +99,22 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-const CARD = 'agenda-admin-card';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(viewerIsEditor: boolean): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
+import { q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	CARD,
+	type PageOnProgress,
+	SEASON_ID,
+	armSeasonDelete,
+	currentSeason,
+	fill,
+	isoDate,
+	noSeasonsResult,
+	selectValue,
+	setAuthedWithTwoCollectives
+} from '$lib/testing/pages/seasonPanel';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/seasonManage';
 
 function upcomingSeason(): Season {
 	return {
@@ -144,23 +137,6 @@ function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } =
 		seasonOwners: season.owners,
 		seasonEditors: season.editors,
 		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
-	});
-}
-
-function noSeasonsResult() {
-	return fullAgendaResult();
-}
-
-function setAuthedWithOneCollective(): void {
-	signIn();
-}
-
-function setAuthedWithTwoCollectives(): void {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'org-b', name: 'Org B', personId: 'person-p' }
-		]
 	});
 }
 
@@ -221,10 +197,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 function visibleText(el: HTMLElement): string {
 	const clone = el.cloneNode(true) as HTMLElement;
 	for (const hidden of clone.querySelectorAll('.sr-only, [aria-hidden="true"]')) hidden.remove();
@@ -238,14 +210,6 @@ async function renderReady(): Promise<HTMLElement> {
 		expect(q(container, 'agenda-empty')).not.toBeNull();
 	});
 	return container;
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 async function startHangingSeriesRun(container: HTMLElement): Promise<Array<(id: string) => void>> {
@@ -277,7 +241,6 @@ async function startHangingSeriesRun(container: HTMLElement): Promise<Array<(id:
 	return resolvers;
 }
 
-type PageOnProgress = (current: number, total: number, kind: string) => void;
 type PageScope = { series: number; events: number; repertoireItems: number };
 function hangingDeleteSeason() {
 	let onProgress: PageOnProgress | undefined;
@@ -302,17 +265,6 @@ function hangingDeleteSeason() {
 		finish: (scope: PageScope) => resolveWith(scope),
 		fail: (reason: unknown) => rejectWith(reason)
 	};
-}
-
-async function armSeasonDelete(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-delete-season')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-delete-season') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-delete-season-confirm')).not.toBeNull();
-	});
 }
 
 describe('season card #261 — [+ Season] stands above the card as a standalone control', () => {

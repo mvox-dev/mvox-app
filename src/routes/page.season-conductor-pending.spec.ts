@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 // Season-manage conductor add/remove holds a pending state until the write lands.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred, testCfg } from '$lib/testing/entuFetchKit';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('raw')
@@ -58,13 +58,8 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
 );
 
-import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	deleteRepertoireItemMock,
 	findMyMemberIdMock,
@@ -89,15 +84,19 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-const SEASON_B_ID = 'season-2';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { CFG, flush } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	SEASON_ID,
+	fixtureRows,
+	isoDate,
+	openPanelForSeason,
+	seriesFixture
+} from '$lib/testing/pages/seasonPanel';
+import { openPanel } from '$lib/testing/pages/seasonManage';
+import { upcomingSeason } from '$lib/testing/pages/seasonFields';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function currentSeason(viewerIsEditor: boolean): Season {
 	return {
@@ -108,18 +107,6 @@ function currentSeason(viewerIsEditor: boolean): Season {
 		conductors: ['p-grace'],
 		owners: [],
 		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
-
-function upcomingSeason(): Season {
-	return {
-		id: SEASON_B_ID,
-		name: 'Season 2027',
-		startDate: isoDate(61),
-		endDate: isoDate(240),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
 	};
 }
 
@@ -136,43 +123,6 @@ function agendaResult() {
 
 function twoSeasonResult() {
 	return fullAgendaResult({ seasons: [currentSeason(true), upcomingSeason()] });
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -198,30 +148,7 @@ beforeEach(() => {
 	deleteSeasonMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openPanel(container: HTMLElement): Promise<HTMLElement> {
-	return await openSeasonCardPanel(container);
-}
+afterEach(cleanupClearReset);
 
 function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	const select = q(container, 'season-manage-conductor-select') as HTMLSelectElement | null;
@@ -231,26 +158,6 @@ function conductorSelect(container: HTMLElement): HTMLSelectElement {
 
 async function pickConductor(container: HTMLElement, personId: string): Promise<void> {
 	await fireEvent.change(conductorSelect(container), { target: { value: personId } });
-}
-
-function expandButtons(container: HTMLElement): HTMLElement[] {
-	return Array.from(
-		container.querySelectorAll('[data-testid="season-card-expand"]')
-	) as HTMLElement[];
-}
-
-function expandFor(container: HTMLElement, seasonName: string): HTMLElement | null {
-	return expandButtons(container).find((b) => b.textContent?.includes(seasonName)) ?? null;
-}
-
-async function openPanelForSeason(container: HTMLElement, seasonName: string): Promise<void> {
-	await waitFor(() => {
-		expect(expandFor(container, seasonName), `an entry for ${seasonName}`).not.toBeNull();
-	});
-	await fireEvent.click(expandFor(container, seasonName) as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe(seasonName);
-	});
 }
 
 describe('#325 conductor — four states at rest (not yet attempted)', () => {

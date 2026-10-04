@@ -60,7 +60,6 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import {
-	openSeasonCardPanel,
 	collapseSeasonCard,
 	SEASON_CARD_EXPAND,
 	SEASON_CARD_COLLAPSE
@@ -70,7 +69,6 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
@@ -97,26 +95,22 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(viewerIsEditor: boolean): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
+import { q } from '$lib/testing/pages/dom';
+import { CFG, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	CARD,
+	SEASON_ID,
+	currentSeason,
+	enableMondayGeneration,
+	fill,
+	noSeasonsResult,
+	openPanel,
+	openSeasonForm,
+	selectValue,
+	seriesFixture
+} from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function agendaResult(opts: { editor?: boolean; conductors?: string[] } = {}) {
 	const { editor = true, conductors = [] } = opts;
@@ -128,10 +122,6 @@ function agendaResult(opts: { editor?: boolean; conductors?: string[] } = {}) {
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function noSeasonsResult() {
-	return fullAgendaResult();
 }
 
 function fixtureRows(): RosterRow[] {
@@ -153,14 +143,6 @@ function fixtureRows(): RosterRow[] {
 			dbEntityId: ORG_EFK
 		}
 	];
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -211,19 +193,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
 const ADMIN_TESTIDS = [
 	'agenda-admin-card', // #222 — the ONE bordered card wrapping header row + panel
 	'season-card-expand', // #261 — the collapsed card's whole-card expand button
@@ -248,16 +217,6 @@ function expectNoAdminControls(container: HTMLElement): void {
 	}
 }
 
-async function openSeasonForm(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-create')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-create') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-create-form')).not.toBeNull();
-	});
-}
-
 async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
 	if (!q(container, 'season-manage-panel')) await openPanel(container);
 	await waitFor(() => {
@@ -269,10 +228,6 @@ async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
 	});
 }
 
-async function openPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-}
-
 async function openSeriesForm(container: HTMLElement): Promise<void> {
 	if (!q(container, 'season-manage-panel')) await openPanel(container);
 	await waitFor(() => {
@@ -282,14 +237,6 @@ async function openSeriesForm(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'series-create-form')).not.toBeNull();
 	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 async function addConductorChip(scope: HTMLElement, personId: string): Promise<void> {
@@ -372,8 +319,6 @@ describe('agenda admin — the entry points render together for a season editor 
 		expect(createEventMock).not.toHaveBeenCalled();
 	});
 });
-
-const CARD = 'agenda-admin-card';
 
 describe('agenda admin — #222/#261: one card — the panel opens inside the card frame', () => {
 	it('the card carries THE single border frame; collapsed, the expand button inside it draws no second frame', async () => {
@@ -646,10 +591,6 @@ describe('agenda admin — creation forms are mutually exclusive', () => {
 		expect(q(container, 'season-manage-panel')).not.toBeNull();
 	});
 });
-
-async function enableMondayGeneration(container: HTMLElement): Promise<void> {
-	await selectValue(container, 'series-create-day', '1');
-}
 
 describe('agenda admin — an in-flight create is never torn down by another entry point', () => {
 	it('mid bulk-generation run: every other entry point is DISABLED, and clicking one anyway leaves the series form and its run untouched', async () => {

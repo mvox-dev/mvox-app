@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -57,14 +57,15 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { isMessageEmpty, everyPatternContains, type MessageFile } from '$lib/testing/messageFile.js';
-import type { Season } from '$lib/seasons/types';
+import {
+	isMessageEmpty,
+	everyPatternContains,
+	type MessageFile
+} from '$lib/testing/messageFile.js';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -84,25 +85,11 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
+import { q } from '$lib/testing/pages/dom';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { SEASON_ID, selectValue, seriesFixture } from '$lib/testing/pages/seasonPanel';
+import { currentSeason } from '$lib/testing/pages/seasonEventCreate';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function agendaResult() {
 	const season = currentSeason();
@@ -113,14 +100,6 @@ function agendaResult() {
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -170,19 +149,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
 async function openEventCreateFromPanel(container: HTMLElement): Promise<void> {
 	await openSeasonCardPanel(container);
 	await waitFor(() => {
@@ -192,10 +158,6 @@ async function openEventCreateFromPanel(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'event-create-form')).not.toBeNull();
 	});
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 describe('event-creation form — the "recurring wants a series" hint', () => {

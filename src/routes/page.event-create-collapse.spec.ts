@@ -86,11 +86,9 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fillDateTime } from '$lib/testing/timeControls';
 import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { setAgendaView } from '$lib/preferences/agendaView';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -116,17 +114,23 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	SEASON_ID,
+	fill,
+	isoDate,
+	openFormFromPanel,
+	selectValue,
+	submit
+} from '$lib/testing/pages/seasonPanel';
+import { fixtureRows } from '$lib/testing/pages/seasonEventCreate';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
 const NEW_EVENT_ID = 'ev-new-1';
 const CREATED_MARK = 'agenda-row-created-mark';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 function season(): Season {
 	return {
@@ -168,23 +172,6 @@ function agendaWorld() {
 		upcoming: worldHasNewEvent ? [UP_REHEARSAL, UP_CONCERT, NEW_ROW] : [UP_REHEARSAL, UP_CONCERT],
 		seasons: [season()]
 	});
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -235,10 +222,6 @@ afterEach(() => {
 
 // ── helpers ─────────────────────────────────────────────────────────────────────
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 async function renderReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
 	const { container } = render(Page);
@@ -250,34 +233,11 @@ async function renderReady(): Promise<HTMLElement> {
 	return container as HTMLElement;
 }
 
-async function openFormFromPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-event')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'event-create-form')).not.toBeNull();
-	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
-}
-
 /** A valid standalone CONCERT create — season prefilled from the panel. */
 async function fillConcert(container: HTMLElement): Promise<void> {
 	await selectValue(container, 'event-create-type', 'concert');
 	await fillDateTime(container, 'event-create-datetime', '2030-07-01', '19:00');
 	await fill(container, 'event-create-name', 'Uus kontsert');
-}
-
-async function submit(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 }
 
 // Record receiver + options of every scrollIntoView (a bare count could pass the wrong element).
