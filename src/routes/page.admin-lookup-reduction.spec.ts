@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { cleanup, render, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -44,7 +44,6 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -57,8 +56,9 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
+import { DB_ENTITY } from '$lib/testing/pages/admin';
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 
-const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
 const VIEWER = 'admin-p';
 
 const ANNA: RolePerson = {
@@ -113,18 +113,10 @@ beforeEach(() => {
 	updateCollectiveNameMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 function fetchedPaths(): string[] {
 	return entuFetchMock.mock.calls.map((c) => String(c[1]));
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 async function renderReady(): Promise<HTMLElement> {

@@ -68,27 +68,14 @@ import Page from './admin/+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
-
-function authExpiredError(): Error {
-	const e = new Error('Entu returned 401 — session expired');
-	e.name = 'AuthExpiredError';
-	return e;
-}
+import { authExpiredError, selectSampledb } from '$lib/testing/pages/admin';
 
 function setCollective(name: string) {
 	collectiveState.set({
 		status: 'ready',
 		collectives: [{ db: 'sampledb', name, personId: 'admin-p' }],
 		erroredDbs: []
-	});
-}
-
-function selectSampledb() {
-	signIn({
-		token: 'jwt-admin',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }]
 	});
 }
 

@@ -1,30 +1,10 @@
 // @vitest-environment happy-dom
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		admin_invite_title: () => 'Invite a new member',
-		admin_invite_no_collective: () => 'Select a collective before creating invites.',
-		admin_invite_no_access: () => 'Creating invites requires administrator rights.',
-		admin_invite_load_error: () => 'Could not load invite prerequisites.',
-		admin_invite_retry_load: () => 'Retry',
-		admin_invite_db_label: () => 'Collective',
-		admin_invite_submit: () => 'Create invite',
-		admin_invite_creating: () => 'Creating…',
-		admin_invite_link_label: () => 'Invite link',
-		admin_invite_copy: () => 'Copy link',
-		admin_invite_copied: () => 'Copied',
-		admin_invite_bearer_warning: () => 'Bearer secret — send only to the invited person.',
-		admin_invite_show_once: (p: { date: string }) => `Shown only once. Expires on ${p.date}.`,
-		admin_invite_error: () => 'Invite creation failed.',
-		admin_invite_copy_error: () => "Couldn't copy the link.",
-		admin_invite_partial_failure: (p: { personId: string }) =>
-			`A person entity (${p.personId}) was already created and carries a live invite token.`,
-		admin_invite_create_another: () => 'Create another invite'
-	})
+	(await import('$lib/testing/pages/adminCopy')).adminMessages()
 );
 
 vi.mock('$lib/invite/inviteData', async () =>
@@ -47,17 +27,9 @@ import {
 	resolveInviteParentMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
-
-function jwt(payload: object): string {
-	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
-	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
-}
-
-const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
+import { jwt, resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
+import { MINTED_TOKEN } from '$lib/testing/pages/adminInvite';
+import { cleanupReset } from '$lib/testing/pages/dom';
 
 function selectTwoCollectives() {
 	signIn({
@@ -81,16 +53,9 @@ async function submitForm(container: HTMLElement) {
 	await fireEvent.click(submit);
 }
 
-beforeEach(() => {
-	resolveParentMock.mockReset();
-	resolveInviteParentMock.mockReset();
-	createInviteMock.mockReset();
-});
+beforeEach(resetInviteMocks);
 
-afterEach(() => {
-	cleanup();
-	resetAppState();
-});
+afterEach(cleanupReset);
 
 describe('/admin/invite — prerequisites', () => {
 	it('without an available collective shows the no-collective state (no form, no data calls)', async () => {

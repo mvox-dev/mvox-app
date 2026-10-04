@@ -91,14 +91,10 @@ import {
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { selectSampledb } from '$lib/testing/pages/profile';
 
 const REASON = '[write_unavailable_no_signal]';
 const IDLE_MS = 2_000;
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
-}
 
 beforeEach(async () => {
 	for (const mock of [

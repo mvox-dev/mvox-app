@@ -25,8 +25,8 @@ import { cookieName, getLocale, setLocale, strategy } from '$lib/paraglide/runti
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import { LOCALES, selectSampledb } from '$lib/testing/pages/profile';
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 type AppLocale = (typeof LOCALES)[number];
 
 const NATIVE_NAMES: Record<AppLocale, string> = {
@@ -66,10 +66,6 @@ function setNavigatorLanguages(langs: string[]) {
 		value: langs,
 		configurable: true
 	});
-}
-
-function selectSampledb() {
-	signIn({ token: 'jwt-member' });
 }
 
 beforeEach(() => {

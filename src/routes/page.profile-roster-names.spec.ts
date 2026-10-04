@@ -2,7 +2,6 @@
 // The admin-only roster-names toggle on /profile.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -37,11 +36,18 @@ import ProfilePage from './profile/+page.svelte';
 import { m } from '$lib/paraglide/messages.js';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
+import {
+	COLLECTIVE_A,
+	COLLECTIVE_B,
+	LOCALES,
+	flushMicrotasks,
+	readMessages
+} from '$lib/testing/pages/profile';
 
 type RosterNamesSetting = { dbEntityId: string; showRealNames: boolean };
 
@@ -53,13 +59,6 @@ const rosterStatus = (c: HTMLElement) => q(c, '[data-testid="profile-roster-name
 const rosterError = (c: HTMLElement) => q(c, '[data-testid="profile-roster-names-error"]');
 const timeFormatSelect = (c: HTMLElement) =>
 	q(c, '[data-testid="profile-time-format"]') as HTMLSelectElement | null;
-
-async function flushMicrotasks(): Promise<void> {
-	for (let i = 0; i < 10; i++) await Promise.resolve();
-}
-
-const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
-const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
 
 function wireProfilesPerCollective(): void {
 	listMyProfilesMock.mockImplementation(async (cfg: { db: string }) =>
@@ -475,8 +474,6 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 	});
 });
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-
 const NEW_KEYS = [
 	'profile_roster_names_label',
 	'profile_roster_names_profile',
@@ -520,12 +517,6 @@ const PINNED_TEXT: Record<(typeof LOCALES)[number], Record<(typeof NEW_KEYS)[num
 		profile_roster_names_saved: 'Налаштування імен у списку збережено.'
 	}
 };
-
-function readMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(__dirname, `../../messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 describe('locale parity — #267 keys exist, non-empty, exact text, in en/et/lv/uk', () => {
 	for (const locale of LOCALES) {

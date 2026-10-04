@@ -44,11 +44,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './invite/[token]/+page.svelte';
-
-function jwt(payload: object): string {
-	const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString('base64url');
-	return `${b64({ alg: 'HS256' })}.${b64(payload)}.sig`;
-}
+import { jwt } from '$lib/testing/pages/admin';
 
 const TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 }); // year 2100
 const EXPIRED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 1_000 }); // 1970

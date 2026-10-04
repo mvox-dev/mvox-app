@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The /admin role add/remove controls hold a pending state until the write lands.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -47,84 +47,20 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './admin/+page.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
-import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	addAdminMock,
 	addLibrarianMock,
-	listAdminsMock,
 	listJoinStatesMock,
-	listLibrariansMock,
 	removeAdminMock,
 	removeLibrarianMock,
-	resolveAdminMock,
-	resolveCollectiveNameMarkerMock,
-	resolveInviteParentMock,
-	resolveLibrarianMock,
-	resolveOwnerTierMock,
-	resolveParentMock,
-	updateCollectiveNameMock
+	resolveOwnerTierMock
 } from '$lib/testing/mocks/admin';
-import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { loadOk, selectSampledb } from '$lib/testing/pages/admin';
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
 resolveOwnerTierMock.mockResolvedValue('error');
-
-const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
-const BELA = {
-	id: 'p-bela',
-	name: 'Bela Brauer',
-	role: 'editor' as const,
-	valueIds: ['pv-ed-bela']
-};
-const CILLA = {
-	id: 'p-cilla',
-	name: 'Cilla Cane',
-	role: 'editor' as const,
-	valueIds: ['pv-ed-cilla']
-};
-
-function listing(persons: RolePerson[], canManage = true) {
-	return { persons, canManage };
-}
-
-const ROSTER = [
-	{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' },
-	{ memberId: 'm-2', personId: 'p-bela', name: 'Bela Brauer', email: '' },
-	{ memberId: 'm-3', personId: 'p-cilla', name: 'Cilla Cane', email: '' },
-	{ memberId: 'm-4', personId: 'p-dora', name: 'Dora Duncan', email: '' }
-];
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
-
-function loadOk() {
-	resolveAdminMock.mockResolvedValue('admin');
-	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
-	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
-	listAdminsMock.mockResolvedValue(listing([ANNA, BELA]));
-	listLibrariansMock.mockResolvedValue(listing([CILLA]));
-	loadRosterMock.mockResolvedValue(toListRead(ROSTER));
-	listSectionsMock.mockResolvedValue([]);
-	addAdminMock.mockResolvedValue(undefined);
-	addLibrarianMock.mockResolvedValue(undefined);
-	removeAdminMock.mockResolvedValue(undefined);
-	removeLibrarianMock.mockResolvedValue(undefined);
-	resolveParentMock.mockResolvedValue('parent-1');
-	resolveInviteParentMock.mockResolvedValue('org-1');
-	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
-	updateCollectiveNameMock.mockResolvedValue(undefined);
-	resolveOwnerTierMock.mockResolvedValue('error');
-	listJoinStatesMock.mockResolvedValue({});
-}
-
-function q<T extends HTMLElement>(root: ParentNode, testid: string): T | null {
-	return root.querySelector(`[data-testid="${testid}"]`) as T | null;
-}
 
 async function renderReady() {
 	const rendered = render(Page);
@@ -156,11 +92,7 @@ beforeEach(() => {
 	selectSampledb();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 describe('#325 admin/librarian — four states at rest (not yet attempted)', () => {
 	it('ready page: PERSISTENT empty role="status" region (admin-roles-status, #267 same-node shape), NO pending notice, NO action error', async () => {

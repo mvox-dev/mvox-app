@@ -60,7 +60,6 @@ import {
 } from '$lib/testing/realNamesFence';
 import { expectNameMarkedOnce, expectWholeTextMarkedOnce } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	resolveAdminMock,
@@ -69,10 +68,7 @@ import {
 	resolveOwnerTierMock,
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
-
-function selectSampledb() {
-	signIn({ token: 'jwt-admin', collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }] });
-}
+import { selectSampledb } from '$lib/testing/pages/admin';
 
 beforeEach(() => {
 	resolveAdminMock.mockResolvedValue('admin');
