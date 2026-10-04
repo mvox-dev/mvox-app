@@ -79,13 +79,18 @@ import { signFileUrlMock } from '$lib/testing/mocks/files';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { upcomingSeason } from '$lib/testing/pages/seasonPanel';
 import {
-	type EntityRaw,
 	RI_RETIRED,
 	WORKS,
+	expectWriteAttempted,
+	manageAlert,
+	manageStatus,
 	q,
 	qa,
+	rowByName,
 	runningSeason,
-	setAuthed
+	savedText,
+	setAuthed,
+	type EntityRaw
 } from '$lib/testing/pages/seasonRepertoire';
 
 const RI_ACTIVE: EntityRaw = {
@@ -261,24 +266,6 @@ async function openRepertoireSection(): Promise<{
 	return { container: container as HTMLElement, section };
 }
 
-function rowByName(scope: ParentNode, workName: string): HTMLElement {
-	const row = qa(scope, 'work-row').find(
-		(el) => q(el, 'work-name')?.textContent?.trim() === workName
-	);
-	if (!row) throw new Error(`no work-row named '${workName}'`);
-	return row;
-}
-
-function manageAlert(section: HTMLElement): HTMLElement | null {
-	return q(section, 'repertoire-manage-error');
-}
-function manageStatus(section: HTMLElement): HTMLElement | null {
-	return q(section, 'repertoire-manage-status');
-}
-function savedText(section: HTMLElement): string {
-	return manageStatus(section)?.textContent ?? '';
-}
-
 type FetchMock = ReturnType<typeof installWorld>;
 function writeAttempts(fetchMock: FetchMock, method: 'POST' | 'DELETE', fragment: string) {
 	return fetchMock.mock.calls.filter(
@@ -291,11 +278,6 @@ function createAttempts(fetchMock: FetchMock) {
 		([url, init]) =>
 			/\/entity(\?|$)/.test(String(url)) && (init as RequestInit | undefined)?.method === 'POST'
 	);
-}
-async function expectWriteAttempted(probe: () => number): Promise<void> {
-	await waitFor(() => {
-		expect(probe(), 'the tap must actually fire the write').toBeGreaterThan(0);
-	});
 }
 
 async function expectFailureSurfaced(section: HTMLElement): Promise<HTMLElement> {

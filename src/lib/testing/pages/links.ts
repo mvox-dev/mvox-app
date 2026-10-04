@@ -5,6 +5,7 @@ import type { LinkRow } from '$lib/links/linkData';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
+import { resetOnLine } from '$lib/testing/networkSignal';
 import { signIn } from '$lib/testing/session';
 import { qa } from './dom';
 
@@ -82,6 +83,14 @@ export function wireCalls(): WireCall[] {
 			body: init?.body ? JSON.parse(String(init.body)) : undefined
 		})
 	);
+}
+
+export function cleanupClearResetAdminOnLine(): void {
+	cleanup();
+	vi.clearAllMocks();
+	resetAppState();
+	resetAdmin();
+	resetOnLine();
 }
 
 // (*MVOX:Josquin*)

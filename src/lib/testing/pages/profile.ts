@@ -10,7 +10,7 @@ import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/pro
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { signIn } from '$lib/testing/session';
 
-export const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+export { LOCALES } from './files';
 
 export const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 export const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };

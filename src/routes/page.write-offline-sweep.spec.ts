@@ -144,7 +144,6 @@ import {
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	listSectionsMock,
@@ -152,6 +151,7 @@ import {
 	resolveDatabaseEntityIdMock
 } from '$lib/testing/moduleHandles';
 import { SEASON_ID, isoDate } from '$lib/testing/pages/seasonPanel';
+import { setAuthed } from '$lib/testing/pages/links';
 
 const ORG = '69c7f8718489bfcb0e81b065';
 
@@ -261,10 +261,6 @@ afterEach(() => {
 	resetOnLine();
 	resetAppState();
 });
-
-function setAuthed(): void {
-	signIn();
-}
 
 async function renderPanelOpenOnline(): Promise<HTMLElement> {
 	await goOnline();

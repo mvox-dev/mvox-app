@@ -28,7 +28,6 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './links/+page.svelte';
 import { adminStore } from '$lib/nav/adminStore';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import {
 	createLinkMock,
 	deleteLinkMock,
@@ -38,8 +37,7 @@ import {
 } from '$lib/testing/mocks/links';
 import { cleanupClearAdmin, rowEls, rowNames, rows, setAuthed } from '$lib/testing/pages/links';
 import { q, qa } from '$lib/testing/pages/dom';
-
-const CFG = testCfg('sampledb', 'jwt-abc');
+import { CFG } from '$lib/testing/pages/roster';
 
 beforeEach(() => {
 	setAuthed();

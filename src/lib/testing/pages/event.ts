@@ -12,7 +12,7 @@ import { signIn } from '$lib/testing/session';
 
 // Before the fixture event (2026-09-01), so it is upcoming; only Date is faked.
 export const NOW = new Date('2026-08-20T10:00:00.000Z');
-export { LOCALES } from './profile';
+export { LOCALES } from './files';
 export const cfg = testCfg('sampledb');
 
 export function isoAt(offsetDays: number): string {

@@ -35,6 +35,7 @@ import {
 	editorTokenAtNow,
 	seasonEntity
 } from '$lib/testing/pages/event';
+import { seriesEntity } from '$lib/testing/pages/eventFixtures';
 import { q } from '$lib/testing/pages/dom';
 
 function eventEntity() {
@@ -58,14 +59,6 @@ function eventEntity() {
 
 function credeEventEntity() {
 	return { ...eventEntity(), event_name: [{ _id: 'cval-name-1', string: 'Crede Rehearsal' }] };
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }]
-	};
 }
 
 type WireControls = {

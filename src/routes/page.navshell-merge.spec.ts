@@ -99,6 +99,7 @@ import {
 	updateCollectiveNameMock
 } from '$lib/testing/mocks/admin';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { ANNA } from '$lib/testing/pages/admin';
 
 const testChildren = createRawSnippet(() => ({
 	render: () => '<div data-testid="page-content">Page Content</div>'
@@ -134,8 +135,6 @@ function selectSampledb() {
 		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'admin-p' }]
 	});
 }
-
-const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-own-anna'] };
 
 function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');

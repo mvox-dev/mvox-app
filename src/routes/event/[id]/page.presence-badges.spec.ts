@@ -47,6 +47,7 @@ import { gotoMock } from '$lib/testing/routeMocks';
 import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
 import { PDF_BYTES, SIGNED_URL, isoAt, pdfData } from '$lib/testing/pages/event';
+import { workRow } from '$lib/testing/pages/eventFixtures';
 
 let fakeByteStore: FakeByteStore;
 
@@ -98,25 +99,6 @@ function installWire() {
 	});
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
-}
-
-function workRow(id: string, workName: string, fileId: string) {
-	return {
-		id,
-		kind: 'repertoire' as const,
-		workId: `work-${id}`,
-		editionId: `ed-${id}`,
-		workName,
-		composer: 'Thomas Tallis',
-		status: 'active' as const,
-		editionName: 'Vocal score',
-		ordinal: null,
-		fileId,
-		fileName: fileId === '' ? '' : `${fileId}.pdf`,
-		externalLinks: [],
-		canBorrow: false,
-		notes: ''
-	};
 }
 
 /** Three rows: a held file, an unheld file, and NO file — all three badge

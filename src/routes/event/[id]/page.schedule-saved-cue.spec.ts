@@ -36,6 +36,7 @@ import {
 	seasonEntity,
 	setAuthed
 } from '$lib/testing/pages/event';
+import { seriesEntity } from '$lib/testing/pages/eventFixtures';
 import { q } from '$lib/testing/pages/dom';
 
 function eventEntity() {
@@ -54,14 +55,6 @@ function eventEntity() {
 			{ reference: 'season1', entity_type: 'season' },
 			{ reference: 'series1', entity_type: 'event_series' }
 		]
-	};
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }]
 	};
 }
 

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The sign-in page always shows the full provider picker in canonical order, never redirects
 // on mount, and marks the remembered provider in place with '· last used'.
-import { render, cleanup } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/navigation', async () =>
@@ -17,6 +17,7 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 import Page from './+page.svelte';
 import { setLastProvider } from '$lib/auth/storage';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { cleanupResetGotoStorage } from '$lib/testing/pages/login';
 
 const CANONICAL_ORDER = ['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple'];
 
@@ -31,12 +32,7 @@ function renderedProviderIds(container: HTMLElement): string[] {
 	);
 }
 
-afterEach(() => {
-	cleanup();
-	gotoMock.mockReset();
-	localStorage.clear();
-	sessionStorage.clear();
-});
+afterEach(cleanupResetGotoStorage);
 
 describe('/auth/login — no auto-redirect, picker always renders (#206)', () => {
 	it('does NOT auto-redirect on mount when a provider is remembered', () => {

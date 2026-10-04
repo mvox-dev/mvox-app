@@ -4,7 +4,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { json } from '$lib/testing/entuFetchKit';
 
 beforeEach(fakeDateAtNow);
 
@@ -47,9 +47,9 @@ import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import { convertEventToSeriesMock, createEventMock } from '$lib/testing/mocks/events';
 import { LOCALES, fakeDateAtNow } from '$lib/testing/pages/event';
 import { q } from '$lib/testing/pages/dom';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { fill } from '$lib/testing/pages/seasonPanel';
 
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -177,10 +177,6 @@ async function openConvertForm(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'event-convert-form')).not.toBeNull();
 	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 async function fillAndSubmitConvert(

@@ -57,7 +57,7 @@ import {
 import { listMyAttendanceMock } from '$lib/testing/mocks/events';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-import { DB_A, complete, truncated } from '$lib/testing/pages/agenda';
+import { DB_A, DB_B, complete, truncated } from '$lib/testing/pages/agenda';
 
 interface Read<T> {
 	items: T[];
@@ -66,8 +66,6 @@ interface Read<T> {
 }
 type RsvpRead = Read<{ rsvpId: string; eventId: string; status: string }>;
 type AttendanceRead = Read<{ attendanceId: string; eventId: string; status: string }>;
-
-const DB_B = 'other-choir';
 
 function setAuthedWithTwoCollectives() {
 	signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'person-p' }, { db: DB_B, name: 'Other Choir', personId: 'person-q' }] });

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // ?error=session_expired renders a session-expired message in the alert slot, keeps the
 // provider CTAs, and the page performs no navigation on mount.
-import { render, cleanup } from '@testing-library/svelte';
+import { render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$app/navigation', async () =>
@@ -24,18 +24,14 @@ import etMessages from '../../../../messages/et.json';
 import lvMessages from '../../../../messages/lv.json';
 import ukMessages from '../../../../messages/uk.json';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { cleanupResetGotoStorage } from '$lib/testing/pages/login';
 
 function renderAt(search: string) {
 	pageStub.url = new URL(`http://localhost/auth/login${search}`);
 	return render(Page);
 }
 
-afterEach(() => {
-	cleanup();
-	gotoMock.mockReset();
-	localStorage.clear();
-	sessionStorage.clear();
-});
+afterEach(cleanupResetGotoStorage);
 
 describe('/auth/login — session expired flag (#107)', () => {
 	it('?error=session_expired renders an explicit session-expired message, not the generic fallback', () => {

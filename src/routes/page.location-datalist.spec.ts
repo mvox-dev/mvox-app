@@ -86,7 +86,7 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-import { q } from '$lib/testing/pages/dom';
+import { optionSet, q } from '$lib/testing/pages/dom';
 import { CFG, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
@@ -246,10 +246,6 @@ function resolveDatalist(input: HTMLInputElement): HTMLElement {
 	const dl = document.querySelector(`datalist[id="${listId}"]`);
 	expect(dl, `<datalist id="${listId}"> must exist in the page`).not.toBeNull();
 	return dl as HTMLElement;
-}
-
-function optionSet(dl: HTMLElement): string[] {
-	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
 }
 
 function locationInput(container: HTMLElement, testid: string): HTMLInputElement {
