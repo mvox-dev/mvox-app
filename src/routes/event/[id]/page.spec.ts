@@ -4,15 +4,9 @@ import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
-import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -51,10 +45,8 @@ import { setReadCacheFactory } from '$lib/entu/readCache';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
 import { localeMock } from '$lib/testing/mocks/session';
-
-const cfg = testCfg('sampledb');
+import { cfg, editorTokenAtNow, setAuthedWithSampledb } from '$lib/testing/pages/event';
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -303,13 +295,6 @@ describe('loadEventDetail — conductor resolution (#77 model via resolveConduct
 		expect(detail.conductorNames).toEqual(['Mihkel Putrinš']);
 	});
 });
-
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
 
 function renderEventPage(fixtures: Fixtures = {}) {
 	const fetchStub = entuFetchStub(fixtures);

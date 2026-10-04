@@ -30,12 +30,8 @@ import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
-
-function isoAt(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
-}
+import { isoAt, setAuthed } from '$lib/testing/pages/event';
 
 type EntityRaw = Record<string, unknown>;
 
@@ -252,13 +248,6 @@ function installWorld(options: WorldOptions = {}) {
 
 	vi.stubGlobal('fetch', fetchMock);
 	return fetchMock;
-}
-
-function setAuthed(dbs: string[] = ['sampledb']) {
-	signIn({
-		token: 'jwt-editor',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' }))
-	});
 }
 
 function renderPage(dbs: string[] = ['sampledb']) {

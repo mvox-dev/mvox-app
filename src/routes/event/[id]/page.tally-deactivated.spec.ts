@@ -4,11 +4,7 @@ import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(fakeDateAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -75,9 +71,11 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { fakeDateAtNow } from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 function eventEntity(startDatetime: string, over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -152,10 +150,6 @@ function renderPage(event: Record<string, unknown>) {
 	pageStub.url = new URL('http://localhost/event/ev1');
 	setAuthedWithSampledb();
 	return render(Page);
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 async function tallyGoing(container: HTMLElement): Promise<string> {

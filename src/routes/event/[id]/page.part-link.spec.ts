@@ -39,38 +39,29 @@ import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { json } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
+import {
+	DB,
+	DB_ENTITY,
+	JSON_HEADERS,
+	LATER_SAME_DAY,
+	PERSON,
+	READ_AT,
+	SEASON,
+	cleanupResetReadCache,
+	offlineEntu,
+	pdfData,
+	urlOf
+} from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
-const DB = 'sampledb';
-const PERSON = 'person-1';
 const IDENTITY = { db: DB, personId: PERSON };
-const DB_ENTITY = 'db-entity-1';
-const SEASON = 'season-1';
 const EVENT = { id: 'ev-1', name: 'Tuesday rehearsal', start: '2026-10-06T15:00:00.000Z' };
 
 const HELD_FILE = 'file-held';
 const ABSENT_FILE = 'file-absent';
 const HELD_WORK = 'Spem in alium';
 const ABSENT_WORK = 'If ye love me';
-
-const READ_AT = new Date('2026-09-28T07:05:00.000Z');
-const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
-
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
-
-function urlOf(input: RequestInfo | URL): string {
-	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-}
-
-function pdfData() {
-	return {
-		bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
-		filetype: 'application/pdf',
-		sha256: 'sha-fixture'
-	};
-}
 
 function eventEntity() {
 	return {
@@ -157,10 +148,6 @@ function onlineEntu() {
 	});
 }
 
-function offlineEntu() {
-	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
-}
-
 async function openEventPage() {
 	pageStub.params = { id: EVENT.id };
 	pageStub.url = new URL(`http://localhost/event/${EVENT.id}`);
@@ -216,13 +203,7 @@ beforeEach(() => {
 	});
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-	setReadCacheFactory(undefined);
-});
+afterEach(cleanupResetReadCache);
 
 describe('#434 slice 5 — the event page links a part that is on the device', () => {
 	it('online: the held part links to /part/<fileId>; the part not on the device has no link', async () => {

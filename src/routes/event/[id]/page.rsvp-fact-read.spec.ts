@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -32,10 +26,8 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { cleanupRealTimersResetTypes, editorTokenAtNow } from '$lib/testing/pages/event';
+import { MY_RSVP_ROW, seasonEntity, setAuthed } from '$lib/testing/pages/eventRsvp';
 
 function eventEntity() {
 	return {
@@ -51,16 +43,6 @@ function eventEntity() {
 		]
 	};
 }
-
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }]
-	};
-}
-
-const MY_RSVP_ROW = { _id: 'rsvp-77', event: [{ reference: 'ev1' }], status: [{ string: 'going' }] };
 
 function truncatedLifetimeBody() {
 	return {
@@ -118,13 +100,6 @@ function wireStub(opts: WireOpts = {}) {
 	});
 }
 
-function setAuthed() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 function renderPage(opts: WireOpts = {}) {
 	const fetchStub = wireStub(opts);
 	vi.stubGlobal('fetch', fetchStub);
@@ -144,13 +119,7 @@ function rsvpQueries(fetchStub: ReturnType<typeof wireStub>): string[] {
 		.filter((u) => u.includes('_type.string=rsvp') && u.includes('_parent.reference='));
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetTypeIdCache();
-	resetAppState();
-});
+afterEach(cleanupRealTimersResetTypes);
 
 describe('/event/[id] — the own-answer state comes from the scoped FACT read (#329)', () => {
 	it('(a) her answer EXISTS: shown even though the lifetime read truncated it away — and the wire saw the exact scoped query', async () => {

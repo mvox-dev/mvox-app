@@ -4,11 +4,7 @@ import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(fakeDateAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -43,6 +39,8 @@ import { EntityDeleteForbiddenError } from '$lib/seasons/deleteErrors';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { fakeDateAtNow, seasonEntity, seriesEntity } from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 const CFG = testCfg('sampledb', 'jwt-token');
 
@@ -67,25 +65,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
-}
-
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }],
-		default_location: [{ string: 'Church Hall' }],
-		default_description: [{ string: 'Series default note.' }]
-	};
 }
 
 function readWireStub(eventOver?: Record<string, unknown>) {
@@ -134,10 +113,6 @@ afterEach(() => {
 	localStorage.clear();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 async function idleDeleteButton(container: HTMLElement): Promise<HTMLElement> {
 	return await waitFor(() => {

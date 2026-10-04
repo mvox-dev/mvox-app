@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -40,9 +34,16 @@ import {
 	expectVisibleReason,
 	nonGetCalls
 } from '$lib/testing/networkSignal';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	PROFILES,
+	REASON,
+	cleanupRealTimersReset,
+	editPosts,
+	editorTokenAtNow,
+	seasonEntity,
+	seriesEntity,
+	setAuthedWithSampledb
+} from '$lib/testing/pages/event';
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -66,31 +67,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
-
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }],
-		default_location: [{ string: 'Church Hall' }],
-		default_description: [{ string: 'Series default note.' }]
-	};
-}
-
-const PROFILES: Record<string, unknown[]> = {
-	'p-mihkel': [
-		{ _id: 'prof-m', name: [{ string: 'Mihkel Putrinš' }], _sharing: [{ string: 'domain' }] }
-	]
-};
 
 type EditWireOpts = {
 	failEditPosts?: number;
@@ -141,13 +117,6 @@ function editWireStub(eventOver?: Record<string, unknown>, opts: EditWireOpts = 
 	return { stub, release: () => release() };
 }
 
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts = {}) {
 	const { stub, release } = editWireStub(eventOver, opts);
 	vi.stubGlobal('fetch', stub);
@@ -158,22 +127,7 @@ function renderEditPage(eventOver?: Record<string, unknown>, opts: EditWireOpts 
 	return { ...rendered, fetchStub: stub, release };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
-
-function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
-	return fetchStub.mock.calls.filter(
-		(c) =>
-			((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST' &&
-			String(c[0]).includes('/entity/ev1')
-	);
-}
-
-const REASON = '[write_unavailable_no_signal]';
+afterEach(cleanupRealTimersReset);
 
 afterEach(() => {
 	resetOnLine();

@@ -2,18 +2,11 @@
 
 // Offline, the event page's RSVP buttons are disabled, the section says why, and a click
 // sends nothing; back online they write again. Only the wire fetch is stubbed.
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-// Pin "now" before the fixture event (2026-09-01) so the event is UPCOMING —
-// only Date is faked, timers stay real so waitFor keeps polling.
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -36,8 +29,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { setToken } from '$lib/auth/storage';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import {
 	goOffline,
 	goOnline,
@@ -46,9 +37,15 @@ import {
 	expectVisibleReason,
 	nonGetCalls
 } from '$lib/testing/networkSignal';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { REASON, cleanupRealTimersResetTypes, editorTokenAtNow } from '$lib/testing/pages/event';
+import {
+	NO_GRANT,
+	RIGHTS_URL,
+	SELF_EDITOR,
+	seasonEntity,
+	setAuthed,
+	waitForRsvpSection
+} from '$lib/testing/pages/eventRsvp';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -66,22 +63,6 @@ function eventEntity() {
 		]
 	};
 }
-
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }]
-	};
-}
-
-/** The exact enablement read for this viewer — full URL, pinned byte-for-byte. */
-const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/p-viewer?props=_owner,_editor';
-
-/** Person-entity rights fixtures — on the PERSON entity, never member rows. */
-const SELF_EDITOR = { _id: 'p-viewer', _editor: [{ reference: 'p-viewer' }] };
-/** Private-bucket case: a no-grant caller reads NO rights props at all. */
-const NO_GRANT = { _id: 'p-viewer' };
 
 type WireOpts = {
 	/** The person-entity body the rights read answers with; 'hold' = in flight. */
@@ -109,13 +90,6 @@ function wireStub(opts: WireOpts = {}) {
 	});
 }
 
-function setAuthed() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 function renderPage(opts: WireOpts = {}) {
 	const fetchStub = wireStub(opts);
 	vi.stubGlobal('fetch', fetchStub);
@@ -126,24 +100,7 @@ function renderPage(opts: WireOpts = {}) {
 	return { ...rendered, fetchStub };
 }
 
-async function waitForRsvpSection(container: HTMLElement): Promise<HTMLElement> {
-	return waitFor(() => {
-		const section = container.querySelector('[data-testid="event-detail-rsvp"]');
-		expect(section).not.toBeNull();
-		return section as HTMLElement;
-	});
-}
-
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetTypeIdCache();
-	resetAppState();
-});
-
-
-const REASON = '[write_unavailable_no_signal]';
+afterEach(cleanupRealTimersResetTypes);
 
 afterEach(() => {
 	resetOnLine();

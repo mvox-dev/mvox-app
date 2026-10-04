@@ -1,17 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { json } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -34,7 +26,15 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	cleanupRealTimersReset,
+	editPosts,
+	editorTokenAtNow,
+	postedProps,
+	seasonEntity,
+	seriesEntity,
+	setAuthedWithSampledb
+} from '$lib/testing/pages/event';
 
 const NEW_VENUE = 'Ürgoru laululava — sissepääs B!';
 
@@ -55,25 +55,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 		],
 		_editor: [{ reference: 'p-viewer' }],
 		...over
-	};
-}
-
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }],
-		default_location: [{ string: 'Church Hall' }],
-		default_description: [{ string: 'Series default note.' }]
 	};
 }
 
@@ -140,13 +121,6 @@ function wireStub(opts: WireOpts = {}) {
 	return { stub, corpusUrls };
 }
 
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 function renderDetail(opts: WireOpts = {}) {
 	const { stub, corpusUrls } = wireStub(opts);
 	vi.stubGlobal('fetch', stub);
@@ -157,12 +131,7 @@ function renderDetail(opts: WireOpts = {}) {
 	return { ...rendered, fetchStub: stub, corpusUrls };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
+afterEach(cleanupRealTimersReset);
 
 function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
@@ -196,18 +165,6 @@ function resolveDatalist(input: HTMLInputElement): HTMLElement {
 
 function optionSet(dl: HTMLElement): string[] {
 	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
-}
-
-function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
-	return fetchStub.mock.calls.filter(
-		(c) =>
-			((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST' &&
-			String(c[0]).includes('/entity/ev1')
-	);
-}
-
-function postedProps(call: unknown[]): Array<Record<string, unknown>> {
-	return JSON.parse(String((call[1] as RequestInit).body)) as Array<Record<string, unknown>>;
 }
 
 describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)', () => {

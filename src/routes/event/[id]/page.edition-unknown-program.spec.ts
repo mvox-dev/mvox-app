@@ -2,17 +2,11 @@
 
 // A reader's program row whose pinned edition the label lookup cannot name says unknown,
 // never "No pinned edition". Real page and data layer; only the wire fetch is stubbed.
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-// Pin "now" before the fixture event (2026-09-01) — only Date is faked.
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 // Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -36,11 +30,10 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { setToken } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
+import { setAuthed } from '$lib/testing/pages/eventRsvp';
+import { EDITIONS, seasonEntity, workRowOf } from '$lib/testing/pages/eventEdition';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -56,18 +49,6 @@ function eventEntity() {
 			{ reference: 'org1', entity_type: 'organization' },
 			{ reference: 'season1', entity_type: 'season' }
 		]
-	};
-}
-
-/** The viewer p-viewer holds NOTHING here: the season's `_editor` names
- *  someone else, the event names nobody. `loadManagePickers` never runs for
- *  her, so the editor-side flag can never reach her rows. */
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		_editor: [{ reference: 'p-someone-else' }]
 	};
 }
 
@@ -89,16 +70,6 @@ const PROGRAM_ITEMS = [
 ];
 
 const WORKS = [{ _id: 'w-2', name: [{ string: 'Mass in B minor' }], composer: [{ string: 'J. S. Bach' }] }];
-
-/** What the collective-wide `listAllEditions` read returns. ed-9 is NOT in it —
- *  that is the whole fixture: the label lookup cannot name pi-2's edition. */
-const EDITIONS = [
-	{
-		_id: 'ed-1',
-		name: [{ string: 'Bärenreiter BA 5103' }],
-		_parent: [{ reference: 'w-2', entity_type: 'work' }]
-	}
-];
 
 /** `editionCount` above the returned row count makes the collective-wide edition read
  *  truncated, as `deriveListRead` reports it; absent, the read is complete. */
@@ -127,13 +98,6 @@ function wireStub(opts: { editionCount?: number } = {}) {
 	});
 }
 
-function setAuthed() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 async function renderAsReader(opts: { editionCount?: number } = {}) {
 	const fetchStub = wireStub(opts);
 	vi.stubGlobal('fetch', fetchStub);
@@ -150,14 +114,6 @@ async function renderAsReader(opts: { editionCount?: number } = {}) {
 	return { ...rendered, fetchStub };
 }
 
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
-}
-
 function editionReads(fetchStub: ReturnType<typeof wireStub>): string[] {
 	return fetchStub.mock.calls
 		.map((c) => String(c[0]))
@@ -168,12 +124,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
+afterEach(cleanupRealTimersReset);
 
 describe("/event/[id] #337 — a reader's PROGRAM rows under a TRUNCATED edition read", () => {
 	it('a program row whose pin fell past the cap says UNKNOWN, never "no pinned edition"', async () => {

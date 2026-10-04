@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Attendance marking on the event page is gated while offline.
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -46,7 +46,6 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 );
 
 import Page from './+page.svelte';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import {
 	goOffline,
 	goOnline,
@@ -56,62 +55,15 @@ import {
 	isWriteDisabled
 } from '$lib/testing/networkSignal';
 import type { EventDetail } from '$lib/events/eventDetail';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { applyAttendanceChangeMock } from '$lib/testing/mocks/events';
+import { REASON } from '$lib/testing/pages/event';
 import {
-	applyAttendanceChangeMock,
-	listAllRsvpsForEventMock,
-	listAttendanceMock,
-	loadEventDetailMock
-} from '$lib/testing/mocks/events';
-import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function isoAt(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
-}
-
-function pastDetail(over: Partial<EventDetail> = {}): EventDetail {
-	return {
-		id: 'ev1',
-		name: 'Tuesday Rehearsal',
-		eventType: 'rehearsal',
-		startDatetime: isoAt(-1),
-		durationMinutes: 90,
-		location: '',
-		description: '',
-		conductorIds: [],
-		conductorNames: [],
-		capacity: null,
-		ownerIds: [],
-		editorIds: [],
-		seasonId: 'season1',
-		seasonOwnerIds: [],
-		seasonEditorIds: [],
-		seriesId: null,
-		inheritedFields: [],
-		...over
-	};
-}
-
-const ROSTER = [
-	{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-];
-
-function setAuthed() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'sampledb', personId: 'person-p' }] });
-}
-
-function setFixtures(
-	detail: EventDetail,
-	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
-) {
-	loadEventDetailMock.mockResolvedValue(detail);
-	loadRosterMock.mockResolvedValue({ items: ROSTER, total: ROSTER.length, truncated: false });
-	listAttendanceMock.mockResolvedValue(existing);
-	listAllRsvpsForEventMock.mockResolvedValue([]);
-}
+	pastDetail,
+	resetAttendanceMocks,
+	setAuthed,
+	setFixtures
+} from '$lib/testing/pages/eventAttendance';
+import { q } from '$lib/testing/pages/dom';
 
 function renderPage() {
 	vi.stubGlobal('fetch', vi.fn(async () => json({ entities: [] })));
@@ -121,24 +73,7 @@ function renderPage() {
 	return render(Page);
 }
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadEventDetailMock.mockReset();
-	loadRosterMock.mockReset();
-	listAttendanceMock.mockReset();
-	listAllRsvpsForEventMock.mockReset();
-	applyAttendanceChangeMock.mockReset();
-	discoverMock.mockReset();
-	resetTypeIdCache();
-	resetAppState();
-});
-
-const REASON = '[write_unavailable_no_signal]';
+afterEach(resetAttendanceMocks);
 
 afterEach(() => {
 	resetOnLine();

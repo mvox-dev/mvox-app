@@ -3,17 +3,11 @@
 // The work-edition picker says unknown for a zero-match row under a truncated
 // `listAllEditions` read, then states the fact once that work's scoped read lands complete.
 // Real page and data layer; only the wire fetch is stubbed.
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-// Pin "now" before the fixture event (2026-09-01) — only Date is faked.
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 // Full-fallback paraglide mock — every key renders `[key {params}]`.
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -37,11 +31,10 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { setToken } from '$lib/auth/storage';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
+import { setAuthed } from '$lib/testing/pages/eventRsvp';
+import { workRowOf } from '$lib/testing/pages/eventEdition';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -154,13 +147,6 @@ function wireStub(opts: { editionCount?: number; scoped?: ScopedMode } = {}) {
 	});
 }
 
-function setAuthed() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 async function renderWorks(opts: { editionCount?: number; scoped?: ScopedMode } = {}) {
 	const fetchStub = wireStub(opts);
 	vi.stubGlobal('fetch', fetchStub);
@@ -184,14 +170,6 @@ async function renderWorks(opts: { editionCount?: number; scoped?: ScopedMode } 
 	return { ...rendered, fetchStub };
 }
 
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
-}
-
 function pickerOptions(row: HTMLElement) {
 	const select = row.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
 	expect(select, 'work-edition-picker').not.toBeNull();
@@ -206,12 +184,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
+afterEach(cleanupRealTimersReset);
 
 describe('/event/[id] #329 — a zero-match row under a TRUNCATED edition read says UNKNOWN', () => {
 	it('the unknown state stands while the scoped read has not answered — wording and picker both', async () => {
