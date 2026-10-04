@@ -60,7 +60,6 @@ import {
 	textNodesContaining
 } from '$lib/testing/nameMarker';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 import {
 	bulkCheckoutMock,
@@ -80,10 +79,7 @@ import {
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 import { LIBRARY_SURFACES, signInLibraryReader } from '$lib/testing/pages/library';
-
-function setNoCollective() {
-	signIn({ collectives: [] });
-}
+import { setNoCollective } from '$lib/testing/pages/roster';
 
 afterEach(() => {
 	cleanup();

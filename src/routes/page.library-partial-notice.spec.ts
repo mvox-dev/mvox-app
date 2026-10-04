@@ -61,10 +61,7 @@ import {
 	setAuthedWithTwoCollectives,
 	truncated
 } from '$lib/testing/pages/library';
-
-function complete<T>(items: T[]) {
-	return { items, total: items.length, truncated: false };
-}
+import { complete } from '$lib/testing/pages/agenda';
 
 function worksFor(db: string) {
 	return db === DB_A

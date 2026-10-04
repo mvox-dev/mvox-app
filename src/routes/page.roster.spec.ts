@@ -40,14 +40,13 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-import { cleanupResetRosterReads, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-
-function setNoCollective() {
-	signIn({ collectives: [] });
-}
+import {
+	cleanupResetRosterReads,
+	setAuthedWithOneCollective,
+	setNoCollective
+} from '$lib/testing/pages/roster';
 
 beforeEach(() => {
 	listSectionsMock.mockResolvedValue([]);

@@ -87,7 +87,6 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { fillDateTime } from '$lib/testing/timeControls';
-import type { AgendaItem } from '$lib/agenda/types';
 import type { Season } from '$lib/seasons/types';
 import { setAgendaView } from '$lib/preferences/agendaView';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
@@ -126,6 +125,7 @@ import {
 	submit
 } from '$lib/testing/pages/seasonPanel';
 import { fixtureRows } from '$lib/testing/pages/seasonEventCreate';
+import { UP_CONCERT, UP_REHEARSAL, item } from '$lib/testing/pages/agenda';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
@@ -144,24 +144,6 @@ function season(): Season {
 	};
 }
 
-function item(id: string, name: string, startDatetime: string, eventType: string): AgendaItem {
-	return {
-		id,
-		name,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: [],
-		eventType
-	} as AgendaItem;
-}
-
-// Far-future dates so AgendaList's real-clock relative-day decoration stays
-// ahead of them; one rehearsal + one concert so BOTH chips exist before the create.
-const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
-const UP_CONCERT = item('up-con', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
 const NEW_ROW = item(NEW_EVENT_ID, 'Uus kontsert', '2030-07-01T16:00:00.000Z', 'concert');
 
 // The world flips when createEvent lands: reloads after that include the new row.

@@ -1,4 +1,6 @@
 // Season repertoire specs' works, running season and queries they had word for word.
+import { waitFor } from '@testing-library/svelte';
+import { expect } from 'vitest';
 import type { Season } from '$lib/seasons/types';
 import { signIn } from '$lib/testing/session';
 import { isoDate } from './seasonPanel';
@@ -48,6 +50,32 @@ export function qa(scope: ParentNode, testid: string): HTMLElement[] {
 
 export function setAuthed(dbs: string[] = ['sampledb']) {
 	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
+}
+
+export async function expectWriteAttempted(probe: () => number): Promise<void> {
+	await waitFor(() => {
+		expect(probe(), 'the tap must actually fire the write').toBeGreaterThan(0);
+	});
+}
+
+export function manageStatus(section: HTMLElement): HTMLElement | null {
+	return q(section, 'repertoire-manage-status');
+}
+
+export function manageAlert(section: HTMLElement): HTMLElement | null {
+	return q(section, 'repertoire-manage-error');
+}
+
+export function savedText(section: HTMLElement): string {
+	return manageStatus(section)?.textContent ?? '';
+}
+
+export function rowByName(scope: ParentNode, workName: string): HTMLElement {
+	const row = qa(scope, 'work-row').find(
+		(el) => q(el, 'work-name')?.textContent?.trim() === workName
+	);
+	if (!row) throw new Error(`no work-row named '${workName}'`);
+	return row;
 }
 
 // (*MVOX:Josquin*)

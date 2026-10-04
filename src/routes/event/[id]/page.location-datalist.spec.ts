@@ -35,6 +35,8 @@ import {
 	seriesEntity,
 	setAuthedWithSampledb
 } from '$lib/testing/pages/event';
+import { flush } from '$lib/testing/pages/seasonEventCreate';
+import { optionSet } from '$lib/testing/pages/dom';
 
 const NEW_VENUE = 'Ürgoru laululava — sissepääs B!';
 
@@ -133,10 +135,6 @@ function renderDetail(opts: WireOpts = {}) {
 
 afterEach(cleanupRealTimersReset);
 
-function flush(): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 async function detailReady(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(container.querySelector('[data-testid="event-detail-location"]')).not.toBeNull();
@@ -161,10 +159,6 @@ function resolveDatalist(input: HTMLInputElement): HTMLElement {
 	const dl = document.querySelector(`datalist[id="${listId}"]`);
 	expect(dl, `<datalist id="${listId}"> must exist in the page`).not.toBeNull();
 	return dl as HTMLElement;
-}
-
-function optionSet(dl: HTMLElement): string[] {
-	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
 }
 
 describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)', () => {

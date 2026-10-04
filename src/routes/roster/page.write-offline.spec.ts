@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -86,23 +86,22 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import {
 	goOffline,
 	goOnline,
-	resetOnLine,
 	settle,
 	isWriteDisabled,
 	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
-import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { setAuthed } from '$lib/testing/pages/roster';
 import { q } from '$lib/testing/pages/dom';
 import { REASON } from '$lib/testing/pages/event';
+import { cleanupClearResetAdminOnLine } from '$lib/testing/pages/links';
 
 const ROWS = [
 	{
@@ -167,13 +166,7 @@ beforeEach(async () => {
 	await goOnline();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-	resetOnLine();
-});
+afterEach(cleanupClearResetAdminOnLine);
 
 function recordNameInput(container: HTMLElement): HTMLInputElement {
 	const node = container.querySelector('[data-testid="roster-record-name"]');

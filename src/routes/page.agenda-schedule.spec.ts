@@ -61,6 +61,7 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { localeMock } from '$lib/testing/mocks/session';
+import { scheduleEntity } from '$lib/testing/pages/event';
 
 function item(
 	id: string,
@@ -85,14 +86,6 @@ const UP1 = item('up1', 'Kevadkontsert', '2030-06-10T16:00:00.000Z', 'concert');
 const UP_BARE = item('up-bare', 'Tavaline proov', '2030-06-12T16:00:00.000Z');
 const REC1 = item('rec1', 'Talvekontsert', '2026-05-01T18:00:00.000Z', 'concert');
 const REC_BARE = item('rec-bare', 'Vana proov', '2026-05-02T18:00:00.000Z');
-
-function scheduleEntity(id: string, name: string, iso: string) {
-	return {
-		_id: id,
-		name: [{ _id: `val-${id}-name`, string: name }],
-		datetime: [{ _id: `val-${id}-dt`, datetime: iso }]
-	};
-}
 
 type ScheduleWire = {
 	byKey: Record<string, Array<Record<string, unknown>>>;

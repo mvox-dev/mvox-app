@@ -47,4 +47,8 @@ export function cleanupUnstubResetAuth(): void {
 	history.replaceState({}, '', '/');
 }
 
+export function optionSet(dl: HTMLElement): string[] {
+	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
+}
+
 // (*MVOX:Josquin*)

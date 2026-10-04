@@ -47,6 +47,7 @@ import {
 	seasonEntity,
 	setAuthed
 } from '$lib/testing/pages/event';
+import { seriesEntity } from '$lib/testing/pages/eventFixtures';
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -69,14 +70,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }]
-	};
 }
 
 function defaultScheduleEntities() {

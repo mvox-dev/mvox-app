@@ -34,4 +34,10 @@ export function cleanupRestoreClipboard(): void {
 	resetAdmin();
 }
 
+export function installWriteText(): ReturnType<typeof vi.fn> {
+	const writeText = vi.fn().mockResolvedValue(undefined);
+	setClipboard({ writeText });
+	return writeText;
+}
+
 // (*MVOX:Josquin*)

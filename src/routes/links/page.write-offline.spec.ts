@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // /links writes are gated while offline, on the real page.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -25,21 +25,19 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import {
 	goOffline,
 	goOnline,
-	resetOnLine,
 	settle,
 	isWriteDisabled,
 	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { REASON } from '$lib/testing/pages/event';
-import { DB_ENTITY, TYPE_ID } from '$lib/testing/pages/links';
+import { DB_ENTITY, TYPE_ID, cleanupClearResetAdminOnLine } from '$lib/testing/pages/links';
 
 function nonGetWireCalls(): string[] {
 	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>)
@@ -100,13 +98,7 @@ beforeEach(() => {
 	adminStore.set('admin');
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-	resetOnLine();
-});
+afterEach(cleanupClearResetAdminOnLine);
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);

@@ -112,6 +112,7 @@ import {
 	submit
 } from '$lib/testing/pages/seasonPanel';
 import { renderReady } from '$lib/testing/pages/seasonRender';
+import { flush } from '$lib/testing/pages/seasonEventCreate';
 
 const UPCOMING_SEASON_ID = 'season-2';
 
@@ -195,10 +196,6 @@ function routeSeasonListsBySeason(): void {
 		const items = seasonId === SEASON_ID ? standaloneFixture() : upcomingStandaloneFixture();
 		return { items, total: items.length, truncated: false };
 	});
-}
-
-function flush(): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 beforeEach(() => {

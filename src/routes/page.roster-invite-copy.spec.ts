@@ -75,7 +75,12 @@ import {
 } from '$lib/testing/mocks/roster';
 import { ORG_A } from '$lib/testing/pages/rosterFixtures';
 import { setAuthed } from '$lib/testing/pages/roster';
-import { cleanupRestoreClipboard, setClipboard, treeA } from '$lib/testing/pages/rosterInvite';
+import {
+	cleanupRestoreClipboard,
+	installWriteText,
+	setClipboard,
+	treeA
+} from '$lib/testing/pages/rosterInvite';
 import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): RosterRow[] {
@@ -88,12 +93,6 @@ function rowsA(): RosterRow[] {
 
 const FRESH_TOKEN = 'tok-fresh-1';
 const EXPECTED_URL = () => `${window.location.origin}/invite/${FRESH_TOKEN}`;
-
-function installWriteText(): ReturnType<typeof vi.fn> {
-	const writeText = vi.fn().mockResolvedValue(undefined);
-	setClipboard({ writeText });
-	return writeText;
-}
 
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rowsA()));

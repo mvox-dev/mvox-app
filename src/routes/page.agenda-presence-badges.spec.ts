@@ -107,6 +107,7 @@ import { isoDate } from '$lib/testing/pages/seasonPanel';
 import { q } from '$lib/testing/pages/seasonRepertoire';
 import { recent, setAuthedWithTwoCollectives, upcoming } from '$lib/testing/pages/agendaWorks';
 import { pdfData } from '$lib/testing/pages/event';
+import { workRow } from '$lib/testing/pages/eventFixtures';
 
 let fakeByteStore: FakeByteStore;
 
@@ -131,25 +132,6 @@ function stubByteFetch() {
 			});
 		return new Response(JSON.stringify({ entities: [] }), { status: 200 });
 	});
-}
-
-function workRow(id: string, workName: string, fileId: string) {
-	return {
-		id,
-		kind: 'repertoire' as const,
-		workId: `work-${id}`,
-		editionId: `ed-${id}`,
-		workName,
-		composer: 'Thomas Tallis',
-		status: 'active' as const,
-		editionName: 'Vocal score',
-		ordinal: null,
-		fileId,
-		fileName: fileId === '' ? '' : `${fileId}.pdf`,
-		externalLinks: [],
-		canBorrow: false,
-		notes: ''
-	};
 }
 
 function mockBaselineAgenda() {

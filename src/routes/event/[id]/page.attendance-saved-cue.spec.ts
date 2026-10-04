@@ -48,7 +48,6 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import type { EventDetail } from '$lib/events/eventDetail';
-import { signIn } from '$lib/testing/session';
 import {
 	applyAttendanceChangeMock,
 	listAllRsvpsForEventMock,
@@ -59,6 +58,7 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { flushMicrotasks, isoAt } from '$lib/testing/pages/event';
 import { ROSTER, resetAttendanceMocks, rowSavedText } from '$lib/testing/pages/eventAttendance';
 import { q } from '$lib/testing/pages/dom';
+import { setAuthed } from '$lib/testing/pages/seasonRepertoire';
 
 function pastConductedDetail(): EventDetail {
 	return {
@@ -80,10 +80,6 @@ function pastConductedDetail(): EventDetail {
 		seriesId: null,
 		inheritedFields: []
 	};
-}
-
-function setAuthed(dbs: string[] = ['sampledb']) {
-	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
 }
 
 function setFixtures(

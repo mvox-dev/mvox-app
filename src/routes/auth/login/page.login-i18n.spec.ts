@@ -21,8 +21,8 @@ import Page from './+page.svelte';
 import { setLastProvider } from '$lib/auth/storage';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { LOCALES } from '$lib/testing/pages/files';
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 const OTHER_LOCALES = ['et', 'lv', 'uk'] as const;
 
 function messages(locale: string): MessageFile {

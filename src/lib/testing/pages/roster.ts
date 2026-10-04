@@ -232,4 +232,8 @@ export function seedTwoCollectiveMocks(): void {
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 }
 
+export function setNoCollective() {
+	signIn({ collectives: [] });
+}
+
 // (*MVOX:Josquin*)

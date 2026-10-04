@@ -28,7 +28,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
-import { DB_A } from './agenda';
+import { DB_A, DB_B } from './agenda';
 
 export { cleanupClearReset } from './dom';
 
@@ -110,8 +110,7 @@ export function mockLibrarian(): void {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
-export { DB_A, truncated } from './agenda';
-export const DB_B = 'other-choir';
+export { DB_A, DB_B, truncated } from './agenda';
 
 export function setAuthedWithTwoCollectives(): void {
 	signIn({

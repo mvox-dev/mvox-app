@@ -38,6 +38,7 @@ export function item(id: string, name: string, startDatetime: string, eventType:
 	} as AgendaItem;
 }
 
+// Far-future dates, so the real-clock relative-day labels never decorate them.
 export const UP_CONCERT = item('up-con', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
 
 export const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
@@ -145,5 +146,7 @@ export function currentSeason(): Season {
 }
 
 export const DB_A = 'sampledb';
+
+export const DB_B = 'other-choir';
 
 // (*MVOX:Josquin*)

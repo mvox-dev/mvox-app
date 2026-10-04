@@ -32,8 +32,16 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import { isoAt, setAuthed } from '$lib/testing/pages/event';
-
-type EntityRaw = Record<string, unknown>;
+import {
+	expectWriteAttempted,
+	manageAlert,
+	manageStatus,
+	q,
+	qa,
+	rowByName,
+	savedText,
+	type EntityRaw
+} from '$lib/testing/pages/seasonRepertoire';
 
 function eventEntity(): EntityRaw {
 	return {
@@ -257,13 +265,6 @@ function renderPage(dbs: string[] = ['sampledb']) {
 	return render(Page);
 }
 
-function q(scope: ParentNode, testid: string): HTMLElement | null {
-	return scope.querySelector(`[data-testid="${testid}"]`);
-}
-function qa(scope: ParentNode, testid: string): HTMLElement[] {
-	return Array.from(scope.querySelectorAll(`[data-testid="${testid}"]`));
-}
-
 async function worksSection(container: HTMLElement, rowCount: number): Promise<HTMLElement> {
 	await waitFor(() => {
 		const section = q(container, 'event-detail-works');
@@ -271,24 +272,6 @@ async function worksSection(container: HTMLElement, rowCount: number): Promise<H
 		expect(qa(section!, 'work-row').length).toBe(rowCount);
 	});
 	return q(container, 'event-detail-works')!;
-}
-
-function rowByName(scope: ParentNode, workName: string): HTMLElement {
-	const row = qa(scope, 'work-row').find(
-		(el) => q(el, 'work-name')?.textContent?.trim() === workName
-	);
-	if (!row) throw new Error(`no work-row named '${workName}'`);
-	return row;
-}
-
-function manageAlert(section: HTMLElement): HTMLElement | null {
-	return q(section, 'repertoire-manage-error');
-}
-function manageStatus(section: HTMLElement): HTMLElement | null {
-	return q(section, 'repertoire-manage-status');
-}
-function savedText(section: HTMLElement): string {
-	return manageStatus(section)?.textContent ?? '';
 }
 
 type FetchMock = ReturnType<typeof installWorld>;
@@ -303,11 +286,6 @@ function createAttempts(fetchMock: FetchMock) {
 		([url, init]) =>
 			/\/entity(\?|$)/.test(String(url)) && (init as RequestInit | undefined)?.method === 'POST'
 	);
-}
-async function expectWriteAttempted(probe: () => number): Promise<void> {
-	await waitFor(() => {
-		expect(probe(), 'the tap must actually fire the write').toBeGreaterThan(0);
-	});
 }
 
 async function expectFailureSurfaced(section: HTMLElement): Promise<HTMLElement> {
