@@ -57,6 +57,8 @@ import {
 	loadEventDetailMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { ROSTER } from '$lib/testing/pages/eventAttendance';
+import { q } from '$lib/testing/pages/dom';
 
 function pastEditedDetail(): EventDetail {
 	return {
@@ -80,20 +82,12 @@ function pastEditedDetail(): EventDetail {
 	};
 }
 
-const ROSTER = [
-	{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-];
 const ROSTER_READ = { items: ROSTER, total: ROSTER.length, truncated: false };
 
 function renderPage() {
 	vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ entities: [] }))));
 	signIn({ collectives: [{ db: 'sampledb', name: 'sampledb', personId: 'person-p' }] });
 	return render(Page);
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 async function openPanel(container: HTMLElement) {

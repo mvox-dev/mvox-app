@@ -6,11 +6,7 @@ import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(fakeDateAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('plain')
@@ -49,6 +45,8 @@ import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import { resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import { convertEventToSeriesMock, createEventMock } from '$lib/testing/mocks/events';
+import { LOCALES, fakeDateAtNow } from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const CFG = testCfg('sampledb', 'jwt-abc');
@@ -159,10 +157,6 @@ afterEach(() => {
 	discoverMock.mockReset();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 async function waitDetail(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
@@ -679,8 +673,6 @@ describe('#313 — the conversion form as a dialog on the event page', () => {
 		expect(convertEventToSeriesMock).not.toHaveBeenCalled();
 	});
 });
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function messages(locale: string): MessageFile {
 	return JSON.parse(

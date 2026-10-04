@@ -2,17 +2,12 @@
 // canSeeTally answers whether the person can see the tally, not manage the event.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(fakeDateAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -39,6 +34,8 @@ vi.mock('$lib/attendance/attendanceData', async (importOriginal) =>
 
 import Page from './+page.svelte';
 import { listAllRsvpsForEventMock } from '$lib/testing/mocks/events';
+import { cleanupResetAllMocks, fakeDateAtNow } from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 function nonEditorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -113,14 +110,7 @@ beforeEach(() => {
 	listAllRsvpsForEventMock.mockResolvedValue([...RSVP_ROWS]);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	vi.resetAllMocks();
-	localStorage.clear();
-	resetAppState();
-});
+afterEach(cleanupResetAllMocks);
 
 function renderPage(event: Record<string, unknown>) {
 	const stub = wireStub(event);
@@ -129,10 +119,6 @@ function renderPage(event: Record<string, unknown>) {
 	pageStub.url = new URL('http://localhost/event/ev1');
 	setAuthedWithSampledb();
 	return { ...render(Page), fetchStub: stub };
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 describe('#363 — a plain member (no grant on the event) gets the tally', () => {

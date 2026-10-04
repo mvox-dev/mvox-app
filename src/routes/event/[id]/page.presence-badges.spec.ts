@@ -46,6 +46,7 @@ import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { loadWorksByEventIdMock } from '$lib/testing/moduleHandles';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
+import { PDF_BYTES, SIGNED_URL, isoAt, pdfData } from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
@@ -60,21 +61,6 @@ function installPresence(impl?: PresenceQuery) {
 }
 
 const IDENTITY = { db: 'sampledb', personId: 'person-p' };
-
-function pdfData() {
-	return {
-		bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
-		filetype: 'application/pdf',
-		sha256: 'sha-fixture'
-	};
-}
-
-function isoAt(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
-}
-
-const SIGNED_URL = 'https://s3.example/signed-ev?X-Amz-Expires=60';
-const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46]);
 
 /** Reads only: the event + its season; every other side read answers empty.
  *  The signed-URL GET serves bytes. */

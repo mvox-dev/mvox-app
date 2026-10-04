@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The attendance saved cue on the event page's write path.
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred, json } from '$lib/testing/entuFetchKit';
 
@@ -47,11 +47,8 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import type { EventDetail } from '$lib/events/eventDetail';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
 import {
 	applyAttendanceChangeMock,
 	listAllRsvpsForEventMock,
@@ -59,10 +56,9 @@ import {
 	loadEventDetailMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function isoAt(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString();
-}
+import { flushMicrotasks, isoAt } from '$lib/testing/pages/event';
+import { ROSTER, resetAttendanceMocks } from '$lib/testing/pages/eventAttendance';
+import { q } from '$lib/testing/pages/dom';
 
 function pastConductedDetail(): EventDetail {
 	return {
@@ -86,11 +82,6 @@ function pastConductedDetail(): EventDetail {
 	};
 }
 
-const ROSTER = [
-	{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-];
-
 function setAuthed(dbs: string[] = ['sampledb']) {
 	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
 }
@@ -112,10 +103,6 @@ function renderPage(dbs?: string[]) {
 	return render(Page);
 }
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 function rowSavedText(container: HTMLElement, memberId: string): string {
 	return q(container, `attendance-saved-status-${memberId}`)?.textContent?.trim() ?? '';
 }
@@ -130,22 +117,7 @@ async function openPanel(container: HTMLElement) {
 	});
 }
 
-async function flushMicrotasks(times = 6) {
-	for (let i = 0; i < times; i++) await Promise.resolve();
-}
-
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadEventDetailMock.mockReset();
-	loadRosterMock.mockReset();
-	listAttendanceMock.mockReset();
-	listAllRsvpsForEventMock.mockReset();
-	applyAttendanceChangeMock.mockReset();
-	discoverMock.mockReset();
-	resetTypeIdCache();
-	resetAppState();
-});
+afterEach(resetAttendanceMocks);
 
 describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)', () => {
 	it('merely LOADING recorded attendance announces nothing — the region pre-exists, blank, role="status" aria-live="polite"', async () => {

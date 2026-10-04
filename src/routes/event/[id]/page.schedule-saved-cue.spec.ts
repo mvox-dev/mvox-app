@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { deferred, json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -33,11 +27,16 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { fillDateTime } from '$lib/testing/timeControls';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	PROFILES,
+	cleanupRealTimersResetTypes,
+	editorTokenAtNow,
+	scheduleEntity,
+	seasonEntity,
+	setAuthed
+} from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 function eventEntity() {
 	return {
@@ -58,34 +57,11 @@ function eventEntity() {
 	};
 }
 
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
 function seriesEntity() {
 	return {
 		_id: 'series1',
 		name: [{ string: 'Tuesday Series' }],
 		duration_minutes: [{ number: 120 }]
-	};
-}
-
-const PROFILES: Record<string, unknown[]> = {
-	'p-mihkel': [
-		{ _id: 'prof-m', name: [{ string: 'Mihkel Putrinš' }], _sharing: [{ string: 'domain' }] }
-	]
-};
-
-function scheduleEntity(id: string, name: string, iso: string) {
-	return {
-		_id: id,
-		name: [{ _id: `val-${id}-name`, string: name }],
-		datetime: [{ _id: `val-${id}-dt`, datetime: iso }]
 	};
 }
 
@@ -170,13 +146,6 @@ function scheduleWireStub(controls: WireControls) {
 	return stub;
 }
 
-function setAuthed(dbs: string[] = ['sampledb']) {
-	signIn({
-		token: 'jwt-editor',
-		collectives: dbs.map((db) => ({ db, name: db, personId: 'p-viewer' }))
-	});
-}
-
 function renderSchedulePage(dbs: string[] = ['sampledb']) {
 	const controls: WireControls = { failItemWrites: false, holdItemPost: null };
 	const stub = scheduleWireStub(controls);
@@ -188,17 +157,7 @@ function renderSchedulePage(dbs: string[] = ['sampledb']) {
 	return { ...rendered, fetchStub: stub, controls };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetTypeIdCache();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupRealTimersResetTypes);
 
 function scheduleSection(container: HTMLElement): HTMLElement | null {
 	return q(container, 'event-detail-schedule');

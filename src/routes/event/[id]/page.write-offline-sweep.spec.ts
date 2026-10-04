@@ -7,7 +7,6 @@ import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
 beforeEach(() => {
 	setToken('jwt-editor');
 	vi.useFakeTimers({ toFake: ['Date'] });
@@ -54,7 +53,7 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import { NOW } from '$lib/testing/pages/event';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 // The viewer (`p-viewer`) is `_owner` on the event and `_editor` on the season, so every

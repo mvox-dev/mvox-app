@@ -1,22 +1,14 @@
 // @vitest-environment happy-dom
 // #105: i18n and a11y on the real event route; source scans for copy, rendered DOM for semantics.
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { json } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -39,11 +31,19 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	EDITABLE_FIELDS,
+	LOCALES,
+	PROFILES,
+	cleanupRealTimersReset,
+	editPosts,
+	editorTokenAtNow,
+	seasonEntity,
+	seriesEntity,
+	setAuthedWithSampledb
+} from '$lib/testing/pages/event';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function readSource(relPath: string): string {
 	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
@@ -84,31 +84,6 @@ function pastConductorEvent(over: Partial<Record<string, unknown>> = {}) {
 	});
 }
 
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
-function seriesEntity() {
-	return {
-		_id: 'series1',
-		name: [{ string: 'Tuesday Series' }],
-		duration_minutes: [{ number: 120 }],
-		default_location: [{ string: 'Church Hall' }],
-		default_description: [{ string: 'Series default note.' }]
-	};
-}
-
-const PROFILES: Record<string, unknown[]> = {
-	'p-mihkel': [
-		{ _id: 'prof-m', name: [{ string: 'Mihkel Putrinš' }], _sharing: [{ string: 'domain' }] }
-	]
-};
-
 function entuStub(event: Record<string, unknown>) {
 	const season = seasonEntity();
 	const series = seriesEntity();
@@ -134,13 +109,6 @@ function entuStub(event: Record<string, unknown>) {
 	});
 }
 
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-editor',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
-
 function renderEventPage(event: Record<string, unknown> = eventEntity()) {
 	const fetchStub = entuStub(event);
 	vi.stubGlobal('fetch', fetchStub);
@@ -151,12 +119,7 @@ function renderEventPage(event: Record<string, unknown> = eventEntity()) {
 	return { ...rendered, fetchStub };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
+afterEach(cleanupRealTimersReset);
 
 async function waitForTestid(container: HTMLElement, testid: string): Promise<HTMLElement> {
 	return await waitFor(() => {
@@ -165,14 +128,6 @@ async function waitForTestid(container: HTMLElement, testid: string): Promise<HT
 		return el as HTMLElement;
 	});
 }
-
-const EDITABLE_FIELDS = [
-	'name',
-	'start_datetime',
-	'duration_minutes',
-	'location',
-	'description'
-] as const;
 
 function accessibleName(el: Element): string {
 	const labelledby = el.getAttribute('aria-labelledby');
@@ -204,14 +159,6 @@ function accessibleName(el: Element): string {
 }
 
 const EVENT_HEADING = 'Tuesday Rehearsal';
-
-function editPosts(fetchStub: ReturnType<typeof vi.fn>) {
-	return fetchStub.mock.calls.filter(
-		(c) =>
-			((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST' &&
-			String(c[0]).includes('/entity/ev1')
-	);
-}
 
 describe('#105 — i18n: the event detail page renders via Paraglide keys only', () => {
 	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {

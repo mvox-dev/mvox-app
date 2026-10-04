@@ -1,15 +1,9 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
 import { deferred, json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -34,9 +28,14 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './+page.svelte';
 import { commitDateTime, fillDateTime } from '$lib/testing/timeControls';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
+import {
+	PROFILES,
+	cleanupRealTimersReset,
+	editorTokenAtNow,
+	seasonEntity
+} from '$lib/testing/pages/event';
+import { q } from '$lib/testing/pages/dom';
 
 function eventEntity() {
 	return {
@@ -61,15 +60,6 @@ function credeEventEntity() {
 	return { ...eventEntity(), event_name: [{ _id: 'cval-name-1', string: 'Crede Rehearsal' }] };
 }
 
-function seasonEntity() {
-	return {
-		_id: 'season1',
-		name: [{ string: '2026/27' }],
-		start_date: [{ date: '2026-08-01' }],
-		conductor: [{ reference: 'p-mihkel' }]
-	};
-}
-
 function seriesEntity() {
 	return {
 		_id: 'series1',
@@ -77,12 +67,6 @@ function seriesEntity() {
 		duration_minutes: [{ number: 120 }]
 	};
 }
-
-const PROFILES: Record<string, unknown[]> = {
-	'p-mihkel': [
-		{ _id: 'prof-m', name: [{ string: 'Mihkel Putrinš' }], _sharing: [{ string: 'domain' }] }
-	]
-};
 
 type WireControls = {
 	holdEditPost: Promise<void> | null;
@@ -151,16 +135,7 @@ function renderEditPage(dbs: string[] = ['sampledb']) {
 	return { ...rendered, fetchStub: stub, controls };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupRealTimersReset);
 
 const flush = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 

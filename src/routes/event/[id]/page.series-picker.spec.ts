@@ -2,17 +2,11 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { setToken } from '$lib/auth/storage';
-import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { json } from '$lib/testing/entuFetchKit';
 
-const NOW = new Date('2026-08-20T10:00:00.000Z');
-beforeEach(() => {
-	setToken('jwt-editor');
-	vi.useFakeTimers({ toFake: ['Date'] });
-	vi.setSystemTime(NOW);
-});
+beforeEach(editorTokenAtNow);
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -37,11 +31,8 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './+page.svelte';
 import { loadEventDetail } from '$lib/events/eventDetail';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
-
-const cfg = testCfg('sampledb');
+import { cfg, cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 
 function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -227,12 +218,7 @@ function renderSeriesPage(
 	return { ...rendered, fetchStub: stub, release };
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	vi.useRealTimers();
-	resetAppState();
-});
+afterEach(cleanupRealTimersReset);
 
 function q<T extends Element = HTMLElement>(container: HTMLElement, testid: string): T | null {
 	return container.querySelector<T>(`[data-testid="${testid}"]`);
