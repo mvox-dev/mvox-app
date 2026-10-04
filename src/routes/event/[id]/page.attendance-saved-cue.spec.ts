@@ -57,7 +57,7 @@ import {
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { flushMicrotasks, isoAt } from '$lib/testing/pages/event';
-import { ROSTER, resetAttendanceMocks } from '$lib/testing/pages/eventAttendance';
+import { ROSTER, resetAttendanceMocks, rowSavedText } from '$lib/testing/pages/eventAttendance';
 import { q } from '$lib/testing/pages/dom';
 
 function pastConductedDetail(): EventDetail {
@@ -101,10 +101,6 @@ function renderPage(dbs?: string[]) {
 	pageStub.url = new URL('http://localhost/event/ev1');
 	setAuthed(dbs);
 	return render(Page);
-}
-
-function rowSavedText(container: HTMLElement, memberId: string): string {
-	return q(container, `attendance-saved-status-${memberId}`)?.textContent?.trim() ?? '';
 }
 
 async function openPanel(container: HTMLElement) {

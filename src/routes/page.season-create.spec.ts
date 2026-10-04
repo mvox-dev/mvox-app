@@ -53,15 +53,11 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { testCfg } from '$lib/testing/entuFetchKit';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -73,13 +69,11 @@ import {
 } from '$lib/testing/moduleHandles';
 import { createSeasonMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065'; // live sampledb collective id shape
-const CFG = testCfg('sampledb', 'jwt-abc');
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
+import { renderReady } from '$lib/testing/pages/seasonRender';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { fill, fixtureRows, isoDate, promptOption, upcomingSeason } from '$lib/testing/pages/seasonPanel';
+import { optionValues, q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
 
 function currentSeason(viewerIsEditor: boolean): Season {
 	return {
@@ -93,18 +87,6 @@ function currentSeason(viewerIsEditor: boolean): Season {
 	};
 }
 
-function upcomingSeason(): Season {
-	return {
-		id: 'season-2',
-		name: 'Season 2027',
-		startDate: isoDate(61),
-		endDate: isoDate(240),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
-
 function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
 	const { editor = true, withUpcomingSeason = false } = opts;
 	const season = currentSeason(editor);
@@ -114,39 +96,6 @@ function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } =
 		seasonEditors: season.editors,
 		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
 	});
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -175,19 +124,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
 async function openForm(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'season-create')).not.toBeNull();
@@ -198,10 +134,6 @@ async function openForm(container: HTMLElement): Promise<void> {
 	});
 }
 
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
 function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	const form = q(container, 'season-create-form') as HTMLElement;
 	const select = form.querySelector(
@@ -210,19 +142,6 @@ function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	expect(select, 'expected the native season-create-conductor-select').not.toBeNull();
 	expect(select.tagName).toBe('SELECT');
 	return select;
-}
-
-function optionValues(select: HTMLSelectElement): string[] {
-	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
-}
-
-function promptOption(select: HTMLSelectElement): HTMLOptionElement {
-	const prompt = select.querySelector('option') as HTMLOptionElement;
-	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
-	expect(prompt.value).toBe('');
-	expect(prompt.disabled).toBe(true);
-	expect(prompt.hidden).toBe(true);
-	return prompt;
 }
 
 async function pickConductor(container: HTMLElement, personId: string): Promise<void> {

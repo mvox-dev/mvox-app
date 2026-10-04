@@ -28,4 +28,14 @@ export function workRowOf(container: HTMLElement, workName: string): HTMLElement
 	return li as HTMLElement;
 }
 
+export function pickerOptions(row: HTMLElement) {
+	const select = row.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
+	expect(select, 'work-edition-picker').not.toBeNull();
+	return Array.from(select.options).map((o) => ({
+		value: o.value,
+		label: o.textContent?.trim(),
+		disabled: o.disabled
+	}));
+}
+
 // (*MVOX:Josquin*)

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The repertoire element's UX contracts on the real agenda page.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -33,32 +33,9 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-const REPERTOIRE_ITEMS = [
-	{
-		_id: 'ri-1',
-		name: [{ string: 'Spem in alium' }],
-		work: [{ reference: 'work-1' }],
-		edition: [{ reference: 'ed-1' }],
-		status: [{ string: 'active' }]
-	},
-	{
-		_id: 'ri-2',
-		name: [{ string: 'Old warhorse' }],
-		work: [{ reference: 'work-2' }],
-		status: [{ string: 'retired' }]
-	}
-];
+import { REPERTOIRE_ITEMS, cleanupUnstubResetAgenda, future } from '$lib/testing/pages/agendaWorks';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
@@ -134,12 +111,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupUnstubResetAgenda);
 
 describe('+page — repertoire UX corrections on the real agenda route (#111)', () => {
 	it('the expanded works list separates its rows with dividers, none on the outer edges (finding 2)', async () => {

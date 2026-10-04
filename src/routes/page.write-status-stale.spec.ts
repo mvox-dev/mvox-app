@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -50,9 +50,8 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { completionGateStore } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
@@ -66,6 +65,7 @@ import {
 	listAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { cleanupClearResetGate } from '$lib/testing/pages/agendaSummary';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -143,12 +143,7 @@ async function openPanel(container: HTMLElement): Promise<void> {
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupClearResetGate);
 
 describe('#554 — agenda RSVP: a write settling after a collective switch changes nothing', () => {
 	it('a stale success leaves the new collective’s answer and saved cue alone, and pending clears', async () => {

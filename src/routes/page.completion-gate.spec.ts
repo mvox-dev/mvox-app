@@ -56,17 +56,7 @@ import {
 	resolveManageRightsMock
 } from '$lib/testing/moduleHandles';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-
-const EVENT = {
-	id: 'e1',
-	name: 'Rehearsal e1',
-	startDatetime: '2026-06-15T09:00:00.000Z',
-	durationMinutes: 90,
-	location: '',
-	conductors: [],
-	owners: [],
-	editors: []
-};
+import { EVENT } from '$lib/testing/pages/agenda';
 
 function goingButton(container: HTMLElement) {
 	return container.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement | null;

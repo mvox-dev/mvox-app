@@ -35,12 +35,9 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-type EntityRaw = Record<string, unknown>;
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+import { future } from '$lib/testing/pages/agendaWorks';
+import type { EntityRaw } from '$lib/testing/pages/seasonRepertoire';
 
 function repertoireItem(id: string, name: string, workId: string): EntityRaw {
 	return {

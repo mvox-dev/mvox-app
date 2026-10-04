@@ -66,24 +66,8 @@ import { createSeasonMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { q } from '$lib/testing/pages/dom';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(): Season {
-	return {
-		id: 'season-1',
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { currentSeason } from '$lib/testing/pages/agenda';
 
 function freshCollectiveResult() {
 	return fullAgendaResult({ seasons: [] });

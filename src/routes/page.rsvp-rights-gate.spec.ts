@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 // The agenda's RSVP control asks Entu whether the singer may write.
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import type { AgendaItem } from '$lib/agenda/types';
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred, json } from '$lib/testing/entuFetchKit';
 
@@ -46,53 +44,17 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { discoverMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
-import { applyRsvpChangeMock } from '$lib/testing/mocks/events';
+import { E1, RIGHTS_URL, SELF_EDITOR, agendaWith, cleanupResetRsvpMocks, row, setAuthed, stubWire, waitForRow } from '$lib/testing/pages/agendaRsvp';
 
-function agendaEvent(id: string, startDatetime: string): AgendaItem {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	} as AgendaItem;
-}
-
-const E1 = agendaEvent('e1', '2026-06-15T09:00:00.000Z');
-
-function agendaWith(events: AgendaItem[]) {
-	return fullAgendaResult({
-		seasons: [],
-		upcoming: events,
-		recent: [],
-		seasonId: null,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: []
-	});
-}
-
-const RIGHTS_URL = 'https://api.entu-test.invalid/sampledb/entity/person-p?props=_owner,_editor';
 const RIGHTS_URL_OTHER =
 	'https://api.entu-test.invalid/other-choir/entity/person-p?props=_owner,_editor';
 
-const SELF_EDITOR = {
-	_id: 'person-p',
-	_editor: [{ reference: 'person-p' }, { reference: 'someone-else' }]
-};
 const SELF_OWNER_ONLY = { _id: 'person-p', _owner: [{ reference: 'person-p' }] };
 const NO_GRANT = { _id: 'person-p' };
 const GRANTS_EXCLUDE_SELF = {
@@ -101,61 +63,15 @@ const GRANTS_EXCLUDE_SELF = {
 	_editor: [{ reference: 'someone-else' }, { reference: 'another-person' }]
 };
 
-type RightsAnswer = { body?: unknown; hold?: boolean; deferredResponse?: Promise<Response> };
-
-function stubWire(rights: Record<string, RightsAnswer>) {
-	const fetchStub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-		const url = String(input);
-		for (const [rightsUrl, answer] of Object.entries(rights)) {
-			if (url === rightsUrl) {
-				if (answer.hold) return new Promise<Response>(() => {});
-				if (answer.deferredResponse) return answer.deferredResponse;
-				return json({ entity: answer.body });
-			}
-		}
-		void init;
-		return json({ entities: [] });
-	});
-	vi.stubGlobal('fetch', fetchStub);
-	return fetchStub;
-}
-
-function setAuthed(dbs: Array<{ db: string; name: string }>) {
-	signIn({ collectives: dbs.map((d) => ({ db: d.db, name: d.name, personId: 'person-p' })) });
-	completionGateStore.set('complete');
-}
-
-function row(container: HTMLElement, id: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="agenda-row-${id}"]`);
-}
-
 function rsvpButtons(container: HTMLElement): HTMLButtonElement[] {
 	return Array.from(container.querySelectorAll('button[data-testid^="rsvp-btn-"]'));
-}
-
-async function waitForRow(container: HTMLElement, id: string): Promise<HTMLElement> {
-	return waitFor(() => {
-		const r = row(container, id);
-		expect(r).not.toBeNull();
-		return r!;
-	});
 }
 
 function rightsCalls(fetchStub: ReturnType<typeof vi.fn>, url: string) {
 	return fetchStub.mock.calls.filter((c) => String(c[0]) === url);
 }
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listMyRsvpsMock.mockReset();
-	applyRsvpChangeMock.mockReset();
-	discoverMock.mockReset();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetRsvpMocks);
 
 describe('+page — RSVP enablement is the Entu grant on the singer’s own person (#372)', () => {
 	it('WIRE: enablement is GET entity/{personId}?props=_owner,_editor — full shape — and does NOT wait on findMyMemberId', async () => {

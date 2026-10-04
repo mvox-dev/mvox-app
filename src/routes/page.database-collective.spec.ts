@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The agenda page resolves the collective as its database entity.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -56,14 +56,10 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -75,25 +71,12 @@ import {
 import { createSeasonMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
-
-const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective (#161)
-const CFG = testCfg('sampledb', 'jwt-abc');
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(): Season {
-	return {
-		id: 'season-1',
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: ['person-p'] // the viewer is a season editor → [+ Season] renders
-	};
-}
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { renderReady } from '$lib/testing/pages/seasonRender';
+import { fill, isoDate, openSeasonForm } from '$lib/testing/pages/seasonPanel';
+import { currentSeason } from '$lib/testing/pages/agenda';
+import { CFG } from '$lib/testing/pages/roster';
+import { DB_ENTITY } from '$lib/testing/pages/admin';
 
 function agendaResult() {
 	const season = currentSeason();
@@ -118,10 +101,6 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
@@ -138,38 +117,7 @@ beforeEach(() => {
 	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openSeasonForm(container: HTMLElement): Promise<void> {
-	await waitFor(() => {
-		expect(q(container, 'season-create')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-create') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-create-form')).not.toBeNull();
-	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
+afterEach(cleanupClearReset);
 
 describe('main page — season create resolves the DATABASE entity as the collective (#161)', () => {
 	it('submit: resolveDatabaseEntityId is consulted and createSeason receives ITS id as the structural parent — no other wire traffic resolves the collective', async () => {

@@ -123,24 +123,8 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { q } from '$lib/testing/pages/dom';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
-
-function agendaItem(id: string, startDatetime: string) {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	};
-}
-
-const ROSTER = [
-	{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
-];
+import { agendaItem } from '$lib/testing/pages/agendaSummary';
+import { ROSTER, rowSavedText } from '$lib/testing/pages/eventAttendance';
 
 function setConductedRecentFixture(
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
@@ -181,10 +165,6 @@ function setTwoConductedRecentEventsFixture() {
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
-}
-
-function rowSavedText(container: HTMLElement, memberId: string): string {
-	return q(container, `attendance-saved-status-${memberId}`)?.textContent?.trim() ?? '';
 }
 
 async function openPanel(container: HTMLElement, eventId = 'past-1') {

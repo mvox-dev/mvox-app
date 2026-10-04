@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The repertoire status and edition controls on the real agenda page.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -33,32 +33,10 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-const REPERTOIRE_ITEMS = [
-	{
-		_id: 'ri-1',
-		name: [{ string: 'Spem in alium' }],
-		work: [{ reference: 'work-1' }],
-		edition: [{ reference: 'ed-1' }],
-		status: [{ string: 'active' }]
-	},
-	{
-		_id: 'ri-2',
-		name: [{ string: 'Old warhorse' }],
-		work: [{ reference: 'work-2' }],
-		status: [{ string: 'retired' }]
-	}
-];
+import { workRowOf } from '$lib/testing/pages/eventEdition';
+import { REPERTOIRE_ITEMS, cleanupUnstubResetAgenda, future } from '$lib/testing/pages/agendaWorks';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
@@ -139,14 +117,6 @@ async function renderExpandedAsEditor() {
 	return { ...rendered, fetchMock };
 }
 
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
-}
-
 function postsTo(fetchMock: ReturnType<typeof installWorld>, fragment: string) {
 	return fetchMock.mock.calls.filter(
 		([url, init]) =>
@@ -158,12 +128,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupUnstubResetAgenda);
 
 describe('+page — repertoire status/edition UX on the real agenda route (#125)', () => {
 	it('the expanded works wrapper is unindented — no pl-4 (nor pl-3+) on works-expanded (F4)', async () => {

@@ -44,24 +44,11 @@ import {
 	loadFullAgendaMock,
 	loadWorksByEventIdMock
 } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+import { workRowOf } from '$lib/testing/pages/eventEdition';
+import { agendaEvent } from '$lib/testing/pages/agendaWorks';
 
 function setAuthedReader() {
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'orlando', name: 'Orlando', personId: 'person-p' }] });
-}
-
-function agendaEvent(id: string, name: string) {
-	return {
-		id,
-		name,
-		startDatetime: future,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	};
 }
 
 function installAgenda() {
@@ -134,14 +121,6 @@ async function renderExpandedAsReader(rowsByEvent: Record<string, WorkRow[]>) {
 		expect(rendered.container.querySelector('[data-testid="work-row"]')).not.toBeNull();
 	});
 	return rendered;
-}
-
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
 }
 
 beforeEach(() => {

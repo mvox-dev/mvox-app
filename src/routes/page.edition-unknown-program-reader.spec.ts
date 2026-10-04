@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The agenda's program reader says unknown when the edition read was partial.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -33,11 +33,10 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyRsvpsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+import { workRowOf } from '$lib/testing/pages/eventEdition';
+import { cleanupUnstubResetAgendaRsvps, future } from '$lib/testing/pages/agendaWorks';
 
 function setAuthedReader() {
 	signIn();
@@ -107,27 +106,13 @@ function wireStub(opts: { editionCount?: number } = {}) {
 	return fetchMock;
 }
 
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
-}
-
 beforeEach(() => {
 	resetTypeIdCache();
 	installAgenda();
 	listMyRsvpsMock.mockResolvedValue({ items: [], total: 0, truncated: false });
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	listMyRsvpsMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupUnstubResetAgendaRsvps);
 
 describe('#337 agenda — a reader’s program row through the shared element', () => {
 	it('a program row whose pin the truncated wire read could not name says UNKNOWN, never "no pinned edition"', async () => {

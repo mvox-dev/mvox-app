@@ -34,7 +34,7 @@ import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 import { setAuthed } from '$lib/testing/pages/eventRsvp';
-import { workRowOf } from '$lib/testing/pages/eventEdition';
+import { pickerOptions, workRowOf } from '$lib/testing/pages/eventEdition';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -168,16 +168,6 @@ async function renderWorks(opts: { editionCount?: number; scoped?: ScopedMode } 
 		).not.toBeNull();
 	});
 	return { ...rendered, fetchStub };
-}
-
-function pickerOptions(row: HTMLElement) {
-	const select = row.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
-	expect(select, 'work-edition-picker').not.toBeNull();
-	return Array.from(select.options).map((o) => ({
-		value: o.value,
-		label: o.textContent?.trim(),
-		disabled: o.disabled
-	}));
 }
 
 beforeEach(() => {

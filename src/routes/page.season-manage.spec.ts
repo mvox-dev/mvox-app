@@ -91,7 +91,7 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-import { q } from '$lib/testing/pages/dom';
+import { optionValues, q } from '$lib/testing/pages/dom';
 import { CFG, flush } from '$lib/testing/pages/roster';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
@@ -204,10 +204,6 @@ async function editField(container: HTMLElement, field: string, value: string): 
 	const input = q(container, `season-edit-input-${field}`) as HTMLInputElement;
 	await fireEvent.input(input, { target: { value } });
 	await fireEvent.keyDown(input, { key: 'Enter' });
-}
-
-function optionValues(select: HTMLSelectElement): string[] {
-	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
 }
 
 async function pickConductor(panel: HTMLElement, personId: string): Promise<void> {
