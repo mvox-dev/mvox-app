@@ -52,9 +52,8 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock, discoverMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -65,6 +64,8 @@ import {
 } from '$lib/testing/moduleHandles';
 import { createSeasonMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 const ORG_EFK = '69c7f8718489bfcb0e81b065';
 
@@ -86,10 +87,6 @@ function currentSeason(): Season {
 
 function freshCollectiveResult() {
 	return fullAgendaResult({ seasons: [] });
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -115,10 +112,6 @@ afterEach(() => {
 	listMyRsvpsMock.mockReset();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 async function renderSettled(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();

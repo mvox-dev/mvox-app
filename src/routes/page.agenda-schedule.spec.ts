@@ -12,7 +12,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 vi.mock('$lib/paraglide/runtime.js', async () =>
 	(await import('$lib/testing/mocks/session')).localeRuntimeModule()
 );
@@ -52,7 +51,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';

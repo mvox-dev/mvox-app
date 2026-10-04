@@ -26,7 +26,12 @@ import Page from './+page.svelte';
 import { authStore } from '$lib/auth/session';
 import { setToken, clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
-import { flushReadCache, readCacheGet, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
+import {
+	flushReadCache,
+	readCacheGet,
+	resetServedFromCache,
+	setReadCacheFactory
+} from '$lib/entu/readCache';
 import { tallinnHHMM } from '$lib/preferences/timeFormat';
 import { json } from '$lib/testing/entuFetchKit';
 

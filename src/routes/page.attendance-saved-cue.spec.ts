@@ -106,10 +106,9 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -122,6 +121,8 @@ import {
 	listAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
 
 function agendaItem(id: string, startDatetime: string) {
 	return {
@@ -140,11 +141,6 @@ const ROSTER = [
 	{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' },
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com' }
 ];
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
-}
 
 function setConductedRecentFixture(
 	existing: Array<{ attendanceId: string; memberId: string; status: string }> = []
@@ -185,10 +181,6 @@ function setTwoConductedRecentEventsFixture() {
 	listAttendanceMock.mockResolvedValue([]);
 	listAllRsvpsForEventMock.mockResolvedValue([]);
 	setAuthedWithOneCollective('person-p');
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 function rowSavedText(container: HTMLElement, memberId: string): string {
