@@ -33,8 +33,8 @@ import Page from './roster/+page.svelte';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 type Route = 'member' | 'profile' | 'section' | 'other';
 
@@ -76,10 +76,6 @@ function stubWire(failing: Partial<Record<Route, number>> = {}) {
 			});
 		})
 	);
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 function expectSessionExpiredNotice(container: HTMLElement) {

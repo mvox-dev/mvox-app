@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -53,11 +53,8 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
@@ -76,8 +73,10 @@ import {
 	loadRosterMock,
 	reinstateMemberMock
 } from '$lib/testing/mocks/roster';
-
-const ORG_A = 'org-a';
+import { ORG_A } from '$lib/testing/pages/rosterFixtures';
+import { setAuthed } from '$lib/testing/pages/roster';
+import { cleanupRestoreClipboard, setClipboard, treeA } from '$lib/testing/pages/rosterInvite';
+import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): RosterRow[] {
 	return [
@@ -87,28 +86,8 @@ function rowsA(): RosterRow[] {
 	];
 }
 
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
 const FRESH_TOKEN = 'tok-fresh-1';
 const EXPECTED_URL = () => `${window.location.origin}/invite/${FRESH_TOKEN}`;
-
-function setAuthed() {
-	signIn();
-}
-
-const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-
-function setClipboard(value: unknown): void {
-	Object.defineProperty(navigator, 'clipboard', {
-		value,
-		configurable: true,
-		writable: true
-	});
-}
 
 function installWriteText(): ReturnType<typeof vi.fn> {
 	const writeText = vi.fn().mockResolvedValue(undefined);
@@ -136,21 +115,7 @@ beforeEach(() => {
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	if (originalClipboardDesc) {
-		Object.defineProperty(navigator, 'clipboard', originalClipboardDesc);
-	} else {
-		Reflect.deleteProperty(navigator, 'clipboard');
-	}
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupRestoreClipboard);
 
 function expectNoInviteMaterial(container: HTMLElement): void {
 	expect(container.textContent).not.toContain(FRESH_TOKEN);

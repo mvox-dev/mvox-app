@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Section create from the page-level entry: parent choice and the write.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -26,22 +26,23 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
-import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { assignMock, createSectionMock, unassignMock } from '$lib/testing/mocks/sections';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
-const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
+import {
+	EFK_SOPRANO,
+	ORG_EFK,
+	ORG_SIREEN,
+	SIREEN_SOPRANO_II,
+	fixtureRows
+} from '$lib/testing/pages/rosterFixtures';
+import { CFG, submit, typeName } from '$lib/testing/pages/roster';
+import { renderArrangeReady } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
 function liveShapedTree(): SectionNode[] {
 	return [
@@ -75,33 +76,6 @@ function liveShapedTree(): SectionNode[] {
 	];
 }
 
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [EFK_SOPRANO],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-const CFG = testCfg('sampledb', 'jwt-abc');
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(liveShapedTree());
@@ -121,39 +95,11 @@ afterEach(() => {
 	resetAdmin();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderArrangeReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
-}
-
 async function openForm(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'roster-new-section') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, 'roster-new-section-form')).not.toBeNull();
 	});
-}
-
-async function typeName(container: HTMLElement, value: string): Promise<void> {
-	await fireEvent.input(q(container, 'roster-new-section-name') as HTMLElement, {
-		target: { value }
-	});
-}
-
-async function submit(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
 }
 
 describe("/roster — the page-level create threads the VIEWER'S org id into createSection (finding #10, re-driven per #470)", () => {

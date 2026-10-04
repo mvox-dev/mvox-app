@@ -98,9 +98,10 @@ import {
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { setAuthed } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 const REASON = '[write_unavailable_no_signal]';
 
@@ -130,10 +131,6 @@ function fixtureTree(): SectionNode[] {
 		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] },
 		{ id: 'sec-bass', name: 'Bass', displayOrder: 2, parentId: null, dbEntityId: 'db-1', depth: 0, children: [] }
 	];
-}
-
-function setAuthed() {
-	signIn();
 }
 
 beforeEach(async () => {
@@ -178,10 +175,6 @@ afterEach(() => {
 	resetAdmin();
 	resetOnLine();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 function recordNameInput(container: HTMLElement): HTMLInputElement {
 	const node = container.querySelector('[data-testid="roster-record-name"]');

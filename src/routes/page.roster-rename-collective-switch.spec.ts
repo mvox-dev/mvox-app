@@ -36,95 +36,22 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
-import type { RosterRow } from '$lib/roster/rosterData';
-import { resolveMyLibraryId } from '$lib/library/librarianStore';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { toListRead } from '$lib/testing/listReadFixtures';
+import { resetAdmin } from '$lib/nav/adminStore';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { listSectionsMock } from '$lib/testing/moduleHandles';
+import { renameMock } from '$lib/testing/mocks/sections';
 import {
-	deactivateMemberMock,
-	listDeactivateBlockersMock,
-	listInactiveMembersMock,
-	loadInactiveRosterMock,
-	loadRosterMock,
-	reinstateMemberMock
-} from '$lib/testing/mocks/roster';
-import {
-	assignMock,
-	createMock,
-	deleteMock,
-	renameMock,
-	reorderMock,
-	reparentMock,
-	unassignMock
-} from '$lib/testing/mocks/sections';
+	anyRenameErrorAlert,
+	anyRenameInput,
+	flush,
+	renameStatusText,
+	seedTwoCollectiveMocks,
+	switchBackToSampledbArrange
+} from '$lib/testing/pages/roster';
+import { switchToOtherChoirArrange } from '$lib/testing/pages/rosterArrange';
+import { renderInArrangeMode } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
-const ORG_A = 'org-a';
-const ORG_B = 'org-b';
-
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
-function treeB(): SectionNode[] {
-	return [
-		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] },
-		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
-	];
-}
-
-function rowsA(): RosterRow[] {
-	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: 'bea@x.com', sectionIds: [], dbEntityId: ORG_A }
-	];
-}
-
-function rowsB(): RosterRow[] {
-	return [
-		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B }
-	];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
-}
-
-beforeEach(() => {
-	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
-	);
-	listSectionsMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
-	);
-	assignMock.mockResolvedValue(undefined);
-	unassignMock.mockResolvedValue(undefined);
-	createMock.mockResolvedValue('sec-created');
-	reorderMock.mockResolvedValue(undefined);
-	deleteMock.mockResolvedValue(undefined);
-	reparentMock.mockResolvedValue(undefined);
-	renameMock.mockResolvedValue(undefined);
-	deactivateMemberMock.mockResolvedValue(undefined);
-	reinstateMemberMock.mockResolvedValue(undefined);
-	loadInactiveRosterMock.mockResolvedValue(toListRead([]));
-	listInactiveMembersMock.mockResolvedValue(toListRead([]));
-	listDeactivateBlockersMock.mockResolvedValue([]);
-	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
-});
+beforeEach(seedTwoCollectiveMocks);
 
 afterEach(() => {
 	cleanup();
@@ -133,54 +60,6 @@ afterEach(() => {
 	resetAppState();
 	resetAdmin();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-function renameStatusText(container: HTMLElement): string {
-	return (q(container, 'roster-section-rename-status')?.textContent ?? '').trim();
-}
-
-function anyRenameErrorAlert(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[data-testid^="arrange-rename-error-"]');
-}
-
-function anyRenameInput(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[data-testid^="arrange-rename-input-"]');
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-async function renderInArrangeMode(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
-}
-
-async function switchToOtherChoirArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('other-choir');
-	await waitFor(() => {
-		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
-	});
-	expect(q(container, 'arrange-row-sec-sop')).toBeNull();
-}
-
-async function switchBackToSampledbArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('sampledb');
-	await waitFor(() => {
-		expect(q(container, 'arrange-row-sec-sop')).not.toBeNull();
-	});
-	expect(q(container, 'arrange-row-sec-b1')).toBeNull();
-}
 
 async function openRename(container: HTMLElement, sectionId: string, newName: string) {
 	await fireEvent.click(q(container, `arrange-rename-${sectionId}`) as HTMLElement);

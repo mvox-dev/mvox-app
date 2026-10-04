@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The roster page's deactivate flow, end to end.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -38,11 +38,10 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 import Page from './roster/+page.svelte';
 import { LibraryLookupError, resolveMyLibraryId } from '$lib/library/librarianStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 import { deferred } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { createInviteMock, mintSelfLinkInviteMock } from '$lib/testing/mocks/admin';
@@ -56,25 +55,13 @@ import {
 	loadRosterMock,
 	reinstateMemberMock
 } from '$lib/testing/mocks/roster';
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
+import { altoSection } from '$lib/testing/pages/rosterFixtures';
+import { cleanupClearResetAdmin, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 const rosterTwo = [
 	{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'db-1' },
 	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
 ];
-
-const altoSection = {
-	id: 'sec-alto',
-	name: 'Alto',
-	displayOrder: 0,
-	parentId: null,
-	dbEntityId: 'db-1',
-	depth: 0,
-	children: []
-};
 
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rosterTwo));
@@ -95,12 +82,7 @@ beforeEach(() => {
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
+afterEach(cleanupClearResetAdmin);
 
 async function renderRosterAs(admin: 'admin' | 'not-admin') {
 	const utils = render(Page);

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -31,10 +31,8 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
+import { adminStore, type AdminState } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
@@ -46,6 +44,8 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
+import { cleanupResetRenameMocks, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 function fixtureTree(): SectionNode[] {
 	return [
@@ -73,10 +73,6 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
@@ -89,24 +85,7 @@ beforeEach(() => {
 	renameMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	reparentMock.mockReset();
-	renameMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetRenameMocks);
 
 async function renderArrangeReady(admin: AdminState = 'admin') {
 	setAuthedWithOneCollective();

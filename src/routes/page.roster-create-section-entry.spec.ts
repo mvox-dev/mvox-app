@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The page-level new-section entry on /roster.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -29,127 +29,29 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
-import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
-import { toListRead } from '$lib/testing/listReadFixtures';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
+import { type AdminState } from '$lib/nav/adminStore';
+import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { assignMock, createSectionMock } from '$lib/testing/mocks/sections';
 import {
-	assignMock,
-	createSectionMock,
-	deleteMock,
-	reorderMock,
-	unassignMock
-} from '$lib/testing/mocks/sections';
+	EFK_ALTO,
+	EFK_SOPRANO,
+	ORG_EFK,
+	SIREEN_SOPRANO_II
+} from '$lib/testing/pages/rosterFixtures';
+import {
+	CFG,
+	cleanupResetCreateSectionMocks,
+	seedCreateSectionMocks,
+	submit,
+	typeName
+} from '$lib/testing/pages/roster';
+import { renderReady } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
-const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const EFK_ALTO = '69c7f8748489bfcb0e81b0cd';
-const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
+beforeEach(seedCreateSectionMocks);
 
-function liveShapedTree(): SectionNode[] {
-	return [
-		{
-			id: EFK_SOPRANO,
-			name: 'Soprano',
-			displayOrder: 1,
-			parentId: null,
-			dbEntityId: ORG_EFK,
-			depth: 0,
-			children: []
-		},
-		{
-			id: SIREEN_SOPRANO_II,
-			name: 'Soprano II',
-			displayOrder: 3,
-			parentId: null,
-			dbEntityId: ORG_SIREEN,
-			depth: 0,
-			children: []
-		},
-		{
-			id: EFK_ALTO,
-			name: 'Alto',
-			displayOrder: 4,
-			parentId: null,
-			dbEntityId: ORG_EFK,
-			depth: 0,
-			children: []
-		}
-	];
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [EFK_SOPRANO],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-const CFG = testCfg('sampledb', 'jwt-abc');
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-beforeEach(() => {
-	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
-	listSectionsMock.mockResolvedValue(liveShapedTree());
-	assignMock.mockResolvedValue(undefined);
-	unassignMock.mockResolvedValue(undefined);
-	createSectionMock.mockResolvedValue('sec-new-1');
-	reorderMock.mockResolvedValue(undefined);
-	deleteMock.mockResolvedValue(undefined);
-	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
-});
-
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createSectionMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-async function renderReady(admin: AdminState = 'admin') {
-	setAuthedWithOneCollective();
-	adminStore.set(admin);
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
-	});
-	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetCreateSectionMocks);
 
 async function renderArrangeReady(admin: AdminState = 'admin') {
 	const container = await renderReady(admin);
@@ -168,16 +70,6 @@ async function openPageForm(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'roster-new-section-form')).not.toBeNull();
 	});
-}
-
-async function typeName(container: HTMLElement, value: string): Promise<void> {
-	await fireEvent.input(q(container, 'roster-new-section-name') as HTMLElement, {
-		target: { value }
-	});
-}
-
-async function submit(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'roster-new-section-submit') as HTMLElement);
 }
 
 describe('/roster — the "+ New section" control lives in Arrange mode (finding F1, structural, relocated #155/S4)', () => {

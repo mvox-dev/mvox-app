@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Section create paths drop a parent id kept across a collective switch.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -37,14 +37,11 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { resolveMyLibraryId } from '$lib/library/librarianStore';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { createInviteMock, mintSelfLinkInviteMock } from '$lib/testing/mocks/admin';
 import {
@@ -64,24 +61,18 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
-
-const ORG_A = 'org-a';
-const ORG_B = 'org-b';
-
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
-function treeB(): SectionNode[] {
-	return [
-		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] },
-		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
-	];
-}
+import { ORG_A, ORG_B, treeA, treeB } from '$lib/testing/pages/rosterFixtures';
+import {
+	cleanupClearResetAdmin,
+	flush,
+	removeStatusText,
+	renameStatusText,
+	setAuthedWithTwoCollectives,
+	switchToOtherChoirArrange,
+	switchToOtherChoirGroups
+} from '$lib/testing/pages/roster';
+import { renderGroupsRoster, renderInArrangeMode } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): RosterRow[] {
 	return [
@@ -94,15 +85,6 @@ function rowsB(): RosterRow[] {
 	return [
 		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B, ownerIds: ['person-q'] }
 	];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
 }
 
 beforeEach(() => {
@@ -129,77 +111,10 @@ beforeEach(() => {
 	vi.mocked(resolveMyLibraryId).mockResolvedValue('lib-1');
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupClearResetAdmin);
 
 function createStatusText(container: HTMLElement): string {
 	return (q(container, 'roster-section-create-status')?.textContent ?? '').trim();
-}
-
-function removeStatusText(container: HTMLElement): string {
-	return (q(container, 'roster-section-remove-status')?.textContent ?? '').trim();
-}
-
-function renameStatusText(container: HTMLElement): string {
-	return (q(container, 'roster-section-rename-status')?.textContent ?? '').trim();
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-async function renderInArrangeMode(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
-}
-
-async function switchToOtherChoirArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('other-choir');
-	await waitFor(() => {
-		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
-	});
-	expect(q(container, 'arrange-row-sec-alto')).toBeNull();
-}
-
-async function renderGroupsRoster(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'section-toggle-unassigned')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-row-m-ada')).not.toBeNull();
-	});
-	return container;
-}
-
-async function switchToOtherChoirGroups(container: HTMLElement) {
-	selectedCollectiveDbStore.set('other-choir');
-	await waitFor(() => {
-		expect(q(container, 'section-toggle-sec-b1')).not.toBeNull();
-	});
-	expect(q(container, 'section-toggle-sec-sop')).toBeNull();
-	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-row-m-bob')).not.toBeNull();
-	});
 }
 
 async function openPageCreateForm(container: HTMLElement, name: string) {

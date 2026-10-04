@@ -25,6 +25,8 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { json } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
+import { JSON_HEADERS, flush } from '$lib/testing/pages/roster';
+import { renderRosterAs } from '$lib/testing/pages/rosterRender';
 
 interface DbWire {
 	dbEntityId: string;
@@ -38,8 +40,6 @@ interface DbWire {
 	lookupRecords?: Array<{ id: string; person?: string; name?: string }>;
 	viewerPersonId?: string;
 }
-
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 function wireMember(fx: DbWire, m: { id: string; person: string }) {
 	return {
@@ -163,7 +163,6 @@ function sampledbFixture(toggle: boolean | 'absent'): DbWire {
 }
 
 const q = (c: HTMLElement, id: string) => c.querySelector(`[data-testid="${id}"]`);
-const flush = () => new Promise((r) => setTimeout(r, 0));
 
 function rowNameSpan(c: HTMLElement, memberId: string): HTMLElement {
 	const li = q(c, `roster-row-${memberId}`);
@@ -173,10 +172,6 @@ function rowNameSpan(c: HTMLElement, memberId: string): HTMLElement {
 	return span as HTMLElement;
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 function setAuthedWithTwoCollectives() {
 	signIn({
 		collectives: [
@@ -184,16 +179,6 @@ function setAuthedWithTwoCollectives() {
 			{ db: 'other-choir', name: 'Other Choir', personId: 'person-b' }
 		]
 	});
-}
-
-async function renderRosterAs(admin: 'admin' | 'not-admin') {
-	const utils = render(Page);
-	setAuthedWithOneCollective();
-	adminStore.set(admin);
-	await waitFor(() => expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull());
-	await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
-	await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());
-	return utils;
 }
 
 afterEach(() => {

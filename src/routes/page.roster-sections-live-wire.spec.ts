@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -21,11 +21,11 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { cleanupUnstubResetRoster, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 const DB_ENTITY = '69c7f8718489bfcb0e81b065';
 const SEC_SOPRANO = '69c7f8728489bfcb0e81b07b';
@@ -114,21 +114,11 @@ function stubSectionsFetch(payload: unknown): ReturnType<typeof vi.fn> {
 	return fetchMock;
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadRosterMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
+afterEach(cleanupUnstubResetRoster);
 
 async function renderReady() {
 	setAuthedWithOneCollective();
@@ -142,10 +132,6 @@ async function renderReady() {
 		await fireEvent.click(toggleAll);
 	}
 	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 describe('/roster over the REAL listSections — CORRECTED data: a section-parented Soprano II renders NESTED (the acceptance shape for the live data fix)', () => {

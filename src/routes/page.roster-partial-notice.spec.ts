@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -40,12 +40,12 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { cleanupClearResetAdmin, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 const NOTICE = '[data-testid="roster-partial-notice"]';
 
@@ -75,10 +75,6 @@ function partial<T>(items: T[], total: number) {
 	return { items, total, truncated: true };
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 function setAuthedWithTwoCollectives() {
 	signIn({
 		collectives: [
@@ -102,12 +98,7 @@ beforeEach(() => {
 	listInactiveMembersMock.mockResolvedValue(toListRead([]));
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
+afterEach(cleanupClearResetAdmin);
 
 async function renderReady() {
 	const utils = render(Page);

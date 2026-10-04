@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -29,113 +29,20 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
-import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import { toListRead } from '$lib/testing/listReadFixtures';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
-import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { adminStore } from '$lib/nav/adminStore';
+import { createSectionMock } from '$lib/testing/mocks/sections';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
-	assignMock,
-	createSectionMock,
-	deleteMock,
-	reorderMock,
-	unassignMock
-} from '$lib/testing/mocks/sections';
+	CFG,
+	cleanupResetCreateSectionMocks,
+	seedCreateSectionMocks,
+	setAuthedWithOneCollective
+} from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
+beforeEach(seedCreateSectionMocks);
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
-const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const EFK_ALTO = '69c7f8748489bfcb0e81b0cd';
-const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
-
-function liveShapedTree(): SectionNode[] {
-	return [
-		{
-			id: EFK_SOPRANO,
-			name: 'Soprano',
-			displayOrder: 1,
-			parentId: null,
-			dbEntityId: ORG_EFK,
-			depth: 0,
-			children: []
-		},
-		{
-			id: SIREEN_SOPRANO_II,
-			name: 'Soprano II',
-			displayOrder: 3,
-			parentId: null,
-			dbEntityId: ORG_SIREEN,
-			depth: 0,
-			children: []
-		},
-		{
-			id: EFK_ALTO,
-			name: 'Alto',
-			displayOrder: 4,
-			parentId: null,
-			dbEntityId: ORG_EFK,
-			depth: 0,
-			children: []
-		}
-	];
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [EFK_SOPRANO],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-const CFG = testCfg('sampledb', 'jwt-abc');
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-beforeEach(() => {
-	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
-	listSectionsMock.mockResolvedValue(liveShapedTree());
-	assignMock.mockResolvedValue(undefined);
-	unassignMock.mockResolvedValue(undefined);
-	createSectionMock.mockResolvedValue('sec-new-1');
-	reorderMock.mockResolvedValue(undefined);
-	deleteMock.mockResolvedValue(undefined);
-	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
-});
-
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createSectionMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
+afterEach(cleanupResetCreateSectionMocks);
 
 async function renderArrangeReady() {
 	setAuthedWithOneCollective();
@@ -153,10 +60,6 @@ async function renderArrangeReady() {
 		expect(q(container, 'roster-new-section-form')).not.toBeNull();
 	});
 	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 describe('#560 — one key listener on the roster section-create form', () => {

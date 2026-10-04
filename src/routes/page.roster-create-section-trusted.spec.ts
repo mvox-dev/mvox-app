@@ -1,6 +1,6 @@
 // /roster section create end to end with real taps: body, parent, the new row appears.
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -20,19 +20,16 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { json } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { EFK_BASS, EFK_SOPRANO, ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { JSON_HEADERS, cleanupUnstubResetRoster } from '$lib/testing/pages/roster';
+import { renderArrangeReady } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065'; // the database entity — THE collective
-const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const EFK_BASS = '69c7f8768489bfcb0e81b163';
 const TAM_TENOR = '69c7f8878489bfcb0e81b506';
 const TYPE_SECTION = '69c7ea498489bfcb0e819ea3'; // the `section` type-definition entity
 const NEW_SECTION_ID = 'sec-new-live';
@@ -90,8 +87,6 @@ function fixtureRows(): RosterRow[] {
 
 const calls: Array<{ url: string; method: string; body: string | null }> = [];
 
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
-
 function stubFetch(): void {
 	const fetchMock = vi.fn().mockImplementation(async (url: string | URL, init?: RequestInit) => {
 		const u = String(url);
@@ -111,10 +106,6 @@ function stubFetch(): void {
 	vi.stubGlobal('fetch', fetchMock);
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	calls.length = 0;
 	resetTypeIdCache(); // the type-id cache is module-scope — never let it leak across cases
@@ -122,31 +113,7 @@ beforeEach(() => {
 	stubFetch();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadRosterMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderArrangeReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
-}
+afterEach(cleanupUnstubResetRoster);
 
 async function trustedClick(el: HTMLElement): Promise<void> {
 	const stopAtDocument = (e: Event) => e.stopPropagation();

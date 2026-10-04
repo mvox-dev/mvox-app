@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -26,32 +26,10 @@ import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function fixtureTree(): SectionNode[] {
-	const sop1: SectionNode = {
-		id: 'sec-sop1',
-		name: 'Soprano 1',
-		displayOrder: 1,
-		parentId: 'sec-sop',
-		depth: 1,
-		children: []
-	};
-	return [
-		{
-			id: 'sec-sop',
-			name: 'Soprano',
-			displayOrder: 1,
-			parentId: null,
-			depth: 0,
-			children: [sop1]
-		},
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] }
-	];
-}
+import { fixtureTree } from '$lib/testing/pages/rosterFixtures';
+import { cleanupResetRosterReads, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 function fixtureRows(): RosterRow[] {
 	return [
@@ -63,21 +41,12 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupResetRosterReads);
 
 async function renderReady() {
 	setAuthedWithOneCollective();

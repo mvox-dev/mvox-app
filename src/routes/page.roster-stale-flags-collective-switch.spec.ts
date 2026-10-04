@@ -39,15 +39,11 @@ vi.mock('$lib/roster/memberRecord', async (importOriginal) =>
 	(await import('$lib/testing/mocks/roster')).memberRecordModule(importOriginal)
 );
 
-import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { resolveMyLibraryId, resolveLibrarian } from '$lib/library/librarianStore';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	deactivateMemberMock,
@@ -68,34 +64,20 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
-
-const ORG_A = 'org-a';
-const ORG_B = 'org-b';
-
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
-function treeB(): SectionNode[] {
-	return [
-		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] },
-		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
-	];
-}
+import { ORG_A, ORG_B, rowsB, treeA, treeB } from '$lib/testing/pages/rosterFixtures';
+import {
+	flush,
+	openCard,
+	switchToOtherChoirArrange,
+	switchToOtherChoirGroups
+} from '$lib/testing/pages/roster';
+import { rowOrder } from '$lib/testing/pages/rosterArrange';
+import { renderGroupsRoster, renderInArrangeMode } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): RosterRow[] {
 	return [
 		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: [], dbEntityId: ORG_A }
-	];
-}
-
-function rowsB(): RosterRow[] {
-	return [
-		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: ORG_B }
 	];
 }
 
@@ -109,15 +91,6 @@ function inactiveB(): RosterRow[] {
 	return [
 		{ memberId: 'm-inb', personId: 'p-inb', name: 'Benno Gone', email: 'benno@x.com', sectionIds: [], dbEntityId: ORG_B }
 	];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
 }
 
 beforeEach(() => {
@@ -160,42 +133,8 @@ afterEach(() => {
 	resetAdmin();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 function reorderStatusText(container: HTMLElement): string {
 	return (q(container, 'roster-reorder-status')?.textContent ?? '').trim();
-}
-
-function rowOrder(container: HTMLElement): string[] {
-	return [...container.querySelectorAll('[data-testid^="arrange-row-"]')].map(
-		(el) => el.getAttribute('data-testid') ?? ''
-	);
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-async function renderInArrangeMode(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
-}
-
-async function switchToOtherChoirArrange(container: HTMLElement) {
-	selectedCollectiveDbStore.set('other-choir');
-	await waitFor(() => {
-		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
-	});
-	expect(q(container, 'arrange-row-sec-alto')).toBeNull();
 }
 
 async function keyboardMoveDown(container: HTMLElement, rowId: string, nthWrite: number) {
@@ -211,50 +150,10 @@ async function keyboardMoveDown(container: HTMLElement, rowId: string, nthWrite:
 	});
 }
 
-async function renderGroupsRoster(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'section-toggle-unassigned')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-row-m-ada')).not.toBeNull();
-	});
-	return container;
-}
-
-async function switchToOtherChoirGroups(container: HTMLElement) {
-	selectedCollectiveDbStore.set('other-choir');
-	await waitFor(() => {
-		expect(q(container, 'section-toggle-sec-b1')).not.toBeNull();
-	});
-	expect(q(container, 'section-toggle-sec-sop')).toBeNull();
-	await fireEvent.click(q(container, 'section-toggle-unassigned') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-row-m-bob')).not.toBeNull();
-	});
-}
-
 async function openInactivePanel(container: HTMLElement, memberId: string) {
 	await fireEvent.click(q(container, 'roster-inactive-toggle') as HTMLElement);
 	await waitFor(() => {
 		expect(q(container, `member-reinstate-${memberId}`)).not.toBeNull();
-	});
-}
-
-async function openCard(container: HTMLElement, memberId: string) {
-	const li = q(container, `roster-row-${memberId}`);
-	expect(li, `roster-row-${memberId} must render`).not.toBeNull();
-	if (li!.querySelector('[data-testid="roster-record-name"]')) return; // already open
-	const card = q(container, `roster-row-card-${memberId}`);
-	expect(card, `#302: collapsed-card activator roster-row-card-${memberId} must render`).not.toBeNull();
-	await fireEvent.click(card as HTMLElement);
-	await waitFor(() => {
-		expect(
-			q(container, `roster-row-${memberId}`)!.querySelector('[data-testid="roster-record-name"]')
-		).not.toBeNull();
 	});
 }
 
