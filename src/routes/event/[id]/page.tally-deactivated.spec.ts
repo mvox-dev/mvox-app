@@ -73,9 +73,9 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 import Page from './+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { fakeDateAtNow } from '$lib/testing/pages/event';
 import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithSampledb } from '$lib/testing/pages/eventFixtures';
 
 function eventEntity(startDatetime: string, over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -116,13 +116,6 @@ const RSVP_ROWS = [
 	{ rsvpId: 'r2', memberId: 'm-gone', status: 'going' }, // the deactivated member's recorded yes
 	{ rsvpId: 'r3', memberId: 'm-viewer', status: 'maybe' }
 ];
-
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-token',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
-	});
-}
 
 beforeEach(() => {
 	findMyMemberIdMock.mockResolvedValue('m-viewer');

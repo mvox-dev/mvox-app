@@ -42,7 +42,6 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	listAdminsMock,
@@ -58,6 +57,7 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { BELA, CFG, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
+import { renderReady } from '$lib/testing/pages/adminRender';
 
 const SELF_HINT_KEY = '[admin_roles_remove_self_hint]';
 
@@ -93,14 +93,6 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ markerId: 'marker-1', name: 'Sampledb' });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-}
-
-async function renderReady() {
-	const rendered = render(Page);
-	await waitFor(() => {
-		expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
-	});
-	return rendered;
 }
 
 beforeEach(() => {

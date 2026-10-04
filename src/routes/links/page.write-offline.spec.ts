@@ -38,6 +38,7 @@ import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { REASON } from '$lib/testing/pages/event';
 import { DB_ENTITY, TYPE_ID, cleanupClearResetAdminOnLine } from '$lib/testing/pages/links';
+import { rowEls } from '$lib/testing/pages/dom';
 
 function nonGetWireCalls(): string[] {
 	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>)
@@ -102,10 +103,6 @@ afterEach(cleanupClearResetAdminOnLine);
 
 function q(container: HTMLElement, testid: string): HTMLElement | null {
 	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-function rowEls(container: HTMLElement): HTMLElement[] {
-	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));
 }
 
 async function renderReadyOnline() {

@@ -92,7 +92,7 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-import { q } from '$lib/testing/pages/dom';
+import { flushMicrotasks, q } from '$lib/testing/pages/dom';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
 	SEASON_ID,
@@ -135,10 +135,6 @@ function upcomingRehearsal(): AgendaItem {
 		editors: [],
 		eventType: 'rehearsal'
 	} as AgendaItem;
-}
-
-async function flushMicrotasks(): Promise<void> {
-	for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 
 function setAuthedWithTwoCollectives() {

@@ -1,4 +1,6 @@
-// Event page fixtures shared word for word: the bare series (no defaults) and a work row.
+// Event page fixtures shared word for word: the bare series, a work row, the tally sign-in.
+import { signIn } from '$lib/testing/session';
+
 export function seriesEntity() {
 	return {
 		_id: 'series1',
@@ -24,6 +26,13 @@ export function workRow(id: string, workName: string, fileId: string) {
 		canBorrow: false,
 		notes: ''
 	};
+}
+
+export function setAuthedWithSampledb() {
+	signIn({
+		token: 'jwt-token',
+		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
+	});
 }
 
 // (*MVOX:Josquin*)

@@ -114,7 +114,7 @@ import {
 	selectValue,
 	setAuthedWithTwoCollectives
 } from '$lib/testing/pages/seasonPanel';
-import { setAuthedWithOneCollective } from '$lib/testing/pages/seasonManage';
+import { renderReady } from '$lib/testing/pages/seasonManageRender';
 
 function upcomingSeason(): Season {
 	return {
@@ -201,15 +201,6 @@ function visibleText(el: HTMLElement): string {
 	const clone = el.cloneNode(true) as HTMLElement;
 	for (const hidden of clone.querySelectorAll('.sr-only, [aria-hidden="true"]')) hidden.remove();
 	return (clone.textContent ?? '').replace(/\s+/g, ' ').trim();
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
 }
 
 async function startHangingSeriesRun(container: HTMLElement): Promise<Array<(id: string) => void>> {

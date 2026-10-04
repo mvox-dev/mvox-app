@@ -60,6 +60,7 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { CFG, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset, q } from '$lib/testing/pages/dom';
+import { renderReady } from '$lib/testing/pages/adminRender';
 
 const MARKER = { markerId: 'marker-1', name: 'Koor Sampledb' };
 
@@ -78,14 +79,6 @@ function loadOk() {
 	resolveInviteParentMock.mockResolvedValue('org-1');
 	resolveCollectiveNameMarkerMock.mockResolvedValue({ ...MARKER });
 	updateCollectiveNameMock.mockResolvedValue(undefined);
-}
-
-async function renderReady() {
-	const rendered = render(Page);
-	await waitFor(() => {
-		expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
-	});
-	return rendered;
 }
 
 async function renderWithName() {

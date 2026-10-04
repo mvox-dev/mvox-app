@@ -50,10 +50,7 @@ import { signIn } from '$lib/testing/session';
 import { applyProfileSaveMock } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock, resolveGateMock } from '$lib/testing/mocks/session';
 import { selectSampledb, waitReady } from '$lib/testing/pages/profile';
-
-async function flushMicrotasks(): Promise<void> {
-	for (let i = 0; i < 20; i++) await Promise.resolve();
-}
+import { flushMicrotasks } from '$lib/testing/pages/dom';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 

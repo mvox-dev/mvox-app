@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The /admin role add/remove controls hold a pending state until the write lands.
-import { fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -45,8 +45,6 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
-import Page from './admin/+page.svelte';
-import type { RolePerson } from '$lib/admin/roleManagement';
 import {
 	addAdminMock,
 	addLibrarianMock,
@@ -57,19 +55,11 @@ import {
 } from '$lib/testing/mocks/admin';
 import { loadOk, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
 resolveOwnerTierMock.mockResolvedValue('error');
-
-async function renderReady() {
-	const rendered = render(Page);
-	await waitFor(() => {
-		expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
-		expect(q(rendered.container, 'admin-roles-librarians')).not.toBeNull();
-	});
-	return rendered;
-}
 
 function adminSelect(container: HTMLElement): HTMLSelectElement {
 	const select = q<HTMLSelectElement>(container, 'admin-add-admin-select');

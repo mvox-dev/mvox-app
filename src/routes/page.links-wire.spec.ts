@@ -34,7 +34,7 @@ import {
 	setAuthedAdmin,
 	wireCalls
 } from '$lib/testing/pages/links';
-import { q } from '$lib/testing/pages/dom';
+import { q, rowEls } from '$lib/testing/pages/dom';
 
 function installWireRouter() {
 	entuFetchMock.mockImplementation((_db: string, path: string, _token: string, init?: RequestInit) => {
@@ -87,10 +87,6 @@ beforeEach(() => {
 });
 
 afterEach(cleanupClearAdmin);
-
-function rowEls(container: HTMLElement): HTMLElement[] {
-	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));
-}
 
 async function renderReady() {
 	const utils = render(Page);

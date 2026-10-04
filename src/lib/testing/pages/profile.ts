@@ -1,11 +1,8 @@
 // Profile page harness (no page import): the setup its specs had word for word.
 import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { expect, vi } from 'vitest';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetAppState } from '$lib/testing/appReset';
-import type { MessageFile } from '$lib/testing/messageFile.js';
 import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/profile';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { signIn } from '$lib/testing/session';
@@ -67,10 +64,6 @@ export async function waitReady(container: HTMLElement): Promise<void> {
 	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 }
 
-export function readMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
+export { messages as readMessages } from './messageFiles';
 
 // (*MVOX:Josquin*)

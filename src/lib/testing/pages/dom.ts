@@ -51,4 +51,12 @@ export function optionSet(dl: HTMLElement): string[] {
 	return [...dl.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value).sort();
 }
 
+export async function flushMicrotasks(): Promise<void> {
+	for (let i = 0; i < 20; i++) await Promise.resolve();
+}
+
+export function rowEls(container: HTMLElement): HTMLElement[] {
+	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));
+}
+
 // (*MVOX:Josquin*)

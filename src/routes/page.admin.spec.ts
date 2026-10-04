@@ -78,6 +78,7 @@ import {
 } from '$lib/testing/pages/admin';
 import { cleanupReset, optionValues, q } from '$lib/testing/pages/dom';
 import { promptOption } from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/adminRolesRender';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
@@ -94,15 +95,6 @@ function section(container: HTMLElement, testid: string): HTMLElement {
 	const el = q<HTMLElement>(container, testid);
 	expect(el, `expected [data-testid="${testid}"] to be rendered`).not.toBeNull();
 	return el!;
-}
-
-async function renderReady() {
-	const rendered = render(Page);
-	await waitFor(() => {
-		expect(q(rendered.container, 'admin-roles-admins')).not.toBeNull();
-		expect(q(rendered.container, 'admin-roles-librarians')).not.toBeNull();
-	});
-	return rendered;
 }
 
 function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement {
