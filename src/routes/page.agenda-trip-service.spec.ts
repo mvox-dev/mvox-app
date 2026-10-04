@@ -1,10 +1,8 @@
 // @vitest-environment happy-dom
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import type { AgendaItem } from '$lib/agenda/types';
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -57,68 +55,24 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
+import { findMyMemberIdMock, listMyRsvpsMock } from '$lib/testing/moduleHandles';
 import {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
-	loadFullAgendaMock
-} from '$lib/testing/moduleHandles';
+	UP_CONCERT,
+	UP_FREETEXT,
+	UP_REHEARSAL,
+	chip,
+	chipTestids,
+	chipTexts,
+	chips,
+	cleanupResetAgendaView,
+	item,
+	upcomingRowIds
+} from '$lib/testing/pages/agenda';
+import { renderAgenda } from '$lib/testing/pages/agendaRender';
 
-function setAuthedWithOneCollective() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
-}
-
-function item(id: string, name: string, startDatetime: string, eventType: string): AgendaItem {
-	return {
-		id,
-		name,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: [],
-		eventType
-	} as AgendaItem;
-}
-
-const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
-const UP_CONCERT = item('up-con', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
 const UP_SERVICE = item('up-serv', 'Jumalateenistus', '2030-06-15T08:00:00.000Z', 'service');
 const UP_TRIP = item('up-trip', 'Suvine ringreis', '2030-06-18T06:00:00.000Z', 'trip');
-const UP_FREETEXT = item('up-proov', 'Eriproov', '2030-06-14T16:00:00.000Z', 'proov');
-
-function chipGroup(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="group"][aria-label="[msg:filter-group]"]');
-}
-
-function chips(container: HTMLElement): HTMLButtonElement[] {
-	const group = chipGroup(container);
-	return group ? Array.from(group.querySelectorAll('button')) : [];
-}
-
-function chipTestids(container: HTMLElement): (string | null)[] {
-	return chips(container).map((b) => b.getAttribute('data-testid'));
-}
-
-function chipTexts(container: HTMLElement): (string | undefined)[] {
-	return chips(container).map((b) => b.textContent?.trim());
-}
-
-function chip(container: HTMLElement, testid: string): HTMLButtonElement {
-	const el = container.querySelector(`[data-testid="${testid}"]`);
-	expect(el, `chip ${testid} must exist`).not.toBeNull();
-	return el as HTMLButtonElement;
-}
-
-function upcomingRowIds(container: HTMLElement): string[] {
-	return Array.from(container.querySelectorAll('[data-testid^="agenda-row-"]')).map((el) =>
-		(el.getAttribute('data-testid') as string).replace('agenda-row-', '')
-	);
-}
 
 function badge(container: HTMLElement, id: string): HTMLElement {
 	const el = container.querySelector(`[data-testid="event-type-badge-${id}"]`);
@@ -137,19 +91,6 @@ function expectSchemeClasses(el: Element, type: string) {
 	}
 }
 
-async function renderAgenda(
-	upcoming: AgendaItem[],
-	recent: AgendaItem[] = []
-): Promise<HTMLElement> {
-	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ upcoming, recent }));
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="agenda-skeleton"]')).toBeNull();
-	});
-	return container as HTMLElement;
-}
-
 async function switchToMonth(container: HTMLElement): Promise<void> {
 	const btn = container.querySelector('[data-testid="agenda-view-month"]');
 	expect(btn, 'agenda-view-month toggle must exist').not.toBeNull();
@@ -159,16 +100,7 @@ async function switchToMonth(container: HTMLElement): Promise<void> {
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
-afterEach(async () => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	resetAppState();
-	const prefs = await import('$lib/preferences/agendaView').catch(() => null);
-	prefs?.setAgendaView('list');
-	if (typeof localStorage !== 'undefined') localStorage.clear();
-});
+afterEach(cleanupResetAgendaView);
 
 describe('#266 — the filter chips pick trip and service up from the vocabulary', () => {
 	it('renders own chips for present trip/service events — canonical order (service after concert, trip after retreat-slot neighbours), localized labels, NO other bucket', async () => {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -90,10 +90,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -101,12 +98,14 @@ import {
 } from '$lib/testing/moduleHandles';
 import {
 	createAttendanceMock,
-	deleteAttendanceMock,
 	listAllRsvpsForEventMock,
-	listAttendanceMock,
-	updateAttendanceStatusMock
+	listAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	cleanupResetAttendanceMocks,
+	setAuthedWithOneCollective
+} from '$lib/testing/pages/agendaAttendance';
 
 function agendaItem(
 	id: string,
@@ -124,11 +123,6 @@ function agendaItem(
 		editors: [],
 		...over
 	};
-}
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
 }
 
 function setRecentFixture(
@@ -161,20 +155,7 @@ function setRecentFixture(
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	loadRosterMock.mockReset();
-	listAttendanceMock.mockReset();
-	listAllRsvpsForEventMock.mockReset();
-	createAttendanceMock.mockReset();
-	updateAttendanceStatusMock.mockReset();
-	deleteAttendanceMock.mockReset();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetAttendanceMocks);
 
 const ROW = '[data-testid="agenda-recent-row-past-1"]';
 const BTN = `${ROW} [data-testid="take-attendance-btn"]`;

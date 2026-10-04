@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -57,74 +57,34 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { completionGateStore } from '$lib/profile/completionGate';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
+import {
+	UP_CONCERT,
+	UP_FREETEXT,
+	UP_REHEARSAL,
+	chip,
+	chipGroup,
+	chipTestids,
+	chipTexts,
+	chips,
+	cleanupResetAgendaGate,
+	item,
+	setAuthedWithOneCollective,
+	setAuthedWithTwoCollectives,
+	upcomingRowIds
+} from '$lib/testing/pages/agenda';
+import { renderAgenda } from '$lib/testing/pages/agendaRender';
 
-function setAuthedWithOneCollective() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({ collectives: [{ db: 'org-a', name: 'Org A', personId: 'p1' }, { db: 'org-b', name: 'Org B', personId: 'p1' }] });
-}
-
-function item(id: string, name: string, startDatetime: string, eventType: string): AgendaItem {
-	return {
-		id,
-		name,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: [],
-		eventType
-	} as AgendaItem;
-}
-
-const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
-const UP_CONCERT = item('up-con', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
 const UP_OTHER = item('up-other', 'Muu üritus', '2030-06-15T16:00:00.000Z', 'other');
-const UP_FREETEXT = item('up-proov', 'Eriproov', '2030-06-14T16:00:00.000Z', 'proov');
 const UP_UNTYPED = item('up-untyped', 'Tüübita üritus', '2030-06-16T16:00:00.000Z', '');
 const RECENT_SOCIAL = item('rec-soc', 'Suvepidu', '2026-05-01T18:00:00.000Z', 'social');
 const RECENT_CONCERT = item('rec-con', 'Talvekontsert', '2026-04-01T18:00:00.000Z', 'concert');
-
-function chipGroup(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="group"][aria-label="[msg:filter-group]"]');
-}
-
-function chips(container: HTMLElement): HTMLButtonElement[] {
-	const group = chipGroup(container);
-	return group ? Array.from(group.querySelectorAll('button')) : [];
-}
-
-function chipTestids(container: HTMLElement): (string | null)[] {
-	return chips(container).map((b) => b.getAttribute('data-testid'));
-}
-
-function chipTexts(container: HTMLElement): (string | undefined)[] {
-	return chips(container).map((b) => b.textContent?.trim());
-}
-
-function chip(container: HTMLElement, testid: string): HTMLButtonElement {
-	const el = container.querySelector(`[data-testid="${testid}"]`);
-	expect(el, `chip ${testid} must exist`).not.toBeNull();
-	return el as HTMLButtonElement;
-}
-
-function upcomingRowIds(container: HTMLElement): string[] {
-	return Array.from(container.querySelectorAll('[data-testid^="agenda-row-"]')).map((el) =>
-		(el.getAttribute('data-testid') as string).replace('agenda-row-', '')
-	);
-}
 
 function recentRowIds(container: HTMLElement): string[] {
 	return Array.from(container.querySelectorAll('[data-testid^="agenda-recent-row-"]')).map((el) =>
@@ -132,30 +92,10 @@ function recentRowIds(container: HTMLElement): string[] {
 	);
 }
 
-async function renderAgenda(
-	upcoming: AgendaItem[],
-	recent: AgendaItem[] = []
-): Promise<HTMLElement> {
-	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ upcoming, recent }));
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="agenda-skeleton"]')).toBeNull();
-	});
-	return container as HTMLElement;
-}
-
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetAgendaGate);
 
 describe('#214 — chip DERIVATION from the rendered agenda', () => {
 	it('renders exactly [All, rehearsal, concert, social] for a rehearsal+concert upcoming and a social recent — canonical order, native buttons, above the agenda', async () => {

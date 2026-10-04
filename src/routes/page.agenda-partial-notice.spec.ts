@@ -56,6 +56,8 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { listMyAttendanceMock } from '$lib/testing/mocks/events';
+import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 function complete<T>(items: T[]) {
 	return { items, total: items.length, truncated: false };
@@ -71,10 +73,6 @@ interface Read<T> {
 }
 type RsvpRead = Read<{ rsvpId: string; eventId: string; status: string }>;
 type AttendanceRead = Read<{ attendanceId: string; eventId: string; status: string }>;
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
 
 const DB_A = 'sampledb';
 const DB_B = 'other-choir';
@@ -100,10 +98,6 @@ afterEach(() => {
 	vi.clearAllMocks();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 describe('#321 — the agenda states when the singer’s own answer/attendance set is partial', () => {
 	it('a truncated listMyRsvps read renders rsvp-partial-notice (visible, role=status, i18n copy)', async () => {

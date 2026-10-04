@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgendaItem } from '$lib/agenda/types';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket', {
@@ -47,32 +46,17 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
-
-function setAuthedWithOneCollective() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
-}
-
-function item(id: string, name: string, startDatetime: string, eventType: string): AgendaItem {
-	return {
-		id,
-		name,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: [],
-		eventType
-	} as AgendaItem;
-}
+import {
+	cleanupResetAgendaMocks,
+	item,
+	setAuthedWithOneCollective
+} from '$lib/testing/pages/agenda';
 
 const REHEARSAL = item('ev-proov', 'Tavaline proov', '2030-06-10T16:00:00.000Z', 'rehearsal');
 const CONCERT = item('ev-kontsert', 'Kevadkontsert', '2030-06-12T18:00:00.000Z', 'concert');
@@ -80,13 +64,7 @@ const CONCERT = item('ev-kontsert', 'Kevadkontsert', '2030-06-12T18:00:00.000Z',
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	resetAppState();
-});
+afterEach(cleanupResetAgendaMocks);
 
 describe('+page — agenda shows ALL event types (#194/#202 integration)', () => {
 	it('renders the concert row alongside the rehearsal row, each with its LOCALIZED type badge', async () => {

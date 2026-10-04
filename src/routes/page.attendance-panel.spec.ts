@@ -1,62 +1,12 @@
 // @vitest-environment happy-dom
 // The agenda's take-attendance panel: member list, marks and writes.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).englishMessages({
-		picker_partial_members_notice: () => 'Not every member is listed here',
-		agenda_empty_no_events: () => 'No upcoming events.',
-		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
-		agenda_today: () => 'Today',
-		agenda_tomorrow: () => 'Tomorrow',
-		agenda_gap_weeks: (p: { weeks: number }) => `${p.weeks} weeks later`,
-		agenda_load_error: () => "Couldn't load the agenda.",
-		agenda_retry: () => 'Retry',
-		agenda_filter_all: () => 'All',
-		agenda_filter_group_label: () => 'Filter by event type',
-		agenda_view_toggle_label: () => 'Agenda view',
-		agenda_view_list: () => 'List',
-		agenda_view_month: () => 'Month',
-		agenda_filter_empty: () => 'No events match this filter.',
-		agenda_row_link_label: (p: { event: string }) => `View details for ${p.event}`,
-		rsvp_status_going: () => 'Going',
-		rsvp_status_not_going: () => 'Not going',
-		rsvp_status_maybe: () => 'Maybe',
-		rsvp_status_late: () => 'Running late',
-		rsvp_group_label: () => 'RSVP',
-		rsvp_non_member_hint: () => 'You are not an active member.',
-		rsvp_save_failed: () => 'Could not save your answer.',
-		agenda_recent: () => 'Recent',
-		agenda_recent_show_more: () => 'Show earlier',
-		agenda_switch_collective: () => 'Switch collective',
-		agenda_take_attendance: () => 'Take attendance',
-		agenda_take_attendance_label: (p: { event: string }) => `Take attendance for ${p.event}`,
-		attendance_group_label: (p: { name: string }) => `Attendance for ${p.name}`,
-		attendance_status_present: () => 'Present',
-		attendance_status_absent: () => 'Absent',
-		attendance_status_late: () => 'Late',
-		attendance_toggle_aria_label: (p: { name: string; status: string }) => `Mark ${p.name} as ${p.status}`,
-		attendance_rsvp_none: () => 'No answer',
-		attendance_rsvp_aria_label: (p: { name: string; rsvp: string }) => `RSVP for ${p.name}: ${p.rsvp}`,
-		attendance_load_error: () => "Couldn't load attendance.",
-		attendance_loading: () => 'Loading attendance…',
-		attendance_ready: (p: { count: number }) => `Attendance loaded, ${p.count} members`,
-		attendance_save_failed: () => 'Could not save attendance.',
-		attendance_saved: () => 'Saved.',
-		attendance_tally: (p: { present: number; absent: number; late: number }) =>
-			`${p.present} present · ${p.absent} absent · ${p.late} late`,
-		attendance_tally_unconfirmed: () => 'Counts include unconfirmed changes.',
-		attendance_close: () => 'Close',
-		attendance_status_not_recorded: () => 'Not recorded',
-		attendance_season_summary: () => 'This season',
-		attendance_season_rate: (p: { attended: number; total: number }) =>
-			`Attended ${p.attended} of ${p.total} events`,
-		attendance_member_rate: (p: { attended: number; total: number }) => `${p.attended} of ${p.total}`,
-		attendance_all_members: () => 'All members'
-	})
+	(await import('$lib/testing/pages/agendaCopy')).agendaMessages()
 );
 
 vi.mock('$lib/agenda/agendaData', async () =>
@@ -93,9 +43,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import {
@@ -105,43 +53,15 @@ import {
 } from '$lib/testing/moduleHandles';
 import {
 	createAttendanceMock,
-	deleteAttendanceMock,
 	listAllRsvpsForEventMock,
-	listAttendanceMock,
-	updateAttendanceStatusMock
+	listAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function agendaItem(
-	id: string,
-	startDatetime: string,
-	conductors: string[] = []
-): {
-	id: string;
-	name: string;
-	startDatetime: string;
-	durationMinutes: number;
-	location: string;
-	conductors: string[];
-	owners: string[];
-	editors: string[];
-} {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors,
-		owners: [],
-		editors: []
-	};
-}
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
-}
+import {
+	cleanupResetAttendanceMocks,
+	setAuthedWithOneCollective
+} from '$lib/testing/pages/agendaAttendance';
+import { agendaItem } from '$lib/testing/pages/agendaConductor';
 
 function setTwoConductedRecentEventsFixture() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
@@ -183,20 +103,7 @@ function setConductedRecentFixture() {
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	loadRosterMock.mockReset();
-	listAttendanceMock.mockReset();
-	listAllRsvpsForEventMock.mockReset();
-	createAttendanceMock.mockReset();
-	updateAttendanceStatusMock.mockReset();
-	deleteAttendanceMock.mockReset();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupResetAttendanceMocks);
 
 describe('+page — the Take attendance entry point (#84 TA.3)', () => {
 	it('a conductor NOW sees the take-attendance button on their conducted recent row (TA.2 gated it behind handler presence; TA.3 wires the handler)', async () => {

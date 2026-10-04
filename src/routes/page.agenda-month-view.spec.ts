@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -32,7 +31,6 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	})
 );
 
-type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 const localeMock = vi.hoisted(() => ({
 	state: null as { get(k: string): string | undefined; set(k: string, v: string): unknown } | null
 }));
@@ -84,19 +82,10 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
-	loadFullAgendaMock
-} from '$lib/testing/moduleHandles';
-
-function setAuthedWithOneCollective() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
-}
+import { toListRead } from '$lib/testing/listReadFixtures.js';
+import { findMyMemberIdMock, listMyRsvpsMock } from '$lib/testing/moduleHandles';
+import { type AppLocale, chipGroup, cleanupResetAgendaView } from '$lib/testing/pages/agenda';
+import { renderAgenda } from '$lib/testing/pages/agendaRender';
 
 function item(
 	id: string,
@@ -137,10 +126,6 @@ function viewButton(container: HTMLElement, testid: string): HTMLButtonElement {
 	return el as HTMLButtonElement;
 }
 
-function chipGroup(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="group"][aria-label="[msg:filter-group]"]');
-}
-
 function monthGroups(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll('[data-testid="agenda-month-group"]'));
 }
@@ -169,19 +154,6 @@ function dayListRowIds(container: HTMLElement): string[] {
 	);
 }
 
-async function renderAgenda(
-	upcoming: AgendaItem[],
-	recent: AgendaItem[] = []
-): Promise<HTMLElement> {
-	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ upcoming, recent }));
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="agenda-skeleton"]')).toBeNull();
-	});
-	return container as HTMLElement;
-}
-
 async function switchToMonth(container: HTMLElement): Promise<void> {
 	await fireEvent.click(viewButton(container, 'agenda-view-month'));
 }
@@ -193,16 +165,7 @@ beforeEach(() => {
 	setAppLocale('et');
 });
 
-afterEach(async () => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	findMyMemberIdMock.mockReset().mockResolvedValue(null);
-	listMyRsvpsMock.mockReset().mockResolvedValue([]);
-	resetAppState();
-	const prefs = await import('$lib/preferences/agendaView').catch(() => null);
-	prefs?.setAgendaView('list');
-	if (typeof localStorage !== 'undefined') localStorage.clear();
-});
+afterEach(cleanupResetAgendaView);
 
 describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the chips, day list default)', () => {
 	it('renders a two-state segmented control of native buttons; the day list is active by default', async () => {

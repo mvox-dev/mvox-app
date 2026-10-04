@@ -2,13 +2,11 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AgendaItem } from '$lib/agenda/types';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-type AppLocale = 'en' | 'et' | 'lv' | 'uk';
 vi.mock('$lib/paraglide/runtime.js', async () =>
 	(await import('$lib/testing/mocks/session')).localeRuntimeModule()
 );
@@ -51,35 +49,16 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { localeMock } from '$lib/testing/mocks/session';
-
-function setAuthedWithOneCollective() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
-}
-
-function item(id: string, name: string, startDatetime: string): AgendaItem {
-	return {
-		id,
-		name,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: [],
-		eventType: 'rehearsal'
-	} as AgendaItem;
-}
-
-const REHEARSAL = item('ev-proov', 'Tavaline proov', '2030-06-10T16:00:00.000Z');
+import { type AppLocale, setAuthedWithOneCollective } from '$lib/testing/pages/agenda';
+import { REHEARSAL } from '$lib/testing/pages/agendaRehearsal';
 
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));
