@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The agenda notices for a truncated RSVP or attendance lifetime read.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -48,7 +48,6 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
@@ -56,15 +55,9 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { listMyAttendanceMock } from '$lib/testing/mocks/events';
-import { q } from '$lib/testing/pages/dom';
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-
-function complete<T>(items: T[]) {
-	return { items, total: items.length, truncated: false };
-}
-function truncated<T>(items: T[], total: number) {
-	return { items, total, truncated: true };
-}
+import { DB_A, complete, truncated } from '$lib/testing/pages/agenda';
 
 interface Read<T> {
 	items: T[];
@@ -74,7 +67,6 @@ interface Read<T> {
 type RsvpRead = Read<{ rsvpId: string; eventId: string; status: string }>;
 type AttendanceRead = Read<{ attendanceId: string; eventId: string; status: string }>;
 
-const DB_A = 'sampledb';
 const DB_B = 'other-choir';
 
 function setAuthedWithTwoCollectives() {
@@ -93,11 +85,7 @@ function emptyAgenda() {
 	});
 }
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
+afterEach(cleanupClearReset);
 
 describe('#321 — the agenda states when the singer’s own answer/attendance set is partial', () => {
 	it('a truncated listMyRsvps read renders rsvp-partial-notice (visible, role=status, i18n copy)', async () => {

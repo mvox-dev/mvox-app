@@ -34,4 +34,8 @@ export function cleanupClearReset(): void {
 	resetAppState();
 }
 
+export function optionValues(select: HTMLSelectElement): string[] {
+	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
 // (*MVOX:Josquin*)

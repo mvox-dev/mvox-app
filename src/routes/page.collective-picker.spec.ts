@@ -65,32 +65,12 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { listMyAttendanceMock } from '$lib/testing/mocks/events';
+import { DB_A, complete, truncated } from '$lib/testing/pages/agenda';
+import { agendaEvent } from '$lib/testing/pages/agendaWorks';
+import { q } from '$lib/testing/pages/dom';
 
-const DB_A = 'sampledb';
 const DB_B = 'orlando';
 const SELECTED_KEY = 'mvox.selected_collective';
-
-function complete<T>(items: T[]) {
-	return { items, total: items.length, truncated: false };
-}
-function truncated<T>(items: T[], total: number) {
-	return { items, total, truncated: true };
-}
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-function agendaEvent(id: string, name: string) {
-	return {
-		id,
-		name,
-		startDatetime: future,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	};
-}
 
 function installAgendaPerDb() {
 	loadFullAgendaMock.mockImplementation(async () =>
@@ -132,10 +112,6 @@ function setAuthedWithStatus(state: { status: 'none' } | { status: 'error'; erro
 	collectiveState.set(state);
 	urlCollectiveDbStore.set(null);
 	selectedCollectiveDbStore.set(null);
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 function headerSelect(container: HTMLElement): HTMLSelectElement | null {

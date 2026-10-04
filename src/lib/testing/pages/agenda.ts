@@ -4,6 +4,7 @@ import { expect } from 'vitest';
 import type { AgendaItem } from '$lib/agenda/types';
 import { setAgendaView } from '$lib/preferences/agendaView';
 import { resetGate } from '$lib/profile/completionGate';
+import type { Season } from '$lib/seasons/types';
 import { resetAppState } from '$lib/testing/appReset';
 import {
 	findMyMemberIdMock,
@@ -11,6 +12,7 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { signIn } from '$lib/testing/session';
+import { isoDate } from './seasonPanel';
 
 export function setAuthedWithOneCollective() {
 	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p1' }] });
@@ -97,5 +99,51 @@ export function cleanupResetAgendaView(): void {
 	setAgendaView('list');
 	if (typeof localStorage !== 'undefined') localStorage.clear();
 }
+
+export function complete<T>(items: T[]) {
+	return { items, total: items.length, truncated: false };
+}
+
+export function agendaItem(id: string, startDatetime: string) {
+	return {
+		id,
+		name: `Rehearsal ${id}`,
+		startDatetime,
+		durationMinutes: 90,
+		location: '',
+		conductors: [] as string[],
+		owners: [] as string[],
+		editors: [] as string[]
+	};
+}
+
+export function truncated<T>(items: T[], total: number) {
+	return { items, total, truncated: true };
+}
+
+export const EVENT = {
+	id: 'e1',
+	name: 'Rehearsal e1',
+	startDatetime: '2026-06-15T09:00:00.000Z',
+	durationMinutes: 90,
+	location: '',
+	conductors: [],
+	owners: [],
+	editors: []
+};
+
+export function currentSeason(): Season {
+	return {
+		id: 'season-1',
+		name: 'Season 2026',
+		startDate: isoDate(-30),
+		endDate: isoDate(60),
+		conductors: [],
+		owners: [],
+		editors: ['person-p'] // the viewer is a season editor → [+ Season] renders
+	};
+}
+
+export const DB_A = 'sampledb';
 
 // (*MVOX:Josquin*)

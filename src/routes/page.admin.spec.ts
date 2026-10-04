@@ -76,7 +76,7 @@ import {
 	resetAdminMocks,
 	selectSampledb
 } from '$lib/testing/pages/admin';
-import { cleanupReset, q } from '$lib/testing/pages/dom';
+import { cleanupReset, optionValues, q } from '$lib/testing/pages/dom';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
@@ -109,10 +109,6 @@ function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement
 	expect(select, `expected the section to hold a native [data-testid="${testid}"]`).not.toBeNull();
 	expect(select!.tagName).toBe('SELECT');
 	return select!;
-}
-
-function optionValues(select: HTMLSelectElement): string[] {
-	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
 }
 
 function promptOption(select: HTMLSelectElement): HTMLOptionElement {

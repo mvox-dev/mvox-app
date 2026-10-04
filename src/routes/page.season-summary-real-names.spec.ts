@@ -36,13 +36,12 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { realNamesWire, PROFILE_NAMES, REAL_NAMES } from '$lib/testing/realNamesFence';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -53,24 +52,8 @@ import {
 	listAttendanceMock,
 	listMyAttendanceMock
 } from '$lib/testing/mocks/events';
-
-function agendaItem(id: string, startDatetime: string) {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [] as string[],
-		owners: [] as string[],
-		editors: [] as string[]
-	};
-}
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
-}
+import { agendaItem } from '$lib/testing/pages/agenda';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
 
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(

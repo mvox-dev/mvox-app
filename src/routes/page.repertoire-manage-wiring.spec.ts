@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // Repertoire and programme management wired through the agenda page; only fetch is stubbed.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent } from '@testing-library/svelte';
+import { render, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -33,29 +33,9 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-const upcoming = [
-	{
-		id: 'ev-1',
-		name: 'Rehearsal',
-		startDatetime: future,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	}
-];
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
+import { cleanupUnstubResetAgenda, upcoming } from '$lib/testing/pages/agendaWorks';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 interface WorldOptions {
 	seasonEditor?: boolean;
@@ -192,12 +172,7 @@ beforeEach(() => {
 	resetTypeIdCache();
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupUnstubResetAgenda);
 
 describe('+page — repertoire management wiring (#91 TR.3)', () => {
 	it('a season editor SEES the management controls on the agenda row', async () => {

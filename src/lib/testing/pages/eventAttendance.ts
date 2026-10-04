@@ -13,6 +13,7 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { discoverMock } from '$lib/testing/routeMocks';
 import { signIn } from '$lib/testing/session';
+import { q } from './dom';
 import { isoAt } from './event';
 
 export const ROSTER = [
@@ -68,6 +69,10 @@ export function resetAttendanceMocks(): void {
 	discoverMock.mockReset();
 	resetTypeIdCache();
 	resetAppState();
+}
+
+export function rowSavedText(container: HTMLElement, memberId: string): string {
+	return q(container, `attendance-saved-status-${memberId}`)?.textContent?.trim() ?? '';
 }
 
 // (*MVOX:Josquin*)

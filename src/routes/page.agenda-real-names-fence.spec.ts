@@ -60,19 +60,7 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
-
-function agendaItem(id: string, startDatetime: string) {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [] as string[],
-		owners: [] as string[],
-		editors: [] as string[]
-	};
-}
+import { agendaItem } from '$lib/testing/pages/agenda';
 
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));

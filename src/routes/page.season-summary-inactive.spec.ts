@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -42,10 +42,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
-import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { toListRead } from '$lib/testing/listReadFixtures.js';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -57,24 +54,8 @@ import {
 	listMyAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadActiveAndArchivedRostersMock, loadRosterMock } from '$lib/testing/mocks/roster';
-
-function agendaItem(id: string, startDatetime: string) {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	};
-}
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
-}
+import { agendaItem, cleanupClearResetGate } from '$lib/testing/pages/agendaSummary';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
 
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(
@@ -117,12 +98,7 @@ beforeEach(() => {
 	});
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupClearResetGate);
 
 async function renderExpandedSummary() {
 	const utils = render(Page);

@@ -93,7 +93,6 @@ import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { openFileBytes } from '$lib/files/openFileBytes';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import {
 	listSectionsMock,
@@ -106,6 +105,7 @@ import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { isoDate } from '$lib/testing/pages/seasonPanel';
 import { q } from '$lib/testing/pages/seasonRepertoire';
+import { recent, setAuthedWithTwoCollectives } from '$lib/testing/pages/agendaWorks';
 
 let fakeByteStore: FakeByteStore;
 
@@ -128,10 +128,6 @@ function pdfData() {
 	};
 }
 
-function setAuthedWithTwoCollectives() {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' }, { db: 'crede', name: 'Crede', personId: 'person-c' }] });
-}
-
 function stubByteFetch() {
 	vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
 		const url = typeof input === 'string' ? input : input.toString();
@@ -145,25 +141,12 @@ function stubByteFetch() {
 }
 
 const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-const past = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
 
 const upcoming = [
 	{
 		id: 'ev-1',
 		name: 'Rehearsal',
 		startDatetime: future,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	}
-];
-const recent = [
-	{
-		id: 'ev-0',
-		name: 'Last rehearsal',
-		startDatetime: past,
 		durationMinutes: 90,
 		location: '',
 		conductors: [],

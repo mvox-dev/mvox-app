@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -44,10 +44,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 );
 
 import Page from './+page.svelte';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -59,19 +56,8 @@ import {
 	listMyAttendanceMock
 } from '$lib/testing/mocks/events';
 import { loadActiveAndArchivedRostersMock, loadRosterMock } from '$lib/testing/mocks/roster';
-
-function agendaItem(id: string, startDatetime: string) {
-	return {
-		id,
-		name: `Rehearsal ${id}`,
-		startDatetime,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	};
-}
+import { agendaItem, cleanupClearResetGate } from '$lib/testing/pages/agendaSummary';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/agendaAttendance';
 
 function agendaFixture(overrides: {
 	seasonOwners?: string[];
@@ -90,11 +76,6 @@ function agendaFixture(overrides: {
 		seasonOwners: overrides.seasonOwners ?? [],
 		seasonEditors: overrides.seasonEditors ?? []
 	});
-}
-
-function setAuthedWithOneCollective(personId = 'person-p') {
-	signIn({ collectives: [{ db: 'sampledb', name: 'Sampledb', personId }] });
-	completionGateStore.set('complete');
 }
 
 beforeEach(() => {
@@ -116,12 +97,7 @@ beforeEach(() => {
 	listAttendanceMock.mockResolvedValue([{ attendanceId: 'x1', memberId: 'm1', status: 'present' }]);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetGate();
-});
+afterEach(cleanupClearResetGate);
 
 async function renderWithSummary() {
 	const utils = render(Page);

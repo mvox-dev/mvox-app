@@ -36,31 +36,11 @@ vi.mock('$lib/attendance/attendanceData', async () =>
 
 import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listMyRsvpsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-const REPERTOIRE_ITEMS = [
-	{
-		_id: 'ri-1',
-		name: [{ string: 'Spem in alium' }],
-		work: [{ reference: 'work-1' }],
-		edition: [{ reference: 'ed-1' }],
-		status: [{ string: 'active' }]
-	},
-	{
-		_id: 'ri-2',
-		name: [{ string: 'Old warhorse' }],
-		work: [{ reference: 'work-2' }],
-		status: [{ string: 'retired' }]
-	}
-];
+import { pickerOptions, workRowOf } from '$lib/testing/pages/eventEdition';
+import { REPERTOIRE_ITEMS, cleanupUnstubResetAgendaRsvps, future } from '$lib/testing/pages/agendaWorks';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { LOCALES } from '$lib/testing/pages/profile';
 
 const SCOPED_WORK_2_EDITIONS = [
 	{
@@ -162,36 +142,12 @@ async function renderExpandedAsEditor() {
 	return rendered;
 }
 
-function workRowOf(container: HTMLElement, workName: string): HTMLElement {
-	const li = Array.from(container.querySelectorAll('[data-testid="work-row"]')).find(
-		(el) => el.querySelector('[data-testid="work-name"]')?.textContent?.trim() === workName
-	);
-	expect(li, `work-row for ${workName}`).not.toBeUndefined();
-	return li as HTMLElement;
-}
-
-function pickerOptions(row: HTMLElement) {
-	const select = row.querySelector('[data-testid="work-edition-picker"]') as HTMLSelectElement;
-	expect(select, 'work-edition-picker').not.toBeNull();
-	return Array.from(select.options).map((o) => ({
-		value: o.value,
-		label: o.textContent?.trim(),
-		disabled: o.disabled
-	}));
-}
-
 beforeEach(() => {
 	resetTypeIdCache();
 	listMyRsvpsMock.mockResolvedValue({ items: [], total: 0, truncated: false });
 });
 
-afterEach(() => {
-	cleanup();
-	vi.unstubAllGlobals();
-	loadFullAgendaMock.mockReset();
-	listMyRsvpsMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupUnstubResetAgendaRsvps);
 
 describe('#329 agenda — a zero-match row under a TRUNCATED edition read says UNKNOWN', () => {
 	it('the unknown state stands while the scoped read has not answered — never the known-absent wording', async () => {
@@ -374,8 +330,6 @@ describe('#329 — the lifetime listMyRsvps read keeps its OTHER consumer', () =
 		expect(listMyRsvpsMock.mock.calls.some((c) => c[1] === 'person-p')).toBe(true);
 	});
 });
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 
 function localeMessages(locale: string): MessageFile {
 	return JSON.parse(

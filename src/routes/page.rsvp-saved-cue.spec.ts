@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
 // The RSVP saved cue on the agenda's write path.
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import type { AgendaItem } from '$lib/agenda/types';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
@@ -74,10 +72,9 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { completionGateStore, resetGate } from '$lib/profile/completionGate';
+import { resetGate } from '$lib/profile/completionGate';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -85,6 +82,7 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { applyRsvpChangeMock } from '$lib/testing/mocks/events';
+import { E1, agendaWith, row, setAuthed } from '$lib/testing/pages/agendaRsvp';
 
 function agendaEvent(id: string, startDatetime: string) {
 	return {
@@ -99,29 +97,7 @@ function agendaEvent(id: string, startDatetime: string) {
 	};
 }
 
-const E1 = agendaEvent('e1', '2026-06-15T09:00:00.000Z');
 const E2 = agendaEvent('e2', '2026-06-16T09:00:00.000Z');
-
-function agendaWith(events: AgendaItem[]) {
-	return fullAgendaResult({
-		seasons: [],
-		upcoming: events,
-		recent: [],
-		seasonId: null,
-		seasonConductors: [],
-		seasonOwners: [],
-		seasonEditors: []
-	});
-}
-
-function setAuthed(dbs: Array<{ db: string; name: string }>) {
-	signIn({ collectives: dbs.map((d) => ({ db: d.db, name: d.name, personId: 'person-p' })) });
-	completionGateStore.set('complete');
-}
-
-function row(container: HTMLElement, id: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="agenda-row-${id}"]`);
-}
 
 function rowSavedText(container: HTMLElement, id: string): string {
 	return (
