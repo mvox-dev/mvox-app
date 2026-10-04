@@ -151,13 +151,9 @@ import {
 	loadFullAgendaMock,
 	resolveDatabaseEntityIdMock
 } from '$lib/testing/moduleHandles';
+import { SEASON_ID, isoDate } from '$lib/testing/pages/seasonPanel';
 
 const ORG = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 function agendaResult() {
 	return fullAgendaResult({

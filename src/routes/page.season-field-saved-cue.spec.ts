@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 // The saved cue on season-manage name and date edits.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { deferred, testCfg } from '$lib/testing/entuFetchKit';
+import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('raw')
@@ -58,13 +58,9 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
 );
 
-import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import {
 	deleteRepertoireItemMock,
 	findMyMemberIdMock,
@@ -89,15 +85,12 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-const SEASON_B_ID = 'season-2';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
+import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { CFG, flush } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { SEASON_ID, isoDate, openPanelForSeason } from '$lib/testing/pages/seasonPanel';
+import { fixtureRows, upcomingSeason } from '$lib/testing/pages/seasonFields';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 function currentSeason(): Season {
 	return {
@@ -106,18 +99,6 @@ function currentSeason(): Season {
 		startDate: isoDate(-30),
 		endDate: isoDate(60),
 		conductors: ['p-grace'],
-		owners: [],
-		editors: ['person-p']
-	};
-}
-
-function upcomingSeason(): Season {
-	return {
-		id: SEASON_B_ID,
-		name: 'Season 2027',
-		startDate: isoDate(61),
-		endDate: isoDate(240),
-		conductors: [],
 		owners: [],
 		editors: ['person-p']
 	};
@@ -136,31 +117,6 @@ function agendaResult() {
 
 function twoSeasonResult() {
 	return fullAgendaResult({ seasons: [currentSeason(), upcomingSeason()] });
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -186,46 +142,7 @@ beforeEach(() => {
 	deleteSeasonMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-function expandButtons(container: HTMLElement): HTMLElement[] {
-	return Array.from(
-		container.querySelectorAll('[data-testid="season-card-expand"]')
-	) as HTMLElement[];
-}
-
-function expandFor(container: HTMLElement, seasonName: string): HTMLElement | null {
-	return expandButtons(container).find((b) => b.textContent?.includes(seasonName)) ?? null;
-}
-
-async function openPanelForSeason(container: HTMLElement, seasonName: string): Promise<void> {
-	await waitFor(() => {
-		expect(expandFor(container, seasonName), `an entry for ${seasonName}`).not.toBeNull();
-	});
-	await fireEvent.click(expandFor(container, seasonName) as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-label')?.textContent?.trim()).toBe(seasonName);
-	});
-}
+afterEach(cleanupClearReset);
 
 async function beginFieldEdit(
 	container: HTMLElement,

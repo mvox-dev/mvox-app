@@ -73,67 +73,26 @@ import type { Season } from '$lib/seasons/types';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import { listSectionsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function runningSeason(): Season {
-	return {
-		id: 'season-1',
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
-
-function upcomingSeason(): Season {
-	return {
-		id: 'season-2',
-		name: 'Season 2027',
-		startDate: isoDate(61),
-		endDate: isoDate(240),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
-
-type EntityRaw = Record<string, unknown>;
-
-const WORKS: EntityRaw[] = [
-	{
-		_id: 'work-1',
-		name: [{ string: 'Spem in alium' }],
-		composer: [{ string: 'Thomas Tallis' }]
-	},
-	{ _id: 'work-2', name: [{ string: 'Old warhorse' }] },
-	{
-		_id: 'work-3',
-		name: [{ string: 'Nunc dimittis' }],
-		composer: [{ string: 'Arvo Pärt' }]
-	}
-];
+import { upcomingSeason } from '$lib/testing/pages/seasonPanel';
+import {
+	type EntityRaw,
+	RI_RETIRED,
+	WORKS,
+	q,
+	qa,
+	runningSeason,
+	setAuthed
+} from '$lib/testing/pages/seasonRepertoire';
 
 const RI_ACTIVE: EntityRaw = {
 	_id: 'ri-1',
 	name: [{ string: 'Spem in alium' }],
 	work: [{ reference: 'work-1' }],
 	status: [{ string: 'active' }]
-};
-const RI_RETIRED: EntityRaw = {
-	_id: 'ri-2',
-	name: [{ string: 'Old warhorse' }],
-	work: [{ reference: 'work-2' }],
-	status: [{ string: 'retired' }]
 };
 const RI_OTHER_SEASON: EntityRaw = {
 	_id: 'ri-9',
@@ -223,10 +182,6 @@ function installWorld(options: WorldOptions) {
 	return fetchMock;
 }
 
-function setAuthed(dbs: string[] = ['sampledb']) {
-	signIn({ collectives: dbs.map((db) => ({ db, name: db, personId: 'person-p' })) });
-}
-
 beforeEach(() => {
 	resetTypeIdCache();
 	loadRosterMock.mockResolvedValue(toListRead([]));
@@ -255,13 +210,6 @@ afterEach(() => {
 	gotoMock.mockReset();
 	resetAppState();
 });
-
-function q(scope: ParentNode, testid: string): HTMLElement | null {
-	return scope.querySelector(`[data-testid="${testid}"]`);
-}
-function qa(scope: ParentNode, testid: string): HTMLElement[] {
-	return Array.from(scope.querySelectorAll(`[data-testid="${testid}"]`));
-}
 
 function expandFor(container: HTMLElement, seasonName: string): HTMLElement | null {
 	return (

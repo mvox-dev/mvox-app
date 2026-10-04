@@ -62,18 +62,20 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
-import { HOURS_24, MINUTES_5, fillDateTime, fillTime, optionValues } from '$lib/testing/timeControls';
+import {
+	HOURS_24,
+	MINUTES_5,
+	fillDateTime,
+	fillTime,
+	optionValues
+} from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -94,27 +96,24 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	SEASON_ID,
+	currentSeason,
+	fill,
+	fixtureRows,
+	isoDate,
+	openFormFromPanel,
+	promptOption,
+	selectValue,
+	standaloneFixture,
+	submit
+} from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
 const UPCOMING_SEASON_ID = 'season-2';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(viewerIsEditor: boolean): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
 
 function upcomingSeason(): Season {
 	return {
@@ -156,44 +155,11 @@ function lapsedOnlySeasonResult(viewerIsEditor: boolean): ReturnType<typeof agen
 	});
 }
 
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
 function seriesFixture() {
 	return [
 		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 },
 		{ id: 'series-2', name: 'Sectionals', eventCount: 0 }
 	];
-}
-
-function standaloneFixture() {
-	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
 }
 
 function series1Defaults() {
@@ -233,10 +199,6 @@ function routeSeasonListsBySeason(): void {
 
 function flush(): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -279,38 +241,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openFormFromPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-event')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'event-create-form')).not.toBeNull();
-	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
-}
-
 function typeSelect(container: HTMLElement): HTMLSelectElement {
 	const select = q(container, 'event-create-type') as HTMLSelectElement;
 	expect(select).not.toBeNull();
@@ -332,21 +262,8 @@ function conductorSelect(container: HTMLElement): HTMLSelectElement {
 	return select;
 }
 
-function promptOption(select: HTMLSelectElement): HTMLOptionElement {
-	const prompt = select.querySelector('option') as HTMLOptionElement;
-	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
-	expect(prompt.value).toBe('');
-	expect(prompt.disabled).toBe(true);
-	expect(prompt.hidden).toBe(true);
-	return prompt;
-}
-
 async function pickConductor(container: HTMLElement, personId: string): Promise<void> {
 	await fireEvent.change(conductorSelect(container), { target: { value: personId } });
-}
-
-async function submit(container: HTMLElement): Promise<void> {
-	await fireEvent.click(q(container, 'event-create-submit') as HTMLElement);
 }
 
 function lastCreateInput(): CreateEventInput {

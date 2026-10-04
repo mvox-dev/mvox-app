@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -92,8 +91,6 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 );
 vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore }));
 
-import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import {
 	goOffline,
@@ -104,12 +101,9 @@ import {
 	isWriteDisabled
 } from '$lib/testing/networkSignal';
 import type { Season } from '$lib/seasons/types';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	deleteRepertoireItemMock,
@@ -124,99 +118,18 @@ import {
 import { createEventMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	SEASON_ID,
+	conductorSelect,
+	fixtureRows,
+	standaloneFixture
+} from '$lib/testing/pages/seasonPanel';
+import { agendaResult, openPanel, seriesFixture } from '$lib/testing/pages/seasonManage';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 let fakeByteStore: FakeByteStore;
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-const SEASON_START = isoDate(-30);
-const SEASON_END = isoDate(60);
-
-function currentSeason(viewerIsEditor: boolean): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: SEASON_START,
-		endDate: SEASON_END,
-		conductors: ['p-grace'],
-		owners: [],
-		editors: viewerIsEditor ? ['person-p'] : []
-	};
-}
-
-function upcomingSeason(): Season {
-	return {
-		id: 'season-2',
-		name: 'Season 2027',
-		startDate: isoDate(61),
-		endDate: isoDate(240),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
-
-function agendaResult(opts: { editor?: boolean; withUpcomingSeason?: boolean } = {}) {
-	const { editor = true, withUpcomingSeason = false } = opts;
-	const season = currentSeason(editor);
-	return fullAgendaResult({
-		seasonId: season.id,
-		seasonConductors: season.conductors,
-		seasonOwners: season.owners,
-		seasonEditors: season.editors,
-		seasons: withUpcomingSeason ? [season, upcomingSeason()] : [season]
-	});
-}
-
-function fixtureRows(): RosterRow[] {
-	return [
-		{
-			memberId: 'm-ada',
-			personId: 'p-ada',
-			name: 'Ada Lovelace',
-			email: 'ada@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-grace',
-			personId: 'p-grace',
-			name: 'Grace Hopper',
-			email: 'grace@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		},
-		{
-			memberId: 'm-pete',
-			personId: 'person-p',
-			name: 'Pete Wilson',
-			email: 'pete@x.com',
-			sectionIds: [],
-			dbEntityId: ORG_EFK
-		}
-	];
-}
-
-function seriesFixture() {
-	return [
-		{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] },
-		{ id: 'series-2', name: 'Sectionals', eventCount: 0, ownerIds: ['person-p'] }
-	];
-}
-
-function standaloneFixture() {
-	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
 
 beforeEach(() => {
 	fakeByteStore = createFakeByteStore();
@@ -275,32 +188,6 @@ afterEach(() => {
 	resetOnLine();
 	resetAppState();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openPanel(container: HTMLElement): Promise<HTMLElement> {
-	return await openSeasonCardPanel(container);
-}
-
-function conductorSelect(panel: HTMLElement): HTMLSelectElement {
-	const select = panel.querySelector(
-		'[data-testid="season-manage-conductor-select"]'
-	) as HTMLSelectElement;
-	expect(select, 'expected the native season-manage-conductor-select').not.toBeNull();
-	expect(select.tagName).toBe('SELECT');
-	return select;
-}
 
 const REASON = '[write_unavailable_no_signal]';
 

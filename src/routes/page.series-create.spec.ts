@@ -78,14 +78,12 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 );
 
 import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { HOURS_24, MINUTES_5, fillTime, optionValues } from '$lib/testing/timeControls';
 import type { Season } from '$lib/seasons/types';
-import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
+import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
@@ -98,18 +96,25 @@ import {
 } from '$lib/testing/moduleHandles';
 import { createEventMock, createEventSeriesMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-const NEW_SERIES_ID = 'series-new-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-const SEASON_START = isoDate(-30);
-const SEASON_END = isoDate(60);
+import { q } from '$lib/testing/pages/dom';
+import { CFG } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	NEW_SERIES_ID,
+	SEASON_END,
+	SEASON_ID,
+	SEASON_START,
+	enableMondayGeneration,
+	fill,
+	isoDate,
+	lastSeriesInput,
+	openSeriesForm,
+	selectValue,
+	seriesFixture,
+	standaloneFixture
+} from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/seasonRender';
+import { flush } from '$lib/testing/pages/seasonEventCreate';
 
 function currentSeason(viewerIsEditor: boolean): Season {
 	return {
@@ -133,22 +138,6 @@ function agendaResult(opts: { editor?: boolean } = {}) {
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function standaloneFixture() {
-	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
-}
-
-function flush(): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -189,38 +178,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openSeriesForm(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-series')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-series') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'series-create-form')).not.toBeNull();
-	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
-}
-
 async function submit(container: HTMLElement): Promise<void> {
 	await fireEvent.click(q(container, 'series-create-submit') as HTMLElement);
 }
@@ -231,10 +188,6 @@ async function fillValidTemplate(container: HTMLElement): Promise<void> {
 	await fillTime(container, 'series-create-time', '19:00');
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
-}
-
-async function enableMondayGeneration(container: HTMLElement): Promise<void> {
-	await selectValue(container, 'series-create-day', '1');
 }
 
 async function settleSeriesRun(container: HTMLElement): Promise<void> {
@@ -271,12 +224,6 @@ function gridSequence(container: HTMLElement): string[] {
 			'[data-testid^="series-create-month-"], [data-testid^="series-create-date-"]'
 		)
 	].map((el) => el.getAttribute('data-testid') ?? '');
-}
-
-function lastSeriesInput(): CreateEventSeriesInput {
-	const calls = createEventSeriesMock.mock.calls;
-	expect(calls.length).toBeGreaterThan(0);
-	return calls[calls.length - 1][1] as CreateEventSeriesInput;
 }
 
 function eventInput(callIndex: number): CreateEventInput {

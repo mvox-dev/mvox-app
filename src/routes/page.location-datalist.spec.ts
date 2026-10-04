@@ -60,16 +60,12 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 );
 
 import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import type { AgendaItem } from '$lib/agenda/types';
-import type { Season } from '$lib/seasons/types';
 import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -90,30 +86,22 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const CFG = testCfg('sampledb', 'jwt-abc');
-const SEASON_ID = 'season-1';
-const NEW_SERIES_ID = 'series-new-1';
+import { q } from '$lib/testing/pages/dom';
+import { CFG, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	NEW_SERIES_ID,
+	SEASON_ID,
+	fill,
+	openPanel,
+	selectValue,
+	seriesFixture,
+	standaloneFixture
+} from '$lib/testing/pages/seasonPanel';
+import { currentSeason } from '$lib/testing/pages/seasonEventCreate';
 
 const NEW_VENUE_SERIES = 'Püha Vaimu SAAL — üliuus koht nr 1!';
 const NEW_VENUE_EVENT = 'Viinistu katlamaja (uus!)';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-function currentSeason(): Season {
-	return {
-		id: SEASON_ID,
-		name: 'Season 2026',
-		startDate: isoDate(-30),
-		endDate: isoDate(60),
-		conductors: [],
-		owners: [],
-		editors: ['person-p']
-	};
-}
 
 function item(id: string, location: string, startDatetime: string): AgendaItem {
 	return {
@@ -159,18 +147,6 @@ function agendaResult(opts: { upcoming?: AgendaItem[]; recent?: AgendaItem[] } =
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function standaloneFixture() {
-	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 let fetchSpy: ReturnType<typeof vi.fn>;
@@ -231,10 +207,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 async function renderReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
 	const { container } = render(Page);
@@ -245,10 +217,6 @@ async function renderReady(): Promise<HTMLElement> {
 		expect(q(container, 'season-card-expand')).not.toBeNull();
 	});
 	return container;
-}
-
-async function openPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
 }
 
 async function openSeriesForm(container: HTMLElement): Promise<void> {
@@ -270,14 +238,6 @@ async function openEventForm(container: HTMLElement): Promise<void> {
 	await waitFor(() => {
 		expect(q(container, 'event-create-form')).not.toBeNull();
 	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 function resolveDatalist(input: HTMLInputElement): HTMLElement {

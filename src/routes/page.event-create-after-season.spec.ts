@@ -91,13 +91,14 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { fill, isoDate } from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/seasonRender';
+import { flush } from '$lib/testing/pages/seasonEventCreate';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
 const FUTURE_SEASON_ID = 'season-future-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 function futureSeason(rights: { owners?: string[]; editors?: string[] } = {}): Season {
 	return {
@@ -159,14 +160,6 @@ function currentSeasonAgenda(season: Season) {
 	});
 }
 
-function flush(): Promise<void> {
-	return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadFullAgendaMock.mockResolvedValue(futureOnlyAgenda(futureSeason()));
 	loadRosterMock.mockResolvedValue(toListRead([]));
@@ -220,10 +213,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
 async function renderReadyWithRow(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();
 	const { container } = render(Page);
@@ -231,19 +220,6 @@ async function renderReadyWithRow(): Promise<HTMLElement> {
 		expect(q(container, 'agenda-row-ev-1')).not.toBeNull();
 	});
 	return container;
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
 }
 
 describe('#167 — event creation controls with a FUTURE-only season', () => {

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -57,9 +57,7 @@ import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import type { Season } from '$lib/seasons/types';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -81,14 +79,11 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import { SEASON_ID, cleanupResetSeasonDeleteMocks, isoDate } from '$lib/testing/pages/seasonPanel';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
 const VIEWER = 'person-p';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
 
 function currentSeason(): Season {
 	return {
@@ -160,33 +155,7 @@ beforeEach(() => {
 	deleteSeasonMock.mockResolvedValue({ series: 3, events: 21, repertoireItems: 6 });
 });
 
-afterEach(() => {
-	cleanup();
-	loadFullAgendaMock.mockReset();
-	loadRosterMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
-	resolveManageRightsMock.mockReset();
-	discoverMock.mockReset();
-	gotoMock.mockReset();
-	findMyMemberIdMock.mockReset();
-	listMyRsvpsMock.mockReset();
-	listEventSeriesForSeasonMock.mockReset();
-	listEventsForSeasonMock.mockReset();
-	updateSeasonFieldMock.mockReset();
-	addSeasonConductorMock.mockReset();
-	removeSeasonConductorMock.mockReset();
-	getSeriesDefaultsMock.mockReset();
-	deleteEventMock.mockReset();
-	deleteEventSeriesMock.mockReset();
-	countSeriesOccurrencesMock.mockReset();
-	countSeasonScopeMock.mockReset();
-	deleteSeasonMock.mockReset();
-	resetAppState();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetSeasonDeleteMocks);
 
 async function renderReady(): Promise<HTMLElement> {
 	setAuthedWithOneCollective();

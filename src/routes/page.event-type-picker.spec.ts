@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -52,15 +52,12 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
-import Page from './+page.svelte';
-import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import type { Season } from '$lib/seasons/types';
-import type { CreateEventInput, CreateEventSeriesInput } from '$lib/entity/entityCreate';
+import type { CreateEventInput } from '$lib/entity/entityCreate';
 import { fillDateTime, fillTime } from '$lib/testing/timeControls';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
 	findMyMemberIdMock,
@@ -80,6 +77,22 @@ import {
 	removeSeasonConductorMock,
 	updateSeasonFieldMock
 } from '$lib/testing/mocks/seasons';
+import { q } from '$lib/testing/pages/dom';
+import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
+import {
+	NEW_SERIES_ID,
+	SEASON_END,
+	SEASON_ID,
+	SEASON_START,
+	fill,
+	lastSeriesInput,
+	openEventFormFromPanel,
+	openSeriesForm,
+	selectValue,
+	seriesFixture,
+	standaloneFixture
+} from '$lib/testing/pages/seasonPanel';
+import { renderReady } from '$lib/testing/pages/seasonRender';
 
 const CANONICAL_EVENT_TYPES = [
 	'rehearsal',
@@ -93,17 +106,6 @@ const CANONICAL_EVENT_TYPES = [
 	'social',
 	'other'
 ];
-
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const SEASON_ID = 'season-1';
-const NEW_SERIES_ID = 'series-new-1';
-
-function isoDate(offsetDays: number): string {
-	return new Date(Date.now() + offsetDays * 24 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
-const SEASON_START = isoDate(-30);
-const SEASON_END = isoDate(60);
 
 function currentSeason(): Season {
 	return {
@@ -126,18 +128,6 @@ function agendaResult() {
 		seasonEditors: season.editors,
 		seasons: [season]
 	});
-}
-
-function seriesFixture() {
-	return [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12 }];
-}
-
-function standaloneFixture() {
-	return [{ id: 'ev-9', name: 'Spring concert', startDatetime: '2027-04-18T18:00:00.000Z' }];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 beforeEach(() => {
@@ -182,49 +172,6 @@ afterEach(() => {
 	resetAppState();
 });
 
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openSeriesForm(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-series')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-series') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'series-create-form')).not.toBeNull();
-	});
-}
-
-async function openEventFormFromPanel(container: HTMLElement): Promise<void> {
-	await openSeasonCardPanel(container);
-	await waitFor(() => {
-		expect(q(container, 'season-manage-add-event')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'season-manage-add-event') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'event-create-form')).not.toBeNull();
-	});
-}
-
-async function fill(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.input(q(container, testid) as HTMLElement, { target: { value } });
-}
-
-async function selectValue(container: HTMLElement, testid: string, value: string): Promise<void> {
-	await fireEvent.change(q(container, testid) as HTMLElement, { target: { value } });
-}
-
 function optionPairs(select: HTMLSelectElement): Array<[string, string]> {
 	return [...select.querySelectorAll('option')].map((o) => [o.value, (o.textContent ?? '').trim()]);
 }
@@ -244,12 +191,6 @@ async function fillValidSeriesTemplate(container: HTMLElement): Promise<void> {
 	await fill(container, 'series-create-from', '2026-09-01');
 	await fill(container, 'series-create-until', '2026-09-21');
 	await selectValue(container, 'series-create-day', '1');
-}
-
-function lastSeriesInput(): CreateEventSeriesInput {
-	const calls = createEventSeriesMock.mock.calls;
-	expect(calls.length).toBeGreaterThan(0);
-	return calls[calls.length - 1][1] as CreateEventSeriesInput;
 }
 
 function lastEventInput(): CreateEventInput {
