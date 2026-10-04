@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -31,9 +31,8 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
@@ -44,16 +43,20 @@ import {
 	reorderMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
+import {
+	EFK_ALTO,
+	EFK_BASS,
+	EFK_SOPRANO,
+	ORG_EFK,
+	ORG_SIREEN,
+	SIREEN_SOPRANO_II
+} from '$lib/testing/pages/rosterFixtures';
+import { cleanupResetCreateSectionMocks } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
-const ORG_EFK = '69c7f8718489bfcb0e81b065';
-const ORG_SIREEN = '69c7f8788489bfcb0e81b1a9';
 const ORG_TAM = '69c7f8868489bfcb0e81b4f0';
-const EFK_SOPRANO = '69c7f8728489bfcb0e81b07b';
-const EFK_ALTO = '69c7f8748489bfcb0e81b0cd';
 const EFK_TENOR = '69c7f8758489bfcb0e81b113';
-const EFK_BASS = '69c7f8768489bfcb0e81b163';
 const TAM_BASS = '69c7f88a8489bfcb0e81b5bc';
-const SIREEN_SOPRANO_II = '69c7f8798489bfcb0e81b207';
 
 function node(id: string, name: string, displayOrder: number, dbEntityId: string): SectionNode {
 	return { id, name, displayOrder, parentId: null, dbEntityId, depth: 0, children: [] };
@@ -115,19 +118,7 @@ beforeEach(() => {
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createSectionMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
+afterEach(cleanupResetCreateSectionMocks);
 
 async function renderReady() {
 	setAuthedWithOneCollective();
@@ -145,10 +136,6 @@ async function renderReady() {
 		expect(container.querySelector('[data-testid="roster-arrange-list"]')).not.toBeNull();
 	});
 	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 function renderedSectionIds(container: HTMLElement): string[] {

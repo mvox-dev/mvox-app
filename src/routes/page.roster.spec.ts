@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -40,14 +40,10 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import { collectiveState, selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
+import { cleanupResetRosterReads, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 function setNoCollective() {
 	signIn({ collectives: [] });
@@ -57,12 +53,7 @@ beforeEach(() => {
 	listSectionsMock.mockResolvedValue([]);
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	resetAppState();
-});
+afterEach(cleanupResetRosterReads);
 
 describe('/roster — loading state', () => {
 	it('shows the skeleton while loadRoster is in flight', async () => {

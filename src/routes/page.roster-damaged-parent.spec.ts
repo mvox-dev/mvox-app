@@ -29,7 +29,6 @@ import type { RosterRow } from '$lib/roster/rosterData';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
 	assignMock,
@@ -39,6 +38,8 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 const DB_ENTITY = 'db-1';
 
@@ -87,10 +88,6 @@ function stubGlobalFetch(entities: unknown[] = sectionWireEntities()) {
 	return stub;
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	stubGlobalFetch();
 	loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRows())));
@@ -115,10 +112,6 @@ afterEach(() => {
 	resetAppState();
 	resetAdmin();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 async function renderRosterWithDamage(
 	damagedParents: Array<{ reference: string; entity_type?: string }>

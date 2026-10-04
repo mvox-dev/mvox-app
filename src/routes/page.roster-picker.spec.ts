@@ -28,30 +28,16 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
-
-function fixtureTree(): SectionNode[] {
-	const sop1: SectionNode = {
-		id: 'sec-sop1',
-		name: 'Soprano 1',
-		displayOrder: 1,
-		parentId: 'sec-sop',
-		depth: 1,
-		children: []
-	};
-	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, depth: 0, children: [sop1] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, depth: 0, children: [] }
-	];
-}
+import { fixtureTree } from '$lib/testing/pages/rosterFixtures';
+import { JSON_HEADERS, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 function fixtureRows(): RosterRow[] {
 	return [
@@ -70,10 +56,6 @@ function gateRows(): RosterRow[] {
 	];
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 interface WireCall {
 	db: string;
 	path: string;
@@ -83,8 +65,6 @@ interface WireCall {
 }
 
 const wire: WireCall[] = [];
-
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
 let parentValuesByMember: Record<
 	string,
@@ -169,10 +149,6 @@ async function renderReady(admin: AdminState = 'admin') {
 		});
 	}
 	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
 }
 
 function sel(

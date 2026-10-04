@@ -44,12 +44,10 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { RosterRow } from '$lib/roster/rosterData';
 import type { SectionNode } from '$lib/sections/sectionData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { isoDateFormatter } from '$lib/preferences/timeFormat';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
@@ -68,9 +66,10 @@ import {
 	loadRosterMock,
 	reinstateMemberMock
 } from '$lib/testing/mocks/roster';
-
-const ORG_A = 'org-a';
-const ORG_B = 'org-b';
+import { ORG_A, ORG_B } from '$lib/testing/pages/rosterFixtures';
+import { setAuthedWithTwoCollectives } from '$lib/testing/pages/roster';
+import { cleanupRestoreClipboard, setClipboard, treeA } from '$lib/testing/pages/rosterInvite';
+import { q } from '$lib/testing/pages/dom';
 
 const CREATED_AT: Record<string, string> = {
 	m1: '2026-05-02T12:00:00.000Z',
@@ -95,12 +94,6 @@ function rowsB(): RosterRow[] {
 	];
 }
 
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
 function treeB(): SectionNode[] {
 	return [
 		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
@@ -121,15 +114,6 @@ function detailsFor(db: string, personIds: string[]): Record<string, JoinStateDe
 			return [id, at === undefined ? { state } : { state, at }];
 		})
 	);
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
 }
 
 beforeEach(() => {
@@ -173,31 +157,7 @@ beforeEach(() => {
 	loadMemberRecordMock.mockResolvedValue({ state: 'none' });
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	if (originalClipboardDesc) {
-		Object.defineProperty(navigator, 'clipboard', originalClipboardDesc);
-	} else {
-		Reflect.deleteProperty(navigator, 'clipboard');
-	}
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
-
-function setClipboard(value: unknown): void {
-	Object.defineProperty(navigator, 'clipboard', {
-		value,
-		configurable: true,
-		writable: true
-	});
-}
+afterEach(cleanupRestoreClipboard);
 
 function allControls(container: HTMLElement): Element[] {
 	return [

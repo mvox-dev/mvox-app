@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -41,12 +41,10 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import { MemberRecordPartialSaveError, type MemberRecordLookup } from '$lib/roster/memberRecord';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { REDACT_ATTR } from '$lib/redact/redact';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	createMemberRecordMock,
@@ -60,41 +58,20 @@ import {
 	updateMemberRecordMock
 } from '$lib/testing/mocks/roster';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
-}
-
-const rosterTwo: RosterRow[] = [
-	{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'db-1' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
-];
-
-const altoSection = {
-	id: 'sec-alto',
-	name: 'Alto',
-	displayOrder: 0,
-	parentId: null,
-	dbEntityId: 'db-1',
-	depth: 0,
-	children: []
-};
+import { altoSection, rosterTwo } from '$lib/testing/pages/rosterFixtures';
+import {
+	cleanupClearResetAdmin,
+	flush,
+	setAuthedWithOneCollective,
+	setAuthedWithTwoCollectives
+} from '$lib/testing/pages/roster';
+import { renderRosterAs } from '$lib/testing/pages/rosterRender';
 
 const rowsOther: RosterRow[] = [
 	{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: [], dbEntityId: 'db-b' }
 ];
 
 const q = (c: HTMLElement, id: string) => c.querySelector(`[data-testid="${id}"]`);
-const flush = () => new Promise((r) => setTimeout(r, 0));
 
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rosterTwo));
@@ -113,24 +90,7 @@ beforeEach(() => {
 	]);
 });
 
-afterEach(() => {
-	cleanup();
-	vi.clearAllMocks();
-	resetAppState();
-	resetAdmin();
-});
-
-async function renderRosterAs(admin: 'admin' | 'not-admin') {
-	const utils = render(Page);
-	setAuthedWithOneCollective();
-	adminStore.set(admin);
-	await waitFor(() =>
-		expect(q(utils.container, 'section-toggle-unassigned')).not.toBeNull()
-	);
-	await fireEvent.click(q(utils.container, 'section-toggle-unassigned')!);
-	await waitFor(() => expect(q(utils.container, 'roster-row-m2')).not.toBeNull());
-	return utils;
-}
+afterEach(cleanupClearResetAdmin);
 
 async function openEditor(container: HTMLElement, memberId: string) {
 	const card = q(container, `roster-row-card-${memberId}`);

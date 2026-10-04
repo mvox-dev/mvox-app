@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -25,13 +25,9 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
@@ -41,6 +37,10 @@ import {
 	reorderMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
+import { cleanupResetArrangeMocks } from '$lib/testing/pages/roster';
+import { fixtureRows } from '$lib/testing/pages/rosterArrange';
+import { renderReady } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
 function fixtureTree(): SectionNode[] {
 	return [
@@ -61,20 +61,6 @@ function fixtureTree(): SectionNode[] {
 	];
 }
 
-function fixtureRows(): RosterRow[] {
-	return [
-		{ memberId: 'm-ada', personId: 'p-ada', name: 'Ada Lovelace', email: 'ada@x.com', sectionIds: ['sec-sop'] },
-		{ memberId: 'm-eva', personId: 'p-eva', name: 'Eva Green', email: 'eva@x.com', sectionIds: ['sec-sop1'] },
-		{ memberId: 'm-sel', personId: 'p-sel', name: 'Selma Otsing', email: 'selma@x.com', sectionIds: ['sec-sop2'] },
-		{ memberId: 'm-bea', personId: 'p-bea', name: 'Bea Noe', email: '', sectionIds: ['sec-alto'] },
-		{ memberId: 'm-tara', personId: 'p-tara', name: 'Tara Oja', email: 'tara@x.com', sectionIds: ['sec-tenor'] }
-	];
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
@@ -85,32 +71,7 @@ beforeEach(() => {
 	deleteMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-async function renderReady(admin: AdminState = 'admin') {
-	setAuthedWithOneCollective();
-	adminStore.set(admin);
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(container.querySelector('[data-testid="roster-groups"]')).not.toBeNull();
-	});
-	return container;
-}
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetArrangeMocks);
 
 function chip(container: HTMLElement, mode: 'collapsed' | 'expanded' | 'arrange'): HTMLElement | null {
 	return q(container, `roster-view-chip-${mode}`);

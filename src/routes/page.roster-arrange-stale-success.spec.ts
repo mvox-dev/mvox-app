@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -25,14 +25,9 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
-import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
@@ -43,24 +38,11 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
-
-const ORG_A = 'org-a';
-const ORG_B = 'org-b';
-
-function treeA(): SectionNode[] {
-	return [
-		{ id: 'sec-sop', name: 'Soprano', displayOrder: 1, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-alto', name: 'Alto', displayOrder: 2, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] },
-		{ id: 'sec-tenor', name: 'Tenor', displayOrder: 3, parentId: null, dbEntityId: ORG_A, depth: 0, children: [] }
-	];
-}
-
-function treeB(): SectionNode[] {
-	return [
-		{ id: 'sec-b1', name: 'Bass I', displayOrder: 1, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] },
-		{ id: 'sec-b2', name: 'Bass II', displayOrder: 2, parentId: null, dbEntityId: ORG_B, depth: 0, children: [] }
-	];
-}
+import { ORG_A, ORG_B, treeA, treeB } from '$lib/testing/pages/rosterFixtures';
+import { cleanupResetReparentMocks, flush } from '$lib/testing/pages/roster';
+import { rowOrder } from '$lib/testing/pages/rosterArrange';
+import { renderInArrangeMode } from '$lib/testing/pages/rosterRender';
+import { q } from '$lib/testing/pages/dom';
 
 function rowsA(): RosterRow[] {
 	return [
@@ -73,15 +55,6 @@ function rowsB(): RosterRow[] {
 	return [
 		{ memberId: 'm-bob', personId: 'p-bob', name: 'Bob Bass', email: 'bob@x.com', sectionIds: ['sec-b1'], dbEntityId: ORG_B }
 	];
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-q' }
-		]
-	});
 }
 
 beforeEach(() => {
@@ -99,46 +72,10 @@ beforeEach(() => {
 	reparentMock.mockResolvedValue(undefined);
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	reparentMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
-
-function rowOrder(container: HTMLElement): string[] {
-	return [...container.querySelectorAll('[data-testid^="arrange-row-"]')].map(
-		(el) => el.getAttribute('data-testid') ?? ''
-	);
-}
+afterEach(cleanupResetReparentMocks);
 
 function statusText(container: HTMLElement): string {
 	return (q(container, 'roster-reorder-status')?.textContent ?? '').trim();
-}
-
-async function renderInArrangeMode(): Promise<HTMLElement> {
-	setAuthedWithTwoCollectives();
-	adminStore.set('admin');
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'roster-groups')).not.toBeNull();
-	});
-	await fireEvent.click(q(container, 'roster-view-chip-arrange') as HTMLElement);
-	await waitFor(() => {
-		expect(q(container, 'roster-arrange-list')).not.toBeNull();
-	});
-	return container;
 }
 
 async function switchToOtherChoir(container: HTMLElement) {
@@ -148,8 +85,6 @@ async function switchToOtherChoir(container: HTMLElement) {
 	});
 	expect(q(container, 'arrange-row-sec-alto')).toBeNull();
 }
-
-const flush = () => new Promise((r) => setTimeout(r, 0));
 
 describe('/roster — a structural-write SUCCESS settling after a collective switch writes NOTHING (#264 item 4)', () => {
 	it('performReorder: a held reorderSections SUCCESS settles after the switch → the live region stays EMPTY (no stale "moved"/"dropped" announcement), no banner, and collective B\'s tree is untouched', async () => {

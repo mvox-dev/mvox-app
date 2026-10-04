@@ -32,7 +32,7 @@ import LibraryPage from './library/+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 const factorySpy = createRouteLoadMachine as unknown as Mock;
 
@@ -77,10 +77,6 @@ function stubWire() {
 			});
 		})
 	);
-}
-
-function setAuthedWithOneCollective() {
-	signIn();
 }
 
 function expectNoFailureBranch(container: HTMLElement, prefix: string) {

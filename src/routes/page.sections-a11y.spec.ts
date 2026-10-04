@@ -77,9 +77,10 @@ import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { q } from '$lib/testing/pages/dom';
 
 const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
@@ -113,10 +114,6 @@ function fixtureRows(): RosterRow[] {
 	];
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
 	listSectionsMock.mockResolvedValue(fixtureTree());
@@ -137,10 +134,6 @@ afterEach(() => {
 	resetAppState();
 	resetAdmin();
 });
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
 
 async function renderReady(admin: AdminState = 'admin'): Promise<HTMLElement> {
 	setAuthedWithOneCollective();

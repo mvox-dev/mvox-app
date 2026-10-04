@@ -44,10 +44,8 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import { REDACT_ATTR, REDACT_TOGGLE_ATTR } from '$lib/redact/redact';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import {
 	createMemberRecordMock,
@@ -61,15 +59,8 @@ import {
 	updateMemberRecordMock
 } from '$lib/testing/mocks/roster';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
-const rosterTwo: RosterRow[] = [
-	{ memberId: 'm1', personId: 'person-p', name: 'Alice Alto', email: 'alice@example.com', sectionIds: [], dbEntityId: 'db-1' },
-	{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
-];
+import { rosterTwo } from '$lib/testing/pages/rosterFixtures';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 // The full-record fixture: every one of the five PII values present, so the
 // default-inert pin can assert each renders VERBATIM without the toggle.

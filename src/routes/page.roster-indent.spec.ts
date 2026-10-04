@@ -29,11 +29,8 @@ vi.mock('$app/navigation', async () =>
 import Page from './roster/+page.svelte';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { testCfg } from '$lib/testing/entuFetchKit';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import {
@@ -44,6 +41,13 @@ import {
 	reparentMock,
 	unassignMock
 } from '$lib/testing/mocks/sections';
+import {
+	CFG,
+	cleanupResetReparentMocks,
+	setAuthedWithOneCollective
+} from '$lib/testing/pages/roster';
+import { row, rowOrder } from '$lib/testing/pages/rosterArrange';
+import { q } from '$lib/testing/pages/dom';
 
 const ORG = 'org-1';
 
@@ -112,8 +116,6 @@ function fixtureRowsDeep(): RosterRow[] {
 	];
 }
 
-const CFG = testCfg('sampledb', 'jwt-abc');
-
 let landedReparents: Array<{ id: string; newParentId: string }>;
 
 function sortLevel(nodes: SectionNode[]): SectionNode[] {
@@ -167,10 +169,6 @@ function treeWithLandedMoves(moves: Array<{ id: string; newParentId: string }>):
 	return roots;
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(() => {
 	landedReparents = [];
 	loadRosterMock.mockImplementation(() => Promise.resolve(toListRead(fixtureRows())));
@@ -186,23 +184,7 @@ beforeEach(() => {
 	});
 });
 
-afterEach(() => {
-	cleanup();
-	loadRosterMock.mockReset();
-	listSectionsMock.mockReset();
-	assignMock.mockReset();
-	unassignMock.mockReset();
-	createMock.mockReset();
-	reorderMock.mockReset();
-	deleteMock.mockReset();
-	reparentMock.mockReset();
-	resetAppState();
-	resetAdmin();
-});
-
-function q(container: HTMLElement, testid: string): HTMLElement | null {
-	return container.querySelector(`[data-testid="${testid}"]`);
-}
+afterEach(cleanupResetReparentMocks);
 
 async function renderInArrangeMode(): Promise<HTMLElement> {
 	landedReparents.length = 0;
@@ -217,16 +199,6 @@ async function renderInArrangeMode(): Promise<HTMLElement> {
 		expect(q(container, 'roster-arrange-list')).not.toBeNull();
 	});
 	return container;
-}
-
-function rowOrder(container: HTMLElement): string[] {
-	return [...container.querySelectorAll('[data-testid^="arrange-row-"]')].map(
-		(el) => el.getAttribute('data-testid') ?? ''
-	);
-}
-
-function row(container: HTMLElement, id: string): HTMLElement {
-	return q(container, `arrange-row-${id}`) as HTMLElement;
 }
 
 function indentBtn(container: HTMLElement, id: string): HTMLButtonElement {
