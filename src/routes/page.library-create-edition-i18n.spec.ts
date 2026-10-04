@@ -1,39 +1,8 @@
 // @vitest-environment node
-//
-// #271 RED — the i18n leg of the create-edition affordance. This spec reads
-// the RAW message files (messages/*.json), not the compiled Paraglide output,
-// because the contract is about the FILES: the eight new
-// `library_create_edition_*` keys exist in ALL FOUR locales, mirroring the
-// `library_create_work_*` template key-for-key.
-//
-// COPY STATUS: #271 carries NO PO-pinned copy — every string below, the
-// Estonian included, is an ENGINEERING DRAFT drawn from the existing
-// library_create_work_* / library_edition_* register (et "väljaanne" per
-// library_editions_empty, "kirjastaja" per library_edition_publisher_unknown;
-// lv "izdevums"/"izdevējs"; uk "видання"/"видавець"). ALL FOUR locales are
-// flagged REFINABLE in the delivery report — refining them later is a
-// copy-edit against these exact-text pins, not a schema change.
-//
-// LENGTH NOTE: the control sits in the ml-4-indented edition tree under the
-// page's max-w-md column, so the longest lv/uk strings have the least room in
-// the app. The wrap/overflow sanity pin for that lives in
-// page.library-create-edition.spec.ts (class contract — happy-dom computes no
-// layout); HERE the length concern is only that no locale's draft balloons
-// past its create-work sibling register.
+// The create-edition keys, read from the raw message files in all four locales.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-type MessageFile = Record<string, unknown>;
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-type Locale = (typeof LOCALES)[number];
-
-function readMessages(locale: Locale): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
+import { LOCALES } from '$lib/testing/pages/profile';
+import { type Locale, readMessages } from '$lib/testing/pages/files';
 
 const NEW_KEYS = [
 	'library_create_edition_button',
@@ -46,9 +15,6 @@ const NEW_KEYS = [
 	'library_create_edition_error'
 ] as const;
 
-// Exact-text pins — engineering drafts, all four locales refinable (see
-// header). The {name} placeholder in *_created follows the
-// library_create_work_created template verbatim.
 const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 	en: {
 		library_create_edition_button: 'Add edition',

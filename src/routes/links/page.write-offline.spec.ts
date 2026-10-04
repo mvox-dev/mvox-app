@@ -38,10 +38,8 @@ import {
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
-
-const DB_ENTITY = 'db-ent-1';
-const TYPE_ID = 'type-link-1';
-const REASON = '[write_unavailable_no_signal]';
+import { REASON } from '$lib/testing/pages/event';
+import { DB_ENTITY, TYPE_ID } from '$lib/testing/pages/links';
 
 function nonGetWireCalls(): string[] {
 	return (entuFetchMock.mock.calls as Array<[string, string, string, RequestInit | undefined]>)

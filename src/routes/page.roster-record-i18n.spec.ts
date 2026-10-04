@@ -1,22 +1,9 @@
-// #268 RED — the member-record editor's i18n keys, pinned EXACTLY in all four
-// locales (the standing invariant: new i18n keys land in all four locale files
-// with 4-locale exact-text pins — the page.roster-damaged-i18n.spec.ts pattern).
-//
-// Naming follows the roster page's 66-key `roster_*` convention:
-// `roster_record_*`. Labels are the RELEASED copy ("labels as proposed",
-// Mihkel 2026-09-07): Pärisnimi / Telefon / E-post / Sünnikuupäev. English says
-// "date of birth" EVERYWHERE user-facing — "birthdate" is the code identifier
-// only, "birth date" is not used (terminology ruling on the issue).
+// The member-record editor keys, exact in all four locales; the route spec's mock can't see them.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+import { messagePatterns } from '$lib/testing/messageFile.js';
+import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
 const EXACT: Record<string, Record<string, string>> = {
-	// Static sr-only pencil label — composes with the row's visible name inside
-	// the button (#262), so it carries NO placeholder.
 	roster_record_edit_label: {
 		en: 'Edit member details:',
 		et: 'Muuda liikme andmeid:',
@@ -65,88 +52,50 @@ const EXACT: Record<string, Record<string, string>> = {
 		lv: 'Dalībnieka dati saglabāti.',
 		uk: 'Дані учасника збережено.'
 	},
-	// Failure tells the truth: nothing was saved, the values are still there.
 	roster_record_save_failed: {
 		en: 'Couldn’t save — nothing was saved. The entered values are still in the form.',
 		et: 'Salvestamine ebaõnnestus — midagi ei salvestatud. Sisestatud väärtused on endiselt vormis.',
 		lv: 'Neizdevās saglabāt — nekas netika saglabāts. Ievadītās vērtības joprojām ir formā.',
 		uk: 'Не вдалося зберегти — нічого не збережено. Введені значення залишилися у формі.'
 	},
-	// Partial failure says exactly what landed (#253). {saved} = the landed
-	// field LABELS (never values).
 	roster_record_save_partial: {
 		en: 'Saving partly failed — saved: {saved}. The rest was not saved.',
 		et: 'Salvestamine ebaõnnestus osaliselt — salvestatud: {saved}. Ülejäänu jäi salvestamata.',
 		lv: 'Saglabāšana daļēji neizdevās — saglabāts: {saved}. Pārējais netika saglabāts.',
 		uk: 'Збереження частково не вдалося — збережено: {saved}. Решту не збережено.'
 	},
-	// Review F2 refusal copy — the gate that keeps the DOMAIN-shared `name` from
-	// being written empty. Pinned here like every sibling: the editor spec's
-	// paraglide mock is a Proxy that synthesises `[roster_record_name_required]`
-	// from the key name alone, so it would pass even with the key missing from
-	// et/lv/uk entirely. This table is the only thing that reads the shipped text.
 	roster_record_name_required: {
 		en: 'A real name is required — nothing was saved. Enter a name, then save again.',
 		et: 'Pärisnimi on kohustuslik — midagi ei salvestatud. Sisesta nimi ja salvesta uuesti.',
 		lv: 'Īstais vārds ir obligāts — nekas netika saglabāts. Ievadiet vārdu un saglabājiet vēlreiz.',
 		uk: "Справжнє ім'я обов'язкове — нічого не збережено. Введіть ім'я та збережіть ще раз."
 	},
-	// #283 phone-guard refusal — STATIC copy naming the field, NEVER echoing the
-	// typed value (crede real-PII law, memberRecord.ts header). Same register as
-	// roster_record_name_required; et drafted first, all four refinable.
 	roster_record_phone_invalid: {
 		en: 'The phone number can’t contain letters — nothing was saved. Remove the letters, then save again.',
 		et: 'Telefoninumber ei tohi sisaldada tähti — midagi ei salvestatud. Eemalda tähed ja salvesta uuesti.',
 		lv: 'Tālruņa numurs nedrīkst saturēt burtus — nekas netika saglabāts. Noņemiet burtus un saglabājiet vēlreiz.',
 		uk: 'Номер телефону не може містити літер — нічого не збережено. Приберіть літери та збережіть ще раз.'
 	},
-	// #283 email-guard refusal — the guard behind it is the BROWSER'S own
-	// checkValidity() and must stay the weakest rule that closes the hole
-	// (Gama's recorded line); the copy, like every refusal here, is static and
-	// value-free.
 	roster_record_email_invalid: {
 		en: 'The email address doesn’t look valid — nothing was saved. Check the address, then save again.',
 		et: 'E-posti aadress ei tundu õige — midagi ei salvestatud. Kontrolli aadressi ja salvesta uuesti.',
 		lv: 'E-pasta adrese neizskatās derīga — nekas netika saglabāts. Pārbaudiet adresi un saglabājiet vēlreiz.',
 		uk: 'Адреса ел. пошти виглядає недійсною — нічого не збережено. Перевірте адресу та збережіть ще раз.'
 	},
-	// #285 — the fifth field's label. LOCALE STATED CHOICE, flagged for the
-	// PO/copy pass: the field IS specifically the Estonian isikukood (a member
-	// of an Estonian collective needs HER Estonian code — a translated label
-	// like "national ID code" invites entering some other country's number), so
-	// this RED drafts the proper-noun 'Isikukood' in ALL FOUR locales. #266's
-	// precedent translated; the field's nature argues proper-noun. GREEN /
-	// Comenius may flip en/lv/uk to the translated shape — updating these rows
-	// and the locale files TOGETHER, stating the pick and flagging it for the
-	// copy pass. The et row is not in question.
+	// A proper noun in every locale: the field takes the Estonian isikukood only.
 	roster_record_id_code_label: {
 		en: 'Isikukood',
 		et: 'Isikukood',
 		lv: 'Isikukood',
 		uk: 'Isikukood'
 	},
-	// #285 — the checksum-guard refusal, name-required register: names the
-	// field, says nothing was saved, says what to do — and NEVER carries the
-	// typed value (no placeholder; the static-copy suite below pins that for
-	// this key too).
 	roster_record_id_code_invalid: {
 		en: 'The isikukood is not valid — nothing was saved. Check the code, then save again.',
 		et: 'Isikukood ei ole õige — midagi ei salvestatud. Kontrolli koodi ja salvesta uuesti.',
 		lv: 'Isikukood nav derīgs — nekas netika saglabāts. Pārbaudiet kodu un saglabājiet vēlreiz.',
 		uk: 'Isikukood недійсний — нічого не збережено. Перевірте код та збережіть ще раз.'
 	}
-	// roster_record_damaged left this exact-text table with #388: it no longer
-	// names the member (Mihkel 2026-09-27) — the alert carries an EntuRef to
-	// the person instead. Its new wording is the copy pass's call; the #388
-	// block below pins the contract (present in all four locales, no
-	// placeholder, the old named text gone).
 };
-
-function localeMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 describe('#268 — roster_record_* keys, exact text in all four locales', () => {
 	for (const key of Object.keys(EXACT)) {
@@ -165,11 +114,6 @@ describe('#268 — placeholders survive translation', () => {
 	});
 });
 
-// #388 RED — the three roster status messages that used to interpolate the
-// member's name stop naming anyone (Mihkel 2026-09-27): a capture marker
-// cannot blank part of a sentence, so the name leaves the copy and the alert
-// carries #487's EntuRef (short id, clickable) instead. The sentence must
-// stand alone — no {name}, no placeholder of any kind — in all four locales.
 describe('#388 — roster_record_damaged / roster_member_deactivate_failed / roster_member_reinstate_failed name no member', () => {
 	const NAMELESS_KEYS = [
 		'roster_record_damaged',
@@ -180,8 +124,6 @@ describe('#388 — roster_record_damaged / roster_member_deactivate_failed / ros
 	for (const key of NAMELESS_KEYS) {
 		it.each(LOCALES)(`${key}: %s.json carries non-empty copy with NO {placeholder}`, (locale) => {
 			const messages = localeMessages(locale);
-			// Existence first — messagePatterns(undefined) is [] and would pass
-			// the no-placeholder check vacuously.
 			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
 			const patterns = messagePatterns(messages[key]);
 			expect(patterns.length, `${locale}.${key} renders at least one pattern`).toBeGreaterThan(0);
@@ -207,14 +149,6 @@ describe('#268 — terminology ruling: English says "date of birth", never "birt
 });
 
 describe('#283/#285 — the refusal messages are STATIC: no placeholder, so no path for a typed value into the copy', () => {
-	// The editor spec's paraglide proxy mock synthesises `[key]` from the key
-	// name alone, so it cannot see the shipped text at all — this direct file
-	// read is the only real check that the refusals stay value-free. The list
-	// is a HARDCODED literal, deliberately: the generic it.each over EXACT does
-	// not make this no-placeholder privacy assertion, so a new refusal key that
-	// skips this array is silently unfenced (#285 research: silent-pass trap).
-	// roster_record_id_code_invalid needs it more than any sibling — the value
-	// it must never echo identifies a real person exactly.
 	it.each(LOCALES)('%s: roster_record_phone_invalid, roster_record_email_invalid and roster_record_id_code_invalid carry no {placeholder}', (locale) => {
 		const messages = localeMessages(locale);
 		for (const key of [
@@ -222,16 +156,10 @@ describe('#283/#285 — the refusal messages are STATIC: no placeholder, so no p
 			'roster_record_email_invalid',
 			'roster_record_id_code_invalid'
 		]) {
-			// Existence asserted here too — messagePatterns(undefined) is [], and a
-			// vacuous pass on a missing key is the partial-assertion trap.
 			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
 			expect(messagePatterns(messages[key]).join(' ')).not.toMatch(/\{[^}]*\}/);
 		}
 	});
 });
 
-// (*MVOX:Tallis* — #268 RED, 4-locale exact-text pins)
-// (*MVOX:Tallis* — #283 RED: phone/email refusal keys ×4 locales, static-copy pins)
-// (*MVOX:Tallis* — #285 RED: id_code label + refusal keys ×4 locales; label
-//  locale choice drafted proper-noun, flagged for the copy pass)
-// (*MVOX:Tallis* — #388 RED: the three status messages drop {name} ×4 locales)
+// (*MVOX:Tallis* — #268 #283 #285 #388 RED: record keys ×4 locales, exact and static-copy pins)

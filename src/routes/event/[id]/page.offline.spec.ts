@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 // The event page offline, and the next event fetched ahead.
-import { IDBFactory } from 'fake-indexeddb';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -28,22 +27,20 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import EventPage from './+page.svelte';
 import AgendaPage from '../../+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
-import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
+import { flushReadCache } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
 import { json } from '$lib/testing/entuFetchKit';
 import {
-	DB,
 	DB_ENTITY,
+	EVENTS,
 	JSON_HEADERS,
 	LATER_SAME_DAY,
-	PERSON,
 	READ_AT,
 	SEASON,
 	cleanupResetReadCache,
 	offlineEntu,
+	seedOfflineSession,
 	urlOf
 } from '$lib/testing/pages/event';
 
@@ -53,11 +50,6 @@ const CONDUCTOR_NAME = 'Anna Dirigent';
 const SERIES_LOCATION = 'Kaarli kirik';
 
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
-
-const EVENTS = [
-	{ id: 'ev-1', name: 'Tuesday rehearsal', start: '2026-10-06T15:00:00.000Z' },
-	{ id: 'ev-2', name: 'Autumn concert', start: '2026-10-18T14:00:00.000Z' }
-];
 
 function eventEntity(e: (typeof EVENTS)[number]) {
 	return {
@@ -180,19 +172,7 @@ async function asOfLine(container: HTMLElement): Promise<Element> {
 	});
 }
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'], now: READ_AT });
-	setReadCacheFactory(new IDBFactory());
-	vi.stubGlobal('indexedDB', new IDBFactory());
-	resetServedFromCache();
-	localStorage.clear();
-	setToken('tok-1');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB]: PERSON },
-		expMs: READ_AT.getTime() + 48 * 3_600_000
-	});
-});
+beforeEach(seedOfflineSession);
 
 afterEach(cleanupResetReadCache);
 

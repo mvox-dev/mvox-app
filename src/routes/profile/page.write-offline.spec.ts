@@ -92,8 +92,8 @@ import {
 } from '$lib/testing/networkSignal';
 import { resetAppState } from '$lib/testing/appReset';
 import { selectSampledb } from '$lib/testing/pages/profile';
+import { REASON } from '$lib/testing/pages/event';
 
-const REASON = '[write_unavailable_no_signal]';
 const IDLE_MS = 2_000;
 
 beforeEach(async () => {

@@ -90,8 +90,8 @@ import {
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { ROSTER } from '$lib/testing/pages/admin';
 import { q } from '$lib/testing/pages/dom';
+import { REASON } from '$lib/testing/pages/event';
 
-const REASON = '[write_unavailable_no_signal]';
 const HELD = '[write_held_no_signal]';
 
 const ANNA = { id: 'p-anna', name: 'Anna Arro', role: 'owner' as const, valueIds: ['pv-a'] };

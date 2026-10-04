@@ -1,9 +1,8 @@
 // @vitest-environment happy-dom
 // The agenda's work-edition picker says unknown after a partial read.
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty, messagePatterns } from '$lib/testing/messageFile.js';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -38,9 +37,13 @@ import Page from './+page.svelte';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { listMyRsvpsMock, loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import { pickerOptions, workRowOf } from '$lib/testing/pages/eventEdition';
-import { REPERTOIRE_ITEMS, cleanupUnstubResetAgendaRsvps, future } from '$lib/testing/pages/agendaWorks';
+import {
+	REPERTOIRE_ITEMS,
+	cleanupUnstubResetAgendaRsvps,
+	future
+} from '$lib/testing/pages/agendaWorks';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-import { LOCALES } from '$lib/testing/pages/profile';
+import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
 const SCOPED_WORK_2_EDITIONS = [
 	{
@@ -330,12 +333,6 @@ describe('#329 — the lifetime listMyRsvps read keeps its OTHER consumer', () =
 		expect(listMyRsvpsMock.mock.calls.some((c) => c[1] === 'person-p')).toBe(true);
 	});
 });
-
-function localeMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 const NO_EDITION_TODAY: Record<(typeof LOCALES)[number], string> = {
 	en: 'No pinned edition',

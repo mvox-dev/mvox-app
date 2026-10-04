@@ -3,8 +3,6 @@
 // i18n + a11y for the attendance surfaces: AgendaList's badge, AttendanceSurface, SeasonSummary.
 import { render, cleanup, createEvent, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 
@@ -55,6 +53,7 @@ import AttendanceSurface from '$lib/components/attendance/AttendanceSurface.svel
 import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 import AgendaList from '$lib/agenda/AgendaList.svelte';
 import type { AgendaItem } from '$lib/agenda/types';
+import { readSource } from '$lib/testing/pages/files';
 
 afterEach(cleanup);
 
@@ -88,10 +87,6 @@ const ATTENDANCE_SURFACE_FILES = surfacesUnder(
 	'src/lib/components/agenda/',
 	'src/lib/agenda/'
 );
-
-function readSource(relPath: string): string {
-	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
 
 // 1 — i18n: every attendance surface renders via Paraglide keys only
 describe('#86 — i18n: no hardcoded user-facing strings on attendance surfaces', () => {

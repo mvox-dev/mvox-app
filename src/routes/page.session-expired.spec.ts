@@ -49,12 +49,7 @@ import {
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/agenda';
-
-function authExpiredError(): Error {
-	const e = new Error('Entu returned 401 — session expired');
-	e.name = 'AuthExpiredError';
-	return e;
-}
+import { authExpiredError } from '$lib/testing/pages/admin';
 
 findMyMemberIdMock.mockResolvedValue(null);
 listMyRsvpsMock.mockResolvedValue(toListRead([]));

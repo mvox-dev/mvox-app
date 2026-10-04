@@ -43,8 +43,7 @@ import { signIn } from '$lib/testing/session';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { CFG, cleanupClearResetAdmin } from '$lib/testing/pages/roster';
 import { q } from '$lib/testing/pages/dom';
-
-const DB_ENTITY = '69c7f8688489bfcb0e81aff1'; // the database entity — THE collective
+import { DB_ENTITY } from '$lib/testing/pages/admin';
 
 function wireRouter(path: string): Response {
 	if (path.includes('_type.string=member') && path.includes('status.string=active')) {

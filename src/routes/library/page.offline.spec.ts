@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 // #434: the library offline shows the last seen data; only `globalThis.fetch` is stubbed, the
 // real readers run through readCache over fake-indexeddb.
-import { IDBFactory } from 'fake-indexeddb';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
@@ -31,16 +30,23 @@ vi.mock('$app/state', () => ({ page: pageStub }));
 
 import LibraryPage from './+page.svelte';
 import { authStore } from '$lib/auth/session';
-import { setToken } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
 import { json } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
+import {
+	DB,
+	DB_ENTITY,
+	JSON_HEADERS,
+	LATER_SAME_DAY,
+	PERSON,
+	READ_AT,
+	offlineEntu,
+	seedOfflineSession,
+	urlOf
+} from '$lib/testing/pages/event';
 
-const DB = 'sampledb';
-const PERSON = 'person-1';
-const DB_ENTITY = 'db-entity-1';
 const LIBRARY = 'lib-1';
 
 // Profile and record names differ with real names on, so the row names her by the record name
@@ -57,16 +63,7 @@ const WORKS = [
 const EDITION = { id: 'e-1', name: 'Carus 2019', publisher: 'Carus' };
 const COPY = { id: 'c-1', copyNumber: 3 };
 
-// Only Date is faked. 07:05Z is 10:05 in Tallinn (EEST), so the as-of time is unmistakable.
-const READ_AT = new Date('2026-09-28T07:05:00.000Z');
-const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
-
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
-
-function urlOf(input: RequestInfo | URL): string {
-	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-}
 
 /** The online Entu: discovery plus the library's reads; everything else answers empty. Without
   * `librarianPerson` as the library's `_owner`, every viewer resolves to not-librarian. */
@@ -239,10 +236,6 @@ function onlineEntu(opts: { librarianPerson?: string } = {}) {
 	});
 }
 
-function offlineEntu() {
-	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
-}
-
 /** Discovery through the store's own entry point, then mount /library. */
 async function openLibrary() {
 	collectiveState.set({ status: 'loading' });
@@ -326,21 +319,7 @@ async function onlineVisit() {
 	cleanup();
 }
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'], now: READ_AT });
-	setReadCacheFactory(new IDBFactory());
-	// #343's part byte store (file presence badges) opens the global
-	// IndexedDB — a separate, fresh one.
-	vi.stubGlobal('indexedDB', new IDBFactory());
-	resetServedFromCache();
-	localStorage.clear();
-	setToken('tok-1');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB]: PERSON },
-		expMs: READ_AT.getTime() + 48 * 3_600_000
-	});
-});
+beforeEach(seedOfflineSession);
 
 afterEach(() => {
 	cleanup();

@@ -102,8 +102,7 @@ import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { setAuthed } from '$lib/testing/pages/roster';
 import { q } from '$lib/testing/pages/dom';
-
-const REASON = '[write_unavailable_no_signal]';
+import { REASON } from '$lib/testing/pages/event';
 
 const ROWS = [
 	{

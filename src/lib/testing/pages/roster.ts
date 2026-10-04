@@ -32,7 +32,7 @@ import { fixtureRows, liveShapedTree, ORG_EFK, rowsA, rowsB, treeA, treeB } from
 
 export const CFG = testCfg('sampledb', 'jwt-abc');
 
-export const JSON_HEADERS = { 'Content-Type': 'application/json' };
+export { JSON_HEADERS } from './event';
 
 export const flush = () => new Promise((r) => setTimeout(r, 0));
 

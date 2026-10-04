@@ -27,12 +27,7 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './profile/+page.svelte';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { cleanupResetGate, selectSampledb } from '$lib/testing/pages/profile';
-
-function authExpiredError(): Error {
-	const e = new Error('Entu returned 401 — session expired');
-	e.name = 'AuthExpiredError';
-	return e;
-}
+import { authExpiredError } from '$lib/testing/pages/admin';
 
 beforeEach(() => {
 	listMyProfilesMock.mockReset();

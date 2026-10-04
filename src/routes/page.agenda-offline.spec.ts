@@ -2,7 +2,6 @@
 
 // The agenda offline: rows from the read cache plus an as-of line. Only fetch is stubbed,
 // so every real reader between the page and the wire runs.
-import { IDBFactory } from 'fake-indexeddb';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
@@ -23,8 +22,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
-import { setToken, clearAll } from '$lib/auth/storage';
+import { clearAll } from '$lib/auth/storage';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import {
 	flushReadCache,
@@ -34,28 +32,21 @@ import {
 } from '$lib/entu/readCache';
 import { tallinnHHMM } from '$lib/preferences/timeFormat';
 import { json } from '$lib/testing/entuFetchKit';
+import {
+	DB,
+	DB_ENTITY,
+	EVENTS,
+	JSON_HEADERS,
+	LATER_SAME_DAY,
+	PERSON,
+	READ_AT,
+	SEASON,
+	offlineEntu,
+	seedOfflineSession,
+	urlOf
+} from '$lib/testing/pages/event';
 
-const DB = 'sampledb';
-const PERSON = 'person-1';
-const DB_ENTITY = 'db-entity-1';
-const SEASON = 'season-1';
-
-// A fixed "today" (only Date is faked — IndexedDB and waitFor keep real timers).
-// 07:05Z is 10:05 in Tallinn (EEST), so the as-of time is unmistakable.
-const READ_AT = new Date('2026-09-28T07:05:00.000Z');
-const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
-
-const EVENTS = [
-	{ id: 'ev-1', name: 'Tuesday rehearsal', start: '2026-10-06T15:00:00.000Z' },
-	{ id: 'ev-2', name: 'Autumn concert', start: '2026-10-18T14:00:00.000Z' }
-];
-
-const JSON_HEADERS = { 'Content-Type': 'application/json' };
-
-function urlOf(input: RequestInfo | URL): string {
-	return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
-}
 
 /** The online Entu, answering the agenda's reads by path; everything else empty. */
 function onlineEntu() {
@@ -100,10 +91,6 @@ function onlineEntu() {
 	});
 }
 
-function offlineEntu() {
-	return vi.fn(() => Promise.reject(new TypeError('Failed to fetch')));
-}
-
 async function coldStart() {
 	collectiveState.set({ status: 'loading' });
 	await hydrateCollectives();
@@ -120,22 +107,7 @@ async function expectAgendaRows(container: HTMLElement) {
 	});
 }
 
-beforeEach(() => {
-	vi.useFakeTimers({ toFake: ['Date'], now: READ_AT });
-	setReadCacheFactory(new IDBFactory());
-	// #343's part byte store (next-event prefetch, file presence) opens the
-	// global IndexedDB on this page too — a separate, fresh one, so its reads
-	// resolve instead of logging a missing global.
-	vi.stubGlobal('indexedDB', new IDBFactory());
-	resetServedFromCache();
-	localStorage.clear();
-	setToken('tok-1');
-	authStore.set({
-		status: 'authenticated',
-		personIdByDb: { [DB]: PERSON },
-		expMs: READ_AT.getTime() + 48 * 3_600_000
-	});
-});
+beforeEach(seedOfflineSession);
 
 afterEach(() => {
 	cleanup();
