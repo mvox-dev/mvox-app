@@ -28,6 +28,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
+import { DB_A } from './agenda';
 
 export { cleanupClearReset } from './dom';
 
@@ -109,7 +110,7 @@ export function mockLibrarian(): void {
 	resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
 }
 
-export const DB_A = 'sampledb';
+export { DB_A, truncated } from './agenda';
 export const DB_B = 'other-choir';
 
 export function setAuthedWithTwoCollectives(): void {
@@ -211,10 +212,6 @@ export function seedTwoLibraries(): void {
 	findMyMemberIdMock.mockResolvedValue(null);
 	resolveCopyNamesMock.mockResolvedValue(new Map());
 	resolveCopyChainsMock.mockResolvedValue(new Map());
-}
-
-export function truncated<T>(items: T[], total: number) {
-	return { items, total, truncated: true };
 }
 
 // Renders and waits for work-1's row.

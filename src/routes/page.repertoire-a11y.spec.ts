@@ -5,8 +5,6 @@
 // rendered-DOM tests for aria semantics (the #86/TA.5 precedent).
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
@@ -108,6 +106,7 @@ import {
 	resolveCopyNamesMock
 } from '$lib/testing/mocks/library';
 import { resetRepertoireBadgeMocks } from '$lib/testing/pages/library';
+import { readSource } from '$lib/testing/pages/files';
 
 afterEach(resetRepertoireBadgeMocks);
 
@@ -163,10 +162,6 @@ async function renderElementExpanded(props: ComponentProps<typeof RepertoireElem
 	expect(line, 'works-line toggle must render for non-empty rows').not.toBeNull();
 	await fireEvent.click(line);
 	return container;
-}
-
-function readSource(relPath: string): string {
-	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
 // 1 — i18n: every repertoire surface renders via Paraglide keys only

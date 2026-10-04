@@ -39,6 +39,7 @@ import {
 	renderDone
 } from '$lib/testing/pages/adminInvite';
 import { q } from '$lib/testing/pages/dom';
+import { setClipboard } from '$lib/testing/pages/rosterInvite';
 
 function expectNoInviteMaterial(container: HTMLElement): void {
 	expect(container.textContent).not.toContain(MINTED_TOKEN);
@@ -50,14 +51,6 @@ function expectNoInviteMaterial(container: HTMLElement): void {
 		expect(el.value).not.toContain(MINTED_TOKEN);
 		expect(el.value).not.toContain('/invite/');
 	}
-}
-
-function setClipboard(value: unknown): void {
-	Object.defineProperty(navigator, 'clipboard', {
-		value,
-		configurable: true,
-		writable: true
-	});
 }
 
 function installWriteText(): ReturnType<typeof vi.fn> {

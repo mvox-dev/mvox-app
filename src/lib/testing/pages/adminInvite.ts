@@ -10,12 +10,11 @@ import {
 } from '$lib/testing/mocks/admin';
 import { jwt, selectSampledb } from './admin';
 import { q } from './dom';
+import { originalClipboardDesc } from './rosterInvite';
 
 export const MINTED_TOKEN = jwt({ db: 'sampledb', entityId: 'p1', iat: 1, exp: 4_102_444_800 });
 
 export const EXPECTED_URL = () => `${window.location.origin}/invite/${MINTED_TOKEN}`;
-
-const originalClipboardDesc = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
 
 export function cleanupRestoreClipboard(): void {
 	cleanup();

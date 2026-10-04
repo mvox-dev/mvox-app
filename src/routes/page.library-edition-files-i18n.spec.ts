@@ -1,55 +1,8 @@
 // @vitest-environment node
-//
-// #275 RED — the i18n leg of the edition-files affordance. Reads the RAW
-// message files (messages/*.json), same contract shape as
-// page.library-create-edition-i18n.spec.ts: the nine new
-// `library_edition_file_*` keys exist in ALL FOUR locales.
-//
-// COPY STATUS: #275 carries NO PO-pinned copy — every string below, the
-// Estonian included, is an ENGINEERING DRAFT drawn from the existing library
-// register (et "fail"/"ebaõnnestus" per the create-edition family's register;
-// lv "fails"; uk "файл"). ALL FOUR locales are flagged REFINABLE in the
-// delivery report — refining them later is a copy-edit against these
-// exact-text pins, not a schema change.
-//
-// KEY SET (as needed per the slice, task item 10):
-//   attach    — the attach control's accessible name / visible label
-//   open      — the per-file open control
-//   uploading — the per-batch in-flight indicator
-//   uploaded  — sr-only success announcement; {filenames} names EXACTLY what
-//               landed (#253 — never a bare "done")
-//   failed    — per-file visible failure; {filename} names the file
-//   broken    — the delete-failed phantom's row text; {filename}
-//   error     — the batch-level transport failure (step-1 POST died,
-//               nothing was created)
-//   not-created — (review YELLOW) a selected file that step 1 returned NO
-//               property for: nothing exists server-side and nothing landed,
-//               which is a different thing to say than `failed`'s
-//               created-then-cleaned-up; {filename}
-//
-// EIGHT, not nine, since #427: `library_edition_file_open_error` is GONE.
-// Open stopped being a byte read on this page — it is a navigation to the
-// fullscreen viewer, which carries its own not-on-device notice — so the key
-// rendered on no surface at all (#427 review finding 7). A locale string no
-// screen can show is a promise of a message that never arrives.
-//
-// Filesize formatting carries NO i18n key: it is numeric/tabular text
-// (the #207 rule-7 family), rendered locale-independently by
-// editionFiles.formatFileSize.
+// The edition-file keys, read from the raw message files in all four locales.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-
-type MessageFile = Record<string, unknown>;
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-type Locale = (typeof LOCALES)[number];
-
-function readMessages(locale: Locale): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
+import { LOCALES } from '$lib/testing/pages/profile';
+import { type Locale, readMessages } from '$lib/testing/pages/files';
 
 const NEW_KEYS = [
 	'library_edition_file_attach',
@@ -62,7 +15,6 @@ const NEW_KEYS = [
 	'library_edition_file_not_created'
 ] as const;
 
-// Exact-text pins — engineering drafts, all four locales refinable (header).
 const PINNED_TEXT: Record<Locale, Record<(typeof NEW_KEYS)[number], string>> = {
 	en: {
 		library_edition_file_attach: 'Attach files',
@@ -132,8 +84,6 @@ describe('#275 — locale parity: the eight library_edition_file_* keys exist, n
 		});
 	}
 
-	// #427 review finding 7 — the retired key stays retired: re-adding a
-	// string no surface renders is how dead copy accumulates.
 	it('no locale carries library_edition_file_open_error — the surface that showed it is gone (#427)', () => {
 		for (const locale of LOCALES) {
 			expect(

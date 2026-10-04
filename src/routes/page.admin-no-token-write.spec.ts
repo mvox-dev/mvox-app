@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // #550: admin roles write and invite create with no token send nothing and expire the session.
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
+import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -89,13 +89,11 @@ vi.mock('$lib/entu-config', async () =>
 import AdminPage from './admin/+page.svelte';
 import InvitePage from './admin/invite/+page.svelte';
 import { clearAll } from '$lib/auth/storage';
-import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { nonGetCalls, settle } from '$lib/testing/networkSignal';
-import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { selectSampledb } from '$lib/testing/pages/admin';
-import { q } from '$lib/testing/pages/dom';
+import { cleanupUnstubResetAuth, q } from '$lib/testing/pages/dom';
 
 let fetchStub: ReturnType<typeof vi.fn<typeof fetch>>;
 
@@ -107,13 +105,7 @@ beforeEach(() => {
 	history.replaceState({}, '', '/admin');
 });
 
-afterEach(() => {
-	setAuthExpiredHandler(null);
-	cleanup();
-	vi.unstubAllGlobals();
-	resetAppState();
-	history.replaceState({}, '', '/');
-});
+afterEach(cleanupUnstubResetAuth);
 
 async function expectSessionExpiredAndNothingSent() {
 	await waitFor(() => expect(gotoMock).toHaveBeenCalledTimes(1));

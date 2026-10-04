@@ -1,7 +1,5 @@
 // Source scans over every .svelte file: hardcoded strings, locale parity, focus indicators.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
@@ -9,14 +7,10 @@ import {
 	type MessageFile
 } from '$lib/testing/messageFile.js';
 import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
+import { LOCALES } from '$lib/testing/pages/profile';
+import { readSource } from '$lib/testing/pages/files';
 
 const SURFACES = svelteSurfaces();
-
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-
-function readSource(relPath: string): string {
-	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
 
 /** Every m.* key the file's CODE references (comments stripped first). */
 function usedMessageKeys(source: string): string[] {

@@ -128,6 +128,7 @@ import {
 } from '$lib/testing/pages/seasonPanel';
 import { agendaResult, openPanel, seriesFixture } from '$lib/testing/pages/seasonManage';
 import { renderReady } from '$lib/testing/pages/seasonRender';
+import { REASON } from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
@@ -188,8 +189,6 @@ afterEach(() => {
 	resetOnLine();
 	resetAppState();
 });
-
-const REASON = '[write_unavailable_no_signal]';
 
 async function renderPanelOnline(): Promise<{ container: HTMLElement; panel: HTMLElement }> {
 	await goOnline();

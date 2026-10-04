@@ -1,8 +1,10 @@
 // Event page harness (no page import): the setup its specs had word for word.
 import { cleanup } from '@testing-library/svelte';
+import { IDBFactory } from 'fake-indexeddb';
 import { vi } from 'vitest';
+import { authStore } from '$lib/auth/session';
 import { setToken } from '$lib/auth/storage';
-import { setReadCacheFactory } from '$lib/entu/readCache';
+import { resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { testCfg } from '$lib/testing/entuFetchKit';
@@ -10,7 +12,7 @@ import { signIn } from '$lib/testing/session';
 
 // Before the fixture event (2026-09-01), so it is upcoming; only Date is faked.
 export const NOW = new Date('2026-08-20T10:00:00.000Z');
-export const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
+export { LOCALES } from './profile';
 export const cfg = testCfg('sampledb');
 
 export function isoAt(offsetDays: number): string {
@@ -126,6 +128,7 @@ export const DB = 'sampledb';
 export const PERSON = 'person-1';
 export const DB_ENTITY = 'db-entity-1';
 export const SEASON = 'season-1';
+// Only Date is faked. 07:05Z is 10:05 in Tallinn (EEST), so the as-of time is unmistakable.
 export const READ_AT = new Date('2026-09-28T07:05:00.000Z');
 export const LATER_SAME_DAY = new Date('2026-09-28T09:40:00.000Z');
 export const JSON_HEADERS = { 'Content-Type': 'application/json' };
@@ -157,6 +160,25 @@ export function cleanupResetAllMocks(): void {
 	vi.resetAllMocks();
 	localStorage.clear();
 	resetAppState();
+}
+
+export const EVENTS = [
+	{ id: 'ev-1', name: 'Tuesday rehearsal', start: '2026-10-06T15:00:00.000Z' },
+	{ id: 'ev-2', name: 'Autumn concert', start: '2026-10-18T14:00:00.000Z' }
+];
+
+export function seedOfflineSession(): void {
+	vi.useFakeTimers({ toFake: ['Date'], now: READ_AT });
+	setReadCacheFactory(new IDBFactory());
+	vi.stubGlobal('indexedDB', new IDBFactory());
+	resetServedFromCache();
+	localStorage.clear();
+	setToken('tok-1');
+	authStore.set({
+		status: 'authenticated',
+		personIdByDb: { [DB]: PERSON },
+		expMs: READ_AT.getTime() + 48 * 3_600_000
+	});
 }
 
 // (*MVOX:Josquin*)

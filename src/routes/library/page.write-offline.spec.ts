@@ -79,6 +79,7 @@ import {
 } from '$lib/testing/mocks/library';
 import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { signInLibraryReader } from '$lib/testing/pages/library';
+import { REASON } from '$lib/testing/pages/event';
 
 afterEach(() => {
 	cleanup();
@@ -102,8 +103,6 @@ afterEach(() => {
 	createEditionMock.mockReset();
 	resetAppState();
 });
-
-const REASON = '[write_unavailable_no_signal]';
 
 afterEach(() => {
 	resetOnLine();

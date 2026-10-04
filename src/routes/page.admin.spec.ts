@@ -77,6 +77,7 @@ import {
 	selectSampledb
 } from '$lib/testing/pages/admin';
 import { cleanupReset, optionValues, q } from '$lib/testing/pages/dom';
+import { promptOption } from '$lib/testing/pages/seasonPanel';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 listJoinStatesMock.mockResolvedValue({});
@@ -109,15 +110,6 @@ function personSelect(sectionEl: HTMLElement, testid: string): HTMLSelectElement
 	expect(select, `expected the section to hold a native [data-testid="${testid}"]`).not.toBeNull();
 	expect(select!.tagName).toBe('SELECT');
 	return select!;
-}
-
-function promptOption(select: HTMLSelectElement): HTMLOptionElement {
-	const prompt = select.querySelector('option') as HTMLOptionElement;
-	expect(prompt, 'expected a first (prompt) option').not.toBeNull();
-	expect(prompt.value).toBe('');
-	expect(prompt.disabled).toBe(true);
-	expect(prompt.hidden).toBe(true);
-	return prompt;
 }
 
 async function pickPerson(select: HTMLSelectElement, personId: string): Promise<void> {

@@ -1,5 +1,6 @@
 import { cleanup } from '@testing-library/svelte';
 import { expect, vi } from 'vitest';
+import { setAuthExpiredHandler } from '$lib/entu/request';
 import { resetAppState } from '$lib/testing/appReset';
 
 export function q<T extends HTMLElement = HTMLElement>(
@@ -36,6 +37,14 @@ export function cleanupClearReset(): void {
 
 export function optionValues(select: HTMLSelectElement): string[] {
 	return Array.from(select.querySelectorAll('option')).map((o) => o.value);
+}
+
+export function cleanupUnstubResetAuth(): void {
+	setAuthExpiredHandler(null);
+	cleanup();
+	vi.unstubAllGlobals();
+	resetAppState();
+	history.replaceState({}, '', '/');
 }
 
 // (*MVOX:Josquin*)

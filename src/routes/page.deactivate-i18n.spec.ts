@@ -1,38 +1,8 @@
-// #255 done-when 8 RED — the copy bindings, auditable from the message files
-// themselves (pattern: page.ux-polish-i18n.spec.ts):
-//
-//   - Gama COPY BINDING (read by a person being told she is out of a choir):
-//     "not active" — NEVER "removed", "deleted" or "deactivated" (punitive, or
-//     jargon about a record rather than a relationship); points at the CHOIR,
-//     not support. Estonian register: relationship-language, never
-//     'eemaldatud'/'kustutatud'.
-//   - The refusal names the REMEDY: who holds what role and where to remove it
-//     — so the refusal keys must carry the collective placeholder the page
-//     spec proves gets filled.
-//   - All new copy lands in all four locales (en/et/lv/uk).
-//
-// GREEN owns the actual sentences; these tests pin the key names, their
-// presence in every locale, and the forbidden-vocabulary boundary.
+// The not-active notice and deactivate refusals, read from all four message files.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import {
-	isMessageEmpty,
-	messagePatterns,
-	everyPatternContains,
-	type MessageFile
-} from '$lib/testing/messageFile.js';
+import { isMessageEmpty, messagePatterns, everyPatternContains } from '$lib/testing/messageFile.js';
+import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
-const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-
-function localeMessages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
-
-// The #255 key contract (page/layout specs render these through key mocks;
-// GREEN translates them for real).
 const NOTICE_KEY = 'membership_not_active_notice';
 const REFUSAL_KEYS = ['roster_deactivate_refused_admin', 'roster_deactivate_refused_librarian'];
 

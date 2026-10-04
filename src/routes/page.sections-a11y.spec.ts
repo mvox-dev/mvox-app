@@ -3,8 +3,6 @@
 // tests that always render the real /roster page, never a component alone.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
@@ -81,6 +79,7 @@ import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { q } from '$lib/testing/pages/dom';
+import { readSource } from '$lib/testing/pages/files';
 
 const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
@@ -215,10 +214,6 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 		expect(q(container, 'roster-arrange-list')).not.toBeNull();
 	});
 	return container;
-}
-
-function readSource(relPath: string): string {
-	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
 }
 
 // 1 — i18n: every sections surface renders via Paraglide keys only

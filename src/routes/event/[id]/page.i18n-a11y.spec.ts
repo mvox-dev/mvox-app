@@ -2,8 +2,6 @@
 // #105: i18n and a11y on the real event route; source scans for copy, rendered DOM for semantics.
 import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { bareTextNodes } from '$lib/testing/bareText';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { json } from '$lib/testing/entuFetchKit';
@@ -42,12 +40,9 @@ import {
 	seriesEntity,
 	setAuthedWithSampledb
 } from '$lib/testing/pages/event';
+import { readSource } from '$lib/testing/pages/files';
 
 const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
-
-function readSource(relPath: string): string {
-	return readFileSync(resolve(process.cwd(), relPath), 'utf-8');
-}
 
 function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;

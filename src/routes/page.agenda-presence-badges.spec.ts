@@ -105,7 +105,8 @@ import { listRepertoireItemsMock } from '$lib/testing/mocks/seasons';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { isoDate } from '$lib/testing/pages/seasonPanel';
 import { q } from '$lib/testing/pages/seasonRepertoire';
-import { recent, setAuthedWithTwoCollectives } from '$lib/testing/pages/agendaWorks';
+import { recent, setAuthedWithTwoCollectives, upcoming } from '$lib/testing/pages/agendaWorks';
+import { pdfData } from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
@@ -120,14 +121,6 @@ function installPresence(impl?: PresenceQuery) {
 
 const IDENTITY = { db: 'sampledb', personId: 'person-p' };
 
-function pdfData() {
-	return {
-		bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
-		filetype: 'application/pdf',
-		sha256: 'sha-fixture'
-	};
-}
-
 function stubByteFetch() {
 	vi.stubGlobal('fetch', async (input: RequestInfo | URL) => {
 		const url = typeof input === 'string' ? input : input.toString();
@@ -139,21 +132,6 @@ function stubByteFetch() {
 		return new Response(JSON.stringify({ entities: [] }), { status: 200 });
 	});
 }
-
-const future = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
-
-const upcoming = [
-	{
-		id: 'ev-1',
-		name: 'Rehearsal',
-		startDatetime: future,
-		durationMinutes: 90,
-		location: '',
-		conductors: [],
-		owners: [],
-		editors: []
-	}
-];
 
 function workRow(id: string, workName: string, fileId: string) {
 	return {

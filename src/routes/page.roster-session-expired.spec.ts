@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -30,11 +30,10 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { setAuthExpiredHandler } from '$lib/entu/request';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
-import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { cleanupUnstubResetAuth } from '$lib/testing/pages/dom';
 
 type Route = 'member' | 'profile' | 'section' | 'other';
 
@@ -98,13 +97,7 @@ beforeEach(() => {
 	history.replaceState({}, '', '/roster');
 });
 
-afterEach(() => {
-	setAuthExpiredHandler(null);
-	cleanup();
-	vi.unstubAllGlobals();
-	resetAppState();
-	history.replaceState({}, '', '/');
-});
+afterEach(cleanupUnstubResetAuth);
 
 describe('/roster — session expired (#107)', () => {
 	it('a real Entu 401 shows the session-expired notice with a sign-in link — not the generic load error, never a silent empty state', async () => {

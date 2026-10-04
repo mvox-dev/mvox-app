@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
+import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -20,11 +20,10 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { setAuthExpiredHandler } from '$lib/entu/request';
-import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { armLibraryRecovery } from '$lib/testing/pages/library';
+import { cleanupUnstubResetAuth } from '$lib/testing/pages/dom';
+import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 
 type Route = 'work' | 'edition-of-work' | 'copy-of-edition' | 'lending' | 'other';
 
@@ -62,19 +61,9 @@ function stubWire(failing: Partial<Record<Route, number>> = {}) {
 	);
 }
 
-function setAuthedWithOneCollective() {
-	signIn();
-}
-
 beforeEach(armLibraryRecovery);
 
-afterEach(() => {
-	setAuthExpiredHandler(null);
-	cleanup();
-	vi.unstubAllGlobals();
-	resetAppState();
-	history.replaceState({}, '', '/');
-});
+afterEach(cleanupUnstubResetAuth);
 
 describe('/library — session expired (#107)', () => {
 	it('a real Entu 401 on the page load shows the session-expired notice with a sign-in link — not the generic load error', async () => {

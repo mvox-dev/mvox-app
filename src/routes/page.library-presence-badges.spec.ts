@@ -94,6 +94,7 @@ import {
 	renderReady,
 	signInLibraryReader
 } from '$lib/testing/pages/library';
+import { pdfData } from '$lib/testing/pages/event';
 
 let fakeByteStore: FakeByteStore;
 
@@ -108,14 +109,6 @@ function installPresence(impl?: PresenceQuery) {
 }
 
 const IDENTITY = { db: 'sampledb', personId: 'person-p' };
-
-function pdfData() {
-	return {
-		bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46]).buffer,
-		filetype: 'application/pdf',
-		sha256: 'sha-fixture'
-	};
-}
 
 function mockBaselineLibrary() {
 	listWorksMock.mockResolvedValue(
