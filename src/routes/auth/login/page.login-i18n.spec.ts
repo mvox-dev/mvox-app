@@ -3,9 +3,7 @@
 // locales; a non-English locale must not render the English text.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty } from '$lib/testing/messageFile.js';
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
@@ -22,14 +20,9 @@ import { setLastProvider } from '$lib/auth/storage';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { LOCALES } from '$lib/testing/pages/files';
+import { messages } from '$lib/testing/pages/messageFiles';
 
 const OTHER_LOCALES = ['et', 'lv', 'uk'] as const;
-
-function messages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 // None of these keys is a variant message; failing on the type keeps a missing key loud.
 function msg(locale: string, key: string): string {

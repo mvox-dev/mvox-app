@@ -43,7 +43,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/+page.svelte';
-import type { RolePerson } from '$lib/admin/roleManagement';
 import { signIn } from '$lib/testing/session';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
@@ -58,15 +57,9 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { ANNA } from '$lib/testing/pages/adminRoleFixtures';
 
 const VIEWER = 'admin-p';
-
-const ANNA: RolePerson = {
-	id: 'p-anna',
-	name: 'Anna Arro',
-	role: 'owner',
-	valueIds: ['pv-own-anna']
-};
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 

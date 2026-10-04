@@ -31,7 +31,7 @@ import { resetAdmin } from '$lib/nav/adminStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY, TYPE_ID, rowNames, setAuthedAdmin, wireCalls } from '$lib/testing/pages/links';
-import { q } from '$lib/testing/pages/dom';
+import { q, rowEls } from '$lib/testing/pages/dom';
 
 interface ServerLink {
 	_id: string;
@@ -112,10 +112,6 @@ afterEach(() => {
 	resetAppState();
 	resetAdmin();
 });
-
-function rowEls(container: HTMLElement): HTMLElement[] {
-	return Array.from(container.querySelectorAll('[data-testid="links-row"]'));
-}
 
 async function renderReady() {
 	const utils = render(Page);

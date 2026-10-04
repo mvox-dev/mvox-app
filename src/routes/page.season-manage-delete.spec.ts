@@ -114,7 +114,7 @@ import {
 	cleanupResetSeasonDeleteMocks,
 	currentSeason
 } from '$lib/testing/pages/seasonPanel';
-import { setAuthedWithOneCollective } from '$lib/testing/pages/seasonManage';
+import { renderReady } from '$lib/testing/pages/seasonManageRender';
 
 // ── fixtures ────────────────────────────────────────────────────────────────────
 
@@ -192,15 +192,6 @@ beforeEach(() => {
 });
 
 afterEach(cleanupResetSeasonDeleteMocks);
-
-async function renderReady(): Promise<HTMLElement> {
-	setAuthedWithOneCollective();
-	const { container } = render(Page);
-	await waitFor(() => {
-		expect(q(container, 'agenda-empty')).not.toBeNull();
-	});
-	return container;
-}
 
 async function armAndConfirmDelete(
 	container: HTMLElement,

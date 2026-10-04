@@ -5,7 +5,6 @@ import { resolve } from 'node:path';
 import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
-import { signIn } from '$lib/testing/session';
 
 beforeEach(fakeDateAtNow);
 
@@ -36,6 +35,7 @@ import Page from './+page.svelte';
 import { listAllRsvpsForEventMock } from '$lib/testing/mocks/events';
 import { cleanupResetAllMocks, fakeDateAtNow } from '$lib/testing/pages/event';
 import { q } from '$lib/testing/pages/dom';
+import { setAuthedWithSampledb } from '$lib/testing/pages/eventFixtures';
 
 function nonEditorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -96,13 +96,6 @@ function wireStub(event: Record<string, unknown>) {
 				entities: [{ _id: 'rsvp-77', event: [{ reference: 'ev1' }], status: [{ string: 'going' }] }]
 			});
 		return json({ entities: [] });
-	});
-}
-
-function setAuthedWithSampledb() {
-	signIn({
-		token: 'jwt-token',
-		collectives: [{ db: 'sampledb', name: 'Sampledb', personId: 'p-viewer' }]
 	});
 }
 

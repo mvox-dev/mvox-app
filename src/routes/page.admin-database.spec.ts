@@ -48,7 +48,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/+page.svelte';
-import type { RolePerson } from '$lib/admin/roleManagement';
 import { listSectionsMock, resolveDatabaseEntityIdMock } from '$lib/testing/moduleHandles';
 import {
 	createInviteMock,
@@ -66,17 +65,11 @@ import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { entuFetchMock } from '$lib/testing/mocks/seasons';
 import { DB_ENTITY, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupClearReset, q } from '$lib/testing/pages/dom';
+import { ANNA } from '$lib/testing/pages/adminRoleFixtures';
 
 // Defaults the hoisted handles carried before they moved to the shared mocks.
 resolveOwnerTierMock.mockResolvedValue('error');
 listJoinStatesMock.mockResolvedValue({});
-
-const ANNA: RolePerson = {
-	id: 'p-anna',
-	name: 'Anna Arro',
-	role: 'owner',
-	valueIds: ['pv-own-anna']
-};
 
 const ROSTER = [{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '' }];
 

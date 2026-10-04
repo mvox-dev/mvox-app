@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 // The event page's convert-to-series form (#313), with the create forms' keys (#631).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -38,7 +37,7 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 );
 
 import Page from './+page.svelte';
-import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { isMessageEmpty, messagePatterns } from '$lib/testing/messageFile.js';
 import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
@@ -50,6 +49,7 @@ import { q } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
 import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import { fill } from '$lib/testing/pages/seasonPanel';
+import { messages } from '$lib/testing/pages/messageFiles';
 
 function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 	return {
@@ -669,12 +669,6 @@ describe('#313 — the conversion form as a dialog on the event page', () => {
 		expect(convertEventToSeriesMock).not.toHaveBeenCalled();
 	});
 });
-
-function messages(locale: string): MessageFile {
-	return JSON.parse(
-		readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-	) as MessageFile;
-}
 
 describe('#313 — i18n: event_detail_convert present and non-empty in all four locales', () => {
 	it.each(LOCALES)('%s carries the key, non-empty', (locale) => {
