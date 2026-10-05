@@ -35,7 +35,7 @@ export function setAuthedWithSampledb() {
 	});
 }
 
-export function eventEntity() {
+export function bareEventEntity() {
 	return {
 		_id: 'ev1',
 		name: [{ string: 'Tuesday Rehearsal' }],

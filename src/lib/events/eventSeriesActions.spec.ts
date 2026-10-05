@@ -72,6 +72,13 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 		expect(deleteUrls(stub)).toEqual([]);
 	});
 
+	it('finds the series value by type, not position: series listed before season', async () => {
+		const { reassignEventSeries } = await actions();
+		const stub = wire([...PARENTS].reverse());
+		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
+		expect(postBodies(stub)).toEqual([[{ _id: 'pv-series', type: '_parent', reference: 'series2' }]]);
+	});
+
 	it('reads `_parent` BEFORE writing (the overwrite entry cannot be built blind)', async () => {
 		const { reassignEventSeries } = await actions();
 		const stub = wire();

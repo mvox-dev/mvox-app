@@ -39,7 +39,7 @@ import {
 	setAuthed,
 	waitForRsvpSection
 } from '$lib/testing/pages/eventRsvp';
-import { eventEntity } from '$lib/testing/pages/eventFixtures';
+import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ function wireStub(opts: WireOpts = {}) {
 			if (opts.personRights === 'hold') return new Promise<Response>(() => {});
 			return json({ entity: opts.personRights ?? NO_GRANT });
 		}
-		if (url.includes('/entity/ev1')) return json({ entity: eventEntity() });
+		if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
 		if (url.includes('/entity/season1')) return json({ entity: seasonEntity() });
 		if (url.includes('_type.string=member') && url.includes('person.reference=p-viewer')) {
 			if (memberEntities === 'hold') return new Promise<Response>(() => {});

@@ -195,6 +195,20 @@ describe('loadEventDetail — full header shape', () => {
 		expect(detail.seasonEditorIds).toEqual([]);
 	});
 
+	it('season and series are read by type, not position: series listed first', async () => {
+		const fetchImpl = entuFetchStub({
+			event: eventEntity({
+				_parent: [
+					{ reference: 'series1', entity_type: 'event_series' },
+					{ reference: 'season1', entity_type: 'season' }
+				]
+			})
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.seasonId).toBe('season1');
+		expect(detail.seriesId).toBe('series1');
+	});
+
 	it('the event GET asks for event_name and NEVER the retired bare name (#420 — no fallback read)', async () => {
 		const fetchImpl = entuFetchStub();
 		await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);

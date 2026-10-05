@@ -35,7 +35,7 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 import { setAuthed } from '$lib/testing/pages/eventRsvp';
 import { EDITIONS, seasonEntity, workRowOf } from '$lib/testing/pages/eventEdition';
-import { eventEntity } from '$lib/testing/pages/eventFixtures';
+import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
 
@@ -78,7 +78,7 @@ function wireStub(opts: { editionCount?: number } = {}) {
 		const method = init?.method ?? 'GET';
 		if (method === 'DELETE') return json({ deleted: true });
 		if (method === 'POST') return json({ _id: 'new-1' });
-		if (url.includes('/entity/ev1')) return json({ entity: eventEntity() });
+		if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
 		if (url.includes('/entity/season1')) return json({ entity: seasonEntity() });
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-1' }] });
 		if (url.includes('_type.string=member') && url.includes('person.reference=p-viewer'))
