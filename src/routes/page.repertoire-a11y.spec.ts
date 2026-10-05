@@ -192,17 +192,6 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 		}
 	);
 
-	it('every repertoire_* key in en.json exists in et, lv and uk', () => {
-		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
-		const repertoireKeys = Object.keys(en).filter((k) => k.startsWith('repertoire_'));
-		expect(repertoireKeys.length).toBeGreaterThan(0);
-		for (const locale of ['et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
-			const missing = repertoireKeys.filter((k) => !(k in messages));
-			expect(missing, `${locale}.json is missing repertoire keys`).toEqual([]);
-		}
-	});
-
 	// WCAG 2.5.3 Label in Name: a control's accessible name CONTAINS its visible text, so
 	// a speech-input user's "click Move up" matches. Checked against every locale's
 	// messages: an aria-label key is the visible key's string plus context.

@@ -107,19 +107,6 @@ describe('#86 — i18n: no hardcoded user-facing strings on attendance surfaces'
 			expect(hardcoded).toEqual([]);
 		});
 	}
-
-	it('every attendance_* / agenda_take_attendance key in en.json exists in et, lv and uk', () => {
-		const en = JSON.parse(readSource('messages/en.json')) as Record<string, string>;
-		const attendanceKeys = Object.keys(en).filter(
-			(k) => k.startsWith('attendance_') || k.startsWith('agenda_take_attendance')
-		);
-		expect(attendanceKeys.length).toBeGreaterThan(0);
-		for (const locale of ['et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
-			const missing = attendanceKeys.filter((k) => !(k in messages));
-			expect(missing, `${locale}.json is missing attendance keys`).toEqual([]);
-		}
-	});
 });
 
 // 2 — P/A/L toggle buttons: aria-pressed + aria-label

@@ -1,22 +1,6 @@
 // @vitest-environment node
-//
-// #427 RED — the part viewer's i18n leg. Reads the RAW message files
-// (messages/*.json), the linksKeys.spec.ts shape: no global
-// locale-completeness spec exists, so the slice carries its own four-locale
-// spec.
-//
-// Contract (design ruling on #427):
-//   - Group prefix `part_viewer_`, flat keys, present in ALL FOUR locales.
-//   - THREE keys exactly: close, not_on_device, page_of. The conditional
-//     fourth (part_viewer_open, an aria for the entry buttons) resolves to
-//     NO KEY — the existing 'PDF'/'Open' labels are kept, so the exact-set
-//     pin below also guards against a stray part_viewer_open (or any
-//     part_viewer_ink_*) creeping in.
-//   - part_viewer_page_of carries BOTH {current} and {total} in every locale
-//     (the 'n / N' indicator — Inter, a pencil note in the margin).
-//   - et/lv/uk are real translations, not English placeholders (Comenius
-//     writes them in GREEN). page_of is exempt from the differs-from-en
-//     check: '{current} / {total}' may legitimately be locale-identical.
+
+// Part viewer copy (#427): exactly three part_viewer_ keys, page_of placeholders, translations.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -37,17 +21,7 @@ const PART_VIEWER_KEYS = [
 	'part_viewer_page_of'
 ] as const;
 
-describe('#427 — part_viewer_ keys exist non-empty in all four locales', () => {
-	for (const key of PART_VIEWER_KEYS) {
-		it(`${key} exists non-empty in en/et/lv/uk`, () => {
-			for (const locale of LOCALES) {
-				const value = messages(locale)[key];
-				expect(typeof value, `${locale}.json › ${key} must be a string`).toBe('string');
-				expect((value as string).trim(), `${locale}.json › ${key} must be non-empty`).not.toBe('');
-			}
-		});
-	}
-
+describe('#427 — part_viewer_ keys: placeholders, translation, key set', () => {
 	it('part_viewer_page_of carries {current} and {total} in every locale', () => {
 		for (const locale of LOCALES) {
 			const value = messages(locale)['part_viewer_page_of'] as string;

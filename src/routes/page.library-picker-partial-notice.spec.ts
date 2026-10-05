@@ -65,7 +65,6 @@ import {
 import { q } from '$lib/testing/pages/dom';
 
 const OPTIONS_OPTION = 'bulk-checkout-edition-partial-option';
-const MEMBERS_NOTICE = 'bulk-checkout-members-partial-notice';
 
 function worksFor(db: string) {
 	return db === DB_A
@@ -133,17 +132,6 @@ async function openEditionStep(): Promise<HTMLElement> {
 	});
 	await waitFor(() => {
 		expect(q(container, 'bulk-checkout-edition-select')).not.toBeNull();
-	});
-	return container;
-}
-
-async function openMemberStep(): Promise<HTMLElement> {
-	const container = await openEditionStep();
-	await fireEvent.change(q(container, 'bulk-checkout-edition-select') as HTMLSelectElement, {
-		target: { value: 'edition-a1' }
-	});
-	await waitFor(() => {
-		expect(q(container, 'bulk-checkout-member-list')).not.toBeNull();
 	});
 	return container;
 }
@@ -232,31 +220,6 @@ describe('#321 review F2 — the bulk-checkout EDITION picker states a truncated
 });
 
 describe('#321 review F2 — the borrower pickers state a truncated member feed', () => {
-	it('a truncated listActiveMembers renders the shared VISIBLE role="status" notice inside the member list', async () => {
-		listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
-			Promise.resolve(truncated(membersFor(cfg.db), 500))
-		);
-		const container = await openMemberStep();
-
-		await waitFor(() => {
-			expect(q(container, MEMBERS_NOTICE)).not.toBeNull();
-		});
-		const notice = q(container, MEMBERS_NOTICE) as HTMLElement;
-		expect(notice.getAttribute('role')).toBe('status');
-		expect(notice.className).not.toMatch(/sr-only|hidden/);
-		expect(notice.textContent?.trim()).toBe('picker_partial_members_notice');
-		expect(
-			q(container, 'bulk-checkout-member-list')!.querySelector(`[data-testid="${MEMBERS_NOTICE}"]`)
-		).not.toBeNull();
-	});
-
-	it('a complete member read leaves that notice ABSENT from the DOM', async () => {
-		const container = await openMemberStep();
-		expect(q(container, 'bulk-checkout-member-list')!.textContent).toContain('Ada Lovelace');
-
-		expect(q(container, MEMBERS_NOTICE)).toBeNull();
-	});
-
 	it('the per-copy INLINE checkout select carries the same claim, as its own trailing disabled option', async () => {
 		listActiveMembersMock.mockImplementation((cfg: { db: string }) =>
 			Promise.resolve(truncated(membersFor(cfg.db), 500))

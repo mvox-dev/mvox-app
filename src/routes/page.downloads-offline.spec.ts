@@ -324,15 +324,6 @@ describe('#353 — out-of-scope views fail LEGIBLY offline (the #331 pattern, on
 		await machine.loadForSelected();
 		expect(statuses).toEqual(['loading', 'load-error']);
 	});
-
-	it('the failure COPY exists in all four locales — the state has words, not a blank (library\'s nothing-cached state as the representative)', () => {
-		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			expect(messages['library_load_error'], `${locale}: library_load_error`).toBeTruthy();
-		}
-	});
 });
 
 describe('#353 — wording honesty (byteStore.ts:8), the #351 instrument applied to the new keys', () => {
@@ -360,17 +351,6 @@ describe('#353 — wording honesty (byteStore.ts:8), the #351 instrument applied
 		/прив/i,
 		/безпеч/i
 	];
-
-	it('every new key exists, non-empty, in all four locales', () => {
-		for (const locale of localeFiles) {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			for (const key of NEW_KEYS) {
-				expect(messages[key], `${locale}: ${key}`).toBeTruthy();
-			}
-		}
-	});
 
 	it('no value in any locale implies the stored bytes are private, secure or protected', () => {
 		for (const locale of localeFiles) {

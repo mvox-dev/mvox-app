@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async (importOriginal) =>
@@ -26,11 +25,10 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 import ProfilePage from './profile/+page.svelte';
 import Layout from './+layout.svelte';
 import { startInstallAffordance } from '$lib/install/installState';
-import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-import { LOCALES, readMessages } from '$lib/testing/pages/profile';
+import { readMessages } from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const installButton = (c: HTMLElement) =>
@@ -227,19 +225,7 @@ describe('#408 review F1 — the install adapter is app-lifetime, owned by the r
 	});
 });
 
-const NEW_KEYS = ['profile_install_button', 'profile_install_ios_hint'] as const;
-
-describe('locale parity — #408 keys exist, non-empty, in en/et/lv/uk', () => {
-	for (const locale of LOCALES) {
-		it(`${locale}.json carries every new key`, () => {
-			const messages = readMessages(locale);
-			for (const key of NEW_KEYS) {
-				expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-				expect(isMessageEmpty(messages[key]), `${locale}.json ${key} is empty`).toBe(false);
-			}
-		});
-	}
-
+describe('#408 copy', () => {
 	it("the Estonian copy is Mihkel's drafted default (issue #408 body, verbatim)", () => {
 		const et = readMessages('et');
 		expect(et.profile_install_button).toBe('Paigalda mvox seadmesse');

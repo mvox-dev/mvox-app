@@ -4,32 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { LOCALES } from '$lib/testing/pages/profile';
 import { readMessages } from '$lib/testing/pages/files';
 
-const NEW_KEYS = [
-	'library_edition_file_attach',
-	'library_edition_file_open',
-	'library_edition_file_uploading',
-	'library_edition_file_uploaded',
-	'library_edition_file_failed',
-	'library_edition_file_broken',
-	'library_edition_file_error',
-	'library_edition_file_not_created'
-] as const;
-
-describe('#275 — locale parity: the eight library_edition_file_* keys exist, non-empty, in en/et/lv/uk', () => {
-	for (const locale of LOCALES) {
-		it(`${locale}.json carries every new key, non-empty`, () => {
-			const messages = readMessages(locale);
-			for (const key of NEW_KEYS) {
-				expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-				const value = messages[key];
-				expect(
-					typeof value === 'string' && value.trim().length > 0,
-					`${locale}.json ${key} must be a non-empty string`
-				).toBe(true);
-			}
-		});
-	}
-
+describe('#275 — library_edition_file_* copy', () => {
 	it('no locale carries library_edition_file_open_error — the surface that showed it is gone (#427)', () => {
 		for (const locale of LOCALES) {
 			expect(

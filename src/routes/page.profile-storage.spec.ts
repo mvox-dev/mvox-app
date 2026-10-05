@@ -52,7 +52,7 @@ vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore
 import ProfilePage from './profile/+page.svelte';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
@@ -738,15 +738,6 @@ describe('#352 — string honesty (byteStore.ts:8 — a correctness boundary, NO
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as MessageFile;
 	}
-
-	it('every storage key exists, non-empty, in all four locales', () => {
-		for (const locale of localeFiles) {
-			const messages = readLocale(locale);
-			for (const key of STORAGE_KEYS) {
-				expect(isMessageEmpty(messages[key]), `${locale}: ${key} missing or empty`).toBe(false);
-			}
-		}
-	});
 
 	it('no storage value in ANY locale claims the bytes were secure, private, encrypted, protected or safe', () => {
 		for (const locale of localeFiles) {

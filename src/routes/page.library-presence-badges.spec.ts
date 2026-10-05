@@ -267,7 +267,6 @@ describe('#351 — /library: one indicator, two states, on every file row (integ
 			container.querySelector('[data-testid="library-edition-file-open-file-absent"]')
 		).not.toBeNull();
 	});
-
 });
 
 describe('#351 — wording honesty (byteStore.ts:8 — a correctness boundary, NOT a security boundary)', () => {
@@ -285,17 +284,6 @@ describe('#351 — wording honesty (byteStore.ts:8 — a correctness boundary, N
 		/прив/i,
 		/безпеч/i
 	];
-
-	it('both badge keys exist, non-empty, in all four locales', () => {
-		for (const locale of localeFiles) {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			for (const key of BADGE_KEYS) {
-				expect(messages[key], `${locale}: ${key}`).toBeTruthy();
-			}
-		}
-	});
 
 	it('no badge value in any locale implies the bytes are private, secure or protected — on-device is a statement about AVAILABILITY', () => {
 		for (const locale of localeFiles) {

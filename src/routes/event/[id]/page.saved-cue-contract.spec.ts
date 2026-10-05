@@ -241,7 +241,7 @@ const SURFACES: Record<string, Surface> = {
 	},
 	series: {
 		component: 'src/lib/events/EventSeriesPicker.svelte',
-		// #796 fix pending: its region mounts with the message, not before the write (skipped below).
+		// #796 fix pending: its region mounts with the message, not before the write.
 		persistent: false,
 		staysAfterSwitch: true,
 		event: editableEvent({
@@ -314,8 +314,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(found.sort()).toEqual(Object.values(SURFACES).map((s) => s.component).sort());
 	});
 
-	const persistent = Object.keys(SURFACES).filter((name) => SURFACES[name].persistent);
-	it.each(persistent)('%s: a blank role=status region is there before any write', async (name) => {
+	async function blankRegionBeforeWrite(name: string) {
 		const surface = SURFACES[name];
 		const { container } = renderSurface(surface);
 		await surface.ready(container);
@@ -325,7 +324,17 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(region?.getAttribute('aria-live')).toBe('polite');
 		expect(statusText(container, surface)).toBe('');
 		expect(container.querySelectorAll(`[data-testid="${surface.status}"]`)).toHaveLength(1);
-	});
+	}
+
+	const surfaces = Object.keys(SURFACES);
+	it.each(surfaces.filter((name) => SURFACES[name].persistent))(
+		'%s: a blank role=status region is there before any write',
+		blankRegionBeforeWrite
+	);
+	it.fails.each(surfaces.filter((name) => !SURFACES[name].persistent))(
+		'%s: known gap (#796 fix pending), no region before the first write',
+		blankRegionBeforeWrite
+	);
 
 	it.each(Object.keys(SURFACES))('%s: says nothing while the write is in flight, then saved once it settles', async (name) => {
 		const surface = SURFACES[name];

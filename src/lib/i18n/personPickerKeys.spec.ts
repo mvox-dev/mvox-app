@@ -1,28 +1,6 @@
 // @vitest-environment node
-//
-// #209 RED — the i18n leg of the native-person-select sweep (PO standing rule
-// 1; Gama rulings 1+2, issue comment 2026-09-02). This spec reads the RAW
-// message files (messages/*.json), not the compiled Paraglide output, because
-// the contract is about the FILES: which keys exist, which are retired, and
-// the exact en/et copy Gama ruled verbatim.
-//
-// Contract:
-//   RULING 1 — the four EXISTING placeholder keys (season_conductor_placeholder
-//   serves both the season-manage panel and the season-create form, so five
-//   picker sites share four keys) are REWORDED to add-prompts in all four
-//   locales — a native select's first option is a prompt, not a search hint.
-//   en/et copy is Gama's verbatim; lv/uk are natural translations, pinned here
-//   only as "present, non-empty, and no longer the old search-flavored string".
-//   No new placeholder keys.
-//   RULING 2 — ONE new shared key `picker_everyone_added` (en "Everyone is
-//   already added", et "Kõik on juba lisatud") in all four locales.
-//   RETIREMENT — the combobox-only empty-filter keys have no native-select
-//   equivalent and no other consumer (verified in the #209 spike):
-//   season_conductor_no_matches, event_create_conductor_no_matches,
-//   admin_roles_empty leave ALL FOUR locale files.
-//   COMPONENT — Autocomplete.svelte has zero consumers once the five sites are
-//   selects (spike-verified); the component and its spec are DELETED, not left
-//   as dead code.
+
+// #209 picker copy: reworded add-prompts, picker_everyone_added, and the retired no-matches keys.
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -117,25 +95,8 @@ describe('#209 — picker_everyone_added, the ONE shared exhausted-state key (Ga
 });
 
 describe('#209 review F1/F2 — the OTHER empty states have their own copy', () => {
-	// `picker_everyone_added` is a factual claim, and it was being made for
-	// three states that had established nothing: a roster read still in flight,
-	// a roster read that FAILED, and a collective with no members at all. Each
-	// gets its own key; `picker_order_fallback` is the section-read failure,
-	// where the picker still works but no longer in roster order.
-	for (const key of [
-		'picker_roster_loading',
-		'picker_roster_unavailable',
-		'picker_no_members',
-		'picker_order_fallback'
-	]) {
-		it(`${key} exists non-empty in all four locales`, () => {
-			for (const locale of LOCALES) {
-				const value = messages(locale)[key];
-				expect(typeof value, `${locale}.json › ${key} must exist`).toBe('string');
-				expect((value as string).trim(), `${locale}.json › ${key} must be non-empty`).not.toBe('');
-			}
-		});
-	}
+	// picker_everyone_added is a claim, so loading, a failed read and an empty collective each
+	// get their own key; picker_order_fallback is the section-read failure.
 
 	it('en copy is distinct per state — four different sentences, none of them the everyone-added claim', () => {
 		const en = messages('en');

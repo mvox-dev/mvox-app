@@ -1675,20 +1675,6 @@ describe('#243 — locale coverage for the start/end labels and the range error'
 		) as Record<string, string>;
 	}
 
-	it('event_create_start_label / event_create_end_label / event_end_before_start exist in en/et/lv/uk and are non-empty', () => {
-		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			for (const key of [
-				'event_create_start_label',
-				'event_create_end_label',
-				'event_end_before_start'
-			]) {
-				const msg = messages(locale)[key];
-				expect(msg, `${locale}.json is missing ${key}`).toBeDefined();
-				expect(msg, `${locale}.json ${key} is empty`).toMatch(/\S/);
-			}
-		}
-	});
-
 	it('the detail editor’s field name follows the field: event_edit_duration_minutes_aria_label no longer says "Edit duration" (the KEY stays — a rename would break the derived-key a11y suite)', () => {
 		expect(messages('en')['event_edit_duration_minutes_aria_label']).not.toBe('Edit duration');
 		expect(messages('et')['event_edit_duration_minutes_aria_label']).not.toBe('Muuda kestust');

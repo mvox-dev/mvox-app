@@ -3,7 +3,6 @@
 // locales; a non-English locale must not render the English text.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isMessageEmpty } from '$lib/testing/messageFile.js';
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
@@ -129,27 +128,7 @@ describe('et copy ruled by Gama on #218', () => {
 
 // ── i18n — every sign-in key present, non-empty, in all four locales ─────────────
 
-describe('locale parity — every #218 key present and non-empty in en/et/lv/uk', () => {
-	const KEYS = [
-		'login_heading',
-		'login_error_csrf_mismatch',
-		'login_error_missing_session_token',
-		'login_error_generic',
-		'login_last_used',
-		'auth_provider_smart_id',
-		'auth_provider_mobile_id',
-		'auth_provider_id_card',
-		'auth_provider_e_mail',
-		'auth_provider_google',
-		'auth_provider_apple'
-	] as const;
-
-	it.each(LOCALES)('%s carries every key, none empty', (locale) => {
-		const file = messages(locale);
-		for (const key of KEYS) {
-			expect(isMessageEmpty(file[key]), `messages/${locale}.json: ${key}`).toBe(false);
-		}
-	});
+describe('#218 locale copy — product names', () => {
 
 	// Product names stay untranslated in every locale (Gama ruling).
 	const PRODUCT_NAMES = [

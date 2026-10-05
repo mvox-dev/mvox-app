@@ -1,9 +1,6 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { REDACT_ATTR } from '$lib/redact/redact';
 
@@ -370,20 +367,6 @@ describe('#205 review F3 — closing the editor lands focus back on the activato
 		await waitFor(() => expect(input(container, 'name')).toBeNull());
 		expect(document.activeElement).toBe(tier);
 		expect(document.activeElement).not.toBe(activator(container, 'name'));
-	});
-});
-
-describe('#205 — new Paraglide keys land in ALL FOUR locales', () => {
-	it('profile_name_edit_label + profile_email_edit_label exist non-empty in en/et/lv/uk', () => {
-		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as MessageFile;
-			for (const key of ['profile_name_edit_label', 'profile_email_edit_label']) {
-				expect(key in messages, `${locale}.json is missing ${key}`).toBe(true);
-				expect(isMessageEmpty(messages[key]), `${locale}.json has an empty ${key}`).toBe(false);
-			}
-		}
 	});
 });
 

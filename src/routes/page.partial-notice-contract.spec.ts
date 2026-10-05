@@ -68,6 +68,18 @@ vi.mock('$lib/library/libraryData', async () =>
 vi.mock('$lib/library/librarianStore', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule({ libraryId: false })
 );
+vi.mock('$lib/seasons/seasonManage', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	...(await import('$lib/testing/mocks/seasons')).seasonManageModule()
+}));
+vi.mock('$lib/repertoire/repertoireData', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	listRepertoireItems: (await import('$lib/testing/mocks/seasons')).listRepertoireItemsMock
+}));
+vi.mock('$lib/roster/memberLifecycle', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	loadActiveAndArchivedRosters: (await import('$lib/testing/mocks/roster')).loadActiveAndArchivedRostersMock
+}));
 
 import AgendaPage from './+page.svelte';
 import EventPage from './event/[id]/+page.svelte';
@@ -75,13 +87,22 @@ import LibraryPage from './library/+page.svelte';
 import RosterPage from './roster/+page.svelte';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { completionGateStore, resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { deferred } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { q } from '$lib/testing/pages/dom';
 import { DB_A, DB_B, complete, truncated } from '$lib/testing/pages/agenda';
-import { pagesReaching } from '$lib/testing/pageReach';
+import { readFileSync } from 'node:fs';
+import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
+import { openSeasonCardPanel } from '$lib/testing/seasonCard';
+import {
+	listEventSeriesForSeasonMock,
+	listEventsForSeasonMock,
+	listRepertoireItemsMock,
+	listSeriesOptionsForSeasonMock
+} from '$lib/testing/mocks/seasons';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
@@ -94,7 +115,11 @@ import {
 	listAttendanceMock,
 	listMyAttendanceMock
 } from '$lib/testing/mocks/events';
-import { listActiveMembersMock, loadRosterMock } from '$lib/testing/mocks/roster';
+import {
+	listActiveMembersMock,
+	loadActiveAndArchivedRostersMock,
+	loadRosterMock
+} from '$lib/testing/mocks/roster';
 import {
 	listAllCopiesMock,
 	listAllEditionsMock,
@@ -116,7 +141,11 @@ type Row = {
 	read: Mock;
 	items: unknown[];
 	ready: (container: HTMLElement) => Promise<unknown>;
+	/** False where the notice sits in a panel that a collective switch closes. */
 	switches: boolean;
+	arrange?: () => void;
+	/** Wraps the list read into what the read's caller returns. */
+	wrap?: (read: unknown) => unknown;
 };
 
 const MEMBER = { memberId: 'member-1', personId: 'p-ada', name: 'Ada Lovelace', email: '', sectionIds: [] };
@@ -176,6 +205,103 @@ const ROWS: Record<string, Row> = {
 		ready: (c) => waitFor(() => expect(q(c, 'section-toggle-unassigned')).not.toBeNull()),
 		switches: true
 	},
+	'/ season series': {
+		route: '/',
+		Page: AgendaPage,
+		notice: 'season-manage-partial-notice',
+		key: 'season_manage_partial_notice',
+		read: listEventSeriesForSeasonMock,
+		items: [{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['p-viewer'] }],
+		arrange: () => {
+			loadFullAgendaMock.mockResolvedValue(
+				fullAgendaResult({
+					seasonId: 'season-1',
+					seasonEditors: ['p-viewer'],
+					seasons: [
+						{
+							id: 'season-1',
+							name: 'Season 2026',
+							startDate: '2026-01-01',
+							endDate: '2099-12-31',
+							conductors: [],
+							owners: [],
+							editors: ['p-viewer']
+						}
+					]
+				})
+			);
+		},
+		ready: async (c) => {
+			await openSeasonCardPanel(c);
+			await waitFor(() => expect(q(c, 'season-manage-series-series-1')).not.toBeNull());
+		},
+		switches: false
+	},
+	'/ season summary': {
+		route: '/',
+		Page: AgendaPage,
+		notice: 'season-summary-partial-notice',
+		key: 'season_summary_partial_notice',
+		read: loadActiveAndArchivedRostersMock,
+		items: [MEMBER],
+		wrap: (active) => ({ active, inactive: complete([]) }),
+		arrange: () => {
+			loadFullAgendaMock.mockResolvedValue(
+				fullAgendaResult({
+					recent: [
+						{
+							id: 'past-1',
+							name: 'Rehearsal past-1',
+							startDatetime: '2026-06-10T16:00:00.000Z',
+							durationMinutes: 90,
+							location: '',
+							conductors: [],
+							owners: [],
+							editors: []
+						}
+					],
+					seasons: [],
+					upcoming: [],
+					seasonId: 's1',
+					seasonConductors: [],
+					seasonOwners: ['p-viewer'],
+					seasonEditors: []
+				})
+			);
+			listAttendanceMock.mockResolvedValue([{ attendanceId: 'a1', memberId: 'member-1', status: 'present' }]);
+		},
+		ready: async (c) => {
+			await waitFor(() => expect(q(c, 'season-summary-expand')).not.toBeNull());
+			await fireEvent.click(q(c, 'season-summary-expand')!);
+			await waitFor(() => expect(q(c, 'member-rate-member-1')).not.toBeNull());
+		},
+		switches: false
+	},
+	'/library bulk checkout members': {
+		route: '/library',
+		Page: LibraryPage,
+		notice: 'bulk-checkout-members-partial-notice',
+		key: 'picker_partial_members_notice',
+		read: listActiveMembersMock,
+		items: [{ memberId: 'member-1', personId: 'p-ada', sectionIds: [] }],
+		arrange: () => {
+			resolveLibrarianMock.mockResolvedValue({ state: 'librarian', libraryId: 'lib-1' });
+			const edition = { id: 'edition-1', name: 'Original', publisher: 'B', workId: 'work-1' };
+			listEditionsMock.mockResolvedValue(complete([edition]));
+			listAllEditionsMock.mockResolvedValue(complete([edition]));
+			const copies = [{ id: 'copy-1', name: 'Copy #1', copyNumber: 1, editionId: 'edition-1' }];
+			listCopiesMock.mockResolvedValue(complete(copies));
+			listAllCopiesMock.mockResolvedValue(complete(copies));
+		},
+		ready: async (c) => {
+			await waitFor(() => expect(q(c, 'bulk-checkout-work-select')).not.toBeNull());
+			await fireEvent.change(q(c, 'bulk-checkout-work-select')!, { target: { value: 'work-1' } });
+			await waitFor(() => expect(q(c, 'bulk-checkout-edition-select')).not.toBeNull());
+			await fireEvent.change(q(c, 'bulk-checkout-edition-select')!, { target: { value: 'edition-1' } });
+			await waitFor(() => expect(q(c, 'bulk-checkout-member-list')).not.toBeNull());
+		},
+		switches: true
+	},
 	'/event/[id] attendance panel': {
 		route: '/event/ev1',
 		Page: EventPage,
@@ -225,6 +351,7 @@ function arrangeComplete() {
 		vi.fn(async (input: RequestInfo | URL) => new Response(JSON.stringify(eventWire(String(input)))))
 	);
 	adminStore.set('admin');
+	completionGateStore.set('complete');
 	resolveDatabaseEntityIdMock.mockResolvedValue('org-1');
 	listSectionsMock.mockResolvedValue([]);
 	loadFullAgendaMock.mockResolvedValue(
@@ -245,9 +372,17 @@ function arrangeComplete() {
 	for (const names of [resolveBorrowerNamesMock, resolveCopyNamesMock, resolveCopyChainsMock]) {
 		names.mockResolvedValue(new Map());
 	}
+	listEventSeriesForSeasonMock.mockResolvedValue(complete([]));
+	listSeriesOptionsForSeasonMock.mockResolvedValue([]);
+	listEventsForSeasonMock.mockResolvedValue(complete([]));
+	listRepertoireItemsMock.mockResolvedValue([]);
+	loadActiveAndArchivedRostersMock.mockResolvedValue({ active: complete([MEMBER]), inactive: complete([]) });
 }
 
+const answer = (row: Row, read: unknown) => (row.wrap ? row.wrap(read) : read);
+
 function renderRow(row: Row) {
+	row.arrange?.();
 	pageStub.url = new URL(`http://localhost${row.route}`);
 	history.replaceState({}, '', row.route);
 	return render(row.Page);
@@ -272,18 +407,22 @@ afterEach(() => {
 	vi.clearAllMocks();
 	resetAppState();
 	resetAdmin();
+	resetGate();
 	history.replaceState({}, '', '/');
 });
 
 describe('a partial list read, on every page that can show one', () => {
-	it('the table covers every page that renders the partial notice', () => {
-		const routes = Object.values(ROWS).map((row) => row.route.replace('/ev1', '/[id]'));
-		expect([...new Set(routes)].sort()).toEqual(pagesReaching('src/lib/components/PartialNotice.svelte'));
+	it('the table covers every PartialNotice usage in the source', () => {
+		const usages = findSourceFiles('src', ['.svelte']).flatMap((file) =>
+			[...readFileSync(file, 'utf-8').matchAll(/<PartialNotice[^>]*?testid="([^"]+)"/g)].map(([, id]) => id)
+		);
+		const rows = new Set(Object.values(ROWS).map((row) => row.notice));
+		expect([...rows].sort()).toEqual([...new Set(usages)].sort());
 	});
 
 	it.each(Object.keys(ROWS))('%s: a truncated read shows a visible role=status notice', async (name) => {
 		const row = ROWS[name];
-		row.read.mockResolvedValue(truncated(row.items, 600));
+		row.read.mockResolvedValue(answer(row, truncated(row.items, 600)));
 		signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'p-viewer' }] });
 
 		const { container } = renderRow(row);
@@ -295,7 +434,7 @@ describe('a partial list read, on every page that can show one', () => {
 
 	it.each(Object.keys(ROWS))('%s: a complete read leaves the notice absent', async (name) => {
 		const row = ROWS[name];
-		row.read.mockResolvedValue(complete(row.items));
+		row.read.mockResolvedValue(answer(row, complete(row.items)));
 		signIn({ collectives: [{ db: DB_A, name: 'Sampledb', personId: 'p-viewer' }] });
 
 		const { container } = renderRow(row);
@@ -310,7 +449,7 @@ describe('a partial list read, on every page that can show one', () => {
 		const row = ROWS[name];
 		const bRead = deferred<unknown>();
 		row.read.mockImplementation((cfg: { db: string }) =>
-			cfg.db === DB_A ? Promise.resolve(truncated(row.items, 600)) : bRead.promise
+			cfg.db === DB_A ? Promise.resolve(answer(row, truncated(row.items, 600))) : bRead.promise
 		);
 		signIn({
 			collectives: [
@@ -319,6 +458,7 @@ describe('a partial list read, on every page that can show one', () => {
 			]
 		});
 		const { container } = renderRow(row);
+		await row.ready(container);
 		await waitFor(() => expect(q(container, row.notice)).not.toBeNull());
 
 		selectedCollectiveDbStore.set(DB_B);
@@ -327,7 +467,7 @@ describe('a partial list read, on every page that can show one', () => {
 			expect(q(container, row.notice)).toBeNull();
 		});
 
-		bRead.resolve(complete(row.items));
+		bRead.resolve(answer(row, complete(row.items)));
 		await bRead.promise;
 		await waitFor(() => expect(q(container, row.notice)).toBeNull());
 	});

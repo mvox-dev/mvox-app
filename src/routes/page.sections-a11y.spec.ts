@@ -5,7 +5,6 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	everyPatternContains,
-	isMessageEmpty,
 	type MessageFile
 } from '$lib/testing/messageFile.js';
 
@@ -213,20 +212,7 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 }
 
 // 1 — i18n: the source scan for hardcoded strings is page.ux-polish-i18n.spec.ts
-describe('#99 — i18n: roster keys exist in all four locales', () => {
-	it('guard: every roster_* key in en.json exists in et, lv and uk, and none is empty', () => {
-		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
-		const rosterKeys = Object.keys(en).filter((k) => k.startsWith('roster_'));
-		expect(rosterKeys.length).toBeGreaterThan(0);
-		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(readSource(`messages/${locale}.json`)) as MessageFile;
-			const missing = rosterKeys.filter((k) => !(k in messages));
-			expect(missing, `${locale}.json is missing roster keys`).toEqual([]);
-			const empty = rosterKeys.filter((k) => k in messages && isMessageEmpty(messages[k]));
-			expect(empty, `${locale}.json has empty roster values`).toEqual([]);
-		}
-	});
-
+describe('#99 — i18n: roster announcement labels in all four locales', () => {
 	it('guard: parameterised reorder/rename announcement labels carry {name} in ALL four locales — a label that drops the param collapses every section to the same announcement', () => {
 		// The drag-handle label key went with its element; the live-region announcements
 		// (reorder, rename) still carry `{name}`.

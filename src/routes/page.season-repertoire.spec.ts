@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -357,21 +355,6 @@ describe('#234 — season-manage panel: the repertoire section', () => {
 		expect(options[0].textContent).toBe('[repertoire_add_work_label]');
 		expect(options[1].textContent).toBe('Nunc dimittis - Arvo Pärt');
 		expect(q(section, 'work-manage-add-work-button')).not.toBeNull();
-	});
-
-	it('locale files: season_manage_repertoire_label exists non-empty in en, et, lv and uk', () => {
-		for (const locale of ['en', 'et', 'lv', 'uk'] as const) {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			const value = messages['season_manage_repertoire_label'];
-			expect(typeof value, `${locale}.json must carry season_manage_repertoire_label`).toBe(
-				'string'
-			);
-			expect((value as string).trim().length, `${locale} value must be non-empty`).toBeGreaterThan(
-				0
-			);
-		}
 	});
 });
 

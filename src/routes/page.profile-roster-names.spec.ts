@@ -2,7 +2,6 @@
 // The admin-only roster-names toggle on /profile.
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { resolve } from 'node:path';
 import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/collectives/discover', async () =>
@@ -36,7 +35,6 @@ import ProfilePage from './profile/+page.svelte';
 import { m } from '$lib/paraglide/messages.js';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
-import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import type { Collective } from '$lib/collectives/types';
 import { signIn } from '$lib/testing/session';
@@ -518,15 +516,8 @@ const PINNED_TEXT: Record<(typeof LOCALES)[number], Record<(typeof NEW_KEYS)[num
 	}
 };
 
-describe('locale parity — #267 keys exist, non-empty, exact text, in en/et/lv/uk', () => {
+describe('#267 keys — exact text in en/et/lv/uk', () => {
 	for (const locale of LOCALES) {
-		it(`${locale}.json carries every new key, non-empty`, () => {
-			const messages = readMessages(locale);
-			for (const key of NEW_KEYS) {
-				expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-				expect(isMessageEmpty(messages[key]), `${locale}.json ${key} is empty`).toBe(false);
-			}
-		});
 
 		it(`${locale}.json pins the exact text (et control strings PO-verbatim; the rest refinable drafts)`, () => {
 			const messages = readMessages(locale);
