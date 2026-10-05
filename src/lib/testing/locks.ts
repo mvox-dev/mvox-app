@@ -8,16 +8,13 @@ export function serialLocks() {
 			const run = (tails.get(name) ?? Promise.resolve()).then(() =>
 				callback({ name, mode: 'exclusive' })
 			);
-			tails.set(
-				name,
-				run.catch(() => {})
-			);
+			tails.set(name, run.catch(() => {}));
 			return run;
 		}
 	};
 }
 
-export function installLocks(manager: { request: (name: string, callback: Callback) => Promise<unknown> } = serialLocks()): void {
+export function installLocks(manager: ReturnType<typeof serialLocks> = serialLocks()): void {
 	Object.defineProperty(navigator, 'locks', { value: manager, configurable: true });
 }
 

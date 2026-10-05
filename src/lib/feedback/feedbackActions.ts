@@ -9,6 +9,7 @@ export interface CreateFeedbackInput {
 	strokes: StrokeData;
 	description: string;
 	pagePath: string;
+	metadata: string;
 }
 
 type CreateProp =
@@ -16,7 +17,8 @@ type CreateProp =
 	| { type: '_parent'; reference: string }
 	| { type: 'name'; string: string }
 	| { type: 'description'; string: string }
-	| { type: 'doodle_layer'; string: string };
+	| { type: 'doodle_layer'; string: string }
+	| { type: 'metadata'; string: string };
 
 interface StepOnePropertyEntry {
 	_id: string;
@@ -62,7 +64,8 @@ export async function createFeedback(
 		{ type: '_parent', reference: memberId },
 		{ type: 'name', string: name },
 		...(input.description ? [{ type: 'description' as const, string: input.description }] : []),
-		{ type: 'doodle_layer', string: serialize(input.strokes) }
+		{ type: 'doodle_layer', string: serialize(input.strokes) },
+		{ type: 'metadata', string: input.metadata }
 	];
 
 	const createRes = await entuFetch(

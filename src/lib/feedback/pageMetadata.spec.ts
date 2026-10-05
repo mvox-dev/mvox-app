@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// The page metadata a feedback carries: route, time, app version, locale, viewport, and nothing else.
+// The page metadata a feedback carries: route, time, app version, locale, viewport, nothing else.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 import { setLocale } from '$lib/paraglide/runtime';
@@ -34,7 +34,7 @@ describe('#611 page metadata', () => {
 	});
 
 	it('reads the app version from /version.json, the #350 build stamp', async () => {
-		const fetchImpl = vi.fn(async () =>
+		const fetchImpl = vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) =>
 			json({ source: 'cloudflare-pages', branch: 'main', commit: COMMIT })
 		);
 

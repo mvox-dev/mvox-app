@@ -31,6 +31,8 @@
 		<FormError>{m.feedback_copy_failed()}</FormError>
 	{:else if editor.notice === 'send-failed'}
 		<FormError>{m.feedback_send_failed()}</FormError>
+	{:else if editor.notice === 'send-after-sign-in'}
+		<p role="status" class="text-sm text-ink-2">{m.feedback_send_after_sign_in()}</p>
 	{/if}
 
 	{#if editor.shot}

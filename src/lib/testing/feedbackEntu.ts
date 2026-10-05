@@ -1,4 +1,4 @@
-// A fake Entu and build stamp for the feedback send: answers the reads and the three writes a send makes.
+// A fake Entu and build stamp for a feedback send: the reads and the three writes it makes.
 import { vi } from 'vitest';
 import { json } from './entuFetchKit';
 
@@ -39,7 +39,7 @@ export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
 		if (method === 'POST' && meta) {
 			return json({
 				_id: meta[1],
-				properties: [{ _id: `${meta[1]}-shot`, type: 'screenshot', upload: { url: UPLOAD_URL, headers: {} } }]
+				properties: [{ _id: `${meta[1]}-shot`, type: 'screenshot', upload: { url: UPLOAD_URL, method: 'PUT', headers: {} } }]
 			});
 		}
 		if (method === 'PUT' && url === UPLOAD_URL) return new Response('', { status: 200 });

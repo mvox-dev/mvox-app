@@ -1,29 +1,7 @@
-// mvox-side schema-of-record for APP-EXTENSION entity types — types that exist
-// because mvox needs them, not because they trace to canonical v4E. Home settled
-// on mvox-app#246 (Gama SETTLE, 2026-09-06), following the 2026-09-06 ruling that
-// retired the entu/research upstream flow entirely: "mvox is independent and
-// upstream flow is retired entirely." All schema evolution is mvox-side now; this
-// file is where its DEFINITION lives, owned by this team, in this repo.
-//
-// Shape note: the vocabulary below (name/blurb/sharing/inheritsRights/parents/
-// properties/creators/notes) deliberately MIRRORS the `EntityDef` shape reviewed
-// on #246 — familiar documentation shape, reused because the team already knows
-// how to read it. It is NOT imported from `docs/schema/v4E/schema.ts` and carries
-// no runtime dependency on that file or on entu/research: `creators`/`parentCard`
-// are pure documentation even in real v4E (entu-api enforces none of it — see
-// architecture-decisions.md "CREATE has NO parent-rights check"), so nothing is
-// lost by keeping this a plain local type instead of a real import. Precedent
-// checked, not assumed: `mvox_collective`'s own definition lives inline in
-// entu-research's `setup-entity-types.ts` — a different repo, a different team's
-// file — so "app extensions skip the entu/research flow" has only ever meant
-// skipping schema.ts/PR/trailers, never "definitions live outside entu-research."
-// This file is the corrected version of that precedent: mvox-side, front door.
-//
-// The idempotent CREATE primitive that turns one of these into a live type-def +
-// prop-defs on a target db is `ensure-schema-type.ts` in this same directory —
-// kept separate so this file stays pure data, reviewable without reading wire
-// mechanics, and reusable the moment a second extension type needs a home here.
+// Schema of record for mvox's app-extension types; their rulings are in the extensions doc.
 
+// Plain data in EntityDef's shape, not imported from v4E: Entu enforces neither creators nor
+// parentCard. ensure-schema-type.ts turns one definition into live type- and prop-defs.
 export type Cardinality = '0..1' | '1' | '0..N' | '1..N';
 export type Sharing = 'private' | 'domain' | 'public';
 export type Right = '_owner' | '_editor' | '_expander' | '_viewer';
@@ -39,40 +17,16 @@ export interface ParentSpec {
 
 export interface PropertySpec {
 	name: string;
-	/** Entu wire type (`string`, `datetime`, `number`, `reference`, `text`, …). */
 	type: string;
 	required?: boolean;
 	note?: string;
-	/** Bilingual prop-def `description` — what Entu shows on the field's edit view. */
 	descriptionEn: string;
 	descriptionEt: string;
-	/** Admin-list display config, mirrored 1:1 from the sibling type this extension
-	 * imitates (`ordinal`/`table`/`search` on Entu prop-defs), not decorative. */
 	ordinal?: number;
 	table?: boolean;
 	search?: boolean;
-	/** Per-property sharing override (gate 1 of the 3-gate-AND bucket model). Falls
-	 * back to the type's own `sharing` when omitted — but see mvox-app#265's live
-	 * finding: omitting `_sharing` on a prop-def at Entu's own create time does NOT
-	 * default to private, it silently INHERITS the parent type's tier
-	 * (`inheritParentProperties`, confirmed via a live probe whose first private-tier
-	 * field silently came back `public`). Set this EXPLICITLY on every prop-def of a
-	 * mixed-sharing entity — never omit it to "get private."
-	 *
-	 * **The same trap has a second pole, also from mvox-app#265**: "inherit the
-	 * type's tier" is not the same question as "match the sibling properties'
-	 * actual posture." `roster_show_real_names` first tried the omit-and-inherit
-	 * route on the reasoning that Mihkel's "no special case, same as the
-	 * collective's other properties" meant exactly that — but the TYPE's own
-	 * `_sharing` (what omission actually inherits) resolved to `public`, a
-	 * platform-generic constant, while the sibling PROP-DEFS on that same type
-	 * were empirically 11-12 of 12-13 `domain`. Omission answered a different
-	 * question than the one being asked. **When "same as the others" is the
-	 * actual intent, establish it empirically (read the sibling prop-defs'
-	 * OWN sharing) and set the match EXPLICITLY — never rely on omission's
-	 * inherit-from-TYPE behavior to stand in for "matches its siblings."**
-	 * Omission is for "no opinion, take whatever the type declares" — a
-	 * different, rarer intent than either of the above. */
+	// Set on every prop-def: an omitted one inherits the TYPE's tier (#265), which need not match
+	// its sibling fields. Read the siblings' own sharing and set the match explicitly.
 	sharing?: Sharing;
 }
 
@@ -87,56 +41,27 @@ export type CreatorRule =
 export interface MvoxEntityDef {
 	name: string;
 	blurb: string;
-	/** The TYPE-DEF's own `_sharing` (gate 2 of the 3-gate-AND bucket model) —
-	 * verified empirically against the sibling type this extension imitates, not
-	 * copied from aspirational design text (see `schedule_item.notes` below). */
 	sharing: Sharing;
 	inheritsRights: boolean;
 	parents: ParentSpec[];
-	/** Another type in this file (or a canonical v4E type, resolved by name on the
-	 * target db) that instances may be created from in the Entu admin UI. */
 	addFrom?: string;
 	properties: PropertySpec[];
 	creators: CreatorRule[];
 	notes: string[];
-	/** mvox-app issue that commissioned + settled this type — the design record
-	 * lives there until a durable schema-of-record home is chosen (pending,
-	 * per the #246 settle §5; commissioning issues are the record until then). */
 	commissionedBy: string;
 }
 
-/**
- * A single property added to an EXISTING type (canonical v4E or another
- * extension) — distinct from `MvoxEntityDef`, which defines a whole new type.
- * First use: mvox-app#265's R2 toggle, added to the canonical `database`
- * type (the collective root, post-#161 org→db-entity migration). Same
- * commissioning/PO-Approved discipline applies; this is just a lighter shape
- * for the "one more field on something that already exists" case.
- */
+// One property added to an existing type (canonical v4E or an extension).
 export interface PropertyAdditionDef {
-	/** Name of the type this property is added to (canonical or extension). */
 	onType: string;
 	property: PropertySpec;
 	commissionedBy: string;
 	notes: string[];
 }
 
-/**
- * A single named point in time within an event (call, rehearsal start,
- * performance start). One event, several named times.
- *
- * Settled mvox-app#246 (Gama, 2026-09-06, after Pérotin conceded the `ordinal`
- * challenge — see commit history / issue thread for the full adjudication):
- * two required properties, no `ordinal` (sort by `datetime`, `name` as the
- * costless tie-break), rights/sharing posture identical to `program_item`.
- */
 export const schedule_item: MvoxEntityDef = {
 	name: 'schedule_item',
 	blurb: 'A single named point in time within an event (call, rehearsal start, performance start).',
-	// Verified against LIVE program_item (2026-09-06, read-only probe): the type-def's
-	// own `_sharing` is `domain`, not the aspirational `public` the salvaged v4E draft
-	// literal carried. "Identical rights posture to program_item" is the ruling's
-	// actual intent — matching the live sibling, not its stale schema.ts field.
 	sharing: 'domain',
 	inheritsRights: true,
 	parents: [
@@ -181,39 +106,10 @@ export const schedule_item: MvoxEntityDef = {
 	commissionedBy: 'mvox-app#246'
 };
 
-/**
- * Admin-owned record of a member's real identity — real name, phone, email,
- * birth date — independent of and never overwriting the member's own profile.
- *
- * Settled mvox-app#265 (Mihkel shape review, 2026-09-06, comment 5561754737,
- * following Mihkel's own posture ruling on the same issue, comment 5561632474):
- * branch (i), ONE entity with per-property sharing, confirmed live — see
- * `docs/architecture/mvox-schema-extensions.md` for the full evidence chain
- * (source read + live partition probe + Mihkel's standing ruling to consult
- * and believe Entu's own documentation on platform behaviour, rather than
- * building further verification ladders). Four corrections applied verbatim
- * from the review: type name (not the proposal's `roster_record`), only
- * `name` required (not `phone` too), R2 toggle default `false`, R2 toggle
- * takes the collective's existing sharing posture (no special case — see
- * `roster_show_real_names` below).
- *
- * **Parent corrected post-review** (team-lead routing, 2026-09-06, following a
- * dry-run halt): the shape review approved `organization` as the parent, but
- * neither mvox_crede nor the dev/test collective has an `organization` type-def
- * live — `organization` was RETIRED in the #161 org→db-entity migration (2026-08,
- * MVOX-11). The collective root has been the database entity itself since
- * then; `member`'s type-def description ("membership record within one
- * organization") is aspirational leftover predating #161, not the current
- * shape. `member`'s own actual live `_parent` on both databases already
- * points at the database entity — this definition now matches that, the
- * post-#161 canonical shape, not a workaround.
- */
+// Parent is `database`: `organization` was retired in #161 (rulings: mvox-app#265).
 export const admin_member_record: MvoxEntityDef = {
 	name: 'admin_member_record',
 	blurb: "Admin-owned record of a member's real identity — real name, phone, email, birth date — independent of the member's own profile.",
-	// Type-level (gate 2): must be domain-or-above or nothing on this type ever
-	// reaches a non-owner reader. The admin-only fields stay invisible anyway —
-	// that's gate 1 (each prop-def's own sharing below), not this gate.
 	sharing: 'domain',
 	inheritsRights: true,
 	parents: [
@@ -295,39 +191,14 @@ export const admin_member_record: MvoxEntityDef = {
 	commissionedBy: 'mvox-app#265'
 };
 
-/**
- * R2 toggle: whether the roster shows real names (from `admin_member_record`)
- * or profile names. Lives on the collective entity, per design input 3 — the
- * collective root IS the database entity (post-#161 org→db-entity migration,
- * both databases), the same entity `admin_member_record.parents` resolves
- * `database` to there.
- *
- * Settled mvox-app#265, corrections 3+4 (Mihkel, comment 5561754737): default
- * `false` (profile names until an admin opts in); sharing takes the SAME
- * posture as the collective's other properties — no special case.
- *
- * **Sharing corrected post-dry-run (team-lead ruling interpretation, 2026-09-06,
- * reported to PO)**: the first version of this definition OMITTED `sharing`,
- * reading "no special case" as "inherit the `database` type's own `_sharing`."
- * Dry-run surfaced that the TYPE's own `_sharing` is `public` on both
- * databases — a platform-generic constant — while the `database` type's
- * EXISTING sibling prop-defs are empirically `domain` (11-12 of 12-13,
- * checked live on both dbs; only `billing_tokens_limit` is `public`). "Same
- * as the collective's other properties" means the empirical sibling PATTERN
- * (`domain`), not the type-level cap omission actually inherits — those are
- * different questions that happened to look interchangeable until checked.
- * **Explicit `domain` below is Mihkel's ruling correctly implemented; the
- * earlier omission was an implementation error against it, not an
- * alternative reading of it.** See `PropertySpec.sharing`'s doc comment above
- * for the general lesson this leaves behind.
- */
+// `domain` matches the collective's sibling prop-defs, not the type's own `public` (#265).
 export const roster_show_real_names: PropertyAdditionDef = {
 	onType: 'database',
 	property: {
 		name: 'roster_show_real_names',
 		type: 'boolean',
 		required: false,
-		sharing: 'domain', // explicit — see the doc comment above; matches the empirical sibling pattern, NOT the database type's own _sharing (public)
+		sharing: 'domain',
 		descriptionEn: "Admin roster display setting: true shows members' real names (admin_member_record.name); false (default) shows profile names.",
 		descriptionEt: 'Admini rosteri kuvamisseade: tõene väärtus näitab liikmete pärisnimesid (admin_member_record.name); väär (vaikimisi) näitab profiilinimesid.',
 		ordinal: 90
@@ -340,41 +211,10 @@ export const roster_show_real_names: PropertyAdditionDef = {
 	]
 };
 
-/**
- * A named URL kept for a collective's members — an external resource the
- * choir shares (e.g. a recordings archive). One collection per collective.
- *
- * Settled mvox-app#256 (Gama, 2026-09-09, quoting Mihkel verbatim: "link
- * entity is app extension. we are free from v4E."): app extension type, no
- * `entu/research` PR, Gama's three defaults stand unopposed as the spec —
- * admins add/remove, members read-only; ordered via `display_order`; name +
- * url + optional description, nothing else. Placement: collective-level,
- * "mirrors `repertoire_item` and `section` so it introduces no new pattern."
- *
- * **Parent corrected from the issue thread's own wording** (same correction
- * `admin_member_record` needed on #265): the thread says "organization-
- * parented" / "parented by the collective" throughout, but `organization`
- * was retired in #161 (org -> database-entity migration, 2026-08) — the
- * collective root is the `database` entity on both live databases. Verified
- * empirically, not assumed: `probe-256-link-premise-check-2026-09-10.ts`
- * confirms `organization` NOT FOUND on either db, and — checking whether
- * the "mirrors section/repertoire_item" language extends to the type-level
- * sharing tier too — both sibling type-defs are live `domain` on both dbs.
- * `sharing: 'domain'` below matches that empirical sibling pattern (not
- * `database`'s OWN type-def sharing, which is `public` — the same
- * omission-inherits-the-wrong-thing trap #265's `roster_show_real_names`
- * hit first; avoided here by setting the type tier explicitly from the
- * sibling reading rather than any inherit-from-parent mechanism).
- */
+// Type tier `domain` matches live section and repertoire_item, not `database`'s `public` (#256).
 export const link: MvoxEntityDef = {
 	name: 'link',
 	blurb: "A named URL kept for the collective's members — an external resource the choir shares (e.g. a recordings archive).",
-	// Verified live 2026-09-10 (probe-256-link-premise-check-2026-09-10.ts, which
-	// names the two dbs it read): section and repertoire_item type-defs were both
-	// `domain` on mvox_crede and on the dev/test collective —
-	// the empirical sibling pattern this type mirrors, per the ruling's own
-	// framing. NOT `database`'s own type-def sharing (`public`, a platform-
-	// generic constant, same trap as #265's toggle).
 	sharing: 'domain',
 	inheritsRights: true,
 	parents: [
@@ -439,46 +279,8 @@ export const link: MvoxEntityDef = {
 	commissionedBy: 'mvox-app#256'
 };
 
-/**
- * `event_name` — a property added to the EXISTING canonical `event` type, not
- * a new type of its own (the `id_code`-on-`admin_member_record` shape does
- * NOT apply: `event` is canonical v4E with no `MvoxEntityDef` entry in this
- * file, so it has no `properties` array to extend inline — this mirrors
- * `roster_show_real_names`'s shape instead, a fresh top-level
- * `PropertyAdditionDef`).
- *
- * Commissioned [mvox-app#233](https://github.com/mvox-dev/mvox-app/issues/233):
- * Mihkel, 2026-09-03, verbatim: *"event name goes into new 'event_name'
- * field, and 'name' field becomes formula of all three values -- date, type,
- * name"* — so entu.app's own listing pane shows something readable once
- * `name` stops being the free-text field and becomes that formula (S4, this
- * same issue, gated on S1-S3 landing first: a formula overwrites the stored
- * value on every save and silently drops POSTs, so this prop-def and the
- * backfill that populates it must exist and be fully populated before `name`
- * is ever turned into one).
- *
- * **The estate** (Mihkel, 2026-09-18, folded into the #233 body — quoted in
- * full in docs/architecture/mvox-schema-extensions.md): "run on crede only —
- * we will return to templating the schema, when we stabilise it" and drop
- * the estate's other collective from constraining us. This prop-def is
- * provisioned on `mvox_crede` and nowhere else — no other collective
- * receives this or any further schema change, and the per-collective
- * twin-script pattern every earlier schema change used (seed-246, seed-256,
- * seed-265, seed-282) ends here: one script per step.
- *
- * **Sharing and ordinal are deliberately left UNSET here** — no committed
- * artefact records the live crede `event` type's `name` prop-def posture
- * (no ordinal field exists at all in the historical v4E schema.ts, and no
- * probe-233-* ledger reads it), so there is nothing to copy in at definition
- * time. Per `PropertySpec.sharing`'s standing doc comment (establish
- * empirically, set EXPLICITLY, never omit-and-inherit — the #265 trap): S1's
- * own script reads the live `event.name` prop-def FIRST and DERIVES
- * `event_name`'s posture from it — **`_sharing` mirrors event.name's, and
- * `ordinal` sits adjacent (name's ordinal + 1)** — then passes that resolved
- * value into `ensurePropDef` explicitly, the same discipline as every other
- * property in this file, just resolved at run time instead of write time
- * because the source value itself isn't known until then.
- */
+// Sharing and ordinal are unset on purpose: S1 reads the live `event.name` prop-def and derives
+// both at run time (same sharing, ordinal + 1), mvox-app#233.
 export const event_name: PropertyAdditionDef = {
 	onType: 'event',
 	property: {
@@ -488,8 +290,6 @@ export const event_name: PropertyAdditionDef = {
 		note: "the event's own free-text name — moves out of `name` once `name` becomes a formula (S4); no fallback (Mihkel's standing no-fallbacks stance) once the app's reads move (S3)",
 		descriptionEn: "The event's own name. Read and written by the app; `name` becomes a display formula once this field is fully populated.",
 		descriptionEt: 'Sündmuse enda nimi. Rakendus loeb ja kirjutab seda; `name` muutub kuvamise valemiks pärast selle välja täielikku täitmist.'
-		// sharing / ordinal intentionally absent — see the doc comment above:
-		// S1 derives both live (mirrors event.name's sharing, ordinal adjacent).
 	},
 	commissionedBy: 'mvox-app#233',
 	notes: [
@@ -499,33 +299,8 @@ export const event_name: PropertyAdditionDef = {
 	]
 };
 
-/**
- * `feedback` — a member's feedback on the app itself: a screenshot, ink
- * drawn over it, and a description. Commissioned
- * [mvox-app#395](https://github.com/mvox-dev/mvox-app/issues/395), child of
- * [mvox-app#390](https://github.com/mvox-dev/mvox-app/issues/390).
- *
- * **Parent**: `member` (single, required) — the first `MvoxEntityDef` in
- * this file parented to `member` rather than `database`. **Creator**: the
- * member themself, `{ kind: 'self' }` — the first use of that `CreatorRule`
- * kind here (`admin_member_record`'s only precedent is `parent_right
- * _editor`, admin-created, not self).
- *
- * **Sharing — set explicitly, never left to inherit** (Gama, #395 body,
- * 2026-09-28): the type and all three fields carry `_sharing: domain`. A
- * type's `_sharing` is a ceiling, not a default (ER-1); a child copies its
- * parent's `_sharing` only when the parent is non-private (ER-13) — a
- * `member` still sitting at its own default `private` tier (not yet
- * flipped to `domain`, per `t3-1-singer-provision.ts`) would otherwise
- * silently leave a feedback under it `private` too. The create path (a
- * later slice) sets `_sharing: domain` on the instance explicitly at
- * create time, as `admin_member_record` does on #265 — never omitted.
- *
- * `_inheritrights: true` — inheritance left natural (Mihkel, #390 ruling,
- * quoted in the #395 body): rights on the member cascade to their
- * feedback, the `sectionActions.ts` precedent, not `profileData.ts`'s
- * isolate-and-assert-explicit `_inheritrights: false` pattern.
- */
+// `_sharing: domain` is set explicitly on the type and every field, never left to inherit
+// (ER-1, ER-13). Rulings: mvox-app#395, #611.
 export const feedback: MvoxEntityDef = {
 	name: 'feedback',
 	blurb: "A member's feedback on the app: a screenshot, ink drawn over it, and a description.",
@@ -565,6 +340,15 @@ export const feedback: MvoxEntityDef = {
 			descriptionEn: "The member's feedback in their own words.",
 			descriptionEt: 'Liikme tagasiside tema enda sõnadega.',
 			ordinal: 3
+		},
+		{
+			name: 'metadata',
+			type: 'text',
+			sharing: 'domain',
+			note: 'JSON: route path, time, app version (the #350 build stamp), locale and viewport; nothing personal (#611)',
+			descriptionEn: 'The page the feedback was given on: route path, time, app version, locale and viewport size, as JSON.',
+			descriptionEt: 'Leht, mille kohta tagasiside anti: aadress, aeg, rakenduse versioon, keel ja vaate mõõdud JSON-vormingus.',
+			ordinal: 4
 		}
 	],
 	creators: [{ kind: 'self' }],
@@ -573,7 +357,8 @@ export const feedback: MvoxEntityDef = {
 		'Created by the member with their own key (`creators: self`) — Entu auto-grants the creator `_owner` on create; no extra grant.',
 		"Instance `_sharing` is set EXPLICITLY to `domain` at create time, as #265 does: a type's `_sharing` is a ceiling, not a default (ER-1), and a child copies its parent's `_sharing` only when the parent is non-private (ER-13) — a feedback under a still-private member would otherwise stay private (PO ruling, Gama, 2026-09-28).",
 		'`_inheritrights: true` — inheritance left natural (Mihkel, #390): rights on the member cascade to its feedback.',
-		'Instances carry a `name` VALUE with no prop-def: page path + UTC submission date, never a member name or description text; the type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).'
+		'Instances carry a `name` VALUE with no prop-def: page path + UTC submission date, never a member name or description text; the type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).',
+		'`metadata` (#611) was added on crede by hand (Mihkel, 2026-10-01) and is recorded here to match; no provisioning run.'
 	],
 	commissionedBy: 'mvox-app#395'
 };

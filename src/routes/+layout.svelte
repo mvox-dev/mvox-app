@@ -2,11 +2,14 @@
 <script module lang="ts">
 	import { install401Recovery } from '$lib/auth/install-401-recovery';
 	import { startUpdateForcing } from '$lib/sw/swUpdate';
+	import { startSendingSavedFeedback } from '$lib/feedback/sendFeedback';
 
 	// Module scope: runs once, before any page can issue an Entu read.
 	install401Recovery();
 
 	startUpdateForcing();
+
+	startSendingSavedFeedback();
 </script>
 
 <script lang="ts">
@@ -52,6 +55,7 @@
 	// Every navigation is a load boundary for the cache-fallback half of the write gate.
 	afterNavigate(() => {
 		clearReadFellBackToCache();
+		feedbackEditor.dismissSaved();
 	});
 
 	$effect(() => {
@@ -188,6 +192,15 @@
 	toolbarLabel={m.feedback_editor_label()}
 	overlay={feedbackEditor.open ? feedbackOverlay : undefined}
 >
+	{#if feedbackEditor.savedForLater}
+		<p
+			data-testid="feedback-saved"
+			role="status"
+			class="mx-auto w-full max-w-md px-6 pt-4 text-sm text-ink-2"
+		>
+			{m.feedback_saved_send_later()}
+		</p>
+	{/if}
 	{#if $membershipStore === 'inactive' && $selectedCollectiveStore}
 		<!-- Presentation only: no redirect and no nav lock (PO-accepted). -->
 		<p
