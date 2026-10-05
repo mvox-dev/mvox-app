@@ -1,6 +1,7 @@
 // createWork: one type lookup plus one POST entity to the collection endpoint.
+// The shared POST, its failures and the transport are proved once, in entityCreate.spec.ts.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTypeIdCache, type EntuCfg } from '$lib/seasons/entuSeasons';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { createWork } from './entityCreate';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
@@ -11,22 +12,16 @@ beforeEach(() => {
 });
 
 function makeFetchMock(
-	opts: {
-		typeIds?: Record<string, string>;
-		typeEntitiesEmpty?: boolean;
-		createBody?: unknown;
-		createStatus?: number;
-	} = {}
+	opts: { typeIds?: Record<string, string> } = {}
 ) {
-	const { typeIds = {}, typeEntitiesEmpty = false, createBody, createStatus = 200 } = opts;
+	const { typeIds = {} } = opts;
 	return vi.fn().mockImplementation((url: string) => {
 		const u = String(url);
 		if (u.includes('_type.string=entity')) {
-			if (typeEntitiesEmpty) return Promise.resolve(json({ entities: [] }));
 			const name = /name\.string=([^&]+)/.exec(u)?.[1] ?? '';
 			return Promise.resolve(json({ entities: [{ _id: typeIds[name] ?? `type-${name}` }] }));
 		}
-		return Promise.resolve(json(createBody ?? { _id: 'work-new-1' }, createStatus));
+		return Promise.resolve(json({ _id: 'work-new-1' }));
 	});
 }
 
@@ -135,21 +130,6 @@ describe('#198 createWork — wire shape', () => {
 			string: 'Ave verum corpus'
 		});
 	});
-
-	it('the create is a POST to the COLLECTION endpoint `entity` — never entity/{id} (that appends onto an EXISTING entity) — and issues EXACTLY two fetches (resolution + create), zero library lookups', async () => {
-		const fetchImpl = makeFetchMock();
-		await createWork(cfg, { ...minimalWork }, fetchImpl);
-		const [url, init] = createCall(fetchImpl);
-		expect(init.method).toBe('POST');
-		expect(String(url)).toContain('/testdb/entity');
-		expect(String(url)).not.toMatch(/\/entity\/[^?]/);
-		expect(fetchImpl).toHaveBeenCalledTimes(2);
-	});
-
-	it('resolves to the NEW entity `_id` from the create response', async () => {
-		const fetchImpl = makeFetchMock({ createBody: { _id: 'work-created-9' } });
-		await expect(createWork(cfg, { ...minimalWork }, fetchImpl)).resolves.toBe('work-created-9');
-	});
 });
 
 describe('#198 createWork — input hygiene: rejected BEFORE any fetch', () => {
@@ -193,63 +173,5 @@ describe('#198 createWork — input hygiene: rejected BEFORE any fetch', () => {
 	});
 });
 
-describe('#198 critical: NO _sharing and NO inherit-rights flag on the work create — rights are trusted to propagation from the library entity (#132 decision)', () => {
-	it('createWork sends NEITHER, even with every optional present — the only system props are _type and _parent', async () => {
-		const fetchImpl = makeFetchMock();
-		await createWork(cfg, { ...minimalWork, composer: 'Thomas Tallis' }, fetchImpl);
-		const body = createCallBody(fetchImpl);
-		expect(body.filter((p) => p.type === '_sharing')).toEqual([]);
-		expect(body.filter((p) => p.type === '_inheritrights')).toEqual([]);
-		const systemProps = new Set(body.filter((p) => p.type.startsWith('_')).map((p) => p.type));
-		expect([...systemProps].sort()).toEqual(['_parent', '_type']);
-	});
-});
-
-describe('#198 createWork — failure surfacing', () => {
-	it('resolveTypeId finding NO `work` type definition propagates the failure and NO create POST is issued', async () => {
-		const fetchImpl = makeFetchMock({ typeEntitiesEmpty: true });
-		await expect(
-			createWork(cfg, { ...minimalWork }, fetchImpl as unknown as typeof fetch)
-		).rejects.toThrow(/work|not found/);
-		const posts = (fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>).filter(
-			([, init]) => init?.method === 'POST'
-		);
-		expect(posts).toEqual([]);
-	});
-
-	it('a non-2xx create POST throws with the STATUS surfaced, never resolves silently', async () => {
-		const fetchImpl = makeFetchMock({ createStatus: 403 });
-		await expect(
-			createWork(cfg, { ...minimalWork }, fetchImpl as unknown as typeof fetch)
-		).rejects.toThrow(/403/);
-	});
-
-	it('a 2xx create response WITHOUT `_id` throws (the apparent-success trap) — a silent non-create must not resolve', async () => {
-		const fetchImpl = makeFetchMock({ createBody: {} });
-		await expect(
-			createWork(cfg, { ...minimalWork }, fetchImpl as unknown as typeof fetch)
-		).rejects.toThrow(/_id/);
-	});
-});
-
-describe('#198 createWork — transport integration (real entuFetch/entuUrl underneath the seam)', () => {
-	it('the create POST goes through entuUrl (base + db segment) and entuFetch attaches the Bearer token + JSON content type', async () => {
-		const fetchImpl = makeFetchMock();
-		await createWork(cfg, { ...minimalWork }, fetchImpl);
-		const [url, init] = createCall(fetchImpl);
-		expect(String(url)).toBe('https://api.entu-test.invalid/testdb/entity');
-		const headers = init.headers as Record<string, string>;
-		expect(headers.Authorization).toBe('Bearer jwt');
-		expect(headers['Content-Type']).toBe('application/json');
-	});
-
-	it('resolveTypeId results are CACHED per db:typeName — two creates issue ONE resolution GET total', async () => {
-		const fetchImpl = makeFetchMock();
-		await createWork(cfg, { ...minimalWork, name: 'W1' }, fetchImpl);
-		await createWork(cfg, { ...minimalWork, name: 'W2' }, fetchImpl);
-		expect(typeResolutionCalls(fetchImpl)).toHaveLength(1);
-		expect(fetchImpl).toHaveBeenCalledTimes(3);
-	});
-});
-
 // (*MVOX:Tallis* — #198 RED)
+// (*MVOX:Josquin*)

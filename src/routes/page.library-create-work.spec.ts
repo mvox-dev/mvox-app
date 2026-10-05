@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 // #198 — the librarian's inline create-work form, driven through the real /library route.
+// The shared form's focus, role, keys and touch targets are proved in the create-edition spec.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -86,7 +87,6 @@ import { listActiveMembersMock } from '$lib/testing/mocks/roster';
 import { listRepertoireItemsMock, listSeasonsMock } from '$lib/testing/mocks/seasons';
 import { resolveLibrarianMock } from '$lib/testing/mocks/admin';
 import { mockLibrarian } from '$lib/testing/pages/library';
-import { expectTouchTarget } from '$lib/testing/pages/dom';
 
 function setAuthedWithOneCollective() {
 	signIn();
@@ -310,30 +310,6 @@ async function renderWithFormOpen(): Promise<HTMLElement> {
 	return container;
 }
 
-describe('#198 — create-work controls are 44px touch targets', () => {
-	it('the entry-point button reserves min-h-11', async () => {
-		mockBaselineLibrary();
-		setAuthedWithOneCollective();
-		mockLibrarian();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="create-work-button"]')).not.toBeNull();
-		});
-		expectTouchTarget(container, 'create-work-button');
-	});
-
-	it('every control inside the open form reserves min-h-11 (both inputs, submit, cancel)', async () => {
-		const container = await renderWithFormOpen();
-
-		expectTouchTarget(container, 'create-work-name');
-		expectTouchTarget(container, 'create-work-composer');
-		expectTouchTarget(container, 'create-work-submit');
-		expectTouchTarget(container, 'create-work-cancel');
-	});
-});
-
 describe('#198 — the form is escapable', () => {
 	it('cancel closes the form and restores the entry-point button — no write', async () => {
 		const container = await renderWithFormOpen();
@@ -373,52 +349,6 @@ describe('#198 — the form is escapable', () => {
 			'[data-testid="create-work-name"]'
 		) as HTMLInputElement;
 		expect(nameInput.value).toBe('');
-	});
-
-	it('Escape in the name input closes the form', async () => {
-		const container = await renderWithFormOpen();
-
-		await fireEvent.keyDown(
-			container.querySelector('[data-testid="create-work-name"]') as HTMLInputElement,
-			{ key: 'Escape' }
-		);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="create-work-form"]')).toBeNull();
-		});
-		expect(createWorkMock).not.toHaveBeenCalled();
-	});
-
-	it('Escape works while focus is on the Cancel button, not just the inputs', async () => {
-		const container = await renderWithFormOpen();
-
-		await fireEvent.keyDown(
-			container.querySelector('[data-testid="create-work-cancel"]') as HTMLButtonElement,
-			{ key: 'Escape', bubbles: true }
-		);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="create-work-form"]')).toBeNull();
-		});
-		expect(createWorkMock).not.toHaveBeenCalled();
-	});
-
-	it('auto-focuses the name input the instant the form opens', async () => {
-		const container = await renderWithFormOpen();
-		const nameInput = container.querySelector(
-			'[data-testid="create-work-name"]'
-		) as HTMLInputElement;
-		await waitFor(() => {
-			expect(document.activeElement).toBe(nameInput);
-		});
-	});
-
-	it('the inline form is a group, not a dialog — it implements no dialog focus contract', async () => {
-		const container = await renderWithFormOpen();
-
-		const form = container.querySelector('[data-testid="create-work-form"]') as HTMLElement;
-		expect(form.getAttribute('role')).toBe('group');
-		expect(form.getAttribute('aria-label')).toBeTruthy();
 	});
 });
 
@@ -580,43 +510,6 @@ describe('#198 — the create is not double-submittable', () => {
 	});
 });
 
-describe('#560 — one key listener on the work form', () => {
-	it('Escape fired at the form wrapper closes it', async () => {
-		const container = await renderWithFormOpen();
-
-		await fireEvent.keyDown(
-			container.querySelector('[data-testid="create-work-form"]') as HTMLElement,
-			{ key: 'Escape' }
-		);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="create-work-form"]')).toBeNull();
-		});
-		expect(createWorkMock).not.toHaveBeenCalled();
-	});
-
-	it('Enter from the composer field submits the form', async () => {
-		const container = await renderWithFormOpen();
-		createWorkMock.mockResolvedValue('work-new');
-
-		await fireEvent.input(
-			container.querySelector('[data-testid="create-work-name"]') as HTMLInputElement,
-			{ target: { value: 'Missa brevis' } }
-		);
-		const second = container.querySelector(
-			'[data-testid="create-work-composer"]'
-		) as HTMLInputElement;
-		await fireEvent.input(second, { target: { value: 'Arvo Pärt' } });
-		await fireEvent.keyDown(second, { key: 'Enter' });
-
-		await waitFor(() => expect(createWorkMock).toHaveBeenCalledTimes(1));
-		expect(createWorkMock.mock.calls[0][1]).toEqual({
-			name: 'Missa brevis',
-			composer: 'Arvo Pärt',
-			libraryEntityId: 'lib-1'
-		});
-	});
-});
-
 // (*MVOX:Tallis*)
 // (*MVOX:Byrd*)
+// (*MVOX:Josquin*)

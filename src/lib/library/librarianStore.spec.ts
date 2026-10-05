@@ -58,6 +58,8 @@ describe('resolveMyLibraryId', () => {
 		expect(
 			urls.some((u) => u.includes(`_type.string=library`) && u.includes(`_parent.reference=${DB_ENTITY}`))
 		).toBe(true);
+		expect(urls.some((u) => u.includes('_type.string=member'))).toBe(false);
+		expect(urls.some((u) => u.includes('organization'))).toBe(false);
 	});
 
 	it('returns null when no database entity is visible', async () => {
@@ -171,3 +173,4 @@ describe('librarianStore', () => {
 		expect(get(librarianStore)).toBe('loading');
 	});
 });
+// (*MVOX:Josquin*)
