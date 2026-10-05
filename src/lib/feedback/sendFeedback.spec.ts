@@ -26,7 +26,12 @@ import {
 	prop
 } from '$lib/testing/feedbackEntu';
 import { createSavedFeedbackStore, type SavedFeedbackStore } from './savedFeedback';
-import { sendFeedback, sendSavedFeedback } from './sendFeedback';
+import {
+	FIRST_RETRY_MS,
+	cancelSavedFeedbackRetry,
+	sendFeedback,
+	sendSavedFeedback
+} from './sendFeedback';
 
 const PNG = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
 const STROKES = { v: 1 as const, strokes: [{ pen: 'red' as const, w: 0.004, pts: [0.1, 0.1, 0.5, 0.5] }] };
@@ -50,6 +55,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	cancelSavedFeedbackRetry();
 	vi.useRealTimers();
 	resetOnLine();
 	resetAppState();
@@ -122,6 +128,53 @@ describe('#611 send, online', () => {
 		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
 
 		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+	});
+});
+
+const cutOff = () => Promise.reject(new TypeError('Failed to fetch'));
+
+describe('#611 a send cut off part-way', () => {
+	it('cut off after the create landed: the retry leaves one complete feedback, not two', async () => {
+		signInP();
+		let cut = true;
+		const entu = feedbackEntu({ meta: () => (cut ? cutOff() : undefined) });
+
+		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
+		cut = false;
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect([...entu.state.live]).toEqual(['fb-2']);
+		expect([...entu.state.shot]).toEqual(['fb-2']);
+		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+	});
+
+	it('cut off after the create during a saved send: the next one completes it once', async () => {
+		signInP();
+		const entu = feedbackEntu({ meta: (id) => (id === 'fb-1' ? cutOff() : undefined) });
+		await saveOffline(entu);
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect([...entu.state.live]).toEqual(['fb-2']);
+		expect([...entu.state.shot]).toEqual(['fb-2']);
+		expect(await store.list('sampledb', 'person-p')).toEqual([]);
+	});
+
+	it('kept because a request got no answer, it is retried with no change in the signal', async () => {
+		vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+		signInP();
+		let cut = true;
+		const entu = feedbackEntu({ create: () => (cut ? cutOff() : undefined) });
+
+		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
+		cut = false;
+		await vi.advanceTimersByTimeAsync(FIRST_RETRY_MS);
+
+		await vi.waitFor(async () => expect(await store.list('sampledb', 'person-p')).toEqual([]));
+		expect([...entu.state.shot]).toEqual(['fb-1']);
+		expect(navigator.onLine).toBe(true);
 	});
 });
 
@@ -219,6 +272,19 @@ describe('#611 saved feedback goes out only on its owner key', () => {
 			'after-sign-in'
 		);
 		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect(entu.fetchImpl).not.toHaveBeenCalled();
+		expect((await store.list('sampledb', 'person-p')).length).toBe(1);
+	});
+
+	it('a stored key that is gone while the session still reads signed in keeps it, no request', async () => {
+		signInP();
+		localStorage.removeItem('token');
+		const entu = feedbackEntu();
+
+		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe(
+			'after-sign-in'
+		);
 
 		expect(entu.fetchImpl).not.toHaveBeenCalled();
 		expect((await store.list('sampledb', 'person-p')).length).toBe(1);

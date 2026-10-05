@@ -11,12 +11,21 @@ export interface FeedbackEntuOpts {
 	/** member id per person id; a person missing here has no active member row. */
 	members?: Record<string, string>;
 	branch?: string;
-	/** Answer for the create POST; default is a fresh id per create. */
-	create?: () => Response | Promise<Response>;
+	/** Answer for the create POST; undefined falls through to a fresh id per create. */
+	create?: () => Response | Promise<Response> | undefined;
+	/** Answer for a screenshot POST on that entity; undefined falls through to the default. */
+	meta?: (id: string) => Response | Promise<Response> | undefined;
 }
 
 export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
-	const state = { branch: opts.branch ?? 'main', creates: 0 };
+	const state = {
+		branch: opts.branch ?? 'main',
+		creates: 0,
+		/** Feedback entities that exist in the fake Entu, and those whose screenshot landed. */
+		live: new Set<string>(),
+		shot: new Set<string>(),
+		lastMeta: ''
+	};
 	const members = opts.members ?? { 'person-p': 'member-p', 'person-q': 'member-q' };
 	const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
@@ -32,17 +41,30 @@ export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
 			return json({ entities: members[person] ? [{ _id: members[person] }] : [] });
 		}
 		if (method === 'POST' && /\/entity$/.test(url)) {
-			if (opts.create) return opts.create();
-			return json({ _id: `fb-${++state.creates}` });
+			const override = opts.create?.();
+			if (override) return override;
+			const id = `fb-${++state.creates}`;
+			state.live.add(id);
+			return json({ _id: id });
 		}
 		const meta = url.match(/\/entity\/(fb-\d+)$/);
+		if (method === 'DELETE' && meta) {
+			state.live.delete(meta[1]);
+			return json({ deleted: true });
+		}
 		if (method === 'POST' && meta) {
+			const override = opts.meta?.(meta[1]);
+			if (override) return override;
+			state.lastMeta = meta[1];
 			return json({
 				_id: meta[1],
 				properties: [{ _id: `${meta[1]}-shot`, type: 'screenshot', upload: { url: UPLOAD_URL, method: 'PUT', headers: {} } }]
 			});
 		}
-		if (method === 'PUT' && url === UPLOAD_URL) return new Response('', { status: 200 });
+		if (method === 'PUT' && url === UPLOAD_URL) {
+			state.shot.add(state.lastMeta);
+			return new Response('', { status: 200 });
+		}
 		if (method === 'GET') return json({ entities: [], count: 0 });
 		throw new Error(`unexpected request: ${method} ${url}`);
 	});
