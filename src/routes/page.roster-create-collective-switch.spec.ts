@@ -163,7 +163,7 @@ describe('/roster — #299 CLASS B: the retained page-create parent id (synchron
 		}
 	});
 
-	it('the open create form does not survive the switch — pageCreateOpen, pageCreateName and pageCreateParentId all clear together (PO ruling)', async () => {
+	it('the open create form does not survive the switch — its open state, typed name and chosen parent all clear together (PO ruling)', async () => {
 		const container = await renderInArrangeMode();
 
 		await openPageCreateForm(container, 'Draft name');
@@ -181,7 +181,7 @@ describe('/roster — #299 CLASS B: the retained page-create parent id (synchron
 	});
 });
 
-describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch guard at all', () => {
+describe('/roster — #299 CLASS A: a page-level create settling after a collective switch', () => {
 	it("STALE SETTLE: A's page-level create resolving after the switch must not insert into B's tree, and announces nothing", async () => {
 		const gate = deferred<string>();
 		createMock.mockImplementationOnce(() => gate.promise);
@@ -231,7 +231,7 @@ describe('/roster — #299 CLASS A: submitPageCreate has no collective-switch gu
 	});
 });
 
-describe('/roster — #299/#470: sectionWriteError clears on a collective switch', () => {
+describe('/roster — #299/#470: a section write failure clears on a collective switch', () => {
 	it('an assign failure from a previous visit must not still be on screen after leaving and returning', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		assignMock.mockRejectedValueOnce(new Error('boom-a'));
@@ -378,7 +378,7 @@ describe('/roster — #299/#470 F3: a section write that SETTLES after the switc
 
 describe('/roster — #299 status regions clear on a collective switch (PO amendment)', () => {
 
-	it("pageCreateStatus: A's create announcement is not still in the region after switching to B", async () => {
+	it("create: A's create announcement is not still in the region after switching to B", async () => {
 		const container = await renderInArrangeMode();
 
 		await openPageCreateForm(container, 'Chorus');
@@ -395,7 +395,7 @@ describe('/roster — #299 status regions clear on a collective switch (PO amend
 		).toBe('');
 	});
 
-	it("removeStatus: A's removal announcement is not still in the region after switching to B", async () => {
+	it("remove: A's removal announcement is not still in the region after switching to B", async () => {
 		const container = await renderInArrangeMode();
 
 		await fireEvent.click(q(container, 'section-remove-sec-tenor') as HTMLElement);
@@ -415,7 +415,7 @@ describe('/roster — #299 status regions clear on a collective switch (PO amend
 		).toBe('');
 	});
 
-	it("renameStatus: A's rename announcement is not still in the region after switching to B", async () => {
+	it("rename: A's rename announcement is not still in the region after switching to B", async () => {
 		const container = await renderInArrangeMode();
 
 		await fireEvent.click(q(container, 'arrange-rename-sec-sop') as HTMLElement);

@@ -26,6 +26,12 @@ import {
 
 const cfg = testCfg('sampledb');
 
+function failOn(type: string) {
+	replaceEntityPropertyMock.mockImplementation(async (_cfg, _id, prop: { type: string }) => {
+		if (prop.type === type) throw new Error('replaceEntityProperty POST failed: 500');
+	});
+}
+
 beforeEach(() => {
 	resolveTypeIdMock.mockReset().mockResolvedValue('type-amr');
 	replaceEntityPropertyMock.mockReset().mockResolvedValue(undefined);
@@ -173,8 +179,8 @@ describe('createMemberRecord — lazy create, rights left to Entu (#699)', () =>
 	});
 });
 
-describe('updateMemberRecord — replaceEntityProperty per changed field, fixed order, no deletes', () => {
-	it('routes EVERY changed field through replaceEntityProperty (atomic overwrite — never a bare POST append), in the fixed order name → phone → email → birthdate regardless of object key order', async () => {
+describe('updateMemberRecord — replaceEntityProperty per changed field, no deletes', () => {
+	it('routes EVERY changed field through replaceEntityProperty (atomic overwrite — never a bare POST append) on the record', async () => {
 		const fetchImpl = vi.fn();
 		await updateMemberRecord(
 			cfg,
@@ -183,13 +189,26 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 			fetchImpl
 		);
 		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(2);
-		expect(replaceEntityPropertyMock.mock.calls[0][1]).toBe('rec-1');
-		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'name', string: 'New Name' });
-		expect(replaceEntityPropertyMock.mock.calls[1][2]).toEqual({
-			type: 'email',
-			string: 'new@x.example'
-		});
+		for (const prop of [
+			{ type: 'name', string: 'New Name' },
+			{ type: 'email', string: 'new@x.example' }
+		]) {
+			expect(replaceEntityPropertyMock).toHaveBeenCalledWith(cfg, 'rec-1', prop, fetchImpl, expect.any(String));
+		}
 		expect(fetchImpl).not.toHaveBeenCalled();
+	});
+
+	it('the fixed write order name → phone → email → birthdate, whatever the key order: a failed write reports exactly the fields before it as landed', async () => {
+		failOn('email');
+		const err = await updateMemberRecord(
+			cfg,
+			'rec-1',
+			{ email: 'new@x.example', birthdate: '1990-03-15', phone: '555', name: 'New Name' },
+			vi.fn()
+		).catch((e) => e);
+		expect(err).toBeInstanceOf(MemberRecordPartialSaveError);
+		expect((err as MemberRecordPartialSaveError).landedFields).toEqual(['name', 'phone']);
+		expect((err as MemberRecordPartialSaveError).failedField).toBe('email');
 	});
 
 	it('birthdate wire: the date input\'s YYYY-MM-DD becomes { type: "birthdate", datetime: "<date>T00:00:00.000Z" } (UTC-midnight anchor)', async () => {
@@ -219,32 +238,17 @@ describe('updateMemberRecord — replaceEntityProperty per changed field, fixed 
 		expect(fetchImpl).not.toHaveBeenCalled();
 	});
 
-	it('#285 — id_code is LAST in the fixed write order: { id_code, name } writes name FIRST, id_code after, regardless of object key order (deterministic partial-failure order)', async () => {
-		await updateMemberRecord(cfg, 'rec-1', { id_code: '50001010017', name: 'New Name' }, vi.fn());
-		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(2);
-		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({ type: 'name', string: 'New Name' });
-		expect(replaceEntityPropertyMock.mock.calls[1][2]).toEqual({
-			type: 'id_code',
-			string: '50001010017'
-		});
-	});
-
-	it('#285 — id_code comes after even BIRTHDATE (the previous last field): { id_code, birthdate } writes birthdate first', async () => {
-		await updateMemberRecord(
+	it('#285 — id_code is written LAST, after even birthdate: its failure reports every other changed field as landed', async () => {
+		failOn('id_code');
+		const err = await updateMemberRecord(
 			cfg,
 			'rec-1',
-			{ id_code: '50001010017', birthdate: '1990-03-15' },
+			{ id_code: '50001010017', birthdate: '1990-03-15', name: 'New Name' },
 			vi.fn()
-		);
-		expect(replaceEntityPropertyMock).toHaveBeenCalledTimes(2);
-		expect(replaceEntityPropertyMock.mock.calls[0][2]).toEqual({
-			type: 'birthdate',
-			datetime: '1990-03-15T00:00:00.000Z'
-		});
-		expect(replaceEntityPropertyMock.mock.calls[1][2]).toEqual({
-			type: 'id_code',
-			string: '50001010017'
-		});
+		).catch((e) => e);
+		expect(err).toBeInstanceOf(MemberRecordPartialSaveError);
+		expect((err as MemberRecordPartialSaveError).landedFields).toEqual(['name', 'birthdate']);
+		expect((err as MemberRecordPartialSaveError).failedField).toBe('id_code');
 	});
 
 	it('#285 — clearing id_code is an overwrite to "" through the atomic path (string semantics, like phone) — NEVER the birthdate-style GET+DELETE removal, no wire calls of its own', async () => {

@@ -166,8 +166,8 @@ async function armAndConfirmDeactivate(container: HTMLElement, memberId: string)
 	await fireEvent.click(q(container, `member-deactivate-confirm-${memberId}`) as HTMLElement);
 }
 
-describe('/roster — #296 reorderPending across a collective switch', () => {
-	it("LATE-SETTLE CLOBBER (performReorder finally): A's stale reorder settles AFTER a genuine reorder has started on B — B's busy state survives, B's controls stay frozen, no third write can fire", async () => {
+describe('/roster — #296 reorder busy state across a collective switch', () => {
+	it("LATE-SETTLE CLOBBER (reorder): A's stale reorder settles AFTER a genuine reorder has started on B — B's busy state survives, B's controls stay frozen, no third write can fire", async () => {
 		const gateA = deferred();
 		const gateB = deferred();
 		reorderMock
@@ -215,7 +215,7 @@ describe('/roster — #296 reorderPending across a collective switch', () => {
 		expect(reorderMock).toHaveBeenCalledTimes(2);
 	});
 
-	it("LATE-SETTLE CLOBBER (performReparent finally): A's stale reparent settles AFTER a genuine reorder has started on B — B's busy state survives and B completes honestly", async () => {
+	it("LATE-SETTLE CLOBBER (reparent): A's stale reparent settles AFTER a genuine reorder has started on B — B's busy state survives and B completes honestly", async () => {
 		const gateA = deferred();
 		reparentMock.mockImplementation(() => gateA.promise);
 		const gateB = deferred();
@@ -259,8 +259,8 @@ describe('/roster — #296 reorderPending across a collective switch', () => {
 	});
 });
 
-describe('/roster — #296 amendment: reorderError catch-writes across a collective switch', () => {
-	it("NO CROSS-COLLECTIVE BANNER (performReorder catch): A's reorder FAILURE settling after the switch paints no page-level failure banner over B, and B's tree is untouched", async () => {
+describe('/roster — #296 amendment: reorder failure banners across a collective switch', () => {
+	it("NO CROSS-COLLECTIVE BANNER (reorder): A's reorder FAILURE settling after the switch paints no page-level failure banner over B, and B's tree is untouched", async () => {
 		const gate = deferred();
 		reorderMock.mockImplementation(() => gate.promise);
 		const container = await renderInArrangeMode();
@@ -279,7 +279,7 @@ describe('/roster — #296 amendment: reorderError catch-writes across a collect
 		expect(rowOrder(container)).toEqual(['arrange-row-sec-b1', 'arrange-row-sec-b2']);
 	});
 
-	it("NO CROSS-COLLECTIVE BANNER (performReparent catch): A's reparent FAILURE settling after the switch paints no page-level failure banner over B", async () => {
+	it("NO CROSS-COLLECTIVE BANNER (reparent): A's reparent FAILURE settling after the switch paints no page-level failure banner over B", async () => {
 		const gate = deferred();
 		reparentMock.mockImplementation(() => gate.promise);
 		const container = await renderInArrangeMode();
@@ -303,7 +303,7 @@ describe('/roster — #296 amendment: reorderError catch-writes across a collect
 	});
 });
 
-describe('/roster — #296 reinstatePending across a collective switch', () => {
+describe('/roster — #296 reinstate busy state across a collective switch', () => {
 	it("LATE-SETTLE CLOBBER: A's stale reinstate settles AFTER a genuine reinstate has started on B — B's button stays disabled, B's write cannot double-fire, and B then completes honestly", async () => {
 		const gateA = deferred();
 		const gateB = deferred();
@@ -365,8 +365,8 @@ describe('/roster — #296 reinstatePending across a collective switch', () => {
 	});
 });
 
-describe('/roster — #296 deactivateActionError writer catches across a collective switch', () => {
-	it("NO CROSS-COLLECTIVE CLOBBER (handleReinstate's catch): B's OWN reinstate-failure alert survives A's stale reinstate failure settling after the switch", async () => {
+describe('/roster — #296 deactivate and reinstate failure alerts across a collective switch', () => {
+	it("NO CROSS-COLLECTIVE CLOBBER (reinstate failure): B's OWN reinstate-failure alert survives A's stale reinstate failure settling after the switch", async () => {
 		const gateA = deferred();
 		reinstateMemberMock
 			.mockImplementationOnce(() => gateA.promise)
@@ -402,7 +402,7 @@ describe('/roster — #296 deactivateActionError writer catches across a collect
 		expect(q(container, 'member-reinstate-failed-m-ina')).toBeNull();
 	});
 
-	it("NO CROSS-COLLECTIVE CLOBBER (handleDeactivateConfirm's catch): B's OWN deactivate-failure alert survives A's stale deactivate failure settling after the switch", async () => {
+	it("NO CROSS-COLLECTIVE CLOBBER (deactivate failure): B's OWN deactivate-failure alert survives A's stale deactivate failure settling after the switch", async () => {
 		const gateA = deferred();
 		deactivateMemberMock
 			.mockImplementationOnce(() => gateA.promise)
@@ -433,8 +433,8 @@ describe('/roster — #296 deactivateActionError writer catches across a collect
 	});
 });
 
-describe('/roster — #296 amendment: deactivateRefusal refusal branch across a collective switch', () => {
-	it("NO CROSS-COLLECTIVE CLOBBER (the REFUSAL branch, not the catch): B's OWN grant-holder refusal survives A's stale refusal settling after the switch", async () => {
+describe('/roster — #296 amendment: the deactivate refusal across a collective switch', () => {
+	it("NO CROSS-COLLECTIVE CLOBBER (refusal): B's OWN grant-holder refusal survives A's stale refusal settling after the switch", async () => {
 		const gateA = deferred<{ role: 'admin' | 'librarian' }[]>();
 		listDeactivateBlockersMock
 			.mockImplementationOnce(() => gateA.promise)

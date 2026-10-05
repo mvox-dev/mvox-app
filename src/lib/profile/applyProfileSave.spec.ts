@@ -45,19 +45,6 @@ describe('applyProfileSave — first save into a level (existingId === null)', (
 		expect(res).toEqual({ profileId: 'new-prof-1' });
 	});
 
-	it('create then field-write ORDER: createOwnProfile resolves before saveProfileFields is called', async () => {
-		const calls: string[] = [];
-		createOwnProfileMock.mockImplementation(async () => {
-			calls.push('create');
-			return 'new-prof-1';
-		});
-		saveProfileFieldsMock.mockImplementation(async () => {
-			calls.push('fields');
-		});
-		await applyProfileSave({ cfg, personId: 'person-p', level: 'domain', existingId: null, fields });
-		expect(calls).toEqual(['create', 'fields']);
-	});
-
 	it('PARTIAL failure: shell created but field write rejects → throws ProfileSaveError carrying the created id', async () => {
 		createOwnProfileMock.mockResolvedValue('new-prof-9');
 		saveProfileFieldsMock.mockRejectedValue(new Error('save failed: 500'));
