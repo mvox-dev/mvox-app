@@ -212,9 +212,9 @@ describe('#395 createFeedback — any failed step rejects (fail loudly, no parti
 		expect(del && String(del[0])).toBe(`${API}sampledb/property/${PROP_ID}`);
 	});
 
-	it('a network error on the PUT rejects', async () => {
+	it('a network error on the PUT rejects with that TypeError: no answer is not a refusal (#611)', async () => {
 		const fetchImpl = makeFetch({ put: new TypeError('network down') });
-		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toBeInstanceOf(TypeError);
 	});
 });
 

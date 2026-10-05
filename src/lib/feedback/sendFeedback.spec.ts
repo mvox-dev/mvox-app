@@ -148,6 +148,17 @@ describe('#611 a send cut off part-way', () => {
 		expect(await store.list('sampledb', 'person-p')).toEqual([]);
 	});
 
+	it('cut off during the screenshot upload: the retry leaves one complete feedback', async () => {
+		signInP();
+		const entu = feedbackEntu({ put: (id) => (id === 'fb-1' ? cutOff() : undefined) });
+
+		await expect(sendFeedback(draft(), { fetchImpl: entu.fetchImpl, store })).resolves.toBe('saved');
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect([...entu.state.live]).toEqual(['fb-2']);
+		expect([...entu.state.shot]).toEqual(['fb-2']);
+	});
+
 	it('cut off after the create during a saved send: the next one completes it once', async () => {
 		signInP();
 		const entu = feedbackEntu({ meta: (id) => (id === 'fb-1' ? cutOff() : undefined) });

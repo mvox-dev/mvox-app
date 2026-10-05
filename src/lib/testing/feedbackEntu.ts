@@ -15,6 +15,7 @@ export interface FeedbackEntuOpts {
 	create?: () => Response | Promise<Response> | undefined;
 	/** Answer for a screenshot POST on that entity; undefined falls through to the default. */
 	meta?: (id: string) => Response | Promise<Response> | undefined;
+	put?: (id: string) => Response | Promise<Response> | undefined;
 }
 
 export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
@@ -62,9 +63,12 @@ export function feedbackEntu(opts: FeedbackEntuOpts = {}) {
 			});
 		}
 		if (method === 'PUT' && url === UPLOAD_URL) {
+			const override = opts.put?.(state.lastMeta);
+			if (override) return override;
 			state.shot.add(state.lastMeta);
 			return new Response('', { status: 200 });
 		}
+		if (method === 'DELETE' && url.includes('/property/')) return json({ deleted: true });
 		if (method === 'GET') return json({ entities: [], count: 0 });
 		throw new Error(`unexpected request: ${method} ${url}`);
 	});
