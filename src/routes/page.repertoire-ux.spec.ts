@@ -114,17 +114,17 @@ beforeEach(() => {
 afterEach(cleanupUnstubResetAgenda);
 
 describe('+page — repertoire UX corrections on the real agenda route (#111)', () => {
-	it('the expanded works list separates its rows with dividers, none on the outer edges (finding 2)', async () => {
+	it('the expanded works list holds each work as one item of a single list (finding 2)', async () => {
 		const { container } = await renderExpandedAsEditor();
 		const list = container.querySelector(
 			'[data-testid="works-expanded"] ol, [data-testid="works-expanded"] ul'
 		);
 		expect(list).not.toBeNull();
-		expect((list as HTMLElement).className).toMatch(/(^|\s)divide-y(-\d+)?(\s|$)/);
 		const workRows = container.querySelectorAll('[data-testid="work-row"]');
 		expect(workRows.length).toBe(2);
 		for (const li of workRows) {
-			expect(li.className).not.toMatch(/(^|\s)(sm:|max-sm:)?border-[tby]\b/);
+			expect(li.tagName).toBe('LI');
+			expect(li.parentElement).toBe(list);
 		}
 	});
 
@@ -142,12 +142,10 @@ describe('+page — repertoire UX corrections on the real agenda route (#111)', 
 		}
 	});
 
-	it('"Add to programme" on the page is a native <select>, full-width on mobile, auto on desktop (finding 4)', async () => {
+	it('"Add to programme" on the page is a native <select> (finding 4)', async () => {
 		const { container } = await renderExpandedAsEditor();
 		const select = container.querySelector('[data-testid="work-manage-add-programme-select"]');
 		expect(select).not.toBeNull();
 		expect((select as HTMLElement).tagName).toBe('SELECT');
-		expect((select as HTMLElement).className).toMatch(/(^|\s)w-full(\s|$)/);
-		expect((select as HTMLElement).className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 	});
 });

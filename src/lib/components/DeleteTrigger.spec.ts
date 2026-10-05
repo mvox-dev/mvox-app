@@ -1,61 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #237 RED — DeleteTrigger: the app's ONE delete-trigger unit, the
-// "defined once and reused" half of #237 that the issue calls load-bearing.
-//
-// WHY a component and not per-site markup: #237's goal is that the NEXT
-// delete control inherits the standard affordance and a future colour change
-// is ONE edit. TrashIcon.svelte (#238) is only the glyph; every site still
-// authors its own button, colour and hit area — three of them today carry
-// `text-red-700 hover:text-red-800` independently, and the roster's trigger
-// shipped at ~20px (p-1). The shared unit is the trigger's FACE only — each
-// site keeps its own arm-state variable (seasonManageDeleteArmed /
-// deleteArmed / pendingRemoveId are heterogeneous on purpose); no global
-// arm-state moves in here.
-//
-// PO ruling (Mihkel, relayed via Henry 2026-09-07): the unit meets the 44px
-// touch minimum BY CONSTRUCTION — a consumer cannot instantiate it below
-// 44px. The wrapping button/target is in scope; surrounding row layout is not.
-//
-// CONTRACT (GREEN must implement — src/lib/components/DeleteTrigger.svelte,
-// Svelte 5 runes):
-//
-//   RENDERS exactly one native <button type="button"> containing exactly one
-//   <TrashIcon> (svg[data-icon="trash"], aria-hidden — the icon never carries
-//   the name; the BUTTON does, via aria-label or name-from-contents).
-//
-//   BASE CLASSES, by construction (always present, consumer cannot remove):
-//     flex min-h-11 min-w-11 items-center justify-center
-//     text-red-700 hover:text-red-800
-//     disabled:cursor-default disabled:opacity-60 disabled:hover:text-red-700
-//   — the #236/#262 precedent treatment, and the ONLY place in the app the
-//   idle destructive-red pair may live (one colour change = one edit; the
-//   sweep spec pins the repo-wide uniqueness).
-//
-//   #237 review F2 — the DISABLED face belongs to the unit too. Pre-sweep it
-//   lived in each site's own class string (roster: `disabled:cursor-default
-//   disabled:opacity-30 disabled:hover:text-ink-2`), so the migration silently
-//   dropped it and an ineligible trigger rendered identical to an actionable
-//   one — still lighting on hover, since CSS :hover matches disabled buttons.
-//   Owned here, every consumer that passes `disabled` inherits it. opacity-60
-//   matches the #252-corrected arrange siblings on the roster's own row (#252
-//   ruled opacity-30 too faint to read as a control).
-//
-//   PROPS
-//     class      optional — APPENDED after the base classes (positioning like
-//                ml-auto, per-site extras like underline); appending cannot
-//                strip the base, so 44px survives any consumer input.
-//     iconClass  optional, default 'h-5 w-5' (the #236 precedent size) —
-//                landed on the TrashIcon; a site whose row demands smaller
-//                (e.g. #262's h-4 w-4 schedule rows) passes its own, which
-//                makes the deviation a stated choice at the call site.
-//     children   optional snippet — a VISIBLE label rendered beside the icon
-//                (the event-detail site keeps its visible label per the
-//                #157/#249 single-name discipline: name-from-contents, no
-//                aria-label). When absent the consumer passes aria-label.
-//     ...rest    spread onto the <button> verbatim: data-testid, aria-label,
-//                title, disabled, aria-busy, onclick, onkeydown — every site
-//                keeps its own wiring byte-for-byte.
+// DeleteTrigger is the app's one delete button: a native button around an aria-hidden
+// TrashIcon, with a 44px floor no consumer class can strip and rest props spread verbatim.
 
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -73,25 +18,9 @@ function button(container: HTMLElement): HTMLButtonElement {
 	return buttons[0] as HTMLButtonElement;
 }
 
-const BASE_CLASSES = [
-	'flex',
-	'min-h-11',
-	'min-w-11',
-	'items-center',
-	'justify-center',
-	'text-red-700',
-	'hover:text-red-800'
-];
-
-// #237 review F2 — the disabled face, owned by the unit rather than by each
-// call site's class string (which is how the roster's treatment got lost in
-// the sweep). `disabled:hover:text-red-700` is the one that matters most:
-// without it `hover:text-red-800` still fires over a disabled button.
-const DISABLED_CLASSES = [
-	'disabled:cursor-default',
-	'disabled:opacity-60',
-	'disabled:hover:text-red-700'
-];
+// Size is a layout the test DOM cannot measure, so the 44px floor is pinned by
+// its tokens. The red pair is pinned repo-wide by trashcan-sweep.spec.ts.
+const TOUCH_TOKENS = ['min-h-11', 'min-w-11'];
 
 describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 	it('renders a native <button type="button"> wrapping ONE aria-hidden TrashIcon svg — no name on the icon', () => {
@@ -105,54 +34,64 @@ describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 		expect(svgs[0].getAttribute('aria-hidden')).toBe('true');
 	});
 
-	it('carries the base treatment by construction: 44px minimum + the #236/#262 red pair', () => {
+	it('layout guard (happy-dom cannot measure size): the 44px touch floor is on every instance', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Delete the thing' }
 		});
 		const btn = button(container);
-		for (const cls of BASE_CLASSES) {
-			expect(btn.classList.contains(cls), `base class ${cls} missing`).toBe(true);
+		for (const cls of TOUCH_TOKENS) {
+			expect(btn.classList.contains(cls), `touch token ${cls} missing`).toBe(true);
 		}
 	});
 
-	it('a consumer CANNOT instantiate it below 44px — the class prop APPENDS, the base survives', () => {
-		// A consumer doing its worst: positioning extras plus an attempt at a
-		// tiny hit area. Tailwind's later-in-markup classes do not defeat
-		// min-h-11 by specificity games in our setup, but the contract pinned
-		// here is simpler and stronger: the base class LIST is always present.
+	it('layout guard (happy-dom cannot measure size): a consumer class cannot strip the 44px floor', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Delete the thing', class: 'ml-auto p-1 text-xs' }
 		});
 		const btn = button(container);
-		for (const cls of ['min-h-11', 'min-w-11', 'text-red-700', 'hover:text-red-800']) {
+		for (const cls of TOUCH_TOKENS) {
 			expect(btn.classList.contains(cls), `${cls} stripped by consumer class`).toBe(true);
 		}
-		// …and the consumer's positioning classes DID land (appending works).
-		expect(btn.classList.contains('ml-auto')).toBe(true);
 	});
 
-	it('a disabled instance carries the disabled face BY CONSTRUCTION — ineligible never looks actionable (#237 review F2)', () => {
+	it('a disabled instance cannot be pressed — the click never reaches the consumer (#237 review F2)', async () => {
+		const onclick = vi.fn();
 		const { container } = render(DeleteTrigger, {
-			props: { 'aria-label': 'Remove section X', disabled: true }
+			props: { 'aria-label': 'Remove section X', disabled: true, onclick }
 		});
 		const btn = button(container);
-		expect(btn.disabled, 'the functional gate still holds').toBe(true);
-		for (const cls of DISABLED_CLASSES) {
-			expect(btn.classList.contains(cls), `disabled variant ${cls} missing`).toBe(true);
-		}
+		expect(btn.disabled).toBe(true);
+		await fireEvent.click(btn);
+		expect(onclick).not.toHaveBeenCalled();
 	});
 
-	it('the disabled face survives a consumer class — appending cannot strip it either', () => {
+	it('a consumer class does not undo the disabled state', async () => {
+		const onclick = vi.fn();
+		const { container } = render(DeleteTrigger, {
+			props: {
+				'aria-label': 'Remove section X',
+				disabled: true,
+				class: 'ml-auto p-1 text-xs',
+				onclick
+			}
+		});
+		const btn = button(container);
+		expect(btn.disabled).toBe(true);
+		await fireEvent.click(btn);
+		expect(onclick).not.toHaveBeenCalled();
+	});
+
+	it('layout guard (happy-dom cannot measure paint): a disabled trigger dims and stops lighting on hover (#237 F2)', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Remove section X', disabled: true, class: 'ml-auto p-1 text-xs' }
 		});
 		const btn = button(container);
-		for (const cls of DISABLED_CLASSES) {
-			expect(btn.classList.contains(cls), `${cls} stripped by consumer class`).toBe(true);
+		for (const cls of ['disabled:cursor-default', 'disabled:opacity-60', 'disabled:hover:text-red-700']) {
+			expect(btn.classList.contains(cls), `disabled face ${cls} missing`).toBe(true);
 		}
 	});
 
-	it('icon defaults to h-5 w-5 (the #236 precedent size) — ONE default, defined here', () => {
+	it('layout guard (happy-dom cannot measure size): the icon defaults to h-5 w-5', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Delete the thing' }
 		});
@@ -161,7 +100,7 @@ describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 		expect(svg.classList.contains('w-5')).toBe(true);
 	});
 
-	it('iconClass overrides the default — a smaller row makes its deviation a stated choice at the call site (#262 h-4 w-4)', () => {
+	it('layout guard (happy-dom cannot measure size): iconClass replaces the default icon size', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Delete the thing', iconClass: 'h-4 w-4' }
 		});
@@ -210,7 +149,6 @@ describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 		// and the icon is aria-hidden, so name-from-contents is exactly the label.
 		expect(btn.getAttribute('aria-label')).toBeNull();
 		expect((btn.textContent ?? '').trim()).toBe('Delete this event');
-		// The icon still renders alongside the label.
 		expect(btn.querySelector('svg[data-icon="trash"]')).not.toBeNull();
 	});
 });

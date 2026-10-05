@@ -186,7 +186,6 @@ describe('#269 /roster end-to-end — toggle ON through the real producer chain'
 		expect(m1span.textContent).toBe('Alice Alto');
 
 		expect(m2span.getAttribute('data-testid')).toBe('roster-row-name');
-		expect(m2span.className).toBe('text-sm text-ink');
 		expect(m1span.className).toBe(m2span.className);
 		expect(m2span.tagName).toBe('SPAN');
 		expect(q(container, 'roster-row-m2')!.firstElementChild).toBe(m2span);

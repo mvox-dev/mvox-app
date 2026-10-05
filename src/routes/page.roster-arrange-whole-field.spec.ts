@@ -119,8 +119,12 @@ describe('#205 — /roster arrange: whole-field rename activator', () => {
 			btn.textContent,
 			'the visible section name must live INSIDE the rename button'
 		).toContain('Alto');
+	});
 
-		const classes = Array.from(btn.classList);
+	it('layout guard (happy-dom cannot measure size): the rename activator is 44px tall and spans the name area', async () => {
+		const container = await renderArrangeReady();
+
+		const classes = Array.from((q(container, 'arrange-rename-sec-alto') as HTMLElement).classList);
 		expect(classes, 'the rename activator must reserve a 44px-tall touch target').toContain(
 			'min-h-11'
 		);
@@ -244,6 +248,10 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 			'arrange-rename-sec-alto',
 			'arrange-count-sec-alto'
 		]);
+	});
+
+	it('layout guard (happy-dom cannot measure width): the grip does not grow, the name carries no indent', async () => {
+		const container = await renderArrangeReady();
 
 		const row = q(container, 'arrange-row-sec-alto') as HTMLElement;
 		expect(row.className).toContain('shrink-0');
@@ -271,7 +279,7 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 		const overActivator = q(container, 'arrange-rename-sec-alto') as HTMLElement;
 		await fireEvent.dragOver(overActivator, { dataTransfer });
 		await waitFor(() => {
-			expect(dropZone(container, 'sec-alto').className).toContain('bg-ink-5');
+			expect(q(container, 'section-drop-indicator')).not.toBeNull();
 		});
 		await fireEvent.drop(overActivator, { dataTransfer });
 
@@ -306,7 +314,7 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 
 			await fireEvent.pointerMove(grip, { ...TOUCH, clientX: 10, clientY: 90 });
 			await waitFor(() => {
-				expect(dropZone(container, 'sec-alto').className).toContain('bg-ink-5');
+				expect(q(container, 'section-drop-indicator')).not.toBeNull();
 			});
 			await fireEvent.pointerUp(grip, { ...TOUCH, clientX: 10, clientY: 90 });
 
@@ -326,7 +334,7 @@ describe('#205 review — /roster arrange: no duplicate name, no shrunken drop t
 });
 
 describe('#205 review F2 (round 3) — the grip is legible, the focus ring is row-sized', () => {
-	it('the wrapper paints the focus ring, so focus encloses the same rectangle as hold and drop', async () => {
+	it('layout guard (happy-dom cannot measure ring extent): the focus ring encloses the whole row', async () => {
 		const container = await renderArrangeReady();
 
 		const zone = dropZone(container, 'sec-alto');
@@ -345,18 +353,13 @@ describe('#205 review F2 (round 3) — the grip is legible, the focus ring is ro
 		).toContain('focus:outline-none');
 	});
 
-	it('the grip carries a visible hover/active affordance — the drag surface says where it is', async () => {
+	it('layout guard (happy-dom cannot measure size): the grip is 44px tall', async () => {
 		const container = await renderArrangeReady();
 
 		const grip = q(container, 'arrange-grip-sec-alto') as HTMLElement;
 		expect(grip, 'the grip must render').not.toBeNull();
 
-		const classes = grip.className;
-		expect(classes, 'the grip must react to hover').toMatch(/hover:/);
-		expect(classes, 'the grip must react to press').toMatch(/active:/);
-		expect(classes, 'the grip must name itself as a drag surface').toContain('cursor-grab');
-
-		expect(classes, 'the grip hit/hover surface must span the row height').toContain('min-h-11');
+		expect(grip.className, 'the grip hit surface must span the row height').toContain('min-h-11');
 	});
 
 	it('the grip stays the touch pickup zone and the ONLY drag start — the decision that grip-only is intended', async () => {

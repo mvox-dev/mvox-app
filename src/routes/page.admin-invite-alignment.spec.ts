@@ -67,8 +67,10 @@ import { cleanupReset } from '$lib/testing/pages/dom';
 listJoinStatesMock.mockResolvedValue({});
 resolveOwnerTierMock.mockResolvedValue('error');
 
-const STANDALONE_ROOT_CLASSES = 'mx-auto flex w-full max-w-md flex-col gap-4';
-const EMBEDDED_ROOT_CLASSES = 'flex w-full flex-col gap-4';
+// Centring is layout the test DOM cannot measure, so these guards read the centring tokens.
+function centring(el: HTMLElement): string[] {
+	return Array.from(el.classList).filter((c) => c === 'mx-auto' || c.startsWith('max-w-'));
+}
 
 function loadOk() {
 	resolveAdminMock.mockResolvedValue('admin');
@@ -121,33 +123,27 @@ describe('#235 — embedded InviteSurface on /admin (integration: real route pag
 		return { container, section };
 	}
 
-	it('root div drops BOTH centering tokens — full class string is exactly the standalone string minus mx-auto/max-w-md', async () => {
+	it('layout guard (happy-dom cannot measure centring): the embedded surface is not centred', async () => {
 		const { section } = await renderAdminReady();
-		const root = inviteSurfaceRoot(section, 'h2');
-
-		expect(Array.from(root.classList)).not.toContain('mx-auto');
-		expect(Array.from(root.classList)).not.toContain('max-w-md');
-		expect(Array.from(root.classList).filter((c) => c.startsWith('max-w-'))).toEqual([]);
-
-		expect(root.getAttribute('class')).toBe(EMBEDDED_ROOT_CLASSES);
+		expect(centring(inviteSurfaceRoot(section, 'h2'))).toEqual([]);
 	});
 
-	it('aligns like its siblings: Administrators/Librarians sections carry no width/centering of their own, and neither does the invite section wrapper', async () => {
+	it('layout guard (happy-dom cannot measure centring): it aligns like the role sections beside it', async () => {
 		const { container, section } = await renderAdminReady();
 
 		for (const testid of ['admin-roles-admins', 'admin-roles-librarians']) {
 			const sibling = container.querySelector<HTMLElement>(`[data-testid="${testid}"]`);
 			expect(sibling, `expected [data-testid="${testid}"]`).not.toBeNull();
-			expect(sibling!.getAttribute('class')).toBe('flex flex-col gap-3');
+			expect(centring(sibling!)).toEqual([]);
 		}
-		expect(section.getAttribute('class')).toBe('flex flex-col gap-3');
-		expect(section.querySelector('.mx-auto')).toBeNull();
-		expect(section.querySelector('.max-w-md')).toBeNull();
+		for (const el of [section, ...section.querySelectorAll<HTMLElement>('*')]) {
+			expect(centring(el)).toEqual([]);
+		}
 	});
 });
 
-describe('#235 — standalone /admin/invite stays pixel-identical (integration: real route page)', () => {
-	it("root div class string is byte-identical to today's — the component's own classes remain the sole centering mechanism on the full-bleed route", async () => {
+describe('#235 — standalone /admin/invite stays centred (integration: real route page)', () => {
+	it('layout guard (happy-dom cannot measure centring): the full-bleed route centres the surface', async () => {
 		selectSampledb();
 		resolveParentMock.mockResolvedValue('parent-1');
 		resolveInviteParentMock.mockResolvedValue('org-1');
@@ -157,12 +153,7 @@ describe('#235 — standalone /admin/invite stays pixel-identical (integration: 
 			expect(container.querySelector('[data-testid="invite-admin-submit"]')).not.toBeNull();
 		});
 
-		const root = inviteSurfaceRoot(container, 'h1');
-		expect(root.getAttribute('class')).toBe(STANDALONE_ROOT_CLASSES);
-
-		const main = container.querySelector('main');
-		expect(main).not.toBeNull();
-		expect(main!.getAttribute('class')).toBe('min-h-screen bg-paper px-6 py-10 text-ink');
+		expect(centring(inviteSurfaceRoot(container, 'h1'))).toEqual(['mx-auto', 'max-w-md']);
 	});
 });
 

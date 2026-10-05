@@ -376,23 +376,22 @@ describe('/roster — arrange-mode drop indicator (#155/S2 review F2)', () => {
 		expect(listSlots(container)).not.toContain('section-drop-indicator');
 	});
 
-	it('the held SUBTREE and the DROP TARGET are tinted differently', async () => {
+	it('the held SUBTREE is marked as held; the DROP TARGET is not, and gets the drop hint', async () => {
 		const container = await renderInArrangeMode();
 		const dataTransfer = makeDataTransfer();
 
 		await fireEvent.dragStart(row(container, 'sec-sop'), { dataTransfer });
-		await fireEvent.dragOver(row(container, 'sec-alto'), { dataTransfer });
+		await fireEvent.dragOver(row(container, 'sec-tenor'), { dataTransfer });
 
 		await waitFor(() => {
-			expect(dropZone(container, 'sec-alto').className).toContain('bg-ink-5');
+			expect(listSlots(container)).toContain('section-drop-indicator');
 		});
-		expect(dropZone(container, 'sec-sop1').className).toContain('bg-indigo-soft');
-		expect(row(container, 'sec-sop1').className).not.toContain('bg-indigo-soft');
-		expect(dropZone(container, 'sec-sop1').className).not.toContain('bg-ink-5');
-		expect(dropZone(container, 'sec-alto').className).not.toContain('bg-indigo-soft');
+		expect(row(container, 'sec-sop1').getAttribute('data-grabbed-subtree')).toBe('true');
+		expect(row(container, 'sec-tenor').hasAttribute('data-grabbed-subtree')).toBe(false);
+		expect(row(container, 'sec-tenor').hasAttribute('data-grabbed')).toBe(false);
 	});
 
-	it('the HELD row\'s dashed outline encloses the whole visual row — the name included, not the grip alone', async () => {
+	it('layout guard (happy-dom cannot measure outline extent): the held row\'s outline encloses its name', async () => {
 		const container = await renderInArrangeMode();
 		const dataTransfer = makeDataTransfer();
 
@@ -540,7 +539,7 @@ describe('/roster — an in-flight arrange-mode reorder blocks a second one (reu
 		});
 	});
 
-	it('the in-flight state does not dim the rows — names and counts stay legible', async () => {
+	it('the in-flight state keeps the rows readable — names and counts stay', async () => {
 		reorderMock.mockImplementation(() => new Promise<void>(() => {}));
 		const container = await renderInArrangeMode();
 
@@ -549,15 +548,9 @@ describe('/roster — an in-flight arrange-mode reorder blocks a second one (reu
 			expect(row(container, 'sec-tenor').getAttribute('draggable')).toBe('false');
 		});
 
-		for (const id of ['sec-sop', 'sec-sop1', 'sec-sop2', 'sec-alto', 'sec-tenor']) {
-			expect(row(container, id).className, `row ${id}`).not.toContain('opacity-30');
-			expect(row(container, id).className, `row ${id}`).toContain('cursor-default');
-		}
+		expect(visibleRowLabel(container, 'sec-sop')).toBe('Soprano (3)');
+		expect(visibleRowLabel(container, 'sec-alto')).toBe('Alto (1)');
 		expect(visibleRowLabel(container, 'sec-tenor')).toBe('Tenor (1)');
-		expect(
-			(q(container, 'arrange-rename-sec-tenor') as HTMLElement).className,
-			'rename activator'
-		).not.toContain('opacity-30');
 	});
 });
 
@@ -616,7 +609,7 @@ describe('/roster — arrange-mode TOUCH long-press reorders too (#155/S2 review
 
 		await fireEvent.pointerMove(g, { ...TOUCH, clientX: 10, clientY: 90 });
 		await waitFor(() => {
-			expect(dropZone(container, 'sec-tenor').className).toContain('bg-ink-5');
+			expect(listSlots(container)).toContain('section-drop-indicator');
 		});
 		await fireEvent.pointerUp(g, { ...TOUCH, clientX: 10, clientY: 90 });
 

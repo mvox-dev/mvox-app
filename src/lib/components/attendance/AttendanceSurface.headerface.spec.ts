@@ -24,7 +24,7 @@ const item: AgendaItem = {
 } as AgendaItem;
 
 describe('AttendanceSurface — panel header uses the body face, not font-display (#290)', () => {
-	it('the event-name span beside the close button drops font-display but keeps truncate + text-sm', () => {
+	it('layout guard (happy-dom cannot measure typography): the event-name span has no display face', () => {
 		const { container } = render(AttendanceSurface, {
 			props: {
 				item,

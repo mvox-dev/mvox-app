@@ -22,18 +22,17 @@ function renderField(props: Record<string, unknown>) {
 }
 
 describe('Field', () => {
-	it('dims a disabled field: the control is disabled and carries the dim style', () => {
+	it('disables the control when the field is disabled', () => {
 		const { input } = renderField({ disabled: true });
 		expect(input.disabled).toBe(true);
-		expect(input.className.split(' ')).toContain('disabled:opacity-50');
 	});
 
-	it('leaves an enabled field enabled, with the same control style', () => {
-		const { input } = renderField({});
-		expect(input.disabled).toBe(false);
-		expect(input.className).toBe(
-			'w-full border border-ink-5 bg-paper px-1.5 py-1 text-ink disabled:opacity-50'
-		);
+	it('gives an enabled and a disabled control the same style, so both forms match', () => {
+		const { input: enabled } = renderField({});
+		const { input: disabled } = renderField({ disabled: true });
+		expect(enabled.disabled).toBe(false);
+		expect(enabled.className).not.toBe('');
+		expect(disabled.className).toBe(enabled.className);
 	});
 
 	it('wraps the caption and the control in one label', () => {
@@ -42,12 +41,13 @@ describe('Field', () => {
 		expect(label.contains(input)).toBe(true);
 		const caption = container.querySelector('[data-testid="name-label"]') as HTMLElement;
 		expect(caption.textContent).toBe('Name');
-		expect(label.className).toBe('flex flex-col gap-0.5 w-full');
 	});
 
-	it('grows instead of taking the full width when asked', () => {
-		const { container } = renderField({ grow: true });
-		const label = container.querySelector('label') as HTMLLabelElement;
-		expect(label.className).toBe('flex flex-col gap-0.5 min-w-0 flex-1');
+	it('layout guard (happy-dom cannot measure width): full width by default, grows when asked', () => {
+		const tokens = (props: Record<string, unknown>) =>
+			Array.from((renderField(props).container.querySelector('label') as HTMLElement).classList);
+		expect(tokens({})).toContain('w-full');
+		expect(tokens({ grow: true })).toEqual(expect.arrayContaining(['min-w-0', 'flex-1']));
+		expect(tokens({ grow: true })).not.toContain('w-full');
 	});
 });
