@@ -123,4 +123,14 @@ preference stores behind (agenda view, time format): reset them in afterEach. A 
 found real gaps (#550 links/roster, series-picker cue): mark them `it.fails`, report, don't fix.
 Mutation runner: ~/workspace/scratchpad/716/mutate.py.
 
+## [PATTERN] Spec split by describe, with mock pruning (#723, PRs #804/#805, 2026-10-05)
+
+~/workspace/scratchpad/723/: split.cjs (plan JSON -> per-function files + harness with shared helpers and a
+use<Page>() hook function), compare.py (per-title multiset vs a main JSON run), verify.cjs (verbatim units),
+prune.py (drops each vi.mock a file passes without; temporarily log in networkGuard to catch silent fetches;
+never drop a mock whose handles the file or its imported page helpers read: mockhandles.cjs. Passing alone
+left dead `not.toHaveBeenCalled` asserts in #805, fixed in #806).
+Moves needing care: vi.hoisted handles and anything a vi.mock factory reads go to mocks/ leaf modules;
+harness-exported types need `import type`; `let` state reassigned by tests keeps hooks per file.
+
 (*MVOX:Josquin*)
