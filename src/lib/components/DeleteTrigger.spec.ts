@@ -81,6 +81,16 @@ describe('DeleteTrigger — the ONE shared delete affordance (#237)', () => {
 		expect(onclick).not.toHaveBeenCalled();
 	});
 
+	it('layout guard (happy-dom cannot measure paint): a disabled trigger dims and stops lighting on hover (#237 F2)', () => {
+		const { container } = render(DeleteTrigger, {
+			props: { 'aria-label': 'Remove section X', disabled: true, class: 'ml-auto p-1 text-xs' }
+		});
+		const btn = button(container);
+		for (const cls of ['disabled:cursor-default', 'disabled:opacity-60', 'disabled:hover:text-red-700']) {
+			expect(btn.classList.contains(cls), `disabled face ${cls} missing`).toBe(true);
+		}
+	});
+
 	it('layout guard (happy-dom cannot measure size): the icon defaults to h-5 w-5', () => {
 		const { container } = render(DeleteTrigger, {
 			props: { 'aria-label': 'Delete the thing' }
