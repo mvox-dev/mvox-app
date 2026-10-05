@@ -14,34 +14,25 @@ import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
-import { tallinnWallClockParts, toTallinnLocalInputValue } from './timeFormat';
-
-// A static named import of not-yet-exported members would fail at LINK time
-// with an opaque error, so the tests reach for the exports dynamically.
-type TallinnConversionExports = {
-	tallinnOffsetMinutes: (date: Date) => number;
-	tallinnLocalToUtcIso: (local: string) => string;
-};
-
-async function conversionExports(): Promise<TallinnConversionExports> {
-	return (await import('./timeFormat')) as unknown as TallinnConversionExports;
-}
+import {
+	tallinnLocalToUtcIso,
+	tallinnOffsetMinutes,
+	tallinnWallClockParts,
+	toTallinnLocalInputValue
+} from './timeFormat';
 
 describe('#230 — tallinnOffsetMinutes (shared DST-aware offset reader)', () => {
 	it('plain winter instant → 120 (EET), plain summer instant → 180 (EEST)', async () => {
-		const { tallinnOffsetMinutes } = await conversionExports();
 		expect(tallinnOffsetMinutes(new Date('2026-01-15T12:00:00.000Z'))).toEqual(120);
 		expect(tallinnOffsetMinutes(new Date('2026-07-15T12:00:00.000Z'))).toEqual(180);
 	});
 
 	it('spring-forward edge (2026-03-29, 01:00Z): 120 right before, 180 right after', async () => {
-		const { tallinnOffsetMinutes } = await conversionExports();
 		expect(tallinnOffsetMinutes(new Date('2026-03-29T00:59:00.000Z'))).toEqual(120);
 		expect(tallinnOffsetMinutes(new Date('2026-03-29T01:00:00.000Z'))).toEqual(180);
 	});
 
 	it('fall-back edge (2026-10-25, 01:00Z): 180 right before, 120 right after', async () => {
-		const { tallinnOffsetMinutes } = await conversionExports();
 		expect(tallinnOffsetMinutes(new Date('2026-10-25T00:59:00.000Z'))).toEqual(180);
 		expect(tallinnOffsetMinutes(new Date('2026-10-25T01:00:00.000Z'))).toEqual(120);
 	});
@@ -49,56 +40,46 @@ describe('#230 — tallinnOffsetMinutes (shared DST-aware offset reader)', () =>
 
 describe('#230 — tallinnLocalToUtcIso (shared two-pass wall-clock → UTC instant)', () => {
 	it('plain dates: winter converts at +120, summer at +180 — exact ISO shapes', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-01-15T12:00')).toEqual('2026-01-15T10:00:00.000Z');
 		expect(tallinnLocalToUtcIso('2026-07-15T12:00')).toEqual('2026-07-15T09:00:00.000Z');
 	});
 
 	it('spring-forward day, EET side (01:30 on 29 Mar): the SECOND pass is what lands 23:30Z — one pass would write 22:30Z, an hour off', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		// The exact instant page.event-editing.spec.ts pins end-to-end.
 		expect(tallinnLocalToUtcIso('2026-03-29T01:30')).toEqual('2026-03-28T23:30:00.000Z');
 	});
 
 	it('spring-forward day, EEST side (04:30 after the jump) → 01:30Z', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-03-29T04:30')).toEqual('2026-03-29T01:30:00.000Z');
 	});
 
 	it('spring-forward day, the NONEXISTENT 03:xx hour maps forward deterministically (03:30 → 01:30Z, i.e. wall 04:30 EEST) — pinned so the extraction cannot drift it', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-03-29T03:30')).toEqual('2026-03-29T01:30:00.000Z');
 	});
 
 	it('fall-back day, unambiguous EEST side (02:30 on 25 Oct) → 23:30Z the previous day', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-10-25T02:30')).toEqual('2026-10-24T23:30:00.000Z');
 	});
 
 	it('fall-back day, the AMBIGUOUS repeated 03:xx hour resolves to the EET (second) occurrence: 03:30 → 01:30Z', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-10-25T03:30')).toEqual('2026-10-25T01:30:00.000Z');
 	});
 
 	it('fall-back day, afternoon (12:00, already EET) → 10:00Z', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-10-25T12:00')).toEqual('2026-10-25T10:00:00.000Z');
 	});
 
 	it("date-only draft defaults the time to 00:00 (a half-filled composite is a reachable state): '2026-01-15' → 2026-01-14T22:00Z", async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		expect(tallinnLocalToUtcIso('2026-01-15')).toEqual('2026-01-14T22:00:00.000Z');
 	});
 
 	it("TOTAL on purpose: '' for an empty or unparseable draft — never throws (the onblur handlers depend on this)", async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		for (const junk of ['', 'garbage', 'T19:00', '15.01.2026T12:00']) {
 			expect(tallinnLocalToUtcIso(junk), JSON.stringify(junk)).toEqual('');
 		}
 	});
 
 	it('round-trips every valid Tallinn wall clock — full-shape, DST edges included', async () => {
-		const { tallinnLocalToUtcIso } = await conversionExports();
 		// Independent reference: render the instant back to a wall clock, require the original.
 		const backFmt = new Intl.DateTimeFormat('en-CA', {
 			timeZone: 'Europe/Tallinn',

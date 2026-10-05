@@ -9,14 +9,6 @@ import {
 	type FakeAdapter
 } from '$lib/testing/byteStoreFakes';
 
-/** The #352 contract shape — an intersection until byteStore.ts declares it
- *  (the source pins below hold the interface itself to account). */
-type StorageControlCapable = ByteStore & {
-	usageForPartition(db: string, personId: string): Promise<{ count: number; size: number }>;
-	usageForOthers(db: string, personId: string): Promise<{ count: number; size: number }>;
-	clearAllPartitions(): Promise<void>;
-};
-
 const A = { db: 'sampledb', personId: 'person-a' };
 const B = { db: 'sampledb', personId: 'person-b' };
 const C = { db: 'crede', personId: 'person-a' }; // same human, other collective
@@ -43,7 +35,7 @@ function seededRecord(n: number, openedAt: number): StoredFileRecord {
 }
 
 let adapter: FakeAdapter;
-let store: StorageControlCapable;
+let store: ByteStore;
 
 /** A holds 10+20, B holds 5, C holds 30 — every partition-vs-others split
  *  below is computable by hand from these four rows. */
@@ -58,7 +50,7 @@ beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-09-15T10:00:00.000Z'));
 	adapter = createFakeAdapter();
-	store = createByteStore(adapter, { capBytes: 100 }) as StorageControlCapable;
+	store = createByteStore(adapter, { capBytes: 100 });
 });
 
 afterEach(() => {
@@ -183,8 +175,7 @@ describe('#352 — clearAllPartitions: the device-wide wipe, signed-in or not', 
 
 describe('#352 — the fake store implements the SAME members (reconciled, not a divergent duplicate)', () => {
 	it('createFakeByteStore(): usageForPartition / usageForOthers answer the seeded state, full shape', async () => {
-		const fake = createFakeByteStore() as unknown as ReturnType<typeof createFakeByteStore> &
-			StorageControlCapable;
+		const fake = createFakeByteStore();
 		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-1', data(10));
 		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-2', data(20));
 		fake.seed({ db: 'sampledb', personId: 'person-b' }, 'file-3', data(5));
@@ -198,8 +189,7 @@ describe('#352 — the fake store implements the SAME members (reconciled, not a
 	});
 
 	it('createFakeByteStore(): clearAllPartitions empties every partition', async () => {
-		const fake = createFakeByteStore() as unknown as ReturnType<typeof createFakeByteStore> &
-			StorageControlCapable;
+		const fake = createFakeByteStore();
 		fake.seed({ db: 'sampledb', personId: 'person-a' }, 'file-1', data(10));
 		fake.seed({ db: 'crede', personId: 'person-a' }, 'file-2', data(30));
 

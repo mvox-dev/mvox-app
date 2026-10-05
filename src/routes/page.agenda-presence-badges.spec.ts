@@ -116,7 +116,7 @@ function installPresence(impl?: PresenceQuery) {
 	const spy = vi.fn<PresenceQuery>(
 		impl ?? (async (db, personId) => fakeByteStore.heldFor(db, personId))
 	);
-	(fakeByteStore as unknown as { heldFileIds: PresenceQuery }).heldFileIds = spy;
+	fakeByteStore.heldFileIds = spy;
 	return spy;
 }
 

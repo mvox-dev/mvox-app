@@ -115,6 +115,7 @@ import {
 } from '$lib/testing/pages/seasonPanel';
 import { renderReady } from '$lib/testing/pages/seasonRender';
 import { flush } from '$lib/testing/pages/seasonEventCreate';
+import { timeFormatStore } from '$lib/preferences/timeFormat';
 
 function currentSeason(viewerIsEditor: boolean): Season {
 	return {
@@ -628,9 +629,6 @@ describe('season panel — submit ALWAYS generates (#240): the series wire, full
 	});
 
 	it('#207 AM/PM preference (integration): the store flips the surface to 12h selects — and submit STILL sends the 24h HH:MM wire string', async () => {
-		const timeFormatModulePath = '$lib/preferences/timeFormat';
-		const { timeFormatStore } = (await import(/* @vite-ignore */ timeFormatModulePath)) as
-			typeof import('$lib/preferences/timeFormat');
 		timeFormatStore.set('ampm');
 		try {
 			const container = await renderReady();

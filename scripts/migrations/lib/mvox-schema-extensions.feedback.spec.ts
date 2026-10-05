@@ -1,23 +1,9 @@
-// mvox-app#395 slice 1/2 (RED) — the `feedback` type in the schema of record.
-//
-// Contract pinned here, for GREEN to satisfy:
-//
-// - `scripts/migrations/lib/mvox-schema-extensions.ts` exports
-//   `feedback: MvoxEntityDef`, EXACTLY the shape below (full toEqual — no
-//   partial matchers). Child of `member`; three fields — `screenshot` (file),
-//   `doodle_layer` (text: #394's StrokeData JSON, src/lib/strokes/strokes.ts),
-//   `description` (text). Type AND every field carry `_sharing: domain`,
-//   each set explicitly (never omitted — the #265 inherit-from-parent trap).
-//   `_inheritrights: true` (sectionActions.ts precedent: inheritance left
-//   natural, per the #390/#395 ruling). Creator is the member themself —
-//   `{ kind: 'self' }`, the first MvoxEntityDef to use it.
-//
-// - `docs/architecture/mvox-schema-extensions.md` carries its narrative
-//   section under "Entity catalog", before "Property additions".
+// The `feedback` type in the schema of record: a child of member, created by the member, with the
+// type and all three fields explicitly domain-shared. Its narrative lives in the extensions doc.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as schema from './mvox-schema-extensions';
+import { feedback } from './mvox-schema-extensions';
 
 const EXPECTED_FEEDBACK_DEF = {
 	name: 'feedback',
@@ -73,13 +59,12 @@ const EXPECTED_FEEDBACK_DEF = {
 
 describe('#395 — feedback in the schema of record', () => {
 	it('exports `feedback: MvoxEntityDef` with the exact commissioned shape', () => {
-		expect((schema as Record<string, unknown>).feedback).toEqual(EXPECTED_FEEDBACK_DEF);
+		expect(feedback).toEqual(EXPECTED_FEEDBACK_DEF);
 	});
 
 	it('type and every field are domain, each set explicitly — none left to inherit', () => {
-		const def = (schema as Record<string, unknown>).feedback as typeof EXPECTED_FEEDBACK_DEF | undefined;
-		expect(def?.sharing).toBe('domain');
-		expect(def?.properties.map((p) => [p.name, p.sharing])).toEqual([
+		expect(feedback.sharing).toBe('domain');
+		expect(feedback.properties.map((p) => [p.name, p.sharing])).toEqual([
 			['screenshot', 'domain'],
 			['doodle_layer', 'domain'],
 			['description', 'domain']
