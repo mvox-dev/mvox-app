@@ -27,7 +27,9 @@ const pageStub = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({ page: pageStub }));
 
 import LibraryPage from './+page.svelte';
+import { get } from 'svelte/store';
 import { authStore } from '$lib/auth/session';
+import { librarianStore } from '$lib/library/librarianStore';
 import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 import { flushReadCache, resetServedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
 import { isoDateFormatter, tallinnHHMM } from '$lib/preferences/timeFormat';
@@ -319,7 +321,10 @@ async function onlineVisit() {
 
 beforeEach(seedOfflineSession);
 
-afterEach(() => {
+afterEach(async () => {
+	// A page left mid-load still writes the shared librarian store: the wait isolates tests
+	// from the #800 late-write race.
+	await waitFor(() => expect(get(librarianStore)).not.toBe('loading'));
 	cleanup();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
