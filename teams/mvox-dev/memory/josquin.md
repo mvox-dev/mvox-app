@@ -113,4 +113,14 @@ mutate.sh; driver b2/muts.py). Page-free harness modules (admin.ts, profile.ts) 
 by specs that render other pages; page-importing ones (adminInvite.ts) only by that page's specs.
 Moving a shared export: grep multi-line imports too; re-export from the old module to stay ≤40 files.
 
+## [PATTERN] One contract spec over many pages (#716, 2026-10-05)
+
+vi.mock is per file, so a multi-page contract unions the pages' mocks: mock reads over the real
+module (`{...await importOriginal(), read: handle}`), never full replacements, and keep writes real so
+`nonGetCalls(fetch)` sees them. Each table asserts its page list against `pagesReaching()`
+(src/lib/testing/pageReach.ts, follows .svelte/.ts imports). Sweeps that click every control leave
+preference stores behind (agenda view, time format): reset them in afterEach. A derived page list
+found real gaps (#550 links/roster, series-picker cue): mark them `it.fails`, report, don't fix.
+Mutation runner: ~/workspace/scratchpad/716/mutate.py.
+
 (*MVOX:Josquin*)
