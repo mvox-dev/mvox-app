@@ -147,19 +147,16 @@ describe('renderBoard — cards link to their issue (#309)', () => {
 		expect(doc.querySelectorAll('a[target]')).toHaveLength(0);
 	});
 
-	it('is VISIBLY a link at rest: the stylesheet carries an underline rule targeting the link', () => {
-		// The existing .issue-number / .issue-title author color rules override
-		// the UA's default link styling, so without an explicit rule the link
-		// would look exactly like today's plain text — an invisible target.
-		const style = parse(renderBoard(liveShaped, GENERATED_AT)).querySelector('style')?.textContent ?? '';
-		const underlineRules = [...style.matchAll(/([^{}]+)\{[^}]*underline[^}]*\}/g)];
-		expect(underlineRules.length, 'no underline rule anywhere in the stylesheet').toBeGreaterThan(0);
-		expect(
-			underlineRules.some(
-				([, selector]) => /(^|[\s.,:>~+])a\b/.test(selector) || /link/i.test(selector)
-			),
-			'the underline rule must target the anchor (an `a` selector or a *link* class)'
-		).toBe(true);
+	it('is VISIBLY a link at rest: every card link renders underlined', () => {
+		// The card's own colour rules override the UA link styling, so the underline must be explicit.
+		document.documentElement.innerHTML = renderBoard(liveShaped, GENERATED_AT)
+			.replace(/^[\s\S]*?<html[^>]*>|<\/html>[\s\S]*$/g, '')
+			.replace(/<script[\s\S]*?<\/script>/g, '');
+		const links = [...document.querySelectorAll('article a')];
+		expect(links.length).toBeGreaterThanOrEqual(8);
+		expect(links.map((a) => getComputedStyle(a).textDecoration)).toEqual(
+			links.map(() => 'underline')
+		);
 	});
 
 	it('a closed card keeps its link and href inside the dim — no special case', () => {
