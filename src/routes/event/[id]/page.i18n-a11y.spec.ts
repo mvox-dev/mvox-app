@@ -30,12 +30,13 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './+page.svelte';
 import {
+	cleanupRealTimersReset,
 	EDITABLE_FIELDS,
+	editorTokenAtNow,
+	editPosts,
+	eventEntity,
 	LOCALES,
 	PROFILES,
-	cleanupRealTimersReset,
-	editPosts,
-	editorTokenAtNow,
 	seasonEntity,
 	seriesEntity,
 	setAuthedWithSampledb
@@ -46,25 +47,6 @@ const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
 
 function readMessages(locale: string): Record<string, string> {
 	return JSON.parse(readSource(`messages/${locale}.json`)) as Record<string, string>;
-}
-
-function eventEntity(over: Partial<Record<string, unknown>> = {}) {
-	return {
-		_id: 'ev1',
-		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
-		event_type: [{ _id: 'val-type-1', string: 'rehearsal' }],
-		start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
-		location: [{ _id: 'val-loc-1', string: 'Rehearsal Hall' }],
-		description: [{ _id: 'val-desc-1', string: 'Come 15 minutes early for warm-ups.' }],
-		capacity: [{ _id: 'val-cap-1', number: 20 }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' },
-			{ reference: 'series1', entity_type: 'event_series' }
-		],
-		...over
-	};
 }
 
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
@@ -465,10 +447,7 @@ describe('#157 — the edit tap target is the whole field, not the pencil glyph'
 				location: [],
 				description: [],
 				duration_minutes: [],
-				_parent: [
-					{ reference: 'org1', entity_type: 'organization' },
-					{ reference: 'season1', entity_type: 'season' }
-				]
+				_parent: [{ reference: 'season1', entity_type: 'season' }]
 			})
 		);
 		await waitForTestid(container, 'event-edit-btn-description');

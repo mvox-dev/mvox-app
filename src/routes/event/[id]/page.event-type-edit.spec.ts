@@ -31,35 +31,17 @@ import { CANONICAL_EVENT_TYPES } from '$lib/events/eventTypeLabels';
 import { eventTypeBadgeClass } from '$lib/events/eventTypeStyles';
 import { gotoMock } from '$lib/testing/routeMocks';
 import {
-	PROFILES,
 	cfg,
 	cleanupRealTimersReset,
 	editorTokenAtNow,
+	eventEntity,
 	postedProps,
+	PROFILES,
 	seasonEntity,
 	setAuthedWithSampledb
 } from '$lib/testing/pages/event';
 
 const FIELD: EditableEventField = 'event_type';
-
-function eventEntity(over: Partial<Record<string, unknown>> = {}) {
-	return {
-		_id: 'ev1',
-		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
-		event_type: [{ _id: 'val-type-1', string: 'rehearsal' }],
-		start_datetime: [{ _id: 'val-start-1', datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
-		location: [{ _id: 'val-loc-1', string: 'Rehearsal Hall' }],
-		description: [{ _id: 'val-desc-1', string: 'Come 15 minutes early for warm-ups.' }],
-		capacity: [{ _id: 'val-cap-1', number: 20 }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' },
-			{ reference: 'series1', entity_type: 'event_series' }
-		],
-		...over
-	};
-}
 
 function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });

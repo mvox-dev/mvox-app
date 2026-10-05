@@ -1,64 +1,29 @@
 // @vitest-environment happy-dom
-/**
- * #309 RED — cards link to their issue, a `lead` frontmatter field, and a
- * header link back to the app.
- *
- * Card link contract (issue body):
- * - The card's `#N` and displayed title together form ONE `<a>` whose href is
- *   the issue's `htmlUrl` VERBATIM (fetched `html_url`, carried camelCase per
- *   the closedAt convention) — no string assembly, no hardcoded host.
- * - Epics render exactly like leaves: children sit AFTER the labels span, so
- *   wrapping only number+title can never nest anchors — pinned here as zero
- *   nested `<a>` in the raw markup, and children's links outside the parent's.
- * - Accessible name is the link's own text; NO aria-label anywhere (none
- *   exists in the module today — pinned to stay that way).
- * - Same tab: no target attribute.
- * - VISIBLY a link at rest: the existing .issue-number/.issue-title author
- *   color rules override the UA's default link styling, so a bare `<a>` would
- *   look exactly like today's plain text — a stylesheet rule (underline) on
- *   the link is REQUIRED, pinned with the same style-block-assertion pattern
- *   the #307 chip specs use.
- *
- * Lead contract: second frontmatter field `lead`, ADDITIONAL to the title
- * (slugline REPLACES the title; lead renders under it, above the labels, as
- * `.issue-lead`). Absent lead → no element at all. Not truncated. Escaped
- * like every other authored string. Unknown keys still ignored. Same
- * renderIssue path for sub-issue cards.
- *
- * Header link contract (amendment, comment 5613989097 — DECISION-Mihkel
- * "links are enough"): ONE plain static `<a>` to https://mvox.eu in the page
- * header, same tab, labelled with the bare product name "mvox", no
- * session/token/origin plumbing of any kind.
- *
- * (*MVOX:Tallis*)
- */
+// Roadmap cards: #N + title as one same-tab link to htmlUrl (no nested anchors, no aria-label,
+// visibly underlined), an optional `lead` under the title, and a header link to https://mvox.eu.
+
+// (*MVOX:Tallis*)
 import { describe, expect, it } from 'vitest';
 import liveShapedJson from './fixtures/live-shaped.json';
-import * as renderModule from './render';
-import { renderBoard, displayTitle, type RoadmapIssue, type RoadmapLabel } from './render';
+import {
+	renderBoard,
+	displayLead,
+	displayTitle,
+	type RoadmapIssue,
+	type RoadmapLabel
+} from './render';
 
 const GENERATED_AT = '2026-09-10T12:34:56Z';
 
-/**
- * The fixture and these specs carry htmlUrl ahead of the RoadmapIssue type
- * gaining the field — the intersection stays valid before and after.
- */
-type LinkedIssue = RoadmapIssue & { htmlUrl?: string };
-
-const liveShaped = liveShapedJson as (RoadmapIssue & { htmlUrl: string })[];
-
-/** displayLead does not exist at HEAD — reached via the namespace so the whole file still runs RED. */
-const displayLead = (
-	renderModule as { displayLead?: (issue: RoadmapIssue) => string | null }
-).displayLead;
+const liveShaped = liveShapedJson as RoadmapIssue[];
 
 function label(name: string, color: string | null = null): RoadmapLabel {
 	return { name, color };
 }
 
 function issue(
-	overrides: Partial<LinkedIssue> & Pick<RoadmapIssue, 'number' | 'title'>
-): LinkedIssue {
+	overrides: Partial<RoadmapIssue> & Pick<RoadmapIssue, 'number' | 'title'>
+): RoadmapIssue {
 	return {
 		state: 'open',
 		stateReason: null,
@@ -81,11 +46,7 @@ function entry(doc: Document, number: number): Element {
 	return el as Element;
 }
 
-/**
- * Maximum <a> nesting depth in the RAW markup. DOM-based checks cannot see
- * source-level nesting — the HTML parser auto-splits nested anchors — so the
- * zero-nested-anchors pin has to read the string the renderer actually emits.
- */
+/** Max <a> depth in the RAW markup: the HTML parser splits nested anchors, so the DOM can't. */
 function maxAnchorDepth(html: string): number {
 	let depth = 0;
 	let max = 0;
@@ -280,13 +241,9 @@ describe('renderBoard — epics link like leaves, anchors never nest (#309)', ()
 });
 
 describe('displayLead (#309)', () => {
-	it('render.ts exports displayLead', () => {
-		expect(displayLead, 'render.ts must export displayLead').toBeTypeOf('function');
-	});
-
 	it('returns the lead when present and a non-empty string', () => {
 		expect(
-			displayLead?.(
+			displayLead(
 				issue({
 					number: 301,
 					title: 'Score detail page shows lending state',
@@ -297,23 +254,23 @@ describe('displayLead (#309)', () => {
 	});
 
 	it('returns null when there is no frontmatter, or no body at all', () => {
-		expect(displayLead?.(issue({ number: 1, title: 't', body: 'Plain markdown body.' }))).toBeNull();
-		expect(displayLead?.(issue({ number: 2, title: 't', body: null }))).toBeNull();
+		expect(displayLead(issue({ number: 1, title: 't', body: 'Plain markdown body.' }))).toBeNull();
+		expect(displayLead(issue({ number: 2, title: 't', body: null }))).toBeNull();
 	});
 
 	it('returns null when lead is empty or not a string — the displayTitle type-guard, mirrored', () => {
-		expect(displayLead?.(issue({ number: 3, title: 't', body: '---\nlead: ""\n---\n' }))).toBeNull();
-		expect(displayLead?.(issue({ number: 4, title: 't', body: '---\nlead: 42\n---\n' }))).toBeNull();
+		expect(displayLead(issue({ number: 3, title: 't', body: '---\nlead: ""\n---\n' }))).toBeNull();
+		expect(displayLead(issue({ number: 4, title: 't', body: '---\nlead: 42\n---\n' }))).toBeNull();
 	});
 
 	it('returns null on malformed frontmatter, never throws', () => {
-		expect(() => displayLead?.(issue({ number: 5, title: 't', body: '---\nlead: [broken\n---\n' }))).not.toThrow();
-		expect(displayLead?.(issue({ number: 5, title: 't', body: '---\nlead: [broken\n---\n' }))).toBeNull();
+		expect(() => displayLead(issue({ number: 5, title: 't', body: '---\nlead: [broken\n---\n' }))).not.toThrow();
+		expect(displayLead(issue({ number: 5, title: 't', body: '---\nlead: [broken\n---\n' }))).toBeNull();
 	});
 
 	it('returns null when the frontmatter carries only a slugline', () => {
 		expect(
-			displayLead?.(issue({ number: 6, title: 't', body: '---\nslugline: Ainult pealkiri\n---\n' }))
+			displayLead(issue({ number: 6, title: 't', body: '---\nslugline: Ainult pealkiri\n---\n' }))
 		).toBeNull();
 	});
 });
@@ -337,11 +294,7 @@ describe('renderBoard — lead on the page (#309)', () => {
 		expect(lead, 'no .issue-lead element on the card').not.toBeNull();
 		expect(lead?.textContent).toContain('LEAD-MARKER selgitav lause');
 		expect(card.querySelector('.issue-title')?.textContent).toBe('Eesti pealkiri');
-		// Ordering read off the CARD's own children rather than off the whole
-		// document string: a string search matches the stylesheet's
-		// `.issue-labels` SELECTOR text as readily as the rendered span, so it
-		// would pass or fail on where the <style> block sits instead of on the
-		// card markup this test is about.
+		// Read off the card's children: a string search would also match the stylesheet's selectors.
 		const order = Array.from(card.children).map((el) => el.className);
 		expect(order, 'the card must render link, lead and labels').toEqual(
 			expect.arrayContaining(['issue-link', 'issue-lead', 'issue-labels'])

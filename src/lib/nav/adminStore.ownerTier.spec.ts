@@ -1,19 +1,7 @@
 // resolveOwnerTier: the owner/editor split behind the roster's invite controls.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import * as adminStoreModule from './adminStore';
+import { resolveOwnerTier } from './adminStore';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
-
-type OwnerTier = 'owner' | 'editor' | 'none' | 'error';
-type ResolveOwnerTier = (
-	cfg: EntuCfg,
-	personId: string,
-	fetchImpl?: typeof fetch,
-	dbEntityId?: string
-) => Promise<OwnerTier>;
-
-const resolveOwnerTier = (adminStoreModule as unknown as { resolveOwnerTier?: ResolveOwnerTier })
-	.resolveOwnerTier;
 
 const cfg = testCfg('sampledb', 'test-token');
 const personId = 'person-123';
@@ -49,7 +37,7 @@ describe('resolveOwnerTier — owner vs editor on the DATABASE entity', () => {
 			database: databaseBody(DB_ENTITY),
 			entityById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: personId }] } }
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('owner');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('owner');
 	});
 
 	it("personId in `_editor` only → 'editor' (the probe's 403 tier: \"User not in _owner property\")", async () => {
@@ -57,7 +45,7 @@ describe('resolveOwnerTier — owner vs editor on the DATABASE entity', () => {
 			database: databaseBody(DB_ENTITY),
 			entityById: { [DB_ENTITY]: { _id: DB_ENTITY, _editor: [{ reference: personId }] } }
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('editor');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('editor');
 	});
 
 	it("personId in BOTH lists → 'owner' — the higher tier wins", async () => {
@@ -71,7 +59,7 @@ describe('resolveOwnerTier — owner vs editor on the DATABASE entity', () => {
 				}
 			}
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('owner');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('owner');
 	});
 
 	it("personId in neither list → 'none' — a rights ANSWER, read from the entity", async () => {
@@ -79,7 +67,7 @@ describe('resolveOwnerTier — owner vs editor on the DATABASE entity', () => {
 			database: databaseBody(DB_ENTITY),
 			entityById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: 'someone-else' }] } }
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('none');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('none');
 	});
 
 	it("an entity-read HTTP failure → 'error', never a silent 'none'", async () => {
@@ -88,19 +76,19 @@ describe('resolveOwnerTier — owner vs editor on the DATABASE entity', () => {
 			entityById: {},
 			entityStatus: 500
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it("no visible database entity → 'error' — no rights were evaluated, so none are claimed", async () => {
 		const fetchImpl = mockFetch({ database: databaseBody(null) });
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl)).toBe('error');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl)).toBe('error');
 	});
 
 	it('a pre-resolved dbEntityId (#173 shape) skips the database lookup round-trip', async () => {
 		const fetchImpl = mockFetch({
 			entityById: { [DB_ENTITY]: { _id: DB_ENTITY, _owner: [{ reference: personId }] } }
 		});
-		expect(await resolveOwnerTier!(cfg, personId, fetchImpl, DB_ENTITY)).toBe('owner');
+		expect(await resolveOwnerTier(cfg, personId, fetchImpl, DB_ENTITY)).toBe('owner');
 		const urls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls.map((c) =>
 			String(c[0])
 		);

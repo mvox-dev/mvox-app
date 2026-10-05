@@ -1,24 +1,5 @@
-// #167 RED — `manageableSeason`: the ADMIN's season pick (pure logic).
-//
-// The bug: after creating a season with a FUTURE start date, the agenda's
-// event/series creation controls vanish. `currentSeason` (VIEWER semantics —
-// the latest season already started) answers null for a future-only season
-// list, and the page gates every management control on that answer — so the
-// admin who just created the season cannot put a single event into it.
-//
-// Contract pinned here (GREEN adds the export to ./conductorLogic.ts;
-// `currentSeason` itself keeps its viewer semantics UNTOUCHED — the viewer
-// agenda's "Recent" scoping must not change):
-//
-// `manageableSeason(seasons, now)` — which season an admin manages by default:
-//   1. a season is current (per `currentSeason`) → that exact season.
-//   2. no season has started, but seasons EXIST → the next one to happen: the
-//      season with the SMALLEST startDate (the future season the admin just
-//      created and now needs to populate). A season with an empty startDate is
-//      still a season — a created season is manageable REGARDLESS of its dates
-//      (#167 acceptance criterion).
-//   3. no seasons at all → null.
-//   Never mutates its input.
+// manageableSeason: the season an admin manages by default. The current one, else the season
+// with the smallest startDate (dates or not), else null. currentSeason keeps viewer semantics.
 import { describe, expect, it } from 'vitest';
 import type { Season } from '$lib/seasons/types';
 import { currentSeason, manageableSeason } from './conductorLogic';
@@ -70,10 +51,7 @@ describe('manageableSeason — the admin equivalent of currentSeason (#167)', ()
 		expect(manageableSeason([], NOW)).toBeNull();
 	});
 
-	// #167 review F1 — the acceptance criterion is "regardless of start date":
-	// a LAPSED season (end_date already past) is not what an admin who just
-	// created the next one wants to manage. `currentSeason` ignores end_date on
-	// purpose (viewer scoping); the admin pick must not.
+	// currentSeason ignores end_date on purpose (viewer scoping); the admin pick must not.
 	it('the current season has LAPSED and a future one exists → the future one (the just-created season is reachable)', () => {
 		const seasons = [
 			season('s-lapsed', '2025-09-01', '2026-06-01'), // ended before NOW

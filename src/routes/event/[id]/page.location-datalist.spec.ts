@@ -51,7 +51,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 		description: [{ _id: 'val-desc-1', string: 'Come 15 minutes early.' }],
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
 		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
 			{ reference: 'season1', entity_type: 'season' },
 			{ reference: 'series1', entity_type: 'event_series' }
 		],
@@ -66,10 +65,7 @@ function corpusEntities() {
 		name: [{ string: `Event ${id}` }],
 		start_datetime: [{ datetime: dt }],
 		...(location === null ? {} : { location: [{ _id: `val-loc-${id}`, string: location }] }),
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
+		_parent: [{ reference: 'season1', entity_type: 'season' }]
 	});
 	return [
 		mk('evA', 'Hopneri Maja', '2026-09-08T16:00:00.000Z'),

@@ -35,23 +35,9 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 import { setAuthed } from '$lib/testing/pages/eventRsvp';
 import { EDITIONS, seasonEntity, workRowOf } from '$lib/testing/pages/eventEdition';
+import { eventEntity } from '$lib/testing/pages/eventFixtures';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
-
-function eventEntity() {
-	return {
-		_id: 'ev1',
-		name: [{ string: 'Tuesday Rehearsal' }],
-		event_type: [{ string: 'rehearsal' }],
-		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ number: 90 }],
-		location: [{ string: 'Rehearsal Hall' }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
-	};
-}
 
 // Three active reader rows: ri-1 nothing pinned (the flag-discriminating row), ri-2 pinned
 // to an edition the read returns, ri-3 pinned to ed-9, which the read never returns.

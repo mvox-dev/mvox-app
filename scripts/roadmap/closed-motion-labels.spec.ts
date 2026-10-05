@@ -1,50 +1,10 @@
 // @vitest-environment happy-dom
-/**
- * #354 RED — a closed issue displays no motion labels.
- *
- * The board renders closed sub-issues inside Pooleli under their open epic
- * (correct — that a child is done is the useful fact about the epic), but each
- * still wears its motion chips: a green `ready` among work that genuinely is
- * outstanding. The house pattern closes issues WITH `ready` still on them
- * (~250 closed issues wear it), so relabelling is a forever-sweep; the fix is
- * ONE render-time rule instead:
- *
- *   A closed issue does not display motion labels — `ready`, `in process`,
- *   `prepped`, `in research`, `blocked`. Motion describes where something sits
- *   in the queue; a closed issue is not in the queue. Kind labels (`task`,
- *   `epic`, `bug`, `enhancement`) still say something true about what it was,
- *   and stay. Open issues are untouched, labels and all.
- *
- * Instrument (guard-instrument law): the rule is an exported PURE predicate
- * `isMotionLabel(name)` on render.ts — every membership decision pinned on it
- * with inline string fixtures and a FULL-shape toEqual verdict record
- * (objectContaining shipped 4 real bugs in this repo — never used here).
- * Matching is EXACT and case-sensitive, the same idiom as render.ts's
- * ACTIVE_TIER_LABELS / hasLabel: the live GitHub labels are lowercase, and no
- * other label comparison in this file folds case — a `Ready` GitHub-side would
- * neither float (#310) nor suppress (#340), so it must not vanish here either.
- * Same rename caveat as active-float.spec.ts: a fixture cannot see a
- * GitHub-side label rename.
- *
- * Integration: renderBoard IS the page — the CLI (render.ts main) writes its
- * output verbatim to roadmap/index.html — so the DOM assertions below read the
- * rule off the real deployed artefact's producer, not a helper in isolation.
- * Wire-shape normalization (REST labels → chips) is already pinned end-to-end
- * by board.spec.ts (#307/#310); the filter runs after that on the same names.
- *
- * Fence (issue #354, verbatim): "Do not touch the staleness predicate." It
- * reads open issues only, so the warning must name EXACTLY the same issues
- * before and after this change, given the same board — including the
- * staleness-warning.spec.ts precedent that a stale `in research` on a CLOSED
- * issue does not suppress the check.
- *
- * Label strings/colours are the REAL ones (gh api repos/mvox-dev/mvox-app/labels
- * via fixtures/live-shaped.json; enhancement is GitHub's stock a2eeef).
- *
- * (*MVOX:Tallis*)
- */
+// A closed issue shows no motion labels (ready, in process, prepped, in research, blocked); kind
+// labels stay. Matching is exact and case-sensitive, and the staleness warning must not change.
+
+// (*MVOX:Tallis*)
 import { describe, expect, it } from 'vitest';
-import { renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
+import { isMotionLabel, renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
 
 const GENERATED_AT = '2026-09-14T09:00:00.000Z';
 
@@ -87,12 +47,7 @@ function entry(doc: Document, number: number): Element {
 	return el as Element;
 }
 
-/**
- * The chip names of one issue's OWN labels, in render order. The issue's own
- * `.issue-labels` span precedes any nested sub-issue's in tree order, so the
- * first match is the right one — a child's chips never bleed into its parent's
- * reading.
- */
+/** One issue's OWN chips: its .issue-labels span precedes any sub-issue's, so take the first. */
 function ownChips(doc: Document, number: number): string[] {
 	const labels = entry(doc, number).querySelector('.issue-labels');
 	return Array.from(labels?.querySelectorAll('.label') ?? []).map(
@@ -100,16 +55,7 @@ function ownChips(doc: Document, number: number): string[] {
 	);
 }
 
-/**
- * THE board fixture — one board, read twice: once by the chip assertions
- * (which must flip under #354) and once by the staleness fence (which must
- * not). #400 is the open epic; #401 its open groomed-and-idle child (the one
- * genuine staleness violator); #402 its closed child still wearing motion
- * labels; #403 a top-level closed issue wearing ALL FIVE motion labels plus a
- * kind label — including `in research`, the label that per the
- * staleness-warning.spec.ts precedent must NOT suppress the warning from a
- * closed issue.
- */
+/** One board read by both the chip tests and the staleness fence; #401 is the one violator. */
 function boardFixture(): RoadmapIssue[] {
 	return [
 		issue({
@@ -140,20 +86,7 @@ function boardFixture(): RoadmapIssue[] {
 }
 
 describe('#354 — isMotionLabel is the exported instrument', () => {
-	// Dynamic import so THIS describe fails on the missing export while the
-	// renderBoard DOM specs below still fail on their own merits, not on an
-	// import-binding error poisoning the whole file.
-	async function instrument(): Promise<(name: string) => boolean> {
-		const render = (await import('./render')) as Record<string, unknown>;
-		expect(
-			typeof render.isMotionLabel,
-			'render.ts must export the pure predicate isMotionLabel(name: string): boolean'
-		).toBe('function');
-		return render.isMotionLabel as (name: string) => boolean;
-	}
-
-	it('exactly the five motion names are motion — kind names, neighbours and case variants are not', async () => {
-		const isMotionLabel = await instrument();
+	it('exactly the five motion names are motion — kind names, neighbours and case variants are not', () => {
 		const names = [
 			// The five motion labels (issue #354's own list, verbatim).
 			'ready',
@@ -199,8 +132,7 @@ describe('#354 — isMotionLabel is the exported instrument', () => {
 		});
 	});
 
-	it('is pure: same name, same verdict, no state between calls', async () => {
-		const isMotionLabel = await instrument();
+	it('is pure: same name, same verdict, no state between calls', () => {
 		expect(isMotionLabel('ready')).toBe(isMotionLabel('ready'));
 		expect(isMotionLabel('task')).toBe(isMotionLabel('task'));
 	});
@@ -303,17 +235,13 @@ describe('#354 — renderBoard: a closed issue displays no motion labels', () =>
 });
 
 describe('#354 — fence: the staleness warning names exactly the same issues, same board', () => {
-	// These are green TODAY and must stay green after the chip rule lands:
-	// stalenessViolators reads flattenOpenIssues, and #354 must not touch it.
+	// stalenessViolators reads open issues only, so the chip rule must not change it.
 	const warningEl = (doc: Document): Element | null => doc.querySelector('.staleness-warning');
 	const warnedNumbers = (doc: Document): string[] =>
 		(warningEl(doc)?.textContent ?? '').match(/#\d+/g) ?? [];
 
 	it('the shared board fixture warns about #401 and ONLY #401 — closed motion labels neither add violators nor suppress', () => {
-		// #403 (closed) carries `in research`: per the staleness-warning.spec.ts
-		// precedent it does NOT switch the check off. #402 (closed) carries
-		// task+ready: never a violator. #400 (open epic) carries ready without
-		// task: never fires. #401 is the one genuine violator — before AND after.
+		// A closed `in research` (#403) does not switch the check off; closed #402 never violates.
 		const doc = parse(renderBoard(boardFixture(), GENERATED_AT));
 		expect(warnedNumbers(doc)).toEqual(['#401']);
 	});

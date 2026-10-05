@@ -20,7 +20,6 @@ async function actions(): Promise<ActionsModule> {
 }
 
 const PARENTS = [
-	{ _id: 'pv-org', reference: 'org1', property_type: '_parent', entity_type: 'organization' },
 	{ _id: 'pv-season', reference: 'season1', property_type: '_parent', entity_type: 'season' },
 	{ _id: 'pv-series', reference: 'series1', property_type: '_parent', entity_type: 'event_series' }
 ];
@@ -106,8 +105,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 			const writes = calls(stub).filter((c) => c.method !== 'GET');
 			expect(writes.some((c) => c.url.includes('pv-season'))).toBe(false);
 			expect(writes.some((c) => String(c.body ?? '').includes('pv-season'))).toBe(false);
-			expect(writes.some((c) => c.url.includes('pv-org'))).toBe(false);
-			expect(writes.some((c) => String(c.body ?? '').includes('pv-org'))).toBe(false);
 		}
 	});
 

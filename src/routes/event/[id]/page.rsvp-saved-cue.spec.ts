@@ -34,21 +34,7 @@ import {
 	setAuthed
 } from '$lib/testing/pages/event';
 import { MY_RSVP_ROW, seasonEntity } from '$lib/testing/pages/eventRsvp';
-
-function eventEntity() {
-	return {
-		_id: 'ev1',
-		name: [{ string: 'Tuesday Rehearsal' }],
-		event_type: [{ string: 'rehearsal' }],
-		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ number: 90 }],
-		location: [{ string: 'Rehearsal Hall' }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
-	};
-}
+import { eventEntity } from '$lib/testing/pages/eventFixtures';
 
 type WireOpts = {
 	updatePost?: 'ok' | 'fail' | 'hold';
