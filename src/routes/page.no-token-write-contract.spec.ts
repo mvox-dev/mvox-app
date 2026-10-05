@@ -109,8 +109,7 @@ import {
 	writingPages
 } from '$lib/testing/pages/writePages';
 
-// gap: a write that still sends with the token it read at load; the case is expected to fail.
-type Row = { page: string; write: (container: HTMLElement) => Promise<unknown>; gap?: string };
+type Row = { page: string; write: (container: HTMLElement) => Promise<unknown> };
 
 const library = (write: Row['write']): Row => ({ page: '/library', write });
 
@@ -149,21 +148,58 @@ const ROWS: Record<string, Row> = {
 	},
 	'/links add': {
 		page: '/links',
-		gap: '#795 fix pending: posts with the load-time token',
 		write: async (c) => {
 			await fireEvent.input(must(c, 'links-add-name'), { target: { value: 'Scores' } });
 			await fireEvent.input(must(c, 'links-add-url'), { target: { value: 'https://example.test' } });
 			await fireEvent.click(must(c, 'links-add-submit'));
 		}
 	},
+	'/links edit': {
+		page: '/links',
+		write: async (c) => {
+			await fireEvent.click(must(c, 'links-edit'));
+			await waitFor(() => must(c, 'links-edit-name'));
+			await fireEvent.input(must(c, 'links-edit-name'), { target: { value: 'Parts' } });
+			await fireEvent.click(must(c, 'links-edit-save'));
+		}
+	},
+	'/links remove': { page: '/links', write: (c) => fireEvent.click(must(c, 'links-remove')) },
+	'/links move': {
+		page: '/links',
+		write: (c) => fireEvent.click(c.querySelectorAll('[data-testid="links-move-up"]')[1])
+	},
 	'/roster new section': {
 		page: '/roster',
-		gap: '#795 fix pending: posts with the load-time token',
 		write: async (c) => {
 			await fireEvent.click(must(c, 'roster-new-section'));
 			await waitFor(() => must(c, 'roster-new-section-name'));
 			await fireEvent.input(must(c, 'roster-new-section-name'), { target: { value: 'Tenor 2' } });
 			await fireEvent.click(must(c, 'roster-new-section-submit'));
+		}
+	},
+	'/roster rename section': {
+		page: '/roster',
+		write: async (c) => {
+			await fireEvent.click(must(c, 'arrange-rename-sec-s'));
+			await waitFor(() => must(c, 'arrange-rename-input-sec-s'));
+			await fireEvent.input(must(c, 'arrange-rename-input-sec-s'), { target: { value: 'Soprano 1' } });
+			await fireEvent.keyDown(must(c, 'arrange-rename-input-sec-s'), { key: 'Enter' });
+		}
+	},
+	'/roster indent section': { page: '/roster', write: (c) => fireEvent.click(must(c, 'arrange-indent-sec-a')) },
+	'/roster reorder section': {
+		page: '/roster',
+		write: async (c) => {
+			await fireEvent.keyDown(must(c, 'arrange-row-sec-a'), { key: ' ' });
+			await fireEvent.keyDown(must(c, 'arrange-row-sec-a'), { key: 'ArrowUp' });
+			await fireEvent.keyDown(must(c, 'arrange-row-sec-a'), { key: ' ' });
+		}
+	},
+	'/roster delete section': {
+		page: '/roster',
+		write: async (c) => {
+			await fireEvent.click(must(c, 'section-remove-sec-s'));
+			await fireEvent.click(await waitFor(() => must(c, 'section-remove-confirm-sec-s')));
 		}
 	},
 	'/library create work': library(async (c) => {
@@ -235,9 +271,7 @@ describe('a write with no token, on every page that writes', () => {
 		expect(nonGetCalls(fetchStub)).toEqual([]);
 	}
 
-	const names = Object.keys(ROWS);
-	it.each(names.filter((name) => !ROWS[name].gap))('%s: sends nothing and goes to session-expired', writeWithoutToken);
-	it.fails.each(names.filter((name) => ROWS[name].gap))('%s: known gap (#795 fix pending), still sends; this flips red when fixed', writeWithoutToken);
+	it.each(Object.keys(ROWS))('%s: sends nothing and goes to session-expired', writeWithoutToken);
 });
 
 // (*MVOX:Josquin*)
