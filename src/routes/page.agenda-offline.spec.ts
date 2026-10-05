@@ -3,6 +3,7 @@
 // The agenda offline: rows from the read cache plus an as-of line. Only fetch is stubbed,
 // so every real reader between the page and the wire runs.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -257,19 +258,32 @@ describe('#434 slice 5 — one works read per agenda load, and it stores', () =>
 	const WORKS_READ = /_type\.string=(work|edition|copy|program_item|repertoire_item)(&|$)/;
 
 	it('a works read falling back to its stored copy does NOT age-stamp a fully live agenda', async () => {
-		vi.stubGlobal('fetch', onlineEntu());
+		const firstLive = onlineEntu();
+		vi.stubGlobal('fetch', firstLive);
 		const first = await coldStart();
 		await expectAgendaRows(first.container);
+		// The prefetch runs once the works read has settled, so every works URL is stored by then.
+		await waitFor(() => {
+			const urls = firstLive.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL));
+			expect(urls.some((u) => u.includes(`entity/${EVENTS[0].id}?`)), 'prefetch ran').toBe(true);
+		});
+		// The first-tier works reads; the season-repertoire fallback only follows an answered one.
+		const worksUrls = new Set(
+			firstLive.mock.calls
+				.map((c) => urlOf(c[0] as RequestInfo | URL))
+				.filter((u) => WORKS_READ.test(u) && !u.includes('repertoire_item'))
+		);
 		await flushReadCache();
 		cleanup();
 
 		const live = onlineEntu();
-		let worksRejections = 0;
+		const rejected = new Set<string>();
 		vi.stubGlobal(
 			'fetch',
 			vi.fn((input: RequestInfo | URL) => {
-				if (WORKS_READ.test(urlOf(input))) {
-					worksRejections += 1;
+				const url = urlOf(input);
+				if (WORKS_READ.test(url)) {
+					rejected.add(url);
 					return Promise.reject(new TypeError('Failed to fetch'));
 				}
 				return live(input);
@@ -279,10 +293,13 @@ describe('#434 slice 5 — one works read per agenda load, and it stores', () =>
 		const { container } = await coldStart();
 		await expectAgendaRows(container);
 		await waitFor(() => {
-			expect(worksRejections, 'a works read rejected').toBeGreaterThan(0);
+			expect([...rejected].sort()).toEqual([...worksUrls].sort());
 		});
-		await flushReadCache();
-		await new Promise((resolve) => setTimeout(resolve, 50));
+		// A serving reader answers each rejection from IndexedDB; this read queues behind those,
+		// so once it lands every fallback has too.
+		const base = `https://api.entu-test.invalid/${DB}/`;
+		await readCacheGet(DB, PERSON, [...worksUrls][0].slice(base.length));
+		await tick();
 
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
 	});
