@@ -485,18 +485,16 @@ describe('#298 — the active filter excluding the new event is SAID, not implie
 	});
 });
 
-describe('#298 — locale coverage for the hidden-by-filter confirmation', () => {
+describe('#298 — the hidden-by-filter confirmation keeps its slots', () => {
 	function messages(locale: string): Record<string, string> {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as Record<string, string>;
 	}
 
-	it('event_created_hidden_by_filter exists in en/et/lv/uk, is non-empty, and carries the {name} and {when} slots', () => {
+	it('event_created_hidden_by_filter carries the {name} and {when} slots in en/et/lv/uk', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const msg = messages(locale)['event_created_hidden_by_filter'];
-			expect(msg, `${locale}.json is missing event_created_hidden_by_filter`).toBeDefined();
-			expect(msg, `${locale}.json event_created_hidden_by_filter is empty`).toMatch(/\S/);
 			expect(msg, `${locale}.json event_created_hidden_by_filter lacks {name}`).toContain(
 				'{name}'
 			);

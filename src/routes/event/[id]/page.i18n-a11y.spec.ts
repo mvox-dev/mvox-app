@@ -150,32 +150,6 @@ describe('#105 — i18n: the event detail page renders via Paraglide keys only',
 		const hardcoded = readSource(file).match(/aria-label="[^"]*[a-zA-Z][^"]*"/g) ?? [];
 		expect(hardcoded).toEqual([]);
 	});
-
-	it.each(EVENT_SURFACES)('every m.* key %s references exists in en.json (a key that renders its own name is a missing translation)', (file) => {
-		const source = readSource(file);
-		const en = readMessages('en');
-		const referenced = new Set<string>();
-		const pattern = /\bm\.([a-z][a-zA-Z0-9_]*)/g;
-		let match: RegExpExecArray | null;
-		while ((match = pattern.exec(source)) !== null) referenced.add(match[1]);
-		expect(referenced.size).toBeGreaterThan(0);
-		const missing = [...referenced].filter((key) => !(key in en));
-		expect(missing).toEqual([]);
-	});
-
-	it('every event_detail_* / event_edit_* / event_type_* key in en.json exists in et, lv and uk', () => {
-		const en = readMessages('en');
-		const eventKeys = Object.keys(en).filter(
-			(k) =>
-				k.startsWith('event_detail_') || k.startsWith('event_edit_') || k.startsWith('event_type_')
-		);
-		expect(eventKeys.length).toBeGreaterThan(0);
-		for (const locale of ['et', 'lv', 'uk']) {
-			const messages = readMessages(locale);
-			const missing = eventKeys.filter((k) => !(k in messages));
-			expect(missing, `${locale}.json is missing event keys`).toEqual([]);
-		}
-	});
 });
 
 describe('#105 — i18n: edit-button labels name the OBJECT edited', () => {
@@ -195,15 +169,6 @@ describe('#105 — i18n: edit-button labels name the OBJECT edited', () => {
 				expect(label, `${locale}: missing an edit aria-label key`).toBeTruthy();
 			}
 			expect(new Set(labels).size, `${locale}: duplicate edit labels`).toBe(labels.length);
-		}
-	});
-
-	it('event_detail_rsvp_heading exists in all four locales (the RSVP region needs a heading to be named by)', () => {
-		for (const locale of LOCALES) {
-			expect(
-				readMessages(locale).event_detail_rsvp_heading,
-				`${locale}.json is missing event_detail_rsvp_heading`
-			).toBeTruthy();
 		}
 	});
 });

@@ -140,13 +140,8 @@ describe('#237 — no colour-emoji glyph anywhere in markup', () => {
 // ── 5. locales — a purely visual sweep ─────────────────────────────────────────
 
 describe('#237 — zero message-key changes ride along', () => {
-	const keys = [
-		'season_manage_series_delete',
-		'season_manage_event_delete',
-		'event_detail_delete_label',
-		'roster_section_remove',
-		'season_conductor_remove'
-	];
+	// The others are used by a surface, so the i18n sweep keeps them; this one no surface uses.
+	const keys = ['season_manage_event_delete'];
 	for (const locale of ['en', 'et', 'lv', 'uk']) {
 		it(`messages/${locale}.json still carries every glyph-independent name key`, () => {
 			const messages = JSON.parse(

@@ -195,17 +195,6 @@ describe('#427 — the PDF affordance navigates to the in-app part viewer', () =
 describe('#343 — zero new locale keys (pinned)', () => {
 	const localeFiles = ['en', 'et', 'lv', 'uk'] as const;
 
-	it('the existing keys this slice reuses are present in all four locales', () => {
-		for (const locale of localeFiles) {
-			const messages = JSON.parse(
-				// The works-write-failure precedent: cwd-relative, not
-				// import.meta.url — the [id] segment breaks URL resolution.
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			expect(messages['repertoire_pdf_error'], locale).toBeTruthy();
-		}
-	});
-
 	it('no byte-store/offline/cache key was added — the slice ships on existing strings alone', () => {
 		for (const locale of localeFiles) {
 			const messages = JSON.parse(

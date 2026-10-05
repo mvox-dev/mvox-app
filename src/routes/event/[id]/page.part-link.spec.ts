@@ -282,16 +282,6 @@ describe('#434 slice 5 — the part link message keys', () => {
 		return JSON.parse(readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8'));
 	}
 
-	it('both keys exist, non-empty, in all four locales', () => {
-		for (const locale of locales) {
-			const msgs = messages(locale);
-			for (const key of keys) {
-				expect(typeof msgs[key], `${locale}.${key}`).toBe('string');
-				expect((msgs[key] as string).trim(), `${locale}.${key}`).not.toBe('');
-			}
-		}
-	});
-
 	it('the aria label names the work in every locale', () => {
 		for (const locale of locales) {
 			expect(messages(locale)['event_part_link_aria_label'], locale).toContain('{work}');

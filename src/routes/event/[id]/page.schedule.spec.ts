@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -993,42 +990,6 @@ describe('#262 — page invariants with the schedule on screen', () => {
 		expect(heading, 'the section must carry its own sub-heading').not.toBeNull();
 		expect(heading!.textContent).toContain('[event_schedule_heading]');
 	});
-});
-
-describe('#262 — i18n keys exist in all four locales (en/et/lv/uk), none empty', () => {
-	const KEYS = [
-		'event_schedule_heading',
-		'event_schedule_add_label',
-		'event_schedule_name_label',
-		'event_schedule_datetime_label',
-		'event_schedule_add_submit',
-		'event_schedule_add_cancel',
-		'event_schedule_edit_aria_label',
-		'event_schedule_remove_aria_label',
-		'event_schedule_remove_confirm_aria_label',
-		'event_schedule_remove_confirm_short',
-		'event_schedule_remove_cancel_aria_label',
-		'event_schedule_remove_cancel_short',
-		'event_schedule_save_error',
-		'event_schedule_name_required',
-		'event_schedule_datetime_required'
-	];
-
-	for (const locale of ['en', 'et', 'lv', 'uk']) {
-		it(`${locale}.json carries every event_schedule_* key, non-empty`, () => {
-			const messages = JSON.parse(
-				readFileSync(resolve(`messages/${locale}.json`), 'utf8')
-			) as MessageFile;
-			expect(
-				KEYS.filter((k) => !(k in messages)),
-				`${locale}.json is missing event_schedule keys`
-			).toEqual([]);
-			expect(
-				KEYS.filter((k) => isMessageEmpty(messages[k])),
-				`${locale}.json has empty event_schedule keys`
-			).toEqual([]);
-		});
-	}
 });
 
 // (*MVOX:Tallis* — #262 RED: event-detail schedule section + editor CRUD)

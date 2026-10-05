@@ -4,7 +4,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
-import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('plain')
@@ -2486,13 +2486,10 @@ describe('#241 — locale files: series_create_show_next_label / series_create_s
 	}
 
 	it.each(LOCALES)(
-		'%s: both keys exist, non-empty, carry {count}, and never bake the cap into the copy',
+		'%s: both keys carry {count}, and never bake the cap into the copy',
 		(locale) => {
 			const file = messageFile(locale);
 			for (const key of REVEAL_KEYS) {
-				expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(
-					false
-				);
 				for (const pattern of messagePatterns(file[key])) {
 					expect(pattern, `${key} in ${locale} must parameterise the count`).toContain(
 						'{count}'
