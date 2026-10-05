@@ -599,6 +599,19 @@ describe('#394 — controls', () => {
 		expect(btn('Undo').querySelector('svg[data-icon="undo"]')).not.toBeNull();
 	});
 
+	it('layout guard (happy-dom cannot measure paint): the pressed state carries a visible marker, not aria-pressed alone', async () => {
+		mount();
+		const marked = (b: HTMLButtonElement) => b.classList.contains('ring-2');
+		expect(marked(btn('Red pen'))).toBe(true);
+		expect(marked(btn('Black pen'))).toBe(false);
+		await fireEvent.click(btn('Black pen'));
+		expect(marked(btn('Red pen'))).toBe(false);
+		expect(marked(btn('Black pen'))).toBe(true);
+		await fireEvent.click(btn('Erase strokes'));
+		expect(marked(btn('Erase strokes'))).toBe(true);
+		expect(marked(btn('Black pen'))).toBe(false);
+	});
+
 	it('aria-pressed tracks the active pen and the erase toggle; picking a pen leaves erase mode', async () => {
 		mount();
 		const pressed = () => ({

@@ -362,6 +362,15 @@ describe('#205 review F2 (round 3) — the grip is legible, the focus ring is ro
 		expect(grip.className, 'the grip hit surface must span the row height').toContain('min-h-11');
 	});
 
+	it('layout guard (happy-dom cannot measure hover/press paint): the grip shows a hover/active affordance and a grab cursor', async () => {
+		const container = await renderArrangeReady();
+
+		const classes = (q(container, 'arrange-grip-sec-alto') as HTMLElement).className;
+		expect(classes, 'the grip must react to hover').toMatch(/hover:/);
+		expect(classes, 'the grip must react to press').toMatch(/active:/);
+		expect(classes, 'the grip must name itself as a drag surface').toContain('cursor-grab');
+	});
+
 	it('the grip stays the touch pickup zone and the ONLY drag start — the decision that grip-only is intended', async () => {
 		const container = await renderArrangeReady();
 
