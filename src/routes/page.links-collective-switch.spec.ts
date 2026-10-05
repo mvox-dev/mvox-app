@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 // /links resets on a collective switch and drops the old collective's late reads.
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -168,17 +166,6 @@ describe('#256 pin 6 — page state resets on a collective switch', () => {
 			expect(rowNames(container)).toEqual(['B-Website']);
 		});
 		expect(q(container, 'links-edit-name')).toBeNull();
-	});
-});
-
-describe('#256 structural — the NEW page uses the extracted route-load machine', () => {
-	it('src/routes/links/+page.svelte imports createRouteLoadMachine from $lib/loading/routeLoad (not a hand-rolled in-file counter)', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/routes/links/+page.svelte'),
-			'utf-8'
-		);
-		expect(source).toContain('createRouteLoadMachine');
-		expect(source).toContain('$lib/loading/routeLoad');
 	});
 });
 

@@ -111,6 +111,14 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 });
 
+describe('boot', () => {
+	it('listens for install, activate and fetch only — nothing wakes it while the app is closed', async () => {
+		await bootWorker();
+
+		expect([...listeners.keys()]).toEqual(['install', 'activate', 'fetch']);
+	});
+});
+
 describe('install', () => {
 	it('batch-writes the core into this deploy cache, adds the tail one by one, then takes over', async () => {
 		await bootWorker();

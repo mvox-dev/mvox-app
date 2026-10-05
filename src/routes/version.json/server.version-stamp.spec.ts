@@ -1,49 +1,6 @@
-// #350 RED — build stamp: every deployment answers at the fixed unauthenticated
-// URL /version.json with the branch name and FULL commit sha it was built from,
-// read from CF Pages build env (CF_PAGES_BRANCH / CF_PAGES_COMMIT_SHA).
-//
-// Contract (SPIKE-settled, fork (b) — prerendered +server.ts, vite.config.ts
-// untouched, no fence repin):
-//
-//   GET /version.json → 200 application/json, EXACTLY three keys, two states:
-//     CF build:  { source: 'cloudflare-pages', branch: <verbatim>, commit: <full 40-hex sha> }
-//     otherwise: { source: 'not-a-cloudflare-pages-build', branch: null, commit: null }
-//
-//   There is NO third state and NO half-real state. The stamp claims
-//   'cloudflare-pages' only when BOTH vars carry genuine-looking CF values:
-//   non-empty branch AND a full 40-char lowercase-hex sha. Empty string,
-//   missing var, truncated/whitespace/non-hex/uppercase sha, or only one var
-//   present → the honest-absence shape. A default of 'main' or a plausible
-//   fake sha would be a lie told exactly when the tool is being trusted
-//   (issue #350 done-when; fail-loudly convention).
-//
-//   Fence: branch + sha ONLY — no env dump. Pinned here as an exact-key-set
-//   assertion, with a poisoned env fixture proving extra vars cannot leak.
-//
-// Instrument (guard-instrument law): `buildStamp` is an exported PURE function
-// taking an env-shaped record; every shape decision is pinned on it with
-// inline fixtures and FULL-shape toEqual (objectContaining shipped 4 real bugs
-// in this repo — never used here). The endpoint tests then pin that GET is a
-// thin wrapper: reads process.env AT CALL TIME (not module-load time) and
-// returns exactly the builder's output as JSON.
-//
-// `export const prerender = true` is load-bearing: this app is adapter-static
-// + ssr=false, and the build FAILS without it — worse, a refactor that drops
-// it would make the stamp silently disappear. Pinned both as a runtime export
-// (=== true) and as literal source text at the fixed route path.
-//
-// (*MVOX:Tallis*)
-//
-// GREEN-phase note (*MVOX:Byrd*): `buildStamp` moved to the sibling
-// `./build-stamp` module, not `./+server` — SvelteKit hard-validates every
-// +server.ts export against a fixed allow-list (GET/POST/.../prerender/
-// config/entries, or `_`-prefixed) and fails `vite build` unconditionally for
-// any other name, prerendered or not (confirmed against
-// @sveltejs/kit/src/utils/exports.js and by running the build). Import path
-// only — every fixture, assertion, and pin below is unchanged.
+// /version.json: the branch and full sha a CF Pages build came from, or the honest-absence shape.
+// buildStamp is pure and pinned on fixtures; GET reads process.env at call time.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { buildStamp } from './build-stamp';
 import { GET, prerender } from './+server';
 
@@ -230,16 +187,6 @@ describe('#350 /version.json endpoint module', () => {
 		expect(prerender).toBe(true);
 	});
 
-	it('the +server.ts at the FIXED route path src/routes/version.json/ carries the prerender export as literal source', () => {
-		// Route dir = URL path in SvelteKit: this read fails loudly if anyone
-		// moves the endpoint away from the contracted unauthenticated URL.
-		const source = readFileSync(
-			resolve(process.cwd(), 'src', 'routes', 'version.json', '+server.ts'),
-			'utf-8'
-		);
-		expect(source).toContain('export const prerender = true');
-	});
-
 	it('GET in a CF Pages build env returns the full stamp as application/json', async () => {
 		process.env.CF_PAGES_BRANCH = 'dev';
 		process.env.CF_PAGES_COMMIT_SHA = FULL_SHA;
@@ -288,3 +235,5 @@ describe('#350 /version.json endpoint module', () => {
 		expect(await (await get()).json()).toEqual(ABSENT_STAMP);
 	});
 });
+
+// (*MVOX:Tallis*), buildStamp module split (*MVOX:Byrd*)

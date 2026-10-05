@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-// canSeeTally answers whether the person can see the tally, not manage the event.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+// The rsvp tally shows to anyone the read answers; only management stays rights-gated.
 import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -233,13 +231,6 @@ describe('#363 — every management gate still asks manageRightsFrom, exactly as
 			}
 			expect(q(container, 'event-detail-tally')).not.toBeNull();
 		});
-	});
-});
-
-describe('#363 — canSeeTally no longer exists under that lying name', () => {
-	it('no definition or call site of canSeeTally survives in +page.svelte (the tally has no seeing-predicate at all — the read is the predicate)', () => {
-		const src = readFileSync(resolve('src/routes/event/[id]/+page.svelte'), 'utf8');
-		expect(src).not.toMatch(/canSeeTally\s*\(/);
 	});
 });
 

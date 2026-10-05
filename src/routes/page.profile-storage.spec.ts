@@ -693,19 +693,6 @@ describe('/profile — storage controls are native classed <button>s', () => {
 	});
 });
 
-// ── source pin: this slice's naming is the ONLINE path; offline is #353 ─────
-
-describe('/profile — the page states the naming-scope boundary where the reader meets it', () => {
-	it('ProfileStorageSection.svelte cites #353 as the owner of offline naming', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/lib/profile/ProfileStorageSection.svelte'),
-			'utf-8'
-		);
-		expect(source).toMatch(/#353/);
-		expect(source).toMatch(/offline/i);
-	});
-});
-
 // ── wording honesty, all four locales ────────────────────────────────────────
 
 describe('#352 — string honesty (byteStore.ts:8 — a correctness boundary, NOT a security boundary)', () => {

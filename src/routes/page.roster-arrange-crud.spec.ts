@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { deferred } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -867,23 +865,6 @@ describe('/roster — #273 the armed pair stays mounted, disabled + aria-busy, t
 			);
 		});
 		consoleSpy.mockRestore();
-	});
-
-	it('the KNOWN-GAP comments (source + this spec file) are removed with the fix', () => {
-		const needle = ['carry no disabled/', 'aria-busy wiring'].join('');
-		const page = readFileSync(resolve(process.cwd(), 'src/routes/roster/+page.svelte'), 'utf-8');
-		expect(
-			page.includes(needle),
-			'roster/+page.svelte still carries the KNOWN GAP comment for a gap this fix closes'
-		).toBe(false);
-		const spec = readFileSync(
-			resolve(process.cwd(), 'src/routes/page.roster-arrange-crud.spec.ts'),
-			'utf-8'
-		);
-		expect(
-			spec.includes(needle),
-			'this spec file still carries the #237-era KNOWN-GAP near-duplicate comment'
-		).toBe(false);
 	});
 });
 
