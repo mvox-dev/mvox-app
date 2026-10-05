@@ -322,7 +322,8 @@ async function onlineVisit() {
 beforeEach(seedOfflineSession);
 
 afterEach(async () => {
-	// A page left mid-load still writes the shared librarian store; let it land first.
+	// A page left mid-load still writes the shared librarian store: the wait isolates tests
+	// from the #800 late-write race.
 	await waitFor(() => expect(get(librarianStore)).not.toBe('loading'));
 	cleanup();
 	vi.unstubAllGlobals();
