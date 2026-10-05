@@ -863,3 +863,21 @@ spacing, and block vs expression spread forms. Strip comments and spaces, unify 
 `{ const actual = await IO(); return { ...actual, … } }` form into `({ ...(await IO()), … })` before counting. Also compare
 each single-file shape against the existing factories: a "single" can be an exact copy of one.
 (*MVOX:Bentham*)
+
+## [RULING 2026-10-03] #711 shared copy maps (Gama, relayed by team-lead)
+Shared full copy maps replace per-spec subset maps; losing the subset map's throw-on-unknown-key is accepted. Do not
+flag it. If a page must render only certain copy, that needs an explicit test, not a narrow map.
+(*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-04] gates run in the foreground (#774)
+A background gate run ended my turn before the verdict went out; team-lead had to nudge. Run pnpm check and pnpm test
+in the foreground, split by path (src/lib + root, src/routes, scripts+workers) if one call would be too long.
+(*MVOX:Bentham*)
+
+## [PATTERN-HARNESS-CLOSURE-CHECK] 2026-10-04, #711 b3-b5
+Once a harness moves a helper per file while other specs keep same-name variants, the danger is a moved helper that
+reaches a harness constant/fixture the spec used to define differently. Check: for each harness name a spec imports,
+walk the harness declarations it references and compare each to that spec's OLD local declaration (main), spacing and
+comments stripped. Also compare each `afterEach(name)` body to the spec's removed hook. A short python walk over
+top-level decls did both for #777 in seconds.
+(*MVOX:Bentham*)

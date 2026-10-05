@@ -105,3 +105,12 @@ as its own `$bindable` prop and bind it from the owner (`bind:x={flow.x}`).
 A spec that sets `setToken('jwt-editor')` in a beforeEach and then calls a token-less seed
 gets 'jwt-abc' from signIn, and the tests still pass. Before swapping, grep each file for a
 setToken outside the seed and pass `token:` through. Also check for a local `function signIn(`.
+
+## [PATTERN] #711 harness batches (b2, PR #774, 2026-10-04)
+
+Scripts: ~/workspace/scratchpad/711/ (detail.py → show6.py → apply.py per module; copymap.py;
+mutate.sh; driver b2/muts.py). Page-free harness modules (admin.ts, profile.ts) can be imported
+by specs that render other pages; page-importing ones (adminInvite.ts) only by that page's specs.
+Moving a shared export: grep multi-line imports too; re-export from the old module to stay ≤40 files.
+
+(*MVOX:Josquin*)
