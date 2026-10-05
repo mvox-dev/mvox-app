@@ -45,6 +45,10 @@ function parse(html: string): Document {
 	return new DOMParser().parseFromString(html, 'text/html');
 }
 
+function doc0(): Document {
+	return parse(renderBoard(liveShaped, SUMMER_ISO));
+}
+
 /** The one <time> element on the page. Contract: it exists, exactly once. */
 function timeEl(doc: Document): Element {
 	const els = doc.querySelectorAll('time');
@@ -95,14 +99,30 @@ describe('#308 — generated-at shown in Estonian local time', () => {
 		expect(el.getAttribute('datetime')).toBe(SUMMER_ISO);
 		expect(el.textContent).not.toBe(el.getAttribute('datetime'));
 		// The human line must not show the raw ISO string at all.
-		const meta = doc.querySelector('.meta');
-		expect(meta).not.toBeNull();
-		expect(meta?.textContent).not.toContain(SUMMER_ISO);
+		const header = doc.querySelector('header');
+		expect(header).not.toBeNull();
+		expect(header?.textContent).not.toContain(SUMMER_ISO);
 	});
 
-	it('keeps the page furniture English: the line still reads "Generated at …"', () => {
+	it('one header line reads "mvox roadmap | <time>", with mvox the link to the app', () => {
 		const doc = parse(renderBoard(liveShaped, SUMMER_ISO));
-		expect(doc.querySelector('.meta')?.textContent).toMatch(/^Generated at /);
+		const header = doc.querySelector('header');
+		expect(header?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`mvox roadmap | ${timeEl(doc).textContent}`
+		);
+		expect(header?.querySelector('h1 a[href="https://mvox.eu"]')?.textContent).toBe('mvox');
+		expect(header?.querySelectorAll('p, br')).toHaveLength(0);
+	});
+
+	it('the header line is sticky, on one flex row, and mvox is italic', () => {
+		const style = doc0().querySelector('style')?.textContent ?? '';
+		const rule = (sel: string) => new RegExp(`(^|[\\s,}])${sel.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(style)?.[2] ?? '';
+		expect(rule('.masthead')).toMatch(/position:\s*sticky/);
+		expect(rule('.masthead')).toMatch(/top:\s*0/);
+		expect(rule('.masthead')).toMatch(/display:\s*flex/);
+		expect(rule('.masthead')).toMatch(/background:/);
+		expect(rule('.app-link')).toMatch(/font-style:\s*italic/);
+		expect(doc0().querySelector('header')?.classList.contains('masthead')).toBe(true);
 	});
 
 	it('self-refresh identity untouched: CURRENT stays the ISO stamp, never the display string', () => {
