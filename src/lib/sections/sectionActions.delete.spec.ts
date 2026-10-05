@@ -1,17 +1,8 @@
 // The section delete write layer, refused while the section is not empty.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import * as actions from './sectionActions';
+import { deleteSection } from './sectionActions';
 import { isSectionNotEmpty } from './sectionErrors';
 import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
-
-type DeleteSection = (
-	cfg: EntuCfg,
-	sectionId: string,
-	fetchImpl?: typeof fetch
-) => Promise<void>;
-
-const deleteSection = (actions as unknown as { deleteSection?: DeleteSection }).deleteSection;
 
 const cfg = testCfg('testdb');
 
@@ -45,7 +36,7 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 
 	it('an EMPTY section: two scoped counting GETs, then exactly ONE DELETE …/testdb/entity/{sectionId} — no /property/ call', async () => {
 		const fetchImpl = emptyChecksThen(0, 0);
-		await deleteSection!(cfg, 'sec-bass', fetchImpl);
+		await deleteSection(cfg, 'sec-bass', fetchImpl);
 
 		const calls = callsOf(fetchImpl);
 		expect(calls).toHaveLength(3);
@@ -73,7 +64,7 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 
 	it('sends the auth token on every request (nothing is anonymous)', async () => {
 		const fetchImpl = emptyChecksThen(0, 0);
-		await deleteSection!(cfg, 'sec-bass', fetchImpl);
+		await deleteSection(cfg, 'sec-bass', fetchImpl);
 
 		for (const [, init] of fetchImpl.mock.calls as Array<[string, RequestInit | undefined]>) {
 			expect(JSON.stringify(init?.headers ?? {})).toContain('jwt');
@@ -82,7 +73,7 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 
 	it('a section that still has MEMBERS is REFUSED: tagged section-not-empty, and NO DELETE is issued', async () => {
 		const fetchImpl = emptyChecksThen(3, 0);
-		const reason = await deleteSection!(cfg, 'sec-alto', fetchImpl).catch((e: unknown) => e);
+		const reason = await deleteSection(cfg, 'sec-alto', fetchImpl).catch((e: unknown) => e);
 
 		expect(isSectionNotEmpty(reason)).toBe(true);
 		expect(String(reason)).toContain('sec-alto');
@@ -91,7 +82,7 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 
 	it('a section that still has SUB-SECTIONS is REFUSED too — deleting it would orphan them', async () => {
 		const fetchImpl = emptyChecksThen(0, 2);
-		const reason = await deleteSection!(cfg, 'sec-men', fetchImpl).catch((e: unknown) => e);
+		const reason = await deleteSection(cfg, 'sec-men', fetchImpl).catch((e: unknown) => e);
 
 		expect(isSectionNotEmpty(reason)).toBe(true);
 		expect(callsOf(fetchImpl).some((c) => c.method === 'DELETE')).toBe(false);
@@ -106,7 +97,7 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 			}
 			return Promise.resolve(json({ count: 0, entities: [] }));
 		});
-		const reason = await deleteSection!(cfg, 'sec-alto', fetchImpl).catch((e: unknown) => e);
+		const reason = await deleteSection(cfg, 'sec-alto', fetchImpl).catch((e: unknown) => e);
 
 		expect(isSectionNotEmpty(reason)).toBe(true);
 		expect(String(reason)).toContain('40');
@@ -121,13 +112,13 @@ describe('deleteSection — verifies emptiness server-side, then deletes the sec
 			return Promise.resolve(json({ count: 0, entities: [] }));
 		});
 
-		await expect(deleteSection!(cfg, 'sec-bass', fetchImpl)).rejects.toThrow(/500/);
+		await expect(deleteSection(cfg, 'sec-bass', fetchImpl)).rejects.toThrow(/500/);
 		expect(callsOf(fetchImpl).some((c) => c.method === 'DELETE')).toBe(false);
 	});
 
 	it('throws on a non-2xx DELETE with the status surfaced — a refused delete must never be silent', async () => {
 		const fetchImpl = emptyChecksThen(0, 0, 403);
-		await expect(deleteSection!(cfg, 'sec-bass', fetchImpl)).rejects.toThrow(/403/);
+		await expect(deleteSection(cfg, 'sec-bass', fetchImpl)).rejects.toThrow(/403/);
 	});
 });
 

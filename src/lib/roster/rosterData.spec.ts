@@ -659,13 +659,11 @@ describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', (
 		sectionIds: [],
 		dbEntityId: undefined,
 		createdAt: '2026-06-01T09:00:00.000Z'
-	} as unknown as ActiveMember;
+	} as ActiveMember;
 
 	it('carries createdAt through', () => {
 		const row = toRosterRow(memberWithStamp, [profile('domain', 'Ada', 'a@x.ee')]);
-		expect((row as unknown as { createdAt?: string })?.createdAt).toBe(
-			'2026-06-01T09:00:00.000Z'
-		);
+		expect(row?.createdAt).toBe('2026-06-01T09:00:00.000Z');
 	});
 
 	it('absent on the member → absent on the row (undefined, never a guessed stamp)', () => {
@@ -676,7 +674,7 @@ describe('#467 — toRosterRow threads createdAt onto the RosterRow verbatim', (
 			dbEntityId: undefined
 		} as ActiveMember;
 		const row = toRosterRow(bare, [profile('domain', 'Bea', 'b@x.ee')]);
-		expect((row as unknown as { createdAt?: string })?.createdAt).toBeUndefined();
+		expect(row?.createdAt).toBeUndefined();
 	});
 });
 

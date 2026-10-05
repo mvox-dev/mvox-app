@@ -1,50 +1,14 @@
 // The event, series and season DELETE write layer, driven at the `fetchImpl` wire.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from './entuSeasons';
 import { isCascadePartial, isDeleteForbidden } from './deleteErrors';
-import * as manage from './seasonManage';
+import {
+	countSeasonScope,
+	countSeriesOccurrences,
+	deleteEvent,
+	deleteEventSeries,
+	deleteSeason
+} from './seasonManage';
 import { json, testCfg, type Call } from '$lib/testing/entuFetchKit';
-
-type DeleteFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<unknown>;
-type CountFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<number>;
-
-type ProgressKind = 'series' | 'event' | 'repertoire';
-type OnProgress = (current: number, total: number, kind: ProgressKind) => void;
-interface CascadeOptions {
-	onProgress?: OnProgress;
-}
-interface SeasonScope {
-	series: number;
-	events: number;
-	repertoireItems: number;
-}
-type DeleteSeriesFn = (
-	cfg: EntuCfg,
-	id: string,
-	fetchImpl?: typeof fetch,
-	options?: CascadeOptions
-) => Promise<number>;
-type CountScopeFn = (cfg: EntuCfg, id: string, fetchImpl?: typeof fetch) => Promise<SeasonScope>;
-type DeleteSeasonFn = (
-	cfg: EntuCfg,
-	id: string,
-	fetchImpl?: typeof fetch,
-	options?: CascadeOptions
-) => Promise<SeasonScope>;
-
-const deleteEvent = (manage as unknown as { deleteEvent?: DeleteFn }).deleteEvent;
-const deleteEventSeries = (manage as unknown as { deleteEventSeries?: DeleteFn })
-	.deleteEventSeries;
-const countSeriesOccurrences = (manage as unknown as { countSeriesOccurrences?: CountFn })
-	.countSeriesOccurrences;
-// #217/#216 — same namespace-lookup discipline as above: the file must LOAD
-// while these are absent, and each RED test fail readably ("not a function")
-// instead of exploding at import time.
-const deleteEventSeriesP = (manage as unknown as { deleteEventSeries?: DeleteSeriesFn })
-	.deleteEventSeries;
-const countSeasonScope = (manage as unknown as { countSeasonScope?: CountScopeFn })
-	.countSeasonScope;
-const deleteSeason = (manage as unknown as { deleteSeason?: DeleteSeasonFn }).deleteSeason;
 
 const cfg = testCfg('sampledb');
 
@@ -119,7 +83,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 
 	it('an event with NO children: one scoped read per child type, then ONE DELETE …/sampledb/entity/{eventId} — no /property/ call', async () => {
 		const { impl, calls } = stubFetch();
-		await deleteEvent!(cfg, 'ev-9', impl);
+		await deleteEvent(cfg, 'ev-9', impl);
 
 		expect(lookupKeys(calls)).toEqual(['attendance:ev-9', 'program_item:ev-9']);
 		expect(deleteTargets(calls)).toEqual(['ev-9']);
@@ -133,40 +97,40 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 		const { impl, calls } = stubFetch({
 			children: { 'attendance:ev-9': ['att-1', 'att-2'], 'program_item:ev-9': ['pi-1'] }
 		});
-		await deleteEvent!(cfg, 'ev-9', impl);
+		await deleteEvent(cfg, 'ev-9', impl);
 
 		expect(deleteTargets(calls)).toEqual(['att-1', 'att-2', 'pi-1', 'ev-9']);
 	});
 
 	it('sends the auth token on every call (nothing is anonymous)', async () => {
 		const { impl, calls } = stubFetch({ children: { 'attendance:ev-9': ['att-1'] } });
-		await deleteEvent!(cfg, 'ev-9', impl);
+		await deleteEvent(cfg, 'ev-9', impl);
 
 		expect(calls.every((c) => c.headers.includes('jwt'))).toBe(true);
 	});
 
 	it('throws on a non-2xx DELETE with the status surfaced — a refused delete must never be silent', async () => {
 		const { impl } = stubFetch({ deleteStatus: { 'ev-9': 403 } });
-		await expect(deleteEvent!(cfg, 'ev-9', impl)).rejects.toThrow(/403/);
+		await expect(deleteEvent(cfg, 'ev-9', impl)).rejects.toThrow(/403/);
 	});
 
 	it('a 500 throws too — not just the auth-shaped refusals', async () => {
 		const { impl } = stubFetch({ deleteStatus: { 'ev-9': 500 } });
-		await expect(deleteEvent!(cfg, 'ev-9', impl)).rejects.toThrow(/500/);
+		await expect(deleteEvent(cfg, 'ev-9', impl)).rejects.toThrow(/500/);
 	});
 
 	// #197 review F3 — a 403 is the ONE refusal the panel's `_editor` rights gate
 	// cannot predict (Entu's DELETE wants `_owner` on the target), so it is
 	// TAGGED: the panel says "you don't have permission", not "try again".
 	it('a 403 rejects with the tagged forbidden error; a 500 does NOT', async () => {
-		const forbidden = await deleteEvent!(
+		const forbidden = await deleteEvent(
 			cfg,
 			'ev-9',
 			stubFetch({ deleteStatus: { 'ev-9': 403 } }).impl
 		).catch((e) => e);
 		expect(isDeleteForbidden(forbidden)).toBe(true);
 
-		const broken = await deleteEvent!(
+		const broken = await deleteEvent(
 			cfg,
 			'ev-9',
 			stubFetch({ deleteStatus: { 'ev-9': 500 } }).impl
@@ -180,7 +144,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 			deleteStatus: { 'att-2': 500 }
 		});
 
-		const failure = await deleteEvent!(cfg, 'ev-9', impl).catch((e) => e);
+		const failure = await deleteEvent(cfg, 'ev-9', impl).catch((e) => e);
 		expect(isCascadePartial(failure, 'event')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 3 });
 		// pi-1 is untouched and the EVENT is still there — the remainder keeps its
@@ -189,7 +153,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 	});
 
 	it('a 403 on a CHILD reads as the same permission story as a 403 on the event', async () => {
-		const forbidden = await deleteEvent!(
+		const forbidden = await deleteEvent(
 			cfg,
 			'ev-9',
 			stubFetch({
@@ -205,7 +169,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 			children: { 'attendance:ev-9': ['att-1'] },
 			lookupStatus: { 'program_item:ev-9': 500 }
 		});
-		await expect(deleteEvent!(cfg, 'ev-9', impl)).rejects.toThrow(/500/);
+		await expect(deleteEvent(cfg, 'ev-9', impl)).rejects.toThrow(/500/);
 		// The second lookup blew up AFTER the first returned rows — and still
 		// nothing was destroyed: the whole work list is gathered before the first
 		// DELETE.
@@ -217,7 +181,7 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 			children: { 'attendance:ev-9': ['att-1', 'att-2'] },
 			counts: { 'attendance:ev-9': 900 }
 		});
-		await expect(deleteEvent!(cfg, 'ev-9', impl)).rejects.toThrow(/900/);
+		await expect(deleteEvent(cfg, 'ev-9', impl)).rejects.toThrow(/900/);
 		expect(deleteTargets(calls)).toEqual([]);
 	});
 });
@@ -229,7 +193,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 
 	it('an EMPTY series: one scoped occurrence read, then ONE DELETE …/entity/{seriesId} — no /property/ call', async () => {
 		const { impl, calls } = stubFetch();
-		await deleteEventSeries!(cfg, 'series-1', impl);
+		await deleteEventSeries(cfg, 'series-1', impl);
 
 		expect(calls).toHaveLength(2);
 		expect(calls[0].method).toBe('GET');
@@ -245,7 +209,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		const { impl, calls } = stubFetch({
 			children: { 'event:series-1': ['occ-1', 'occ-2', 'occ-3'] }
 		});
-		await deleteEventSeries!(cfg, 'series-1', impl);
+		await deleteEventSeries(cfg, 'series-1', impl);
 
 		expect(deleteTargets(calls)).toEqual(['occ-1', 'occ-2', 'occ-3', 'series-1']);
 	});
@@ -261,7 +225,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 				'program_item:occ-2': ['pi-2']
 			}
 		});
-		await deleteEventSeries!(cfg, 'series-1', impl);
+		await deleteEventSeries(cfg, 'series-1', impl);
 
 		expect(deleteTargets(calls)).toEqual(['att-1', 'occ-1', 'pi-2', 'occ-2', 'series-1']);
 	});
@@ -271,15 +235,15 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 	// list read from some earlier moment.
 	it('RESOLVES WITH the number of occurrences deleted', async () => {
 		const { impl } = stubFetch({ children: { 'event:series-1': ['occ-1', 'occ-2', 'occ-3'] } });
-		await expect(deleteEventSeries!(cfg, 'series-1', impl)).resolves.toBe(3);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).resolves.toBe(3);
 
 		const empty = stubFetch();
-		await expect(deleteEventSeries!(cfg, 'series-2', empty.impl)).resolves.toBe(0);
+		await expect(deleteEventSeries(cfg, 'series-2', empty.impl)).resolves.toBe(0);
 	});
 
 	it('sends the auth token on every call (nothing is anonymous)', async () => {
 		const { impl, calls } = stubFetch({ children: { 'event:series-1': ['occ-1'] } });
-		await deleteEventSeries!(cfg, 'series-1', impl);
+		await deleteEventSeries(cfg, 'series-1', impl);
 
 		expect(calls.every((c) => c.headers.includes('jwt'))).toBe(true);
 	});
@@ -290,7 +254,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 			deleteStatus: { 'occ-2': 500 }
 		});
 
-		const failure = await deleteEventSeries!(cfg, 'series-1', impl).catch((e) => e);
+		const failure = await deleteEventSeries(cfg, 'series-1', impl).catch((e) => e);
 		expect(isCascadePartial(failure, 'series')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 3 });
 		// occ-3 is untouched and the SERIES is still there — the remainder keeps
@@ -299,7 +263,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 	});
 
 	it('a 403 on an OCCURRENCE reads as the same permission story as a 403 on the series', async () => {
-		const occForbidden = await deleteEventSeries!(
+		const occForbidden = await deleteEventSeries(
 			cfg,
 			'series-1',
 			stubFetch({
@@ -309,7 +273,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		).catch((e) => e);
 		expect(isDeleteForbidden(occForbidden)).toBe(true);
 
-		const seriesForbidden = await deleteEventSeries!(
+		const seriesForbidden = await deleteEventSeries(
 			cfg,
 			'series-1',
 			stubFetch({ deleteStatus: { 'series-1': 403 } }).impl
@@ -320,7 +284,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 	// The refusal now nests two deep (series → occurrence → the occurrence's own
 	// program_item), which is why `isDeleteForbidden` walks the whole chain.
 	it('a 403 on an occurrence’s CHILD is still a permission story, not a retry prompt', async () => {
-		const forbidden = await deleteEventSeries!(
+		const forbidden = await deleteEventSeries(
 			cfg,
 			'series-1',
 			stubFetch({
@@ -333,7 +297,7 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 
 	it('a failed occurrence LOOKUP throws with the status surfaced and deletes NOTHING', async () => {
 		const { impl, calls } = stubFetch({ lookupStatus: { 'event:series-1': 500 } });
-		await expect(deleteEventSeries!(cfg, 'series-1', impl)).rejects.toThrow(/500/);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).rejects.toThrow(/500/);
 		expect(deleteTargets(calls)).toEqual([]);
 	});
 
@@ -342,18 +306,18 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 			children: { 'event:series-1': ['occ-1', 'occ-2'] },
 			counts: { 'event:series-1': 900 }
 		});
-		await expect(deleteEventSeries!(cfg, 'series-1', impl)).rejects.toThrow(/900/);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).rejects.toThrow(/900/);
 		expect(deleteTargets(calls)).toEqual([]);
 	});
 
 	it('a 403 on the series DELETE itself throws with the status surfaced', async () => {
 		const { impl } = stubFetch({ deleteStatus: { 'series-1': 403 } });
-		await expect(deleteEventSeries!(cfg, 'series-1', impl)).rejects.toThrow(/403/);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).rejects.toThrow(/403/);
 	});
 
 	it('a 500 on the series DELETE throws too', async () => {
 		const { impl } = stubFetch({ deleteStatus: { 'series-1': 500 } });
-		await expect(deleteEventSeries!(cfg, 'series-1', impl)).rejects.toThrow(/500/);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).rejects.toThrow(/500/);
 	});
 });
 
@@ -371,7 +335,7 @@ describe('countSeriesOccurrences — the live figure behind the confirm', () => 
 			counts: { 'event:series-1': 900 }
 		});
 
-		await expect(countSeriesOccurrences!(cfg, 'series-1', impl)).resolves.toBe(900);
+		await expect(countSeriesOccurrences(cfg, 'series-1', impl)).resolves.toBe(900);
 		// A COUNT, not a page of rows: one scoped read, nothing written.
 		expect(calls).toHaveLength(1);
 		expect(calls[0].method).toBe('GET');
@@ -382,13 +346,13 @@ describe('countSeriesOccurrences — the live figure behind the confirm', () => 
 
 	it('an empty series counts 0, and the token rides along', async () => {
 		const { impl, calls } = stubFetch();
-		await expect(countSeriesOccurrences!(cfg, 'series-2', impl)).resolves.toBe(0);
+		await expect(countSeriesOccurrences(cfg, 'series-2', impl)).resolves.toBe(0);
 		expect(calls[0].headers).toContain('jwt');
 	});
 
 	it('a non-2xx read throws with the status surfaced (fail loud)', async () => {
 		const { impl } = stubFetch({ lookupStatus: { 'event:series-1': 500 } });
-		await expect(countSeriesOccurrences!(cfg, 'series-1', impl)).rejects.toThrow(/500/);
+		await expect(countSeriesOccurrences(cfg, 'series-1', impl)).rejects.toThrow(/500/);
 	});
 });
 
@@ -425,7 +389,7 @@ describe('countSeasonScope — the live scope the season-delete confirm quotes (
 	it('reads the three scoped lists and reports { series, events, repertoireItems } — events counts ALL season events (occurrences AND standalone); a read deletes NOTHING', async () => {
 		const { impl, calls } = stubFetch({ children: seasonChildren() });
 
-		await expect(countSeasonScope!(cfg, 'season-1', impl)).resolves.toEqual({
+		await expect(countSeasonScope(cfg, 'season-1', impl)).resolves.toEqual({
 			series: 2,
 			events: 4,
 			repertoireItems: 2
@@ -441,7 +405,7 @@ describe('countSeasonScope — the live scope the season-delete confirm quotes (
 
 	it('an empty season counts zeros', async () => {
 		const { impl } = stubFetch();
-		await expect(countSeasonScope!(cfg, 'season-1', impl)).resolves.toEqual({
+		await expect(countSeasonScope(cfg, 'season-1', impl)).resolves.toEqual({
 			series: 0,
 			events: 0,
 			repertoireItems: 0
@@ -453,12 +417,12 @@ describe('countSeasonScope — the live scope the season-delete confirm quotes (
 			children: seasonChildren(),
 			counts: { 'repertoire_item:season-1': 900 }
 		});
-		await expect(countSeasonScope!(cfg, 'season-1', impl)).rejects.toThrow(/900/);
+		await expect(countSeasonScope(cfg, 'season-1', impl)).rejects.toThrow(/900/);
 	});
 
 	it('a non-2xx read throws with the status surfaced (fail loud)', async () => {
 		const { impl } = stubFetch({ lookupStatus: { 'event:season-1': 500 } });
-		await expect(countSeasonScope!(cfg, 'season-1', impl)).rejects.toThrow(/500/);
+		await expect(countSeasonScope(cfg, 'season-1', impl)).rejects.toThrow(/500/);
 	});
 });
 
@@ -467,7 +431,7 @@ describe('deleteEventSeries — the #216 progress option, without breaking a sin
 		const { impl } = stubFetch({ children: { 'event:series-1': ['occ-1', 'occ-2', 'occ-3'] } });
 		const onProgress = vi.fn();
 
-		await deleteEventSeriesP!(cfg, 'series-1', impl, { onProgress });
+		await deleteEventSeries(cfg, 'series-1', impl, { onProgress });
 
 		expect(onProgress.mock.calls).toEqual([
 			[1, 4, 'event'],
@@ -483,7 +447,7 @@ describe('deleteEventSeries — the #216 progress option, without breaking a sin
 		});
 		const onProgress = vi.fn();
 
-		await deleteEventSeriesP!(cfg, 'series-1', impl, { onProgress });
+		await deleteEventSeries(cfg, 'series-1', impl, { onProgress });
 
 		// The children DID go (before their event, the #197 ordering)…
 		expect(deleteTargets(calls)).toEqual(['att-1', 'att-2', 'occ-1', 'series-1']);
@@ -503,14 +467,14 @@ describe('deleteEventSeries — the #216 progress option, without breaking a sin
 		const onProgress = vi.fn();
 
 		await expect(
-			deleteEventSeriesP!(cfg, 'series-1', impl, { onProgress })
+			deleteEventSeries(cfg, 'series-1', impl, { onProgress })
 		).rejects.toMatchObject({ deletedCount: 1 });
 		expect(onProgress.mock.calls).toEqual([[1, 4, 'event']]);
 	});
 
 	it('the options argument is OPTIONAL and trailing — the existing 3-arg positional call shape still resolves with the occurrence count', async () => {
 		const { impl } = stubFetch({ children: { 'event:series-1': ['occ-1', 'occ-2'] } });
-		await expect(deleteEventSeriesP!(cfg, 'series-1', impl)).resolves.toBe(2);
+		await expect(deleteEventSeries(cfg, 'series-1', impl)).resolves.toBe(2);
 	});
 });
 
@@ -522,7 +486,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 	it('deletes every series (occurrences first), then every STANDALONE event, then every repertoire_item, then the season — the exact DELETE sequence, all on the ENTITY endpoint', async () => {
 		const { impl, calls } = stubFetch({ children: seasonChildren() });
 
-		await deleteSeason!(cfg, 'season-1', impl);
+		await deleteSeason(cfg, 'season-1', impl);
 
 		expect(deleteTargets(calls)).toEqual([
 			'occ-1',
@@ -546,7 +510,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		const { impl } = stubFetch({ children: seasonChildren() });
 		const onProgress = vi.fn();
 
-		await deleteSeason!(cfg, 'season-1', impl, { onProgress });
+		await deleteSeason(cfg, 'season-1', impl, { onProgress });
 
 		expect(onProgress.mock.calls).toEqual([
 			[1, 8, 'event'],
@@ -562,7 +526,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 
 	it('resolves with what it actually deleted: { series, events, repertoireItems }', async () => {
 		const { impl } = stubFetch({ children: seasonChildren() });
-		await expect(deleteSeason!(cfg, 'season-1', impl)).resolves.toEqual({
+		await expect(deleteSeason(cfg, 'season-1', impl)).resolves.toEqual({
 			series: 2,
 			events: 4,
 			repertoireItems: 2
@@ -580,7 +544,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		});
 		const onProgress = vi.fn();
 
-		await deleteSeason!(cfg, 'season-1', impl, { onProgress });
+		await deleteSeason(cfg, 'season-1', impl, { onProgress });
 
 		expect(deleteTargets(calls)).toEqual(['att-1', 'occ-1', 'series-1', 'season-1']);
 		expect(onProgress.mock.calls).toEqual([
@@ -593,7 +557,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		const { impl, calls } = stubFetch();
 		const onProgress = vi.fn();
 
-		await expect(deleteSeason!(cfg, 'season-1', impl, { onProgress })).resolves.toEqual({
+		await expect(deleteSeason(cfg, 'season-1', impl, { onProgress })).resolves.toEqual({
 			series: 0,
 			events: 0,
 			repertoireItems: 0
@@ -613,7 +577,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 			deleteStatus: { 'ev-2': 500 }
 		});
 
-		const failure = await deleteSeason!(cfg, 'season-1', impl).catch((e) => e);
+		const failure = await deleteSeason(cfg, 'season-1', impl).catch((e) => e);
 		expect(typeof isCascadePartial).toBe('function');
 		expect(isCascadePartial(failure, 'season')).toBe(true);
 		expect(failure).toMatchObject({
@@ -634,7 +598,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 			deleteStatus: { 'occ-2': 500 }
 		});
 
-		const failure = await deleteSeason!(cfg, 'season-1', impl).catch((e) => e);
+		const failure = await deleteSeason(cfg, 'season-1', impl).catch((e) => e);
 		expect(isCascadePartial(failure, 'season')).toBe(true);
 		expect(failure).toMatchObject({ deletedCount: 1, totalCount: 8 });
 		expect(isCascadePartial((failure as { failure?: unknown }).failure, 'series')).toBe(true);
@@ -649,7 +613,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		});
 		const onProgress = vi.fn();
 
-		const failure = await deleteSeason!(cfg, 'season-1', impl, { onProgress }).catch((e) => e);
+		const failure = await deleteSeason(cfg, 'season-1', impl, { onProgress }).catch((e) => e);
 		expect(isCascadePartial(failure, 'season')).toBe(true);
 		// occ-1 + occ-2 really are gone — exactly the two ticks that were emitted.
 		expect(failure).toMatchObject({ deletedCount: 2, totalCount: 8 });
@@ -661,7 +625,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 	});
 
 	it('a 403 anywhere in the cascade reads as the SAME permission story, however deep it sits', async () => {
-		const onRepertoire = await deleteSeason!(
+		const onRepertoire = await deleteSeason(
 			cfg,
 			'season-1',
 			stubFetch({ children: seasonChildren(), deleteStatus: { 'rep-1': 403 } }).impl
@@ -669,7 +633,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		expect(isDeleteForbidden(onRepertoire)).toBe(true);
 
 		// season → series → occurrence → the occurrence's own child: four links.
-		const deep = await deleteSeason!(
+		const deep = await deleteSeason(
 			cfg,
 			'season-1',
 			stubFetch({
@@ -679,7 +643,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 		).catch((e) => e);
 		expect(isDeleteForbidden(deep)).toBe(true);
 
-		const onSeason = await deleteSeason!(
+		const onSeason = await deleteSeason(
 			cfg,
 			'season-1',
 			stubFetch({ deleteStatus: { 'season-1': 403 } }).impl
@@ -692,7 +656,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 			children: seasonChildren(),
 			counts: { 'event:season-1': 900 }
 		});
-		await expect(deleteSeason!(cfg, 'season-1', impl)).rejects.toThrow(/900/);
+		await expect(deleteSeason(cfg, 'season-1', impl)).rejects.toThrow(/900/);
 		expect(deleteTargets(calls)).toEqual([]);
 	});
 
@@ -701,7 +665,7 @@ describe('deleteSeason — serial cascade, children before parent, ONE counter o
 			children: seasonChildren(),
 			lookupStatus: { 'repertoire_item:season-1': 500 }
 		});
-		await expect(deleteSeason!(cfg, 'season-1', impl)).rejects.toThrow(/500/);
+		await expect(deleteSeason(cfg, 'season-1', impl)).rejects.toThrow(/500/);
 		expect(deleteTargets(calls)).toEqual([]);
 	});
 });

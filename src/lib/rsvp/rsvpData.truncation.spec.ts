@@ -53,11 +53,7 @@ describe('listMyRsvps — count-based truncation detection (#321)', () => {
 			status: [{ string: 'going' }]
 		}));
 		const fetchImpl = vi.fn().mockResolvedValue(json({ count: 500, entities }));
-		const res = (await listMyRsvps(cfg, 'person-1', fetchImpl)) as unknown as {
-			items: unknown[];
-			total: number;
-			truncated: boolean;
-		};
+		const res = await listMyRsvps(cfg, 'person-1', fetchImpl);
 		expect(res.truncated).toBe(false);
 		expect(res.total).toBe(500);
 		expect(res.items).toHaveLength(500);

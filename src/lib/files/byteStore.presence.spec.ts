@@ -1,38 +1,10 @@
-// #351 RED — the PRESENCE QUERY on the byte store: one non-touching call
-// answering "which fileIds does this (db, personId) partition hold?", so a
-// list can badge N rows without stamping N opens.
-//
-// THE TRAP THIS CONTRACT EXISTS TO PREVENT (issue #351, "read this before
-// writing the presence check"): ByteStore.get() COUNTS AS AN OPEN — recency
-// is what bounds the store, and a per-row get() would stamp every listed file
-// as freshly opened on every render. LRU collapses to render order, eviction
-// starts discarding the wrong bytes, and nothing fails visibly. So:
-//
-//   - The presence query is ONE call per list, keyed (db, personId) like
-//     clearPartition — NOT one call per row, NOT built on get().
-//   - It moves NO recency: no adapter.touch, no openedAt change, no put.
-//   - It lives on the REAL ByteStore interface (byteStore.ts). The fake
-//     (byteStoreFakes.ts) already had a test-only heldFor(db, personId) with
-//     no real-interface counterpart — that divergence is RECONCILED here: the
-//     real interface gains heldFileIds(db, personId): Promise<string[]> and
-//     the fake implements the same member (delegating, not duplicating).
-//     Named heldFileIds — "held", a statement about presence, because a name
-//     that reads like a bytes-read (get*/read*/load*) invites the next caller
-//     to treat it as one, and a bytes-read is exactly what it must never be.
-//   - There is NO live invalidation — the store has no events. A row evicted
-//     by the cap stops appearing ON THE NEXT QUERY; that is the whole
-//     contract (reflect-on-next-query).
+// The byte store's presence query: one heldFileIds(db, personId) call per list that moves no
+// recency, since a per-row get() would count as an open and reorder eviction by render.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createByteStore, type ByteStore, type StoredFileRecord } from './byteStore';
 import { createFakeAdapter, createFakeByteStore, type FakeAdapter } from '$lib/testing/byteStoreFakes';
-
-/** The #351 contract shape — an intersection until byteStore.ts declares it
- *  (the source pin below holds the interface itself to account). */
-type PresenceCapable = ByteStore & {
-	heldFileIds(db: string, personId: string): Promise<string[]>;
-};
 
 const A = { db: 'sampledb', personId: 'person-a' };
 const B = { db: 'sampledb', personId: 'person-b' };
@@ -59,13 +31,13 @@ function seededRecord(n: number, openedAt: number): StoredFileRecord {
 }
 
 let adapter: FakeAdapter;
-let store: PresenceCapable;
+let store: ByteStore;
 
 beforeEach(() => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-09-14T10:00:00.000Z'));
 	adapter = createFakeAdapter();
-	store = createByteStore(adapter, { capBytes: 100 }) as PresenceCapable;
+	store = createByteStore(adapter, { capBytes: 100 });
 });
 
 afterEach(() => {
@@ -172,11 +144,10 @@ describe('#351 — the fake store implements the SAME presence member (reconcile
 		fake.seed({ db: 'db-1', personId: 'p-1' }, 'file-b', data(4));
 		fake.seed({ db: 'db-2', personId: 'p-1' }, 'file-c', data(4));
 
-		const presence = fake as unknown as PresenceCapable;
-		const answer = await presence.heldFileIds('db-1', 'p-1');
+		const answer = await fake.heldFileIds('db-1', 'p-1');
 		expect([...answer].sort()).toEqual(['file-a', 'file-b']);
 		expect([...answer].sort()).toEqual([...fake.heldFor('db-1', 'p-1')].sort());
-		expect(await presence.heldFileIds('db-2', 'p-1')).toEqual(['file-c']);
+		expect(await fake.heldFileIds('db-2', 'p-1')).toEqual(['file-c']);
 	});
 });
 

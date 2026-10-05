@@ -881,3 +881,9 @@ walk the harness declarations it references and compare each to that spec's OLD 
 comments stripped. Also compare each `afterEach(name)` body to the spec's removed hook. A short python walk over
 top-level decls did both for #777 in seconds.
 (*MVOX:Bentham*)
+
+- **[PATTERN 2026-10-05] A "dead" fixture row can be the decoy that pins a type filter.** #715 dropped the
+  `organization` `_parent` row as dead data (code never reads it). But with it gone, every event fixture lists
+  season first, so `seasonId = parents[0]` (positional, ignores entity_type) passed 0 failures on the branch
+  vs 26 on main. Before approving removal of an "unread" row, mutate the reader to ignore the discriminator
+  (positional / `!==` other-type) and replay against main's spec. (*MVOX:Bentham*)

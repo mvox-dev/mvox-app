@@ -1,18 +1,7 @@
 // withdrawInvite revokes an unredeemed invite link; one live link per person.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import * as inviteData from './inviteData';
-import { mintSelfLinkInvite } from './inviteData';
+import { mintSelfLinkInvite, withdrawInvite } from './inviteData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
-
-type WithdrawInvite = (
-	cfg: EntuCfg,
-	personId: string,
-	fetchImpl?: typeof fetch
-) => Promise<void>;
-
-const withdrawInvite = (inviteData as unknown as { withdrawInvite?: WithdrawInvite })
-	.withdrawInvite;
 
 const cfg = testCfg('sampledb', 'jwt-owner');
 const PERSON_ID = 'person-target';
@@ -79,7 +68,7 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 			{ _id: 'eu-old-1', rawInvite: 'tok-old-1' },
 			{ _id: 'eu-old-2', rawInvite: 'tok-old-2' }
 		]);
-		await withdrawInvite!(cfg, PERSON_ID, fetchImpl);
+		await withdrawInvite(cfg, PERSON_ID, fetchImpl);
 		expect(findStoredInvite(state.values)).toBeUndefined();
 		const deletes = ops.filter((o) => o.method === 'DELETE');
 		expect(deletes).toHaveLength(2);
@@ -91,7 +80,7 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 			BOUND,
 			{ _id: 'eu-stale', rawInvite: 'tok-stale' }
 		]);
-		await withdrawInvite!(cfg, PERSON_ID, fetchImpl);
+		await withdrawInvite(cfg, PERSON_ID, fetchImpl);
 		expect(state.values).toContainEqual(BOUND);
 		expect(findStoredInvite(state.values)).toBeUndefined();
 		const deletes = ops.filter((o) => o.method === 'DELETE');
@@ -101,7 +90,7 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 
 	it('withdraw cannot unlink a member who has actually JOINED: only bound entries present → zero DELETEs, resolves as a no-op', async () => {
 		const { fetchImpl, state, ops } = makeEntuStore([BOUND]);
-		await withdrawInvite!(cfg, PERSON_ID, fetchImpl);
+		await withdrawInvite(cfg, PERSON_ID, fetchImpl);
 		expect(state.values).toEqual([BOUND]);
 		expect(ops.filter((o) => o.method === 'DELETE')).toHaveLength(0);
 	});
@@ -114,7 +103,7 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 			],
 			['eu-old-2']
 		);
-		await expect(withdrawInvite!(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-2|500/);
+		await expect(withdrawInvite(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-2|500/);
 		expect(findStoredInvite(state.values)).toBeDefined();
 	});
 
@@ -122,19 +111,19 @@ describe('withdrawInvite — the sweep, standalone (revocation, not tidiness)', 
 		const { fetchImpl } = makeEntuStore([{ _id: 'eu-old-1', rawInvite: 'tok-old-1' }], [
 			'eu-old-1'
 		]);
-		await expect(withdrawInvite!(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-1|500/);
+		await expect(withdrawInvite(cfg, PERSON_ID, fetchImpl)).rejects.toThrow(/eu-old-1|500/);
 	});
 
 	it('an identity-read failure rejects — never silently treated as "nothing to withdraw"', async () => {
 		const failingRead = vi
 			.fn()
 			.mockResolvedValue(json({ error: 'forbidden' }, 403)) as unknown as typeof fetch;
-		await expect(withdrawInvite!(cfg, PERSON_ID, failingRead)).rejects.toThrow(/403/);
+		await expect(withdrawInvite(cfg, PERSON_ID, failingRead)).rejects.toThrow(/403/);
 	});
 
 	it('withdraw leaves NO marker: no POST is ever issued — withdrawn and never-invited are the SAME state (Mihkel ruling)', async () => {
 		const { fetchImpl, ops } = makeEntuStore([{ _id: 'eu-old', rawInvite: 'tok-old' }]);
-		await withdrawInvite!(cfg, PERSON_ID, fetchImpl);
+		await withdrawInvite(cfg, PERSON_ID, fetchImpl);
 		expect(ops.filter((o) => o.method === 'POST')).toHaveLength(0);
 	});
 });

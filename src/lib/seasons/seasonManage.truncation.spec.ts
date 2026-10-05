@@ -59,10 +59,7 @@ describe('listEventSeriesForSeason — truncation detection (#321)', () => {
 				}
 			]
 		]);
-		const res = (await listEventSeriesForSeason(cfg, 'season-1', fetchImpl)) as unknown as {
-			items: unknown[];
-			truncated: boolean;
-		};
+		const res = await listEventSeriesForSeason(cfg, 'season-1', fetchImpl);
 		expect(res.truncated).toBe(true);
 		expect(res.items).toEqual([{ id: 'series-1', name: 'Tuesdays', eventCount: 1, ownerIds: [] }]);
 	});
@@ -72,9 +69,7 @@ describe('listEventSeriesForSeason — truncation detection (#321)', () => {
 			[seriesRoute, { count: 210, entities: [{ _id: 'series-1', name: [{ string: 'Tuesdays' }] }] }],
 			[eventsRoute, { count: 0, entities: [] }]
 		]);
-		const res = (await listEventSeriesForSeason(cfg, 'season-1', fetchImpl)) as unknown as {
-			truncated: boolean;
-		};
+		const res = await listEventSeriesForSeason(cfg, 'season-1', fetchImpl);
 		expect(res.truncated).toBe(true);
 	});
 });

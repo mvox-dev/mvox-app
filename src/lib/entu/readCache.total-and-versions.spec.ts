@@ -8,28 +8,18 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import { CACHED_READ, entuFetch } from './request';
-import * as readCache from './readCache';
 import {
 	READ_CACHE_DB_NAME,
 	READ_CACHE_MAX_BYTES,
+	READ_CACHE_OPEN_TIMEOUT_MS,
 	flushReadCache,
 	readCacheEntryCount,
 	readCacheGet,
+	readCacheTotalBytes,
 	resetServedFromCache,
 	setReadCacheFactory
 } from './readCache';
 import { authStore } from '$lib/auth/session';
-
-// Read off the module namespace so a missing export fails an assertion, not the import.
-const mod = readCache as unknown as {
-	readCacheTotalBytes?: () => Promise<number>;
-	READ_CACHE_OPEN_TIMEOUT_MS?: number;
-};
-
-async function totalBytes(): Promise<number> {
-	expect(mod.readCacheTotalBytes, 'readCacheTotalBytes export').toBeTypeOf('function');
-	return mod.readCacheTotalBytes!();
-}
 
 const DB = 'sampledb';
 const PERSON = 'person-a';
@@ -93,7 +83,7 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 		];
 		for (const [i, body] of bodies.entries()) await storeOnline(`entity/${i}`, body);
 
-		expect(await totalBytes()).toBe(bodies.reduce((sum, b) => sum + utf8(b), 0));
+		expect(await readCacheTotalBytes()).toBe(bodies.reduce((sum, b) => sum + utf8(b), 0));
 	});
 
 	it('overwriting a key replaces its bytes in the total — the old size is subtracted, not kept', async () => {
@@ -102,7 +92,7 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 		const smaller = { _id: 'x', pad: 'x'.repeat(100) };
 		await storeOnline('entity/x', smaller);
 
-		expect(await totalBytes()).toBe(utf8(smaller) + utf8({ _id: 'y' }));
+		expect(await readCacheTotalBytes()).toBe(utf8(smaller) + utf8({ _id: 'y' }));
 		expect(await readCacheEntryCount()).toBe(2);
 	});
 
@@ -122,7 +112,7 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 			const entry = await readCacheGet(DB, PERSON, `entity/e${i}`);
 			if (entry) survivors += entry.bytes;
 		}
-		const total = await totalBytes();
+		const total = await readCacheTotalBytes();
 		expect(total).toBe(survivors);
 		expect(total).toBeLessThanOrEqual(READ_CACHE_MAX_BYTES);
 		expect(await readCacheEntryCount()).toBe(fits);
@@ -131,12 +121,12 @@ describe('(i) the byte total is a running total, exact across put and evict', ()
 	it('the total survives a re-open of the database (a new app load)', async () => {
 		await storeOnline('entity/1', { _id: '1', pad: 'x'.repeat(2_000) });
 		await storeOnline('entity/2', { _id: '2' });
-		const before = await totalBytes();
+		const before = await readCacheTotalBytes();
 
 		setReadCacheFactory(factory); // drops the memoised connection, same database
-		expect(await totalBytes()).toBe(before);
+		expect(await readCacheTotalBytes()).toBe(before);
 		await storeOnline('entity/3', { _id: '3' });
-		expect(await totalBytes()).toBe(before + utf8({ _id: '3' }));
+		expect(await readCacheTotalBytes()).toBe(before + utf8({ _id: '3' }));
 	});
 
 	it('a put under the budget opens NO cursor — no per-put walk over every entry', async () => {
@@ -174,9 +164,8 @@ describe('(ii) another tab on another database version', () => {
 	});
 
 	it('READ_CACHE_OPEN_TIMEOUT_MS is exported and at most 2000ms', () => {
-		expect(mod.READ_CACHE_OPEN_TIMEOUT_MS).toBeTypeOf('number');
-		expect(mod.READ_CACHE_OPEN_TIMEOUT_MS!).toBeGreaterThan(0);
-		expect(mod.READ_CACHE_OPEN_TIMEOUT_MS!).toBeLessThanOrEqual(2000);
+		expect(READ_CACHE_OPEN_TIMEOUT_MS).toBeGreaterThan(0);
+		expect(READ_CACHE_OPEN_TIMEOUT_MS).toBeLessThanOrEqual(2000);
 	});
 
 	/** Another tab holding version 1 open, never closing on versionchange. */

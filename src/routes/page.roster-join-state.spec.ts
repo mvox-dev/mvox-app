@@ -402,15 +402,7 @@ describe('(A) dated status lines — #467: one line per row, four display states
 			actual.listJoinStates(cfg, ids, withheldFetch)
 		);
 		listJoinStateDetailsMock.mockImplementation((cfg: { db: string; token: string }, ids: string[]) =>
-			(
-				actual as unknown as {
-					listJoinStateDetails: (
-						cfg: { db: string; token: string },
-						ids: string[],
-						fetchImpl?: typeof fetch
-					) => Promise<Record<string, JoinStateDetail>>;
-				}
-			).listJoinStateDetails(cfg, ids, withheldFetch)
+			actual.listJoinStateDetails(cfg, ids, withheldFetch)
 		);
 
 		const { container } = await renderRoster({ admin: 'not-admin' });

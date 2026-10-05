@@ -1,31 +1,15 @@
 // listJoinStateDetails: the roster's dated join read.
 import { describe, expect, it, vi } from 'vitest';
-import type { EntuCfg } from '$lib/seasons/entuSeasons';
-import * as linkedIdentities from './linkedIdentities';
-import * as inviteData from '$lib/invite/inviteData';
+import {
+	listJoinStateDetails,
+	listJoinStates,
+	readPropertyCreatedAt
+} from './linkedIdentities';
+import { INVITE_LIFETIME_MS } from '$lib/invite/inviteData';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
 
 type JoinState = 'absent' | 'invited' | 'joined';
 type JoinStateDetail = { state: JoinState; at?: string };
-type ListJoinStateDetails = (
-	cfg: EntuCfg,
-	personIds: string[],
-	fetchImpl?: typeof fetch
-) => Promise<Record<string, JoinStateDetail>>;
-type ReadPropertyCreatedAt = (
-	cfg: EntuCfg,
-	propertyId: string,
-	fetchImpl?: typeof fetch
-) => Promise<string | undefined>;
-
-const listJoinStateDetails = (
-	linkedIdentities as unknown as { listJoinStateDetails?: ListJoinStateDetails }
-).listJoinStateDetails;
-const readPropertyCreatedAt = (
-	linkedIdentities as unknown as { readPropertyCreatedAt?: ReadPropertyCreatedAt }
-).readPropertyCreatedAt;
-const listJoinStates = linkedIdentities.listJoinStates;
-
 const cfg = testCfg('sampledb', 'jwt-admin');
 
 type WireEntry = { _id: string; uid?: string; provider?: string; email?: string; invite?: string };
@@ -78,7 +62,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			{ 'p-1': [PLACEHOLDER] },
 			{ 'eu-p': { created: { at: AT_INVITED, by: 'author-person-1' } } }
 		);
-		const details = await listJoinStateDetails!(cfg, ['p-1'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-1'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({
 			'p-1': { state: 'invited', at: AT_INVITED }
 		});
@@ -92,7 +76,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			{ 'p-2': [BOUND] },
 			{ 'eu-b': { created: { at: AT_JOINED, by: 'author-person-2' } } }
 		);
-		const details = await listJoinStateDetails!(cfg, ['p-2'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-2'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({
 			'p-2': { state: 'joined', at: AT_JOINED }
 		});
@@ -105,7 +89,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			{ 'p-3': [PLACEHOLDER, BOUND] },
 			{ 'eu-b': { created: { at: AT_JOINED, by: 'author' } } }
 		);
-		const details = await listJoinStateDetails!(cfg, ['p-3'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-3'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({
 			'p-3': { state: 'joined', at: AT_JOINED }
 		});
@@ -115,14 +99,14 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 
 	it("absent — NO property read at all; {state:'absent'} with no `at` key (the member _created date is rosterData's, not this producer's)", async () => {
 		const fetchImpl = routedFetch({ 'p-4': 'no-key' });
-		const details = await listJoinStateDetails!(cfg, ['p-4'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-4'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({ 'p-4': { state: 'absent' } });
 		expect(propertyCalls(fetchImpl)).toHaveLength(0);
 	});
 
 	it('withheld bucket (no _viewer tell, #454) — the personId is OMITTED and no property read is issued', async () => {
 		const fetchImpl = routedFetch({ 'p-5': 'withheld' });
-		const details = await listJoinStateDetails!(cfg, ['p-5'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-5'], fetchImpl);
 		expect(details).toEqual({});
 		expect(propertyCalls(fetchImpl)).toHaveLength(0);
 	});
@@ -133,7 +117,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			{ 'p-6': [PLACEHOLDER], 'p-7': [BOUND] },
 			{ 'eu-p': { status: 500 }, 'eu-b': { created: { at: AT_JOINED, by: 'author' } } }
 		);
-		const details = await listJoinStateDetails!(cfg, ['p-6', 'p-7'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-6', 'p-7'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({
 			'p-6': { state: 'invited' },
 			'p-7': { state: 'joined', at: AT_JOINED }
@@ -146,7 +130,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 	it('property read 2xx but created.at MISSING — same skip-and-warn: state without `at`, warn names the id, no throw', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = routedFetch({ 'p-8': [PLACEHOLDER] }, { 'eu-p': { created: {} } });
-		const details = await listJoinStateDetails!(cfg, ['p-8'], fetchImpl);
+		const details = await listJoinStateDetails(cfg, ['p-8'], fetchImpl);
 		expect(details).toEqual<Record<string, JoinStateDetail>>({ 'p-8': { state: 'invited' } });
 		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('eu-p'))).toBe(true);
 		warnSpy.mockRestore();
@@ -154,7 +138,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 
 	it('entity read HTTP failure still FAILS LOUD — the existing listLinkedIdentities throw, unchanged by the dated sibling', async () => {
 		const fetchImpl = routedFetch({ 'p-9': null });
-		await expect(listJoinStateDetails!(cfg, ['p-9'], fetchImpl)).rejects.toThrow(/403/);
+		await expect(listJoinStateDetails(cfg, ['p-9'], fetchImpl)).rejects.toThrow(/403/);
 	});
 
 	it('shares the internal entity read — exactly ONE entity fetch per person (invited person: 1 entity + 1 property = 2 calls total)', async () => {
@@ -162,7 +146,7 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			{ 'p-1': [PLACEHOLDER] },
 			{ 'eu-p': { created: { at: AT_INVITED, by: 'a' } } }
 		);
-		await listJoinStateDetails!(cfg, ['p-1'], fetchImpl);
+		await listJoinStateDetails(cfg, ['p-1'], fetchImpl);
 		expect(fetchImpl.mock.calls).toHaveLength(2);
 	});
 });
@@ -172,7 +156,7 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 		const fetchImpl = vi
 			.fn()
 			.mockResolvedValue(json({ _id: 'v-1', created: { at: AT_INVITED, by: 'author' } }));
-		const at = await readPropertyCreatedAt!(cfg, 'v-1', fetchImpl as unknown as typeof fetch);
+		const at = await readPropertyCreatedAt(cfg, 'v-1', fetchImpl as unknown as typeof fetch);
 		expect(at).toBe(AT_INVITED);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('property/v-1');
@@ -181,7 +165,7 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 	it('non-2xx → undefined + console.warn naming the property id — never a throw (#456: one bad stamp must not sink the batch)', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
-		const at = await readPropertyCreatedAt!(cfg, 'v-2', fetchImpl as unknown as typeof fetch);
+		const at = await readPropertyCreatedAt(cfg, 'v-2', fetchImpl as unknown as typeof fetch);
 		expect(at).toBeUndefined();
 		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-2'))).toBe(true);
 		warnSpy.mockRestore();
@@ -190,7 +174,7 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 	it('2xx without created.at → undefined + warn naming the id', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'v-3' }));
-		const at = await readPropertyCreatedAt!(cfg, 'v-3', fetchImpl as unknown as typeof fetch);
+		const at = await readPropertyCreatedAt(cfg, 'v-3', fetchImpl as unknown as typeof fetch);
 		expect(at).toBeUndefined();
 		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-3'))).toBe(true);
 		warnSpy.mockRestore();
@@ -199,7 +183,7 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 	it('2xx with created.at = null (non-string) → undefined + warn naming the id, never a null typed as string', async () => {
 		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({ _id: 'v-4', created: { at: null } }));
-		const at = await readPropertyCreatedAt!(cfg, 'v-4', fetchImpl as unknown as typeof fetch);
+		const at = await readPropertyCreatedAt(cfg, 'v-4', fetchImpl as unknown as typeof fetch);
 		expect(at).toBeUndefined();
 		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-4'))).toBe(true);
 		warnSpy.mockRestore();
@@ -226,9 +210,7 @@ describe('listJoinStates — the bare 3-value contract is byte-identical to toda
 
 describe('INVITE_LIFETIME_MS — the ONE lifetime constant (docs/architecture/invite-flow.md §7: live mints 24 h; the pinned source says 7 d; live is authoritative)', () => {
 	it('inviteData.ts exports INVITE_LIFETIME_MS === 24 * 60 * 60 * 1000', () => {
-		const lifetime = (inviteData as unknown as { INVITE_LIFETIME_MS?: number })
-			.INVITE_LIFETIME_MS;
-		expect(lifetime).toBe(24 * 60 * 60 * 1000);
+		expect(INVITE_LIFETIME_MS).toBe(24 * 60 * 60 * 1000);
 	});
 });
 

@@ -14,10 +14,9 @@ vi.mock('$lib/entu-config', async () =>
 
 // The single-flight redirect guard is module state, so every test gets a fresh module instance;
 // one test's fired redirect can't leak into the next.
-type AuthExpiredApi = { isAuthExpiredError?: (e: unknown) => boolean };
 async function freshModules() {
 	vi.resetModules();
-	const req = (await import('./request')) as typeof import('./request') & AuthExpiredApi;
+	const req = await import('./request');
 	const storage = await import('$lib/auth/storage');
 	const session = await import('$lib/auth/session');
 	// The teardown+redirect half sits behind a registration seam so node scripts can import
@@ -110,10 +109,10 @@ describe('entuFetch — 401 handling (#107)', () => {
 
 		const tagged = new Error('Entu returned 401');
 		tagged.name = 'AuthExpiredError';
-		expect(req.isAuthExpiredError?.(tagged)).toBe(true);
-		expect(req.isAuthExpiredError?.(new Error('network down'))).toBe(false);
-		expect(req.isAuthExpiredError?.(undefined)).toBe(false);
-		expect(req.isAuthExpiredError?.('AuthExpiredError')).toBe(false);
+		expect(req.isAuthExpiredError(tagged)).toBe(true);
+		expect(req.isAuthExpiredError(new Error('network down'))).toBe(false);
+		expect(req.isAuthExpiredError(undefined)).toBe(false);
+		expect(req.isAuthExpiredError('AuthExpiredError')).toBe(false);
 	});
 });
 
@@ -206,7 +205,7 @@ describe('entuFetch — 401 handling, review fixes (#107 R1)', () => {
 			caught = e;
 		}
 
-		expect(req.isAuthExpiredError?.(caught)).toBe(true);
+		expect(req.isAuthExpiredError(caught)).toBe(true);
 		expect(storage.getToken()).toBeNull();
 		expect(get(session.authStore)).toEqual({ status: 'anonymous' });
 		expect(gotoMock).toHaveBeenCalledTimes(1);
@@ -240,7 +239,7 @@ describe('entuFetch — non-401 failures stay data-loading errors (regression gu
 		}
 
 		expect(caught).toBe(boom);
-		expect(req.isAuthExpiredError?.(caught)).toBe(false);
+		expect(req.isAuthExpiredError(caught)).toBe(false);
 		expect(storage.getToken()).toBe('jwt-live');
 		expect(gotoMock).not.toHaveBeenCalled();
 	});
