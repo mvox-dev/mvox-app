@@ -149,7 +149,7 @@ const ROWS: Record<string, Row> = {
 	},
 	'/links add': {
 		page: '/links',
-		gap: 'posts with the load-time token',
+		gap: '#795 fix pending: posts with the load-time token',
 		write: async (c) => {
 			await fireEvent.input(must(c, 'links-add-name'), { target: { value: 'Scores' } });
 			await fireEvent.input(must(c, 'links-add-url'), { target: { value: 'https://example.test' } });
@@ -158,7 +158,7 @@ const ROWS: Record<string, Row> = {
 	},
 	'/roster new section': {
 		page: '/roster',
-		gap: 'posts with the load-time token',
+		gap: '#795 fix pending: posts with the load-time token',
 		write: async (c) => {
 			await fireEvent.click(must(c, 'roster-new-section'));
 			await waitFor(() => must(c, 'roster-new-section-name'));
@@ -237,7 +237,7 @@ describe('a write with no token, on every page that writes', () => {
 
 	const names = Object.keys(ROWS);
 	it.each(names.filter((name) => !ROWS[name].gap))('%s: sends nothing and goes to session-expired', writeWithoutToken);
-	it.fails.each(names.filter((name) => ROWS[name].gap))('%s: known gap, still sends', writeWithoutToken);
+	it.fails.each(names.filter((name) => ROWS[name].gap))('%s: known gap (#795 fix pending), still sends; this flips red when fixed', writeWithoutToken);
 });
 
 // (*MVOX:Josquin*)

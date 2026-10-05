@@ -241,7 +241,7 @@ const SURFACES: Record<string, Surface> = {
 	},
 	series: {
 		component: 'src/lib/events/EventSeriesPicker.svelte',
-		// Its region mounts with the message (#304), not before the write like the others (#328).
+		// #796 fix pending: its region mounts with the message, not before the write (skipped below).
 		persistent: false,
 		staysAfterSwitch: true,
 		event: editableEvent({
@@ -395,7 +395,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		settledThenSwitch
 	);
 	it.fails.each(names.filter((name) => SURFACES[name].staysAfterSwitch))(
-		'%s: known gap, the settled cue follows the viewer to the next collective',
+		'%s: known gap (#796 fix pending), the settled cue follows the viewer to the next collective',
 		settledThenSwitch
 	);
 });
