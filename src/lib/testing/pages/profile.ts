@@ -7,7 +7,7 @@ import { applyFieldMoveMock, applyProfileSaveMock } from '$lib/testing/mocks/pro
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
 import { signIn } from '$lib/testing/session';
 
-export { LOCALES } from './files';
+export { LOCALES, readMessages } from './files';
 
 export const COLLECTIVE_A = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 export const COLLECTIVE_B = { db: 'bravura', name: 'Bravura', personId: 'person-b' };
@@ -63,7 +63,5 @@ export async function openEditor(
 export async function waitReady(container: HTMLElement): Promise<void> {
 	await waitFor(() => expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull());
 }
-
-export { messages as readMessages } from './messageFiles';
 
 // (*MVOX:Josquin*)
