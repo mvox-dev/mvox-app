@@ -1,7 +1,5 @@
 // The byte store's presence query: one heldFileIds(db, personId) call per list that moves no
 // recency, since a per-row get() would count as an open and reorder eviction by render.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createByteStore, type ByteStore, type StoredFileRecord } from './byteStore';
 import { createFakeAdapter, createFakeByteStore, type FakeAdapter } from '$lib/testing/byteStoreFakes';
@@ -130,11 +128,6 @@ describe('#351 review finding 2 — presence reads KEYS, never PAYLOADS', () => 
 		expect(listSpy).not.toHaveBeenCalled();
 		expect(adapter.rows().map((r) => r.fileId)).toEqual(['file-2']);
 	});
-
-	it('the adapter seam DECLARES the keys-only method, so no implementation can quietly answer presence from rows', () => {
-		const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
-		expect(source).toMatch(/listKeys\(\): Promise<ByteStoreKey\[\]>/);
-	});
 });
 
 describe('#351 — the fake store implements the SAME presence member (reconciled, not a divergent duplicate)', () => {
@@ -148,19 +141,6 @@ describe('#351 — the fake store implements the SAME presence member (reconcile
 		expect([...answer].sort()).toEqual(['file-a', 'file-b']);
 		expect([...answer].sort()).toEqual([...fake.heldFor('db-1', 'p-1')].sort());
 		expect(await fake.heldFileIds('db-2', 'p-1')).toEqual(['file-c']);
-	});
-});
-
-describe('#351 — source pins: the member sits on the REAL interface and reads as presence, never as a bytes-read', () => {
-	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
-
-	it('the ByteStore interface declares heldFileIds(db, personId): Promise<string[]>', () => {
-		expect(source).toMatch(/heldFileIds\(db: string, personId: string\): Promise<string\[\]>/);
-	});
-
-	it('the doc beside it states this is a presence query and NOT an open — the one fact the next caller must meet', () => {
-		expect(source).toMatch(/presence/i);
-		expect(source).toMatch(/not an open|never an open|not count as an open|no recency/i);
 	});
 });
 

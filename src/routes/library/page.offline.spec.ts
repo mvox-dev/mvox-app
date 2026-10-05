@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 // #434: the library offline shows the last seen data; only `globalThis.fetch` is stubbed, the
 // real readers run through readCache over fake-indexeddb.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -473,6 +471,47 @@ describe('#434 slice 4 review round, finding 2 — the borrower sees her OWN loa
 		await openMyLoans(container);
 		await asOfLine(container);
 	});
+	it('offline a loan whose edition never answered still carries its stored copy name', async () => {
+		const live = onlineEntu();
+		const noEdition = vi.fn(async (input: RequestInfo | URL) =>
+			urlOf(input).includes(`entity/${EDITION.id}?props=name,_parent`)
+				? json({ message: 'boom' }, 500, JSON_HEADERS)
+				: live(input)
+		);
+		vi.stubGlobal('fetch', noEdition);
+		const first = await openLibrary();
+		await expectListing(first.container);
+		await fireEvent.click(
+			await waitFor(() => {
+				const el = first.container.querySelector('[data-testid="my-loans-toggle"]');
+				expect(el, 'my-loans-toggle').not.toBeNull();
+				return el!;
+			})
+		);
+		const onlineLabel = await waitFor(() => {
+			const text = first.container.querySelector('[data-testid="my-loans-item-l-1"]')?.textContent ?? '';
+			expect(text).toContain(`#${COPY.copyNumber}`);
+			return text;
+		});
+		await awaitRead(live, '_type.string=library&');
+		await flushReadCache();
+		cleanup();
+
+		vi.setSystemTime(LATER_SAME_DAY);
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openLibrary();
+		await expectListing(container);
+		await fireEvent.click(
+			await waitFor(() => {
+				const el = container.querySelector('[data-testid="my-loans-toggle"]');
+				expect(el, 'my-loans-toggle').not.toBeNull();
+				return el!;
+			})
+		);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="my-loans-item-l-1"]')?.textContent).toBe(onlineLabel);
+		});
+	});
 });
 
 describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel offline, not an alert', () => {
@@ -564,6 +603,120 @@ describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel 
 		expect(list.textContent).not.toContain('library_borrower_unknown');
 	});
 
+	/** Expand work w-1 and edition e-1, then wait for `testid` inside copy c-1's row. */
+	async function openCopyRow(container: HTMLElement, testid: string): Promise<Element> {
+		await fireEvent.click(
+			await waitFor(() => {
+				const el = container.querySelector(`[data-testid="library-work-toggle-${WORKS[0].id}"]`);
+				expect(el, 'work toggle').not.toBeNull();
+				return el!;
+			})
+		);
+		await fireEvent.click(
+			await waitFor(() => {
+				const el = container.querySelector(`[data-testid="library-edition-toggle-${EDITION.id}"]`);
+				expect(el, 'edition toggle').not.toBeNull();
+				return el!;
+			})
+		);
+		return waitFor(() => {
+			const el = container.querySelector(`[data-testid="library-copy-${COPY.id}"] [data-testid="${testid}"]`);
+			expect(el, testid).not.toBeNull();
+			return el!;
+		});
+	}
+
+	it('a return re-reads the lendings into the store, so a later offline visit shows the copy available', async () => {
+		const live = librarianEntu();
+		let returned = false;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+				const url = urlOf(input);
+				if (init?.method === 'POST' && url.includes('entity/l-1')) {
+					returned = true;
+					return json({}, 200, JSON_HEADERS);
+				}
+				if (returned && url.includes('_type.string=lending&')) {
+					return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
+				}
+				return live(input);
+			})
+		);
+		const first = await openLibrary();
+		await expectLibrarianPanel(first.container);
+		await fireEvent.click(await openCopyRow(first.container, `library-return-${COPY.id}`));
+		await waitFor(() => {
+			expect(first.container.querySelector(`[data-testid="inline-checkout-${COPY.id}"]`)).not.toBeNull();
+		});
+		await flushReadCache();
+		cleanup();
+
+		vi.setSystemTime(LATER_SAME_DAY);
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openLibrary();
+		await expectListing(container);
+		await openCopyRow(container, `inline-checkout-${COPY.id}`);
+		expect(container.querySelector(`[data-testid="library-return-${COPY.id}"]`)).toBeNull();
+	});
+
+	/** The librarian with copy c-1 available and the lending type resolvable; `libraryDown()`
+	 *  makes the library-parent read fail from then on. */
+	function checkoutEntu() {
+		const live = librarianEntu();
+		let libraryReadDown = false;
+		const stub = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = urlOf(input);
+			if (url.includes('_type.string=lending&')) return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
+			if (url.includes('_type.string=entity')) {
+				return json({ count: 1, entities: [{ _id: 'type-lending' }] }, 200, JSON_HEADERS);
+			}
+			if (libraryReadDown && url.includes('_type.string=library&')) {
+				throw new TypeError('Failed to fetch');
+			}
+			if (init?.method === 'POST') return json({ _id: 'l-new' }, 200, JSON_HEADERS);
+			return live(input);
+		});
+		return { live, stub, libraryDown: () => (libraryReadDown = true) };
+	}
+
+	async function checkOutCopy(wire: ReturnType<typeof checkoutEntu>, libraryDown: boolean) {
+		vi.stubGlobal('fetch', wire.stub);
+		const { container } = await openLibrary();
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="librarian-tools"]'), 'librarian-tools').not.toBeNull();
+		});
+		const select = await openCopyRow(container, `inline-checkout-${COPY.id}`);
+		await awaitRead(wire.live, '_type.string=member&status.string=active');
+		await flushReadCache();
+		if (libraryDown) wire.libraryDown();
+		await fireEvent.change(select, { target: { value: BORROWER_MEMBER } });
+		return container;
+	}
+
+	const posts = (stub: ReturnType<typeof vi.fn>) =>
+		stub.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === 'POST');
+
+	it('a checkout writes one lending under the library it read live', async () => {
+		const wire = checkoutEntu();
+		await checkOutCopy(wire, false);
+
+		await waitFor(() => {
+			expect(posts(wire.stub)).toHaveLength(1);
+		});
+		expect(String((posts(wire.stub)[0][1] as RequestInit).body)).toContain(`"reference":"${LIBRARY}"`);
+	});
+
+	it('a checkout resolves its library parent live: when that read fails, nothing is written', async () => {
+		const wire = checkoutEntu();
+		const container = await checkOutCopy(wire, true);
+
+		await waitFor(() => {
+			expect(container.querySelector(`[data-testid="inline-checkout-error-${COPY.id}"]`)).not.toBeNull();
+		});
+		expect(posts(wire.stub)).toEqual([]);
+	});
+
 	it('with NOTHING cached, offline the librarian panel still fails legibly rather than claiming a state', async () => {
 		// Discovery alone warmed: the page reaches its own load, the listing
 		// fails, and there is no last-seen librarian answer to restore either.
@@ -578,79 +731,6 @@ describe('#434 slice 4 review round 2, finding 1 — a LIBRARIAN sees her panel 
 			expect(container.querySelector('[data-testid="library-load-error"]'), 'library-load-error').not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="librarian-tools"]')).toBeNull();
-	});
-});
-
-describe('#434 slice 4 — the page is wired through its own entry points', () => {
-	const read = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
-	const page = read('src/routes/library/+page.svelte');
-	const loads = read('src/lib/library/libraryPageLoads.ts');
-	const writes = read('src/lib/library/libraryPageWrites.ts');
-	const all = [page, loads, writes];
-
-	it('renders the ONE shared as-of line, never a copy of it', () => {
-		expect(page).toContain("import AsOfLine from '$lib/components/offline/AsOfLine.svelte'");
-		expect(page).toContain('<AsOfLine readAt={$servedFromCache} testid="library-as-of"');
-		expect(page).toContain('resetServedFromCache()');
-	});
-
-	it('loads through libraryPageData, not the shared readers directly', () => {
-		expect(page).toContain("from '$lib/library/libraryPageData'");
-		expect(loads).toContain("from '$lib/library/libraryPageData'");
-		expect(page).toContain('loadLibraryListing(');
-		expect(loads).toContain('loadLibraryEditions(');
-		expect(loads).toContain('loadLibraryCopies(');
-		for (const source of all) {
-			expect(source).not.toMatch(/\blistWorks\(/);
-			expect(source).not.toMatch(/\blistEditions\(/);
-			expect(source).not.toMatch(/\blistCopies\(/);
-		}
-	});
-
-	it('the librarian state and the my-loans chain load through libraryPageData too', () => {
-		// A red `librarian-load-error` beside a restored listing, or a vanishing my-loans section,
-		// is a reader the page reached past its own entry points.
-		expect(loads).toContain('loadLibrarianState(');
-		expect(page).toContain('loadMyMemberId(');
-		expect(page).toContain('loadMyLoanCopyNames(');
-		expect(page).toContain('loadMyLoanCopyChains(');
-		for (const source of all) {
-			expect(source).not.toMatch(/\bresolveLibrarian\(/);
-			expect(source).not.toMatch(/\bfindMyMemberId\(/);
-			expect(source).not.toMatch(/\bresolveCopyNames\(/);
-			expect(source).not.toMatch(/\bresolveCopyChains\(/);
-		}
-	});
-
-	it('the librarian panel feeds load through libraryPageData too (review round 2, finding 1)', () => {
-		expect(loads).toContain('loadLibrarianPickers(');
-		expect(loads).toContain('loadLibrarianMemberNames(');
-		for (const source of all) {
-			expect(source).not.toMatch(/\blistAllEditions\(/);
-			expect(source).not.toMatch(/\blistAllCopies\(/);
-			expect(source).not.toMatch(/\blistActiveMembers\(/);
-			expect(source).not.toMatch(/\bresolveBorrowerNames\(/);
-		}
-		// One path serves the mount effect and the retry.
-		const pickerCalls = all.map((source) => source.match(/loadLibrarianPickers\(/g)?.length ?? 0);
-		expect(pickerCalls).toEqual([0, 1, 0]);
-	});
-
-	it('every write resolves its own `_parent` LIVE (review round 2, finding 2)', () => {
-		// `loadLibrarianState` is cache-backed and a GET inside a write may not be, so the three
-		// write paths resolve the parent through the flag-free `resolveWriteLibraryId`.
-		expect(writes).toContain("resolveWriteLibraryId");
-		expect(writes.match(/await resolveWriteLibraryId\(cfg\)/g)?.length ?? 0).toBe(1);
-		expect(writes.match(/await requireWriteLibraryId\(cfg, /g)?.length ?? 0).toBe(3);
-		for (const source of all) expect(source).not.toMatch(/\$libraryEntityIdStore/);
-	});
-
-	it('the three post-write lending re-reads store without serving (refreshLibraryLendings)', () => {
-		// Post-write lending re-reads: a served copy could show pre-write availability, an uncached
-		// one leaves the stored copy behind. Store-only does neither.
-		expect(writes.match(/refreshLibraryLendings\(/g)?.length ?? 0).toBeGreaterThanOrEqual(1);
-		expect(writes.match(/await refreshLendings\(cfg\)/g)?.length ?? 0).toBe(3);
-		for (const source of all) expect(source).not.toMatch(/\blistLendings\(/);
 	});
 });
 

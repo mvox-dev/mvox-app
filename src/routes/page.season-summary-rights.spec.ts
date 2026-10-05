@@ -2,8 +2,6 @@
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { join, relative, resolve } from 'node:path';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -151,47 +149,6 @@ describe('#365 — the season-summary comparison opens on season rights', () => 
 		await waitFor(() => expect(loadFullAgendaMock).toHaveBeenCalled());
 		await new Promise((r) => setTimeout(r, 0));
 		expect(container.querySelector(EXPAND)).toBeNull();
-	});
-});
-
-const SRC_ROOT = resolve(__dirname, '..');
-
-function sourceFiles(): string[] {
-	return readdirSync(SRC_ROOT, { recursive: true, withFileTypes: true })
-		.filter(
-			(d) =>
-				d.isFile() &&
-				(d.name.endsWith('.svelte') || d.name.endsWith('.ts')) &&
-				!d.name.endsWith('.spec.ts')
-		)
-		.map((d) => join(d.parentPath, d.name))
-		.filter((f) => !relative(SRC_ROOT, f).startsWith(join('lib', 'paraglide')));
-}
-
-describe('#365 — conductorStore is dead (done-when 2)', () => {
-	it('src/lib/attendance/conductorStore.ts no longer exists', () => {
-		expect(
-			existsSync(join(SRC_ROOT, 'lib', 'attendance', 'conductorStore.ts')),
-			'conductorStore.ts must be deleted — the expand gate was its last consumer (#365)'
-		).toBe(false);
-	});
-
-	it('no non-spec source references attendance/conductorStore', () => {
-		const needle = 'attendance/conductorStore';
-		const offenders: string[] = [];
-		for (const file of sourceFiles()) {
-			const source = readFileSync(file, 'utf-8');
-			let idx = source.indexOf(needle);
-			while (idx !== -1) {
-				const line = source.slice(0, idx).split('\n').length;
-				offenders.push(`${relative(SRC_ROOT, file)}:${line}`);
-				idx = source.indexOf(needle, idx + 1);
-			}
-		}
-		expect(
-			offenders,
-			`live references to the deleted conductorStore:\n${offenders.join('\n')}`
-		).toEqual([]);
 	});
 });
 

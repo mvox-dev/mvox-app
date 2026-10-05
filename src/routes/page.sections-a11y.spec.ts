@@ -3,7 +3,6 @@
 // tests that always render the real /roster page, never a component alone.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { bareTextNodes } from '$lib/testing/bareText';
 import {
 	everyPatternContains,
 	isMessageEmpty,
@@ -73,15 +72,12 @@ import type { SectionNode } from '$lib/sections/sectionData';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { adminStore, resetAdmin, type AdminState } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { resetAppState } from '$lib/testing/appReset';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { q } from '$lib/testing/pages/dom';
 import { readSource } from '$lib/testing/pages/files';
-
-const ROSTER_SURFACES = surfacesUnder('src/routes/roster/', 'src/lib/roster/', 'src/lib/sections/');
 
 // Fixtures: Soprano (one sub-section), Alto, Tenor, and one unassigned member.
 
@@ -216,32 +212,8 @@ async function renderArrangeReady(): Promise<HTMLElement> {
 	return container;
 }
 
-// 1 — i18n: every sections surface renders via Paraglide keys only
-describe('#99 — i18n: no hardcoded user-facing strings on sections surfaces', () => {
-	it('the derived ROSTER_SURFACES list is not empty (a moved folder would scan nothing)', () => {
-		expect(ROSTER_SURFACES.length).toBeGreaterThanOrEqual(8);
-	});
-
-	it.each(ROSTER_SURFACES)('%s contains no bare text nodes outside m.* calls', (file) => {
-		expect(bareTextNodes(readSource(file))).toEqual([]);
-	});
-
-	it('SectionPicker.svelte contains no bare text nodes outside m.* calls', () => {
-		expect(bareTextNodes(readSource('src/lib/sections/SectionPicker.svelte'))).toEqual([]);
-	});
-
-	it.each(ROSTER_SURFACES)('%s has no hardcoded aria-label/title string literals (labels must come from m.*)', (file) => {
-		const source = readSource(file);
-		const hardcoded = source.match(/(?:aria-label|title)="[^"]*[a-zA-Z][^"]*"/g) ?? [];
-		expect(hardcoded).toEqual([]);
-	});
-
-	it('SectionPicker.svelte has no hardcoded aria-label/placeholder string literals', () => {
-		const source = readSource('src/lib/sections/SectionPicker.svelte');
-		const hardcoded = source.match(/(?:aria-label|placeholder)="[^"]*[a-zA-Z][^"]*"/g) ?? [];
-		expect(hardcoded).toEqual([]);
-	});
-
+// 1 — i18n: the source scan for hardcoded strings is page.ux-polish-i18n.spec.ts
+describe('#99 — i18n: roster keys exist in all four locales', () => {
 	it('guard: every roster_* key in en.json exists in et, lv and uk, and none is empty', () => {
 		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const rosterKeys = Object.keys(en).filter((k) => k.startsWith('roster_'));

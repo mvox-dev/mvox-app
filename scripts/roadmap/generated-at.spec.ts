@@ -29,13 +29,6 @@ function timeEl(doc: Document): Element {
 	return els[0];
 }
 
-/** All inline script text of the page — REFRESH_SCRIPT lives there. */
-function scriptText(doc: Document): string {
-	return Array.from(doc.querySelectorAll('script'))
-		.map((s) => s.textContent ?? '')
-		.join('\n');
-}
-
 describe('#308 — generated-at shown in Estonian local time', () => {
 	it('renders the summer (EEST) instant as Tallinn wall-clock time with the GMT +3 marker', () => {
 		const doc = parse(renderBoard(liveShaped, SUMMER_ISO));
@@ -92,14 +85,6 @@ describe('#308 — generated-at shown in Estonian local time', () => {
 		expect(rule('.masthead')).toMatch(/background:/);
 		expect(rule('.app-link')).toMatch(/font-style:\s*italic/);
 		expect(doc0().querySelector('header')?.classList.contains('masthead')).toBe(true);
-	});
-
-	it('self-refresh identity untouched: CURRENT stays the ISO stamp, never the display string', () => {
-		const doc = parse(renderBoard(liveShaped, SUMMER_ISO));
-		const script = scriptText(doc);
-		// The exact JS literal REFRESH_SCRIPT embeds — compared against stamp.txt with !==.
-		expect(script).toContain(JSON.stringify(SUMMER_ISO));
-		expect(script).not.toContain(SUMMER_DISPLAY);
 	});
 
 	it('stays deterministic with the formatting in place: same instant, byte-identical page', () => {

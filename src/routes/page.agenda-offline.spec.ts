@@ -3,6 +3,7 @@
 // The agenda offline: rows from the read cache plus an as-of line. Only fetch is stubbed,
 // so every real reader between the page and the wire runs.
 import { render, cleanup, waitFor } from '@testing-library/svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -249,27 +250,59 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		await expectAgendaRows(container);
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
 	});
-
-	it('the page resets servedFromCache when its load starts, and reads it for the as-of line', () => {
-		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaSelectedLoad.ts'), 'utf-8');
-		expect(load.includes('resetServedFromCache()'), 'resetServedFromCache()').toBe(true);
-		const source = readFileSync(resolve(process.cwd(), 'src/lib/agenda/AgendaNotices.svelte'), 'utf-8');
-		for (const needle of [
-			'$servedFromCache',
-			// The line itself is the shared AsOfLine, which owns the today-vs-date rule.
-			'<AsOfLine',
-			'testid="agenda-as-of"',
-			'data-testid="agenda-downloads-link-cached"'
-		]) {
-			expect(source.includes(needle), needle).toBe(true);
-		}
-	});
 });
 
 // The agenda's own works read stores the works fan-out; no separate next-event warm-up
 // re-fetches the same collections on every load.
 describe('#434 slice 5 — one works read per agenda load, and it stores', () => {
 	const WORKS_READ = /_type\.string=(work|edition|copy|program_item|repertoire_item)(&|$)/;
+
+	it('a works read falling back to its stored copy does NOT age-stamp a fully live agenda', async () => {
+		const firstLive = onlineEntu();
+		vi.stubGlobal('fetch', firstLive);
+		const first = await coldStart();
+		await expectAgendaRows(first.container);
+		// The prefetch runs once the works read has settled, so every works URL is stored by then.
+		await waitFor(() => {
+			const urls = firstLive.mock.calls.map((c) => urlOf(c[0] as RequestInfo | URL));
+			expect(urls.some((u) => u.includes(`entity/${EVENTS[0].id}?`)), 'prefetch ran').toBe(true);
+		});
+		// The first-tier works reads; the season-repertoire fallback only follows an answered one.
+		const worksUrls = new Set(
+			firstLive.mock.calls
+				.map((c) => urlOf(c[0] as RequestInfo | URL))
+				.filter((u) => WORKS_READ.test(u) && !u.includes('repertoire_item'))
+		);
+		await flushReadCache();
+		cleanup();
+
+		const live = onlineEntu();
+		const rejected = new Set<string>();
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((input: RequestInfo | URL) => {
+				const url = urlOf(input);
+				if (WORKS_READ.test(url)) {
+					rejected.add(url);
+					return Promise.reject(new TypeError('Failed to fetch'));
+				}
+				return live(input);
+			})
+		);
+
+		const { container } = await coldStart();
+		await expectAgendaRows(container);
+		await waitFor(() => {
+			expect([...rejected].sort()).toEqual([...worksUrls].sort());
+		});
+		// A serving reader answers each rejection from IndexedDB; this read queues behind those,
+		// so once it lands every fallback has too.
+		const base = `https://api.entu-test.invalid/${DB}/`;
+		await readCacheGet(DB, PERSON, [...worksUrls][0].slice(base.length));
+		await tick();
+
+		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
+	});
 
 	it('each works URL is fetched exactly once, the reads are stored, and nothing is "as of"', async () => {
 		const live = onlineEntu();

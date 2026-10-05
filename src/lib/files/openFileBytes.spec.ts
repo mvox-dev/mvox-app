@@ -1,6 +1,4 @@
 // openFileBytes: the read-through seam between click handlers and the byte store.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/repertoire/fileUrls', async () =>
@@ -12,6 +10,7 @@ import { BYTE_STORE_CAP_BYTES } from './byteStore';
 import { createFakeByteStore, type FakeByteStore } from '$lib/testing/byteStoreFakes';
 import { testCfg } from '$lib/testing/entuFetchKit';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
 
 const CFG = testCfg('sampledb', 'jwt-abc');
 const A = { db: 'sampledb', personId: 'person-a' };
@@ -37,6 +36,7 @@ let store: FakeByteStore;
 
 beforeEach(() => {
 	signFileUrlMock.mockReset();
+	selectedCollectiveDbStore.set(null);
 	store = createFakeByteStore();
 });
 
@@ -202,6 +202,7 @@ describe('openFileBytes — identity discipline', () => {
 		const fetchImpl = vi.fn().mockReturnValue(new Promise<Response>((r) => (releaseFetch = r)));
 
 		const inFlight = openFileBytes(CFG, A, 'file-1', store, fetchImpl as unknown as typeof fetch);
+		selectedCollectiveDbStore.set('crede');
 		releaseFetch(pdfResponse());
 		await inFlight;
 
@@ -209,16 +210,6 @@ describe('openFileBytes — identity discipline', () => {
 		expect(store.puts[0].identity).toEqual(A);
 		expect(store.heldFor('sampledb', 'person-a')).toEqual(['file-1']);
 		expect(store.heldFor('crede', 'person-a')).toEqual([]);
-	});
-
-	it('source pin: this module NEVER consults collective/auth state — identity is an argument or nothing', () => {
-		const source = readFileSync(
-			fileURLToPath(new URL('./openFileBytes.ts', import.meta.url)),
-			'utf-8'
-		);
-		expect(source).not.toMatch(/selectedCollective/);
-		expect(source).not.toMatch(/authStore|\$lib\/auth/);
-		expect(source).not.toMatch(/headers\.get\(\s*['"`]etag/i);
 	});
 });
 

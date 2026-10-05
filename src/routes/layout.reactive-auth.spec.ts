@@ -12,6 +12,12 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
+const updateForcing = vi.hoisted(() => ({ starts: 0 }));
+vi.mock('$lib/sw/swUpdate', () => ({
+	startUpdateForcing: () => {
+		updateForcing.starts += 1;
+	}
+}));
 
 import Layout from './+layout.svelte';
 import { entuFetch } from '$lib/entu/request';
@@ -165,6 +171,12 @@ describe('+layout — a 401 tears the whole session down, not just localStorage 
 			expect(get(collectiveState).status).toBe('anonymous');
 		});
 		expect(gotoMock.mock.calls.map((c) => String(c[0])).some((u) => u.includes('session_expired'))).toBe(true);
+	});
+});
+
+describe('#368 — the root layout starts service-worker update forcing', () => {
+	it('loading the layout starts it exactly once', () => {
+		expect(updateForcing.starts).toBe(1);
 	});
 });
 

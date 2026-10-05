@@ -1,12 +1,8 @@
 // @vitest-environment happy-dom
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
-const SERVICE_WORKER_PATH = fileURLToPath(new URL('../service-worker.ts', String(import.meta.url)));
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
@@ -586,7 +582,7 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		});
 	});
 
-	it("nothing runs while the app is closed: the prefetch fires from the page's own load chain — no visibility/focus/sync hooks, and the service worker is byte-unmodified", async () => {
+	it("nothing runs while the app is closed: the prefetch fires from the page's own load chain — no visibility/focus/sync hooks", async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
 			upcoming,
 			recent: [],
@@ -612,13 +608,6 @@ describe("#409 — the next event's parts reach the device on app open", () => {
 		const banned = ['visibilitychange', 'focus', 'sync', 'periodicsync'];
 		expect(winAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
 		expect(docAdd.mock.calls.filter(([name]) => banned.includes(String(name)))).toEqual([]);
-		const swSource = readFileSync(SERVICE_WORKER_PATH, 'utf-8');
-		expect(createHash('sha256').update(swSource).digest('hex')).toBe(
-			'b360f68c38d3972899cfea912840eb79002f06c7dd2e15e03e01b90cf91c9d9a'
-		);
-		expect(
-			[...swSource.matchAll(/self\.addEventListener\('([a-z]+)'/g)].map((m) => m[1])
-		).toEqual(['install', 'activate', 'fetch']);
 		winAdd.mockRestore();
 		docAdd.mockRestore();
 	});

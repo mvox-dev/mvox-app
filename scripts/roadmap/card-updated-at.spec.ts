@@ -1,25 +1,6 @@
 // @vitest-environment happy-dom
-/**
- * #403 RED — the card's upper-right corner shows when the issue was last updated.
- *
- * Mihkel's commission, and its simplification: the corner is PLAIN last-updated,
- * "be it label movement or new comment". So the rendering reads exactly one
- * field — `updatedAt` — and nothing else may reach it: not `closedAt`, not a
- * label, not the build stamp. The last-updated claim is only true while that
- * stays the single source, which is what the isolation tests below pin.
- *
- * The issue's third box ("a commit or an issue that only references it does not
- * change what the corner shows") is a property of GitHub's `updated_at`, not of
- * this code: verified at the artefact on #369 (closed 22:39:45Z, updated
- * 22:39:51Z, two later commit `referenced` events left it unchanged) and on
- * #371 (cross-reference, likewise unchanged). What IS ours to hold is that the
- * corner cannot drift off that field, so that is what is tested here.
- *
- * Display convention is the page's existing one (`formatGeneratedAt`) — one date
- * convention on one page, no second clock.
- *
- * (*PO:Gama*)
- */
+// The card's upper-right corner shows the issue's updatedAt and nothing else (closedAt, labels
+// and the build stamp never reach it), in the page's one date format. (*PO:Gama*)
 import { describe, expect, it } from 'vitest';
 import { renderBoard, renderUpdatedAt, type RoadmapIssue } from './render';
 
@@ -72,10 +53,13 @@ describe('#403 — every card carries its last-updated time', () => {
 		expect(card?.firstElementChild?.classList.contains('issue-updated')).toBe(true);
 	});
 
-	it('the stylesheet floats it right and the card contains the float', () => {
-		const html = renderBoard([issue()], GENERATED_AT);
-		expect(html).toContain('.issue-updated { float: right;');
-		expect(html).toContain('.issue { display: flow-root;');
+	it('the corner renders floated right inside a card that contains the float', () => {
+		document.documentElement.innerHTML = renderBoard([issue()], GENERATED_AT)
+			.replace(/^[\s\S]*?<html[^>]*>|<\/html>[\s\S]*$/g, '')
+			.replace(/<script[\s\S]*?<\/script>/g, '');
+		const card = document.querySelector('article[data-issue="403"]')!;
+		expect(getComputedStyle(card.querySelector('time.issue-updated')!).float).toBe('right');
+		expect(getComputedStyle(card).display).toBe('flow-root');
 	});
 });
 

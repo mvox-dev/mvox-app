@@ -3,8 +3,6 @@
 // default-inert without the toggle, marked on every field, and a CSS overlay, never a mutation.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -174,25 +172,6 @@ describe('(2) marker coverage — every mapped PII surface carries the marker on
 				field(container, id).closest(`[${REDACT_ATTR}]`),
 				`${id} must render inside a capture-redaction marker`
 			).not.toBeNull();
-		}
-	});
-
-	it('the page SOURCE renders the five fields through <RedactedField> — component-level marker, never five hand-marked inline inputs (the seed-188 anti-pattern #357 names)', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/lib/roster/MemberRecordEditor.svelte'),
-			'utf-8'
-		);
-		expect(source, 'imports the shared component').toContain(
-			"$lib/components/RedactedField.svelte"
-		);
-		const usages = source.match(/<RedactedField/g) ?? [];
-		expect(usages.length, 'all five PII fields go through the component').toBeGreaterThanOrEqual(5);
-		for (const id of PII_FIELD_TESTIDS) {
-			expect(source, `${id} still authored at the call site (as the component's testid prop)`).toContain(id);
-			expect(
-				source,
-				`${id} must NOT remain a raw inline <input> — the marker lives on the component`
-			).not.toMatch(new RegExp(`<input[^>]*data-testid="${id}"`));
 		}
 	});
 });

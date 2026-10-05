@@ -785,35 +785,10 @@ describe('locale parity — every #193 key present and non-empty in en/et/lv/uk'
 	});
 });
 
-// ── #218 — ONE source for provider display names ────────────────────────────────
-// #218 — the identity rows and the signed-in banner read provider names from
-// providerLabel in $lib/auth/providers; no local PROVIDER_LABELS map.
+// ── #218 — provider display names ────────────────────────────────────────────────
 
-describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () => {
-	const profileSource = [
-		'src/routes/profile/+page.svelte',
-		'src/lib/profile/ProfileChrome.svelte',
-		'src/lib/profile/profileFieldOps.ts',
-		'src/lib/profile/LinkedAccountsSection.svelte'
-	]
-		.map((path) => readFileSync(resolve(process.cwd(), path), 'utf-8'))
-		.join('\n');
-	const sectionSource = readFileSync(
-		resolve(process.cwd(), 'src/lib/profile/LinkedAccountsSection.svelte'),
-		'utf-8'
-	);
-
-	it('the profile page no longer defines its own PROVIDER_LABELS map', () => {
-		expect(profileSource).not.toContain('PROVIDER_LABELS');
-	});
-
-	it("the profile page resolves labels via providerLabel imported from '$lib/auth/providers'", () => {
-		expect(sectionSource).toMatch(
-			/import\s*(?:type\s*)?\{[^}]*\bproviderLabel\b[^}]*\}\s*from\s*'\$lib\/auth\/providers'/
-		);
-	});
-
-	it('linked-identity rows read their provider names from that single source (exact prefix)', async () => {
+describe('provider display names (#218)', () => {
+	it('linked-identity rows read the provider name, then the email (full text)', async () => {
 		h.listLinkedIdentitiesMock.mockResolvedValue({
 			identities: [GOOGLE_ID, EMAIL_ID],
 			pendingInvites: 0
@@ -824,8 +799,9 @@ describe('single provider-label source — PROVIDER_LABELS is gone (#218)', () =
 		);
 		const googleRow = q(container, '[data-testid="profile-linked-identity-eu-1"]');
 		const emailRow = q(container, '[data-testid="profile-linked-identity-eu-2"]');
-		expect(googleRow?.textContent?.trim()).toMatch(/^Google\b/);
-		expect(emailRow?.textContent?.trim()).toMatch(/^E-mail\b/);
+		const rowText = (row: Element | null) => row?.textContent?.replace(/\s+/g, ' ').trim();
+		expect(rowText(googleRow)).toBe('Google — me@example.com');
+		expect(rowText(emailRow)).toBe('E-mail — me@example.com');
 	});
 
 	it("the link picker's google button reads 'Google' — the 'Continue with' framing is retired", async () => {

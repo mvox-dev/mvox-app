@@ -24,35 +24,8 @@ import {
 	refreshEventPageWorkRows
 } from './eventPageData';
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { surfacesUnder } from '$lib/testing/svelteSurfaces';
+import { refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
-
-const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
-
-describe('the derived event surfaces', () => {
-	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
-		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
-	});
-});
-
-const eventSurfacesSource = () =>
-	EVENT_SURFACES.map((file) => readFileSync(resolve(process.cwd(), file), 'utf-8')).join('\n');
-
-const AGENDA_SOURCE = () =>
-	[
-		'src/routes/+page.svelte',
-		'src/lib/agenda/agendaLoad.ts',
-		'src/lib/agenda/agendaRosterCache.ts',
-		'src/lib/agenda/agendaSelectedLoad.ts',
-		'src/lib/agenda/agendaWorksLoad.ts',
-		'src/lib/agenda/agendaRowStore.ts',
-		'src/lib/agenda/agendaPanels.ts',
-		'src/lib/repertoire/refetchWorkRows.ts'
-	]
-		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
-		.join('\n');
 
 const DB = 'sampledb';
 const PERSON = 'person-1';
@@ -207,6 +180,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vi.unstubAllGlobals();
 	setReadCacheFactory(undefined);
 	authStore.set({ status: 'anonymous' });
 });
@@ -323,21 +297,6 @@ describe('#434 slice 3 — refreshEventPageDetail stores without ever serving', 
 		);
 		expect(offlineDetail.name).toBe('Thursday rehearsal');
 	});
-
-	it('the event page wires its post-write refresh through this function, not the serving one', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/routes/event/[id]/+page.svelte'),
-			'utf-8'
-		);
-		expect(source).toContain('refreshEventPageDetail');
-		expect(eventSurfacesSource()).not.toMatch(/await loadEventDetail\(/);
-	});
-
-	it('the agenda wires its next-event prefetch through this function, not the serving one', () => {
-		const source = AGENDA_SOURCE();
-		expect(source).toContain('refreshEventPageDetail(cfg, nextEventId, fetch)');
-		expect(source).not.toContain('loadEventPageDetail(');
-	});
 });
 
 // The works read's store-only twin.
@@ -451,34 +410,31 @@ describe('#434 slice 5 — refreshEventPageWorkRows stores without ever serving'
 		expect(stored['ev-1']?.map((r) => r.id)).toEqual(['pi-1', 'pi-2']);
 	});
 
-	it("the agenda's own works reads go through the store-only entry point, with no separate warm-up", () => {
-		const source = AGENDA_SOURCE();
-		expect(source).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
-		expect(source).not.toContain('refreshEventPageWorkRows(cfg, [nextEventId]');
-		// The as-of line here is the agenda's own claim, so never the serving reader.
-		expect(source).not.toContain('loadEventPageWorkRows(');
-		expect(source).not.toMatch(/loadWorksByEventId\(/);
-	});
+	it('refetchWorkRows, the re-read both pages run after a write, stores and never serves', async () => {
+		vi.stubGlobal('fetch', onlineWorks());
+		const rows = await new Promise<Record<string, unknown[]>>((resolve, reject) =>
+			refetchWorkRows(CFG, ['ev-1'], 'season-1', {
+				includeInactive: false,
+				isCurrent: () => true,
+				onRows: resolve,
+				onFailure: () => reject(new Error('refetch failed online'))
+			})
+		);
+		expect(rows['ev-1']).toHaveLength(1);
+		await flushReadCache();
+		expect(await readCacheEntryCount()).toBe(CACHED_WORKS_READS_PER_LOAD);
+		resetServedFromCache();
 
-	it('the event page wires BOTH its works reads through eventPageData, not the shared reader', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/routes/event/[id]/+page.svelte'),
-			'utf-8'
+		vi.stubGlobal('fetch', offline());
+		await new Promise<void>((resolve, reject) =>
+			refetchWorkRows(CFG, ['ev-1'], 'season-1', {
+				includeInactive: false,
+				isCurrent: () => true,
+				onRows: () => reject(new Error('served a stored copy')),
+				onFailure: resolve
+			})
 		);
-		const works = readFileSync(
-			resolve(process.cwd(), 'src/lib/events/EventWorksSection.svelte'),
-			'utf-8'
-		);
-		expect(source).toContain('loadEventPageWorkRows(cfg, [loaded.id], sid, fetch, {');
-		const refetch = readFileSync(
-			resolve(process.cwd(), 'src/lib/repertoire/refetchWorkRows.ts'),
-			'utf-8'
-		);
-		expect(works).toContain('refetchWorkRows(cfg, [evId], seasonId, {');
-		expect(refetch).toContain('refreshEventPageWorkRows(cfg, eventIds, seasonId, fetch, {');
-		// Not imported at all any more, so neither read can drift off the store.
-		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\s*\}/);
-		expect(eventSurfacesSource()).not.toMatch(/loadWorksByEventId\(/);
+		expect(get(servedFromCache)).toBeNull();
 	});
 });
 

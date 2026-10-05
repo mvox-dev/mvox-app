@@ -1,29 +1,7 @@
 // @vitest-environment happy-dom
-/**
- * #305 RED — roadmap board renderer contract.
- *
- * The renderer is the testable core: issues JSON in → complete static HTML
- * out. The GitHub Action around it is reviewed, not unit-tested here.
- *
- * Facts these fixtures reflect (verified live 2026-09-10):
- * - ZERO issues carry YAML frontmatter today; every epic has ZERO native
- *   sub-issues. Day one renders flat English titles — that is CORRECT per
- *   #305, not a degraded mode.
- * - Live label taxonomy: ready / in research / in process / epic / bug / task
- *   (plus labels outside that set, which must never crash the board).
- * - state_reason has real examples of both `completed` and `not_planned`.
- *
- * #307 RED adds: labels carry {name, color} (hex without leading '#', the
- * GitHub wire format) and closedAt (ISO date-time | null); chips render in
- * the label's own colour with luminance-derived text colour; open group
- * sorts by number ascending, closed group by closedAt most-recent-first
- * (null last); an explicit Pooleli/Tehtud divider separates the top-level
- * groups (hardcoded Estonian — this static page is outside Paraglide by
- * design). Fixture colours are the LIVE palette (gh api, 2026-09-10).
- *
- * (*MVOX:Tallis*)
- */
-import { describe, expect, it } from 'vitest';
+// The roadmap board renderer: issues JSON in, complete static HTML out (the Action around it is
+// not unit-tested). Fixture colours are the live label palette. (*MVOX:Tallis*)
+import { describe, expect, it, vi } from 'vitest';
 import liveShapedJson from './fixtures/live-shaped.json';
 import {
 	buildStamp,
@@ -68,11 +46,57 @@ function scriptText(doc: Document): string {
 		.join('\n');
 }
 
-/** The rendered element for one issue. Contract: every issue renders as an element carrying data-issue="<number>". */
+/** The element for one issue: every issue renders with data-issue="<number>". */
 function entry(doc: Document, number: number): Element {
 	const el = doc.querySelector(`[data-issue="${number}"]`);
 	expect(el, `no [data-issue="${number}"] element rendered`).not.toBeNull();
 	return el as Element;
+}
+
+/** Runs the page's inline refresh script against stub browser globals; served null fails. */
+function runRefresh(html: string, opts: { served: string | null; session?: Map<string, string> }) {
+	const session = opts.session ?? new Map<string, string>();
+	let tick: () => void = () => {};
+	let onLoad: () => void = () => {};
+	let intervalMs = 0;
+	const fetchMock = vi.fn(async (_url: string, _init: unknown) => {
+		if (opts.served === null) throw new TypeError('Failed to fetch');
+		return { text: async () => `${opts.served}\n` };
+	});
+	const reload = vi.fn();
+	const scrollTo = vi.fn();
+	const win = {
+		scrollY: 420,
+		scrollTo,
+		addEventListener: (type: string, fn: () => void) => {
+			if (type === 'load') onLoad = fn;
+		}
+	};
+	const storage = {
+		getItem: (key: string) => session.get(key) ?? null,
+		setItem: (key: string, value: string) => void session.set(key, value),
+		removeItem: (key: string) => void session.delete(key)
+	};
+	const every = (fn: () => void, ms: number) => {
+		tick = fn;
+		intervalMs = ms;
+	};
+	const script = scriptText(parse(html));
+	new Function('fetch', 'window', 'location', 'sessionStorage', 'setInterval', script)(
+		fetchMock, win, { reload }, storage, every
+	);
+	return {
+		fetchMock,
+		reload,
+		scrollTo,
+		session,
+		intervalMs,
+		load: () => onLoad(),
+		poll: async () => {
+			tick();
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+	};
 }
 
 describe('parseFrontmatter', () => {
@@ -241,11 +265,7 @@ describe('renderBoard — labels', () => {
 	});
 });
 
-/**
- * The `.label` chip element for one label name under one issue's entry.
- * Contract: every label renders as an element with class "label" whose text
- * content is the label name.
- */
+/** The `.label` chip for one label name under one issue's entry (text = label name). */
 function chip(doc: Document, issueNumber: number, name: string): Element {
 	const found = Array.from(entry(doc, issueNumber).querySelectorAll('.label')).find(
 		(c) => c.textContent?.trim() === name
@@ -327,10 +347,7 @@ describe('renderBoard — ordering inside the groups (#307)', () => {
 	const issuePos = (html: string, n: number): number => pos(html, `data-issue="${n}"`);
 
 	it('orders the open group by activity tier, then issue number ascending (#310 amends #307)', () => {
-		// Fixture: #305 carries `in process`, #298 `in research`; 262/289/301
-		// have neither. #310 makes the tier the primary key — so 305, 298,
-		// then the rest by number: 262, 289, 301. (#307's number-ascending
-		// rule survives per tier.)
+		// #305 is `in process` and #298 `in research`; the rest follow by number.
 		const html = renderBoard(liveShaped, GENERATED_AT);
 		const positions = [305, 298, 262, 289, 301].map((n) => issuePos(html, n));
 		expect([...positions].sort((a, b) => a - b)).toEqual(positions);
@@ -441,13 +458,8 @@ describe('renderBoard — the line: Pooleli / Tehtud divider (#307)', () => {
 });
 
 describe('renderBoard — sub-issues inherit ordering and chips (#307)', () => {
-	// Children arrive out of order on purpose: open 297 before open 290,
-	// old-closed 292 before newly-closed 294.
-	// #354 adjustment: closed #294's `blocked` chip no longer renders (a closed
-	// issue displays no motion labels — closed-motion-labels.spec.ts), so the
-	// coloured-chip-through-the-recursive-path assertion moved to OPEN child
-	// #297, which now carries `blocked` alongside `task`. #294 keeps the label
-	// in the fixture: ordering must stay closedAt-desc, chips or no chips.
+	// Children arrive out of order on purpose; a closed issue shows no motion labels, so the
+	// coloured chip sits on open #297.
 	const epic = issue({
 		number: 289,
 		title: '[EPIC] Library lending 1.0',
@@ -605,24 +617,34 @@ describe('stamp + self-refresh', () => {
 		expect(doc.body?.textContent).toContain(buildStamp(GENERATED_AT).trim());
 	});
 
-	it('polls the same-origin stamp file on an interval, cache-busted', () => {
-		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
-		expect(script).toContain('stamp.txt');
-		expect(script).toMatch(/setInterval|setTimeout/);
-		expect(script).toMatch(/no-store|Date\.now/);
-		expect(script).not.toMatch(/https?:\/\/[^\s"'`]*stamp\.txt/);
+	it('polls the same-origin stamp file every minute, uncached', async () => {
+		const page = runRefresh(renderBoard(liveShaped, GENERATED_AT), { served: GENERATED_AT });
+
+		expect(page.intervalMs).toBe(60_000);
+		await page.poll();
+		expect(page.fetchMock.mock.calls).toEqual([[expect.stringMatching(/^stamp\.txt\?t=\d+$/), { cache: 'no-store' }]]);
+		expect(page.reload).not.toHaveBeenCalled();
 	});
 
-	it('reloads on a changed stamp without losing the reader\'s scroll position', () => {
-		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
-		expect(script).toMatch(/location\.reload/);
-		expect(script).toMatch(/scrollY/);
-		expect(script).toMatch(/scrollTo|scrollRestoration/);
+	it("reloads on a changed stamp without losing the reader's scroll position", async () => {
+		const html = renderBoard(liveShaped, GENERATED_AT);
+		const before = runRefresh(html, { served: buildStamp('2026-09-10T12:05:00Z') });
+		await before.poll();
+		expect(before.reload).toHaveBeenCalledTimes(1);
+
+		const after = runRefresh(html, { served: GENERATED_AT, session: before.session });
+		after.load();
+		expect(after.scrollTo.mock.calls).toEqual([[0, 420]]);
+		expect([...after.session.keys()]).toEqual([]);
 	});
 
-	it('a failed stamp fetch changes nothing — the poll is error-tolerant', () => {
-		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
-		expect(script).toMatch(/\.catch\(|try\s*\{/);
+	it('a failed stamp fetch changes nothing — the poll is error-tolerant', async () => {
+		const page = runRefresh(renderBoard(liveShaped, GENERATED_AT), { served: null });
+
+		await page.poll();
+
+		expect(page.reload).not.toHaveBeenCalled();
+		expect([...page.session.keys()]).toEqual([]);
 	});
 });
 
@@ -655,9 +677,15 @@ describe('renderBoard — generated-at display (#308)', () => {
 		expect(buildStamp(GENERATED_AT)).toBe(GENERATED_AT);
 	});
 
-	it('REFRESH_SCRIPT\'s CURRENT still carries the raw ISO instant, not the display string', () => {
-		const script = scriptText(parse(renderBoard(liveShaped, GENERATED_AT)));
-		expect(script).toContain(JSON.stringify(GENERATED_AT));
-		expect(script).not.toContain(formatGeneratedAt(GENERATED_AT));
+	it('the page compares the poll against the raw ISO stamp, not the display string', async () => {
+		const html = renderBoard(liveShaped, GENERATED_AT);
+		const same = runRefresh(html, { served: buildStamp(GENERATED_AT) });
+		const display = runRefresh(html, { served: formatGeneratedAt(GENERATED_AT) });
+
+		await same.poll();
+		await display.poll();
+
+		expect(same.reload).not.toHaveBeenCalled();
+		expect(display.reload).toHaveBeenCalledTimes(1);
 	});
 });

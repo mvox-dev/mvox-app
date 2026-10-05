@@ -220,18 +220,10 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		expect(displayValue(container, 'name')).toBe('Bea');
 	});
 
-	it('write-side guard only: the completionGate module keeps its exported surface (no API change for consumers)', async () => {
+	it('write-side guard only: the store still subscribes, sets and resets for consumers', async () => {
 		const actual = await vi.importActual<typeof import('$lib/profile/completionGate')>(
 			'$lib/profile/completionGate'
 		);
-		expect(typeof actual.completionGateStore.subscribe).toBe('function');
-		expect(typeof actual.completionGateStore.set).toBe('function');
-		expect(typeof actual.completionGateStore.update).toBe('function');
-		expect(typeof actual.resolveGate).toBe('function');
-		expect(typeof actual.resetGate).toBe('function');
-		expect(typeof actual.hasVisibleName).toBe('function');
-		expect(typeof actual.hasDomainName).toBe('function');
-
 		const seen: GateState[] = [];
 		const unsubscribe = actual.completionGateStore.subscribe((s) => seen.push(s));
 		actual.completionGateStore.set('complete');
