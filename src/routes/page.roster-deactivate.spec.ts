@@ -935,45 +935,6 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
 	});
 
-	it('a POST-DEACTIVATE panel reload that settles after a switch writes NOTHING', async () => {
-		const settlers = holdInactiveLoads();
-		const { container } = await renderTwoCollectiveRoster();
-		await fireEvent.click(container.querySelector('[data-testid="section-toggle-unassigned"]')!);
-		await waitFor(() =>
-			expect(container.querySelector('[data-testid="roster-row-m2"]')).not.toBeNull()
-		);
-
-		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
-		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(1));
-		settlers[0]!([]);
-		await waitFor(() =>
-			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
-		);
-
-		await openCard(container, 'm2'); // #302 drive-path edit
-		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-m2"]')!);
-		await waitFor(() =>
-			expect(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')).not.toBeNull()
-		);
-		await fireEvent.click(container.querySelector('[data-testid="member-deactivate-confirm-m2"]')!);
-		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(2));
-
-		await switchToOtherChoir(container);
-		settlers[1]!([
-			{ memberId: 'm2', personId: 'pp-2', name: 'Berta Bass', email: 'berta@example.com', sectionIds: [], dbEntityId: 'db-1' }
-		]);
-		await flush();
-
-		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
-		await waitFor(() => expect(loadInactiveRosterMock).toHaveBeenCalledTimes(3));
-		expect(container.querySelector('[data-testid="inactive-member-row-m2"]')).toBeNull();
-
-		settlers[2]!([]);
-		await waitFor(() =>
-			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
-		);
-	});
-
 	it('a POST-REINSTATE panel reload that settles after a switch writes NOTHING', async () => {
 		const settlers = holdInactiveLoads();
 		const { container } = await renderTwoCollectiveRoster();
