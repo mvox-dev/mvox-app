@@ -45,7 +45,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 		description: [{ _id: 'val-desc-1', string: 'Come 15 minutes early for warm-ups.' }],
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
 		_parent: [
-			{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' },
 			{ _id: 'pv-season', reference: 'season1', entity_type: 'season' },
 			{ _id: 'pv-series', reference: 'series1', entity_type: 'event_series' }
 		],
@@ -66,7 +65,6 @@ const INHERITING = {
 	description: undefined
 };
 const STANDALONE_PARENTS = [
-	{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' },
 	{ _id: 'pv-season', reference: 'season1', entity_type: 'season' }
 ];
 

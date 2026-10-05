@@ -58,10 +58,7 @@ function standaloneEvent(over: Partial<Record<string, unknown>> = {}) {
 		event_type: [{ _id: 'val-type-1', string: 'concert' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: '2027-04-18T18:00:00.000Z' }],
 		location: [{ _id: 'val-loc-1', string: 'Concert Hall' }],
-		_parent: [
-			{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' },
-			{ _id: 'pv-season', reference: 'season-1', entity_type: 'season' }
-		],
+		_parent: [{ _id: 'pv-season', reference: 'season-1', entity_type: 'season' }],
 		...over
 	};
 }
@@ -74,7 +71,6 @@ function ownerEvent(over: Partial<Record<string, unknown>> = {}) {
 function seriesChildEvent() {
 	return editorEvent({
 		_parent: [
-			{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' },
 			{ _id: 'pv-season', reference: 'season-1', entity_type: 'season' },
 			{ _id: 'pv-series', reference: 'series-1', entity_type: 'event_series' }
 		]
@@ -82,7 +78,7 @@ function seriesChildEvent() {
 }
 function seasonlessEvent() {
 	return editorEvent({
-		_parent: [{ _id: 'pv-org', reference: 'org1', entity_type: 'organization' }]
+		_parent: []
 	});
 }
 

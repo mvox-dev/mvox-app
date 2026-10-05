@@ -35,23 +35,9 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 import { setAuthed } from '$lib/testing/pages/eventRsvp';
 import { pickerOptions, workRowOf } from '$lib/testing/pages/eventEdition';
+import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
 
 // ── fixtures ──────────────────────────────────────────────────────────────────
-
-function eventEntity() {
-	return {
-		_id: 'ev1',
-		name: [{ string: 'Tuesday Rehearsal' }],
-		event_type: [{ string: 'rehearsal' }],
-		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ number: 90 }],
-		location: [{ string: 'Rehearsal Hall' }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
-	};
-}
 
 /** The viewer holds `_editor` on the SEASON — the rights surface the
  *  pin-edition picker (repertoire context) is gated on. */
@@ -119,7 +105,7 @@ function wireStub(opts: { editionCount?: number; scoped?: ScopedMode } = {}) {
 		const method = init?.method ?? 'GET';
 		if (method === 'DELETE') return json({ deleted: true });
 		if (method === 'POST') return json({ _id: 'new-1' });
-		if (url.includes('/entity/ev1')) return json({ entity: eventEntity() });
+		if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
 		if (url.includes('/entity/season1')) return json({ entity: seasonEntity() });
 		if (url.includes('_type.string=entity')) return json({ entities: [{ _id: 'type-1' }] });
 		if (url.includes('_type.string=member') && url.includes('person.reference=p-viewer'))

@@ -49,10 +49,7 @@ function eventEntity(): EntityRaw {
 		event_name: [{ _id: 'val-name-1', string: 'Tuesday Rehearsal' }],
 		start_datetime: [{ _id: 'val-start-1', datetime: isoAt(7) }],
 		duration_minutes: [{ _id: 'val-dur-1', number: 90 }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		],
+		_parent: [{ reference: 'season1', entity_type: 'season' }],
 		_editor: [{ reference: 'p-viewer' }]
 	};
 }

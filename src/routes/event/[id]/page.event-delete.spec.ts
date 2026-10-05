@@ -55,7 +55,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 		description: [{ _id: 'val-desc-1', string: 'Come 15 minutes early for warm-ups.' }],
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
 		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
 			{ reference: 'season1', entity_type: 'season' },
 			{ reference: 'series1', entity_type: 'event_series' }
 		],

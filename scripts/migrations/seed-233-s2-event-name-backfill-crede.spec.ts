@@ -12,18 +12,10 @@ vi.mock('./lib/ledger-writer', async (importOriginal) => {
 	};
 });
 
-import { runSeed233S2 as runSeed233S2Draft } from './seed-233-s2-event-name-backfill-crede';
-import type { RunSeed233S2Result } from './seed-233-s2-event-name-backfill-crede';
+import { runSeed233S2 } from './seed-233-s2-event-name-backfill-crede';
 import { json } from '$lib/testing/entuFetchKit';
 
 type CredeRunnerCfg = EntuCfg & { userId: string };
-
-const runSeed233S2 = runSeed233S2Draft as unknown as (
-	cfg: CredeRunnerCfg,
-	dryRun: boolean,
-	fetchImpl?: typeof fetch,
-	authorizedBy?: string
-) => Promise<RunSeed233S2Result>;
 
 const RUNNER_ID = 'runner-person-1';
 const cfg: CredeRunnerCfg = { db: 'mvox_crede', token: 'jwt', userId: RUNNER_ID };

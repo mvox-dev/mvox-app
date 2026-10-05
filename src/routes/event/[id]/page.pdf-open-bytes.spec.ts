@@ -71,10 +71,7 @@ function installWire(opts: { bytesFail?: boolean } = {}) {
 					name: [{ string: 'Tuesday Rehearsal' }],
 					start_datetime: [{ datetime: isoAt(7) }],
 					duration_minutes: [{ number: 90 }],
-					_parent: [
-						{ reference: 'org1', entity_type: 'organization' },
-						{ reference: 'season1', entity_type: 'season' }
-					]
+					_parent: [{ reference: 'season1', entity_type: 'season' }]
 				}
 			});
 		if (url.includes('/entity/season1'))

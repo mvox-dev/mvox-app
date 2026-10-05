@@ -1,12 +1,7 @@
 // Script runner env reads: dry-run flag and the live-run authorizer.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { loadCredeCfg, readDryRun } from './script-runner';
-import * as scriptRunnerModule from './script-runner';
+import { loadCredeCfg, readAuthorizedBy, readDryRun } from './script-runner';
 import { json } from '$lib/testing/entuFetchKit';
-
-const { readAuthorizedBy } = scriptRunnerModule as unknown as {
-	readAuthorizedBy: () => string | undefined;
-};
 
 describe('readDryRun', () => {
 	const saved: string | undefined = process.env.DRY_RUN;
@@ -99,7 +94,7 @@ describe('loadCredeCfg', () => {
 			})
 		);
 		const cfg = await loadCredeCfg(undefined, undefined, undefined, fetchImpl);
-		expect((cfg as { userId?: string }).userId).toBe('runner-1');
+		expect(cfg.userId).toBe('runner-1');
 	});
 
 	it('throws when the exchange reports NO user id for the db — the rights preflight needs the runner identity, a silent gap would surface as aborted-rights much later', async () => {

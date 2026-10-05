@@ -51,7 +51,6 @@ function eventEntity() {
 		capacity: [{ _id: 'val-cap-1', number: 20 }],
 		_editor: [{ reference: 'p-viewer' }],
 		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
 			{ reference: 'season1', entity_type: 'season' },
 			{ reference: 'series1', entity_type: 'event_series' }
 		]

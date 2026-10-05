@@ -59,7 +59,6 @@ function eventEntity(over: Partial<Record<string, unknown>> = {}) {
 		description: [{ string: 'Come 15 minutes early for warm-ups.' }],
 		capacity: [{ number: 20 }],
 		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
 			{ reference: 'season1', entity_type: 'season' },
 			{ reference: 'series1', entity_type: 'event_series' }
 		],
@@ -188,12 +187,26 @@ describe('loadEventDetail — full header shape', () => {
 
 	it('seasonId is null (and the season rights empty) when the event has no season parent', async () => {
 		const fetchImpl = entuFetchStub({
-			event: eventEntity({ _parent: [{ reference: 'org1', entity_type: 'organization' }] })
+			event: eventEntity({ _parent: [] })
 		});
 		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
 		expect(detail.seasonId).toBeNull();
 		expect(detail.seasonOwnerIds).toEqual([]);
 		expect(detail.seasonEditorIds).toEqual([]);
+	});
+
+	it('season and series are read by type, not position: series listed first', async () => {
+		const fetchImpl = entuFetchStub({
+			event: eventEntity({
+				_parent: [
+					{ reference: 'series1', entity_type: 'event_series' },
+					{ reference: 'season1', entity_type: 'season' }
+				]
+			})
+		});
+		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
+		expect(detail.seasonId).toBe('season1');
+		expect(detail.seriesId).toBe('series1');
 	});
 
 	it('the event GET asks for event_name and NEVER the retired bare name (#420 — no fallback read)', async () => {
@@ -249,10 +262,7 @@ describe('loadEventDetail — series inheritance (read-time merge, verbatim list
 		const fetchImpl = entuFetchStub({
 			event: eventEntity({
 				description: undefined,
-				_parent: [
-					{ reference: 'org1', entity_type: 'organization' },
-					{ reference: 'season1', entity_type: 'season' }
-				]
+				_parent: [{ reference: 'season1', entity_type: 'season' }]
 			})
 		});
 		const detail = await loadEventDetail(cfg, 'ev1', fetchImpl as unknown as typeof fetch);
@@ -1435,12 +1445,11 @@ function libraryWorksFixture(): unknown[] {
 }
 
 function activeMembersFixture(): unknown[] {
-	const org = [{ reference: 'org1', entity_type: 'organization' }];
 	return [
-		{ _id: 'member-1', person: [{ reference: 'p-viewer' }], _parent: org },
-		{ _id: 'member-2', person: [{ reference: 'p-mihkel' }], _parent: org },
-		{ _id: 'member-3', person: [{ reference: 'p-alice' }], _parent: org },
-		{ _id: 'member-4', person: [{ reference: 'p-guest' }], _parent: org }
+		{ _id: 'member-1', person: [{ reference: 'p-viewer' }] },
+		{ _id: 'member-2', person: [{ reference: 'p-mihkel' }] },
+		{ _id: 'member-3', person: [{ reference: 'p-alice' }] },
+		{ _id: 'member-4', person: [{ reference: 'p-guest' }] }
 	];
 }
 

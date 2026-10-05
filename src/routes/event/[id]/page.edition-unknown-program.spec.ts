@@ -45,10 +45,7 @@ function eventEntity() {
 		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
 		duration_minutes: [{ number: 90 }],
 		location: [{ string: 'Concert Hall' }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
+		_parent: [{ reference: 'season1', entity_type: 'season' }]
 	};
 }
 

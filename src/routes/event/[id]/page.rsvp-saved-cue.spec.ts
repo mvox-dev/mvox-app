@@ -34,21 +34,7 @@ import {
 	setAuthed
 } from '$lib/testing/pages/event';
 import { MY_RSVP_ROW, seasonEntity } from '$lib/testing/pages/eventRsvp';
-
-function eventEntity() {
-	return {
-		_id: 'ev1',
-		name: [{ string: 'Tuesday Rehearsal' }],
-		event_type: [{ string: 'rehearsal' }],
-		start_datetime: [{ datetime: '2026-09-01T16:00:00.000Z' }],
-		duration_minutes: [{ number: 90 }],
-		location: [{ string: 'Rehearsal Hall' }],
-		_parent: [
-			{ reference: 'org1', entity_type: 'organization' },
-			{ reference: 'season1', entity_type: 'season' }
-		]
-	};
-}
+import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
 
 type WireOpts = {
 	updatePost?: 'ok' | 'fail' | 'hold';
@@ -78,7 +64,7 @@ function wireStub(opts: WireOpts = {}) {
 				}
 			});
 		}
-		if (url.includes('/entity/ev1')) return json({ entity: eventEntity() });
+		if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
 		if (url.includes('/entity/season1')) return json({ entity: seasonEntity() });
 		if (url.includes('_type.string=member') && url.includes('person.reference=p-viewer'))
 			return json({ entities: [{ _id: 'member-1' }] });

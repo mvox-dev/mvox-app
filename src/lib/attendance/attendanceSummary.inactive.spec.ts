@@ -30,16 +30,9 @@ const records: EventAttendance[] = [
 	{ attendanceId: 'a4', memberId: 'm9', status: 'absent' }
 ] as EventAttendance[];
 
-const derive = deriveAllMemberRates as unknown as (
-	allAttendances: EventAttendance[],
-	members: RosterRow[],
-	totalEvents: number,
-	inactiveMembers: RosterRow[]
-) => Array<Record<string, unknown>>;
-
 describe('deriveAllMemberRates — inactive members keep their rows (done-when 3)', () => {
 	it('FULL SHAPE: active rows unchanged {memberId,name,attended,total}; inactive rows appended as {memberId,name,attended,inactive:true} — NO total, NO rate, NO denominator key of any kind', () => {
-		const rows = derive(records, active, 4, inactive);
+		const rows = deriveAllMemberRates(records, active, 4, inactive);
 		expect(rows).toEqual([
 			{ memberId: 'm1', name: 'Alice Alto', attended: 1, total: 4 },
 			{ memberId: 'm9', name: 'Gone Girl', attended: 2, inactive: true }
@@ -47,12 +40,12 @@ describe('deriveAllMemberRates — inactive members keep their rows (done-when 3
 	});
 
 	it('an inactive member counts present + late as attended, absent and no-record do not (same rule as active rows)', () => {
-		const rows = derive(records, [], 4, inactive);
+		const rows = deriveAllMemberRates(records, [], 4, inactive);
 		expect(rows).toEqual([{ memberId: 'm9', name: 'Gone Girl', attended: 2, inactive: true }]);
 	});
 
 	it('an inactive member with no records at all still keeps her row, zero-filled', () => {
-		const rows = derive([], active, 4, inactive);
+		const rows = deriveAllMemberRates([], active, 4, inactive);
 		expect(rows).toEqual([
 			{ memberId: 'm1', name: 'Alice Alto', attended: 0, total: 4 },
 			{ memberId: 'm9', name: 'Gone Girl', attended: 0, inactive: true }

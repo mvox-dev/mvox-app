@@ -70,10 +70,7 @@ const EVENT = {
 	capacity: [{ _id: 'val-cap-1', number: 20 }],
 	_owner: [{ reference: 'p-viewer' }],
 	_editor: [{ reference: 'p-viewer' }],
-	_parent: [
-		{ reference: 'org1', entity_type: 'organization' },
-		{ reference: 'season1', entity_type: 'season' }
-	]
+	_parent: [{ reference: 'season1', entity_type: 'season' }]
 };
 
 const SEASON = {
@@ -122,8 +119,7 @@ const PROGRAM_ITEM = {
 };
 const MEMBER = {
 	_id: 'mem1',
-	person: [{ reference: 'p-viewer', string: 'Viewer' }],
-	_parent: [{ reference: 'org1', entity_type: 'organization' }]
+	person: [{ reference: 'p-viewer', string: 'Viewer' }]
 };
 
 /** A liberal read router keyed on the url. Any non-GET is recorded and answered 200:

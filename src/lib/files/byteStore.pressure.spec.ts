@@ -7,40 +7,10 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
 
-import * as byteStoreModule from './byteStore';
-import {
-	createByteStore,
-	type ByteStore,
-	type ByteStoreAdapter,
-	type ByteStoreKey,
-	type StoredFileRecord
-} from './byteStore';
+import { createByteStore, PRESSURE_RATIO, type StoredFileRecord } from './byteStore';
 import { openFileBytes } from './openFileBytes';
 import { createFakeAdapter, type FakeAdapter } from '$lib/testing/byteStoreFakes';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
-
-/** The #410 contract shape — an intersection until byteStore.ts declares it
- *  (the source pins below hold the interface itself to account; same idiom as
- *  byteStore.presence.spec.ts's PresenceCapable). */
-type RelieveResult =
-	| { outcome: 'unsupported' }
-	| { outcome: 'swept'; before: number; after: number; removed: ByteStoreKey[] };
-type PressureCapable = ByteStore & {
-	relieve(): Promise<RelieveResult>;
-	setProtectedKeys(keys: ReadonlySet<string>): void;
-};
-type PressureOpts = {
-	capBytes?: number;
-	onRowRemoved?: (key: ByteStoreKey) => void;
-	/** The injectable pressure signal — defaults to navigator.storage?.estimate
-	 *  (bound) when the platform has one; absent here (node), so relieve()
-	 *  without this option must answer 'unsupported'. */
-	estimate?: () => Promise<{ usage?: number; quota?: number }>;
-};
-const makeStore = createByteStore as unknown as (
-	adapter: ByteStoreAdapter,
-	opts?: PressureOpts
-) => PressureCapable;
 
 const A = { db: 'sampledb', personId: 'person-a' };
 const B = { db: 'sampledb', personId: 'person-b' };
@@ -81,7 +51,7 @@ beforeEach(() => {
 
 describe('#410 — the exported pressure line', () => {
 	it('PRESSURE_RATIO is exported and pinned at 0.8 — a number the app reads, not a notification', () => {
-		expect((byteStoreModule as unknown as Record<string, unknown>).PRESSURE_RATIO).toBe(0.8);
+		expect(PRESSURE_RATIO).toBe(0.8);
 	});
 });
 
@@ -90,7 +60,7 @@ describe('#410 — nothing is dropped while there is room', () => {
 		// quota 1000: rows 2×50 + 400 other origin bytes → usage 500, ratio 0.5.
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-2', seededRecord(50, 2000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 400, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 400, 1000) });
 		const listMetaSpy = vi.spyOn(adapter, 'listMeta');
 		const listSpy = vi.spyOn(adapter, 'list');
 		const getSpy = vi.spyOn(adapter, 'get');
@@ -117,7 +87,7 @@ describe('#410 — approaching quota: least-recently-OPENED non-protected rows g
 		await adapter.put(C.db, C.personId, 'file-3', seededRecord(50, 3000));
 		await adapter.put(A.db, A.personId, 'file-4', seededRecord(50, 4000));
 		await adapter.put(A.db, A.personId, 'file-5', seededRecord(50, 5000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
 
 		const result = await store.relieve();
 
@@ -147,7 +117,7 @@ describe("#410 — the next event's parts survive EVERY eviction", () => {
 		await adapter.put(C.db, C.personId, 'file-3', seededRecord(50, 3000));
 		await adapter.put(A.db, A.personId, 'file-4', seededRecord(50, 4000));
 		await adapter.put(A.db, A.personId, 'file-5', seededRecord(50, 5000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
 		store.setProtectedKeys(
 			new Set([
 				pkey(A.db, A.personId, 'file-1'),
@@ -181,7 +151,7 @@ describe('#410 — retention scope is the PERSON, never the device (Gama ruling 
 		await adapter.put(B.db, B.personId, 'file-x', seededRecord(50, 1000)); // NOT protected
 		await adapter.put(A.db, A.personId, 'file-x', seededRecord(50, 2000)); // protected
 		await adapter.put(C.db, C.personId, 'file-x', seededRecord(50, 3000)); // protected
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 700, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 700, 1000) });
 		store.setProtectedKeys(
 			new Set([pkey(A.db, A.personId, 'file-x'), pkey(C.db, C.personId, 'file-x')])
 		);
@@ -204,7 +174,7 @@ describe('#410 — trigger: after every put, not only at app open', () => {
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-2', seededRecord(50, 2000));
 		await adapter.put(B.db, B.personId, 'file-3', seededRecord(50, 3000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
 
 		await store.put(A, 'file-new', data(50));
 
@@ -214,7 +184,7 @@ describe('#410 — trigger: after every put, not only at app open', () => {
 
 	it('without an estimate seam, a put runs exactly the pre-#410 cap pass — no sweep, nothing removed under the cap', async () => {
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000 });
+		const store = createByteStore(adapter, { capBytes: 10_000 });
 
 		await store.put(A, 'file-new', data(50));
 
@@ -229,7 +199,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 
 	it('first attempt throws quota → the sweep frees the oldest candidate → the retry lands the row', async () => {
 		await adapter.put(A.db, A.personId, 'file-old', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
 		const realPut = adapter.put.bind(adapter);
 		const putSpy = vi
 			.spyOn(adapter, 'put')
@@ -256,7 +226,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 		// quota 1000, other-origin 100, one dormant 50-byte row → ratio 0.15,
 		// nowhere near the 0.8 pressure line.
 		await adapter.put(A.db, A.personId, 'file-old', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
 		const realPut = adapter.put.bind(adapter);
 		const putSpy = vi
 			.spyOn(adapter, 'put')
@@ -281,7 +251,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 		// already covers it, so the younger one is not collateral.
 		await adapter.put(A.db, A.personId, 'file-old', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-younger', seededRecord(50, 2000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
 		const realPut = adapter.put.bind(adapter);
 		vi.spyOn(adapter, 'put')
 			.mockImplementationOnce(async () => {
@@ -296,7 +266,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 
 	it('a PROTECTED row is never what the quota recovery frees — the retry fails rather than evict the next event’s part', async () => {
 		await adapter.put(A.db, A.personId, 'file-next', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 100, 1000) });
 		store.setProtectedKeys(new Set([pkey(A.db, A.personId, 'file-next')]));
 		vi.spyOn(adapter, 'put').mockImplementation(async () => {
 			throw quotaError();
@@ -310,7 +280,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 
 	it('still failing after the one retry → the error propagates (openFileBytes below owns the degradation)', async () => {
 		await adapter.put(A.db, A.personId, 'file-old', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
 		const putSpy = vi.spyOn(adapter, 'put').mockImplementation(async () => {
 			throw quotaError();
 		});
@@ -323,7 +293,7 @@ describe('#410 — a REAL QuotaExceededError on put: relieve once, retry once', 
 	});
 
 	it("INTEGRATION — a persistently-full device still opens the file: reason 'network-uncached', nothing thrown (#343's belt is the surface)", async () => {
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 800, 1000) });
 		vi.spyOn(adapter, 'put').mockImplementation(async () => {
 			throw quotaError();
 		});
@@ -357,7 +327,7 @@ describe('#410 — manual remove beats retention (#352 unchanged)', () => {
 		await adapter.put(A.db, A.personId, 'file-next', seededRecord(50, 1000));
 		await adapter.put(A.db, A.personId, 'file-other', seededRecord(50, 2000));
 		await adapter.put(C.db, C.personId, 'file-keep', seededRecord(50, 3000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 0, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 0, 1000) });
 		store.setProtectedKeys(
 			new Set([pkey(A.db, A.personId, 'file-next'), pkey(C.db, C.personId, 'file-keep')])
 		);
@@ -371,7 +341,7 @@ describe('#410 — manual remove beats retention (#352 unchanged)', () => {
 	it('clearAllPartitions removes EVERYTHING, protected included', async () => {
 		await adapter.put(A.db, A.personId, 'file-next', seededRecord(50, 1000));
 		await adapter.put(B.db, B.personId, 'file-b', seededRecord(50, 2000));
-		const store = makeStore(adapter, { capBytes: 10_000 });
+		const store = createByteStore(adapter, { capBytes: 10_000 });
 		store.setProtectedKeys(new Set([pkey(A.db, A.personId, 'file-next')]));
 
 		await store.clearAllPartitions();
@@ -387,7 +357,7 @@ describe('#410 — estimate() absent: relieve is a supported no-op that says so'
 
 	it("no injected estimate and no platform StorageManager → { outcome: 'unsupported' }, nothing deleted, nothing thrown", async () => {
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
-		const store = makeStore(adapter, { capBytes: 10_000 });
+		const store = createByteStore(adapter, { capBytes: 10_000 });
 		const deleteSpy = vi.spyOn(adapter, 'delete');
 
 		const result = await store.relieve();
@@ -405,7 +375,7 @@ describe('#410 — recency is a record of USE, not of display (the #367 trap, ap
 		await adapter.put(C.db, C.personId, 'file-3', seededRecord(50, 3000));
 		await adapter.put(A.db, A.personId, 'file-4', seededRecord(50, 4000));
 		await adapter.put(A.db, A.personId, 'file-5', seededRecord(50, 5000));
-		const store = makeStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
+		const store = createByteStore(adapter, { capBytes: 10_000, estimate: estimateOver(adapter, 600, 1000) });
 		const getSpy = vi.spyOn(adapter, 'get');
 		const listSpy = vi.spyOn(adapter, 'list');
 		const touchesBefore = adapter.touchLog.length;
