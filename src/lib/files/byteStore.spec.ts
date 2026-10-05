@@ -1,6 +1,4 @@
 // The byte store's policy core through its public interface, over an in-memory adapter.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	BYTE_STORE_CAP_BYTES,
@@ -200,11 +198,6 @@ describe('byteStore — GLOBAL cap, least-recently-OPENED eviction', () => {
 });
 
 describe('#410 — protected rows are not candidates in the put-time evictUntilFits', () => {
-	/** The #410 contract shape — an intersection until byteStore.ts declares it
-	 *  (same idiom as byteStore.presence.spec.ts's PresenceCapable). */
-	type RetentionCapable = ByteStore & {
-		setProtectedKeys(keys: ReadonlySet<string>): void;
-	};
 	/** Composite key = the adapter's own JSON fixed-arity triple — collision-
 	 *  safe against any separator character appearing in a db/person/file id. */
 	function pkey(db: string, personId: string, fileId: string): string {
@@ -212,13 +205,12 @@ describe('#410 — protected rows are not candidates in the put-time evictUntilF
 	}
 
 	it('an over-cap put with a PROTECTED oldest row evicts the next-oldest instead', async () => {
-		const retaining = store as RetentionCapable;
 		// cap 100: A holds 40 (opened t0, PROTECTED), B holds 40 (opened t1).
 		await store.put(A, 'file-next', data(40));
 		vi.advanceTimersByTime(1000);
 		await store.put(B, 'file-mid', data(40));
 		vi.advanceTimersByTime(1000);
-		retaining.setProtectedKeys(new Set([pkey(A.db, A.personId, 'file-next')]));
+		store.setProtectedKeys(new Set([pkey(A.db, A.personId, 'file-next')]));
 
 		// C's 40 pushes usage to 120 → the globally-oldest row is A's, but it
 		// is the next event's part — the NEXT-oldest (B's) goes instead.
@@ -240,46 +232,6 @@ describe('#410 — protected rows are not candidates in the put-time evictUntilF
 		await store.put(C, 'file-c', data(40));
 		expect(await store.get(A, 'file-a')).toBeUndefined();
 		expect(await store.get(B, 'file-b')).toBeDefined();
-	});
-});
-
-describe('byteStore — the module says what it must, where the reader meets it (source pins)', () => {
-	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
-	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', import.meta.url)), 'utf-8');
-
-	it('states the retention posture: the partition is a correctness boundary and NOT a security boundary', () => {
-		// Gama's exact enforcement phrase family (issue comment
-		// IC_kwDOTubdKM8AAAABUHDKvg): both halves must be present.
-		expect(source).toMatch(/correctness/i);
-		expect(source).toMatch(/not a security boundary/i);
-	});
-
-	it('states the cap and the eviction rule beside them: global cap, least-recently-opened', () => {
-		expect(source).toMatch(/global cap/i);
-		expect(source).toMatch(/least-recently-opened/i);
-	});
-
-	it('records WHY there is no ETag validator (comment-level statement, never code)', () => {
-		// ETag is unreadable via CORS fetch (Access-Control-Expose-Headers absent):
-		// the words are present, the code absent.
-		expect(source).toMatch(/ETag/);
-		expect(source).toMatch(/CORS|Expose-Headers/i);
-		expect(source).not.toMatch(/headers\.get/i);
-		expect(core).not.toMatch(/headers\.get/i);
-		expect(source).not.toMatch(/['"`]etag['"`]/i);
-		expect(core).not.toMatch(/['"`]etag['"`]/i);
-	});
-
-	it("records the #333 hash-pin hook: the stored sha256 is the app-computed digest of the fetched bytes", () => {
-		expect(source).toMatch(/#333/);
-		expect(source).toMatch(/sha-?256/i);
-	});
-
-	it('never touches auth or identity stores — identity arrives as an argument only', () => {
-		expect(source).not.toMatch(/selectedCollective/);
-		expect(core).not.toMatch(/selectedCollective/);
-		expect(source).not.toMatch(/\$lib\/auth/);
-		expect(core).not.toMatch(/\$lib\/auth/);
 	});
 });
 

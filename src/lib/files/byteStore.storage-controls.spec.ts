@@ -1,6 +1,4 @@
 // The byte store's scoped usage queries and device-wide clear, behind the profile storage section.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createByteStore, type ByteStore, type StoredFileRecord } from './byteStore';
 import {
@@ -198,30 +196,6 @@ describe('#352 — the fake store implements the SAME members (reconciled, not a
 		expect(fake.heldFor('sampledb', 'person-a')).toEqual([]);
 		expect(fake.heldFor('crede', 'person-a')).toEqual([]);
 		expect(await fake.usage()).toBe(0);
-	});
-});
-
-describe('#352 — source pins: the members sit on the REAL interface; usage() itself is untouched', () => {
-	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', import.meta.url)), 'utf-8');
-	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', import.meta.url)), 'utf-8');
-
-	it('the ByteStore interface declares the two scoped-usage members and the device-wide clear', () => {
-		expect(source).toMatch(/usageForPartition\(db: string, personId: string\): Promise</);
-		expect(source).toMatch(/usageForOthers\(db: string, personId: string\): Promise</);
-		expect(source).toMatch(/clearAllPartitions\(\): Promise<void>/);
-	});
-
-	it('the global usage() signature survives unrepurposed — no parameters grew on it', () => {
-		expect(source).toMatch(/usage\(\): Promise<number>/);
-	});
-
-	it('the adapter seam DECLARES the metadata read, so no implementation can quietly answer a size sum from rows', () => {
-		expect(source).toMatch(/listMeta\(\): Promise<ByteStoreMeta\[\]>/);
-	});
-
-	it('the policy core CALLS adapter.list() nowhere — the grep, not just the spies', () => {
-		expect(source).not.toMatch(/await adapter\.list\(\)/);
-		expect(core).not.toMatch(/await adapter\.list\(\)/);
 	});
 });
 

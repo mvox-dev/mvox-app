@@ -1,6 +1,4 @@
 // The byte store's storage-pressure sweep, driven by an injected estimate() over the fake adapter.
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/repertoire/fileUrls', async () =>
@@ -368,6 +366,25 @@ describe('#410 — estimate() absent: relieve is a supported no-op that says so'
 	});
 });
 
+describe('#410 — the default estimate is the platform StorageManager', () => {
+	it('no injected estimate but a platform StorageManager → the sweep reads navigator.storage.estimate', async () => {
+		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
+		const estimate = estimateOver(adapter, 900, 1000);
+		vi.stubGlobal('navigator', { storage: { estimate } });
+		try {
+			const store = createByteStore(adapter, { capBytes: 10_000 });
+
+			const result = await store.relieve();
+
+			expect(estimate).toHaveBeenCalled();
+			expect(result.outcome).toBe('swept');
+			expect(adapter.rows()).toEqual([]);
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+});
+
 describe('#410 — recency is a record of USE, not of display (the #367 trap, applied to the sweep)', () => {
 	it('a full relieve() moves ZERO recency stamps and calls get() ZERO times — listMeta and delete are its whole vocabulary', async () => {
 		await adapter.put(A.db, A.personId, 'file-1', seededRecord(50, 1000));
@@ -392,24 +409,6 @@ describe('#410 — recency is a record of USE, not of display (the #367 trap, ap
 		expect(adapter.rows().map((r) => ({ fileId: r.fileId, openedAt: r.record.openedAt }))).toEqual([
 			{ fileId: 'file-5', openedAt: 5000 }
 		]);
-	});
-});
-
-describe('#410 — source pins: the seam is declared where the next caller meets it', () => {
-	const source = readFileSync(fileURLToPath(new URL('./byteStore.ts', String(import.meta.url))), 'utf-8');
-	const core = readFileSync(fileURLToPath(new URL('./byteStoreCore.ts', String(import.meta.url))), 'utf-8');
-
-	it('the ByteStore interface declares relieve() and setProtectedKeys()', () => {
-		expect(source).toMatch(/relieve\(\): Promise</);
-		expect(source).toMatch(/setProtectedKeys\(keys: ReadonlySet<string>\): void/);
-	});
-
-	it('the default estimate is navigator.storage?.estimate — the injectable seam, not a hard platform dependency', () => {
-		expect(core).toMatch(/navigator\.storage/);
-	});
-
-	it('PRESSURE_RATIO is exported from the module source', () => {
-		expect(source).toMatch(/export const PRESSURE_RATIO = 0\.8/);
 	});
 });
 

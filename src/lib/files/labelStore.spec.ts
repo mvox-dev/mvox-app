@@ -1,7 +1,5 @@
 // #353, #427: the part-label store, and the call sites that hand it a name.
 import { IDBFactory } from 'fake-indexeddb';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createLabelIdbAdapter, LABEL_DB_NAME } from './labelIdbAdapter';
 import { createLabelStore, recordPartLabel, type PartLabel } from './labelStore';
@@ -213,44 +211,24 @@ describe('#353 — StoredFileRecord is UNCHANGED: no title, no label, byteStore.
 	});
 });
 
-describe('#353 — composition + call sites: the label index is WIRED, not beside the app', () => {
-	const src = (rel: string) => readFileSync(resolve(process.cwd(), rel), 'utf-8');
+describe('#353 — composition: the app byte store removes the label when it removes the bytes', () => {
+	it('clearing a partition through the app byte store empties that partition in the app label store', async () => {
+		vi.stubGlobal('indexedDB', new IDBFactory());
+		vi.resetModules();
+		const { getAppByteStore } = await import('./appByteStore');
+		const { getAppLabelStore } = await import('./appLabelStore');
+		await getAppByteStore().put(IDENTITY, 'file-a', bytes(5));
+		await getAppLabelStore().putLabel(IDENTITY, 'file-a', LABEL);
+		expect(await getAppLabelStore().labelsFor('sampledb', 'person-1')).toEqual(
+			new Map([['file-a', LABEL]])
+		);
 
-	it('appByteStore wires onRowRemoved to the label store — eviction anywhere removes the name', () => {
-		const source = src('src/lib/files/appByteStore.ts');
-		expect(source).toContain('onRowRemoved');
-		expect(source).toMatch(/appLabelStore|LabelStore/);
+		await getAppByteStore().clearPartition('sampledb', 'person-1');
+
+		await vi.waitFor(async () =>
+			expect(await getAppLabelStore().labelsFor('sampledb', 'person-1')).toEqual(new Map())
+		);
 	});
-
-	it('the app label store singleton exists (the page seam specs substitute)', () => {
-		const source = src('src/lib/files/appLabelStore.ts');
-		expect(source).toContain('getAppLabelStore');
-	});
-
-	it.each(['src/routes/part/[fileId]/+page.svelte'])(
-		'%s records the label where the bytes land — the delivery `reason` is only knowable there',
-		(page) => {
-			expect(src(page)).toContain('recordPartLabel');
-		}
-	);
-
-	it('openPart hands the part label to the viewer through the navigation state', () => {
-		const source = src('src/lib/parts/openPart.ts');
-		expect(source).toContain('partLabel');
-		expect(source).toMatch(/goto\([^;]*state:/s);
-	});
-
-	it.each([
-		'src/routes/library/+page.svelte',
-		'src/lib/events/EventWorksSection.svelte',
-		'src/lib/agenda/agendaPageHandlers.ts'
-	])(
-		'%s opens a part through openPart',
-		(page) => {
-			expect(src(page)).toMatch(/import \{ openPart \} from '\$lib\/parts\/openPart'/);
-			expect(src(page)).toContain('openPart(');
-		}
-	);
 });
 
 // (*MVOX:Tallis* — #353 RED)

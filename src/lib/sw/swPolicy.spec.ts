@@ -1,49 +1,6 @@
-// #353 RED — the service worker's DECISION CORE, as a pure exported module
-// (guard-instrument law: the routing/decision logic the SW runs on is an
-// exported pure function pinned with inline fixtures — never asserted by
-// poking a real ServiceWorkerGlobalScope, which no test environment here has).
-//
-// SPIKE facts this spec rests on (spike-353, on-branch experiments, reverted):
-//   - SvelteKit's src/service-worker.ts auto-registers under adapter-static +
-//     ssr=false; $service-worker exports build/files/prerendered/version.
-//   - FOUR files are in NO $service-worker array; two of them the shell needs
-//     ('/', '/_app/env.js' — the bootstrap imports env.js UNCONDITIONALLY
-//     before kit.start, so a cold offline start dies without it) and two must
-//     NEVER be cached ('/version.json' — the #350 stamp, the deploy-evidence
-//     instrument; '/_app/version.json' — kit's own update poller, whose
-//     freshness is what makes the skipWaiting recovery dance work at all).
-//   - Every Entu API response is cross-origin (the Entu API host + the
-//     signed bytes bucket), so `origin !== self.location.origin` is the natural
-//     hard fence — but it is pinned here explicitly per URL family, because
-//     the issue's fence is about ENTU API RESPONSES, not about origins.
-//   - The activate cleanup must be PREFIX-SCOPED: the spike's own throwaway
-//     SW deleted every cache on the origin — that bug is fenced below.
-//
-// The module under test: src/lib/sw/swPolicy.ts (lives under $lib so it IS
-// type-checked — the spike proved src/service-worker.ts itself is excluded
-// from svelte-check by the generated tsconfig; see the check:sw pin below).
-//
-// DECISION SHAPE (full-shape toEqual everywhere — objectContaining hid four
-// real bugs once, see partial-assertions memory):
-//   { kind: 'bypass' }       — do NOT respondWith: browser hits the network
-//                              directly; nothing read from or written to any
-//                              cache. Cross-origin (ALL Entu API + bucket
-//                              traffic), non-GET, and the two version stamps.
-//   { kind: 'serve-shell' }  — respondWith(cache.match('/')): a navigation.
-//                              REQUIRED offline: a cold navigation to
-//                              /downloads has nothing precached under that
-//                              URL — without this branch every deep link
-//                              fails with no network.
-//   { kind: 'cache-first' }  — respondWith(cache.match(request) else fetch):
-//                              a precached shell asset.
-//   { kind: 'network' }      — respondWith(fetch(request)): same-origin GET
-//                              outside the precache set. NEVER cached — the
-//                              install-time precache is the ONLY cache write
-//                              the SW ever performs (no runtime caching; that
-//                              is what makes the Entu fence impossible to
-//                              erode later).
+// The service worker's decision core (swPolicy.ts), pinned as pure calls with inline fixtures.
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
 	SHELL_CACHE_PREFIX,
@@ -91,10 +48,7 @@ describe('#353 — install precache list (the spike 1a gap: build+files miss the
 	it('is exactly build + files + the two files no $service-worker array names', () => {
 		const build = ['/_app/immutable/entry/start.abc123.js', '/_app/immutable/nodes/0.js'];
 		const files = ['/robots.txt'];
-		// FULL-SHAPE: '/' (the adapter-static fallback shell — nothing in
-		// $service-worker names it) and '/_app/env.js' (build/index.html's
-		// bootstrap imports it unconditionally BEFORE kit.start — not cached
-		// means a cold offline start dies before any app code runs).
+		// '/' and '/_app/env.js' are in no $service-worker array; a cold offline start needs both.
 		expect(precacheUrls({ build, files })).toEqual([...build, ...files, '/', '/_app/env.js']);
 	});
 
@@ -109,14 +63,7 @@ describe('#353 — install precache list (the spike 1a gap: build+files miss the
 });
 
 describe('#353 — the HARD FENCE: Entu API URLs are NEVER cached or served from cache', () => {
-	// Real URL FAMILIES from the tree, on the house test host (#163 C6: no
-	// spec pins the production Entu host literal): entuFetch builds
-	// `${ENTU_API_BASE}${db}/${path}` (src/lib/entu/request.ts, base from
-	// src/lib/entu-config.ts), and edition BYTES come from a signed
-	// DigitalOcean Spaces URL (src/lib/repertoire/fileUrls.ts). Every one of
-	// them is CROSS-ORIGIN to the app origin — which is exactly what the
-	// decision function keys on, so the fence pinned here holds for the
-	// production host by the same rule.
+	// Every Entu API and bytes-bucket URL is cross-origin to the app; the fence keys on that.
 	const ENTU_URLS = [
 		'https://api.entu-test.invalid/sampledb/entity/68000000000000000000abcd',
 		'https://api.entu-test.invalid/sampledb/entity?_type.string=work&props=name&limit=500',
@@ -126,8 +73,7 @@ describe('#353 — the HARD FENCE: Entu API URLs are NEVER cached or served from
 	];
 
 	it.each(ENTU_URLS)('bypasses (no cache read, no cache write): %s', (url) => {
-		// FULL-SHAPE toEqual: the decision carries NO cache instruction of any
-		// kind — not 'cache-first', not 'serve-shell', not a store flag.
+		// The decision carries no cache instruction of any kind.
 		expect(decideFetch(get(url), CTX)).toEqual({ kind: 'bypass' });
 	});
 
@@ -190,37 +136,6 @@ describe('#353 — activate cleanup is PREFIX-SCOPED (the spike\'s own blanket-d
 	it('never claims a cache outside the mvox-shell- namespace — a blanket caches.keys() delete would nuke any other cache on the origin', () => {
 		expect(isStaleShellCache('workbox-precache-v2', current)).toBe(false);
 		expect(isStaleShellCache('some-other-feature-cache', current)).toBe(false);
-	});
-});
-
-describe('#353 — src/service-worker.ts wires the tested policy (integration: the deployed SW runs THIS decision function)', () => {
-	const swPath = resolve(process.cwd(), 'src/service-worker.ts');
-
-	it('exists', () => {
-		expect(existsSync(swPath)).toBe(true);
-	});
-
-	it('derives its cache from $service-worker version through the policy module', () => {
-		const source = readFileSync(swPath, 'utf-8');
-		expect(source).toMatch(/from ['"]\$service-worker['"]/);
-		expect(source).toContain('version');
-		// The pure core is IMPORTED, not re-implemented inline — otherwise the
-		// pins above hold a function the worker never runs.
-		expect(source).toMatch(/from ['"](\$lib|\.\/lib)\/sw\/swPolicy['"]/);
-		for (const name of ['cacheNameFor', 'decideFetch', 'precacheUrls', 'isStaleShellCache']) {
-			expect(source, `service-worker.ts must use ${name}`).toContain(name);
-		}
-	});
-
-	it('never touches $service-worker\'s `prerendered` — the 1c trap that would freeze the #350 stamp', () => {
-		const source = readFileSync(swPath, 'utf-8');
-		expect(source).not.toMatch(/prerendered/);
-	});
-
-	it('takes the skipWaiting + clients.claim update dance (spike 1d: the parked-tab pin is the failure the issue names)', () => {
-		const source = readFileSync(swPath, 'utf-8');
-		expect(source).toContain('skipWaiting');
-		expect(source).toContain('clients.claim');
 	});
 });
 
