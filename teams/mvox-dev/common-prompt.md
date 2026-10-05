@@ -69,6 +69,12 @@ From #524 (Mihkel, 2026-09-30). The issue body is the source of truth.
 
 A test that pins loose text in a source file (`readFileSync` + `toContain`/regex) is a deliberate, stated choice only (Mihkel, 2026-09-30). Ask for data or an export and test behaviour instead; a comment can satisfy a text pin, and a comment can trip a text fence. When a text scan is the right tool (a fence), its one-line why says so, and it ignores comments (`stripComments`).
 
+**Review gate for every PR that adds or changes tests** (Mihkel, 2026-10-05; tests had reached 3.9:1 against source):
+1. A test checks what the user gets (what shows, what is written, what is announced), not CSS class names, source text, or call order or shape. Exceptions are named guards with a stated reason (unmeasurable layout, focus ring, data-protecting order).
+2. A rule that holds on every page is tested once, over a page list taken from the source, from the moment a second page needs it. No per-page or per-language copies.
+3. Every new test fails when the thing it protects breaks; the PR names the break tried and what failed.
+4. The PR states its test-to-source ratio: test and source lines added and removed, and the repo-wide ratio after it.
+
 ## Stack
 
 Landed 2026-05-18 session 2. See `memory/architecture-decisions.md` for the rationale behind each row.

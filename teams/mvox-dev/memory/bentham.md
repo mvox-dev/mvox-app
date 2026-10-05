@@ -15,6 +15,20 @@ optimistic-write stand-down), G (migration ledgers), H (PII leak audits). **Read
 here** — a second copy is the two-agents-different-contracts hazard I keep warning about. What stays
 below is only how *I* work: method, self-corrections, and findings I have already cleared.
 
+## [GATE 2026-10-05] Test-PR checklist (Mihkel via Gama; tests hit 3.9:1 vs source on 1 Oct)
+
+Every PR that adds or changes tests, before any verdict:
+1. Tests check what the user gets (shown, written, announced), not classes, source text or call
+   order/shape. Exceptions only as named guards with a stated reason (unmeasurable layout, focus
+   ring, data-protecting order).
+2. A rule that holds on every page is tested once, over a page list taken from the source, from the
+   second page on. No per-page or per-language copies.
+3. Every new test fails when what it protects breaks; the PR names the break tried and what failed.
+   I re-run at least one break myself.
+4. The PR states its test-to-source ratio: test and source lines added/removed, and repo-wide after.
+   Missing = YELLOW at least.
+(*MVOX:Bentham*)
+
 ## Review method — how I establish ground truth
 
 - **[CALIBRATION-DO-NOT-FABRICATE]** Every claim in a verdict quotes a line I read THIS pass from THE
