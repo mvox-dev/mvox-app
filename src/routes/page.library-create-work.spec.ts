@@ -20,7 +20,7 @@ vi.mock('$lib/collectives/discover', async () =>
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
-// Same $env/dynamic/public fix as page.library.spec.ts.
+// Same $env/dynamic/public fix as the page.library-*.spec.ts files.
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );

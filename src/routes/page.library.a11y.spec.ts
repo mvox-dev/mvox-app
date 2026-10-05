@@ -278,7 +278,7 @@ describe('#75 — a11y: bulk checkout/return checkboxes are labeled', () => {
 	});
 
 	// #76 removed the bulk-return section; inline Return buttons are the only return
-	// surface, covered in page.library.spec.ts ('#76 correction 8').
+	// surface, covered in page.library-checkout.spec.ts ('#76 correction 8').
 });
 
 // ---------------------------------------------------------------------------
