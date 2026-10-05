@@ -75,7 +75,7 @@ const fullRecord = {
 };
 
 // The five PII field testids — IDENTICAL to the pre-extraction inline markup
-// (page.roster-record-editor.spec.ts locates them by these exact strings,
+// (the page.roster-record-editor-*.spec.ts files locate them by these exact strings,
 // byte-unmodified; a testid drift breaks that suite, not just this one).
 const PII_FIELD_TESTIDS = [
 	'roster-record-name',
