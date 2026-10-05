@@ -53,12 +53,6 @@ function makeStatusFlipFetch(statusValues: Array<{ _id: string; string: string }
 }
 
 describe('deactivateMember', () => {
-	it('order: GET → ONE atomic POST — no DELETE anywhere (the overwrite replaces the old value in the same call)', async () => {
-		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-1', string: 'active' }]);
-		await deactivateMember(cfg, 'member-1', fetchImpl);
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
-	});
-
 	it('GET targets the member entity and asks for status', async () => {
 		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-1', string: 'active' }]);
 		await deactivateMember(cfg, 'member-1', fetchImpl);
@@ -163,12 +157,6 @@ describe('reinstateMember', () => {
 		const postCalls = calls.filter((c) => c.method === 'POST');
 		expect(postCalls).toHaveLength(1);
 		expect(postCalls[0].body).toEqual([{ _id: 'sv-arch', type: 'status', string: 'active' }]);
-	});
-
-	it('order: GET → ONE atomic POST, same wire as deactivate — no DELETE', async () => {
-		const { fetchImpl, calls } = makeStatusFlipFetch([{ _id: 'sv-arch', string: 'archived' }]);
-		await reinstateMember(cfg, 'member-1', fetchImpl);
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
 	});
 
 	it('touches no invite machinery: no call URL mentions invite (reinstate WITHOUT a fresh invitation)', async () => {

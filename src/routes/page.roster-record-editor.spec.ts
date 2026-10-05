@@ -541,7 +541,7 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 	});
 });
 
-describe('(E) collective switch — #259 generation discipline', () => {
+describe('(E) collective switch — #259 a write settling after the switch changes nothing', () => {
 	async function renderTwoCollectivesAsAdmin() {
 		loadRosterMock.mockImplementation(async (cfg: { db: string }) =>
 			toListRead(cfg.db === 'other-choir' ? rowsOther : rosterTwo)
@@ -555,7 +555,7 @@ describe('(E) collective switch — #259 generation discipline', () => {
 		return utils;
 	}
 
-	it('a collective switch mid-edit CLOSES and discards the open editor (reset({isSwitch}) carries the new state)', async () => {
+	it('a collective switch mid-edit CLOSES and discards the open editor', async () => {
 		const { container } = await renderTwoCollectivesAsAdmin();
 		await openEditor(container, 'm2');
 		selectedCollectiveDbStore.set('other-choir');
@@ -565,7 +565,7 @@ describe('(E) collective switch — #259 generation discipline', () => {
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
 	});
 
-	it('a held save SUCCESS settling after the switch writes NOTHING: no stale announcement, no reopened editor (generation captured after triggering, checked before every state write)', async () => {
+	it('a held save SUCCESS settling after the switch writes NOTHING: no stale announcement, no reopened editor', async () => {
 		let release!: () => void;
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-new')))
@@ -1106,7 +1106,7 @@ describe('(#285) the FIFTH field — Isikukood, after Sünnikuupäev, #239 idiom
 		expect(idCodeInput(container).value).toBe('50001010017');
 	});
 
-	it('disabled while a save is in flight — same recordSavingMemberId binding as every sibling field', async () => {
+	it('disabled while a save is in flight, like every sibling field', async () => {
 		let release!: () => void;
 		createMemberRecordMock.mockImplementation(
 			() => new Promise<string>((res) => (release = () => res('rec-new')))

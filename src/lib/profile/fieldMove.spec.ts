@@ -42,7 +42,7 @@ beforeEach(() => {
 });
 
 describe('applyFieldMove — AC1 create-before-delete ordering', () => {
-	it('target ABSENT: createOwnProfile → add-to-new → onPhase(created) → delete-from-old → onPhase(deleted), in THAT order', async () => {
+	it('target ABSENT: createOwnProfile → add-to-new → onPhase(created) → delete-from-old → onPhase(deleted), in THAT order: the value lands in the new entity before it leaves the old one', async () => {
 		const calls: string[] = [];
 		createOwnProfileMock.mockImplementation(async (_cfg: EntuCfg, _person: string, level: string) => {
 			calls.push(`createOwnProfile:${level}`);
@@ -83,11 +83,9 @@ describe('applyFieldMove — AC1 create-before-delete ordering', () => {
 			(r) => ({ ok: true as const, r }),
 			(e) => ({ ok: false as const, e })
 		);
-		await Promise.resolve();
-		await Promise.resolve();
+		await vi.waitFor(() => expect(saveProfileFieldsMock).toHaveBeenCalledTimes(1));
 
 		expect(createOwnProfileMock).toHaveBeenCalledTimes(1);
-		expect(saveProfileFieldsMock).toHaveBeenCalledTimes(1);
 		expect(phases).not.toContain('created');
 
 		dstAdd.resolve();

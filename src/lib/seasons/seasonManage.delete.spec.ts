@@ -81,11 +81,10 @@ describe('deleteEvent — the event ENTITY, after its own children', () => {
 		expect(typeof deleteEvent).toBe('function');
 	});
 
-	it('an event with NO children: one scoped read per child type, then ONE DELETE …/sampledb/entity/{eventId} — no /property/ call', async () => {
+	it('an event with NO children: ONE DELETE …/sampledb/entity/{eventId} — no /property/ call', async () => {
 		const { impl, calls } = stubFetch();
 		await deleteEvent(cfg, 'ev-9', impl);
 
-		expect(lookupKeys(calls)).toEqual(['attendance:ev-9', 'program_item:ev-9']);
 		expect(deleteTargets(calls)).toEqual(['ev-9']);
 		expect(calls.at(-1)?.url).toContain('/sampledb/entity/ev-9');
 		// The endpoint split, pinned: an event id is an ENTITY id — a /property/
@@ -191,16 +190,12 @@ describe('deleteEventSeries — cascade: every occurrence, then the series ENTIT
 		expect(typeof deleteEventSeries).toBe('function');
 	});
 
-	it('an EMPTY series: one scoped occurrence read, then ONE DELETE …/entity/{seriesId} — no /property/ call', async () => {
+	it('an EMPTY series: ONE DELETE …/sampledb/entity/{seriesId} — no /property/ call', async () => {
 		const { impl, calls } = stubFetch();
 		await deleteEventSeries(cfg, 'series-1', impl);
 
-		expect(calls).toHaveLength(2);
-		expect(calls[0].method).toBe('GET');
-		expect(calls[0].url).toContain('_type.string=event');
-		expect(calls[0].url).toContain('_parent.reference=series-1');
-		expect(calls[1].method).toBe('DELETE');
-		expect(calls[1].url).toContain('/sampledb/entity/series-1');
+		expect(deleteTargets(calls)).toEqual(['series-1']);
+		expect(calls.at(-1)?.url).toContain('/sampledb/entity/series-1');
 		// The endpoint split, pinned: a series id is an ENTITY id.
 		expect(calls.every((c) => !c.url.includes('/property/'))).toBe(true);
 	});

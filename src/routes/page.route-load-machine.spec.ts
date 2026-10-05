@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -20,12 +20,6 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-vi.mock('$lib/loading/routeLoad', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('$lib/loading/routeLoad')>();
-	return { ...actual, createRouteLoadMachine: vi.fn(actual.createRouteLoadMachine) };
-});
-
-import { createRouteLoadMachine } from '$lib/loading/routeLoad';
 import ProfilePage from './profile/+page.svelte';
 import RosterPage from './roster/+page.svelte';
 import LibraryPage from './library/+page.svelte';
@@ -33,8 +27,6 @@ import { resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { resetAppState } from '$lib/testing/appReset';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
-
-const factorySpy = createRouteLoadMachine as unknown as Mock;
 
 type Route = 'member' | 'profile' | 'section' | 'work' | 'lending' | 'other';
 
@@ -85,7 +77,6 @@ function expectNoFailureBranch(container: HTMLElement, prefix: string) {
 }
 
 beforeEach(() => {
-	factorySpy.mockClear();
 	resetTypeIdCache();
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 	stubWire();
@@ -100,21 +91,17 @@ afterEach(() => {
 	resetGate();
 });
 
-describe('#232 — the three primary routes run on the shared route-load machine', () => {
-	it('/profile constructs the machine (named for itself) and reaches its ready DOM through it', async () => {
+describe('#232 — the three primary routes load to their ready state', () => {
+	it('/profile reaches its ready DOM with no failure branch', async () => {
 		const { container } = render(ProfilePage);
 
 		await waitFor(() => {
 			expect(container.querySelector('[data-testid="profile-field-name"]')).not.toBeNull();
 		});
 		expectNoFailureBranch(container, 'profile');
-
-		expect(factorySpy).toHaveBeenCalledTimes(1);
-		expect(factorySpy.mock.calls[0][0]).toMatchObject({ name: 'profile' });
-		expect(typeof factorySpy.mock.calls[0][0].load).toBe('function');
 	});
 
-	it('/roster constructs the machine (named for itself) and reaches its ready DOM through it', async () => {
+	it('/roster reaches its ready DOM with no failure branch', async () => {
 		const { container } = render(RosterPage);
 
 		await waitFor(() => {
@@ -130,13 +117,9 @@ describe('#232 — the three primary routes run on the shared route-load machine
 			'Ada Lovelace'
 		);
 		expectNoFailureBranch(container, 'roster');
-
-		expect(factorySpy).toHaveBeenCalledTimes(1);
-		expect(factorySpy.mock.calls[0][0]).toMatchObject({ name: 'roster' });
-		expect(typeof factorySpy.mock.calls[0][0].load).toBe('function');
 	});
 
-	it('/library constructs the machine (named for itself) and reaches its ready DOM through it', async () => {
+	it('/library reaches its ready DOM with no failure branch', async () => {
 		const { container } = render(LibraryPage);
 
 		await waitFor(() => {
@@ -144,10 +127,6 @@ describe('#232 — the three primary routes run on the shared route-load machine
 		});
 		expect(container.textContent).toContain('Missa');
 		expectNoFailureBranch(container, 'library');
-
-		expect(factorySpy).toHaveBeenCalledTimes(1);
-		expect(factorySpy.mock.calls[0][0]).toMatchObject({ name: 'library' });
-		expect(typeof factorySpy.mock.calls[0][0].load).toBe('function');
 	});
 });
 

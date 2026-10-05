@@ -171,7 +171,7 @@ describe('updateRepertoireStatus', () => {
 		]);
 	});
 
-	it('CORRUPTED multi-value state: the overwrite pairs the FIRST old id; ONLY the extra is deleted, at /property/{id}, strictly AFTER the POST', async () => {
+	it('CORRUPTED multi-value state: the overwrite pairs the FIRST old id; ONLY the extra is deleted, at /property/{id}, strictly AFTER the POST, so the item never sits without a status', async () => {
 		const { fetchImpl, calls } = makeMockFetch(['sv-a', 'sv-b']);
 		await updateRepertoireStatus(cfg, 'rep-item-1', 'learning', fetchImpl);
 		const postCalls = calls.filter((c) => c.method === 'POST');

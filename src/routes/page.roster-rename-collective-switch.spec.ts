@@ -145,7 +145,7 @@ describe('/roster — #297 rename settle across a collective switch', () => {
 });
 
 describe('/roster — #297/#303 rename state across a collective switch: settled failures clear, open edits commit', () => {
-	it('CLEARED ON SWITCH (renameError): a rename failure fully settled ON A does not resurface on its row after a round-trip through B', async () => {
+	it('CLEARED ON SWITCH: a rename failure fully settled ON A does not resurface on its row after a round-trip through B', async () => {
 		renameMock.mockRejectedValueOnce(new Error('403'));
 		const container = await renderInArrangeMode();
 
@@ -229,7 +229,7 @@ describe('/roster — #297 late settle vs a live write, and the focus contract',
 		expect(renameMock).toHaveBeenCalledTimes(2);
 	});
 
-	it('FOCUS ON A SUPERSEDED SETTLE: the settle still lands focus on the rename trigger — and still announces NOTHING (gate the flag write, not the finally block)', async () => {
+	it('FOCUS ON A SUPERSEDED SETTLE: the settle still lands focus on the rename trigger — and still announces NOTHING', async () => {
 		const gate = deferred();
 		renameMock.mockImplementation(() => gate.promise);
 		const container = await renderInArrangeMode();

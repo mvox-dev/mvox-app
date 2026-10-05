@@ -183,12 +183,6 @@ describe('updateRsvpStatus', () => {
 		}
 	});
 
-	it('order: GET → ONE atomic POST — no DELETE anywhere on the normal (one status + one sentinel) path', async () => {
-		const { fetchImpl, calls } = makeMockFetch({});
-		await updateRsvpStatus(cfg, 'rsvp-1', 'not_going', fetchImpl);
-		expect(calls.map((c) => c.method)).toEqual(['GET', 'POST']);
-	});
-
 	it('FULL SHAPE (#264): the POST pairs the old status id with the new status AND the old sentinel id with the new sentinel — toEqual, both _ids present, no DELETE', async () => {
 		const { fetchImpl, calls } = makeMockFetch({ statusValueId: 'sv-1', sentinels: { going_ref: 'sent-1' } });
 		await updateRsvpStatus(cfg, 'rsvp-1', 'maybe', fetchImpl);

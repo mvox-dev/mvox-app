@@ -170,6 +170,45 @@ describe('+page — membership is display, the Entu grant is the gate (#372)', (
 	});
 });
 
+describe("+page — the agenda reads this person's membership and answers in the selected collective (#12)", () => {
+	const AGENDA = () =>
+		fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] });
+	const isMe = (cfg: { db?: string; token?: string }, personId: string) =>
+		cfg.db === 'sampledb' && cfg.token === 'jwt-abc' && personId === 'person-p';
+
+	it('the non-member hint shows when THIS person is not a member here', async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
+		// Anyone else counts as a member, so a lookup for the wrong person or collective hides the hint.
+		findMyMemberIdMock.mockImplementation(async (cfg, personId) => (isMe(cfg, personId) ? null : 'member-1'));
+		listMyRsvpsMock.mockResolvedValue(toListRead([]));
+		resolveManageRightsMock.mockResolvedValue('not-editor');
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="rsvp-non-member-hint"]')).not.toBeNull();
+		});
+	});
+
+	it("an answer saved earlier shows pressed: the agenda reads THIS person's answers here", async () => {
+		loadFullAgendaMock.mockResolvedValue(AGENDA());
+		findMyMemberIdMock.mockResolvedValue('member-1');
+		listMyRsvpsMock.mockImplementation(async (cfg, personId) =>
+			toListRead(isMe(cfg, personId) ? [{ rsvpId: 'rsvp-1', eventId: EVENT.id, status: 'going' }] : [])
+		);
+		resolveManageRightsMock.mockResolvedValue('editor');
+		setAuthedWithOneCollective();
+
+		const { container } = render(Page);
+		const btn = await waitForGoingButton(container);
+
+		await waitFor(() => {
+			expect(btn.getAttribute('aria-pressed')).toBe('true');
+		});
+	});
+});
+
 describe('+page — write-failure feedback (a rejected rsvp save)', () => {
 	it('a rejected write surfaces a per-row save-failed error AND reverts the optimistic value', async () => {
 		loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [], upcoming: [EVENT], recent: [], seasonId: null, seasonConductors: [], seasonOwners: [], seasonEditors: [] }));
