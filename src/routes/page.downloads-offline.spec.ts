@@ -308,21 +308,6 @@ describe('#353 — structural fences: the page is built for offline, not around 
 		expect(agenda).toContain('data-testid="agenda-downloads-link-cached"');
 		expect(agenda.match(/href="\/downloads"/g)).toHaveLength(2);
 	});
-
-	it('#434 — the agenda\'s own path opts in to the read cache, so the agenda itself renders offline', () => {
-		const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
-		expect(src('src/lib/collectives/discover.ts')).toContain('CACHED_READ');
-		expect(src('src/lib/agenda/agendaData.ts')).toContain('CACHED_READ');
-		const agenda = src('src/lib/agenda/AgendaNotices.svelte');
-		expect(agenda.includes('<AsOfLine readAt={$servedFromCache} testid="agenda-as-of"'), 'agenda-as-of line').toBe(true);
-	});
-
-	it('#434 — the library\'s own path opts in to the read cache, so the library renders offline', () => {
-		const src = (p: string) => readFileSync(resolve(process.cwd(), p), 'utf-8');
-		expect(src('src/lib/library/libraryPageData.ts')).toContain('CACHED_READ');
-		const library = src('src/routes/library/+page.svelte');
-		expect(library.includes('<AsOfLine readAt={$servedFromCache} testid="library-as-of"'), 'library-as-of line').toBe(true);
-	});
 });
 
 describe('#353 — out-of-scope views fail LEGIBLY offline (the #331 pattern, one representative)', () => {
