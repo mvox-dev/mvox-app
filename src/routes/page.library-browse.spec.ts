@@ -22,6 +22,12 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/library/librarianStore', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
+// T6.4/#73 — "my loans" resolves the viewer's own active member the same way
+// RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
+// org scoping in the single-collective dev/test db). Reused, not re-derived.
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 import Page from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';

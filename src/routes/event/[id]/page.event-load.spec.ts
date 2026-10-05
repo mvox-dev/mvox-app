@@ -2,20 +2,6 @@
 // The event page's data read: loadEventDetail's header, inheritance, conductors and rights.
 import { describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
-
-vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).echoMessages()
-);
-vi.mock('$lib/paraglide/runtime.js', async () =>
-	(await import('$lib/testing/mocks/session')).localeRuntimeModule()
-);
-vi.mock('$app/state', async () => (await import('$lib/testing/mocks/events')).appStateModule());
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/testing/routeMocks')).navigationModule()
-);
-vi.mock('$lib/collectives/discover', async () =>
-	(await import('$lib/testing/routeMocks')).discoverModule()
-);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );

@@ -20,6 +20,9 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/library/librarianStore', async () =>
 	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
 );
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 // #74 — mock lendingActions to verify submit triggers the action layer
 vi.mock('$lib/library/lendingActions', async () =>
 	(await import('$lib/testing/mocks/library')).lendingModule()

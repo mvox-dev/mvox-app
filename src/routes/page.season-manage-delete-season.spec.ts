@@ -36,14 +36,7 @@ import {
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { signIn } from '$lib/testing/session';
-import {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
-	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock,
-	resolveManageRightsMock
-} from '$lib/testing/moduleHandles';
-import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import {
 	addSeasonConductorMock,
 	countSeasonScopeMock,
@@ -59,7 +52,6 @@ import {
 } from '$lib/testing/mocks/seasons';
 import { q } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
-import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import {
 	type PageOnProgress,
 	SEASON_ID,
@@ -118,11 +110,6 @@ function resetRows(): void {
 beforeEach(() => {
 	resetRows();
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue(toListRead([]));
-	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
-	resolveManageRightsMock.mockResolvedValue('not-editor');
-	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockImplementation(async () => ({ items: [...seriesRows], truncated: false }));
 	listEventsForSeasonMock.mockImplementation(async () => toListRead([...eventRows]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);
