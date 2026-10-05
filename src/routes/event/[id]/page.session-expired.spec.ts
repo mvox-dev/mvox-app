@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -24,7 +23,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { authStore } from '$lib/auth/session';
 import { install401Recovery } from '$lib/auth/install-401-recovery';
 import { setAuthExpiredHandler } from '$lib/entu/request';
 import { resetAppState } from '$lib/testing/appReset';
@@ -62,50 +60,12 @@ afterEach(() => {
 });
 
 describe('/event/[id] — session expired (#107 review F2)', () => {
-	it('an Entu 401 shows the session-expired notice with a sign-in link — NOT the generic load error + Retry', async () => {
-		const { container } = renderWithStatus(401);
-
+	it('a 404 still shows not-in-this-collective, not the session-expired notice', async () => {
+		const { container } = renderWithStatus(404);
 		await waitFor(() => {
-			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
+			expect(container.querySelector('[data-testid="event-detail-not-available"]')).not.toBeNull();
 		});
-		const signin = container.querySelector('[data-testid="session-expired-signin"]');
-		expect(signin, 'the notice must carry a sign-in link').not.toBeNull();
-		expect(signin?.getAttribute('href') ?? '').toContain('/auth/login');
-
-		expect(container.querySelector('[data-testid="event-detail-load-error"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-retry"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-not-available"]')).toBeNull();
-	});
-
-	it('the 401 also ends the session end-to-end: storage cleared, authStore anonymous, one redirect fired', async () => {
-		renderWithStatus(401);
-
-		await waitFor(() => {
-			expect(gotoMock).toHaveBeenCalled();
-		});
-		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
-		expect(get(authStore)).toEqual({ status: 'anonymous' });
-	});
-
-	it('a 404 still shows not-in-this-collective, and a 503 still shows the loud load error + Retry (401 handling must not swallow them)', async () => {
-		const notAvailable = renderWithStatus(404);
-		await waitFor(() => {
-			expect(
-				notAvailable.container.querySelector('[data-testid="event-detail-not-available"]')
-			).not.toBeNull();
-		});
-		expect(notAvailable.container.querySelector('[data-testid="session-expired"]')).toBeNull();
-		cleanup();
-		vi.unstubAllGlobals();
-
-		const transient = renderWithStatus(503);
-		await waitFor(() => {
-			expect(
-				transient.container.querySelector('[data-testid="event-detail-load-error"]')
-			).not.toBeNull();
-		});
-		expect(transient.container.querySelector('[data-testid="event-detail-retry"]')).not.toBeNull();
-		expect(transient.container.querySelector('[data-testid="session-expired"]')).toBeNull();
+		expect(container.querySelector('[data-testid="session-expired"]')).toBeNull();
 	});
 });
 

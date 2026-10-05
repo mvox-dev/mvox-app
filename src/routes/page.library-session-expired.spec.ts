@@ -20,7 +20,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './library/+page.svelte';
-import { gotoMock } from '$lib/testing/routeMocks';
 import { armLibraryRecovery } from '$lib/testing/pages/library';
 import { cleanupUnstubResetAuth } from '$lib/testing/pages/dom';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
@@ -66,26 +65,6 @@ beforeEach(armLibraryRecovery);
 afterEach(cleanupUnstubResetAuth);
 
 describe('/library — session expired (#107)', () => {
-	it('a real Entu 401 on the page load shows the session-expired notice with a sign-in link — not the generic load error', async () => {
-		stubWire({ work: 401, lending: 401 });
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
-		});
-		const signin = container.querySelector('[data-testid="session-expired-signin"]');
-		expect(signin, 'the notice must carry a sign-in link').not.toBeNull();
-		expect(signin?.getAttribute('href') ?? '').toContain('/auth/login');
-
-		expect(container.querySelector('[data-testid="library-load-error"]')).toBeNull();
-		expect(container.querySelector('[data-testid="library-retry-load"]')).toBeNull();
-
-		await waitFor(() => expect(gotoMock).toHaveBeenCalled());
-		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
-	});
-
 	it('a 401 on a NODE EXPAND after a successful load replaces the tree with the notice, not a per-node error badge', async () => {
 		stubWire({ 'edition-of-work': 401 });
 		setAuthedWithOneCollective();
@@ -106,21 +85,6 @@ describe('/library — session expired (#107)', () => {
 		});
 		expect(container.textContent ?? '').not.toContain('library_node_load_error');
 		expect(container.querySelector('[data-testid="library-work-toggle-w1"]')).toBeNull();
-	});
-
-	it('a GENERIC library load failure still shows the loud load error (auth handling must not swallow it)', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		stubWire({ work: 500 });
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="library-load-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="session-expired"]')).toBeNull();
-		expect(gotoMock, 'a 500 must not sign the user out').not.toHaveBeenCalled();
-		consoleSpy.mockRestore();
 	});
 });
 

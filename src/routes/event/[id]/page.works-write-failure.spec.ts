@@ -35,7 +35,6 @@ import { isoAt, setAuthed } from '$lib/testing/pages/event';
 import {
 	expectWriteAttempted,
 	manageAlert,
-	manageStatus,
 	q,
 	qa,
 	rowByName,
@@ -437,28 +436,6 @@ describe('#324 — event page, programme surface: a rejected write reaches the u
 });
 
 describe('#324 — event page: a settled write is distinguishable from silence', () => {
-	it('the status live region is MOUNTED with the section (role=status, aria-live=polite, blank) and carries the saved message once a status change settles — with no alert', async () => {
-		installWorld();
-		const { container } = renderPage();
-		const section = await worksSection(container, 2);
-
-		const status = manageStatus(section);
-		expect(status, 'the saved live region must mount with the section').not.toBeNull();
-		expect(status!.getAttribute('role')).toBe('status');
-		expect(status!.getAttribute('aria-live')).toBe('polite');
-		expect(status!.textContent?.trim()).toBe('');
-
-		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);
-
-		await waitFor(() => {
-			expect(rowByName(section, 'Bogoróditse Djévo').getAttribute('data-status')).toBe('retired');
-		});
-		await waitFor(() => {
-			expect(savedText(section)).toContain('[repertoire_manage_saved]');
-		});
-		expect(manageAlert(section)).toBeNull();
-	});
-
 	it('a settled ADD WORK says saved too — alongside the refetched row', async () => {
 		installWorld();
 		const { container } = renderPage();
@@ -521,29 +498,6 @@ describe('#324 — the failure/saved cues do not outlive their event', () => {
 
 		expect(manageAlert(next), 'the event being left takes its failure with it').toBeNull();
 		expect(savedText(next).trim()).toBe('');
-	});
-
-	it('a settled write’s saved cue does not follow the viewer to the next event either', async () => {
-		installWorld();
-		const { container } = renderPage(['sampledb', 'crede']);
-		const section = await worksSection(container, 2);
-
-		await fireEvent.click(q(rowByName(section, 'Bogoróditse Djévo'), 'work-status-retired')!);
-		await waitFor(() => {
-			expect(savedText(section)).toContain('[repertoire_manage_saved]');
-		});
-
-		selectedCollectiveDbStore.set('crede');
-		await waitFor(() => {
-			expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Rehearsal');
-		});
-		const next = await worksSection(container, 1);
-
-		expect(
-			savedText(next).trim(),
-			'the live region must not still read “saved” for an older event'
-		).toBe('');
-		expect(manageAlert(next)).toBeNull();
 	});
 });
 

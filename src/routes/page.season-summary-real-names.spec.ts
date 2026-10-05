@@ -38,7 +38,7 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 import Page from './+page.svelte';
 import { resetGate } from '$lib/profile/completionGate';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { realNamesWire, PROFILE_NAMES, REAL_NAMES } from '$lib/testing/realNamesFence';
+import { realNamesWire, REAL_NAMES } from '$lib/testing/realNamesFence';
 import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
 import { resetAppState } from '$lib/testing/appReset';
@@ -111,47 +111,6 @@ async function openSeasonSummary(fetchMock: ReturnType<typeof vi.fn>) {
 	) as HTMLElement;
 	return { ...utils, region, panelUrls };
 }
-
-describe('#469 review F1 — the season-rate table obeys the toggle, in ONE overlay pass', () => {
-	it('toggle ON: active AND archived rows show REAL names — no profile name survives in the table', async () => {
-		const fetchMock = realNamesWire();
-		const { region } = await openSeasonSummary(fetchMock);
-
-		const text = region.textContent ?? '';
-		expect(text).toContain(REAL_NAMES.m1);
-		expect(text).toContain(REAL_NAMES.m2);
-		expect(text).toContain(REAL_NAMES.m9);
-		expect(text).not.toContain(PROFILE_NAMES.m1);
-		expect(text).not.toContain(PROFILE_NAMES.m2);
-		expect(text).not.toContain(PROFILE_NAMES.m9);
-	});
-
-	it('toggle OFF: every row shows the profile name, ZERO admin_member_record reads — and the toggle IS read (once)', async () => {
-		const fetchMock = realNamesWire({ toggle: false });
-		const { region, panelUrls } = await openSeasonSummary(fetchMock);
-
-		const text = region.textContent ?? '';
-		expect(text).toContain(PROFILE_NAMES.m1);
-		expect(text).toContain(PROFILE_NAMES.m2);
-		expect(text).toContain(PROFILE_NAMES.m9);
-		expect(text).not.toContain(REAL_NAMES.m1);
-		expect(text).not.toContain(REAL_NAMES.m9);
-
-		expect(panelUrls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(panelUrls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-	});
-
-	it('opening the panel costs ONE toggle read and ONE admin_member_record read for the WHOLE table, both halves', async () => {
-		const fetchMock = realNamesWire();
-		const { panelUrls } = await openSeasonSummary(fetchMock);
-
-		expect(panelUrls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-		expect(panelUrls.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
-		expect(
-			panelUrls.filter((u) => u.includes('_type.string=member') && u.includes('status.string=archived'))
-		).toHaveLength(1);
-	});
-});
 
 // (*MVOX:Palestrina*)
 

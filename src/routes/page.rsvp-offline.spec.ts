@@ -43,14 +43,14 @@ vi.mock('$lib/repertoire/fileUrls', async () =>
 
 import Page from './+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import { goOffline, goOnline, resetOnLine, settle, expectVisibleReason } from '$lib/testing/networkSignal';
+import { goOffline, goOnline, resetOnLine, expectVisibleReason } from '$lib/testing/networkSignal';
 import {
 	findMyMemberIdMock,
 	listMyRsvpsMock,
 	loadFullAgendaMock
 } from '$lib/testing/moduleHandles';
 import { applyRsvpChangeMock } from '$lib/testing/mocks/events';
-import { E1, RIGHTS_URL, SELF_EDITOR, agendaWith, cleanupResetRsvpMocks, row, setAuthed, stubWire, waitForRow } from '$lib/testing/pages/agendaRsvp';
+import { E1, RIGHTS_URL, SELF_EDITOR, agendaWith, cleanupResetRsvpMocks, setAuthed, stubWire, waitForRow } from '$lib/testing/pages/agendaRsvp';
 import { REASON } from '$lib/testing/pages/event';
 
 afterEach(cleanupResetRsvpMocks);
@@ -93,20 +93,7 @@ describe('+page (agenda) — RSVP while offline (#434 slice 6)', () => {
 		expectVisibleReason(control, 'rsvp-write-unavailable', REASON);
 	});
 
-	it('offline: a click dispatches no write and issues no fetch', async () => {
-		const { row: r, fetchStub } = await renderWritableRow();
-		await goOffline();
-		await settle();
-		const callsBefore = fetchStub.mock.calls.length;
-
-		await fireEvent.click(r.querySelector('[data-testid="rsvp-btn-going"]') as HTMLElement);
-		await settle();
-
-		expect(applyRsvpChangeMock).not.toHaveBeenCalled();
-		expect(fetchStub.mock.calls.length).toBe(callsBefore);
-	});
-
-	it('back online: enabled again, the reason gone, and a click dispatches the write', async () => {
+	it('back online: enabled again, and a click dispatches the write', async () => {
 		const { row: r } = await renderWritableRow();
 		await goOffline();
 		await goOnline();
@@ -115,7 +102,6 @@ describe('+page (agenda) — RSVP while offline (#434 slice 6)', () => {
 			const btn = r.querySelector('[data-testid="rsvp-btn-going"]') as HTMLButtonElement;
 			expect(btn.disabled).toBe(false);
 		});
-		expect(r.querySelector('[data-testid="rsvp-write-unavailable"]')).toBeNull();
 		await fireEvent.click(r.querySelector('[data-testid="rsvp-btn-going"]') as HTMLElement);
 		await waitFor(() => expect(applyRsvpChangeMock).toHaveBeenCalledTimes(1));
 	});

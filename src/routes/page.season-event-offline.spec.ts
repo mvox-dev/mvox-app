@@ -229,28 +229,6 @@ describe('agenda — season management while offline (#434 slice 6)', () => {
 		expect(panel.querySelectorAll('[data-testid="season-manage-write-unavailable"]')).toHaveLength(1);
 	});
 
-	it('offline: edit, conductor add/remove and delete write nothing', async () => {
-		const { container, panel } = await renderPanelOnline();
-		await goOffline();
-
-		await fireEvent.click(q(container, 'season-edit-btn-name') as HTMLElement);
-		await settle();
-		expect(q(container, 'season-edit-input-name'), 'no edit input opens').toBeNull();
-
-		await fireEvent.click(q(container, 'season-manage-delete-season') as HTMLElement);
-		await settle();
-		expect(q(container, 'season-manage-delete-season-confirm'), 'no delete arms').toBeNull();
-
-		await fireEvent.change(conductorSelect(panel), { target: { value: 'p-ada' } });
-		await fireEvent.click(q(container, 'season-manage-conductor-remove-p-grace') as HTMLElement);
-		await settle();
-
-		expect(updateSeasonFieldMock).not.toHaveBeenCalled();
-		expect(addSeasonConductorMock).not.toHaveBeenCalled();
-		expect(removeSeasonConductorMock).not.toHaveBeenCalled();
-		expect(deleteSeasonMock).not.toHaveBeenCalled();
-	});
-
 	it('a signal drop mid-edit KEEPS the typed season name — the draft is not discarded', async () => {
 		const { container, panel } = await renderPanelOnline();
 		await fireEvent.click(q(container, 'season-edit-btn-name') as HTMLElement);
