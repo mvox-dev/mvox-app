@@ -1,23 +1,9 @@
 // Reassign and unassign an event's series without touching its season _parent value.
 import { describe, expect, it, vi } from 'vitest';
 import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { reassignEventSeries, unassignEventSeries } from './eventSeriesActions';
 
 const cfg = testCfg('sampledb');
-
-type ActionsModule = {
-	reassignEventSeries: (
-		c: typeof cfg,
-		eventId: string,
-		newSeriesId: string,
-		fetchImpl?: typeof fetch
-	) => Promise<void>;
-	unassignEventSeries: (c: typeof cfg, eventId: string, fetchImpl?: typeof fetch) => Promise<void>;
-	EventSeriesMissingError: new (...args: never[]) => Error;
-};
-
-async function actions(): Promise<ActionsModule> {
-	return (await import('./eventSeriesActions')) as unknown as ActionsModule;
-}
 
 const PARENTS = [
 	{ _id: 'pv-season', reference: 'season1', property_type: '_parent', entity_type: 'season' },
@@ -62,7 +48,6 @@ function deleteUrls(stub: ReturnType<typeof vi.fn>): string[] {
 
 describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES value id', () => {
 	it('one POST whose entry pairs the OLD SERIES value id with the new reference — full-shape body, zero DELETEs', async () => {
-		const { reassignEventSeries } = await actions();
 		const stub = wire();
 		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
 
@@ -73,14 +58,12 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 	});
 
 	it('finds the series value by type, not position: series listed before season', async () => {
-		const { reassignEventSeries } = await actions();
 		const stub = wire([...PARENTS].reverse());
 		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
 		expect(postBodies(stub)).toEqual([[{ _id: 'pv-series', type: '_parent', reference: 'series2' }]]);
 	});
 
 	it('reads `_parent` BEFORE writing (the overwrite entry cannot be built blind)', async () => {
-		const { reassignEventSeries } = await actions();
 		const stub = wire();
 		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
 		const seq = calls(stub);
@@ -92,7 +75,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 	});
 
 	it('a STANDALONE event (no series value) gets a plain append — no `_id` key at all, zero DELETEs', async () => {
-		const { reassignEventSeries } = await actions();
 		const stub = wire(PARENTS_STANDALONE);
 		await reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch);
 		const bodies = postBodies(stub);
@@ -102,7 +84,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 	});
 
 	it('the SEASON `_parent` value id never appears in any write — either direction', async () => {
-		const { reassignEventSeries, unassignEventSeries } = await actions();
 		const reassignStub = wire();
 		await reassignEventSeries(cfg, 'ev1', 'series2', reassignStub as unknown as typeof fetch);
 		const unassignStub = wire();
@@ -116,7 +97,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 	});
 
 	it('a non-2xx POST rejects — fail loud, no silent success', async () => {
-		const { reassignEventSeries } = await actions();
 		const stub = wire(PARENTS, { failPosts: true });
 		await expect(
 			reassignEventSeries(cfg, 'ev1', 'series2', stub as unknown as typeof fetch)
@@ -126,7 +106,6 @@ describe('#304 reassignEventSeries — the atomic overwrite targets the SERIES v
 
 describe('#304 unassignEventSeries — DELETE of the series value id alone (the owner-gated half)', () => {
 	it('one DELETE /property/{series value id}; no POST; season value untouched', async () => {
-		const { unassignEventSeries } = await actions();
 		const stub = wire();
 		await unassignEventSeries(cfg, 'ev1', stub as unknown as typeof fetch);
 
@@ -137,7 +116,6 @@ describe('#304 unassignEventSeries — DELETE of the series value id alone (the 
 	});
 
 	it('no series parent → throws EventSeriesMissingError (stale picker), ZERO writes', async () => {
-		const { unassignEventSeries } = await actions();
 		const stub = wire(PARENTS_STANDALONE);
 		await expect(
 			unassignEventSeries(cfg, 'ev1', stub as unknown as typeof fetch)
@@ -146,7 +124,6 @@ describe('#304 unassignEventSeries — DELETE of the series value id alone (the 
 	});
 
 	it('a non-2xx DELETE rejects — the 403 an owner-gated refusal answers must surface, never read as success', async () => {
-		const { unassignEventSeries } = await actions();
 		const stub = wire(PARENTS, { failDeletes: true });
 		await expect(unassignEventSeries(cfg, 'ev1', stub as unknown as typeof fetch)).rejects.toThrow();
 	});
@@ -154,7 +131,6 @@ describe('#304 unassignEventSeries — DELETE of the series value id alone (the 
 
 describe('#304 — no silent copying of series values onto the event', () => {
 	it('neither direction ever writes name / duration_minutes / location / description — `_parent` is the ONLY prop on the wire', async () => {
-		const { reassignEventSeries, unassignEventSeries } = await actions();
 		const reassignStub = wire();
 		await reassignEventSeries(cfg, 'ev1', 'series2', reassignStub as unknown as typeof fetch);
 		const unassignStub = wire();
