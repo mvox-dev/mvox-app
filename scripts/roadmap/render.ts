@@ -348,6 +348,10 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 <title>mvox roadmap</title>
 <style>
 	body { font-family: system-ui, sans-serif; max-width: 60rem; margin: 0 auto; padding: 1.5rem; }
+	.masthead { position: sticky; top: 0; z-index: 1; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; background: #fff; padding: 0.5rem 0; border-bottom: 1px solid #ddd; }
+	.masthead h1 { font-size: 1.25rem; margin: 0; }
+	.app-link { font-style: italic; color: inherit; }
+	.masthead-sep, .masthead time { color: #666; }
 	.issue { display: flow-root; border: 1px solid #ccc; border-radius: 0.5rem; padding: 0.75rem; margin: 0.5rem 0; }
 	.issue-updated { float: right; font-size: 0.75rem; color: #666; margin-left: 0.75rem; }
 	.issue[data-state="closed"] { opacity: 0.6; }
@@ -365,10 +369,10 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 </style>
 </head>
 <body>
-<header>
-	<h1>mvox roadmap</h1>
-	<p class="meta">Generated at <time datetime="${escapeHtml(generatedAt)}">${escapeHtml(formatGeneratedAt(generatedAt))}</time></p>
-	<a href="https://mvox.eu">mvox</a>
+<header class="masthead">
+	<h1><a class="app-link" href="https://mvox.eu">mvox</a> roadmap</h1>
+	<span class="masthead-sep" aria-hidden="true">|</span>
+	<time datetime="${escapeHtml(generatedAt)}">${escapeHtml(formatGeneratedAt(generatedAt))}</time>
 </header>
 ${warningHtml}
 <main>

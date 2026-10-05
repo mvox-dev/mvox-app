@@ -1,48 +1,25 @@
 // @vitest-environment happy-dom
-/**
- * #308 RED — the generated-at line shows Estonian local time.
- *
- * One instant, rendered twice: the <time> element's `datetime` attribute
- * keeps the ISO UTC instant (machine identity — same value as stamp.txt and
- * REFRESH_SCRIPT's CURRENT), while its TEXT CONTENT becomes a human rendering
- * in Europe/Tallinn. The display string is formatted FROM generatedAt; there
- * is no second clock.
- *
- * Expected strings below are REAL Intl output, verified live on Node 22
- * full-ICU (et-EE, Europe/Tallinn, 2-digit day/month, numeric year, 24h,
- * timeZoneName 'shortOffset'), reassembled from formatToParts with a single
- * space between date and time. No dateStyle/timeStyle preset produces this:
- * presets emit a comma (`01.07.2026, 15:00`) or a two-digit year — the exact
- * assertions here are deliberate so a naive .format() call fails.
- *
- * The zone marker keeps Intl's native spacing: `GMT +3` / `GMT +2`, WITH a
- * space after GMT (that is the literal formatToParts value for this zone).
- *
- * DST both sides is the issue's hard requirement: a hardcoded +03:00 offset
- * renders the January instant 15:00 instead of 14:00 and nothing would ever
- * report it — the winter test below is what catches exactly that.
- *
- * (*MVOX:Tallis*)
- */
+// The header <time> shows Tallinn local time (both DST sides) while datetime keeps the ISO instant;
+// expected strings are real Intl output (et-EE, Europe/Tallinn). (*MVOX:Tallis*)
 import { describe, expect, it } from 'vitest';
 import liveShapedJson from './fixtures/live-shaped.json';
 import { renderBoard, type RoadmapIssue } from './render';
 
 const liveShaped: RoadmapIssue[] = liveShapedJson as RoadmapIssue[];
 
-// Instants in new Date().toISOString() shape (what main() injects).
-// EEST (summer, UTC+3) — Tallinn wall clock 15:00.
 const SUMMER_ISO = '2026-07-01T12:00:00.000Z';
 const SUMMER_DISPLAY = '01.07.2026 15:00 GMT +3';
-// EET (winter, UTC+2) — Tallinn wall clock 14:00. A fixed +03:00 says 15:00.
 const WINTER_ISO = '2026-01-15T12:00:00.000Z';
 const WINTER_DISPLAY = '15.01.2026 14:00 GMT +2';
-// An instant with visible milliseconds — noise on a build stamp.
 const MILLIS_ISO = '2026-09-10T03:33:16.799Z';
 const MILLIS_DISPLAY = '10.09.2026 06:33 GMT +3';
 
 function parse(html: string): Document {
 	return new DOMParser().parseFromString(html, 'text/html');
+}
+
+function doc0(): Document {
+	return parse(renderBoard(liveShaped, SUMMER_ISO));
 }
 
 /** The one <time> element on the page. Contract: it exists, exactly once. */
@@ -71,9 +48,6 @@ describe('#308 — generated-at shown in Estonian local time', () => {
 	});
 
 	it('separates date and time with a single space, not the Intl preset comma', () => {
-		// Every dateStyle/timeStyle preset and even explicit-field .format()
-		// puts ", " between date and time; the target format has a bare space,
-		// so the string must be assembled from formatToParts.
 		const doc = parse(renderBoard(liveShaped, SUMMER_ISO));
 		const text = timeEl(doc).textContent ?? '';
 		expect(text).not.toContain(',');
@@ -94,15 +68,30 @@ describe('#308 — generated-at shown in Estonian local time', () => {
 		const el = timeEl(doc);
 		expect(el.getAttribute('datetime')).toBe(SUMMER_ISO);
 		expect(el.textContent).not.toBe(el.getAttribute('datetime'));
-		// The human line must not show the raw ISO string at all.
-		const meta = doc.querySelector('.meta');
-		expect(meta).not.toBeNull();
-		expect(meta?.textContent).not.toContain(SUMMER_ISO);
+		const header = doc.querySelector('header');
+		expect(header).not.toBeNull();
+		expect(header?.textContent).not.toContain(SUMMER_ISO);
 	});
 
-	it('keeps the page furniture English: the line still reads "Generated at …"', () => {
+	it('one header line reads "mvox roadmap | <time>", with mvox the link to the app', () => {
 		const doc = parse(renderBoard(liveShaped, SUMMER_ISO));
-		expect(doc.querySelector('.meta')?.textContent).toMatch(/^Generated at /);
+		const header = doc.querySelector('header');
+		expect(header?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`mvox roadmap | ${timeEl(doc).textContent}`
+		);
+		expect(header?.querySelector('h1 a[href="https://mvox.eu"]')?.textContent).toBe('mvox');
+		expect(header?.querySelectorAll('p, br')).toHaveLength(0);
+	});
+
+	it('the header line is sticky, on one flex row, and mvox is italic', () => {
+		const style = doc0().querySelector('style')?.textContent ?? '';
+		const rule = (sel: string) => new RegExp(`(^|[\\s,}])${sel.replace('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(style)?.[2] ?? '';
+		expect(rule('.masthead')).toMatch(/position:\s*sticky/);
+		expect(rule('.masthead')).toMatch(/top:\s*0/);
+		expect(rule('.masthead')).toMatch(/display:\s*flex/);
+		expect(rule('.masthead')).toMatch(/background:/);
+		expect(rule('.app-link')).toMatch(/font-style:\s*italic/);
+		expect(doc0().querySelector('header')?.classList.contains('masthead')).toBe(true);
 	});
 
 	it('self-refresh identity untouched: CURRENT stays the ISO stamp, never the display string', () => {
