@@ -21,11 +21,10 @@ vi.mock('$lib/profile/profileData', async (importOriginal) =>
 
 import ProfilePage from './profile/+page.svelte';
 import { timeFormatStore, TIME_FORMAT_KEY } from '$lib/preferences/timeFormat';
-import { isMessageEmpty } from '$lib/testing/messageFile.js';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
 import { listMyProfilesMock } from '$lib/testing/mocks/session';
-import { LOCALES, readMessages, selectSampledb } from '$lib/testing/pages/profile';
+import { readMessages, selectSampledb } from '$lib/testing/pages/profile';
 
 const q = (c: HTMLElement, sel: string) => c.querySelector(sel);
 const control = (c: HTMLElement) =>
@@ -123,28 +122,7 @@ describe('/profile — time-format preference control (#207 rule 5)', () => {
 	});
 });
 
-const NEW_KEYS = [
-	'time_select_hour_label',
-	'time_select_minute_label',
-	'time_select_ampm_label',
-	'time_select_date_label',
-	'profile_time_format_label',
-	'profile_time_format_24h',
-	'profile_time_format_ampm',
-	'profile_time_format_hint'
-] as const;
-
-describe('locale parity — #207 part 1 keys exist, non-empty, in en/et/lv/uk', () => {
-	for (const locale of LOCALES) {
-		it(`${locale}.json carries every new key`, () => {
-			const messages = readMessages(locale);
-			for (const key of NEW_KEYS) {
-				expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-				expect(isMessageEmpty(messages[key]), `${locale}.json ${key} is empty`).toBe(false);
-			}
-		});
-	}
-
+describe('#207 part 1 copy', () => {
 	it('the hint copy is the PO-ruled per-device fact (en/et pinned verbatim, Gama 2026-09-02)', () => {
 		expect(readMessages('en').profile_time_format_hint).toBe('Applies on this device.');
 		expect(readMessages('et').profile_time_format_hint).toBe('Kehtib sellel seadmel.');

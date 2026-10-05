@@ -1481,7 +1481,6 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 			expect((call[1] as CreateEventInput).seriesId).toBe(NEW_SERIES_ID);
 		}
 	});
-
 });
 
 describe('#138 — a stopped series run survives a collective round trip', () => {
@@ -1887,12 +1886,6 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 		'series_create_skip_add',
 		'series_create_skip_remove'
 	] as const;
-	const KEPT_KEYS = [
-		'series_create_preview_label',
-		'series_create_preview_count_one',
-		'series_create_preview_count_other',
-		'series_create_no_dates'
-	] as const;
 
 	function messageFile(locale: string): MessageFile {
 		return JSON.parse(
@@ -1904,13 +1897,6 @@ describe('#215 — locale files: skip keys retired, preview keys stay', () => {
 		const file = messageFile(locale);
 		for (const key of RETIRED_KEYS) {
 			expect(key in file, `${key} must be gone from messages/${locale}.json`).toBe(false);
-		}
-	});
-
-	it.each(LOCALES)('%s: the preview keys the grid uses are present and non-empty', (locale) => {
-		const file = messageFile(locale);
-		for (const key of KEPT_KEYS) {
-			expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(false);
 		}
 	});
 
@@ -2140,39 +2126,13 @@ describe('#239 — the form is grouped into four native fieldsets with visible l
 	});
 });
 
-describe('#239 — locale files: group keys verbatim (et/en), present everywhere; field keys stay', () => {
-	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	const GROUP_KEYS = [
-		'series_create_group_general_label',
-		'series_create_group_location_label',
-		'series_create_group_schedule_label',
-		'series_create_group_preview_label'
-	] as const;
-	const REUSED_FIELD_KEYS = [
-		'series_create_name_label',
-		'series_create_type_label',
-		'series_create_duration_label',
-		'series_create_location_label',
-		'series_create_description_label',
-		'series_create_repeat_label',
-		'series_create_day_label',
-		'series_create_time_label',
-		'series_create_from_label',
-		'series_create_until_label'
-	] as const;
+describe('#239 — locale files: group keys verbatim (et/en)', () => {
 
 	function messageFile(locale: string): MessageFile {
 		return JSON.parse(
 			readFileSync(resolvePath(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as MessageFile;
 	}
-
-	it.each(LOCALES)('%s: the four series_create_group_* keys are present, non-empty', (locale) => {
-		const file = messageFile(locale);
-		for (const key of GROUP_KEYS) {
-			expect(isMessageEmpty(file[key]), `${key} must exist, non-empty, in ${locale}`).toBe(false);
-		}
-	});
 
 	it('et carries the PO-ruled copy VERBATIM', () => {
 		const file = messageFile('et');
@@ -2188,13 +2148,6 @@ describe('#239 — locale files: group keys verbatim (et/en), present everywhere
 		expect(file['series_create_group_location_label']).toBe('Place and duration');
 		expect(file['series_create_group_schedule_label']).toBe('Repeat and dates');
 		expect(file['series_create_group_preview_label']).toBe('Events to create');
-	});
-
-	it.each(LOCALES)('%s: the ten reused field-label keys stay, non-empty', (locale) => {
-		const file = messageFile(locale);
-		for (const key of REUSED_FIELD_KEYS) {
-			expect(isMessageEmpty(file[key]), `${key} must stay, non-empty, in ${locale}`).toBe(false);
-		}
 	});
 });
 

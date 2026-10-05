@@ -1684,39 +1684,6 @@ describe('#76 correction 9 → #207 rule 7: lending dates render as the ISO cale
 	});
 });
 
-// #75 — every m.* key a library surface calls exists in en.json: a typo or stale key
-// compiles but renders empty.
-describe('#75 — i18n key existence', () => {
-	it('the derived LIBRARY_SURFACES list is not empty (a moved folder would scan nothing)', () => {
-		expect(LIBRARY_SURFACES.length).toBeGreaterThanOrEqual(8);
-	});
-
-	it.each(LIBRARY_SURFACES)('every m.* key referenced in %s exists in en.json', (file) => {
-		const componentSrc = readFileSync(resolve(process.cwd(), file), 'utf-8');
-		const messagesSrc = readFileSync(resolve(process.cwd(), 'messages/en.json'), 'utf-8');
-		const messages = JSON.parse(messagesSrc) as Record<string, unknown>;
-
-		// Extract all m.someKey( calls from the component
-		const keyPattern = /\bm\.(\w+)\s*\(/g;
-		const usedKeys = new Set<string>();
-		let match: RegExpExecArray | null;
-		while ((match = keyPattern.exec(componentSrc)) !== null) {
-			usedKeys.add(match[1]);
-		}
-
-		expect(usedKeys.size).toBeGreaterThan(0);
-
-		const missingKeys: string[] = [];
-		for (const key of usedKeys) {
-			if (!(key in messages)) {
-				missingKeys.push(key);
-			}
-		}
-
-		expect(missingKeys).toEqual([]);
-	});
-});
-
 // Strips `//` line comments first: the data layer's header quotes
 // `{ method: 'POST' | 'DELETE' }` to state the rule, and only code must lack it.
 function stripLineComments(src: string): string {

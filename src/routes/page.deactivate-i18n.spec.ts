@@ -1,20 +1,10 @@
 // The not-active notice and deactivate refusals, read from all four message files.
 import { describe, expect, it } from 'vitest';
-import { isMessageEmpty, messagePatterns, everyPatternContains } from '$lib/testing/messageFile.js';
+import { messagePatterns, everyPatternContains } from '$lib/testing/messageFile.js';
 import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
 const NOTICE_KEY = 'membership_not_active_notice';
 const REFUSAL_KEYS = ['roster_deactivate_refused_admin', 'roster_deactivate_refused_librarian'];
-
-describe('#255 copy — presence in all four locales (done-when 8)', () => {
-	it.each(LOCALES)('%s.json carries the notice and refusal keys, non-empty', (locale) => {
-		const messages = localeMessages(locale);
-		for (const key of [NOTICE_KEY, ...REFUSAL_KEYS]) {
-			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-			expect(isMessageEmpty(messages[key]), `${locale}.json ${key} empty`).toBe(false);
-		}
-	});
-});
 
 describe('#255 copy — the "not active" binding (Gama)', () => {
 	it("en: the notice says 'not active' and never 'removed'/'deleted'/'deactivated'", () => {

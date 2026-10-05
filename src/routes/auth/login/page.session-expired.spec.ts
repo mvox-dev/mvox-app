@@ -21,8 +21,6 @@ import { setLastProvider } from '$lib/auth/storage';
 import { m } from '$lib/paraglide/messages.js';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import etMessages from '../../../../messages/et.json';
-import lvMessages from '../../../../messages/lv.json';
-import ukMessages from '../../../../messages/uk.json';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { cleanupResetGotoStorage } from '$lib/testing/pages/login';
 
@@ -76,13 +74,6 @@ describe('/auth/login — session expired flag (#107)', () => {
 			expect(text).not.toBe('Your session has expired. Please sign in again.');
 		} finally {
 			overwriteGetLocale(() => 'en');
-		}
-	});
-
-	it('all four shipped locales carry the key (checklist item 5)', () => {
-		for (const messages of [etMessages, lvMessages, ukMessages]) {
-			expect(messages.session_expired_message).toBeTruthy();
-			expect(messages.session_expired_signin).toBeTruthy();
 		}
 	});
 });

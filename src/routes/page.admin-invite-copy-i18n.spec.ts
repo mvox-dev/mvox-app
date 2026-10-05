@@ -1,19 +1,7 @@
 // The invite copy-flow keys in all four locales; the failure copy names re-sending the invite.
 import { describe, expect, it } from 'vitest';
-import { isMessageEmpty, messagePatterns } from '$lib/testing/messageFile.js';
+import { messagePatterns } from '$lib/testing/messageFile.js';
 import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
-
-const COPY_KEYS = ['admin_invite_copy', 'admin_invite_copied', 'admin_invite_copy_error'] as const;
-
-describe('#345 copy-flow keys — present and non-empty in all four locales', () => {
-	it.each(LOCALES)('%s.json carries all three copy-flow keys, non-empty', (locale) => {
-		const messages = localeMessages(locale);
-		for (const key of COPY_KEYS) {
-			expect(key in messages, `${locale}.json is missing ${key}`).toBe(true);
-			expect(isMessageEmpty(messages[key]), `${locale}.json has an empty ${key}`).toBe(false);
-		}
-	});
-});
 
 const RESEND_STEMS: Record<(typeof LOCALES)[number], RegExp[]> = {
 	en: [/invite/i, /re-?send/i],

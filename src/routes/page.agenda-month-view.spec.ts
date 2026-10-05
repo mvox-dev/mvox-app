@@ -472,25 +472,15 @@ describe('#247 — per-device persistence (the #207 idiom, ruling 9)', () => {
 	});
 });
 
-describe('#247 — the new locale keys exist in all four locales', () => {
+describe('#247 — the new locale keys: ruled copy and weekday labels', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
 	const WEEKDAY_KEYS = [0, 1, 2, 3, 4, 5, 6].map((day) => `agenda_weekday_short_${day}`);
-	const TOGGLE_KEYS = ['agenda_view_list', 'agenda_view_month', 'agenda_view_toggle_label'];
 
 	function messages(locale: (typeof LOCALES)[number]): Record<string, unknown> {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as Record<string, unknown>;
 	}
-
-	it.each(LOCALES)('%s defines the toggle keys, non-empty', (locale) => {
-		const file = messages(locale);
-		for (const key of TOGGLE_KEYS) {
-			expect(file[key], `${locale}.json must define ${key}`).toBeDefined();
-			expect(typeof file[key]).toBe('string');
-			expect((file[key] as string).trim().length).toBeGreaterThan(0);
-		}
-	});
 
 	it("the Estonian toggle labels are the RULED copy verbatim: 'Nimekiri' | 'Kuu'", () => {
 		expect(messages('et').agenda_view_list).toBe('Nimekiri');

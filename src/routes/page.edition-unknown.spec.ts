@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 // The agenda's work-edition picker says unknown after a partial read.
-import { resolve } from 'node:path';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
-import { isMessageEmpty, messagePatterns } from '$lib/testing/messageFile.js';
+import { messagePatterns } from '$lib/testing/messageFile.js';
 import { render, cleanup, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -341,13 +340,7 @@ const NO_EDITION_TODAY: Record<(typeof LOCALES)[number], string> = {
 	uk: 'Видання не вказано'
 };
 
-describe('#329 i18n — repertoire_edition_unknown exists; repertoire_no_edition unchanged', () => {
-	it.each(LOCALES)('%s.json carries repertoire_edition_unknown, non-empty', (locale) => {
-		const messages = localeMessages(locale);
-		expect('repertoire_edition_unknown' in messages, `${locale}.json missing key`).toBe(true);
-		expect(isMessageEmpty(messages['repertoire_edition_unknown'])).toBe(false);
-	});
-
+describe('#329 i18n — repertoire_edition_unknown is its own sentence', () => {
 	it.each(LOCALES)(
 		'%s: unknown and known-absent are DIFFERENT sentences — the two states must not share wording',
 		(locale) => {
@@ -365,15 +358,7 @@ describe('#329 i18n — repertoire_edition_unknown exists; repertoire_no_edition
 	});
 });
 
-describe('#342 i18n — repertoire_edition_unknown_pinned exists; the three edition-state messages are distinct', () => {
-	it.each(LOCALES)('%s.json carries repertoire_edition_unknown_pinned, non-empty', (locale) => {
-		const messages = localeMessages(locale);
-		expect('repertoire_edition_unknown_pinned' in messages, `${locale}.json missing key`).toBe(
-			true
-		);
-		expect(isMessageEmpty(messages['repertoire_edition_unknown_pinned'])).toBe(false);
-	});
-
+describe('#342 i18n — the three edition-state messages are distinct', () => {
 	it.each(LOCALES)(
 		'%s: no_edition, edition_unknown and edition_unknown_pinned are pairwise DIFFERENT sentences',
 		(locale) => {

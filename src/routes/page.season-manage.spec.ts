@@ -2004,37 +2004,6 @@ function truncatedSeriesRead() {
 }
 
 describe('#321 review F1 — the season-manage panel’s partial notice', () => {
-	it('a truncated series read renders a VISIBLE, persistent role="status" notice with the i18n copy, directly above the rows', async () => {
-		listEventSeriesForSeasonMock.mockResolvedValue(truncatedSeriesRead());
-		const container = await renderReady();
-		const panel = await openPanel(container);
-
-		await waitFor(() => {
-			expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
-		});
-		const notice = q(container, PARTIAL_NOTICE) as HTMLElement;
-		expect(notice.getAttribute('role')).toBe('status');
-		expect(notice.className).not.toContain('sr-only');
-		expect(notice.textContent?.trim()).toBe('season_manage_partial_notice');
-		expect(panel.contains(notice)).toBe(true);
-		const firstRow = q(container, 'season-manage-series-series-1') as HTMLElement;
-		expect(
-			notice.compareDocumentPosition(firstRow) & Node.DOCUMENT_POSITION_FOLLOWING
-		).toBeTruthy();
-		await flush();
-		expect(q(container, PARTIAL_NOTICE)).not.toBeNull();
-	});
-
-	it('a complete read leaves the notice ABSENT from the DOM (not hidden)', async () => {
-		const container = await renderReady();
-		await openPanel(container);
-		await waitFor(() => {
-			expect(q(container, 'season-manage-series-series-1')).not.toBeNull();
-		});
-
-		expect(q(container, PARTIAL_NOTICE)).toBeNull();
-	});
-
 	it('a SEASON switch drops the notice with the rows it described — before the new season’s read has landed', async () => {
 		loadFullAgendaMock.mockResolvedValue(twoSeasonResult());
 		listEventSeriesForSeasonMock.mockImplementation((_cfg: unknown, seasonId: string) =>

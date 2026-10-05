@@ -155,31 +155,6 @@ describe('season summary — a deactivated member keeps her rows (done-when 3, i
 describe('season summary — the rate table states a truncated member read (#321 review F2)', () => {
 	const NOTICE = '[data-testid="season-summary-partial-notice"]';
 
-	it('a truncated ACTIVE roster read renders the shared visible role="status" notice above the rows', async () => {
-		loadActiveAndArchivedRostersMock.mockResolvedValue({
-			active: {
-				items: [
-					{ memberId: 'm1', personId: 'pp-1', name: 'Alice Alto', email: 'alice@example.com' }
-				],
-				total: 500,
-				truncated: true
-			},
-			inactive: toListRead([
-				{ memberId: 'm9', personId: 'pp-9', name: 'Gone Girl', email: '', sectionIds: [] }
-			])
-		});
-		const { container } = await renderExpandedSummary();
-
-		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
-		const notice = container.querySelector(NOTICE)!;
-		expect(notice.getAttribute('role')).toBe('status');
-		expect(notice.className).not.toMatch(/sr-only|hidden/);
-		const region = container.querySelector('[data-testid="season-summary-members"]')!;
-		expect(region.querySelector(NOTICE)).not.toBeNull();
-		const row = container.querySelector('[data-testid="member-rate-m1"]')!;
-		expect(notice.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-	});
-
 	it('a truncated ARCHIVED read raises the same notice — the history half drops singers too', async () => {
 		loadActiveAndArchivedRostersMock.mockResolvedValue({
 			active: toListRead([

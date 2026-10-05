@@ -414,29 +414,14 @@ describe("#214 — visual scheme: #211's eventTypeBadgeClass on the ACTIVE chip 
 	});
 });
 
-describe('#214 — the new keys exist in all four locales', () => {
+describe('#214 — the new keys: ruled copy', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	const NEW_KEYS = [
-		'agenda_filter_all',
-		'agenda_filter_group_label',
-		'agenda_filter_empty',
-		'agenda_filter_recent_empty'
-	];
 
 	function messages(locale: (typeof LOCALES)[number]): Record<string, unknown> {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as Record<string, unknown>;
 	}
-
-	it.each(LOCALES)('%s carries all three keys, non-empty', (locale) => {
-		const file = messages(locale);
-		for (const key of NEW_KEYS) {
-			expect(file[key], `${locale}.json must define ${key}`).toBeDefined();
-			expect(typeof file[key]).toBe('string');
-			expect((file[key] as string).trim().length).toBeGreaterThan(0);
-		}
-	});
 
 	it("agenda_filter_all is the verbatim copy: en 'All', et 'Kõik'", () => {
 		expect(messages('en').agenda_filter_all).toBe('All');

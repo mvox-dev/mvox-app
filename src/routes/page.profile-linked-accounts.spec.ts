@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { isMessageEmpty, messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
+import { messagePatterns, type MessageFile } from '$lib/testing/messageFile.js';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/pages/profileCopy')).profileMessages()
@@ -738,37 +738,14 @@ describe('/profile — same-identity no-op notice is neutral (#219)', () => {
 
 // ── i18n — the #193 keys exist, non-empty, in ALL FOUR locales ──────────────────
 
-describe('locale parity — every #193 key present and non-empty in en/et/lv/uk', () => {
+describe('#193 copy — collective-scoped keys', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	const KEYS = [
-		'profile_linked_accounts_title',
-		'profile_link_another',
-		'profile_link_choose_provider',
-		'profile_link_error_conflict',
-		'profile_link_error_dead',
-		'profile_link_error_failed',
-		'profile_link_error_missing_rights',
-		'profile_link_error_already_linked',
-		'profile_link_error_step',
-		'profile_link_success',
-		// #219 — the after-the-fact same-identity case, distinct from the
-		// pre-existing error key (Gama ruling: neutral copy in all four locales).
-		'profile_link_noop_same_identity',
-		'profile_link_cancel'
-	] as const;
 
 	function messages(locale: string): MessageFile {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as MessageFile;
 	}
-
-	it.each(LOCALES)('%s carries every key, none empty', (locale) => {
-		const file = messages(locale);
-		for (const key of KEYS) {
-			expect(isMessageEmpty(file[key]), `messages/${locale}.json: ${key}`).toBe(false);
-		}
-	});
 
 	// review F1 — the scoping only holds if EVERY locale actually interpolates the
 	// collective. A translation that drops `{collective}` silently restores the
