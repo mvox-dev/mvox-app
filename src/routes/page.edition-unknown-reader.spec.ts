@@ -4,6 +4,7 @@ import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkRow } from '$lib/repertoire/types';
+import { json } from '$lib/testing/entuFetchKit';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages('bracket')
@@ -96,6 +97,62 @@ function workRow(overrides: Partial<WorkRow> = {}): WorkRow {
 		truncated: true,
 		...overrides
 	};
+}
+
+// Program rows go through the real row builder, fed from the wire.
+const PROGRAM_ITEMS = [
+	{
+		_id: 'pi-2',
+		name: [{ string: 'Ghost piece' }],
+		edition: [{ reference: 'ed-9' }],
+		ordinal: [{ number: 1 }]
+	}
+];
+
+function programWire(opts: { editionCount?: number } = {}) {
+	const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+		const url = String(input);
+		if ((init?.method ?? 'GET') !== 'GET') return json({ _id: 'new-1' });
+		if (url.includes('_type.string=program_item')) return json({ entities: PROGRAM_ITEMS });
+		if (url.includes('_type.string=edition')) {
+			return json({
+				...(opts.editionCount === undefined ? {} : { count: opts.editionCount }),
+				entities: [
+					{
+						_id: 'ed-1',
+						name: [{ string: 'Bärenreiter BA 5103' }],
+						_parent: [{ reference: 'w-2', entity_type: 'work' }]
+					}
+				]
+			});
+		}
+		if (url.includes('_type.string=work'))
+			return json({
+				entities: [
+					{ _id: 'w-2', name: [{ string: 'Mass in B minor' }], composer: [{ string: 'J. S. Bach' }] }
+				]
+			});
+		return json({ entities: [] });
+	});
+	vi.stubGlobal('fetch', fetchMock);
+}
+
+async function renderProgramAsReader(opts: { editionCount?: number } = {}) {
+	programWire(opts);
+	const actual = await vi.importActual<typeof import('$lib/repertoire/workRows')>(
+		'$lib/repertoire/workRows'
+	);
+	loadWorksByEventIdMock.mockImplementation(actual.loadWorksByEventId);
+	setAuthedReader();
+	const rendered = render(Page);
+	await waitFor(() => {
+		expect(rendered.container.querySelector('[data-testid="works-line"]')).not.toBeNull();
+	});
+	await fireEvent.click(rendered.container.querySelector('[data-testid="works-line"]')!);
+	await waitFor(() => {
+		expect(rendered.container.querySelector('[data-testid="work-row"]')).not.toBeNull();
+	});
+	return workRowOf(rendered.container, 'Ghost piece');
 }
 
 function stubWire() {
@@ -202,19 +259,32 @@ describe('#331 agenda — the reader\'s COMPLETE read keeps every stated fact', 
 		expect(noEdition!.textContent).toContain('[repertoire_no_edition]');
 		expect(li.querySelector('[data-testid="work-edition-unknown"]')).toBeNull();
 	});
+});
 
-	it('a DANGLING pin under a complete read is still a pin — unknown wording, not a claim of absence (#331 item 4)', async () => {
-		stubWire();
-		const { container } = await renderExpandedAsReader({
-			'pv-ev': [workRow({ truncated: undefined })]
-		});
-		const li = workRowOf(container, 'Old warhorse');
+describe('#337 agenda — a reader’s program row through the shared element', () => {
+	it('a program row whose pin the truncated wire read could not name says UNKNOWN, never "no pinned edition"', async () => {
+		const li = await renderProgramAsReader({ editionCount: 4000 });
 		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
-		expect(unknown, 'work-edition-unknown on the reader\u2019s row').not.toBeNull();
+		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
+		expect(unknown!.textContent).toContain('[repertoire_edition_unknown]');
+		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
+		expect(li.textContent).not.toContain('[repertoire_no_edition]');
+
+		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
+	});
+
+	it('a program row pinned to an edition the complete read does not hold gets the dangling wording', async () => {
+		const li = await renderProgramAsReader();
+		const unknown = li.querySelector('[data-testid="work-edition-unknown"]');
+		expect(unknown, 'work-edition-unknown on the reader’s program row').not.toBeNull();
 		expect(unknown!.textContent).toContain('[repertoire_edition_unknown_pinned]');
 		expect(li.textContent).not.toContain('[repertoire_edition_unknown]');
 		expect(li.querySelector('[data-testid="work-no-edition"]')).toBeNull();
 		expect(li.textContent).not.toContain('[repertoire_no_edition]');
+
+		expect(li.querySelector('[data-testid="work-edition-picker"]')).toBeNull();
+		expect(li.querySelector('[data-testid="work-manage-row"]')).toBeNull();
 	});
 });
 
@@ -270,3 +340,5 @@ describe('#331 agenda — a collective switch carries no stale unknown state acr
 });
 
 // (*MVOX:Tallis* — #331 RED)
+// (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

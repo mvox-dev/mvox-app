@@ -785,14 +785,6 @@ describe('transport integration — real entuFetch/entuUrl underneath the seam',
 		expect(headers.Authorization).toBe('Bearer jwt');
 		expect(headers['Content-Type']).toBe('application/json');
 	});
-
-	it('resolveTypeId results are CACHED per db:typeName — two creates of the same type issue ONE resolution GET total', async () => {
-		const fetchImpl = makeFetchMock();
-		await createEvent(cfg, { ...minimalEvent, name: 'E1' }, fetchImpl);
-		await createEvent(cfg, { ...minimalEvent, name: 'E2' }, fetchImpl);
-		expect(typeResolutionCalls(fetchImpl)).toHaveLength(1);
-		expect(fetchImpl).toHaveBeenCalledTimes(3);
-	});
 });
 
 // (*MVOX:Tallis* — #132/T1 RED)

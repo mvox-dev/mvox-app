@@ -1056,6 +1056,8 @@ describe('agenda admin — every successful create refreshes the agenda', () => 
 			endDate: '2026-12-20',
 			conductorRefs: []
 		});
+		// #161: the parent is the database entity, resolved for this collective.
+		expect(resolveDatabaseEntityIdMock.mock.calls[0][0]).toMatchObject(CFG);
 		await waitFor(() => {
 			expect(q(container, 'season-create-form')).toBeNull();
 		});
@@ -1310,3 +1312,4 @@ describe('agenda admin — creation forms stay inside a 375px viewport (class co
 // (*MVOX:Palestrina*)
 
 // (*MVOX:Tallis*)
+// (*MVOX:Josquin*)

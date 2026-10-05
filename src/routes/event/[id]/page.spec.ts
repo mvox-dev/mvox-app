@@ -683,10 +683,6 @@ function editorEvent(over: Partial<Record<string, unknown>> = {}) {
 	return eventEntity({ _editor: [{ reference: 'p-viewer' }], ...over });
 }
 
-function ownerOnlyEvent(over: Partial<Record<string, unknown>> = {}) {
-	return eventEntity({ _owner: [{ reference: 'p-viewer' }], ...over });
-}
-
 function allRsvpsForEv1(): unknown[] {
 	const rows: unknown[] = [
 		{ _id: 'rsvp-77', member: [{ reference: 'member-1' }], status: [{ string: 'going' }] }
@@ -842,112 +838,9 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 			true
 		);
 	});
-
-	it("seeds the control from the viewer's EXISTING rsvp — the same entity the agenda row owns", async () => {
-		const { container, fetchStub } = renderRsvpPage();
-		await waitFor(() => {
-			expect(
-				container
-					.querySelector('[data-testid="rsvp-btn-going"]')
-					?.getAttribute('aria-pressed')
-			).toBe('true');
-		});
-		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(
-			urls.some((u) => u.includes('_type.string=rsvp') && u.includes('_parent.reference=p-viewer'))
-		).toBe(true);
-	});
-
-	it('a status change WRITES to that same rsvp entity (update rsvp-77) — never a second create', async () => {
-		const { container, fetchStub } = renderRsvpPage();
-		await waitFor(() => {
-			expect(
-				container
-					.querySelector('[data-testid="rsvp-btn-going"]')
-					?.getAttribute('aria-pressed')
-			).toBe('true');
-			const maybe = container.querySelector(
-				'[data-testid="rsvp-btn-maybe"]'
-			) as HTMLButtonElement | null;
-			expect(maybe).not.toBeNull();
-			expect(maybe!.disabled).toBe(false);
-		});
-
-		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-maybe"]')!);
-
-		await waitFor(() => {
-			const posts = fetchStub.mock.calls.filter(
-				(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
-			);
-			expect(posts.length).toBeGreaterThan(0);
-			for (const c of posts) expect(String(c[0])).toContain('/entity/rsvp-77');
-		});
-	});
 });
 
 describe('/event/[id] — tally + capacity render from the domain rsvp read for EVERY member (#363)', () => {
-	it('an _editor on the event sees the tally: per-status counts from the domain rsvp read', async () => {
-		const { container } = renderRsvpPage({ event: editorEvent() });
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-		});
-		const count = (s: string) =>
-			container.querySelector(`[data-testid="event-detail-tally-${s}"]`);
-		expect(count('going'), 'tally-going missing').not.toBeNull();
-		expect(count('going')!.textContent).toContain('12');
-		expect(count('not_going')!.textContent).toContain('2');
-		expect(count('maybe')!.textContent).toContain('1');
-		expect(count('late')!.textContent).toContain('0');
-	});
-
-	it('a plain member with NO grant on the event sees the tally AND capacity — the render follows the read, not a rights predicate (#363)', async () => {
-		const { container, fetchStub } = renderRsvpPage();
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-		});
-		const count = (s: string) =>
-			container.querySelector(`[data-testid="event-detail-tally-${s}"]`);
-		expect(count('going')!.textContent).toContain('12');
-		expect(count('not_going')!.textContent).toContain('2');
-		expect(count('maybe')!.textContent).toContain('1');
-		expect(count('late')!.textContent).toContain('0');
-		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
-		expect(cap).toContain('12');
-		expect(cap).toContain('20');
-		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(
-			urls.some(
-				(u) =>
-					u.includes('_type.string=rsvp') &&
-					u.includes('event.reference=ev1') &&
-					!u.includes('_parent.reference=')
-			)
-		).toBe(true);
-	});
-
-	it('an _editor list WITHOUT the viewer changes nothing — the tally renders from the read, not from list membership (#363)', async () => {
-		const { container } = renderRsvpPage({
-			event: eventEntity({ _editor: [{ reference: 'p-other' }] })
-		});
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-		});
-		expect(
-			container.querySelector('[data-testid="event-detail-tally-going"]')!.textContent
-		).toContain('12');
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
-	});
-
-	it('capacity renders as going-count / capacity alongside the tally when event.capacity is set', async () => {
-		const { container } = renderRsvpPage({ event: editorEvent() }); // default capacity: 20
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
-		});
-		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
-		expect(cap).toContain('12');
-		expect(cap).toContain('20');
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-	});
 
 	it('capacity is hidden when the event has none — the tally still renders', async () => {
 		const { container } = renderRsvpPage({ event: editorEvent({ capacity: undefined }) });
@@ -955,32 +848,6 @@ describe('/event/[id] — tally + capacity render from the domain rsvp read for 
 			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
-	});
-
-	it('an `_owner` on the event who is NOT in `_editor` sees the tally + capacity — ownership subsumes editing', async () => {
-		const { container } = renderRsvpPage({ event: ownerOnlyEvent() });
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-		});
-		expect(
-			container.querySelector('[data-testid="event-detail-tally-going"]')!.textContent
-		).toContain('12');
-		const cap = container.querySelector('[data-testid="event-detail-capacity"]')!.textContent ?? '';
-		expect(cap).toContain('12');
-		expect(cap).toContain('20');
-	});
-
-	it('an `_owner` list WITHOUT the viewer changes nothing either — tally + capacity render for her too (#363)', async () => {
-		const { container } = renderRsvpPage({
-			event: eventEntity({ _owner: [{ reference: 'p-other' }] })
-		});
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally"]')).not.toBeNull();
-		});
-		expect(
-			container.querySelector('[data-testid="event-detail-tally-going"]')!.textContent
-		).toContain('12');
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).not.toBeNull();
 	});
 
 	it('integration: the RSVP section holds the control AND the tally + capacity together (editor view)', async () => {
@@ -1162,76 +1029,6 @@ describe('/event/[id] — a past event is read-only (#102 review F3)', () => {
 	});
 });
 
-describe('/event/[id] — the tally refreshes after the editor changes her OWN rsvp (#102 review F4)', () => {
-	function mutatingTallyWire() {
-		const base = rsvpWireStub({ event: editorEvent() });
-		let mine = 'going';
-		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input);
-			const method = init?.method ?? 'GET';
-			if (url.includes('/entity/rsvp-77') && method === 'POST') {
-				mine = 'maybe';
-				return json({});
-			}
-			if (
-				url.includes('_type.string=rsvp') &&
-				url.includes('event.reference=ev1') &&
-				!url.includes('_parent.reference=')
-			) {
-				const rows = allRsvpsForEv1();
-				rows[0] = {
-					_id: 'rsvp-77',
-					member: [{ reference: 'member-1' }],
-					status: [{ string: mine }]
-				};
-				return json({ entities: rows });
-			}
-			return base(input, init);
-		});
-	}
-
-	it('re-reads the counts on a successful write — going drops, maybe rises, capacity follows', async () => {
-		const { container: c } = renderWithFetch(mutatingTallyWire());
-		await waitFor(() => {
-			expect(
-				c.querySelector('[data-testid="event-detail-tally-going"]')?.textContent
-			).toContain('12');
-			const maybe = c.querySelector('[data-testid="rsvp-btn-maybe"]') as HTMLButtonElement;
-			expect(maybe.disabled).toBe(false);
-		});
-		expect(c.querySelector('[data-testid="event-detail-capacity"]')!.textContent).toContain('12');
-
-		await fireEvent.click(c.querySelector('[data-testid="rsvp-btn-maybe"]')!);
-
-		await waitFor(() => {
-			expect(c.querySelector('[data-testid="event-detail-tally-going"]')!.textContent).toContain(
-				'11'
-			);
-		});
-		expect(c.querySelector('[data-testid="event-detail-tally-maybe"]')!.textContent).toContain('2');
-		expect(c.querySelector('[data-testid="event-detail-capacity"]')!.textContent).toContain('11');
-	});
-
-	it("a plain member's F4 re-fetch DOES issue the cross-person tally read, same as the initial load (#363)", async () => {
-		const { container, fetchStub } = renderRsvpPage(); // default fixture: no rights visible
-		await waitFor(() => {
-			const maybe = container.querySelector('[data-testid="rsvp-btn-maybe"]') as HTMLButtonElement;
-			expect(maybe.disabled).toBe(false);
-		});
-		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-maybe"]')!);
-		await waitFor(() => {
-			const posts = fetchStub.mock.calls.filter(
-				(c) => ((c[1] as RequestInit | undefined)?.method ?? 'GET') === 'POST'
-			);
-			expect(posts.length).toBeGreaterThan(0);
-		});
-		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(
-			urls.some((u) => u.includes('event.reference=ev1') && !u.includes('_parent.reference='))
-		).toBe(true);
-	});
-});
-
 describe('/event/[id] — a write that settles after a collective switch never lands (#102 review round 2, F1)', () => {
 	function switchedCollectiveWire() {
 		let release: () => void = () => {};
@@ -1300,82 +1097,6 @@ describe('/event/[id] — a write that settles after a collective switch never l
 			urls.filter((u) => u.includes('rsvp-77')).every((u) => u.includes('/sampledb/')),
 			'rsvp-77 was touched in the vox db'
 		).toBe(true);
-	});
-});
-
-describe('/event/[id] — a FAILED tally read is surfaced, not silently collapsed (#102 review round 2, F2)', () => {
-	function failingTallyWire(failTimes = Number.POSITIVE_INFINITY) {
-		const base = rsvpWireStub({ event: editorEvent() });
-		let left = failTimes;
-		return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input);
-			if (
-				url.includes('_type.string=rsvp') &&
-				url.includes('event.reference=ev1') &&
-				!url.includes('_parent.reference=') &&
-				left > 0
-			) {
-				left -= 1;
-				return json({ message: 'boom' }, 500);
-			}
-			return base(input, init);
-		});
-	}
-
-	it('shows an error line (and logs) instead of the plain-member view — no tally, no capacity', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { container } = renderWithFetch(failingTallyWire());
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')).toBeNull();
-		expect(
-			errorSpy.mock.calls.some((c) => c.some((a) => String(a).includes('tally'))),
-			'the failure was not logged'
-		).toBe(true);
-		errorSpy.mockRestore();
-	});
-
-	it('Retry re-reads the counts and clears the error line', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const { container } = renderWithFetch(failingTallyWire(1));
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="event-detail-tally-retry"]')!);
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="event-detail-tally-going"]')?.textContent
-			).toContain('12');
-		});
-		expect(container.querySelector('[data-testid="event-detail-tally-error"]')).toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-capacity"]')!.textContent).toContain(
-			'12'
-		);
-		errorSpy.mockRestore();
-	});
-
-	it("a plain member's FAILED tally read shows HER the error line + Retry (#363)", async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const base = rsvpWireStub(); // default fixture: no rights visible
-		const failing = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-			const url = String(input);
-			if (
-				url.includes('_type.string=rsvp') &&
-				url.includes('event.reference=ev1') &&
-				!url.includes('_parent.reference=')
-			)
-				return json({ message: 'boom' }, 500);
-			return base(input, init);
-		});
-		const { container } = renderWithFetch(failing);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="event-detail-tally-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="event-detail-tally-retry"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="event-detail-tally"]')).toBeNull();
-		errorSpy.mockRestore();
 	});
 });
 

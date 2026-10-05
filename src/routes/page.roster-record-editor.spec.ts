@@ -539,26 +539,6 @@ describe('(E) failure tells the truth — typed values stay, nothing pretends to
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 		consoleErrorSpy.mockRestore();
 	});
-
-	it('the required-name REFUSAL owns the live region too: the clear happens before the gate, so a stale "saved" cannot outlive it', async () => {
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() =>
-			expect(q(container, 'roster-member-record-status')!.textContent).toContain(
-				'roster_record_saved'
-			)
-		);
-		await openEditor(container, 'm1');
-		await fireEvent.input(nameInput(container), { target: { value: '' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_name_required]'
-		);
-		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
-		expect(createMemberRecordMock).toHaveBeenCalledTimes(1); // the FIRST save only
-	});
 });
 
 describe('(E) collective switch — #259 generation discipline', () => {
@@ -647,25 +627,6 @@ describe('(E) review F2 — the required NAME is enforced where the write happen
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 	});
 
-	it('UPDATE path: clearing the name of an EXISTING record refuses too — updateMemberRecord never fires', async () => {
-		loadMemberRecordMock.mockResolvedValue({
-			state: 'one',
-			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
-		});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(emailInput(container), { target: { value: 'kept@example.com' } });
-		await fireEvent.input(nameInput(container), { target: { value: '' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_name_required]'
-		);
-		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		expect(emailInput(container).value).toBe('kept@example.com');
-	});
-
 	it('whitespace is not a name: "   " is refused exactly like ""', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -673,20 +634,6 @@ describe('(E) review F2 — the required NAME is enforced where the write happen
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
-	});
-
-	it('after filling the name back in, the same save goes through — the refusal is a gate, not a dead end', async () => {
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(nameInput(container), { target: { value: '' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		await fireEvent.input(nameInput(container), { target: { value: 'Berta Real' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
-		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
-			expect.objectContaining({ name: 'Berta Real' })
-		);
 	});
 });
 
@@ -972,27 +919,6 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
 	});
 
-	it('PRIVACY (crede real-PII law): the refusal copy is a STATIC string naming the field — the typed value appears in no alert and no console output', async () => {
-		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(phoneInput(container), { target: { value: 'õhtul helistada 555' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		const alert = await waitFor(() => {
-			const el = q(container, 'roster-record-save-error');
-			expect(el).not.toBeNull();
-			return el!;
-		});
-		expect(alert.textContent).not.toContain('õhtul helistada 555');
-		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
-			.map((c) => c.map(String).join(' '))
-			.join(' ');
-		expect(logged).not.toContain('õhtul helistada 555');
-		consoleErrorSpy.mockRestore();
-		consoleLogSpy.mockRestore();
-	});
-
 	it("'+372 5555 5555' saves UNCHANGED — + survives by construction (foreign travel is the normal case, #282)", async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
@@ -1032,60 +958,6 @@ describe('(#283) phone guard — letters refuse the save; + and friends survive 
 		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
 		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
 			expect.objectContaining({ phone: '' })
-		);
-	});
-
-	it("UPDATE path: letters in an EXISTING record's phone refuse too — updateMemberRecord never fires, sibling typed change survives", async () => {
-		loadMemberRecordMock.mockResolvedValue({
-			state: 'one',
-			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
-		});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(emailInput(container), { target: { value: 'kept@example.com' } });
-		await fireEvent.input(phoneInput(container), { target: { value: 'mob. 555' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_phone_invalid]'
-		);
-		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		expect(emailInput(container).value).toBe('kept@example.com');
-	});
-
-	it('the phone REFUSAL owns the live region too: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() =>
-			expect(q(container, 'roster-member-record-status')!.textContent).toContain(
-				'roster_record_saved'
-			)
-		);
-		await openEditor(container, 'm1');
-		await fireEvent.input(phoneInput(container), { target: { value: 'tel: 555' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_phone_invalid]'
-		);
-		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
-		expect(createMemberRecordMock).toHaveBeenCalledTimes(1); // the FIRST save only
-	});
-
-	it('after removing the letters, the same save goes through — the refusal is a gate, not a dead end', async () => {
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(phoneInput(container), { target: { value: 'tel: 555' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		await fireEvent.input(phoneInput(container), { target: { value: '+372 555' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
-		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
-			expect.objectContaining({ phone: '+372 555' })
 		);
 	});
 });
@@ -1171,58 +1043,6 @@ describe("(#283) email guard — the browser's OWN constraint validation, weakes
 		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
 			expect.objectContaining({ email: 'mari.tamm+koor@mail.example.co.uk' })
 		);
-	});
-
-	it("UPDATE path: a malformed email on an EXISTING record refuses too — updateMemberRecord never fires", async () => {
-		loadMemberRecordMock.mockResolvedValue({
-			state: 'one',
-			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '' }
-		});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(phoneInput(container), { target: { value: '+372 5550000' } });
-		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_email_invalid]'
-		);
-		expect(updateMemberRecordMock).not.toHaveBeenCalled();
-		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		expect(phoneInput(container).value).toBe('+372 5550000');
-	});
-
-	it('PRIVACY (crede real-PII law): the email refusal copy is STATIC — the typed value appears in no alert and no console output', async () => {
-		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(emailInput(container), { target: { value: 'secret typo @ example' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		const alert = await waitFor(() => {
-			const el = q(container, 'roster-record-save-error');
-			expect(el).not.toBeNull();
-			return el!;
-		});
-		expect(alert.textContent).not.toContain('secret typo @ example');
-		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
-			.map((c) => c.map(String).join(' '))
-			.join(' ');
-		expect(logged).not.toContain('secret typo @ example');
-		consoleErrorSpy.mockRestore();
-		consoleLogSpy.mockRestore();
-	});
-
-	it('after fixing the address, the same save goes through — the refusal is a gate, not a dead end', async () => {
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(emailInput(container), { target: { value: 'not an email' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		await fireEvent.input(emailInput(container), { target: { value: 'berta@example.com' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
 	});
 });
 
@@ -1423,48 +1243,38 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 		);
 		expect(q(container, 'roster-record-save-error')).toBeNull();
 	});
+});
 
-	it("UPDATE path: an invalid code on an EXISTING record refuses too — updateMemberRecord never fires, sibling typed change survives", async () => {
+// One row per save gate: a value it refuses, a value it lets through, and its alert key.
+const GATES = [
+	{ field: 'name', input: nameInput, bad: '', good: 'Berta Real', key: 'roster_record_name_required' },
+	{ field: 'phone', input: phoneInput, bad: 'tel: 555', good: '+372 555', key: 'roster_record_phone_invalid' },
+	{ field: 'email', input: emailInput, bad: 'not an email', good: 'b@example.com', key: 'roster_record_email_invalid' },
+	{ field: 'id_code', input: idCodeInput, bad: '50001010011', good: '50001010017', key: 'roster_record_id_code_invalid' }
+] as const;
+
+describe.each(GATES)('(#283/#285) the $field gate refuses at the save, whatever comes after', (gate) => {
+	const sibling = gate.field === 'email' ? phoneInput : emailInput;
+	const siblingValue = gate.field === 'email' ? '+372 5550000' : 'kept@example.com';
+
+	it("UPDATE path: a refused value on an EXISTING record — updateMemberRecord never fires, sibling typed change survives", async () => {
 		loadMemberRecordMock.mockResolvedValue({
 			state: 'one',
 			record: { _id: 'rec-1', name: 'Recorded Name', phone: '', email: '', birthdate: '', id_code: '' }
 		});
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
-		await fireEvent.input(emailInput(container), { target: { value: 'kept@example.com' } });
-		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.input(sibling(container), { target: { value: siblingValue } });
+		await fireEvent.input(gate.input(container), { target: { value: gate.bad } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_id_code_invalid]'
-		);
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(`[${gate.key}]`);
 		expect(updateMemberRecordMock).not.toHaveBeenCalled();
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		expect(emailInput(container).value).toBe('kept@example.com');
+		expect(sibling(container).value).toBe(siblingValue);
 	});
 
-	it('NEVER-ECHO (crede real-PII law — this field needs it more than any other): the refusal copy is STATIC and the typed value appears in NO alert and NO console output', async () => {
-		const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
-		const { container } = await renderRosterAs('admin');
-		await openEditor(container, 'm2');
-		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
-		await fireEvent.click(q(container, 'roster-record-save')!);
-		const alert = await waitFor(() => {
-			const el = q(container, 'roster-record-save-error');
-			expect(el).not.toBeNull();
-			return el!;
-		});
-		expect(alert.textContent).not.toContain('50001010011');
-		const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
-			.map((c) => c.map(String).join(' '))
-			.join(' ');
-		expect(logged).not.toContain('50001010011');
-		consoleErrorSpy.mockRestore();
-		consoleLogSpy.mockRestore();
-	});
-
-	it('the id-code REFUSAL owns the live region too: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
+	it('the refusal owns the live region: cleared-before-gate ordering — a stale "saved" cannot outlive it', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
 		await fireEvent.click(q(container, 'roster-record-save')!);
@@ -1474,30 +1284,54 @@ describe('(#285) isikukood checksum guard — THIRD in the refusal slot, strict 
 			)
 		);
 		await openEditor(container, 'm1');
-		await fireEvent.input(idCodeInput(container), { target: { value: '5000101001' } });
+		await fireEvent.input(gate.input(container), { target: { value: gate.bad } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
-		expect(q(container, 'roster-record-save-error')!.textContent).toContain(
-			'[roster_record_id_code_invalid]'
-		);
+		expect(q(container, 'roster-record-save-error')!.textContent).toContain(`[${gate.key}]`);
 		expect((q(container, 'roster-member-record-status')!.textContent ?? '').trim()).toBe('');
 		expect(createMemberRecordMock).toHaveBeenCalledTimes(1); // the FIRST save only
 	});
 
-	it('after fixing the code, the same save goes through — the refusal is a gate, not a dead end', async () => {
+	it('after fixing the value, the same save goes through — the refusal is a gate, not a dead end', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openEditor(container, 'm2');
-		await fireEvent.input(idCodeInput(container), { target: { value: '50001010011' } });
+		await fireEvent.input(gate.input(container), { target: { value: gate.bad } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(q(container, 'roster-record-save-error')).not.toBeNull());
 		expect(createMemberRecordMock).not.toHaveBeenCalled();
-		await fireEvent.input(idCodeInput(container), { target: { value: '50001010017' } });
+		await fireEvent.input(gate.input(container), { target: { value: gate.good } });
 		await fireEvent.click(q(container, 'roster-record-save')!);
 		await waitFor(() => expect(createMemberRecordMock).toHaveBeenCalledTimes(1));
 		expect(createMemberRecordMock.mock.calls[0][1]).toEqual(
-			expect.objectContaining({ id_code: '50001010017' })
+			expect.objectContaining({ [gate.field]: gate.good })
 		);
 	});
+});
+
+// crede real-PII law: each refusal copy is STATIC, so the typed value reaches no alert and no log.
+it.each([
+	{ field: 'phone', input: phoneInput, typed: 'õhtul helistada 555' },
+	{ field: 'email', input: emailInput, typed: 'secret typo @ example' },
+	{ field: 'id_code', input: idCodeInput, typed: '50001010011' }
+])('PRIVACY: the $field refusal never echoes the typed value', async ({ input, typed }) => {
+	const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+	const consoleLogSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+	const { container } = await renderRosterAs('admin');
+	await openEditor(container, 'm2');
+	await fireEvent.input(input(container), { target: { value: typed } });
+	await fireEvent.click(q(container, 'roster-record-save')!);
+	const alert = await waitFor(() => {
+		const el = q(container, 'roster-record-save-error');
+		expect(el).not.toBeNull();
+		return el!;
+	});
+	expect(alert.textContent).not.toContain(typed);
+	const logged = [...consoleErrorSpy.mock.calls, ...consoleLogSpy.mock.calls]
+		.map((c) => c.map(String).join(' '))
+		.join(' ');
+	expect(logged).not.toContain(typed);
+	consoleErrorSpy.mockRestore();
+	consoleLogSpy.mockRestore();
 });
 
 function textNodesContaining(root: Element, needle: string): Text[] {

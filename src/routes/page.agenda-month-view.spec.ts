@@ -298,6 +298,29 @@ describe('#247 — month grouping: ascending Tallinn YYYY-MM, app-locale heading
 	});
 });
 
+describe("#251 — the day list's date header follows the app language", () => {
+	const dateHeader = (c: HTMLElement) =>
+		c.querySelector('[data-testid="agenda-date-header"]')?.textContent?.trim();
+
+	it("app language 'et' on an en-US device: the day-group header reads 'esmaspäev, 10. juuni'", async () => {
+		const container = await renderAgenda([JUN_MON]);
+		expect(dateHeader(container)).toBe('esmaspäev, 10. juuni');
+	});
+
+	it('switching the app language live re-renders the header without a reload', async () => {
+		setAppLocale('en');
+		const container = await renderAgenda([JUN_MON]);
+		await waitFor(() => {
+			expect(dateHeader(container)).toBe('Monday, June 10');
+		});
+
+		setAppLocale('et');
+		await waitFor(() => {
+			expect(dateHeader(container)).toBe('esmaspäev, 10. juuni');
+		});
+	});
+});
+
 describe('#247 — the compact row: EXACTLY weekday key + day number + title + type badge', () => {
 	it('renders short-weekday key + day-of-month + title + #211 badge — and nothing else', async () => {
 		const container = await renderAgenda(ALL_UPCOMING);
@@ -592,3 +615,4 @@ describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving ta
 
 // (*MVOX:Tallis*)
 // (*MVOX:Byrd*)
+// (*MVOX:Josquin*)
