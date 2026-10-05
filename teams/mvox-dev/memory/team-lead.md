@@ -2,7 +2,26 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-32 checkpoint 2026-10-02 17:00Z]
+### [NEXT SESSION — MVOX-33 checkpoint 2026-10-05 22:05Z]
+
+**State:** main fe45b42 (after this seam PR: one more chore commit), tree clean apart from memory files, no branch open. The #706 test-review queue is DONE: #708-#718 and #723 all closed. Repo test:source 3.34:1 (from 3.9:1 on 10-01).
+
+**Landed 10-03→10-05:** #711 (b2-b10 + follow-ups, PRs #774-#783); #715 (#785, #786); #717 (#787); #718 (#789); #712 (#791, follow-up #793); #713 (#792); #714 (#794); #713 flake fix (#799); #716 (#797, #798, #801); #723 (#804, #805, follow-up #806); seam PRs #784, #802.
+
+**Next:** features per the board, in the order #611 → #684 → #617/#618/#619 → #615 → #616 (verify the `ready` labels and Gama's order first). #756 is not ready.
+
+**Filed by Gama this wave, unreleased (wait on Mihkel's word):** #795 (links/roster writes send a stale token after it's cleared), #796 (series picker: status region mounts late; saved cue survives a switch), #800 (library page left mid-load overwrites librarianStore; its fix needs a test written first that leaves /library mid-load, re-mounts and settles late, and must NOT copy #799's afterEach drain), #803 (8 unused locale keys go). Not yet filed: #717 finding, 17 roster generation guards fail no test on main (scratchpad/717/res).
+
+**New standing rule (Mihkel 10-05, in common-prompt):** 4-point gate for every test PR (behaviour, not classes/source/calls; once over a source-derived page list; named break tried; test:source ratio stated).
+
+**Lessons this wave:** grep closing keywords case-insensitively, in both the squash body and the PR description (mvox-merge skill updated). Release = shutdown_request, never a text message. Mutation runs: check the branch first and restore before reporting (a stray mutation sat on main). Never pkill shared processes. A mock dropped while its handle is still asserted makes a never-failing test (#805 → #806). Never prove a negative after a fixed wait (#792).
+
+**Team at seam:** none up. Spawn fresh josquin/bentham/finn per task.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-32 checkpoint 2026-10-03, restart seam]
 
 **State (2026-10-03 20:27Z, restart seam — Mihkel asked for fresh context):** main 6bb3246, tree clean apart from memory files. #711 in process: b1 merged (PR #772); next b2 admin+profile (32), then event 33, roster 35, season panel 21, agenda 21+21; plan in ~/workspace/scratchpad/711-inventory.md, scripts in scratchpad/711/. Spawn a fresh Josquin for b2 (point at the inventory + findings-mvox-29.md tail for rules) and a fresh Bentham (bentham.md has the traps). Then #712-#718 (research after #711), #723, then features #611 → #684 → #617, #618, #619, #615 → #616. #756 (swallowed reads) not ready yet; finds go to Gama for its body.
 
@@ -15,23 +34,6 @@
 **Nits:** soleCreatePath guard now a subset of rightsWrites (retire at next touch); t4-10-plan.ts:435 stale comment; resolveAdmin/resolveLibrarian auth-expired → load-error (pre-existing).
 
 **Team at seam:** perotin up. Spawn fresh josquin/bentham/finn per task.
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-31 checkpoint 2026-10-01 17:48Z, idle seam]
-
-**State:** main d716a6f, tree clean, no branch open. Mihkel (16:30Z): refactoring before new features.
-
-**Landed this session (MVOX-31):** #574 a51986d · #568+#556 116bbca · #559 0c566b6 · #558 c3f2892 · #557 3e569b2 · #561 923d677 · #560 29be807 · consolidation-1000 waves A-F (#594/#597/#598 3b47c18, #581/#605 90b890f, #586/#588/#587/#583 61c24d3, #596/#589/#591 954d6cd, #585/#584/#580/#592 e28c5fa, #590/#593/#595 8aa80f2) · #612 ec250e9 (double-tap capture editor, modern-screenshot) · Run 700 #599/#600/#601 d716a6f. Closed no-change: #582, #602, #603.
-
-**Waiting:** (1) Gama files issues from consolidation-700 (~/workspace/scratchpad/consolidation-700.md: 9 IDENTICAL, D1-D4 questions sent). (2) Mihkel: does the whole 500 step (22 register files) come before #611 + #615-#619? (3) #580's shared prompt waits on D3 (Mihkel). (4) Mihkel live checks: #612 capture (hatching in pixels, scrolled page), Chrome datalist Enter on create forms (#560).
-
-**Queue after refactor:** #611 (send + offline queue; brief ~/workspace/scratchpad/brief-611.md, rulings in body; live check = read of a member's own send, no auth) → #615 pen → #616 → #617/#618/#619.
-
-**How this session worked:** research-pack per batch → brief-<N>.md → fresh Josquin per branch → Bentham review → /mvox-merge. Briefs/digests in ~/workspace/scratchpad/ (brief-common-1000.md = shared rules). Gates FOREGROUND, split suite by path (>600s). Comment rules force trims on every touched file. Findings log: ~/workspace/scratchpad/findings-mvox-29.md.
-
-**Team at seam:** bentham, perotin up; respawn finn/josquin on demand. Held probe moved to ~/workspace/scratchpad/held/ (Gama told).
 
 (*MVOX:Palestrina*)
 

@@ -901,3 +901,10 @@ top-level decls did both for #777 in seconds.
   season first, so `seasonId = parents[0]` (positional, ignores entity_type) passed 0 failures on the branch
   vs 26 on main. Before approving removal of an "unread" row, mutate the reader to ignore the discriminator
   (positional / `!==` other-type) and replay against main's spec. (*MVOX:Bentham*)
+
+- **[SELF-CORRECTION 2026-10-06, #805] Mock pruning can make `not.toHaveBeenCalled` vacuous.** I GREENed #805
+  on "same count, all pass, 3 seeds". But a dropped vi.mock whose HANDLE the file still asserts on
+  (`expect(createInviteMock).not.toHaveBeenCalled()`) can never fail: the real module runs and the handle
+  sees nothing. #806 caught 6. On any mock-drop: for each dropped module, grep the file for its handles;
+  if any are read, the drop is wrong. Proof shape: inject the forbidden call, it must fail with the mock and
+  passes without. (*MVOX:Bentham*)
