@@ -1,7 +1,5 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	clearAll,
 	getLastProvider,
@@ -12,8 +10,11 @@ import {
 	setUser
 } from './storage';
 import { endSession } from './session';
-import { createByteStore } from '$lib/files/byteStore';
+import { createByteStore, type ByteStore } from '$lib/files/byteStore';
 import { createFakeAdapter } from '$lib/testing/byteStoreFakes';
+
+const appBytes = vi.hoisted(() => ({ store: null as ByteStore | null }));
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => appBytes.store }));
 
 beforeEach(() => {
 	localStorage.clear();
@@ -62,14 +63,8 @@ describe('auth storage', () => {
 	});
 });
 
-// #343 — RETAIN on logout (Gama ruling 2026-09-12, issue comment
-// IC_kwDOTubdKM8AAAABUHDKvg): the byte store survives BOTH exit paths —
-// explicit sign-out (preserveProvider: false) and token expiry
-// (preserveProvider: true). The deciding case is expiry: the JWT dies on its
-// own schedule, and delete-on-teardown would wipe the cache by a routine
-// invisible event — the exact rehearsal-with-no-signal scenario the store
-// exists for. Re-login as the same (db, personId) finds the bytes under the
-// same partition key without redownloading.
+// The byte store survives both exit paths; on expiry a wipe would empty the offline cache by a
+// routine event, and re-login as the same (db, personId) must find the bytes again.
 describe('#343 — auth teardown RETAINS the byte store', () => {
 	const A = { db: 'sampledb', personId: 'person-a' };
 	const pdf = () => ({
@@ -79,7 +74,7 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 	});
 
 	it('clearAll (logout AND expiry variants) leaves stored bytes retrievable under the same identity', async () => {
-		const store = createByteStore(createFakeAdapter());
+		const store = (appBytes.store = createByteStore(createFakeAdapter()));
 		await store.put(A, 'file-1', pdf());
 		setToken('jwt-abc');
 
@@ -92,7 +87,7 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 	});
 
 	it('endSession — the single teardown BOTH exit paths share — leaves stored bytes retrievable', async () => {
-		const store = createByteStore(createFakeAdapter());
+		const store = (appBytes.store = createByteStore(createFakeAdapter()));
 		await store.put(A, 'file-1', pdf());
 
 		setToken('jwt-abc');
@@ -106,26 +101,31 @@ describe('#343 — auth teardown RETAINS the byte store', () => {
 		expect(new Uint8Array(rec!.bytes)).toEqual(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
 	});
 
-	it('STRUCTURAL: neither storage.ts nor session.ts references the byte store or clearPartition — retention holds by construction, and clearPartition is NOT wired to any auth path', () => {
-		for (const file of ['./storage.ts', './session.ts']) {
-			const source = readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf-8');
-			expect(source, file).not.toMatch(/byteStore|appByteStore/i);
-			expect(source, file).not.toMatch(/clearPartition/);
-			expect(source, file).not.toMatch(/indexedDB/i);
+	it('neither exit path clears a partition, wipes the device store or touches IndexedDB', () => {
+		const store = (appBytes.store = createByteStore(createFakeAdapter()));
+		const clearPartition = vi.spyOn(store, 'clearPartition');
+		const clearAllPartitions = vi.spyOn(store, 'clearAllPartitions');
+		const idb = { open: vi.fn(), deleteDatabase: vi.fn() };
+		vi.stubGlobal('indexedDB', idb);
+		try {
+			setToken('jwt-abc');
+			endSession({ preserveProvider: true });
+			setToken('jwt-def');
+			endSession({ preserveProvider: false });
+			clearAll({ preserveProvider: false });
+		} finally {
+			vi.unstubAllGlobals();
 		}
+
+		expect(clearPartition).not.toHaveBeenCalled();
+		expect(clearAllPartitions).not.toHaveBeenCalled();
+		expect(idb.open).not.toHaveBeenCalled();
+		expect(idb.deleteDatabase).not.toHaveBeenCalled();
 	});
 });
 
-// #442 RED — canPersistLocally(): a proactive write/read-back/remove probe the
-// login screen runs on mount. CONTRACT (for the GREEN implementer):
-//   - one exported function `canPersistLocally(): boolean` in THIS file (the
-//     single source of truth for auth storage; Path C gate);
-//   - one KEYS entry `storageProbe: 'mvox.storage_probe'` — the ONLY key the
-//     probe may touch; token/user keys stay untouched;
-//   - write a fixed value under the probe key, read it back, compare, remove
-//     the key; ANY throw or read-back mismatch → false; nothing survives.
+// canPersistLocally(): a write/read-back/remove probe under its own key, run by the login screen.
 import { canPersistLocally } from './storage';
-import { afterEach, vi } from 'vitest';
 
 const PROBE_KEY = 'mvox.storage_probe';
 
@@ -146,13 +146,7 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 
 	it('returns false when setItem throws (quota exceeded / storage refused)', () => {
-		// mockImplementationOnce (not mockImplementation): happy-dom's Storage is a
-		// Proxy over a per-instance method cache (ClassMethodBinder) whose
-		// getOwnPropertyDescriptor trap returns undefined for these methods, so
-		// vi.restoreAllMocks() can't restore a permanently-overridden spy — the
-		// mock leaks into later tests. A one-shot override matches how
-		// canPersistLocally() actually calls setItem (once per invocation) and
-		// self-clears without depending on restore.
+		// One-shot override: happy-dom's Storage proxy defeats restoreAllMocks, so a permanent spy leaks.
 		vi.spyOn(localStorage, 'setItem').mockImplementationOnce(() => {
 			throw new DOMException('quota exceeded', 'QuotaExceededError');
 		});
@@ -188,10 +182,8 @@ describe('#442 — canPersistLocally() storage self-test', () => {
 	});
 });
 
-// The browser that BLOCKS site data outright (mechanism in the helper below):
-// every read path must degrade to "nothing stored" instead of throwing out of
-// the root layout's load (+layout.ts calls getToken on every navigation,
-// including /auth/login) and the login page init.
+// A browser that blocks site data: every read path degrades to "nothing stored", never a throw
+// out of the root layout's load or the login page init.
 import { withBlockedStorage } from '$lib/testing/blockedStorage';
 
 describe('#442 review F1 — storage access itself throws (site data blocked)', () => {
