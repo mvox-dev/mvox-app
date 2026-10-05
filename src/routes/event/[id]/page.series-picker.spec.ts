@@ -31,6 +31,9 @@ vi.mock('$lib/entu-config', async () =>
 import Page from './+page.svelte';
 import { loadEventDetail } from '$lib/events/eventDetail';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { flushReadCache, servedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
+import { IDBFactory } from 'fake-indexeddb';
+import { get } from 'svelte/store';
 import { signIn } from '$lib/testing/session';
 import { cfg, cleanupRealTimersReset, editorTokenAtNow } from '$lib/testing/pages/event';
 
@@ -580,6 +583,33 @@ describe('#304 — the committed write (owner view)', () => {
 		});
 		expect(q(container, 'event-detail-location')?.textContent ?? '').not.toContain('Church Hall');
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('series2');
+	});
+
+	it('the post-write refresh stores the new header, so a later offline visit shows the new series values', async () => {
+		setReadCacheFactory(new IDBFactory());
+		try {
+			const { container, unmount } = renderSeriesPage(ownerEvent(INHERITING));
+			const select = await waitSelect(container);
+			await fireEvent.change(select, { target: { value: 'series2' } });
+			await waitFor(() => {
+				expect(q(container, 'event-series-confirm-apply')).not.toBeNull();
+			});
+			await fireEvent.click(q(container, 'event-series-confirm-apply')!);
+			await waitFor(() => {
+				expect(q(container, 'event-detail-location')?.textContent ?? '').toContain('Chapel');
+			});
+			await flushReadCache();
+			expect(get(servedFromCache)).toBeNull();
+			unmount();
+
+			vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('Failed to fetch'))));
+			const offline = render(Page);
+			await waitFor(() => {
+				expect(q(offline.container, 'event-detail-location')?.textContent ?? '').toContain('Chapel');
+			});
+		} finally {
+			setReadCacheFactory(undefined);
+		}
 	});
 
 	it('UNASSIGN apply: ONE DELETE of the series value id, no POST, season untouched; the cleared field leaves the screen', async () => {

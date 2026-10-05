@@ -249,27 +249,43 @@ describe('#434 slice 2 — the agenda renders offline from the read cache', () =
 		await expectAgendaRows(container);
 		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
 	});
-
-	it('the page resets servedFromCache when its load starts, and reads it for the as-of line', () => {
-		const load = readFileSync(resolve(process.cwd(), 'src/lib/agenda/agendaSelectedLoad.ts'), 'utf-8');
-		expect(load.includes('resetServedFromCache()'), 'resetServedFromCache()').toBe(true);
-		const source = readFileSync(resolve(process.cwd(), 'src/lib/agenda/AgendaNotices.svelte'), 'utf-8');
-		for (const needle of [
-			'$servedFromCache',
-			// The line itself is the shared AsOfLine, which owns the today-vs-date rule.
-			'<AsOfLine',
-			'testid="agenda-as-of"',
-			'data-testid="agenda-downloads-link-cached"'
-		]) {
-			expect(source.includes(needle), needle).toBe(true);
-		}
-	});
 });
 
 // The agenda's own works read stores the works fan-out; no separate next-event warm-up
 // re-fetches the same collections on every load.
 describe('#434 slice 5 — one works read per agenda load, and it stores', () => {
 	const WORKS_READ = /_type\.string=(work|edition|copy|program_item|repertoire_item)(&|$)/;
+
+	it('a works read falling back to its stored copy does NOT age-stamp a fully live agenda', async () => {
+		vi.stubGlobal('fetch', onlineEntu());
+		const first = await coldStart();
+		await expectAgendaRows(first.container);
+		await flushReadCache();
+		cleanup();
+
+		const live = onlineEntu();
+		let worksRejections = 0;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn((input: RequestInfo | URL) => {
+				if (WORKS_READ.test(urlOf(input))) {
+					worksRejections += 1;
+					return Promise.reject(new TypeError('Failed to fetch'));
+				}
+				return live(input);
+			})
+		);
+
+		const { container } = await coldStart();
+		await expectAgendaRows(container);
+		await waitFor(() => {
+			expect(worksRejections, 'a works read rejected').toBeGreaterThan(0);
+		});
+		await flushReadCache();
+		await new Promise((resolve) => setTimeout(resolve, 50));
+
+		expect(container.querySelector('[data-testid="agenda-as-of"]')).toBeNull();
+	});
 
 	it('each works URL is fetched exactly once, the reads are stored, and nothing is "as of"', async () => {
 		const live = onlineEntu();

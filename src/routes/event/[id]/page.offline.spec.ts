@@ -43,6 +43,7 @@ import {
 	seedOfflineSession,
 	urlOf
 } from '$lib/testing/pages/event';
+import { REPERTOIRE_ITEMS } from '$lib/testing/pages/agendaWorks';
 
 const SERIES = 'series-1';
 const CONDUCTOR = 'p-cond';
@@ -50,6 +51,7 @@ const CONDUCTOR_NAME = 'Anna Dirigent';
 const SERIES_LOCATION = 'Kaarli kirik';
 
 const NEXT_DAY = new Date('2026-09-29T08:00:00.000Z');
+const WORK_NAME = 'Spem in alium';
 
 function eventEntity(e: (typeof EVENTS)[number]) {
 	return {
@@ -128,6 +130,16 @@ function onlineEntu() {
 					}
 				]
 			}, 200, JSON_HEADERS);
+		}
+		if (url.includes('_type.string=repertoire_item')) {
+			return json({ count: 1, entities: [REPERTOIRE_ITEMS[0]] }, 200, JSON_HEADERS);
+		}
+		if (/_type\.string=work(&|$)/.test(url)) {
+			return json(
+				{ count: 1, entities: [{ _id: 'work-1', name: [{ string: WORK_NAME }] }] },
+				200,
+				JSON_HEADERS
+			);
 		}
 		return json({ count: 0, entities: [] }, 200, JSON_HEADERS);
 	});
@@ -251,6 +263,26 @@ describe('#434 slice 3 — the event page renders offline from the read cache', 
 		});
 		expect(container.querySelector('[data-testid="event-detail-name"]')).toBeNull();
 		expect(container.querySelector('[data-testid="event-detail-as-of"]')).toBeNull();
+	});
+});
+
+describe('#434 slice 5 — the event page works list offline', () => {
+	it('online visit, then every fetch rejecting: the same works list', async () => {
+		vi.stubGlobal('fetch', onlineEntu());
+		const online = await openEventPage('ev-1');
+		await waitFor(() => {
+			expect(online.container.querySelector('[data-testid="event-detail-works"]')?.textContent).toContain(WORK_NAME);
+		});
+		await flushReadCache();
+		cleanup();
+
+		vi.setSystemTime(LATER_SAME_DAY);
+		vi.stubGlobal('fetch', offlineEntu());
+		const { container } = await openEventPage('ev-1');
+		await expectHeader(container, EVENTS[0]);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-detail-works"]')?.textContent).toContain(WORK_NAME);
+		});
 	});
 });
 
