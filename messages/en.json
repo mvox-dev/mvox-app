@@ -735,5 +735,7 @@
 	"feedback_capture_failed": "The screenshot could not be taken.",
 	"feedback_copy_unsupported": "This browser cannot copy images.",
 	"feedback_copy_failed": "The screenshot could not be copied.",
-	"feedback_send_failed": "The feedback could not be sent."
+	"feedback_send_failed": "The feedback could not be sent.",
+	"feedback_saved_send_later": "Feedback saved on this device. It will be sent when the signal returns.",
+	"feedback_send_after_sign_in": "Feedback saved. It will be sent after you sign in."
 }

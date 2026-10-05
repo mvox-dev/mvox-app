@@ -736,5 +736,7 @@
 	"feedback_capture_failed": "Ekrānuzņēmumu neizdevās uzņemt.",
 	"feedback_copy_unsupported": "Šī pārlūkprogramma nevar kopēt attēlus.",
 	"feedback_copy_failed": "Ekrānuzņēmumu neizdevās nokopēt.",
-	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt."
+	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt.",
+	"feedback_saved_send_later": "Atsauksme saglabāta šajā ierīcē. Tā tiks nosūtīta, kad atjaunosies signāls.",
+	"feedback_send_after_sign_in": "Atsauksme saglabāta. Tā tiks nosūtīta pēc pierakstīšanās."
 }

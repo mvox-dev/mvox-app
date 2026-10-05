@@ -9,6 +9,7 @@ export interface CreateFeedbackInput {
 	strokes: StrokeData;
 	description: string;
 	pagePath: string;
+	metadata: string;
 }
 
 type CreateProp =
@@ -16,7 +17,8 @@ type CreateProp =
 	| { type: '_parent'; reference: string }
 	| { type: 'name'; string: string }
 	| { type: 'description'; string: string }
-	| { type: 'doodle_layer'; string: string };
+	| { type: 'doodle_layer'; string: string }
+	| { type: 'metadata'; string: string };
 
 interface StepOnePropertyEntry {
 	_id: string;
@@ -46,11 +48,24 @@ async function deleteFeedbackEntity(
 	}
 }
 
+// Resolves on success or when the feedback is already gone; anything else rejects.
+export async function discardFeedback(
+	cfg: EntuCfg,
+	feedbackId: string,
+	fetchImpl: typeof fetch = fetch
+): Promise<void> {
+	const res = await entuFetch(cfg.db, `entity/${feedbackId}`, cfg.token, { method: 'DELETE' }, fetchImpl);
+	if (!res.ok && res.status !== 404) {
+		throw new Error(`discardFeedback: delete failed for '${feedbackId}': HTTP ${res.status}`);
+	}
+}
+
 export async function createFeedback(
 	cfg: EntuCfg,
 	memberId: string,
 	input: CreateFeedbackInput,
-	fetchImpl: typeof fetch = fetch
+	fetchImpl: typeof fetch = fetch,
+	onCreated?: (feedbackId: string) => void | Promise<void>
 ): Promise<string> {
 	const typeId = await resolveTypeId(cfg, 'feedback', fetchImpl);
 
@@ -62,7 +77,8 @@ export async function createFeedback(
 		{ type: '_parent', reference: memberId },
 		{ type: 'name', string: name },
 		...(input.description ? [{ type: 'description' as const, string: input.description }] : []),
-		{ type: 'doodle_layer', string: serialize(input.strokes) }
+		{ type: 'doodle_layer', string: serialize(input.strokes) },
+		{ type: 'metadata', string: input.metadata }
 	];
 
 	const createRes = await entuFetch(
@@ -84,6 +100,7 @@ export async function createFeedback(
 	if (!feedbackId) {
 		throw new Error('createFeedback: create returned 2xx without _id (apparent-success trap)');
 	}
+	await onCreated?.(feedbackId);
 
 	const metaRes = await entuFetch(
 		cfg.db,
@@ -119,15 +136,18 @@ export async function createFeedback(
 	}
 
 	let putOk: boolean;
+	let putError: unknown = null;
 	try {
 		const putRes = await putUploadBytes(entry.upload, input.screenshot, fetchImpl);
 		putOk = putRes.ok;
-	} catch {
+	} catch (e) {
 		putOk = false;
+		putError = e;
 	}
 	if (!putOk) {
 		await deletePhantomProperty(cfg, entry._id, fetchImpl);
 		await deleteFeedbackEntity(cfg, feedbackId, fetchImpl);
+		if (putError instanceof TypeError) throw putError;
 		throw new Error(`createFeedback: screenshot upload failed for '${feedbackId}'`);
 	}
 

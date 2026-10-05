@@ -9,7 +9,8 @@ export type EditorNotice =
 	| 'copied'
 	| 'copy-unsupported'
 	| 'copy-failed'
-	| 'send-failed';
+	| 'send-failed'
+	| 'send-after-sign-in';
 
 export interface EditorShot extends Capture {
 	url: string;
@@ -24,6 +25,7 @@ export function createFeedbackEditor() {
 	let strokes = $state<StrokeData>(noStrokes());
 	let description = $state('');
 	let notice = $state<EditorNotice | null>(null);
+	let savedForLater = $state(false);
 	let capturing = false;
 	let stage: HTMLElement | undefined;
 	let returnFocus: HTMLElement | null = null;
@@ -31,6 +33,7 @@ export function createFeedbackEditor() {
 	async function capture(pagePath: string): Promise<void> {
 		if (open || capturing) return;
 		capturing = true;
+		savedForLater = false;
 		const active = document.activeElement;
 		returnFocus = active instanceof HTMLElement && active !== document.body ? active : null;
 		try {
@@ -74,15 +77,20 @@ export function createFeedbackEditor() {
 	}
 
 	async function send(): Promise<void> {
-		if (!shot) return;
+		if (!shot || notice === 'send-after-sign-in') return;
 		notice = null;
 		try {
-			await sendFeedback({
+			const outcome = await sendFeedback({
 				screenshot: shot.blob,
 				strokes: $state.snapshot(strokes),
 				description,
 				pagePath: shot.pagePath
 			});
+			if (outcome === 'after-sign-in') {
+				notice = 'send-after-sign-in';
+				return;
+			}
+			savedForLater = outcome === 'saved';
 			close();
 		} catch (e) {
 			console.error('feedback send failed', e);
@@ -111,6 +119,12 @@ export function createFeedbackEditor() {
 		},
 		get notice() {
 			return notice;
+		},
+		get savedForLater() {
+			return savedForLater;
+		},
+		dismissSaved() {
+			savedForLater = false;
 		},
 		get stage() {
 			return stage;

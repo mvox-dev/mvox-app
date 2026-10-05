@@ -18,6 +18,7 @@ const NEW_ID = 'feedback-new-1';
 const PROP_ID = 'screenshot-prop-1';
 const PAGE_PATH = '/events/6a7cc04e23dc1d97bb8f203b';
 const DESCRIPTION = 'The save button does nothing on my phone.';
+const METADATA = '{"route":"/events/6a7cc04e23dc1d97bb8f203b","locale":"et"}';
 
 const STROKES: StrokeData = {
 	v: 1,
@@ -92,7 +93,7 @@ function makeFetch(routes: Routes = {}) {
 }
 
 function input() {
-	return { screenshot: screenshotBlob(), strokes: STROKES, description: DESCRIPTION, pagePath: PAGE_PATH };
+	return { screenshot: screenshotBlob(), strokes: STROKES, description: DESCRIPTION, pagePath: PAGE_PATH, metadata: METADATA };
 }
 
 beforeEach(() => {
@@ -121,7 +122,7 @@ describe('#395 createFeedback — the happy path issues exactly the expected req
 		]);
 	});
 
-	it('the create POST body is EXACTLY _type ref + _parent member + name (no rights fields, #699) + description + serialized doodle_layer', async () => {
+	it('the create POST body is EXACTLY _type ref + _parent member + name (no rights fields, #699) + description + serialized doodle_layer + metadata (#611)', async () => {
 		const fetchImpl = makeFetch();
 		await createFeedback(cfg, MEMBER_ID, input(), fetchImpl);
 
@@ -131,7 +132,8 @@ describe('#395 createFeedback — the happy path issues exactly the expected req
 			{ type: '_parent', reference: MEMBER_ID },
 			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
 			{ type: 'description', string: DESCRIPTION },
-			{ type: 'doodle_layer', string: serialize(STROKES) }
+			{ type: 'doodle_layer', string: serialize(STROKES) },
+			{ type: 'metadata', string: METADATA }
 		]);
 	});
 
@@ -210,9 +212,9 @@ describe('#395 createFeedback — any failed step rejects (fail loudly, no parti
 		expect(del && String(del[0])).toBe(`${API}sampledb/property/${PROP_ID}`);
 	});
 
-	it('a network error on the PUT rejects', async () => {
+	it('a network error on the PUT rejects with that TypeError: no answer is not a refusal (#611)', async () => {
 		const fetchImpl = makeFetch({ put: new TypeError('network down') });
-		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toThrow();
+		await expect(createFeedback(cfg, MEMBER_ID, input(), fetchImpl)).rejects.toBeInstanceOf(TypeError);
 	});
 });
 
@@ -266,7 +268,8 @@ describe('#395 createFeedback — an empty description is OMITTED, not posted em
 			{ type: '_type', reference: TYPE_ID },
 			{ type: '_parent', reference: MEMBER_ID },
 			{ type: 'name', string: `${PAGE_PATH} 2026-09-29` },
-			{ type: 'doodle_layer', string: serialize(STROKES) }
+			{ type: 'doodle_layer', string: serialize(STROKES) },
+			{ type: 'metadata', string: METADATA }
 		]);
 	});
 });

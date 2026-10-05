@@ -25,7 +25,12 @@
 >
 	{m.feedback_copy()}
 </button>
-<button type="button" class={BUTTON_CLASS} disabled={!editor.shot} onclick={() => editor.send()}>
+<button
+	type="button"
+	class={BUTTON_CLASS}
+	disabled={!editor.shot || editor.notice === 'send-after-sign-in'}
+	onclick={() => editor.send()}
+>
 	{m.feedback_send()}
 </button>
 <button bind:this={closeButton} type="button" class={BUTTON_CLASS} onclick={() => editor.close()}>

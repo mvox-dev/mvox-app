@@ -232,7 +232,7 @@ parented to `member` rather than `database`.
 that `CreatorRule` kind here (`admin_member_record`'s only precedent is
 `parent_right _editor`, admin-created, not self-created).
 
-**`_sharing`**: `domain` on the type and on every one of the three fields,
+**`_sharing`**: `domain` on the type and on every one of its fields,
 each set EXPLICITLY (the #265 inherit-from-parent trap: a type's `_sharing`
 is a ceiling, not a default — ER-1 — and a child copies its parent's
 `_sharing` only when the parent is non-private — ER-13). The create path
@@ -245,8 +245,7 @@ Provisioned on crede 2026-09-29 by
 read-back is `scripts/migrations/seed-results/readback-395-feedback-type-crede-2026-09-29.json`.
 
 **`name`**: each instance carries a `name` value with no prop-def — page
-path + UTC submission date, never a member name or description text; the
-type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).
+path + UTC submission date, never a member name or description text (PO ruling, Gama, #395 body, 2026-09-29).
 
 **`_inheritrights: true`** — inheritance left natural (Mihkel, #390 ruling,
 quoted in the #395 body): rights on the member cascade to their feedback,
@@ -258,6 +257,7 @@ isolate-and-assert-explicit `_inheritrights: false` pattern.
 | `screenshot`   | file | no       | screenshot of the page the member is giving feedback on                                               |
 | `doodle_layer` | text | no       | ink drawn over the screenshot — [mvox-app#394](https://github.com/mvox-dev/mvox-app/issues/394)'s StrokeData JSON (`src/lib/strokes/strokes.ts` serialize/parse) |
 | `description`  | text | no       | the member's feedback in their own words                                                             |
+| `metadata`     | text | no       | JSON: route path, time, app version (the [mvox-app#350](https://github.com/mvox-dev/mvox-app/issues/350) build stamp), locale and viewport; nothing personal. Added on crede by hand (Mihkel, 2026-10-01) and recorded here by [mvox-app#611](https://github.com/mvox-dev/mvox-app/issues/611); no provisioning run |
 
 **Rights posture**: the member who created a feedback owns it (`_owner`,
 Entu's create-time auto-grant); every domain-tier reader in the same
@@ -305,7 +305,7 @@ The app calls Entu directly, in the authenticated user's rights by default.
 | `schedule_item`         | domain                            | matches event       | name, datetime                                        |
 | `admin_member_record`   | domain                            | domain (asserted)   | `person`, `name` ONLY — `phone`/`email`/`birthdate`/`id_code` never leave the private bucket, per-property, regardless of the type/instance tier |
 | `link`                  | domain                            | matches database     | name, url, description, display_order — nothing private on this type          |
-| `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description — nothing private on this type |
+| `feedback`              | domain (intended; not yet provisioned — verify at the #395 live run) | domain (asserted, explicit) | screenshot, doodle_layer, description, metadata — nothing private on this type |
 
 Note on the "Type `_sharing`" column: the salvaged v4E draft literal declared
 `schedule_item.sharing = 'public'` (design-time aspiration). A live read-only

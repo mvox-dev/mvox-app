@@ -28,7 +28,10 @@ vi.mock('$lib/collective/membershipStore', async (importOriginal) =>
 vi.mock('modern-screenshot', async () =>
 	(await import('$lib/testing/mocks/files')).screenshotModule()
 );
-vi.mock('$lib/feedback/sendFeedback', () => ({ sendFeedback: sendMock }));
+vi.mock('$lib/feedback/sendFeedback', () => ({
+	sendFeedback: sendMock,
+	startSendingSavedFeedback: () => () => {}
+}));
 
 import Layout from './+layout.svelte';
 import { resetGate } from '$lib/profile/completionGate';

@@ -735,5 +735,7 @@
 	"feedback_capture_failed": "Kuvatõmmist ei õnnestunud teha.",
 	"feedback_copy_unsupported": "See brauser ei saa pilte kopeerida.",
 	"feedback_copy_failed": "Kuvatõmmist ei õnnestunud kopeerida.",
-	"feedback_send_failed": "Tagasisidet ei õnnestunud saata."
+	"feedback_send_failed": "Tagasisidet ei õnnestunud saata.",
+	"feedback_saved_send_later": "Tagasiside on sellesse seadmesse salvestatud. See saadetakse, kui signaal taastub.",
+	"feedback_send_after_sign_in": "Tagasiside on salvestatud. See saadetakse pärast sisselogimist."
 }
