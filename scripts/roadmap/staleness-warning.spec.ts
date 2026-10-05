@@ -41,7 +41,7 @@ import { renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
 
 const GENERATED_AT = '2026-09-12T09:00:00.000Z';
 
-/** The warning element's own class. */
+/** The warning element's own class — NOT `.meta` (generated-at.spec.ts pins that). */
 const WARNING_CLASS = 'staleness-warning';
 /** The Estonian warning sentence, page-chrome idiom. Issue numbers follow it. */
 const WARNING_TEXT = 'Valmis tööd seisavad ja keegi ei uuri';
