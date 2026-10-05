@@ -245,8 +245,7 @@ Provisioned on crede 2026-09-29 by
 read-back is `scripts/migrations/seed-results/readback-395-feedback-type-crede-2026-09-29.json`.
 
 **`name`**: each instance carries a `name` value with no prop-def — page
-path + UTC submission date, never a member name or description text; the
-type stays at three fields (PO ruling, Gama, #395 body, 2026-09-29).
+path + UTC submission date, never a member name or description text (PO ruling, Gama, #395 body, 2026-09-29).
 
 **`_inheritrights: true`** — inheritance left natural (Mihkel, #390 ruling,
 quoted in the #395 body): rights on the member cascade to their feedback,
