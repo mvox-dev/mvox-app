@@ -1232,18 +1232,16 @@ describe('agenda — the inheritance preview covers DESCRIPTION too (2nd-pass F4
 	});
 });
 
-describe('#208 — locale coverage for the "From series" secondary line', () => {
+describe('#208 — the "From series" secondary line copy', () => {
 	function messages(locale: string): Record<string, string> {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as Record<string, string>;
 	}
 
-	it('event_create_inherited_from_series exists in en/et/lv/uk, is non-empty, and carries the {value} slot', () => {
+	it('event_create_inherited_from_series carries the {value} slot in en/et/lv/uk', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const msg = messages(locale)['event_create_inherited_from_series'];
-			expect(msg, `${locale}.json is missing event_create_inherited_from_series`).toBeDefined();
-			expect(msg, `${locale}.json event_create_inherited_from_series is empty`).toMatch(/\S/);
 			expect(msg, `${locale}.json event_create_inherited_from_series lacks {value}`).toContain(
 				'{value}'
 			);
@@ -1255,10 +1253,9 @@ describe('#208 — locale coverage for the "From series" secondary line', () => 
 		expect(messages('et')['event_create_inherited_from_series']).toBe('Seeriast: {value}');
 	});
 
-	it('guard: agenda_duration_min (the inherited-duration unit) already exists in all four locales with {minutes}', () => {
+	it('guard: agenda_duration_min (the inherited-duration unit) keeps {minutes} in all four locales', () => {
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const msg = messages(locale)['agenda_duration_min'];
-			expect(msg, `${locale}.json is missing agenda_duration_min`).toBeDefined();
 			expect(msg, `${locale}.json agenda_duration_min lacks {minutes}`).toContain('{minutes}');
 		}
 	});
@@ -1668,7 +1665,7 @@ describe('#243 — the end time honours the AM/PM preference (rule 5, shipped Ti
 	});
 });
 
-describe('#243 — locale coverage for the start/end labels and the range error', () => {
+describe('#243 — the start/end labels and the range error copy', () => {
 	function messages(locale: string): Record<string, string> {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')

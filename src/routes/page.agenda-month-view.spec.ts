@@ -487,14 +487,10 @@ describe('#247 — the new locale keys: ruled copy and weekday labels', () => {
 		expect(messages('et').agenda_view_month).toBe('Kuu');
 	});
 
-	it.each(LOCALES)('%s defines all 7 short-weekday keys, non-empty and DISTINCT', (locale) => {
+	it.each(LOCALES)('%s defines 7 DISTINCT short-weekday strings', (locale) => {
 		const file = messages(locale);
 		const values = WEEKDAY_KEYS.map((key) => {
-			expect(file[key], `${locale}.json must define ${key}`).toBeDefined();
-			expect(typeof file[key]).toBe('string');
-			const value = (file[key] as string).trim();
-			expect(value.length, `${locale}.${key} must be non-empty`).toBeGreaterThan(0);
-			return value;
+			return (file[key] as string).trim();
 		});
 		expect(new Set(values).size, `${locale} weekday strings must be 7 distinct values`).toBe(7);
 	});

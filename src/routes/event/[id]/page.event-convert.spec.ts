@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 // The event page's convert-to-series form (#313), with the create forms' keys (#631).
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { resolve } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
 
@@ -37,7 +36,7 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 );
 
 import Page from './+page.svelte';
-import { isMessageEmpty, messagePatterns } from '$lib/testing/messageFile.js';
+import { messagePatterns } from '$lib/testing/messageFile.js';
 import type { ConvertEventToSeriesInput } from '$lib/events/eventConvert';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
@@ -682,15 +681,6 @@ describe('#313 — the conversion form as a dialog on the event page', () => {
 	});
 });
 
-describe('#313 — i18n: event_detail_convert present and non-empty in all four locales', () => {
-	it.each(LOCALES)('%s carries the key, non-empty', (locale) => {
-		expect(
-			isMessageEmpty(messages(locale)['event_detail_convert']),
-			`messages/${locale}.json: event_detail_convert`
-		).toBe(false);
-	});
-});
-
 describe('#313 — event_create_series_hint no longer sends people to the season panel', () => {
 	const FORBIDDEN: Record<(typeof LOCALES)[number], string> = {
 		en: 'season panel',
@@ -699,9 +689,8 @@ describe('#313 — event_create_series_hint no longer sends people to the season
 		uk: 'панел'
 	};
 
-	it.each(LOCALES)('%s: the hint exists, non-empty, and never names the season panel', (locale) => {
+	it.each(LOCALES)('%s: the hint never names the season panel', (locale) => {
 		const value = messages(locale)['event_create_series_hint'];
-		expect(isMessageEmpty(value), `messages/${locale}.json: event_create_series_hint`).toBe(false);
 		for (const pattern of messagePatterns(value)) {
 			expect(
 				pattern.toLowerCase(),

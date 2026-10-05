@@ -1,10 +1,6 @@
 // @vitest-environment node
-//
-// #487 RED — the i18n leg of EntuRef. Reads the RAW message files. The link's
-// accessible name comes from `entu_ref_aria_label` with a {short} parameter;
-// label-in-name (WCAG 2.5.3) requires the rendered label to CONTAIN the
-// visible short id, and to say the record opens in Entu in a new tab. All
-// four locales must carry a real translation.
+
+// EntuRef label (#487): label-in-name needs the visible short id and 'Entu' in every locale.
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -18,11 +14,10 @@ function messages(locale: (typeof LOCALES)[number]): Record<string, unknown> {
 	) as Record<string, unknown>;
 }
 
-describe('#487 — entu_ref_aria_label exists in all four locales and embeds {short}', () => {
+describe('#487 — entu_ref_aria_label embeds {short} in every locale', () => {
 	for (const locale of LOCALES) {
 		it(`${locale}.json › ${KEY} renders with short='4154c4' containing '4154c4' and naming Entu`, () => {
 			const value = messages(locale)[KEY];
-			expect(typeof value, `${locale}.json › ${KEY} must be a string`).toBe('string');
 			const text = value as string;
 			expect(text).toContain('{short}');
 			const rendered = text.replaceAll('{short}', '4154c4');

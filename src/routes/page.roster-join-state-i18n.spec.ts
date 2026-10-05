@@ -1,6 +1,6 @@
 // The dated join-state keys: en/et exact, lv/uk only present and carrying {date}.
 import { describe, expect, it } from 'vitest';
-import { messagePatterns, isMessageEmpty, everyPatternContains } from '$lib/testing/messageFile.js';
+import { messagePatterns, everyPatternContains } from '$lib/testing/messageFile.js';
 import { LOCALES, readMessages as localeMessages } from '$lib/testing/pages/profile';
 
 const NEW_KEYS = [
@@ -29,12 +29,10 @@ const EXACT: Record<(typeof NEW_KEYS)[number], { en: string; et: string }> = {
 	}
 };
 
-describe('#467 — the four dated join-state keys exist in ALL FOUR locales and carry {date}', () => {
+describe('#467 — the four dated join-state keys carry {date} in all four locales', () => {
 	for (const key of NEW_KEYS) {
-		it.each(LOCALES)(`${key}: %s.json defines it, non-empty, with {date}`, (locale) => {
+		it.each(LOCALES)(`${key}: %s.json keeps {date}`, (locale) => {
 			const messages = localeMessages(locale);
-			expect(key in messages, `${locale}.json missing ${key}`).toBe(true);
-			expect(isMessageEmpty(messages[key]), `${locale}.json ${key} is empty`).toBe(false);
 			expect(
 				everyPatternContains(messages[key], '{date}'),
 				`${locale}.json ${key} dropped {date}`

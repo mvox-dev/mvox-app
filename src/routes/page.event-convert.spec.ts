@@ -194,29 +194,10 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 	});
 });
 
-describe('locale parity — every #196 key present and non-empty in en/et/lv/uk', () => {
+describe('#196 copy', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	const KEYS = [
-		'event_create_series_hint',
-		'season_manage_event_convert',
-		'event_convert_form_label',
-		'event_convert_interval_label',
-		'event_convert_duration_label',
-		'event_convert_end_date_label',
-		'event_convert_submit',
-		'event_convert_cancel',
-		'event_convert_failed',
-		'event_convert_interval_required',
-		'event_convert_duration_required',
-		'event_convert_end_required',
-		'event_convert_end_before_start',
-		'event_convert_start_missing',
-		'event_convert_missing_name',
-		'event_convert_missing_type',
-		'event_convert_progress',
-		'event_convert_generate_failed',
-		'event_convert_resume_notice'
-	] as const;
+	// Used by no surface, so only this check keeps it in the locale files.
+	const KEYS = ['season_manage_event_convert'] as const;
 
 	function messages(locale: string): MessageFile {
 		return JSON.parse(
@@ -224,7 +205,7 @@ describe('locale parity — every #196 key present and non-empty in en/et/lv/uk'
 		) as MessageFile;
 	}
 
-	it.each(LOCALES)('%s carries every key, none empty', (locale) => {
+	it.each(LOCALES)('%s keeps season_manage_event_convert, non-empty', (locale) => {
 		const file = messages(locale);
 		for (const key of KEYS) {
 			expect(isMessageEmpty(file[key]), `messages/${locale}.json: ${key}`).toBe(false);
@@ -236,19 +217,12 @@ describe('locale parity — every #196 key present and non-empty in en/et/lv/uk'
 	});
 });
 
-describe('#212 locale parity — event_convert_start_date_label present and non-empty in en/et/lv/uk', () => {
+describe('#212 — event_convert_start_date_label copy', () => {
 	function messages(locale: string): MessageFile {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as MessageFile;
 	}
-
-	it.each(['en', 'et', 'lv', 'uk'] as const)('%s carries the key, non-empty', (locale) => {
-		expect(
-			isMessageEmpty(messages(locale)['event_convert_start_date_label']),
-			`messages/${locale}.json: event_convert_start_date_label`
-		).toBe(false);
-	});
 
 	it('en reads "Starts", et reads "Algus" — the copy the #212 ruling pinned', () => {
 		expect(messages('en')['event_convert_start_date_label']).toBe('Starts');

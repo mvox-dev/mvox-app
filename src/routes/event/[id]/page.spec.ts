@@ -1,7 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { isMessageEmpty, type MessageFile } from '$lib/testing/messageFile.js';
 import { render, cleanup, waitFor, fireEvent } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -519,29 +516,6 @@ describe('/event/[id] — type badge is translated', () => {
 		expect(container.querySelector('[data-testid="event-detail-type"]')!.textContent).toContain(
 			'flashmob'
 		);
-	});
-
-	it('guard: every event_type_* key in en.json exists in et, lv and uk, and none is empty', () => {
-		const en = JSON.parse(readFileSync(resolve('messages/en.json'), 'utf8')) as MessageFile;
-		const typeKeys = Object.keys(en).filter((k) => k.startsWith('event_type_'));
-		expect(typeKeys.length).toBe(10); // a hard literal on purpose: the locale files, not the constant
-		for (const locale of ['en', 'et', 'lv', 'uk']) {
-			const messages = JSON.parse(
-				readFileSync(resolve(`messages/${locale}.json`), 'utf8')
-			) as MessageFile;
-			expect(
-				typeKeys.filter((k) => !(k in messages)),
-				`${locale}.json is missing event_type keys`
-			).toEqual([]);
-			expect(
-				typeKeys.filter((k) => k in messages && isMessageEmpty(messages[k])),
-				`${locale}.json has empty event_type values`
-			).toEqual([]);
-			expect(
-				'event_detail_not_in_collective' in messages,
-				`${locale}.json is missing event_detail_not_in_collective`
-			).toBe(true);
-		}
 	});
 });
 

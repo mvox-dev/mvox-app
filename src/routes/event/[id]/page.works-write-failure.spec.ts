@@ -1,6 +1,4 @@
 // @vitest-environment happy-dom
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { setToken } from '$lib/auth/storage';
@@ -586,24 +584,6 @@ describe('#551 — event page: a move or remove keeps pending until it settles',
 		expect(names(next)).toEqual(['Nunc dimittis']);
 		expect(manageAlert(next)).toBeNull();
 	});
-});
-
-describe('#324 — locale files', () => {
-	it.each(['en', 'et', 'lv', 'uk'] as const)(
-		'%s.json carries repertoire_manage_saved (new) and repertoire_manage_error (existing), both non-empty',
-		(locale) => {
-			const messages = JSON.parse(
-				readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			for (const key of ['repertoire_manage_saved', 'repertoire_manage_error']) {
-				const value = messages[key];
-				expect(typeof value, `${locale}.json must carry ${key}`).toBe('string');
-				expect((value as string).trim().length, `${locale} ${key} must be non-empty`).toBeGreaterThan(
-					0
-				);
-			}
-		}
-	);
 });
 
 // (*MVOX:Tallis* — #324 RED: repertoire/programme write failure + saved cue on

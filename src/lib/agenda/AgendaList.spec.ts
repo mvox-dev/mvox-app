@@ -983,19 +983,14 @@ describe('#471 Recent shows one card until asked', () => {
 	});
 });
 
-describe('#471 i18n — agenda_recent_show_more in all four locales', () => {
+describe('#471 i18n — agenda_recent_show_more ruled copy', () => {
 	const messages = (locale: string) =>
 		JSON.parse(
 			readFileSync(resolvePath(process.cwd(), 'messages', `${locale}.json`), 'utf-8')
 		) as Record<string, string>;
 
-	it('en and et carry the ruled copy; lv and uk carry a non-empty translation', () => {
+	it('en and et carry the ruled copy', () => {
 		expect(messages('en').agenda_recent_show_more).toBe('Show earlier');
 		expect(messages('et').agenda_recent_show_more).toBe('Näita varasemaid');
-		for (const locale of ['lv', 'uk']) {
-			const value = messages(locale).agenda_recent_show_more;
-			expect(typeof value, `${locale}.json agenda_recent_show_more`).toBe('string');
-			expect(value.trim(), `${locale}.json agenda_recent_show_more is empty`).not.toBe('');
-		}
 	});
 });
