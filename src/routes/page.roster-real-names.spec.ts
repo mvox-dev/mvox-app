@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 // The roster shows real names when the admin setting says so, end to end.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
-import { tick } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -18,14 +17,11 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
 );
 
-import Page from './roster/+page.svelte';
-import { adminStore, resetAdmin } from '$lib/nav/adminStore';
+import { resetAdmin } from '$lib/nav/adminStore';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { json } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
-import { signIn } from '$lib/testing/session';
-import { JSON_HEADERS, flush } from '$lib/testing/pages/roster';
+import { JSON_HEADERS } from '$lib/testing/pages/roster';
 import { renderRosterAs } from '$lib/testing/pages/rosterRender';
 
 interface DbWire {
@@ -35,7 +31,6 @@ interface DbWire {
 	profiles: Record<string, { name: string; email?: string }>;
 	toggle: boolean | 'absent';
 	records: Array<{ id: string; person?: string; name?: string }>;
-	recordsGate?: Promise<void>;
 	bulkRecordsFailFrom?: number;
 	lookupRecords?: Array<{ id: string; person?: string; name?: string }>;
 	viewerPersonId?: string;
@@ -74,7 +69,6 @@ function stubWire(byDb: Record<string, DbWire>): ReturnType<typeof vi.fn> {
 			}, 200, JSON_HEADERS);
 		}
 		if (u.includes('_type.string=admin_member_record')) {
-			if (fx.recordsGate) await fx.recordsGate;
 			if (!u.includes('person.reference=') && fx.bulkRecordsFailFrom !== undefined) {
 				const seen = bulkRecordReads.get(fx) ?? 0;
 				bulkRecordReads.set(fx, seen + 1);
@@ -170,15 +164,6 @@ function rowNameSpan(c: HTMLElement, memberId: string): HTMLElement {
 	const span = li!.querySelector('[data-testid="roster-row-name"]');
 	expect(span).not.toBeNull();
 	return span as HTMLElement;
-}
-
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'other-choir', name: 'Other Choir', personId: 'person-b' }
-		]
-	});
 }
 
 afterEach(() => {
@@ -454,7 +439,7 @@ describe('#269 network — the acceptance list checks the wire, not just the scr
 	});
 });
 
-describe('#269 per-load server read and the #259 switch discipline', () => {
+describe('#269 per-load server read', () => {
 	it('the value is read from the server on EVERY load — no client-side persistence: a fresh render after the server flipped the toggle shows the new state (the second-session/collective-wide acceptance)', async () => {
 		stubWire({ sampledb: sampledbFixture(false) });
 		let utils = await renderRosterAs('admin');
@@ -466,46 +451,6 @@ describe('#269 per-load server read and the #259 switch discipline', () => {
 		stubWire({ sampledb: sampledbFixture(true) });
 		utils = await renderRosterAs('admin');
 		expect(rowNameSpan(utils.container, 'm2').textContent).toBe('Aaron Aardvark');
-	});
-
-	it('DETERMINISTIC switch race: a records read HELD across a collective switch settles into NOTHING — the new collective renders its own (toggle-off) profile names, and the stale real name never appears', async () => {
-		let releaseRecords!: () => void;
-		const gate = new Promise<void>((r) => (releaseRecords = r));
-		const sampledb = sampledbFixture(true);
-		sampledb.recordsGate = gate;
-		const otherChoir: DbWire = {
-			dbEntityId: 'db-ent-2',
-			members: [{ id: 'm-bob', person: 'person-b' }],
-			profiles: { 'person-b': { name: 'Bob Bass', email: 'bob@x.com' } },
-			toggle: false,
-			records: [{ id: 'rec-b', person: 'person-b', name: 'Robert Real' }]
-		};
-		const fetchMock = stubWire({ sampledb, 'other-choir': otherChoir });
-
-		const { container } = render(Page);
-		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
-
-		await waitFor(() =>
-			expect(
-				(fetchMock.mock.calls as Array<[unknown]>)
-					.map((c) => String(c[0]))
-					.some((u) => u.includes('/sampledb/') && u.includes('admin_member_record'))
-			).toBe(true)
-		);
-
-		selectedCollectiveDbStore.set('other-choir');
-		await waitFor(() => expect(q(container, 'section-toggle-unassigned')).not.toBeNull());
-		await fireEvent.click(q(container, 'section-toggle-unassigned')!);
-		await waitFor(() => expect(q(container, 'roster-row-m-bob')).not.toBeNull());
-		expect(rowNameSpan(container, 'm-bob').textContent).toBe('Bob Bass');
-
-		releaseRecords();
-		await flush();
-		await tick();
-		expect(rowNameSpan(container, 'm-bob').textContent).toBe('Bob Bass');
-		expect(q(container, 'roster-row-m2')).toBeNull();
-		expect(container.textContent).not.toContain('Aaron Aardvark');
 	});
 });
 

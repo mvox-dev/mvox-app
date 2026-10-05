@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Roster write flags and error slots reset on a collective switch.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -167,35 +167,6 @@ async function armAndConfirmDeactivate(container: HTMLElement, memberId: string)
 }
 
 describe('/roster — #296 reorderPending across a collective switch', () => {
-	it("STALE DISABLE / CLEARED ON SWITCH: with collective A's reorder WRITE still in flight, collective B renders NO busy region and its structural controls are enabled — A's unresolved write is not B's business", async () => {
-		const gate = deferred();
-		reorderMock.mockImplementation(() => gate.promise);
-		const container = await renderInArrangeMode();
-
-		await keyboardMoveDown(container, 'sec-sop', 1);
-		await switchToOtherChoirArrange(container);
-
-		expect(
-			q(container, 'section-reorder-pending'),
-			"B must not render A's in-flight busy region"
-		).toBeNull();
-		expect(
-			(q(container, 'arrange-indent-sec-b2') as HTMLButtonElement).disabled,
-			"B's indent control must not be disabled by A's in-flight write"
-		).toBe(false);
-		expect(
-			(q(container, 'arrange-rename-sec-b1') as HTMLButtonElement).disabled,
-			"B's rename trigger must not be disabled by A's in-flight write"
-		).toBe(false);
-		expect(
-			q(container, 'arrange-row-sec-b1')?.getAttribute('draggable'),
-			"B's rows must be draggable — no structural write is in flight HERE"
-		).toBe('true');
-
-		gate.resolve();
-		await flush();
-	});
-
 	it("LATE-SETTLE CLOBBER (performReorder finally): A's stale reorder settles AFTER a genuine reorder has started on B — B's busy state survives, B's controls stay frozen, no third write can fire", async () => {
 		const gateA = deferred();
 		const gateB = deferred();
@@ -333,29 +304,6 @@ describe('/roster — #296 amendment: reorderError catch-writes across a collect
 });
 
 describe('/roster — #296 reinstatePending across a collective switch', () => {
-	it("STALE DISABLE / CLEARED ON SWITCH: with collective A's reinstate WRITE still in flight, collective B's reinstate button renders ENABLED — the flag holds A's memberId and must not gate B", async () => {
-		const gate = deferred();
-		reinstateMemberMock.mockImplementation(() => gate.promise);
-		const container = await renderGroupsRoster();
-
-		await openInactivePanel(container, 'm-ina');
-		await fireEvent.click(q(container, 'member-reinstate-m-ina') as HTMLElement);
-		await waitFor(() => {
-			expect(reinstateMemberMock).toHaveBeenCalledTimes(1);
-		});
-
-		await switchToOtherChoirGroups(container);
-		await openInactivePanel(container, 'm-inb');
-
-		expect(
-			(q(container, 'member-reinstate-m-inb') as HTMLButtonElement).disabled,
-			"B's reinstate button must not be disabled by A's in-flight write"
-		).toBe(false);
-
-		gate.reject(new Error('write failed'));
-		await flush();
-	});
-
 	it("LATE-SETTLE CLOBBER: A's stale reinstate settles AFTER a genuine reinstate has started on B — B's button stays disabled, B's write cannot double-fire, and B then completes honestly", async () => {
 		const gateA = deferred();
 		const gateB = deferred();

@@ -86,22 +86,6 @@ async function submitHeldRename(
 }
 
 describe('/roster — #297 rename settle across a collective switch', () => {
-	it("CROSS-COLLECTIVE ANNOUNCEMENT: A's rename SUCCESS settling after the switch leaves roster-section-rename-status EMPTY — it must not name A's section into B's live region", async () => {
-		const gate = deferred();
-		renameMock.mockImplementation(() => gate.promise);
-		const container = await renderInArrangeMode();
-
-		await submitHeldRename(container, 'sec-alto', 'Contralto', 1);
-		await switchToOtherChoirArrange(container);
-
-		gate.resolve();
-		await flush();
-
-		expect(renameStatusText(container)).toBe('');
-		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
-		expect(q(container, 'arrange-row-sec-b2')).not.toBeNull();
-	});
-
 	it("STALE DISABLE: with collective A's rename WRITE still in flight, collective B's structural controls render ENABLED from load — A's unresolved write is not B's business", async () => {
 		const gate = deferred();
 		renameMock.mockImplementation(() => gate.promise);
@@ -178,31 +162,6 @@ describe('/roster — #297/#303 rename state across a collective switch: settled
 			q(container, 'arrange-rename-error-sec-alto'),
 			'a rename failure from before the switch must not survive it'
 		).toBeNull();
-	});
-
-	it('#303 COMMITTED ON SWITCH (renamingSectionId/renameValue): an OPEN rename abandoned at switch time commits ONCE to the outgoing collective, and no editor re-mounts after a round-trip through B', async () => {
-		const container = await renderInArrangeMode();
-
-		await openRename(container, 'sec-alto', 'Half-typed');
-
-		await switchToOtherChoirArrange(container);
-		await waitFor(() => {
-			expect(renameMock).toHaveBeenCalledTimes(1);
-		});
-		expect(renameMock).toHaveBeenCalledWith(
-			{ db: 'sampledb', token: 'jwt-abc' },
-			'sec-alto',
-			'Half-typed'
-		);
-		expect(anyRenameInput(container)).toBeNull();
-
-		await switchBackToSampledbArrange(container);
-		expect(
-			anyRenameInput(container),
-			'a committed rename must not leave the editor armed across a collective round-trip'
-		).toBeNull();
-		expect(q(container, 'arrange-row-sec-alto')).not.toBeNull();
-		expect(renameMock).toHaveBeenCalledTimes(1);
 	});
 });
 

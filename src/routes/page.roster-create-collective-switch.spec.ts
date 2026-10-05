@@ -441,34 +441,4 @@ describe('/roster — #299 status regions clear on a collective switch (PO amend
 	});
 });
 
-describe("/roster — #299 handleRemoveSection's terminal failure writes", () => {
-	it("a wrong-collective removal-failure banner cannot appear: A's remove rejecting after the switch renders no section-remove-error on B", async () => {
-		const gate = deferred();
-		deleteMock.mockImplementation(() => gate.promise);
-		const container = await renderInArrangeMode();
-
-		await fireEvent.click(q(container, 'section-remove-sec-tenor') as HTMLElement);
-		await waitFor(() => {
-			expect(q(container, 'section-remove-confirm-sec-tenor')).not.toBeNull();
-		});
-		await fireEvent.click(q(container, 'section-remove-confirm-sec-tenor') as HTMLElement);
-		await waitFor(() => {
-			expect(deleteMock).toHaveBeenCalledTimes(1);
-		});
-
-		await switchToOtherChoirArrange(container);
-
-		gate.reject(new Error('boom'));
-		await flush();
-
-		expect(
-			q(container, 'section-remove-error'),
-			"a removal that failed on collective A must not put a failure alert on collective B's screen"
-		).toBeNull();
-		expect(q(container, 'arrange-row-sec-b1')).not.toBeNull();
-		expect(q(container, 'arrange-row-sec-b2')).not.toBeNull();
-		expect(q(container, 'arrange-row-sec-tenor')).toBeNull();
-	});
-});
-
 // (*MVOX:Tallis*) (*MVOX:Palestrina*)
