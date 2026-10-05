@@ -20,7 +20,7 @@
 // wins the race over restoreEventCreateFocus); stayed open -> season-manage-panel
 // (restoreEventCreateFocus, unchanged). A VISIBLE confirmation is OUT OF SCOPE (#298).
 
-// Harness: the page.event-create.spec.ts family — real +page.svelte, real
+// Harness: the page.event-create-*.spec.ts family — real +page.svelte, real
 // AgendaList, only the data seams mocked.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
