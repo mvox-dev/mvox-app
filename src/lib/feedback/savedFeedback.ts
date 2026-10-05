@@ -12,6 +12,8 @@ export interface SavedFeedback {
 	description: string;
 	pagePath: string;
 	page: PageContext;
+	/** Set once a send's create has landed, so a retry replaces that entity instead of adding one. */
+	entityId?: string;
 }
 
 export interface SavedFeedbackStore {

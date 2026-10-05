@@ -6,7 +6,7 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { online } from '$lib/net/online';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
-import { createFeedback, type CreateFeedbackInput } from './feedbackActions';
+import { createFeedback, discardFeedback, type CreateFeedbackInput } from './feedbackActions';
 import { capturePage, feedbackMetadata, readAppVersion } from './pageMetadata';
 import { getSavedFeedbackStore, type SavedFeedback, type SavedFeedbackStore } from './savedFeedback';
 
@@ -19,6 +19,28 @@ interface SendDeps {
 }
 
 const SEND_LOCK = 'mvox-saved-feedback-send';
+export const FIRST_RETRY_MS = 15_000;
+const MAX_RETRY_MS = 5 * 60_000;
+
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+let retryMs = FIRST_RETRY_MS;
+
+// The online flag can stay true with no uplink, so a send that got no answer retries on a backoff.
+function retryLater(deps: SendDeps): void {
+	if (retryTimer) return;
+	retryTimer = setTimeout(() => {
+		retryTimer = null;
+		if (!get(online)) return;
+		sendSavedFeedback(deps).catch((e) => console.error('sending saved feedback failed', e));
+	}, retryMs);
+	retryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+}
+
+export function cancelSavedFeedbackRetry(): void {
+	if (retryTimer) clearTimeout(retryTimer);
+	retryTimer = null;
+	retryMs = FIRST_RETRY_MS;
+}
 
 function liveToken(): string | null {
 	const auth = get(authStore);
@@ -26,19 +48,31 @@ function liveToken(): string | null {
 	return getToken();
 }
 
-async function deliver(item: SavedFeedback, token: string, fetchImpl: typeof fetch): Promise<void> {
+async function deliver(
+	item: SavedFeedback,
+	token: string,
+	fetchImpl: typeof fetch,
+	persist?: (item: SavedFeedback) => Promise<void>
+): Promise<void> {
 	const cfg = { db: item.db, token };
+	// An earlier attempt was cut off after its create: replace that entity, never add a second.
+	if (item.entityId) await discardFeedback(cfg, item.entityId, fetchImpl);
 	const metadata = feedbackMetadata(item.page, await readAppVersion(fetchImpl));
 	const memberId = await findMyMemberId(cfg, item.personId, fetchImpl);
 	if (!memberId) throw new Error(`sendFeedback: no active member row in '${item.db}'`);
 	const { screenshot, strokes, description, pagePath } = item;
-	await createFeedback(cfg, memberId, { screenshot, strokes, description, pagePath, metadata }, fetchImpl);
+	const input = { screenshot, strokes, description, pagePath, metadata };
+	await createFeedback(cfg, memberId, input, fetchImpl, async (id) => {
+		item.entityId = id;
+		await persist?.(item);
+	});
 }
 
 export async function sendFeedback(
 	draft: FeedbackDraft,
 	{ fetchImpl = fetch, store = getSavedFeedbackStore() }: SendDeps = {}
 ): Promise<SendOutcome> {
+	const deps = { fetchImpl, store };
 	const identity = get(selectedCollectiveIdentityStore);
 	if (!identity) throw new Error('sendFeedback: no collective is selected');
 	const item: SavedFeedback = {
@@ -62,8 +96,10 @@ export async function sendFeedback(
 	} catch (e) {
 		if (isAuthExpiredError(e)) return keep('after-sign-in');
 		// fetch rejects with a TypeError only when the request never got an answer.
-		if (e instanceof TypeError) return keep('saved');
-		throw e;
+		if (!(e instanceof TypeError)) throw e;
+		const outcome = await keep('saved');
+		retryLater(deps);
+		return outcome;
 	}
 }
 
@@ -81,15 +117,17 @@ export async function sendSavedFeedback({
 		for (const [db, personId] of Object.entries(auth.personIdByDb)) {
 			for (const item of await store.list(db, personId)) {
 				try {
-					await deliver(item, token, fetchImpl);
+					await deliver(item, token, fetchImpl, (kept) => store.put(kept));
 				} catch (e) {
-					if (isAuthExpiredError(e) || e instanceof TypeError) return;
+					if (isAuthExpiredError(e)) return;
+					if (e instanceof TypeError) return retryLater({ fetchImpl, store });
 					console.error('a saved feedback could not be sent; it stays on the device', e);
 					continue;
 				}
 				await store.delete(db, personId, item.id);
 			}
 		}
+		if (!retryTimer) retryMs = FIRST_RETRY_MS;
 	});
 }
 
