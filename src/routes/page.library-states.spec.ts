@@ -14,6 +14,20 @@ vi.mock('$lib/library/libraryData', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
+vi.mock('$lib/roster/rosterData', async () =>
+	(await import('$lib/testing/mocks/roster')).activeMembersModule()
+);
+// #434 — the write paths resolve the library id live through `resolveMyLibraryId`,
+// never off the cache-backed librarian resolution, so it is mocked here too.
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
+);
+// T6.4/#73 — "my loans" resolves the viewer's own active member the same way
+// RSVP already does (rsvpData.ts's findMyMemberId: person + status=active, no
+// org scoping in the single-collective dev/test db). Reused, not re-derived.
+vi.mock('$lib/rsvp/rsvpData', async () =>
+	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('member')
+);
 
 import Page from './library/+page.svelte';
 import { toListRead } from '$lib/testing/listReadFixtures.js';

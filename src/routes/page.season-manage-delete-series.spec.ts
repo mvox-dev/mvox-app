@@ -31,14 +31,7 @@ import {
 	SEASON_CARD_EXPAND
 } from '$lib/testing/seasonCard';
 import { toListRead } from '$lib/testing/listReadFixtures.js';
-import {
-	findMyMemberIdMock,
-	listMyRsvpsMock,
-	loadFullAgendaMock,
-	resolveDatabaseEntityIdMock,
-	resolveManageRightsMock
-} from '$lib/testing/moduleHandles';
-import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import {
 	addSeasonConductorMock,
 	countSeasonScopeMock,
@@ -54,7 +47,6 @@ import {
 } from '$lib/testing/mocks/seasons';
 import { q } from '$lib/testing/pages/dom';
 import { CFG } from '$lib/testing/pages/roster';
-import { ORG_EFK } from '$lib/testing/pages/rosterFixtures';
 import { cleanupResetSeasonDeleteMocks, currentSeason } from '$lib/testing/pages/seasonPanel';
 import { renderReady } from '$lib/testing/pages/seasonManageRender';
 import { armAndConfirmDelete, openPanelWithRows } from '$lib/testing/pages/seasonManageDelete';
@@ -107,11 +99,6 @@ function resetRows(): void {
 beforeEach(() => {
 	resetRows();
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	loadRosterMock.mockResolvedValue(toListRead([]));
-	resolveDatabaseEntityIdMock.mockResolvedValue(ORG_EFK);
-	resolveManageRightsMock.mockResolvedValue('not-editor');
-	findMyMemberIdMock.mockResolvedValue(null);
-	listMyRsvpsMock.mockResolvedValue(toListRead([]));
 	listEventSeriesForSeasonMock.mockImplementation(async () => ({ items: [...seriesRows], truncated: false }));
 	listEventsForSeasonMock.mockImplementation(async () => toListRead([...eventRows]));
 	updateSeasonFieldMock.mockResolvedValue(undefined);

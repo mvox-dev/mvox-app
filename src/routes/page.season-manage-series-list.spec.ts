@@ -12,50 +12,8 @@ vi.mock('$lib/agenda/agendaData', async () =>
 vi.mock('$lib/seasons/seasonManage', async () =>
 	(await import('$lib/testing/mocks/seasons')).seasonManageWritesModule({ deleteEvent: false })
 );
-vi.mock('$lib/entity/entityCreate', async () =>
-	(await import('$lib/testing/mocks/events')).entityCreateModule([])
-);
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
-);
-vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal(), { writes: true })
-);
-vi.mock('$lib/roster/rosterData', async () =>
-	(await import('$lib/testing/mocks/roster')).rosterModule()
-);
-vi.mock('$lib/sections/sectionData', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
-);
-vi.mock('$lib/collectives/discover', async () =>
-	(await import('$lib/testing/routeMocks')).discoverModule()
-);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
-);
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/testing/routeMocks')).navigationModule()
-);
-vi.mock('$lib/rsvp/rsvpData', async () =>
-	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
-);
-vi.mock('$lib/attendance/attendanceData', async () =>
-	(await import('$lib/testing/moduleStubs')).attendanceModule()
-);
-vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
-	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
-);
-vi.mock('$lib/repertoire/fileUrls', async () =>
-	(await import('$lib/testing/mocks/files')).fileUrlsModule()
-);
-vi.mock('$lib/library/libraryData', async () =>
-	(await import('$lib/testing/moduleStubs')).libraryDataModule()
-);
-vi.mock('$lib/repertoire/repertoireData', async () =>
-	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('handle')
-);
-vi.mock('$lib/files/appByteStore', async () =>
-	(await import('$lib/testing/mocks/files')).appByteStoreModule()
 );
 
 import Page from './+page.svelte';

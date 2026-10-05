@@ -8,6 +8,9 @@ vi.mock('$lib/roster/rosterData', async () =>
 vi.mock('$lib/roster/memberLifecycle', async () =>
 	(await import('$lib/testing/mocks/roster')).memberLifecycleModule({ archived: true })
 );
+vi.mock('$lib/invite/inviteData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).inviteWritesModule(importOriginal, { withdraw: false })
+);
 vi.mock('$lib/library/librarianStore', async (importOriginal) =>
 	(await import('$lib/testing/mocks/library')).readyLibrarianModule(importOriginal)
 );

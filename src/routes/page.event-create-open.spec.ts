@@ -2,15 +2,6 @@
 // Event creation on the agenda page: the entry point and its rights gate.
 import { fireEvent, waitFor } from '@testing-library/svelte';
 import { describe, expect, it, vi } from 'vitest';
-
-vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).echoMessages('bare', {
-		event_created: (p: { name: string; when: string }) => `event_created ${p.name} @ ${p.when}`,
-		event_create_inherited_from_series: (p: { value: string }) =>
-			`event_create_inherited_from_series ${p.value}`,
-		agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
-	})
-);
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
 );
@@ -26,38 +17,11 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) =>
 	(await import('$lib/testing/moduleHandles')).rightsModule(await importOriginal())
 );
-vi.mock('$lib/roster/rosterData', async () =>
-	(await import('$lib/testing/mocks/roster')).rosterModule()
-);
-vi.mock('$lib/sections/sectionData', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
-);
-vi.mock('$lib/collectives/discover', async () =>
-	(await import('$lib/testing/routeMocks')).discoverModule()
-);
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/testing/routeMocks')).navigationModule()
-);
-vi.mock('$lib/rsvp/rsvpData', async () =>
-	(await import('$lib/testing/moduleHandles')).rsvpHandlesModule('empty')
-);
-vi.mock('$lib/attendance/attendanceData', async () =>
-	(await import('$lib/testing/moduleStubs')).attendanceModule()
-);
-vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
-	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
-);
-vi.mock('$lib/repertoire/fileUrls', async () =>
-	(await import('$lib/testing/mocks/files')).fileUrlsModule()
-);
-vi.mock('$lib/library/libraryData', async () =>
-	(await import('$lib/testing/moduleStubs')).libraryDataModule()
-);
-vi.mock('$lib/repertoire/repertoireData', async () =>
-	(await import('$lib/testing/mocks/seasons')).repertoireDataModule('empty')
 );
 
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
