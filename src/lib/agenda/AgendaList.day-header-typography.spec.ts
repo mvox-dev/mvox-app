@@ -38,14 +38,14 @@ function header(container: HTMLElement): HTMLElement {
 }
 
 describe('AgendaList — day header typography (#250)', () => {
-	it('header is text-base, no longer 10px', () => {
+	it('layout guard (happy-dom cannot measure typography): header is text-base, no longer 10px', () => {
 		const { container } = render(AgendaList, { items: plainItems });
 		const h = header(container);
 		expect(h.classList.contains('text-base')).toBe(true);
 		expect(h.classList.contains('text-[10px]')).toBe(false);
 	});
 
-	it('header is full-strength ink and carries weight', () => {
+	it('layout guard (happy-dom cannot measure typography): header is full-strength ink and carries weight', () => {
 		const { container } = render(AgendaList, { items: plainItems });
 		const h = header(container);
 		expect(h.classList.contains('text-ink')).toBe(true);
@@ -53,14 +53,14 @@ describe('AgendaList — day header typography (#250)', () => {
 		expect(h.classList.contains('font-semibold')).toBe(true);
 	});
 
-	it('header keeps tracking-wide and uppercase', () => {
+	it('layout guard (happy-dom cannot measure typography): header keeps tracking-wide and uppercase', () => {
 		const { container } = render(AgendaList, { items: plainItems });
 		const h = header(container);
 		expect(h.classList.contains('tracking-wide')).toBe(true);
 		expect(h.classList.contains('uppercase')).toBe(true);
 	});
 
-	it('rhythm: pt-4 pb-1 replaced with some other vertical spacing', () => {
+	it('layout guard (happy-dom cannot measure typography): rhythm: pt-4 pb-1 replaced with some other vertical spacing', () => {
 		const { container } = render(AgendaList, { items: plainItems });
 		const h = header(container);
 		expect(h.classList.contains('pt-4')).toBe(false);
@@ -102,7 +102,7 @@ describe('AgendaList — day header typography (#250)', () => {
 		expect(rel.classList.contains('text-ink')).toBe(false);
 	}
 
-	it('TODAY span stays visually distinct from the date beside it', () => {
+	it('layout guard (happy-dom cannot measure typography): TODAY span stays visually distinct from the date beside it', () => {
 		vi.useFakeTimers();
 		try {
 			vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
@@ -113,7 +113,7 @@ describe('AgendaList — day header typography (#250)', () => {
 		}
 	});
 
-	it('TOMORROW span stays visually distinct from the date beside it', () => {
+	it('layout guard (happy-dom cannot measure typography): TOMORROW span stays visually distinct from the date beside it', () => {
 		vi.useFakeTimers();
 		try {
 			vi.setSystemTime(new Date('2026-06-14T10:00:00.000Z'));
@@ -124,26 +124,27 @@ describe('AgendaList — day header typography (#250)', () => {
 		}
 	});
 
-	describe('bg-highlight on today', () => {
+	describe('today is marked', () => {
 		beforeEach(() => vi.useFakeTimers());
 		afterEach(() => vi.useRealTimers());
 
-		it('today header carries bg-highlight', () => {
+		it('the today header carries the Today marker', () => {
 			vi.setSystemTime(new Date('2026-06-15T10:00:00.000Z'));
 			const { container } = render(AgendaList, { items: plainItems });
-			expect(header(container).classList.contains('bg-highlight')).toBe(true);
+			const marker = header(container).querySelector('[data-testid="agenda-relative-today"]');
+			expect(marker?.textContent).toBe('Today');
 		});
 
-		it('a non-today header does not', () => {
+		it('a non-today header carries no relative marker', () => {
 			vi.setSystemTime(new Date('2026-06-10T10:00:00.000Z'));
 			const { container } = render(AgendaList, { items: plainItems });
-			expect(header(container).classList.contains('bg-highlight')).toBe(false);
+			expect(header(container).querySelector('[data-testid^="agenda-relative-"]')).toBeNull();
 		});
 	});
 });
 
 describe('AgendaList — #250 scope fence (unchanged neighbours)', () => {
-	it('gap marker keeps text-[10px] text-ink-2', () => {
+	it('layout guard (happy-dom cannot measure typography): gap marker keeps text-[10px] text-ink-2', () => {
 		const items = [item('r1', '2026-06-01T09:00:00.000Z'), item('r2', '2026-06-22T09:00:00.000Z')];
 		const { container } = render(AgendaList, { items });
 		const marker = container.querySelector<HTMLElement>('[data-testid="agenda-gap-marker"]');
@@ -152,7 +153,7 @@ describe('AgendaList — #250 scope fence (unchanged neighbours)', () => {
 		expect(marker?.classList.contains('text-ink-2')).toBe(true);
 	});
 
-	it('Recent-row date keeps text-[10px] text-ink-2', () => {
+	it('layout guard (happy-dom cannot measure typography): Recent-row date keeps text-[10px] text-ink-2', () => {
 		const { container } = render(AgendaList, {
 			items: plainItems,
 			recentItems: [item('p1', '2026-05-01T09:00:00.000Z')]

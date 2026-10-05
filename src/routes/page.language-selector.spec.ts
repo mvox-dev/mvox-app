@@ -221,7 +221,7 @@ describe('document language attribute (#123 review F1)', () => {
 });
 
 describe('LanguageSelector — touch target (#123 review F2)', () => {
-	it('every locale option reserves a 44px-tall touch target (min-h-11)', async () => {
+	it('layout guard (happy-dom cannot measure size): every locale option keeps the 44px floor', async () => {
 		const { container } = await renderSelector();
 		for (const locale of LOCALES) {
 			const classes = Array.from((option(container, locale) as HTMLElement).classList);

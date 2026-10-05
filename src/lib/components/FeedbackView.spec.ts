@@ -1,27 +1,6 @@
 // @vitest-environment happy-dom
-//
-// #395 slice 2/2 RED — FeedbackView: one feedback, read-only.
-//
-// CONTRACT (GREEN implements src/lib/components/FeedbackView.svelte, Svelte 5
-// runes):
-//
-//   PROPS  screenshotUrl: string   — the signed url (loadFeedback)
-//          strokes: StrokeData     — parsed doodle_layer (loadFeedback)
-//          description: string
-//          naturalWidth, naturalHeight: number — the screenshot's natural box
-//
-//   RENDER the screenshot as StrokeSurface's `base` snippet (an <img
-//          src={screenshotUrl}>), with StrokeSurface READONLY over it (no
-//          controls), and the description text. Both the screenshot and the
-//          description go through the capture marker: RedactedText
-//          ($lib/components/RedactedText.svelte, #388) wraps the description
-//          body, and the <img> sits inside a marked element (a pseudo-element
-//          overlay cannot render on a replaced element, redact.ts).
-//
-// No route yet (#395 slice 2: no route or compose UI — screenshot capture is a
-// later issue). The integration here is with the REAL StrokeSurface (not
-// mocked): the paths must be byte-identical to StrokeSurface's own for the
-// same StrokeData.
+// FeedbackView shows one feedback read-only: the screenshot under a readonly StrokeSurface
+// (real, not mocked) and the description, both inside the capture marker.
 import { render, cleanup } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createRawSnippet } from 'svelte';
@@ -77,13 +56,8 @@ describe('#395 FeedbackView renders one feedback', () => {
 		expect(img?.getAttribute('alt')).toBe('Screenshot of the page this feedback is about');
 	});
 
-	// REVIEW ROUND (#395, F3): StrokeSurface's box is sized only by
-	// `aspect-ratio` and its ink SVG spans all of it (`inset: 0; width: 100%;
-	// height: 100%`). A bare inline <img> takes Tailwind preflight's `max-width:
-	// 100%; height: auto` and so stops at its intrinsic width whenever that is
-	// narrower than the container — the strokes then sit offset from the pixels
-	// they annotate. The two layers must be the same rectangle.
-	it('the screenshot FILLS the stroke surface — img and its marker span both block-level, img full width', () => {
+	// The strokes span the whole surface box, so the screenshot must fill the same rectangle.
+	it('layout guard (happy-dom cannot measure width): the screenshot fills the stroke surface', () => {
 		const { container } = mount();
 		const img = container.querySelector(`img[src="${URL_}"]`) as HTMLImageElement;
 		const classes = img.getAttribute('class')?.split(/\s+/) ?? [];

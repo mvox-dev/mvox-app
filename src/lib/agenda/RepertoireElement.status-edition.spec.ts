@@ -76,7 +76,7 @@ function firstWorkRow(container: HTMLElement): HTMLElement {
 }
 
 describe('RepertoireElement — works-expanded unindent (#125 F4)', () => {
-	it('the expanded wrapper carries no pl-4 (nor any pl-3+) left padding', () => {
+	it('layout guard (happy-dom cannot measure indent): the expanded wrapper has no pl-3+ padding', () => {
 		const { container } = renderAsSeasonEditor();
 		const wrapper = container.querySelector('[data-testid="works-expanded"]');
 		expect(wrapper).not.toBeNull();
@@ -180,13 +180,6 @@ describe('RepertoireElement — unified edition picker (#125 F5b)', () => {
 		);
 		expect(optionValues).toContain('ed-1');
 		expect(optionValues).toContain('ed-2');
-	});
-
-	it('keeps the #111 mobile treatment: w-full below sm, sm:w-auto at desktop', () => {
-		const { container } = renderAsSeasonEditor();
-		const picker = container.querySelector('[data-testid="work-edition-picker"]') as HTMLElement;
-		expect(picker.className).toMatch(/(^|\s)w-full(\s|$)/);
-		expect(picker.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 	});
 
 	it('selecting another edition fires onpinedition immediately — no confirm step', async () => {

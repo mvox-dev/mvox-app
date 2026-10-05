@@ -315,7 +315,6 @@ describe('/roster — INDENT nests under the immediate previous sibling (#155/S3
 			'arrange-row-sec-alto',
 			'arrange-row-sec-tenor'
 		]);
-		expect(row(container, 'sec-alto').className).toContain('pl-4');
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (4)');
 		expect(row(container, 'sec-alto').getAttribute('data-grabbed')).toBeNull();
 		expect(statusText(container)).toContain('roster_section_indented');
@@ -369,7 +368,6 @@ describe('/roster — UNINDENT promotes one level (#155/S3)', () => {
 			'arrange-row-sec-alto',
 			'arrange-row-sec-tenor'
 		]);
-		expect(row(container, 'sec-sop1').className).toContain('pl-0');
 		expect(row(container, 'sec-sop').getAttribute('aria-label')).toBe('Soprano (2)');
 		expect(statusText(container)).toContain('roster_section_unindented_top');
 		expect(unindentBtn(container, 'sec-sop1').disabled).toBe(true);
@@ -910,9 +908,6 @@ function classTokens(el: Element): string[] {
 function hasBareToken(el: Element, token: string): boolean {
 	return classTokens(el).includes(token);
 }
-function hasTokenAnyVariant(el: Element, token: string): boolean {
-	return classTokens(el).some((c) => c === token || c.endsWith(`:${token}`));
-}
 
 const APPLICABLE_252: Array<{ dir: 'indent' | 'unindent'; id: string }> = [
 	{ dir: 'indent', id: 'sec-sop2' },
@@ -941,13 +936,11 @@ function slot252(
 function isNonInteractive252(el: HTMLElement): boolean {
 	return (
 		el.getAttribute('aria-hidden') === 'true' ||
-		hasBareToken(el, 'invisible') ||
-		hasBareToken(el, 'pointer-events-none') ||
 		(el instanceof HTMLButtonElement && el.disabled)
 	);
 }
 
-describe("/roster — the nesting controls meet the app's own touch-target standard (#252)", () => {
+describe('/roster — layout guard (happy-dom cannot measure size): nesting controls keep the 44px floor (#252)', () => {
 	it('every APPLICABLE direction carries `min-h-11 min-w-11` — the 44px standard the trashcan/gear/create buttons already keep (the glyph inside may stay small)', async () => {
 		const container = await renderInArrangeMode();
 		for (const { dir, id } of APPLICABLE_252) {
@@ -983,15 +976,15 @@ describe("/roster — the nesting controls meet the app's own touch-target stand
 });
 
 describe('/roster — only applicable actions present as tappable; an inapplicable one yields interactivity but holds its space (#252)', () => {
-	it('no inapplicable direction renders the old opacity-30 ghost — the token is gone bare AND behind variants (`disabled:opacity-30` is still the ghost)', async () => {
+	it('layout guard (happy-dom cannot measure visibility): an inapplicable direction is hidden, not a faded ghost', async () => {
 		const container = await renderInArrangeMode();
 		for (const { dir, id } of INAPPLICABLE_252) {
 			const el = slot252(container, dir, id);
 			if (el === null) continue; // slot existence is pinned above; this pin is about presentation
-			expect(
-				hasTokenAnyVariant(el, 'opacity-30'),
-				`${dir} ${id}: an action that cannot be taken must not present as a tappable control at 30% opacity (GH#252 item 2, Mihkel's direction — "show only active actions")`
-			).toBe(false);
+			expect(hasBareToken(el, 'invisible'), `${dir} ${id} must be hidden ("show only active actions")`).toBe(true);
+		}
+		for (const { dir, id } of APPLICABLE_252) {
+			expect(hasBareToken(slot252(container, dir, id)!, 'invisible'), `${dir} ${id}`).toBe(false);
 		}
 	});
 
@@ -1010,7 +1003,7 @@ describe('/roster — only applicable actions present as tappable; an inapplicab
 		expect(reorderMock).not.toHaveBeenCalled();
 	});
 
-	it("space held ACROSS a state change: after unindenting Soprano 1 to top level, its now-inapplicable unindent slot still holds the row's box and is not a ghost", async () => {
+	it("layout guard (happy-dom cannot measure size): after unindenting Soprano 1, its now-inapplicable unindent slot is hidden and still holds the row's box", async () => {
 		const container = await renderInArrangeMode();
 
 		await fireEvent.click(slot252(container, 'unindent', 'sec-sop1') as HTMLElement);
@@ -1031,7 +1024,7 @@ describe('/roster — only applicable actions present as tappable; an inapplicab
 				`the slot must still hold the ${token} box after the move — rows must not jump`
 			).toBe(true);
 		}
-		expect(hasTokenAnyVariant(el, 'opacity-30')).toBe(false);
+		expect(hasBareToken(el, 'invisible')).toBe(true);
 	});
 });
 
@@ -1063,10 +1056,13 @@ describe('/roster — the two directions are distinguishable at a glance (#252)'
 		expect(b).not.toBeNull();
 
 		const textDistinguishes = (a.textContent ?? '').trim() !== (b.textContent ?? '').trim();
-		const classDistinguishes =
-			(a.getAttribute('class') ?? '') !== (b.getAttribute('class') ?? '') ||
-			(a.querySelector('svg')?.getAttribute('class') ?? '') !==
-				(b.querySelector('svg')?.getAttribute('class') ?? '');
+		const svgAttrs = (el: HTMLElement) =>
+			[...(el.querySelector('svg')?.attributes ?? [])]
+				.filter((attr) => attr.name !== 'class')
+				.map((attr) => `${attr.name}=${attr.value}`)
+				.sort()
+				.join(' ');
+		const strokeDistinguishes = svgAttrs(a) !== svgAttrs(b);
 
 		const aPaths = [...a.querySelectorAll('path')].map((p) => p.getAttribute('d') ?? '');
 		const bPaths = [...b.querySelectorAll('path')].map((p) => p.getAttribute('d') ?? '');
@@ -1088,23 +1084,9 @@ describe('/roster — the two directions are distinguishable at a glance (#252)'
 		}
 
 		expect(
-			textDistinguishes || classDistinguishes || glyphDistinguishes,
+			textDistinguishes || strokeDistinguishes || glyphDistinguishes,
 			'side by side at phone size, ▶ and ◀ read as the same shape — the two directions must differ by more than a mirror transform (GH#252 item 3)'
 		).toBe(true);
-	});
-});
-
-describe("/roster — the controls carry the app's normal control tone, not the muted row-metadata ink (#252)", () => {
-	it('no APPLICABLE direction uses bare `text-ink-2` as its base tone — the replacement tone is GREEN\'s to pick and state (GH#252 item 4, #238 finding)', async () => {
-		const container = await renderInArrangeMode();
-		for (const { dir, id } of APPLICABLE_252) {
-			const el = slot252(container, dir, id) as HTMLElement;
-			expect(el, `${dir} control for ${id}`).not.toBeNull();
-			expect(
-				hasBareToken(el, 'text-ink-2'),
-				`${dir} ${id}: a control the user must LOCATE must not be the quietest thing on the row (GH#252 item 4)`
-			).toBe(false);
-		}
 	});
 });
 

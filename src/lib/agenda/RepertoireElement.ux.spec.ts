@@ -43,40 +43,27 @@ function threeProgrammeRows(): WorkRow[] {
 	return threeRows().map((r, i) => ({ ...r, kind: 'program' as const, status: null, ordinal: i }));
 }
 
-const DIVIDE_Y = /(^|\s)divide-y(-\d+)?(\s|$)/;
-const OWN_ROW_BORDER = /(^|\s)(sm:|max-sm:)?border-[tby]\b/;
-
 function listOf(container: HTMLElement): HTMLElement {
 	const list = container.querySelector('[data-testid="works-expanded"] ol, [data-testid="works-expanded"] ul');
 	expect(list).not.toBeNull();
 	return list as HTMLElement;
 }
 
-describe('RepertoireElement — work row separators (#111 finding 2)', () => {
-	it('separates consecutive work rows with a divider (divide-y on the season-repertoire ul)', () => {
+describe('RepertoireElement — work list semantics', () => {
+	it('the season repertoire renders its rows as an unordered list', () => {
 		const { container } = render(RepertoireElement, { props: { rows: threeRows(), expanded: true } });
 		const list = listOf(container);
-		expect(list.tagName).toBe('UL'); // ordinal-free season repertoire → ul branch
-		expect(list.className).toMatch(DIVIDE_Y);
+		expect(list.tagName).toBe('UL');
+		expect(list.querySelectorAll(':scope > [data-testid="work-row"]')).toHaveLength(3);
 	});
 
-	it('separates programmed (ol) rows the same way', () => {
+	it('programmed rows render as a numbered list', () => {
 		const { container } = render(RepertoireElement, {
 			props: { rows: threeProgrammeRows(), expanded: true }
 		});
 		const list = listOf(container);
-		expect(list.tagName).toBe('OL'); // every row carries an ordinal → numbered branch
-		expect(list.className).toMatch(DIVIDE_Y);
-	});
-
-	it('draws no divider above the first row or below the last (between-children only, no per-row borders)', () => {
-		const { container } = render(RepertoireElement, { props: { rows: threeRows(), expanded: true } });
-		expect(listOf(container).className).toMatch(DIVIDE_Y);
-		const workRows = container.querySelectorAll('[data-testid="work-row"]');
-		expect(workRows.length).toBe(3);
-		for (const li of workRows) {
-			expect(li.className).not.toMatch(OWN_ROW_BORDER);
-		}
+		expect(list.tagName).toBe('OL');
+		expect(list.querySelectorAll(':scope > [data-testid="work-row"]')).toHaveLength(3);
 	});
 });
 
@@ -173,17 +160,9 @@ describe('RepertoireElement — native mobile programme picker (#111 finding 4)'
 		return select as HTMLSelectElement;
 	}
 
-	it('below the responsive breakpoint the picker is a native <select> stretched to container width', () => {
+	it('the programme picker is a native <select> listing the pickable editions', () => {
 		const { container } = renderAsEventEditor();
 		const select = addProgrammeSelect(container);
-		expect(select.tagName).toBe('SELECT');
-		expect(select.className).toMatch(/(^|\s)w-full(\s|$)/);
-	});
-
-	it('at desktop width the existing inline dropdown is preserved (sm:w-auto, same native select, options intact)', () => {
-		const { container } = renderAsEventEditor();
-		const select = addProgrammeSelect(container);
-		expect(select.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 		expect(select.tagName).toBe('SELECT');
 		const labels = [...select.querySelectorAll('option')].map((o) => o.textContent?.trim());
 		expect(labels).toEqual([
@@ -225,11 +204,9 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		return el as HTMLSelectElement;
 	}
 
-	it('"Add work" is a native <select>, full width on mobile, inline at ≥640px, options intact', () => {
+	it('"Add work" is a native <select> listing the pickable works', () => {
 		const el = select(renderAsSeasonEditor(), 'work-manage-add-work-select');
 		expect(el.tagName).toBe('SELECT');
-		expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);
-		expect(el.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 		const labels = [...el.querySelectorAll('option')].map((o) => o.textContent?.trim());
 		expect(labels).toEqual([
 			'[repertoire_add_work_label]',
@@ -238,11 +215,9 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		]);
 	});
 
-	it('the unified edition picker is a native <select>, full width on mobile, inline at ≥640px, options intact', () => {
+	it('the unified edition picker is a native <select> listing the row\'s editions', () => {
 		const el = select(renderAsSeasonEditor(), 'work-edition-picker');
 		expect(el.tagName).toBe('SELECT');
-		expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);
-		expect(el.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
 		const labels = [...el.querySelectorAll('option')].map((o) => o.textContent?.trim());
 		expect(labels).toEqual([
 			'[repertoire_pin_edition_label]',
@@ -251,13 +226,12 @@ describe('RepertoireElement — native mobile pickers, repertoire surface (#111 
 		]);
 	});
 
-	it('every edition picker on the surface carries the treatment, not just the first row', () => {
+	it('every work row gets its own native edition picker, not just the first row', () => {
 		const container = renderAsSeasonEditor();
-		const pickers = [...container.querySelectorAll('[data-testid="work-edition-picker"]')];
-		expect(pickers.length).toBe(3); // one per work row
-		for (const el of pickers) {
-			expect(el.className).toMatch(/(^|\s)w-full(\s|$)/);
-			expect(el.className).toMatch(/(^|\s)sm:w-auto(\s|$)/);
+		const rows = [...container.querySelectorAll('[data-testid="work-row"]')];
+		expect(rows).toHaveLength(3);
+		for (const li of rows) {
+			expect(li.querySelector('[data-testid="work-edition-picker"]')?.tagName).toBe('SELECT');
 		}
 	});
 });

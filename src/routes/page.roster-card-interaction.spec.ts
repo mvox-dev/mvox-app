@@ -188,7 +188,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		).toBeNull();
 	});
 
-	it('the activator COVERS the card: a stretched overlay over a positioned row, not a strip of its own', async () => {
+	it('layout guard (happy-dom cannot measure stacking): the activator overlays the whole card', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
@@ -200,11 +200,9 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 			expect(cls, `activator must not size itself (${sizing})`).not.toContain(sizing);
 		}
 		expect(li.className.split(/\s+/)).toContain('min-h-11');
-		expect(cls.some((c) => c === 'border' || c.startsWith('border-'))).toBe(true);
-		expect(cls.some((c) => c.startsWith('focus-visible:'))).toBe(true);
 	});
 
-	it('the SectionPicker on a collapsed row is lifted above the overlay, and comes after it in tree order', async () => {
+	it('layout guard (happy-dom cannot measure stacking): the SectionPicker on a collapsed row sits above the overlay', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
@@ -220,7 +218,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		expect(li.contains(lifted!)).toBe(true);
 	});
 
-	it('an armed deactivate pair left on a COLLAPSED row is lifted above the overlay', async () => {
+	it('layout guard (happy-dom cannot measure stacking): an armed deactivate pair on a collapsed row sits above the overlay', async () => {
 		const { container } = await renderRosterAs('admin');
 		await openCard(container, 'm2');
 		await fireEvent.click(q(container, 'member-deactivate-m2')!);

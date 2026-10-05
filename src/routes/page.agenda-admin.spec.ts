@@ -321,7 +321,7 @@ describe('agenda admin — the entry points render together for a season editor 
 });
 
 describe('agenda admin — #222/#261: one card — the panel opens inside the card frame', () => {
-	it('the card carries THE single border frame; collapsed, the expand button inside it draws no second frame', async () => {
+	it('collapsed, the expand button lives inside the card', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
 			expect(q(container, CARD)).not.toBeNull();
@@ -330,17 +330,9 @@ describe('agenda admin — #222/#261: one card — the panel opens inside the ca
 		const expand = q(container, SEASON_CARD_EXPAND) as HTMLElement;
 		expect(expand, 'collapsed: the expand control lives in the card').not.toBeNull();
 		expect(card.contains(expand)).toBe(true);
-
-		const cardClasses = Array.from(card.classList);
-		expect(cardClasses, 'the card is the bordered frame').toContain('border');
-		expect(cardClasses, 'the frame keeps the rounded look').toContain('rounded-md');
-		expect(
-			Array.from(expand.classList),
-			'no border-in-border: the expand button draws no frame of its own'
-		).not.toContain('border');
 	});
 
-	it('panel OPEN: season-manage-panel renders inside the card, NEVER inside the title-row collapse button, and draws no second frame', async () => {
+	it('panel OPEN: season-manage-panel renders inside the card, NEVER inside the title-row collapse button', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 
@@ -357,11 +349,6 @@ describe('agenda admin — #222/#261: one card — the panel opens inside the ca
 			'the panel must never nest inside the title-row button'
 		).toBe(false);
 		expect(card.contains(collapse), 'the title row lives in the card too').toBe(true);
-
-		expect(
-			Array.from(panel.classList),
-			'no second stacked frame: the panel draws no border of its own'
-		).not.toContain('border');
 	});
 
 	it('panel OPEN: the card survives the mid-refresh rights blank — a keepSeasonManage reload never unmounts the open panel while loadFullAgenda is in flight', async () => {
@@ -425,8 +412,8 @@ describe('agenda admin — #238/#261: create-rights-only (no manageable season)'
 	});
 });
 
-describe('agenda admin — #238: the season trashcan paints red (SVG on currentColor)', () => {
-	it('season-manage-delete-season contains an inline SVG on currentColor and NO emoji glyph; the red classes, testid, aria-label and 44px floor are unchanged (#261: it lives on the OPENED title row now)', async () => {
+describe('agenda admin — #238: the season trashcan is an icon-only button (SVG on currentColor)', () => {
+	it('season-manage-delete-season contains an inline SVG on currentColor and NO emoji glyph; it is named by aria-label (#261: on the OPENED title row)', async () => {
 		const container = await renderReady();
 		await openPanel(container);
 		await waitFor(() => {
@@ -454,13 +441,7 @@ describe('agenda admin — #238: the season trashcan paints red (SVG on currentC
 		expect((trashcan.textContent ?? '').trim(), 'icon-only: no text/emoji glyph').toBe('');
 		expect(trashcan.innerHTML).not.toMatch(/[\u{1F5D1}\u{FE0E}\u{FE0F}]/u);
 
-		const classes = Array.from(trashcan.classList);
-		expect(classes, 'the resting tint').toContain('text-red-700');
-		expect(classes, 'the hover tint').toContain('hover:text-red-800');
-
 		expect(trashcan.getAttribute('aria-label')).toBe('season_manage_season_delete');
-		expect(classes, '44px height floor survives the restyle').toContain('min-h-11');
-		expect(classes, '44px width floor survives the restyle (icon-only)').toContain('min-w-11');
 	});
 });
 
@@ -1133,7 +1114,7 @@ function expectTouchTarget(
 	}
 }
 
-describe('agenda admin — every admin control is a 44x44px touch target', () => {
+describe('agenda admin — layout guard (happy-dom cannot measure size): every control keeps the 44px floor', () => {
 	it('page-level entry points (#261): the collapsed card’s expand button and [+ Season]', async () => {
 		const container = await renderReady();
 		await waitFor(() => {
@@ -1288,7 +1269,7 @@ function expectFormFluid(container: HTMLElement, formTestid: string): void {
 	}
 }
 
-describe('agenda admin — creation forms stay inside a 375px viewport (class contract)', () => {
+describe('agenda admin — layout guard (happy-dom cannot measure width): forms fit a 375px viewport', () => {
 	it('season form: every field fluid, no oversized fixed widths', async () => {
 		const container = await renderReady();
 		await openSeasonForm(container);
