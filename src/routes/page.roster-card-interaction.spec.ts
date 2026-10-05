@@ -188,7 +188,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 		).toBeNull();
 	});
 
-	it('layout guard (happy-dom cannot measure stacking): the activator overlays the whole card', async () => {
+	it('layout guard (happy-dom cannot measure stacking or focus ring): the activator overlays the whole card', async () => {
 		const { container } = await renderRosterAs('admin');
 		const li = rowLi(container, 'm2');
 		const card = q(container, 'roster-row-card-m2')!;
@@ -200,6 +200,7 @@ describe('(1) the collapsed card is the activator — pencil gone, real button, 
 			expect(cls, `activator must not size itself (${sizing})`).not.toContain(sizing);
 		}
 		expect(li.className.split(/\s+/)).toContain('min-h-11');
+		expect(cls.some((c) => c.startsWith('focus-visible:')), 'a visible focus indicator').toBe(true);
 	});
 
 	it('layout guard (happy-dom cannot measure stacking): the SectionPicker on a collapsed row sits above the overlay', async () => {
