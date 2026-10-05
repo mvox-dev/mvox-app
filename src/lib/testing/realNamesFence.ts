@@ -32,10 +32,14 @@ const ALL_MEMBER_PERSON: Array<[string, string]> = [
 
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
-export function realNamesWire(opts: { toggle?: boolean } = {}): ReturnType<typeof vi.fn> {
+export function realNamesWire(
+	opts: { toggle?: boolean; extra?: (url: string) => unknown } = {}
+): ReturnType<typeof vi.fn> {
 	const toggle = opts.toggle ?? true;
 	const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
+		const extra = opts.extra?.(url);
+		if (extra !== undefined) return json(extra, 200, JSON_HEADERS);
 
 		if (url.includes('_type.string=admin_member_record')) {
 			return json({

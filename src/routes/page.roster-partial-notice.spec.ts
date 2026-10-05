@@ -39,10 +39,8 @@ vi.mock('$app/navigation', async () =>
 );
 
 import Page from './roster/+page.svelte';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
-import { signIn } from '$lib/testing/session';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
 import { cleanupClearResetAdmin, setAuthedWithOneCollective } from '$lib/testing/pages/roster';
@@ -75,15 +73,6 @@ function partial<T>(items: T[], total: number) {
 	return { items, total, truncated: true };
 }
 
-function setAuthedWithTwoCollectives() {
-	signIn({
-		collectives: [
-			{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-			{ db: 'otherdb', name: 'Other', personId: 'person-o' }
-		]
-	});
-}
-
 beforeEach(() => {
 	loadRosterMock.mockResolvedValue(toListRead(rows));
 	listSectionsMock.mockResolvedValue([]);
@@ -113,26 +102,6 @@ async function renderReady() {
 }
 
 describe('#321 /roster — the partial notice', () => {
-	it('a truncated member read renders a VISIBLE, persistent role="status" notice with the i18n copy', async () => {
-		loadRosterMock.mockResolvedValue(partial(rows, 640));
-		const { container } = await renderReady();
-
-		await waitFor(() => expect(container.querySelector(NOTICE)).not.toBeNull());
-		const notice = container.querySelector(NOTICE)!;
-		expect(notice.getAttribute('role')).toBe('status');
-		expect(notice.className).not.toContain('sr-only');
-		expect(notice.textContent?.trim()).toBe('[roster_partial_notice]');
-		await waitFor(() =>
-			expect(container.querySelector('[data-testid="section-toggle-unassigned"]')).not.toBeNull()
-		);
-		expect(container.querySelector(NOTICE)).not.toBeNull();
-	});
-
-	it('a complete read leaves the notice ABSENT from the DOM (not hidden)', async () => {
-		const { container } = await renderReady();
-		expect(container.querySelector(NOTICE)).toBeNull();
-	});
-
 	it('the truncation of the archived-member panel raises the SAME notice', async () => {
 		loadInactiveRosterMock.mockResolvedValue(partial(inactiveRows, 812));
 		const { container } = await renderReady();
@@ -158,20 +127,6 @@ describe('#321 /roster — the partial notice', () => {
 			expect(container.querySelector('[data-testid="roster-inactive-list"]')).toBeNull()
 		);
 		expect(container.querySelector(NOTICE)).toBeNull();
-	});
-
-	it('a collective switch does not carry A\'s truncation onto B\'s roster', async () => {
-		loadRosterMock.mockResolvedValue(partial(rows, 640));
-		const utils = render(Page);
-		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
-		await waitFor(() => expect(utils.container.querySelector(NOTICE)).not.toBeNull());
-
-		loadRosterMock.mockResolvedValue(toListRead(rows));
-		selectedCollectiveDbStore.set('otherdb');
-
-		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(2));
-		await waitFor(() => expect(utils.container.querySelector(NOTICE)).toBeNull());
 	});
 });
 

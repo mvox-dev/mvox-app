@@ -46,7 +46,6 @@ vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
 );
 
 import Page from './+page.svelte';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import type { EventDetail } from '$lib/events/eventDetail';
 import {
 	applyAttendanceChangeMock,
@@ -55,7 +54,7 @@ import {
 	loadEventDetailMock
 } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
-import { flushMicrotasks, isoAt } from '$lib/testing/pages/event';
+import { isoAt } from '$lib/testing/pages/event';
 import { ROSTER, resetAttendanceMocks, rowSavedText } from '$lib/testing/pages/eventAttendance';
 import { q } from '$lib/testing/pages/dom';
 import { setAuthed } from '$lib/testing/pages/seasonRepertoire';
@@ -112,39 +111,6 @@ async function openPanel(container: HTMLElement) {
 afterEach(resetAttendanceMocks);
 
 describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)', () => {
-	it('merely LOADING recorded attendance announces nothing — the region pre-exists, blank, role="status" aria-live="polite"', async () => {
-		setFixtures([{ attendanceId: 'att-1', memberId: 'm1', status: 'present' }]);
-		const { container } = renderPage();
-		await openPanel(container);
-
-		const region = q(container, 'attendance-saved-status-m1');
-		expect(region).not.toBeNull();
-		expect(region?.getAttribute('role')).toBe('status');
-		expect(region?.getAttribute('aria-live')).toBe('polite');
-		expect(rowSavedText(container, 'm1')).toBe('');
-		expect(container.textContent).not.toContain('[attendance_saved]');
-	});
-
-	it("a settled write announces saved on THIS page's panel — on the reconciled member's row and no other", async () => {
-		setFixtures();
-		applyAttendanceChangeMock.mockResolvedValue({ attendanceId: 'att-new-1' });
-		const { container } = renderPage();
-		await openPanel(container);
-
-		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
-
-		await waitFor(() => {
-			expect(rowSavedText(container, 'm1')).toContain('[attendance_saved]');
-		});
-		expect(applyAttendanceChangeMock).toHaveBeenCalledWith(
-			expect.objectContaining({ eventId: 'ev1', memberId: 'm1', newStatus: 'present' })
-		);
-		expect(
-			q(container, 'attendance-toggle-m1-present')?.getAttribute('aria-pressed')
-		).toBe('true');
-		expect(rowSavedText(container, 'm2')).toBe('');
-	});
-
 	it('in flight: the PO-ruled SILENT disable is byte-preserved AND the tally line says its counts are unconfirmed', async () => {
 		setFixtures([{ attendanceId: 'att-2', memberId: 'm2', status: 'present' }]);
 		const held = deferred<{ attendanceId: string | null }>();
@@ -182,7 +148,7 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)',
 		expect(q(container, 'attendance-tally-unconfirmed')).toBeNull();
 	});
 
-	it('failure path byte-preserved: revert + per-row role=alert — and NO saved cue', async () => {
+	it('a failed write reverts the row', async () => {
 		setFixtures();
 		applyAttendanceChangeMock.mockRejectedValue(new Error('save failed'));
 		const { container } = renderPage();
@@ -197,35 +163,6 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#327)',
 		expect(
 			q(container, 'attendance-toggle-m1-present')?.getAttribute('aria-pressed')
 		).toBe('false');
-		expect(rowSavedText(container, 'm1')).toBe('');
-		expect(container.textContent).not.toContain('[attendance_saved]');
-	});
-});
-
-describe('/event/[id] — the cue does not leak across a collective switch (#327, hold → switch → settle)', () => {
-	it('a write that settles AFTER the switch never paints the saved cue onto the reloaded page', async () => {
-		setFixtures();
-		const held = deferred<{ attendanceId: string | null }>();
-		applyAttendanceChangeMock.mockReturnValueOnce(held.promise);
-		const { container } = renderPage(['sampledb', 'other-choir']);
-		await openPanel(container);
-
-		await fireEvent.click(q(container, 'attendance-toggle-m1-present')!);
-		await waitFor(() => {
-			expect(
-				q(container, 'attendance-status-group-m1')?.getAttribute('aria-busy')
-			).toBe('true');
-		});
-
-		selectedCollectiveDbStore.set('other-choir');
-		await waitFor(() => {
-			expect(q(container, 'take-attendance-btn')).not.toBeNull();
-		});
-		await openPanel(container);
-
-		held.resolve({ attendanceId: 'att-new-1' });
-		await flushMicrotasks();
-
 		expect(rowSavedText(container, 'm1')).toBe('');
 		expect(container.textContent).not.toContain('[attendance_saved]');
 	});

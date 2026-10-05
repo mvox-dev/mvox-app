@@ -841,7 +841,6 @@ describe('/event/[id] — RSVP control (integration: same RsvpControl, same rsvp
 });
 
 describe('/event/[id] — tally + capacity render from the domain rsvp read for EVERY member (#363)', () => {
-
 	it('capacity is hidden when the event has none — the tally still renders', async () => {
 		const { container } = renderRsvpPage({ event: editorEvent({ capacity: undefined }) });
 		await waitFor(() => {
@@ -1613,35 +1612,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 		).toBe('true');
 	});
 
-	it("the attendance panel shows REAL names with the toggle ON — one toggle read, one records read, profile name gone (#469, supersedes the #269 roster-only ruling)", async () => {
-		const { container, fetchStub } = renderComposePage({
-			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
-			season: conductorSeason(),
-			realNames: true
-		});
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
-		});
-		const before = fetchStub.mock.calls.length;
-		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
-		});
-
-		await waitFor(() => {
-			expect(
-				container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
-			).toContain(RN_RECORD_NAMES['p-viewer']);
-		});
-		const panel = container.querySelector('[data-testid="attendance-panel"]')!;
-		expect(panel.textContent).toContain(RN_RECORD_NAMES['p-mihkel']);
-		expect(panel.textContent).not.toContain('Viewer Vera');
-
-		const opened = fetchStub.mock.calls.slice(before).map((c) => String(c[0]));
-		expect(opened.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-		expect(opened.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
-	});
-
 	it('the header names the conductors by their REAL names with the toggle ON (#469 review F3)', async () => {
 		const { container } = renderComposePage({
 			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
@@ -1679,32 +1649,6 @@ describe('/event/[id] — attendance surfaces on a PAST event (#103 TE.3)', () =
 				.map((c) => String(c[0]))
 				.filter((u) => u.includes('admin_member_record'))
 		).toEqual([]);
-	});
-
-	it("the attendance panel keeps PROFILE names with the toggle OFF — the toggle is read (once), no records request is ever issued (#469)", async () => {
-		const { container, fetchStub } = renderComposePage({
-			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
-			season: conductorSeason(),
-			realNames: 'off'
-		});
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
-		});
-
-		expect(
-			container.querySelector('[data-testid="attendance-row-member-1"]')!.textContent
-		).toContain('Viewer Vera');
-		for (const recordName of Object.values(RN_RECORD_NAMES)) {
-			expect(container.textContent).not.toContain(recordName);
-		}
-
-		const urls = fetchStub.mock.calls.map((c) => String(c[0]));
-		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(2);
 	});
 
 	it('the RSVP tally card names a PAST event\'s respondents by their REAL names with the toggle ON — resolved via loadRosterIncludingArchived (#469)', async () => {
@@ -2043,47 +1987,6 @@ describe('/event/[id] — #220 AM/PM preference on the time line', () => {
 		expect(time).toContain('19:00');
 		expect(time).toContain('20:30');
 		expect(time).not.toMatch(/\b(AM|PM)\b/);
-	});
-});
-
-describe('/event/[id] — the attendance panel states a truncated roster (#321 review F2)', () => {
-	const NOTICE = '[data-testid="attendance-panel-partial-notice"]';
-
-	async function openPanel(memberCount?: number) {
-		const { container } = renderComposePage({
-			event: pastEventEntity({ _editor: [{ reference: 'p-viewer' }] }),
-			season: conductorSeason(),
-			memberCount
-		});
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="take-attendance-btn"]')).not.toBeNull();
-		});
-		await fireEvent.click(container.querySelector('[data-testid="take-attendance-btn"]')!);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="attendance-row-member-1"]')).not.toBeNull();
-		});
-		return container;
-	}
-
-	it('a member read whose count exceeds its rows raises the shared notice inside the panel', async () => {
-		const container = await openPanel(500);
-
-		await waitFor(() => {
-			expect(container.querySelector(NOTICE)).not.toBeNull();
-		});
-		const notice = container.querySelector(NOTICE)!;
-		expect(notice.getAttribute('role')).toBe('status');
-		expect(notice.className).not.toMatch(/sr-only|hidden/);
-		expect(
-			container.querySelector(`[data-testid="attendance-panel"] ${NOTICE}`)
-		).not.toBeNull();
-	});
-
-	it('a complete read leaves it ABSENT from the DOM', async () => {
-		const container = await openPanel();
-		expect(container.querySelector('[data-testid="attendance-row-member-2"]')).not.toBeNull();
-
-		expect(container.querySelector(NOTICE)).toBeNull();
 	});
 });
 

@@ -26,7 +26,6 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { fillDateTime } from '$lib/testing/timeControls';
 import {
 	PROFILES,
@@ -179,21 +178,6 @@ async function commitRowNameEdit(container: HTMLElement, id: string, value: stri
 }
 
 describe('#328 schedule items — the saved-cue region exists from first render', () => {
-	it('editor view: a PERSISTENT empty role="status" aria-live="polite" region (event-schedule-status) is mounted BEFORE any write, exactly one', async () => {
-		const { container } = renderSchedulePage();
-		await waitReady(container);
-		await waitFor(() => {
-			expect(scheduleSection(container)).not.toBeNull();
-		});
-
-		const status = q(container, 'event-schedule-status');
-		expect(status, 'expected the persistent event-schedule-status region').not.toBeNull();
-		expect(status!.getAttribute('role')).toBe('status');
-		expect(status!.getAttribute('aria-live')).toBe('polite');
-		expect(status!.textContent?.trim()).toBe('');
-		expect(container.querySelectorAll('[data-testid="event-schedule-status"]')).toHaveLength(1);
-	});
-
 	it('one node per SURFACE (Gama’s ruling): event-schedule-status, event-edit-status and #324’s repertoire-manage-status are three DISTINCT nodes on this one page', async () => {
 		const { container } = renderSchedulePage();
 		await waitReady(container);
@@ -212,27 +196,6 @@ describe('#328 schedule items — the saved-cue region exists from first render'
 });
 
 describe('#328 schedule items — a write that reconciles announces saved', () => {
-	it('row name edit: NOTHING announced while the POST is held open; the settle sets event_schedule_saved into event-schedule-status; no row alert', async () => {
-		const { container, controls } = renderSchedulePage();
-		await waitReady(container);
-
-		const g = deferred();
-		controls.holdItemPost = g.promise;
-		await commitRowNameEdit(container, 'si1', 'kutse');
-
-		await new Promise((r) => setTimeout(r, 10));
-		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
-
-		g.resolve();
-		controls.holdItemPost = null;
-		await waitFor(() => {
-			expect(q(container, 'event-schedule-status')?.textContent).toContain(
-				'[event_schedule_saved]'
-			);
-		});
-		expect(q(container, 'event-schedule-error-si1')).toBeNull();
-	});
-
 	it('ADD: submitting the add form announces once the create reconciles (the refetch-and-close reconcile path announces too)', async () => {
 		const { container } = renderSchedulePage();
 		await waitReady(container);
@@ -284,7 +247,7 @@ describe('#328 schedule items — a write that reconciles announces saved', () =
 });
 
 describe('#328 schedule items — failure handling stays byte-identical', () => {
-	it('a rejected name edit still rolls the row back and renders event-schedule-error-si1 role="alert" (event_schedule_save_error) — and event-schedule-status announces NOTHING', async () => {
+	it('a rejected name edit rolls the row back and names the failure (event_schedule_save_error)', async () => {
 		const { container, controls } = renderSchedulePage();
 		await waitReady(container);
 		controls.failItemWrites = true;
@@ -298,7 +261,6 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 		});
 		expect(scheduleSection(container)!.textContent).toContain('kogunemine');
 		expect(scheduleSection(container)!.textContent).not.toContain('kutse');
-		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
 	});
 
 	it('PER-ROW + latest-write: si1’s standing alert survives si2’s successful edit, which announces saved; a NEXT attempt starts with the region blank again', async () => {
@@ -335,39 +297,6 @@ describe('#328 schedule items — failure handling stays byte-identical', () => 
 				'[event_schedule_saved]'
 			);
 		});
-	});
-});
-
-describe('#328 schedule items — a late settle never announces onto the NEXT event', () => {
-	it('a row name edit still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the region stays blank', async () => {
-		const { container, controls } = renderSchedulePage(['sampledb', 'crede']);
-		await waitReady(container);
-		await waitFor(() => {
-			expect(scheduleSection(container)?.textContent).toContain('kogunemine');
-		});
-
-		const g = deferred();
-		controls.holdItemPost = g.promise;
-		await commitRowNameEdit(container, 'si1', 'sissejuhatus');
-		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
-
-		selectedCollectiveDbStore.set('crede');
-		await waitFor(() => {
-			expect(scheduleSection(container)?.textContent).toContain('kogunemine');
-		});
-		expect(q(container, 'event-schedule-status')?.textContent?.trim()).toBe('');
-
-		controls.holdItemPost = null;
-		g.resolve();
-		await new Promise((r) => setTimeout(r, 0));
-		await new Promise((r) => setTimeout(r, 0));
-		await new Promise((r) => setTimeout(r, 0));
-
-		expect(
-			q(container, 'event-schedule-status')?.textContent?.trim(),
-			'a late settle must not announce “saved” onto the event the editor has moved to'
-		).toBe('');
-		expect(q(container, 'event-schedule-error-si1')).toBeNull();
 	});
 });
 

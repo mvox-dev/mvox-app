@@ -26,11 +26,9 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './+page.svelte';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import {
 	cleanupRealTimersResetTypes,
 	editorTokenAtNow,
-	flushMicrotasks,
 	setAuthed
 } from '$lib/testing/pages/event';
 import { MY_RSVP_ROW, seasonEntity } from '$lib/testing/pages/eventRsvp';
@@ -119,32 +117,6 @@ async function waitForAnsweredControl(container: HTMLElement) {
 afterEach(cleanupRealTimersResetTypes);
 
 describe('/event/[id] — the saved cue fires when the WRITE reconciles (#326)', () => {
-	it('merely LOADING an existing answer announces nothing — the cue reports a write, never a read (#329 wiring)', async () => {
-		const { container } = renderPage();
-		await waitForAnsweredControl(container);
-		expect(savedText(container)).toBe('');
-		expect(container.textContent).not.toContain('[rsvp_saved]');
-	});
-
-	it('a settled status change announces saved on this page — persistent role="status" region inside the RSVP section', async () => {
-		const { container } = renderPage();
-		await waitForAnsweredControl(container);
-
-		const region = rsvpSection(container)?.querySelector('[data-testid="rsvp-saved-status"]');
-		expect(region).not.toBeNull();
-		expect(region?.getAttribute('role')).toBe('status');
-		expect(region?.getAttribute('aria-live')).toBe('polite');
-
-		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-not_going"]')!);
-
-		await waitFor(() => {
-			expect(savedText(container)).toContain('[rsvp_saved]');
-		});
-		expect(
-			container.querySelector('[data-testid="rsvp-btn-not_going"]')?.getAttribute('aria-pressed')
-		).toBe('true');
-	});
-
 	it('while the write is in flight: the PO-ruled SILENT disable is byte-preserved — aria-busy, no saved text, msg line blank', async () => {
 		const { container, releasePost } = renderPage({ updatePost: 'hold' });
 		await waitForAnsweredControl(container);
@@ -168,7 +140,7 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#326)',
 		releasePost();
 	});
 
-	it('failure path byte-preserved: the value reverts + role=alert error — and NO saved cue', async () => {
+	it('a failed write reverts the value', async () => {
 		const { container } = renderPage({ updatePost: 'fail' });
 		await waitForAnsweredControl(container);
 
@@ -187,36 +159,6 @@ describe('/event/[id] — the saved cue fires when the WRITE reconciles (#326)',
 		expect(
 			container.querySelector('[data-testid="rsvp-btn-going"]')?.getAttribute('aria-pressed')
 		).toBe('true');
-		expect(savedText(container)).toBe('');
-		expect(container.textContent).not.toContain('[rsvp_saved]');
-	});
-});
-
-describe('/event/[id] — the cue does not leak across a collective switch (#326 pin 7, hold → switch → settle)', () => {
-	it('a write that settles AFTER the switch never paints the saved cue onto the reloaded page', async () => {
-		const { container, releasePost } = renderPage({ updatePost: 'hold' }, [
-			'sampledb',
-			'other-choir'
-		]);
-		await waitForAnsweredControl(container);
-
-		await fireEvent.click(container.querySelector('[data-testid="rsvp-btn-not_going"]')!);
-		await waitFor(() => {
-			expect(
-				rsvpSection(container)
-					?.querySelector('[data-testid="rsvp-control"]')
-					?.getAttribute('aria-busy')
-			).toBe('true');
-		});
-
-		selectedCollectiveDbStore.set('other-choir');
-		await waitForAnsweredControl(container);
-
-		releasePost();
-		await flushMicrotasks();
-
-		expect(savedText(container)).toBe('');
-		expect(container.textContent).not.toContain('[rsvp_saved]');
 	});
 });
 

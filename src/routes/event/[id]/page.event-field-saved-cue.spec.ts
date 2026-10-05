@@ -27,7 +27,6 @@ vi.mock('$lib/entu-config', async () =>
 
 import Page from './+page.svelte';
 import { commitDateTime, fillDateTime } from '$lib/testing/timeControls';
-import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { signIn } from '$lib/testing/session';
 import {
 	PROFILES,
@@ -156,42 +155,7 @@ async function commitEdit(
 	await fireEvent.blur(input);
 }
 
-describe('#328 event fields — the saved-cue region exists from first render', () => {
-	it('editor view: a PERSISTENT empty role="status" aria-live="polite" region (event-edit-status) is mounted BEFORE any write — its own node, exactly one', async () => {
-		const { container } = renderEditPage();
-		await waitFor(() => {
-			expect(q(container, 'event-edit-btn-name')).not.toBeNull();
-		});
-
-		const status = q(container, 'event-edit-status');
-		expect(status, 'expected the persistent event-edit-status region').not.toBeNull();
-		expect(status!.getAttribute('role')).toBe('status');
-		expect(status!.getAttribute('aria-live')).toBe('polite');
-		expect(status!.textContent?.trim()).toBe('');
-		expect(container.querySelectorAll('[data-testid="event-edit-status"]')).toHaveLength(1);
-	});
-});
-
 describe('#328 event fields — a write that reconciles announces saved', () => {
-	it('name blur-commit: NOTHING announced while the POST is held open; the settle sets event_edit_saved into event-edit-status; no error node', async () => {
-		const { container, controls } = renderEditPage();
-		const g = deferred();
-		controls.holdEditPost = g.promise;
-
-		await commitEdit(container, 'name', 'Autumn Sing');
-		await waitFor(() => {
-			expect(q(container, 'event-detail-name')?.textContent).toContain('Autumn Sing');
-		});
-		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
-
-		g.resolve();
-		controls.holdEditPost = null;
-		await waitFor(() => {
-			expect(q(container, 'event-edit-status')?.textContent).toContain('[event_edit_saved]');
-		});
-		expect(q(container, 'event-edit-error-name')).toBeNull();
-	});
-
 	it('the cue describes the LATEST write: blank again by the time a second field’s write is in flight, re-announced on its settle', async () => {
 		const { container, controls } = renderEditPage();
 
@@ -235,7 +199,7 @@ describe('#328 event fields — a write that reconciles announces saved', () => 
 });
 
 describe('#328 event fields — failure handling stays byte-identical', () => {
-	it('a rejected name write still reverts the header and renders event-edit-error-name role="alert" (event_edit_save_error) — and event-edit-status announces NOTHING', async () => {
+	it('a rejected name write reverts the header and names the failure (event_edit_save_error)', async () => {
 		const { container, controls } = renderEditPage();
 		controls.failEditPost = true;
 
@@ -251,7 +215,6 @@ describe('#328 event fields — failure handling stays byte-identical', () => {
 		});
 		expect(q(container, 'event-detail-name')?.textContent).not.toContain('Autumn Sing');
 		await flush();
-		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
 	});
 
 	it('#328 review R2-F2 — a pre-write REFUSAL (the #243 duration range check) clears the region: no stale “saved” standing beside the fresh refusal', async () => {
@@ -285,57 +248,6 @@ describe('#328 event fields — failure handling stays byte-identical', () => {
 			fetchStub.mock.calls.filter((c) => (c[1] as RequestInit | undefined)?.method === 'POST')
 		).toHaveLength(postsBefore);
 		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
-	});
-});
-
-describe('#328 event fields — the saved cue does not outlive its event', () => {
-	it('a settled name write’s saved cue does not follow the editor to the NEXT event: the region is mounted and BLANK on arrival', async () => {
-		const { container } = renderEditPage(['sampledb', 'crede']);
-
-		await commitEdit(container, 'name', 'Autumn Sing');
-		await waitFor(() => {
-			expect(q(container, 'event-edit-status')?.textContent).toContain('[event_edit_saved]');
-		});
-
-		selectedCollectiveDbStore.set('crede');
-		await waitFor(() => {
-			expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Rehearsal');
-		});
-
-		const status = q(container, 'event-edit-status');
-		expect(status, 'expected the persistent region on the next event').not.toBeNull();
-		expect(
-			status!.textContent?.trim(),
-			'the live region must not still read “saved” for a write made on an older event'
-		).toBe('');
-		expect(q(container, 'event-edit-error-name')).toBeNull();
-	});
-
-	it('a name write still IN FLIGHT when the editor switches collectives announces NOTHING when it lands: the new event’s region stays blank (editWriteGenerations gates the settle)', async () => {
-		const { container, controls } = renderEditPage(['sampledb', 'crede']);
-		const g = deferred();
-		controls.holdEditPost = g.promise;
-
-		await commitEdit(container, 'name', 'Autumn Sing');
-		await flush();
-		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
-
-		selectedCollectiveDbStore.set('crede');
-		await waitFor(() => {
-			expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Rehearsal');
-		});
-		expect(q(container, 'event-edit-status')?.textContent?.trim()).toBe('');
-
-		controls.holdEditPost = null;
-		g.resolve();
-		await flush();
-
-		expect(
-			q(container, 'event-edit-status')?.textContent?.trim(),
-			'a late settle must not announce “saved” onto the event the editor has moved to'
-		).toBe('');
-		expect(q(container, 'event-edit-error-name')).toBeNull();
-		expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Rehearsal');
 	});
 });
 

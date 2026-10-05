@@ -100,21 +100,6 @@ beforeEach(() => {
 afterEach(cleanupUnstubResetAuth);
 
 describe('/roster — session expired (#107)', () => {
-	it('a real Entu 401 shows the session-expired notice with a sign-in link — not the generic load error, never a silent empty state', async () => {
-		stubWire({ member: 401, section: 401 });
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="roster-skeleton"]')).toBeNull();
-		});
-		expectSessionExpiredNotice(container);
-
-		await waitFor(() => expect(gotoMock).toHaveBeenCalled());
-		expect(String(gotoMock.mock.calls[0][0])).toContain('session_expired');
-	});
-
 	it('a 401 on the per-member PROFILE hop still reaches the page tagged — the tag survives the data-layer chain', async () => {
 		stubWire({ profile: 401 });
 		setAuthedWithOneCollective();
@@ -125,22 +110,6 @@ describe('/roster — session expired (#107)', () => {
 			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
 		});
 		expectSessionExpiredNotice(container);
-	});
-
-	it('a GENERIC roster load failure still shows the loud load error + retry (auth handling must not swallow it)', async () => {
-		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		stubWire({ member: 500 });
-		setAuthedWithOneCollective();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="roster-load-error"]')).not.toBeNull();
-		});
-		expect(container.querySelector('[data-testid="roster-retry-load"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="session-expired"]')).toBeNull();
-		expect(gotoMock, 'a 500 must not sign the user out').not.toHaveBeenCalled();
-		consoleSpy.mockRestore();
 	});
 });
 

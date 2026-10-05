@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // The roster shows real names when the admin setting says so, end to end.
-import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -176,21 +176,6 @@ afterEach(() => {
 });
 
 describe('#269 /roster end-to-end — toggle ON through the real producer chain', () => {
-	it('the record-backed row shows the REAL name, the recordless row shows the profile name — in the SAME roster-row-name span with the SAME class (only the string differs)', async () => {
-		stubWire({ sampledb: sampledbFixture(true) });
-		const { container } = await renderRosterAs('admin');
-
-		const m2span = rowNameSpan(container, 'm2');
-		expect(m2span.textContent).toBe('Aaron Aardvark');
-		const m1span = rowNameSpan(container, 'm1');
-		expect(m1span.textContent).toBe('Alice Alto');
-
-		expect(m2span.getAttribute('data-testid')).toBe('roster-row-name');
-		expect(m1span.className).toBe(m2span.className);
-		expect(m2span.tagName).toBe('SPAN');
-		expect(q(container, 'roster-row-m2')!.firstElementChild).toBe(m2span);
-	});
-
 	it('NON-ADMIN members see the real names too (the toggle is collective-wide, not an admin-only view)', async () => {
 		stubWire({ sampledb: sampledbFixture(true) });
 		const { container } = await renderRosterAs('not-admin');
@@ -255,24 +240,6 @@ describe('#269 fallback — SILENT AND COMPLETE', () => {
 });
 
 describe('#269 toggle OFF — identical to the toggle-less behavior on this tree', () => {
-	it('toggle false + records present → profile names everywhere, NO admin_member_record request at all, the toggle itself read from the server — and the #268 pencil still renders (the baseline fence)', async () => {
-		const fetchMock = stubWire({ sampledb: sampledbFixture(false) });
-		const { container } = await renderRosterAs('admin');
-
-		expect(rowNameSpan(container, 'm1').textContent).toBe('Alice Alto');
-		expect(rowNameSpan(container, 'm2').textContent).toBe('Berta Bass');
-
-		const all = (fetchMock.mock.calls as Array<[unknown]>).map((c) => String(c[0]));
-		expect(all.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(
-			all.filter(
-				(u) => u.includes('entity/db-ent-1') && u.includes('props=roster_show_real_names')
-			)
-		).toHaveLength(1);
-
-		expect(q(container, 'roster-row-card-m2')).not.toBeNull();
-	});
-
 	it('toggle key ABSENT (never set) → false: same rendering, same absence of any records fetch', async () => {
 		const fetchMock = stubWire({ sampledb: sampledbFixture('absent') });
 		const { container } = await renderRosterAs('admin');

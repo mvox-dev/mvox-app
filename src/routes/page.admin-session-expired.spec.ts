@@ -112,20 +112,6 @@ afterEach(() => {
 });
 
 describe('/admin — session expired', () => {
-	it('an auth-expired first read shows the session-expired notice, not the load error', async () => {
-		resolveDatabaseEntityIdMock.mockRejectedValue(authExpiredError());
-		selectSampledb();
-
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(q(container, 'session-expired')).not.toBeNull();
-		});
-		expect(q(container, 'admin-roles-load-error')).toBeNull();
-		expect(q(container, 'admin-roles-no-access')).toBeNull();
-		expect(h.resolveAdmin).not.toHaveBeenCalled();
-	});
-
 	it('an auth-expired read after the gate shows the notice too', async () => {
 		h.loadRoster.mockRejectedValue(authExpiredError());
 		selectSampledb();

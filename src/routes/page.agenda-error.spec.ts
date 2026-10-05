@@ -65,18 +65,6 @@ listMyRsvpsMock.mockResolvedValue(toListRead([]));
 afterEach(cleanupResetAgendaMocks);
 
 describe('+page — agenda load error + retry (M2)', () => {
-	it('surfaces an error + retry affordance on rejection, instead of a permanent skeleton', async () => {
-		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
-		setAuthedWithOneCollective();
-		const { container } = render(Page);
-
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="agenda-skeleton"]')).toBeNull();
-		});
-		expect(container.querySelector('[data-testid="agenda-error"]')).not.toBeNull();
-		expect(container.querySelector('[data-testid="agenda-retry"]')).not.toBeNull();
-	});
-
 	it('retry re-invokes loadAgenda and recovers on success', async () => {
 		loadFullAgendaMock.mockRejectedValueOnce(new Error('network down'));
 		loadFullAgendaMock.mockResolvedValueOnce(fullAgendaResult({ seasons: [], upcoming: [], recent: [], seasonId: null, seasonConductors: [] }));

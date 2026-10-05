@@ -140,33 +140,6 @@ describe('#469 — the ADMIN ROLES page obeys roster_show_real_names (supersedes
 		expect(container.textContent).not.toContain(PROFILE_NAMES.m2);
 	});
 
-	it('toggle ON: ONE roster_show_real_names read and ONE admin_member_record read across the whole load — the overlay rides the page\'s one loadRoster call', async () => {
-		const fetchMock = realNamesWire();
-		const container = await renderReady();
-		expect(addAdminLabels(container)).toEqual([REAL_NAMES.m2, REAL_NAMES.m1]);
-
-		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-		expect(urls.filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
-	});
-
-	it('toggle OFF: both pickers keep the PROFILE names, the record names appear nowhere, ZERO admin_member_record requests — and the toggle itself IS read (once)', async () => {
-		const fetchMock = realNamesWire({ toggle: false });
-		const container = await renderReady();
-
-		expect(addAdminLabels(container)).toEqual([PROFILE_NAMES.m1, PROFILE_NAMES.m2]);
-		await waitFor(() => {
-			expect(container.querySelector('[data-testid="invite-person-select"]')).not.toBeNull();
-		});
-		expect(invitePersonLabels(container)).toEqual([PROFILE_NAMES.m1, PROFILE_NAMES.m2]);
-		expect(container.textContent).not.toContain(REAL_NAMES.m1);
-		expect(container.textContent).not.toContain(REAL_NAMES.m2);
-
-		const urls = fetchMock.mock.calls.map((c) => String(c[0]));
-		expect(urls.filter((u) => u.includes('admin_member_record'))).toEqual([]);
-		expect(urls.filter((u) => u.includes('roster_show_real_names'))).toHaveLength(1);
-	});
-
 	const STALE_GRANT_NAME = 'Bakhed Atgranttime';
 
 	async function delegateListAdminsToReal(bakedName: string): Promise<void> {

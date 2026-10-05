@@ -1,17 +1,11 @@
 // @vitest-environment happy-dom
+// Offline, no enabled control on any page that writes reaches a write seam or the wire.
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, cleanup, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('$lib/paraglide/messages.js', async () =>
-	(await import('$lib/testing/messageMocks')).echoMessages()
-);
-
 const H = vi.hoisted(() => ({
-	loadRoster: vi.fn(),
 	resolveManageRights: vi.fn(),
-	findMyMemberId: vi.fn(),
-	listMyRsvps: vi.fn(),
 	listEventSeriesForSeason: vi.fn(),
 	listSeriesOptionsForSeason: vi.fn(),
 	listEventsForSeason: vi.fn(),
@@ -41,30 +35,26 @@ const H = vi.hoisted(() => ({
 	updateAttendanceStatus: vi.fn(),
 	deleteAttendance: vi.fn()
 }));
-
+const BS = vi.hoisted(() => ({ current: null as unknown }));
+vi.mock('$lib/paraglide/messages.js', async () =>
+	(await import('$lib/testing/messageMocks')).echoMessages()
+);
+vi.mock('$lib/paraglide/runtime', async () =>
+	(await import('$lib/testing/moduleStubs')).runtimeModule()
+);
+const pageStub = vi.hoisted(() => ({ params: { id: 'ev1' }, url: new URL('http://localhost/') }));
+vi.mock('$app/state', () => ({ page: pageStub }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/testing/routeMocks')).navigationModule()
+);
+vi.mock('$lib/collectives/discover', async () =>
+	(await import('$lib/testing/routeMocks')).discoverModule()
+);
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
 vi.mock('$lib/agenda/agendaData', async () =>
 	(await import('$lib/testing/moduleHandles')).agendaDataModule()
-);
-vi.mock('$lib/seasons/seasonManage', () => ({
-	listEventSeriesForSeason: H.listEventSeriesForSeason,
-	listSeriesOptionsForSeason: H.listSeriesOptionsForSeason,
-	listEventsForSeason: H.listEventsForSeason,
-	updateSeasonField: H.updateSeasonField,
-	addSeasonConductor: H.addSeasonConductor,
-	removeSeasonConductor: H.removeSeasonConductor,
-	getSeriesDefaults: H.getSeriesDefaults,
-	deleteEventSeries: H.deleteEventSeries,
-	countSeriesOccurrences: H.countSeriesOccurrences,
-	countSeasonScope: H.countSeasonScope,
-	deleteSeason: H.deleteSeason
-}));
-vi.mock('$lib/entity/entityCreate', () => ({
-	createSeason: H.createSeason,
-	createEventSeries: H.createEventSeries,
-	createEvent: H.createEvent
-}));
-vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
 );
 vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/repertoire/repertoireActions')>()),
@@ -77,35 +67,39 @@ vi.mock('$lib/repertoire/repertoireActions', async (importOriginal) => ({
 	createProgramItem: H.createProgramItem,
 	deleteProgramItem: H.deleteProgramItem
 }));
-vi.mock('$lib/roster/rosterData', () => ({ loadRoster: H.loadRoster }));
-vi.mock('$lib/sections/sectionData', async (importOriginal) =>
-	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
-);
-vi.mock('$lib/collectives/discover', async () =>
-	(await import('$lib/testing/routeMocks')).discoverModule()
-);
-vi.mock('$lib/entu-config', async () =>
-	(await import('$lib/testing/routeMocks')).entuConfigModule()
-);
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/testing/routeMocks')).navigationModule()
-);
-vi.mock('$lib/rsvp/rsvpData', () => ({
-	findMyMemberId: H.findMyMemberId,
-	listMyRsvps: H.listMyRsvps,
-	rsvpsByEventId: () => ({}),
-	createRsvp: H.createRsvp,
-	updateRsvpStatus: H.updateRsvpStatus,
-	deleteRsvp: H.deleteRsvp
+vi.mock('$lib/seasons/seasonManage', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/seasons/seasonManage')>()),
+	listEventSeriesForSeason: H.listEventSeriesForSeason,
+	listSeriesOptionsForSeason: H.listSeriesOptionsForSeason,
+	listEventsForSeason: H.listEventsForSeason,
+	updateSeasonField: H.updateSeasonField,
+	addSeasonConductor: H.addSeasonConductor,
+	removeSeasonConductor: H.removeSeasonConductor,
+	getSeriesDefaults: H.getSeriesDefaults,
+	deleteEventSeries: H.deleteEventSeries,
+	countSeriesOccurrences: H.countSeriesOccurrences,
+	countSeasonScope: H.countSeasonScope,
+	deleteSeason: H.deleteSeason
 }));
-vi.mock('$lib/attendance/attendanceData', () => ({
+vi.mock('$lib/entity/entityCreate', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/entity/entityCreate')>()),
+	createSeason: H.createSeason,
+	createEventSeries: H.createEventSeries,
+	createEvent: H.createEvent
+}));
+vi.mock('$lib/repertoire/repertoireData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/repertoire/repertoireData')>()),
+	listRepertoireItems: H.listRepertoireItems
+}));
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => BS.current }));
+vi.mock('$lib/attendance/attendanceData', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/attendance/attendanceData')>()),
 	listAttendance: vi.fn().mockResolvedValue([]),
 	listMyAttendance: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false }),
 	listAllRsvpsForEvent: vi.fn().mockResolvedValue([]),
 	createAttendance: H.createAttendance,
 	updateAttendanceStatus: H.updateAttendanceStatus,
-	deleteAttendance: H.deleteAttendance,
-	attendanceByMemberId: () => ({})
+	deleteAttendance: H.deleteAttendance
 }));
 vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 	(await import('$lib/testing/moduleStubs')).workRowsModule(await importOriginal())
@@ -113,22 +107,63 @@ vi.mock('$lib/repertoire/workRows', async (importOriginal) =>
 vi.mock('$lib/repertoire/fileUrls', async () =>
 	(await import('$lib/testing/mocks/files')).fileUrlsModule()
 );
-vi.mock('$lib/library/libraryData', () => ({
-	listWorks: vi.fn().mockResolvedValue({
-		items: [{ id: 'work-1', name: 'Missa Brevis', composer: 'Palestrina' }],
-		total: 1,
-		truncated: false
-	}),
-	listAllEditions: vi.fn().mockResolvedValue({
-		items: [{ id: 'ed-1', name: 'Carus 1998', publisher: 'Carus', workId: 'work-1' }],
-		total: 1,
-		truncated: false
-	}),
-	listAllCopies: vi.fn().mockResolvedValue({ items: [], total: 0, truncated: false })
+vi.mock('$lib/rsvp/rsvpData', async (importOriginal) => {
+	const handles = await import('$lib/testing/moduleHandles');
+	return {
+		...(await importOriginal<object>()),
+		findMyMemberId: handles.findMyMemberIdMock,
+		listMyRsvps: handles.listMyRsvpsMock,
+		createRsvp: H.createRsvp,
+		updateRsvpStatus: H.updateRsvpStatus,
+		deleteRsvp: H.deleteRsvp
+	};
+});
+vi.mock('$lib/roster/rosterData', async (importOriginal) => {
+	const roster = await import('$lib/testing/mocks/roster');
+	return {
+		...(await roster.rosterOverRealModule(importOriginal)),
+		listActiveMembers: roster.listActiveMembersMock
+	};
+});
+vi.mock('$lib/collective/databaseEntity', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).entityIdModule(await importOriginal())
+);
+vi.mock('$lib/sections/sectionData', async (importOriginal) =>
+	(await import('$lib/testing/moduleHandles')).sectionDataModule(await importOriginal())
+);
+vi.mock('$lib/profile/profileData', async (importOriginal) =>
+	(await import('$lib/testing/mocks/session')).profileDataModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	...(await import('$lib/testing/mocks/profile')).noLinkedIdentitiesModule(),
+	...(await import('$lib/testing/mocks/admin')).joinStatesModule()
 }));
-vi.mock('$lib/repertoire/repertoireData', () => ({ listRepertoireItems: H.listRepertoireItems }));
-const BS = vi.hoisted(() => ({ current: null as unknown }));
-vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => BS.current }));
+vi.mock('$lib/library/libraryData', async () =>
+	(await import('$lib/testing/mocks/library')).libraryReadsModule()
+);
+vi.mock('$lib/library/librarianStore', async () =>
+	(await import('$lib/testing/mocks/library')).librarianOverRealModule()
+);
+vi.mock('$lib/nav/adminStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).adminStoreOverRealModule(importOriginal)
+);
+vi.mock('$lib/admin/roleManagement', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).roleManagementOverRealModule(importOriginal)
+);
+vi.mock('$lib/collectives/collectiveName', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	...(await import('$lib/testing/mocks/admin')).collectiveNameModule()
+}));
+vi.mock('$lib/invite/inviteData', async (importOriginal) => {
+	const admin = await import('$lib/testing/mocks/admin');
+	return {
+		...(await importOriginal<object>()),
+		resolvePersonParentId: admin.resolveParentMock,
+		resolveInviteParentId: admin.resolveInviteParentMock,
+		createInvite: admin.createInviteMock
+	};
+});
 
 import Page from './+page.svelte';
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
@@ -139,6 +174,7 @@ import {
 	settle,
 	nonGetCalls,
 	isWriteDisabled,
+	expectVisibleReason,
 	exerciseEveryEnabledControl
 } from '$lib/testing/networkSignal';
 import { toListRead, toSeriesRead } from '$lib/testing/listReadFixtures.js';
@@ -146,10 +182,26 @@ import { createFakeByteStore } from '$lib/testing/byteStoreFakes';
 import { resetAppState } from '$lib/testing/appReset';
 import { discoverMock, gotoMock } from '$lib/testing/routeMocks';
 import {
+	findMyMemberIdMock,
+	listMyRsvpsMock,
 	listSectionsMock,
 	loadFullAgendaMock,
 	resolveDatabaseEntityIdMock
 } from '$lib/testing/moduleHandles';
+import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { listAllCopiesMock, listAllEditionsMock, listWorksMock } from '$lib/testing/mocks/library';
+import { resetAdmin } from '$lib/nav/adminStore';
+import { resetGate } from '$lib/profile/completionGate';
+import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
+import { agendaViewStore, readStoredAgendaView } from '$lib/preferences/agendaView';
+import { readStoredTimeFormat, timeFormatStore } from '$lib/preferences/timeFormat';
+import {
+	WRITE_PAGES,
+	WRITE_PAGE_HANDLES,
+	renderWritable,
+	stubWriteWire,
+	writingPages
+} from '$lib/testing/pages/writePages';
 import { SEASON_ID, isoDate } from '$lib/testing/pages/seasonPanel';
 import { setAuthed } from '$lib/testing/pages/links';
 
@@ -210,7 +262,7 @@ beforeEach(() => {
 	);
 	vi.stubGlobal('fetch', fetchStub);
 	loadFullAgendaMock.mockResolvedValue(agendaResult());
-	H.loadRoster.mockResolvedValue(
+	loadRosterMock.mockResolvedValue(
 		toListRead([
 			{
 				memberId: 'm-grace',
@@ -233,8 +285,15 @@ beforeEach(() => {
 	listSectionsMock.mockResolvedValue([]);
 	resolveDatabaseEntityIdMock.mockResolvedValue(ORG);
 	H.resolveManageRights.mockResolvedValue('editor');
-	H.findMyMemberId.mockResolvedValue('m-pete');
-	H.listMyRsvps.mockResolvedValue(toListRead([]));
+	findMyMemberIdMock.mockResolvedValue('m-pete');
+	listMyRsvpsMock.mockResolvedValue(toListRead([]));
+	listWorksMock.mockResolvedValue(
+		toListRead([{ id: 'work-1', name: 'Missa Brevis', composer: 'Palestrina' }])
+	);
+	listAllEditionsMock.mockResolvedValue(
+		toListRead([{ id: 'ed-1', name: 'Carus 1998', publisher: 'Carus', workId: 'work-1' }])
+	);
+	listAllCopiesMock.mockResolvedValue(toListRead([]));
 	H.listEventSeriesForSeason.mockResolvedValue(
 		toSeriesRead([{ id: 'series-1', name: 'Monday rehearsals', eventCount: 12, ownerIds: ['person-p'] }])
 	);
@@ -253,13 +312,18 @@ afterEach(() => {
 	cleanup();
 	vi.unstubAllGlobals();
 	for (const value of Object.values(H)) value.mockReset();
+	for (const handle of WRITE_PAGE_HANDLES) handle.mockReset();
 	gotoMock.mockReset();
 	discoverMock.mockReset();
-	loadFullAgendaMock.mockReset();
-	listSectionsMock.mockReset();
-	resolveDatabaseEntityIdMock.mockReset();
 	resetOnLine();
 	resetAppState();
+	resetGate();
+	resetAdmin();
+	resetTypeIdCache();
+	localStorage.clear();
+	agendaViewStore.set(readStoredAgendaView());
+	timeFormatStore.set(readStoredTimeFormat());
+	history.replaceState({}, '', '/');
 });
 
 async function renderPanelOpenOnline(): Promise<HTMLElement> {
@@ -316,6 +380,46 @@ describe('agenda — no write control reaches the wire offline (#434 slice 6 fen
 		expect(
 			container.querySelectorAll('[data-testid="repertoire-write-unavailable"]').length
 		).toBeGreaterThan(0);
+	});
+});
+
+describe('every page that writes — offline, no enabled control reaches the wire', () => {
+	it('the table covers every page whose components read the write gate', () => {
+		expect(Object.keys(WRITE_PAGES).sort()).toEqual(writingPages());
+	});
+
+	it.each(Object.keys(WRITE_PAGES))('%s: operating every enabled control offline writes nothing', async (route) => {
+		const sweepFetch = stubWriteWire(WRITE_PAGES[route]);
+		await goOnline();
+		const { container } = await renderWritable(WRITE_PAGES[route], pageStub);
+		await goOffline();
+		await settle();
+		for (const [, mock] of writeSeams()) mock.mockClear();
+		sweepFetch.mockClear();
+
+		await exerciseEveryEnabledControl(container);
+
+		for (const [name, mock] of writeSeams()) {
+			expect(mock.mock.calls, `${name} was called while offline`).toEqual([]);
+		}
+		expect(nonGetCalls(sweepFetch)).toEqual([]);
+	});
+
+	it.each(Object.keys(WRITE_PAGES))('%s: offline says why in visible text, and back online the reason goes', async (route) => {
+		stubWriteWire(WRITE_PAGES[route]);
+		await goOnline();
+		const { container } = await renderWritable(WRITE_PAGES[route], pageStub);
+		const reasons = () => [...container.querySelectorAll<HTMLElement>('[data-testid$="-write-unavailable"]')];
+		expect(reasons()).toEqual([]);
+
+		await goOffline();
+		await waitFor(() => expect(reasons().length).toBeGreaterThan(0));
+		for (const reason of reasons()) {
+			expectVisibleReason(container, reason.dataset.testid!, '[write_unavailable_no_signal]');
+		}
+
+		await goOnline();
+		await waitFor(() => expect(reasons()).toEqual([]));
 	});
 });
 
