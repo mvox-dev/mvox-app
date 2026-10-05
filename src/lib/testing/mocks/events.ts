@@ -14,6 +14,14 @@ export const applyRsvpChangeMock = vi.fn();
 export const applyAttendanceChangeMock = vi.fn();
 export const listAttendanceMock = vi.fn();
 export const listAllRsvpsForEventMock = vi.fn();
+export const pageStub = {
+	params: { id: 'ev1' } as Record<string, string>,
+	url: new URL('http://localhost/event/ev1')
+};
+
+export function appStateModule() {
+	return { page: pageStub };
+}
 
 type Real = () => Promise<unknown>;
 const real = async (importOriginal: Real) => (await importOriginal()) as object;

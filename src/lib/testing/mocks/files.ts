@@ -18,6 +18,16 @@ export function appLabelStoreModule() {
 	};
 }
 
+let appByteStore: unknown;
+
+export function setAppByteStore(store: unknown): void {
+	appByteStore = store;
+}
+
+export function appByteStoreModule() {
+	return { getAppByteStore: () => appByteStore };
+}
+
 export function pdfWorkerUrlModule() {
 	return { default: '/mock-pdf-worker.mjs' };
 }
