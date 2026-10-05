@@ -419,7 +419,7 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 		await fireEvent.input(container.querySelector('[data-testid="event-schedule-add-name"]')!, {
 			target: { value: 'kogunemine' }
 		});
-		await fillDateTime(container as HTMLElement, 'event-schedule-add-datetime', '2026-09-01', '17:30');
+		await fillDateTime(container as HTMLElement, 'event-schedule-add-datetime', '2026-12-01', '17:30');
 		await fireEvent.click(container.querySelector('[data-testid="event-schedule-add-submit"]')!);
 
 		await waitFor(() => {
@@ -437,7 +437,7 @@ describe('#262 — add flow (in-situ family, #239/#249 single-name rule)', () =>
 				[
 					{ type: '_parent', reference: 'ev1' },
 					{ type: '_type', reference: 'type-schedule-item' },
-					{ type: 'datetime', datetime: '2026-09-01T14:30:00.000Z' },
+					{ type: 'datetime', datetime: '2026-12-01T15:30:00.000Z' },
 					{ type: 'name', string: 'kogunemine' }
 				].sort((a, b) => a.type.localeCompare(b.type))
 			);
@@ -547,7 +547,7 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 		await fillDateTime(
 			container as HTMLElement,
 			'event-schedule-edit-datetime-si1',
-			'2026-09-01',
+			'2026-11-03',
 			'18:00'
 		);
 		await commitDateTime(container as HTMLElement, 'event-schedule-edit-datetime-si1');
@@ -560,7 +560,7 @@ describe('#262 — edit flow (whole-field activator, replace choreography)', () 
 			);
 			expect(post).not.toBeUndefined();
 			expect(JSON.parse(String((post![1] as RequestInit).body))).toEqual([
-				{ _id: 'val-si1-dt', type: 'datetime', datetime: '2026-09-01T15:00:00.000Z' }
+				{ _id: 'val-si1-dt', type: 'datetime', datetime: '2026-11-03T16:00:00.000Z' }
 			]);
 		});
 	});

@@ -453,6 +453,22 @@ describe('#313 — the occurrence loop relocates intact', () => {
 		});
 	});
 
+	it('occurrences keep the Tallinn wall clock across the October fall-back', async () => {
+		const { container } = renderEventPage(
+			editorEvent({ start_datetime: [{ _id: 'val-start-1', datetime: '2027-10-17T18:00:00.000Z' }] })
+		);
+		await openConvertForm(container);
+
+		await fillAndSubmitConvert(container, { endDate: '2027-11-07' });
+
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(3);
+		});
+		expect(
+			createEventMock.mock.calls.map((call) => (call[1] as { startDatetime: string }).startDatetime)
+		).toEqual(['2027-10-24T18:00:00.000Z', '2027-10-31T19:00:00.000Z', '2027-11-07T19:00:00.000Z']);
+	});
+
 	it('a typed interval no named pattern can express (every 10 days) is honoured', async () => {
 		const { container } = renderEventPage(editorEvent());
 		await openConvertForm(container);

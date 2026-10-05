@@ -1,29 +1,15 @@
 // @vitest-environment happy-dom
-//
-// #388 RED — RedactedText: the shared DISPLAY marker. RedactedField (#357)
-// wraps an <input>; /roster also renders personal values as plain element
-// content (the collapsed row's name and email, the sr-only edit label's name,
-// the inactive-members row name), and those need the same marker without an
-// input. #361 builds a name component on top of this one next, so it stays
-// GENERIC — nothing name-specific in it.
-//
-// CONTRACT (GREEN implements src/lib/components/RedactedText.svelte, Svelte 5
-// runes):
-//
-//   <span {REDACT_ATTR} {...rest}>{@render children()}</span>
-//
-//   PROPS  children: Snippet (required) — the value to mark
-//          ...rest spread onto the <span> (data-testid, class, …)
-//
-//   THE MARKER attribute name is imported from $lib/redact/redact — never a
-//   literal — so the existing html[data-redacting] [data-redact] CSS rule
-//   (app.css) blanks it. DEFAULT-INERT: no effect without the root toggle.
+// RedactedText: the shared display marker, a span carrying REDACT_ATTR around its children.
 import { render, cleanup } from '@testing-library/svelte';
-import { afterEach, describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRawSnippet } from 'svelte';
 import { REDACT_ATTR } from '$lib/redact/redact';
+
+// A probe marker name: the component must follow the module, not a hand-typed literal.
+vi.mock('$lib/redact/redact', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/redact/redact')>()),
+	REDACT_ATTR: 'data-redact-probe'
+}));
 
 import RedactedText from './RedactedText.svelte';
 
@@ -61,13 +47,11 @@ describe('#388 — RedactedText renders its children inside exactly one marked e
 		expect(byTestid[0].textContent).toBe('berta@example.com');
 	});
 
-	it('the component source imports the marker name from $lib/redact/redact — no hand-typed literal', () => {
-		const source = readFileSync(
-			resolve(process.cwd(), 'src/lib/components/RedactedText.svelte'),
-			'utf-8'
-		);
-		expect(source).toMatch(/import\s*\{[^}]*\bREDACT_ATTR\b[^}]*\}\s*from\s*'\$lib\/redact\/redact'/);
-		expect(source).not.toMatch(/['"]data-redact['"]/);
+	it('the marker is the redact module\'s REDACT_ATTR, not a hand-typed literal', () => {
+		const { container } = render(RedactedText, { props: { children: value('Berta Bass') } });
+		expect(REDACT_ATTR).toBe('data-redact-probe');
+		expect(container.querySelectorAll('[data-redact-probe]')).toHaveLength(1);
+		expect(container.querySelector('[data-redact]')).toBeNull();
 	});
 });
 

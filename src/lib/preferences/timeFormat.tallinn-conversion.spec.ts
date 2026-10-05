@@ -1,18 +1,7 @@
-// #230 RED — the shared Tallinn DST-aware conversion helpers (epic #223): the
-// two-pass wall-clock <-> UTC conversion was duplicated near-verbatim between
-// the two event-create surfaces; this module is their shared home.
-
-// CONTRACT (src/lib/preferences/timeFormat.ts): tallinnOffsetMinutes(date) —
-// the DST-aware Tallinn offset in minutes at that instant; tallinnLocalToUtcIso
-// (local) — 'YYYY-MM-DDTHH:MM' Tallinn wall clock -> UTC ISO, '' if unparseable.
-
-// SCOPE: AgendaList.svelte is deliberately OUT (its calendar-day GROUPING
-// formatters are a different, PRESERVED-VERBATIM shape). timeFormat.ts stays
-// on the no-hardcoded-render allowlist and keeps the isConverter fingerprint.
+// The shared Tallinn DST-aware conversion helpers; each form's own spec checks what it posts.
 import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { surfacesUnder } from '$lib/testing/svelteSurfaces';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 import {
 	tallinnLocalToUtcIso,
@@ -156,61 +145,8 @@ describe('toTallinnLocalInputValue and tallinnWallClockParts (Tallinn wall clock
 	});
 });
 
-describe('#230 — extraction wiring (integration: both event routes consume the SHARED helpers, duplicates deleted)', () => {
+describe('#230 — one Tallinn conversion module', () => {
 	const SRC_ROOT = resolve(__dirname, '../..'); // …/src
-	const rootPage = () => readFileSync(resolve(SRC_ROOT, 'routes/+page.svelte'), 'utf8');
-	const EVENT_SURFACES = surfacesUnder('src/routes/event/', 'src/lib/events/');
-	it('the derived EVENT_SURFACES list is not empty (a moved folder would scan nothing)', () => {
-		expect(EVENT_SURFACES.length).toBeGreaterThanOrEqual(8);
-	});
-	const eventSurfaces = () =>
-		EVENT_SURFACES.map((file) => readFileSync(resolve(SRC_ROOT, '..', file), 'utf8')).join('\n');
-	const timeFormatSource = () => readFileSync(resolve(SRC_ROOT, 'lib/preferences/timeFormat.ts'), 'utf8');
-	const TALLINN_TO_UTC_CALLERS = [
-		'src/lib/events/EventConvertForm.svelte',
-		'src/lib/events/EventScheduleSection.svelte',
-		'src/lib/events/EventFieldEdit.svelte'
-	];
-
-	it('src/routes/+page.svelte no longer declares its own copies (eventCreateTallinnOffsetMinutes / tallinnLocalToUtcIso)', () => {
-		const content = rootPage();
-		expect(/function\s+eventCreateTallinnOffsetMinutes\s*\(/.test(content)).toBe(false);
-		expect(/function\s+tallinnLocalToUtcIso\s*\(/.test(content)).toBe(false);
-	});
-
-	// #508 moved the event-create form (and its tallinnLocalToUtcIso call) out
-	// of +page.svelte into EventCreateForm.svelte — the wiring pin followed it.
-	it('EventCreateForm.svelte imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', () => {
-		const content = readFileSync(
-			resolve(SRC_ROOT, 'lib/agenda/EventCreateForm.svelte'),
-			'utf8'
-		);
-		expect(
-			/import\s*\{[^}]*\btallinnLocalToUtcIso\b[^}]*\}\s*from\s*'\$lib\/preferences\/timeFormat'/.test(
-				content
-			)
-		).toBe(true);
-		// The import must not be dead — the create flow still converts through it.
-		expect(/[^.\w]tallinnLocalToUtcIso\(/.test(content.replace(/import[^;]*;/g, ''))).toBe(true);
-	});
-
-	it('no event surface declares its own copies (tallinnOffsetMinutes / tallinnLocalToUtcIso); toTallinnLocalInputValue is declared in timeFormat.ts', () => {
-		const content = eventSurfaces();
-		expect(/function\s+tallinnOffsetMinutes\s*\(/.test(content)).toBe(false);
-		expect(/function\s+tallinnLocalToUtcIso\s*\(/.test(content)).toBe(false);
-		// The ISO→input seeder is NOT part of the shared offset/local→UTC pair.
-		expect(/function\s+toTallinnLocalInputValue\s*\(/.test(timeFormatSource())).toBe(true);
-	});
-
-	it.each(TALLINN_TO_UTC_CALLERS)('%s imports tallinnLocalToUtcIso from $lib/preferences/timeFormat and still calls it', (file) => {
-		const content = readFileSync(resolve(SRC_ROOT, '..', file), 'utf8');
-		expect(
-			/import\s*\{[^}]*\btallinnLocalToUtcIso\b[^}]*\}\s*from\s*'\$lib\/preferences\/timeFormat'/.test(
-				content
-			)
-		).toBe(true);
-		expect(/[^.\w]tallinnLocalToUtcIso\(/.test(content.replace(/import[^;]*;/g, ''))).toBe(true);
-	});
 
 	// A loose-text pin on purpose: it is the executable form of "one zone constant" (#548).
 	it('the quoted zone name is spelled only in timeFormat.ts (TALLINN_TZ)', () => {
@@ -232,4 +168,4 @@ describe('#230 — extraction wiring (integration: both event routes consume the
 	});
 });
 
-// (*MVOX:Tallis* — #230 RED: shared Tallinn conversion helpers, wiring pinned)
+// (*MVOX:Tallis* — #230 RED: shared Tallinn conversion helpers)
