@@ -9,6 +9,7 @@
 	import PersonName from '$lib/components/PersonName.svelte';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
+	import { pickerPromptText } from '$lib/roster/pickerPrompt';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 
 	type RoleWrites = Pick<
@@ -27,6 +28,8 @@
 		canManageLibrarians: boolean;
 		roster: RosterRow[];
 		rosterPartial: boolean;
+		rosterLoading: boolean;
+		rosterFailed: boolean;
 		sections: SectionNode[];
 		sectionsError: boolean;
 		isOffline: boolean;
@@ -46,6 +49,8 @@
 		canManageLibrarians,
 		roster,
 		rosterPartial,
+		rosterLoading,
+		rosterFailed,
 		sections,
 		sectionsError,
 		isOffline,
@@ -82,11 +87,11 @@
 			.map((r) => ({ id: r.personId, label: r.name }))
 	);
 
-	/** Says which empty this is: no members, or everyone already granted. */
-	function pickerPromptText(optionCount: number, addPrompt: string): string {
-		if (optionCount > 0) return addPrompt;
-		return roster.length === 0 ? m.picker_no_members() : m.picker_everyone_added();
-	}
+	const rosterRead = $derived({
+		failed: rosterFailed,
+		loading: rosterLoading,
+		rowCount: roster.length
+	});
 
 	function isLastOwner(person: RolePerson): boolean {
 		return person.role === 'owner' && adminOwnerCount === 1;
@@ -218,7 +223,7 @@
 		<RosterPersonSelect
 			testid="admin-add-admin"
 			options={adminOptions}
-			prompt={pickerPromptText(adminOptions.length, m.admin_roles_add_admin_placeholder())}
+			prompt={pickerPromptText(adminOptions.length, m.admin_roles_add_admin_placeholder(), rosterRead)}
 			ariaLabel={m.admin_roles_add_admin_label()}
 			disabled={rolesPending || isOffline}
 			partial={rosterPartial}
@@ -272,7 +277,11 @@
 			<RosterPersonSelect
 				testid="admin-add-librarian"
 				options={librarianOptions}
-				prompt={pickerPromptText(librarianOptions.length, m.admin_roles_add_librarian_placeholder())}
+				prompt={pickerPromptText(
+					librarianOptions.length,
+					m.admin_roles_add_librarian_placeholder(),
+					rosterRead
+				)}
 				ariaLabel={m.admin_roles_add_librarian_label()}
 				disabled={rolesPending || isOffline}
 				partial={rosterPartial}
