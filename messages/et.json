@@ -730,5 +730,8 @@
 	"feedback_send_failed": "Tagasisidet ei õnnestunud saata.",
 	"feedback_saved_send_later": "Tagasiside on sellesse seadmesse salvestatud. See saadetakse, kui signaal taastub.",
 	"feedback_send_after_sign_in": "Tagasiside on salvestatud. See saadetakse pärast sisselogimist.",
-	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega"
+	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega",
+	"lab_entu_heading": "Katseleht: sisselogimine Entu kaudu",
+	"lab_entu_sign_in": "Logi sisse Entu kaudu",
+	"lab_entu_add_passkey": "Lisa pääsuvõti Entus"
 }
