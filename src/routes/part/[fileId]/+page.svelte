@@ -174,7 +174,9 @@
 				}
 				try {
 					const doc = await openPdf(result.url);
-					await ink.open({ db: identity.db, personId: identity.personId, fileId }, doc.numPages);
+					if (!cancelled) {
+						await ink.open({ db: identity.db, personId: identity.personId, fileId }, doc.numPages);
+					}
 					if (cancelled) {
 						doc.destroy();
 						result.release();

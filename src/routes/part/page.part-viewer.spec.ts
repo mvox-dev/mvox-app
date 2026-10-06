@@ -1241,6 +1241,41 @@ describe('#616 — her ink stays on the device', () => {
 		expect(fakeByteStore.puts).toEqual([]);
 	});
 
+	it('a load superseded while its part opens never swaps in its own person\'s ink', async () => {
+		const device = createInkStore(inkDevice);
+		await device.save(at(1), { v: 1, strokes: [{ pen: 'red', w: 0.004, pts: [0.4, 0.5, 0.6, 0.5] }] });
+		const black = { pen: 'black', w: 0.004, pts: [0.4, 0.75, 0.6, 0.75] };
+		await device.save(at(1, 'person-q'), { v: 1, strokes: [black] });
+		seedHeldPart('person-p');
+		seedHeldPart('person-q');
+		const first = { open: (_: unknown) => {} };
+		const late = new Promise((resolve) => (first.open = resolve));
+		pdfjs.getDocument.mockImplementationOnce(() => ({
+			promise: late.then(() => pdfjs.getDocument.mock.results[1].value.promise),
+			destroy: pdfjs.destroy
+		}));
+
+		fetchMock = deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		const { container: c } = renderViewer();
+		await waitFor(() => expect(pdfjs.getDocument).toHaveBeenCalledTimes(1));
+		authStore.set({
+			status: 'authenticated',
+			personIdByDb: { sampledb: 'person-q' },
+			expMs: Date.now() + 100_000
+		});
+		await waitFor(() => expect(c.querySelector('[data-testid="part-viewer-ink"]')).not.toBeNull());
+		expect(marks(c)).toEqual([BLACK]);
+
+		first.open(undefined);
+		await waitFor(() => expect(pdfjs.destroy).toHaveBeenCalled());
+		expect(marks(c)).toEqual([BLACK]);
+		await fireEvent.click(pen(c));
+		await stroke(c, ACROSS);
+		await saved(1, 2, 'person-q');
+		await saved(1, 1, 'person-p');
+	});
+
 	it('ink the device cannot read is reported, and the pen is not offered over it', async () => {
 		const broken = new Error('ink unreadable');
 		const save = vi.fn(async () => {});
