@@ -38,9 +38,10 @@ import {
 	loadRosterMock,
 	reinstateMemberMock
 } from '$lib/testing/mocks/roster';
-import { altoSection } from '$lib/testing/pages/rosterFixtures';
+import { altoSection, rosterTwo } from '$lib/testing/pages/rosterFixtures';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { openCard, renderRosterAs, useRosterDeactivatePage } from '$lib/testing/pages/rosterDeactivate';
+import { expectLateSettleChangesNothing, holdNext } from '$lib/testing/pages/rosterSwitch';
 
 useRosterDeactivatePage();
 
@@ -250,6 +251,30 @@ describe('(B) #259 — in-flight inactive-panel loads must not outlive a collect
 			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
 		);
 		expect(container.querySelector('[data-testid="inactive-member-row-m9"]')).toBeNull();
+	});
+
+	it('rosterDeactivateOps 84: a PANEL-OPEN read that FAILS after a switch leaves the new panel alone (#790)', async () => {
+		vi.spyOn(console, 'error').mockImplementation(() => {});
+		const { container } = await renderTwoCollectiveRoster();
+		// The panel read only rejects when the archived read and its active-only fallback both fail.
+		loadInactiveRosterMock.mockRejectedValueOnce(new Error('archive down'));
+		loadRosterMock.mockResolvedValueOnce(toListRead(rosterTwo));
+		const held = holdNext<unknown>(loadRosterMock);
+		const loadsBefore = loadRosterMock.mock.calls.length;
+
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() => expect(loadRosterMock).toHaveBeenCalledTimes(loadsBefore + 2));
+		await switchToOtherChoir(container);
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() =>
+			expect(container.querySelector('[data-testid="roster-inactive-empty"]')).not.toBeNull()
+		);
+
+		await expectLateSettleChangesNothing(container, held, { error: new Error('boom-a') }, [
+			deactivateMemberMock,
+			reinstateMemberMock
+		]);
+		vi.mocked(console.error).mockRestore();
 	});
 
 	it('a POST-REINSTATE panel reload that settles after a switch writes NOTHING', async () => {
