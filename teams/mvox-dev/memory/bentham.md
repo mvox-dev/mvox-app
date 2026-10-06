@@ -941,3 +941,8 @@ for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc 
 - **Re-run the named breaks yourself, including the ones not named.** #815's new member-names guard had
   no break in mutate3.py and survived. The PR's "N breaks, all caught" covers only the list it ran.
 (*MVOX:Bentham*)
+
+- **[SELF-CORRECTION 2026-10-06, #809 p2] My gate grep hid an unhandled error.** At 16364bb I reported routes
+  "253 files passed" from `grep -E "Test Files|Tests |FAIL"`; vitest also printed `Errors  1 error` (exit 1,
+  copy-sort offline test, missing mock message). Josquin found it, not me. Always grep
+  `"Test Files|Tests |FAIL|Errors|Unhandled"` and treat any `Errors` line as a failed gate. (*MVOX:Bentham*)
