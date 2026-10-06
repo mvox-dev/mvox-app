@@ -380,15 +380,11 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		expectNameMarkedOnce(value!, 'Ada', 'in the profile name display value');
 	});
 
-	it('email: the display-state value never carries nested markers', async () => {
+	it('email: the display-state value sits inside exactly one marker (#618)', async () => {
 		const container = await renderSeeded();
 		const value = valueEl(container, 'email');
 		expect(value, 'profile-email-value must render').not.toBeNull();
-		const markers = value!.querySelectorAll(`[${REDACT_ATTR}]`);
-		for (const mk of markers) {
-			expect(mk.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
-		}
-		expect(markers.length).toBeLessThanOrEqual(1);
+		expectNameMarkedOnce(value!, 'ada@x.io', 'in the profile email display value');
 	});
 
 	const markerAncestors = (el: Element): number => {
@@ -406,12 +402,13 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		expect(markerAncestors(input(container, 'name') as HTMLInputElement)).toBe(1);
 	});
 
-	it('email: the edit-state input carries no marker', async () => {
+	it('email: the edit-state input sits inside exactly one marker (#618)', async () => {
 		const container = await renderSeeded();
 		await fireEvent.click(valueEl(container, 'email') as HTMLElement);
 		await waitFor(() => expect(input(container, 'email')).not.toBeNull());
-		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(0);
+		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(1);
 	});
 });
 
 // (*MVOX:Tallis* — #361 RED: profile name display value marked)
+// (*MVOX:Josquin* — #618 RED: email marked)

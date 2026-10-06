@@ -5,6 +5,7 @@
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
@@ -216,7 +217,7 @@
 				{#each dedupedLinkedIdentities as identity (identity._id)}
 					<li data-testid={`profile-linked-identity-${identity._id}`} class="text-sm text-ink-2">
 						{providerLabel(identity.provider)}{#if identity.email}
-							&nbsp;— {identity.email}
+							&nbsp;— <RedactedText>{identity.email}</RedactedText>
 						{/if}
 					</li>
 				{/each}
