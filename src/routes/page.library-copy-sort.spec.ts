@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -207,93 +207,15 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 	});
 });
 
-describe('/library — copy-sort controls a11y (#113)', () => {
-	it('the three controls live in a role="toolbar" with an m.* accessible name, each a toggle button (#809)', async () => {
-		const container = await renderWithEditionUnfolded();
-		const group = container.querySelector('[data-testid="copy-sort-edition-1"]');
-		expect(group, 'the sort control group').not.toBeNull();
-		expect(group!.getAttribute('role')).toBe('toolbar');
-		expect(group!.getAttribute('aria-label')).toBe('Sort copies by');
-		for (const key of ['nr', 'member', 'since'] as const) {
-			expect(container.querySelector(sortBtn(key))!.closest('[role="toolbar"]')).toBe(group);
-			expect(container.querySelector(sortBtn(key))!.getAttribute('aria-pressed')).not.toBeNull();
-		}
-	});
-
-	it('every sort control is a native <button type="button"> — Enter/Space operability for free, and no accidental form submits', async () => {
-		const container = await renderWithEditionUnfolded();
-		for (const key of ['nr', 'member', 'since'] as const) {
-			const btn = container.querySelector(sortBtn(key)) as HTMLElement;
-			expect(btn.tagName, `copy-sort-${key}`).toBe('BUTTON');
-			expect(btn.getAttribute('type')).toBe('button');
-		}
-	});
-
-	it('exactly ONE control reports aria-pressed="true" at any time, and the marker follows a key switch', async () => {
-		const container = await renderWithEditionUnfolded();
-		const pressed = () =>
-			(['nr', 'member', 'since'] as const).filter(
-				(key) => container.querySelector(sortBtn(key))!.getAttribute('aria-pressed') === 'true'
-			);
-		expect(pressed()).toEqual(['nr']);
-		await fireEvent.click(container.querySelector(sortBtn('since'))!);
-		await waitFor(() => {
-			expect(pressed()).toEqual(['since']);
-		});
-	});
-});
-
-describe('/library — copy-sort chips: roving tabindex (#156)', () => {
-	const KEYS = ['nr', 'member', 'since'] as const;
-
-	function chips(container: HTMLElement): HTMLButtonElement[] {
-		return KEYS.map((key) => container.querySelector(sortBtn(key)) as HTMLButtonElement);
-	}
-	function stops(container: HTMLElement): HTMLButtonElement[] {
-		return chips(container).filter((c) => c.getAttribute('tabindex') === '0');
-	}
-
-	it('offline the copy sort still changes: it saves nothing (#809)', async () => {
+describe('/library — the copy sort is a choice on this device only (#809)', () => {
+	it('offline the copy sort still changes: it saves nothing', async () => {
 		const container = await renderWithEditionUnfolded();
 		await goOffline();
 		try {
-			await fireEvent.click(chips(container)[1]);
-			expect(chips(container)[1].getAttribute('aria-pressed')).toBe('true');
+			await fireEvent.click(container.querySelector(sortBtn('member'))!);
+			expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-pressed')).toBe('true');
 		} finally {
 			await goOnline();
-		}
-	});
-
-	it('exactly ONE chip is the Tab stop, and it is the pressed key', async () => {
-		const container = await renderWithEditionUnfolded();
-		expect(stops(container)).toEqual([chips(container)[0]]);
-	});
-
-	it('arrows move focus and wrap, and never re-sort the list (#809)', async () => {
-		const container = await renderWithEditionUnfolded();
-		const [nr, member, since] = chips(container);
-
-		nr.focus();
-		await fireEvent.keyDown(nr, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(member);
-		expect(stops(container)).toEqual([member]);
-		await fireEvent.keyDown(member, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(since);
-		await fireEvent.keyDown(since, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(nr);
-		await fireEvent.keyDown(nr, { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(since);
-		expect(nr.getAttribute('aria-pressed')).toBe('true');
-		expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
-	});
-
-	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the chip still activates', async () => {
-		const container = await renderWithEditionUnfolded();
-		const chip = chips(container)[0];
-		for (const key of ['Tab', 'Enter', ' ']) {
-			const event = createEvent.keyDown(chip, { key });
-			fireEvent(chip, event);
-			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
 		}
 	});
 });

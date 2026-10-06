@@ -336,6 +336,7 @@
 					options={modeOptions}
 					selected={roster.viewMode}
 					emptyAllowed={false}
+					defaultValue="collapsed"
 					kind="ui"
 					buttonClass="px-2.5 py-1 text-xs tracking-wide uppercase"
 					onselect={(mode) => mode && setViewMode(mode)}

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
 import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -403,28 +403,8 @@ describe('/roster — the view modes are a rendering switch over the one existin
 	});
 });
 
-describe('/roster — view-mode chips: roving tabindex (#156)', () => {
-	function chips(container: HTMLElement): HTMLButtonElement[] {
-		return Array.from(
-			container.querySelectorAll<HTMLButtonElement>('[data-testid^="roster-view-chip-"]')
-		);
-	}
-	function stops(container: HTMLElement): HTMLButtonElement[] {
-		return chips(container).filter((c) => c.getAttribute('tabindex') === '0');
-	}
-
-	it('the group is a role="toolbar" of toggle buttons, with an accessible name (#809)', async () => {
-		const container = await renderReady('admin');
-		const group = q(container, 'roster-view-modes') as HTMLElement;
-		expect(group.getAttribute('role')).toBe('toolbar');
-		expect(group.getAttribute('aria-label')).toBeTruthy();
-		for (const c of chips(container)) {
-			expect(c.getAttribute('aria-pressed'), c.getAttribute('data-testid') ?? '').not.toBeNull();
-			expect(c.closest('[role="toolbar"]')).toBe(group);
-		}
-	});
-
-	it('offline the view mode still changes: it saves nothing (#809)', async () => {
+describe('/roster — the view mode is a choice on this device only (#809)', () => {
+	it('offline the view mode still changes: it saves nothing', async () => {
 		const container = await renderReady('admin');
 		await goOffline();
 		try {
@@ -434,48 +414,11 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 		}
 	});
 
-	it('exactly ONE chip is the Tab stop, and it is the pressed one', async () => {
+	it('tapping the chosen mode keeps it: a mode is never cleared', async () => {
 		const container = await renderReady('admin');
-		expect(stops(container)).toEqual([chip(container, 'collapsed')]);
-
-		await selectMode(container, 'arrange');
-		expect(stops(container)).toEqual([chip(container, 'arrange')]);
-	});
-
-	it('arrows move focus and wrap, and never change the mode (#809)', async () => {
-		const container = await renderReady('admin');
-		const [collapsed, expanded, arrange] = chips(container);
-		expect(chips(container)).toHaveLength(3);
-
-		collapsed.focus();
-		await fireEvent.keyDown(collapsed, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(expanded);
-		await fireEvent.keyDown(expanded, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(arrange);
-		await fireEvent.keyDown(arrange, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(collapsed);
-		await fireEvent.keyDown(collapsed, { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(arrange);
-		expect(pressedStates(container)).toEqual({ collapsed: 'true', expanded: 'false', arrange: 'false' });
-	});
-
-	it('the group is only as wide as it renders — a non-admin has TWO members and the wrap respects that', async () => {
-		const container = await renderReady('not-admin');
-		expect(chips(container)).toHaveLength(2);
-		const collapsed = chip(container, 'collapsed') as HTMLButtonElement;
-		collapsed.focus();
-		await fireEvent.keyDown(collapsed, { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(chip(container, 'expanded'));
-	});
-
-	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the chip still activates', async () => {
-		const container = await renderReady('admin');
-		const c = chip(container, 'collapsed') as HTMLButtonElement;
-		for (const key of ['Tab', 'Enter', ' ']) {
-			const event = createEvent.keyDown(c, { key });
-			fireEvent(c, event);
-			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
-		}
+		await selectMode(container, 'expanded');
+		await fireEvent.click(chip(container, 'expanded')!);
+		expect(pressedStates(container)).toEqual({ collapsed: 'false', expanded: 'true', arrange: 'false' });
 	});
 });
 

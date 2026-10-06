@@ -55,6 +55,7 @@
 		}))}
 		selected={$agendaViewStore}
 		emptyAllowed={false}
+		defaultValue="list"
 		kind="ui"
 		buttonClass="px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase"
 		onselect={(view) => view && setAgendaView(view)}

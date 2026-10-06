@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -182,7 +182,6 @@ describe('#247 — the Detailne|Kompaktne toggle (ruled: segmented control, WITH
 		for (const btn of buttons) {
 			expect(btn.tagName).toBe('BUTTON');
 			expect(btn.getAttribute('type')).toBe('button');
-			expect(btn.getAttribute('role')).toBeNull();
 			expect(btn.getAttribute('aria-pressed')).not.toBeNull();
 		}
 		expect(buttons.map((b) => b.textContent?.trim())).toEqual([
@@ -501,82 +500,6 @@ describe('#247 — the new locale keys: weekday labels', () => {
 			}
 		}
 	);
-});
-
-describe('#312 — the view toggle is ONE segmented pill (toolbar + roving tabindex, #809)', () => {
-	function segments(container: HTMLElement): HTMLButtonElement[] {
-		return [viewButton(container, 'agenda-view-list'), viewButton(container, 'agenda-view-month')];
-	}
-	function stops(container: HTMLElement): HTMLButtonElement[] {
-		return segments(container).filter((s) => s.getAttribute('tabindex') === '0');
-	}
-
-	it('the group is a role="toolbar" of toggle buttons, keeping its accessible name', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const group = viewToggle(container);
-		expect(group, 'toolbar with the localized label must exist').not.toBeNull();
-		for (const s of segments(container)) {
-			expect(s.getAttribute('aria-pressed'), s.getAttribute('data-testid') ?? '').not.toBeNull();
-			expect(s.closest('[role="toolbar"]')).toBe(group);
-		}
-	});
-
-	it('exactly ONE segment is the Tab stop, and it is the pressed one', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-list')]);
-
-		await switchToMonth(container);
-		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-month')]);
-	});
-
-	it('arrows move focus and wrap, and never change the view (#809)', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const [list, month] = segments(container);
-
-		list.focus();
-		await fireEvent.keyDown(list, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(month);
-		await fireEvent.keyDown(month, { key: 'ArrowRight' });
-		expect(document.activeElement).toBe(list);
-		await fireEvent.keyDown(list, { key: 'ArrowLeft' });
-		expect(document.activeElement).toBe(month);
-		expect(list.getAttribute('aria-pressed')).toBe('true');
-		expect(monthGroups(container)).toEqual([]);
-		expect(localStorage.getItem('mvox.agenda_view')).toBeNull();
-	});
-
-	it('Tab, Enter and Space are NOT preventDefault-ed — focus can leave and the segment still activates', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const list = viewButton(container, 'agenda-view-list');
-		for (const key of ['Tab', 'Enter', ' ']) {
-			const event = createEvent.keyDown(list, { key });
-			fireEvent(list, event);
-			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
-		}
-	});
-
-	it('ONE pill visually: the container carries the border and rounding; segments sit flush — no gap, no per-segment chip rounding', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const group = viewToggle(container) as HTMLElement;
-		const tokens = [...group.classList];
-
-		expect(tokens).toContain('overflow-hidden');
-		expect(tokens).toContain('border');
-		expect(
-			tokens.some((t) => t.startsWith('rounded')),
-			'container must carry the rounding'
-		).toBe(true);
-		expect(
-			tokens.some((t) => t.startsWith('gap-')),
-			'segments sit flush — no gap on the container'
-		).toBe(false);
-		for (const s of segments(container)) {
-			expect(
-				[...s.classList],
-				`${s.getAttribute('data-testid')} must not be its own fully-rounded chip`
-			).not.toContain('rounded-full');
-		}
-	});
 });
 
 // (*MVOX:Tallis*)

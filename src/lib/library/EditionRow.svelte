@@ -74,6 +74,7 @@
 					}))}
 					selected={lib.copySortKey}
 					emptyAllowed={false}
+					defaultValue="nr"
 					kind="ui"
 					buttonClass="px-1.5 py-0.5 text-[10px]"
 					onselect={(key) => key && actions.setCopySortKey(key)}
