@@ -2,6 +2,7 @@
 import { writable, type Writable } from 'svelte/store';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { EntuFetchOptions } from '$lib/entu/fetchOptions';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type LibrarianState = 'loading' | 'librarian' | 'not-librarian' | 'error';
 
@@ -97,7 +98,8 @@ export async function resolveLibrarian(
 		const isEditor = (lib._editor ?? []).some((p) => p.reference === personId);
 		const state = isOwner || isEditor ? 'librarian' : 'not-librarian';
 		return { state, libraryId };
-	} catch {
+	} catch (e) {
+		reportProblem({ area: 'library', action: 'reading the librarian rights', error: e });
 		return { state: 'error', libraryId: null };
 	}
 }

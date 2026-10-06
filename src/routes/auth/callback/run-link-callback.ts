@@ -1,17 +1,4 @@
-// #193 — link-intent branch of the OAuth callback: the user came back from the
-// SECOND provider carrying a real session key + the self-minted invite in the
-// (already-consumed) state blob. Redemption reuses the sole account-scoped
-// exchange (exchangeSessionWithInvite) — entu-api's replaceInviteWithCredentials
-// then writes the second identity as a separate array entry, leaving the first
-// identity untouched (APPEND, platform-verified live in the SPIKE).
-//
-// The decisive difference from the admin-invite branch (run-invite-callback.ts):
-// there, a `conflict` persists the OTHER person as the current user (acceptable
-// for a stranger arriving via an admin invite link). For a self-link initiated
-// from an authenticated profile page that would mean "clicked link, got
-// silently logged in AS SOMEONE ELSE" — this branch REFUSES to persist any
-// identity other than the initiating person (state.linkPersonId), and surfaces
-// every non-happy outcome as a loud, named error instead.
+// The link branch of the OAuth callback (#193): only the initiating person is ever persisted.
 
 import type { OAuthState } from '$lib/auth/state';
 import { exchangeSessionWithInvite } from '$lib/invite/redeem';
@@ -22,6 +9,7 @@ import { hydrateCollectives } from '$lib/collectives/store';
 import { listLinkedIdentities } from '$lib/profile/linkedIdentities';
 import { entuFetch } from '$lib/entu/request';
 import type { CallbackOutcome } from './run-callback-exchange';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 const SAME_IDENTITY_NOOP: CallbackOutcome = {
 	ok: true,
@@ -38,9 +26,7 @@ export async function runLinkCallbackExchange(
 	key: string,
 	state: OAuthState
 ): Promise<CallbackOutcome> {
-	// A link-intent blob without the invite carrier, or without the initiating
-	// person to tripwire against, is an INCONSISTENCY (the initiation always
-	// writes both) — fail loudly, never call the exchange.
+	// The initiation always writes both; without either there is no tripwire, so fail loudly.
 	const invite = state.invite;
 	const linkPersonId = state.linkPersonId;
 	if (!invite || !linkPersonId) return INVALID_STATE;
@@ -61,12 +47,7 @@ export async function runLinkCallbackExchange(
 		return { ok: false, redirectTo: '/profile?link_error=failed', error: 'link_failed' };
 	}
 	if (result.status === 'conflict') {
-		// Same person on both sides: the identity the user just signed in with is
-		// already bound to THEM. "Already in use by another member here" would be a
-		// lie, so this gets its own outcome. (entu-api only raises the conflict flag
-		// when `existingEntry.user._id !== inviteData.entityId` — index.get.js:227-229
-		// — so this branch is a tripwire, not a routine path; classifying it anyway
-		// keeps the message truthful if that ever changes.)
+		// Same person on both sides: already linked to them, not taken by another member.
 		if (result.existingPersonId === linkPersonId) {
 			return {
 				ok: false,
@@ -74,37 +55,20 @@ export async function runLinkCallbackExchange(
 				error: 'link_already_linked'
 			};
 		}
-		// The session-key holder's second identity is ALREADY bound to a different
-		// person than the one that initiated the link. Persisting it here would
-		// silently swap who the user is signed in as — refused.
+		// Bound to a different person: persisting it would swap who is signed in.
 		return { ok: false, redirectTo: '/profile?link_error=conflict', error: 'link_conflict' };
 	}
 	if (result.status === 'unexpected') {
 		return { ok: false, redirectTo: '/profile?link_error=unexpected', error: 'link_unexpected' };
 	}
 
-	// redeemed — the ONLY status that persists, and only for linkPersonId itself
-	// (result.personId === linkPersonId is guaranteed by the exchange's own
-	// expectedEntityId check — any mismatch comes back as `unexpected` instead).
 	try {
-		// The redemption JWT is ACCOUNT-SCOPED: exchangeSessionWithInvite hits the
-		// account-scoped /auth endpoint for the invite's db, and entu-api filters the
-		// whole db scan down to that one db (index.get.js:124-129, :143) — so its
-		// `accounts` claim names ONLY the collective the link was started from.
-		// hydrateAuth reads personIdByDb straight off that claim and hydrateCollectives
-		// wholesale-replaces the switcher list, so persisting it would silently DROP
-		// every OTHER collective the user belongs to until their next full login.
-		// The pre-existing session token is untouched by linking and is strictly
-		// broader, so the happy path keeps it.
-		//
-		// Read the existing token FIRST: getToken() self-clears on a stale token
-		// version, which would wipe a user written before it.
+		// The redemption JWT names only this collective; keep the broader session if there is one.
+		// Read it first: getToken() self-clears on a stale token version.
 		const existingToken = getToken();
 		// Sequence: user BEFORE token (setToken is the version gate that publishes state).
 		setUser({ _id: result.personId, email: result.user.email, name: result.user.name });
 		setLastProvider(state.provider);
-		// Fallback only — never the default: with no session token left there is
-		// nothing broader to keep, and a narrowed session beats no session at all.
 		if (!existingToken) setToken(result.token);
 		hydrateAuth();
 	} catch {
@@ -117,15 +81,7 @@ export async function runLinkCallbackExchange(
 
 	await hydrateCollectives();
 
-	// #219 — same-identity re-link detection. `redeemed` alone cannot tell a
-	// legitimate new link from entu-api's same-person branch quietly re-binding a
-	// provider the person already has (index.get.js:220-225) — the only signal is
-	// comparing the post-redemption identity set back against the pre-mint
-	// snapshot the profile page rode in on the blob. Best-effort: any failure
-	// here (a bad re-read, an unreachable rights-refused DELETE) falls through to
-	// the ordinary success path below — the sign-in itself must never fail on
-	// this branch, and a missing snapshot (older blob) skips the check entirely
-	// rather than guessing which entry is new.
+	// A re-link of a provider already held comes back as a duplicate entry (#219); best-effort.
 	if (state.linkedSnapshot) {
 		try {
 			const relinked = await listLinkedIdentities(
@@ -157,11 +113,12 @@ export async function runLinkCallbackExchange(
 				return SAME_IDENTITY_NOOP;
 			}
 		} catch (e) {
-			console.warn('run-link-callback: same-identity re-read failed', e);
+			const action = 're-reading the linked accounts';
+			reportProblem({ area: 'link callback', action, error: e });
 		}
 	}
 
 	return { ok: true, redirectTo: safeRedirectTarget(state.return_to) };
 }
 
-// (*MVOX:Josquin* — #193 GREEN: link-callback redemption branch)
+// (*MVOX:Josquin*)

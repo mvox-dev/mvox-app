@@ -1,6 +1,7 @@
 import { getToken } from '$lib/auth/storage';
 import type { Copy, Lending } from '$lib/library/libraryData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface LocalFirst<T> {
 	loans: Lending[];
@@ -49,6 +50,7 @@ export function resolveLocalFirst<T>(o: LocalFirst<T>): void {
 			o.apply(resolved);
 		})
 		.catch((e) => {
-			console.error(`library: copy ${o.what} resolution failed`, e);
+			if (!o.isCurrent()) return;
+			reportProblem({ area: 'library', action: `resolving the copy ${o.what}`, error: e });
 		});
 }

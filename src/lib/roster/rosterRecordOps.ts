@@ -5,6 +5,7 @@ import type { MemberRecord } from '$lib/roster/memberRecord';
 import { isValidIdCode } from '$lib/roster/idCode';
 import { emptyRecordForm } from '$lib/roster/rosterPageState';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { mo, actions, generation, isCurrent, isOffline } = deps;
@@ -44,7 +45,7 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			}
 		} catch (e) {
 			if (!isCurrent(g) || mo.recordEditorMemberId !== memberId) return;
-			console.error('roster: member record load failed', memberId, e);
+			reportProblem({ area: 'roster', action: 'loading the member record', error: e });
 			mo.recordEditorMemberId = null;
 		}
 	}

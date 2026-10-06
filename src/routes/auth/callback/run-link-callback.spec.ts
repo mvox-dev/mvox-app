@@ -40,7 +40,12 @@ vi.mock('$lib/collectives/store', async () =>
 	(await import('$lib/testing/mocks/session')).collectivesStoreModule()
 );
 
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
+
 import { runLinkCallbackExchange } from './run-link-callback';
+import { reportProblem } from '$lib/testing/mocks/session';
 import {
 	exchangeInviteMock,
 	hydrateAuthMock,
@@ -412,6 +417,20 @@ describe('runLinkCallbackExchange — same-identity re-link (#219)', () => {
 		} finally {
 			warnSpy.mockRestore();
 		}
+	});
+
+	it('a failed re-read is reported and the sign-in still succeeds (#756)', async () => {
+		reportProblem.mockReset();
+		exchangeInviteMock.mockResolvedValue(REDEEMED);
+		const boom = new TypeError('Failed to fetch');
+		vi.stubGlobal('fetch', vi.fn(() => Promise.reject(boom)));
+
+		const outcome = await runLinkCallbackExchange('key1', snapshotState());
+
+		expect(outcome.ok).toBe(true);
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'link callback', action: 're-reading the linked accounts', error: boom }]
+		]);
 	});
 
 	it('a redeemed link whose new entry carries a NOVEL uid+provider takes the existing success path — no DELETE', async () => {

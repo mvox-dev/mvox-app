@@ -4,6 +4,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { readRosterNamesSetting } from '$lib/collective/rosterNames';
 import { deriveListRead, isTruncated, type ListRead } from '$lib/entu/listRead';
 import { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterRow';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export { listProfilesForPerson, toRosterRow, type RosterRow } from './rosterRow';
 
@@ -147,7 +148,7 @@ export async function loadRosterRead(
 	};
 }
 
-// Any failure degrades to "toggle off" with a loud console.error, never a rejection,
+// Any failure degrades to "toggle off" with a report, never a rejection,
 // so the overlay can only show fewer real names, never leak one.
 export async function resolveRealNameByPerson(
 	cfg: EntuCfg,
@@ -160,7 +161,7 @@ export async function resolveRealNameByPerson(
 		const records = await listRecordNamesByPerson(cfg, fetchImpl, opts);
 		return { byPerson: records.byPerson, truncated: records.truncated };
 	} catch (e) {
-		console.error('resolveRealNameByPerson: real-names overlay unavailable, showing profile names', e);
+		reportProblem({ area: 'roster', action: 'loading the real-names overlay', error: e });
 		return { byPerson: new Map(), truncated: false };
 	}
 }

@@ -220,7 +220,8 @@ describe('#248 — corpus fetch failure degrades silently', () => {
 		await fireEvent.focus(input);
 		await waitFor(() => {
 			expect(corpusUrls.length).toBeGreaterThan(0);
-			expect(reportProblem.mock.calls).toEqual([
+			const reports = reportProblem.mock.calls.filter(([p]) => p.action === 'loading the location suggestions');
+			expect(reports).toEqual([
 				[{ area: 'event', action: 'loading the location suggestions', error: expect.any(Error) }]
 			]);
 		});

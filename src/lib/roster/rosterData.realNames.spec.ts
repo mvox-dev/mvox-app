@@ -409,7 +409,7 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 		]);
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toEqual([]);
 		expect(errorSpy).toHaveBeenCalledWith(
-			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
+			'roster: loading the real-names overlay failed',
 			expect.any(Error)
 		);
 		errorSpy.mockRestore();
@@ -453,7 +453,7 @@ describe('#469 loadRoster — a failing overlay degrades to profile names, loudl
 		]);
 		expect(urls(fetchImpl).filter((u) => u.includes('admin_member_record'))).toHaveLength(1);
 		expect(errorSpy).toHaveBeenCalledWith(
-			'resolveRealNameByPerson: real-names overlay unavailable, showing profile names',
+			'roster: loading the real-names overlay failed',
 			expect.any(Error)
 		);
 		errorSpy.mockRestore();
