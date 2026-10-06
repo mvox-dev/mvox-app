@@ -55,6 +55,8 @@ import {
 } from '$lib/testing/mocks/library';
 import { resetRepertoireBadgeMocks, signInLibraryReader } from '$lib/testing/pages/library';
 import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
+import { selectedCollectiveDbStore } from '$lib/collectives/store';
+import { signIn } from '$lib/testing/session';
 
 const SEASONS = [
 	{
@@ -206,6 +208,39 @@ describe('a failed supplementary read is reported (#756)', () => {
 		const action =
 			read === 'your member record' ? 'finding your member record' : 'loading the repertoire badges';
 		await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith(`library: ${action} failed`, boom));
+		consoleSpy.mockRestore();
+	});
+
+	it('a read that fails after the collective changed is not reported', async () => {
+		mockHappyPath();
+		signInLibraryReader();
+		signIn({
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
+				{ db: 'otherdb', name: 'Other', personId: 'person-o' }
+			],
+			selected: 'sampledb'
+		});
+		let rejectSeasons!: (e: unknown) => void;
+		listSeasonsMock
+			.mockReturnValueOnce(new Promise((_, reject) => (rejectSeasons = reject)))
+			.mockReturnValue(new Promise(() => {}));
+		let rejectMember!: (e: unknown) => void;
+		findMyMemberIdMock
+			.mockReturnValueOnce(new Promise((_, reject) => (rejectMember = reject)))
+			.mockReturnValue(new Promise(() => {}));
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		await renderReady();
+		await waitFor(() => expect(listSeasonsMock).toHaveBeenCalled());
+		selectedCollectiveDbStore.set('otherdb');
+		await waitFor(() => expect(listWorksMock).toHaveBeenCalledTimes(2));
+		rejectSeasons(new Error('late'));
+		rejectMember(new Error('late'));
+		await new Promise((r) => setTimeout(r, 0));
+		const lateReports = consoleSpy.mock.calls.filter(
+			([, error]) => (error as Error)?.message === 'late'
+		);
+		expect(lateReports).toEqual([]);
 		consoleSpy.mockRestore();
 	});
 });
