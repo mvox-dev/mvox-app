@@ -82,6 +82,15 @@ describe('#684 reportProblem keeps each failure for feedback', () => {
 		await vi.waitFor(async () => expect((await listP()).map((p) => p.detail)).toEqual(['not an Error (object)']));
 	});
 
+	it('two failures reported at once are both kept', async () => {
+		signIn({ collectives: [P] });
+
+		reportProblem({ area: 'agenda', action: 'first', error: new Error('1') });
+		reportProblem({ area: 'agenda', action: 'second', error: new Error('2') });
+
+		await vi.waitFor(async () => expect((await listP()).map((p) => p.action)).toEqual(['first', 'second']));
+	});
+
 	it("keeps each person's failures apart", async () => {
 		signIn({ collectives: [Q] });
 		reportProblem({ area: 'library', action: 'load', error: new Error('q broke') });
