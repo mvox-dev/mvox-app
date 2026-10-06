@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 // #756: the event page reports its own answer read and its work-rows read when they fail.
+import 'fake-indexeddb/auto';
 import { render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { json } from '$lib/testing/entuFetchKit';
@@ -33,14 +34,14 @@ import { RIGHTS_URL, SELF_EDITOR, seasonEntity, setAuthed } from '$lib/testing/p
 import { bareEventEntity } from '$lib/testing/pages/eventFixtures';
 import { reportProblem } from '$lib/testing/mocks/session';
 
-function renderPage(failing: string) {
+function renderPage(failing: string, event: Record<string, unknown> = {}) {
 	vi.stubGlobal(
 		'fetch',
 		vi.fn(async (input: RequestInfo | URL) => {
 			const url = String(input);
 			if (url.includes(failing)) return json({}, 500);
 			if (url === RIGHTS_URL) return json({ entity: SELF_EDITOR });
-			if (url.includes('/entity/ev1')) return json({ entity: bareEventEntity() });
+			if (url.includes('/entity/ev1')) return json({ entity: { ...bareEventEntity(), ...event } });
 			if (url.includes('/entity/season1')) return json({ entity: seasonEntity() });
 			return json({ entities: [] });
 		})
@@ -67,11 +68,32 @@ describe('/event/[id] reports a failed read (#756)', () => {
 			failing: '_type.string=program_item',
 			area: 'event',
 			action: 'loading the work rows'
+		},
+		{ read: 'the schedule', failing: '_type.string=schedule_item', action: 'loading the schedule' },
+		{
+			read: 'the answer tally',
+			failing: '_type.string=rsvp&event.reference=ev1',
+			action: 'loading the answer tally'
+		},
+		{
+			read: 'the attendance',
+			failing: '_type.string=attendance&_parent.reference=ev1',
+			event: { start_datetime: [{ datetime: '2026-08-01T16:00:00.000Z' }] },
+			action: 'loading the attendance'
+		},
+		{
+			read: 'the series options',
+			failing: '_type.string=event_series',
+			event: { _editor: [{ reference: 'p-viewer' }] },
+			action: 'loading the series options'
 		}
-	])('a failed read of $read is reported', async ({ failing, area, action }) => {
-		renderPage(failing);
-		await waitFor(() => {
-			expect(reportProblem.mock.calls).toEqual([[{ area, action, error: expect.any(Error) }]]);
-		});
-	});
+	] as Array<{ read: string; failing: string; event?: object; area?: string; action: string }>)(
+		'a failed read of $read is reported',
+		async ({ failing, event, area = 'event', action }) => {
+			renderPage(failing, event as Record<string, unknown>);
+			await waitFor(() => {
+				expect(reportProblem.mock.calls).toEqual([[{ area, action, error: expect.any(Error) }]]);
+			});
+		}
+	);
 });

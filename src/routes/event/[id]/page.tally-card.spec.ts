@@ -37,7 +37,15 @@ vi.mock('$lib/roster/rosterData', async (importActual) => ({
 	loadRosterRead: loadRosterMock
 }));
 
+vi.mock('$lib/files/appByteStore', async () =>
+	(await import('$lib/testing/mocks/files')).fakeAppByteStoreModule()
+);
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
+
 import Page from './+page.svelte';
+import { reportProblem } from '$lib/testing/mocks/session';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { listAllRsvpsForEventMock } from '$lib/testing/mocks/events';
 import { cleanupResetAllMocks, fakeDateAtNow } from '$lib/testing/pages/event';
@@ -493,8 +501,9 @@ describe('#344 review F2 — an unresolvable member gets a placeholder, never he
 
 describe('#344 review F3 — the name read fails LOUDLY, with a retry', () => {
 	it('a rejected roster read says so inside the card, shows no names, and the Retry re-reads', async () => {
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockRejectedValueOnce(new Error('boom'));
+		reportProblem.mockReset();
+		const boom = new Error('boom');
+		loadRosterMock.mockRejectedValueOnce(boom);
 		const { container } = renderPage(futureEvent());
 		await openCard(container);
 		const errorLine = await waitFor(() => {
@@ -505,6 +514,9 @@ describe('#344 review F3 — the name read fails LOUDLY, with a retry', () => {
 		expect(errorLine.textContent).toContain('[event_detail_tally_names_error]');
 		expect(container.querySelector('[data-testid="event-detail-tally-card"] li')).toBeNull();
 		expect(q(container, 'event-detail-tally-card')!.textContent).not.toContain('member-1');
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'event', action: 'loading the tally card names', error: boom }]
+		]);
 
 		loadRosterMock.mockResolvedValue(structuredClone(ROSTER_READ));
 		await fireEvent.click(q(container, 'event-detail-tally-card-names-retry')!);
@@ -514,7 +526,6 @@ describe('#344 review F3 — the name read fails LOUDLY, with a retry', () => {
 				'Anna Alt'
 			);
 		});
-		errorSpy.mockRestore();
 	});
 
 	it('a TRUNCATED active-member read says so NEXT TO THE LINE, card still closed (#344 review F2)', async () => {

@@ -28,6 +28,11 @@ export function appByteStoreModule() {
 	return { getAppByteStore: () => appByteStore };
 }
 
+export async function fakeAppByteStoreModule() {
+	const store = (await import('$lib/testing/byteStoreFakes')).createFakeByteStore();
+	return { getAppByteStore: () => store };
+}
+
 export function pdfWorkerUrlModule() {
 	return { default: '/mock-pdf-worker.mjs' };
 }

@@ -25,7 +25,15 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
+vi.mock('$lib/files/appByteStore', async () =>
+	(await import('$lib/testing/mocks/files')).fakeAppByteStoreModule()
+);
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
+
 import Page from './+page.svelte';
+import { reportProblem } from '$lib/testing/mocks/session';
 import { loadEventDetail } from '$lib/events/eventDetail';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { flushReadCache, servedFromCache, setReadCacheFactory } from '$lib/entu/readCache';
@@ -108,6 +116,8 @@ function credeEventEntity() {
 }
 
 type WireOpts = {
+	failSeries2Get?: boolean;
+	failEventRefetch?: boolean;
 	failWritePosts?: number;
 	holdWritePost?: boolean;
 	holdEventGet?: boolean;
@@ -121,6 +131,7 @@ function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}
 	const credeEvent = credeEventEntity();
 	let failsLeft = opts.failWritePosts ?? 0;
 	let newValueN = 0;
+	let written = false;
 	let release: () => void = () => {};
 	const gate = new Promise<void>((r) => {
 		release = r;
@@ -148,6 +159,7 @@ function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}
 			return json({ deleted: true });
 		}
 		if (method === 'POST' && url.includes('/entity/ev1')) {
+			written = true;
 			if (opts.holdWritePost) await gate;
 			if (failsLeft > 0) {
 				failsLeft -= 1;
@@ -175,12 +187,15 @@ function seriesWireStub(eventOver?: Record<string, unknown>, opts: WireOpts = {}
 			return json({});
 		}
 		if (url.includes('/entity/ev1')) {
+			if (opts.failEventRefetch && written) return json({}, 500);
 			if (opts.holdEventGet) await gate;
 			return json({ entity: event });
 		}
 		if (url.includes('/entity/season1')) return json({ entity: season });
 		if (url.includes('/entity/series1')) return json({ entity: series1 });
-		if (url.includes('/entity/series2')) return json({ entity: series2 });
+		if (url.includes('/entity/series2')) {
+			return opts.failSeries2Get ? json({}, 500) : json({ entity: series2 });
+		}
 		if (url.includes('_type.string=profile')) return json({ entities: [] });
 		if (url.includes('_type.string=event_series')) return json({ entities: [series1, series2] });
 		if (url.includes('_type.string=season')) return json({ entities: [season] });
@@ -630,6 +645,38 @@ describe('#304 — the committed write (owner view)', () => {
 		});
 		expect(q(container, 'event-detail-location')?.textContent ?? '').not.toContain('Church Hall');
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('');
+	});
+
+	it('a failed series preview read is reported (#756)', async () => {
+		reportProblem.mockReset();
+		const { container } = renderSeriesPage(ownerEvent(INHERITING), { failSeries2Get: true });
+		await fireEvent.change(await waitSelect(container), { target: { value: 'series2' } });
+		await waitFor(() => {
+			expect(reportProblem.mock.calls).toEqual([
+				[{ area: 'event', action: 'loading the series defaults', error: expect.any(Error) }]
+			]);
+		});
+	});
+
+	it('a failed re-read after a series change is reported (#756)', async () => {
+		reportProblem.mockReset();
+		const { container } = renderSeriesPage(ownerEvent(INHERITING), { failEventRefetch: true });
+		await fireEvent.change(await waitSelect(container), { target: { value: 'series2' } });
+		await waitFor(() => {
+			expect(q(container, 'event-series-confirm-apply')).not.toBeNull();
+		});
+		await fireEvent.click(q(container, 'event-series-confirm-apply')!);
+		await waitFor(() => {
+			expect(reportProblem.mock.calls).toEqual([
+				[
+					{
+						area: 'event',
+						action: 're-reading the event after a series change',
+						error: expect.any(Error)
+					}
+				]
+			]);
+		});
 	});
 
 	it('a FAILED write says what did not happen and leaves the PREVIOUS series selected — nothing on screen pretends', async () => {

@@ -8,17 +8,39 @@ vi.mock('$lib/problems/reportProblem', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
-const wire = vi.hoisted(() => ({
-	loadFullAgenda: (() => new Promise(() => {})) as () => Promise<unknown>,
-	workRows: (() => new Promise(() => {})) as () => Promise<unknown>
-}));
+const wire = vi.hoisted(() => {
+	const pending = (() => new Promise(() => {})) as () => Promise<unknown>;
+	return {
+		loadFullAgenda: pending,
+		workRows: pending,
+		detail: pending,
+		dbEntity: pending,
+		parts: pending,
+		roster: pending,
+		sections: pending
+	};
+});
+type Wire = Partial<Record<keyof typeof wire, () => Promise<unknown>>>;
 vi.mock('$lib/agenda/agendaData', async (importOriginal) => ({
 	...(await importOriginal<object>()),
 	loadFullAgenda: () => wire.loadFullAgenda()
 }));
 vi.mock('$lib/events/eventPageData', async (importOriginal) => ({
 	...(await importOriginal<object>()),
-	refreshEventPageWorkRows: () => wire.workRows()
+	refreshEventPageWorkRows: () => wire.workRows(),
+	refreshEventPageDetail: () => wire.detail()
+}));
+vi.mock('$lib/collective/databaseEntity', () => ({ resolveDatabaseEntityId: () => wire.dbEntity() }));
+vi.mock('$lib/agenda/nextEventFileIds', () => ({ nextEventFileIds: () => ['file-1'] }));
+vi.mock('$lib/files/prefetch', () => ({ prefetchNextEventParts: () => wire.parts() }));
+vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => ({}) }));
+vi.mock('$lib/roster/rosterData', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	loadRoster: () => wire.roster()
+}));
+vi.mock('$lib/sections/sectionData', async (importOriginal) => ({
+	...(await importOriginal<object>()),
+	listSections: () => wire.sections()
 }));
 
 import { createAgendaLoader, createAgendaLoadState, createLoadCounters } from './agendaLoad';
@@ -53,6 +75,7 @@ function setup(reads: Partial<Record<string, Read>> = {}) {
 			].map((name) => [name, reads[name] ?? never])
 		),
 		selected: () => ({ db: 'sampledb', personId: 'person-p' }),
+		collectiveIdentity: () => ({ db: 'sampledb', personId: 'person-p' }),
 		seasonManageOpen: () => false,
 		...Object.fromEntries(
 			[
@@ -70,11 +93,14 @@ function setup(reads: Partial<Record<string, Read>> = {}) {
 }
 
 const select = ({ loader }: Loader) => loader.loadForSelected();
+const prefetch = (l: Loader) => {
+	l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
+	l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId);
+};
 
 beforeEach(() => {
 	reportProblem.mockReset();
-	wire.loadFullAgenda = never;
-	wire.workRows = never;
+	for (const key of Object.keys(wire) as Array<keyof typeof wire>) wire[key] = never;
 });
 
 describe('agenda reads that fail are reported (#756)', () => {
@@ -96,14 +122,14 @@ describe('agenda reads that fail are reported (#756)', () => {
 		{ read: 'your answers', reads: { listMyRsvps: fail }, run: select, action: 'loading your answers' },
 		{
 			read: 'the agenda',
-			feed: fail,
+			wire: { loadFullAgenda: fail },
 			run: select,
 			action: 'loading the agenda',
 			shown: (l: Loader) => expect(l.ag.agendaError).toBe(true)
 		},
 		{
 			read: 'the work rows',
-			rows: fail,
+			wire: { workRows: fail },
 			run: (l: Loader) => l.loader.loadWorksAndManagement(CFG, ['ev-1'], 's-1', l.seq.requestId),
 			action: 'loading the work rows',
 			shown: (l: Loader) => expect(l.ag.worksByEventId).toEqual({})
@@ -124,10 +150,49 @@ describe('agenda reads that fail are reported (#756)', () => {
 			},
 			action: 'loading the season attendance rates',
 			shown: (l: Loader) => expect(l.ag.seasonRatesError).toBe(true)
+		},
+		{
+			read: 'the database entity rights',
+			wire: { dbEntity: fail },
+			run: (l: Loader) => void l.loader.loadDatabaseEntityRights(CFG, 'person-p'),
+			action: 'resolving the database entity rights'
+		},
+		{
+			read: 'the next event',
+			wire: { detail: fail },
+			run: prefetch,
+			action: 'prefetching the next event'
+		},
+		{
+			read: 'the next event parts',
+			wire: { parts: fail },
+			run: prefetch,
+			action: 'prefetching the next event parts'
+		},
+		{
+			read: 'the roster',
+			wire: { roster: fail },
+			run: (l: Loader) => void l.loader.getRoster(CFG).catch(() => {}),
+			action: 'loading the roster',
+			shown: (l: Loader) => expect(l.ag.rosterReadFailed).toBe(true)
+		},
+		{
+			read: 'the section tree',
+			wire: { sections: fail },
+			run: (l: Loader) => void l.loader.getSections(CFG).catch(() => {}),
+			action: 'loading the section tree',
+			shown: (l: Loader) => expect(l.ag.sectionsReadFailed).toBe(true)
 		}
-	])('a failed read of $read is reported', async (row) => {
-		if (row.feed) wire.loadFullAgenda = row.feed;
-		if (row.rows) wire.workRows = row.rows;
+	] as Array<{
+		read: string;
+		reads?: Partial<Record<string, Read>>;
+		wire?: Wire;
+		run: (l: Loader) => void;
+		area?: string;
+		action: string;
+		shown?: (l: Loader) => void;
+	}>)('a failed read of $read is reported', async (row) => {
+		Object.assign(wire, row.wire);
 		const l = setup(row.reads);
 		row.run(l);
 		await settle();
@@ -143,6 +208,15 @@ describe('agenda reads that fail are reported (#756)', () => {
 		select(l);
 		await settle();
 		expect(l.ag.sessionExpired).toBe(true);
+		expect(reportProblem).not.toHaveBeenCalled();
+	});
+
+	it('a prefetch superseded by a newer load is not reported', async () => {
+		Object.assign(wire, { detail: fail, parts: fail });
+		const l = setup();
+		l.ag.agendaItems = [{ id: 'ev-1' } as (typeof l.ag.agendaItems)[number]];
+		l.loader.prefetchNextEventPartsAfterSettle(CFG, l.seq.requestId - 1);
+		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
