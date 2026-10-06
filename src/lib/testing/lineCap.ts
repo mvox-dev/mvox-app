@@ -10,8 +10,7 @@ export const LINE_CAP_REGISTER: readonly string[] = [
 	'src/lib/agenda/SeriesCreateForm.svelte',
 	'src/lib/components/StrokeSurface.svelte',
 	'src/lib/components/admin/InviteSurface.svelte',
-	'src/lib/events/EventRsvpSection.svelte',
-	'src/routes/part/[fileId]/+page.svelte'
+	'src/lib/events/EventRsvpSection.svelte'
 ];
 
 const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];
