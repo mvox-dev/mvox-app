@@ -51,6 +51,8 @@ export interface RouteLoadMachine {
 	// A plain getter: co-guards outside the machine read it without bumping it.
 	readonly generation: number;
 	isCurrent(g: number): boolean;
+	// #800 — the page's teardown: every load and co-guard still in flight goes stale.
+	dispose(): void;
 }
 
 export function createRouteLoadMachine<TSelected extends { db: string }>(
@@ -128,7 +130,10 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 		get generation() {
 			return generation;
 		},
-		isCurrent
+		isCurrent,
+		dispose() {
+			++generation;
+		}
 	};
 }
 

@@ -176,5 +176,10 @@ export function createLibrarianLoad(lib: LibraryState) {
 		});
 	}
 
-	return { select, retryLibrarianLoad };
+	// #800 — the page's teardown: a load still in flight writes nothing to the shared store.
+	function destroy(): void {
+		++librarianGen;
+	}
+
+	return { select, retryLibrarianLoad, destroy };
 }

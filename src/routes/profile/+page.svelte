@@ -190,6 +190,8 @@
 		void selected;
 		void loadForSelected();
 	});
+
+	$effect(() => () => routeLoad.dispose());
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
