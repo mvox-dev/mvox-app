@@ -11,9 +11,18 @@ export const completionGateStore: Writable<GateState> = writable('loading');
 // when a newer read or a reset began, never because the page that asked has unmounted.
 let gateGeneration = 0;
 
-export function beginGateRead(): () => boolean {
+export async function refreshGate(
+	read: () => Promise<GateState>,
+	wanted: () => boolean = () => true
+): Promise<void> {
 	const g = ++gateGeneration;
-	return () => g === gateGeneration;
+	const live = () => g === gateGeneration && wanted();
+	try {
+		const state = await read();
+		if (live()) completionGateStore.set(state);
+	} catch (e) {
+		if (live()) throw e;
+	}
 }
 
 export function resetGate(): void {

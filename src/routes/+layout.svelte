@@ -32,8 +32,8 @@
 	} from '$lib/collectives/store';
 	import { ensureRetentionSweep } from '$lib/files/retention';
 	import {
-		beginGateRead,
 		completionGateStore,
+		refreshGate,
 		resetGate,
 		resolveGate
 	} from '$lib/profile/completionGate';
@@ -121,11 +121,8 @@
 		const selected = $selectedCollectiveIdentityStore;
 		resetGate();
 		if (auth.status !== 'authenticated' || !selected) return;
-		const isCurrent = beginGateRead();
 		const cfg = cfgFor(selected.db);
-		resolveGate(cfg, selected.personId).then((state) => {
-			if (isCurrent()) completionGateStore.set(state);
-		});
+		void refreshGate(() => resolveGate(cfg, selected.personId));
 	});
 
 	// Enforce: redirect only on a resolved 'incomplete', never from /profile itself.
