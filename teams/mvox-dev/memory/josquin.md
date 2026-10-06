@@ -151,4 +151,19 @@ online.spec fails on the text `navigator.onLine` even inside a comment. Offline 
 created id on the device item, delete it before the retry creates again, and retry on a backoff.
 Scripts: ~/workspace/scratchpad/611/mutate.py.
 
+## [GOTCHA] reportProblem cannot import collectives/store (#684, 2026-10-06)
+
+The store pulls discover -> entu-config -> $env/dynamic/public, which throws in every happy-dom spec
+that doesn't mock entu-config. The +layout module script registers the owner store (setProblemOwner).
+store.ts is comment-heavy: touching it fails comment-rules. Full suite exceeds 600 s: split src/routes,
+src/lib, the rest. A `pgrep -f vitest` waiter matches its own command line. Scripts: ~/workspace/scratchpad/684/.
+
+(*MVOX:Josquin*)
+
+## [GOTCHA] Commit GREEN before running named breaks (#617, 2026-10-06)
+
+`git checkout HEAD -- file` to undo a break reverted my uncommitted GREEN edits (HEAD was RED).
+Commit GREEN first, then mutate and restore with `git checkout -- src/`. A full page mock of
+roleManagement hides any new export from it: helpers pages need go in their own module.
+
 (*MVOX:Josquin*)

@@ -2,7 +2,22 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-34 checkpoint 2026-10-06 08:00Z]
+### [NEXT SESSION — MVOX-35 checkpoint 2026-10-06 20:15Z]
+
+**State:** main 25dad04, no branch open. Bentham up (standing for the wave); no Josquin up.
+
+**Landed 10-06 (after 10:35Z):** #684 (#828), #826 part (#829; open for Mihkel's live checks), #812 (#831), #819 (#833), #825 part (#834; open for iPhone + one other mobile browser), #488 (#835), #809 (#836 + #838), #618 (#839), #617 (#840), #619 (#842). #823 closed not planned (crede name formula set then removed by Mihkel; ledgers #824, #827; upstream ask entu/api#43).
+
+**Next:** #615 → #616, research re-running (wf_971f398c-064); briefs brief-615.md / research-616-verify.md need refreshing from its digests. Queue file: ~/workspace/scratchpad/queue-2026-10-06.md.
+
+**Waiting on Mihkel:** #832 (deploy/SW: missing /_app/immutable/* answers cacheable 200 HTML; Edge held it until reboot) filed, NOT released. Live checks #826, #825. **Waiting on Gama:** whether a raw member id in /admin role rows (roster failed, grant has no name) gets an "unknown member" issue.
+
+**Rules learned this run:** Entu ids are globally unique (memory). During review the tree is the reviewer's: the implementer runs nothing; undo breaks with git checkout, never a saved copy (#618 overwrite). Briefs state the ratio method inline (src/ only, *.spec.ts + src/lib/testing as test, paraglide excluded). Count vitest "Errors" lines as failures. A PR's CI may not start: close/reopen it. Re-check an issue body's edit history before launch (#809 moved 4 times). Headless Chromium can't run here (missing libs).
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-34 checkpoint 2026-10-06 08:00Z]
 
 **State:** main f9c73a5 (plus this seam commit), no branch open, no teammates up. The released queue is done.
 
@@ -15,25 +30,6 @@
 **Rules learned this run:** epic labels are the PO's (script); label only issues you pick. Closing comments are encouraged; the merge skill posts one per closed issue. Rule out a fix that adds a regression even when Bentham says "mergeable" (#811 gate drop, #808 duplicate send). Move rules that lived only in cut comments to architecture-decisions.md. Teammates must not edit on main or commit during review; one final SHA. The ratio method is src/ only, matching Gama's line report (3.42:1 now).
 
 **Team at seam:** none up.
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-33 checkpoint 2026-10-05]
-
-**State:** main fe45b42 (after this seam PR: one more chore commit), tree clean apart from memory files, no branch open. The #706 test-review queue is DONE: #708-#718 and #723 all closed. Repo test:source 3.34:1 (from 3.9:1 on 10-01).
-
-**Landed 10-03→10-05:** #711 (b2-b10 + follow-ups, PRs #774-#783); #715 (#785, #786); #717 (#787); #718 (#789); #712 (#791, follow-up #793); #713 (#792); #714 (#794); #713 flake fix (#799); #716 (#797, #798, #801); #723 (#804, #805, follow-up #806); seam PRs #784, #802.
-
-**Next:** features per the board, in the order #611 → #684 → #617/#618/#619 → #615 → #616 (verify the `ready` labels and Gama's order first). #756 is not ready.
-
-**Filed by Gama this wave, unreleased (wait on Mihkel's word):** #795 (links/roster writes send a stale token after it's cleared), #796 (series picker: status region mounts late; saved cue survives a switch), #800 (library page left mid-load overwrites librarianStore; its fix needs a test written first that leaves /library mid-load, re-mounts and settles late, and must NOT copy #799's afterEach drain), #803 (8 unused locale keys go). Not yet filed: #717 finding, 17 roster generation guards fail no test on main (scratchpad/717/res).
-
-**New standing rule (Mihkel 10-05, in common-prompt):** 4-point gate for every test PR (behaviour, not classes/source/calls; once over a source-derived page list; named break tried; test:source ratio stated).
-
-**Lessons this wave:** grep closing keywords case-insensitively, in both the squash body and the PR description (mvox-merge skill updated). Release = shutdown_request, never a text message. Mutation runs: check the branch first and restore before reporting (a stray mutation sat on main). Never pkill shared processes. A mock dropped while its handle is still asserted makes a never-failing test (#805 → #806). Never prove a negative after a fixed wait (#792).
-
-**Team at seam:** none up. Spawn fresh josquin/bentham/finn per task.
 
 (*MVOX:Palestrina*)
 
