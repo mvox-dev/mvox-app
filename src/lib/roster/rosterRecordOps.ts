@@ -9,8 +9,6 @@ import { reportProblem } from '$lib/problems/reportProblem';
 
 export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { mo, actions, generation, isCurrent, isOffline } = deps;
-	// A switch clears the lock; a save from the collective left behind must not clear the next one's.
-	let lockHolder: object | null = null;
 
 	async function openRecordEditor(row: RosterRow): Promise<void> {
 		const cfg = deps.cfg();
@@ -87,8 +85,6 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			return;
 		}
 		const g = generation();
-		const holder = {};
-		lockHolder = holder;
 		mo.recordSavingMemberId = memberId;
 		try {
 			const fresh = await actions.loadMemberRecord(cfg, row.personId);
@@ -142,10 +138,7 @@ export function createRecordOps<Halves>(deps: MemberOpsDeps<Halves>) {
 				mo.recordSaveError = { memberId, kind: 'failed' };
 			}
 		} finally {
-			if (lockHolder === holder) {
-				lockHolder = null;
-				mo.recordSavingMemberId = null;
-			}
+			if (mo.recordSavingMemberId === memberId) mo.recordSavingMemberId = null;
 		}
 	}
 

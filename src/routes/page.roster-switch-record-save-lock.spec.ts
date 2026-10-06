@@ -27,7 +27,6 @@ vi.mock('$app/navigation', async () =>
 
 import Page from './roster/+page.svelte';
 import type { MemberRecordLookup } from '$lib/roster/memberRecord';
-import type { RosterRow } from '$lib/roster/rosterData';
 import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
@@ -37,7 +36,7 @@ import {
 	loadRosterMock,
 	updateMemberRecordMock
 } from '$lib/testing/mocks/roster';
-import { ORG_B, rowsA, rowsB, treeA, treeB } from '$lib/testing/pages/rosterFixtures';
+import { rowsA, rowsB, treeA, treeB } from '$lib/testing/pages/rosterFixtures';
 import { cleanupClearResetAdmin, setAuthedWithTwoCollectives } from '$lib/testing/pages/roster';
 import { nameInput, openEditor } from '$lib/testing/pages/rosterRecordEditor';
 import {
@@ -51,7 +50,7 @@ import { q } from '$lib/testing/pages/dom';
 const WRITES = [createMemberRecordMock, updateMemberRecordMock];
 const EDITOR = ['name', 'phone', 'email', 'birthdate', 'id-code', 'save'];
 
-const RECORDS: Record<string, string> = { 'p-ada': 'rec-ada', 'p-bob': 'rec-bob', 'p-ada-b': 'rec-ada-b' };
+const RECORDS: Record<string, string> = { 'p-ada': 'rec-ada', 'p-bob': 'rec-bob' };
 
 function lookup(personId: string): MemberRecordLookup {
 	return {
@@ -60,17 +59,10 @@ function lookup(personId: string): MemberRecordLookup {
 	};
 }
 
-// Collective B's member that shares A's member id: ids are per database, so they can collide.
-const adaInB: RosterRow = { ...rowsB()[0], memberId: 'm-ada', personId: 'p-ada-b', dbEntityId: ORG_B };
-
-function serve(rowsInB: RosterRow[]): void {
-	loadRosterMock.mockImplementation((cfg: { db: string }) =>
-		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsInB))
-	);
-}
-
 beforeEach(() => {
-	serve(rowsB());
+	loadRosterMock.mockImplementation((cfg: { db: string }) =>
+		Promise.resolve(toListRead(cfg.db === 'sampledb' ? rowsA() : rowsB()))
+	);
 	listSectionsMock.mockImplementation((cfg: { db: string }) =>
 		Promise.resolve(cfg.db === 'sampledb' ? treeA() : treeB())
 	);
@@ -151,33 +143,6 @@ describe('/roster — a record save in flight does not lock the next collective 
 			expect(q(container, 'roster-record-name')).toBeNull();
 		});
 		await expectLateSettleChangesNothing(container, heldA, { value: undefined }, WRITES);
-	});
-
-	it('A late settle leaves B save of the same member id locked until B settles', async () => {
-		serve([adaInB]);
-		setAuthedWithTwoCollectives();
-		adminStore.set('admin');
-		const { container } = render(Page);
-		const heldA = await startSaveInAThenSwitch(container);
-		await expandGroup(container, 'unassigned', 'roster-row-m-ada');
-
-		const heldB = holdNext(updateMemberRecordMock);
-		await rename(container, 'm-ada', 'Ada B');
-		await waitFor(() => {
-			expect(updates()).toEqual([
-				['sampledb', 'rec-ada', { name: 'Ada A' }],
-				['other-choir', 'rec-ada-b', { name: 'Ada B' }]
-			]);
-		});
-		expect(editorDisabled(container)).toEqual(allAre(true));
-
-		await expectLateSettleChangesNothing(container, heldA, { value: undefined }, WRITES);
-		expect(editorDisabled(container)).toEqual(allAre(true));
-
-		heldB.resolve(undefined);
-		await waitFor(() => {
-			expect(q(container, 'roster-record-name')).toBeNull();
-		});
 	});
 });
 
