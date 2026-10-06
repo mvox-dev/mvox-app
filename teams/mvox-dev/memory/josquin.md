@@ -173,3 +173,13 @@ Corner tap over StrokeSurface: a capture-phase pointerup on a wrapper dispatches
 the target, so the surface drops the dot itself. ~/workspace/scratchpad/615/mutate.py.
 
 (*MVOX:Josquin*)
+
+## [PATTERN] Ink store with tombstones (#616, 2026-10-07)
+
+src/lib/strokes/inkStore.ts keeps a per-page log {strokes:[{id,stroke}], erased:[id]}; save diffs the
+surface's whole array against the live log (multiset by JSON), so the surface stays snapshot-only.
+Get+put in one readwrite transaction keeps quick saves ordered. Unreadable ink hides the pen: a save
+over an empty view would tombstone everything stored. Viewer reopen in specs: reset pdfjs.renderCalls
+and wait for part-viewer-ink before reading marks. ~/workspace/scratchpad/616/mutate.py.
+
+(*MVOX:Josquin*)
