@@ -162,13 +162,16 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('property/v-1');
 	});
 
-	it('non-2xx → undefined + console.warn naming the property id — never a throw (#456: one bad stamp must not sink the batch)', async () => {
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	it('non-2xx → undefined, reported naming the property id — never a throw (#456: one bad stamp must not sink the batch)', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		const at = await readPropertyCreatedAt(cfg, 'v-2', fetchImpl as unknown as typeof fetch);
 		expect(at).toBeUndefined();
-		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-2'))).toBe(true);
-		warnSpy.mockRestore();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'profile: reading when a linked account was added failed',
+			new Error('property v-2: HTTP 500')
+		);
+		errorSpy.mockRestore();
 	});
 
 	it('2xx without created.at → undefined + warn naming the id', async () => {
