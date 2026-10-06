@@ -33,6 +33,7 @@ import { listSectionsMock } from '$lib/testing/moduleHandles';
 import { createInviteMock, mintSelfLinkInviteMock } from '$lib/testing/mocks/admin';
 import {
 	deactivateMemberMock,
+	loadActiveAndArchivedRostersMock,
 	loadInactiveRosterMock,
 	loadRosterMock,
 	reinstateMemberMock
@@ -84,6 +85,18 @@ describe('(B) inactive surface — out of the normal flow, sections shown, reins
 		const section = container.querySelector('[data-testid="inactive-member-section-m9"]');
 		expect(section).not.toBeNull();
 		expect(section?.textContent).toContain('Alto');
+	});
+
+	it('a failed archived read is reported and the active list still loads (#756)', async () => {
+		const { container } = await renderWithInactive();
+		const boom = new Error('archived read failed');
+		loadActiveAndArchivedRostersMock.mockRejectedValue(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		await fireEvent.click(container.querySelector('[data-testid="roster-inactive-toggle"]')!);
+		await waitFor(() =>
+			expect(consoleSpy).toHaveBeenCalledWith('roster: loading the archived roster failed', boom)
+		);
+		consoleSpy.mockRestore();
 	});
 
 	it('reinstate is ONE action: calls reinstateMember for her, mints NO invitation, and refreshes both lists', async () => {

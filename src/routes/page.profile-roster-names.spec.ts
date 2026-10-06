@@ -441,10 +441,11 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 	});
 
 	it('READ FAILED: the control stays rendered on the documented default but DISABLED (the id never arrives); a forced change writes nothing, restores the select to the server value and says the setting was NOT changed', async () => {
-		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const boom = new Error('entu 500');
 		try {
 			wireProfilesPerCollective();
-			h.readRosterNamesMock.mockRejectedValue(new Error('entu 500'));
+			h.readRosterNamesMock.mockRejectedValue(boom);
 			adminStore.set('admin');
 			signInMember([COLLECTIVE_A]);
 			const { container } = render(ProfilePage);
@@ -452,7 +453,7 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 			await waitFor(() => expect(rosterSelect(container)).not.toBeNull());
 			await flushMicrotasks();
 
-			expect(warn).toHaveBeenCalled();
+			expect(error).toHaveBeenCalledWith('profile: reading the roster names setting failed', boom);
 			expect(rosterSelect(container)!.value).toBe('profile');
 			expect(rosterSelect(container)!.disabled, 'a failed read leaves no entity id').toBe(true);
 
@@ -467,7 +468,7 @@ describe('/profile — roster-names WRITE precondition (no confirmed entity id)'
 			);
 			expect(rosterStatus(container)!.textContent?.trim(), 'no success claim').toBe('');
 		} finally {
-			warn.mockRestore();
+			error.mockRestore();
 		}
 	});
 });

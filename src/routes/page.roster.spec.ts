@@ -116,7 +116,8 @@ describe('/roster — empty state', () => {
 describe('/roster — load-error state', () => {
 	it('shows a generic localized error (not the raw thrown message); logs detail to console.error; retry calls loadRoster again', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-		loadRosterMock.mockRejectedValue(new Error('boom 500'));
+		const boom = new Error('boom 500');
+		loadRosterMock.mockRejectedValue(boom);
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -126,12 +127,7 @@ describe('/roster — load-error state', () => {
 		});
 		expect(container.textContent).toContain('Something went wrong loading the roster.');
 		expect(container.textContent).not.toContain('boom 500');
-		expect(consoleSpy).toHaveBeenCalled();
-		const loggedArgs = consoleSpy.mock.calls.flat();
-		const loggedDetail = loggedArgs.some(
-			(arg) => arg instanceof Error && arg.message === 'boom 500'
-		);
-		expect(loggedDetail).toBe(true);
+		expect(consoleSpy).toHaveBeenCalledWith('roster: load failed', boom);
 		expect(loadRosterMock).toHaveBeenCalledTimes(1);
 
 		const retryBtn = container.querySelector('[data-testid="roster-retry-load"]') as HTMLButtonElement;

@@ -253,7 +253,8 @@ describe('#323 — FAILED: truthful alert, retry available, screen restored to t
 		expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
 
 		reorderLinksMock.mockRejectedValue(new Error('renumber failed mid-loop'));
-		listLinksMock.mockRejectedValue(new Error('list read failed too'));
+		const readFailure = new Error('list read failed too');
+		listLinksMock.mockRejectedValue(readFailure);
 
 		await fireEvent.click(rowEls(container)[1].querySelector('[data-testid="links-move-down"]')!);
 
@@ -264,6 +265,7 @@ describe('#323 — FAILED: truthful alert, retry available, screen restored to t
 		});
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent?.trim()).toBe('links_reorder_failed_stale');
+		expect(consoleErrorSpy).toHaveBeenCalledWith('links: loading the links failed', readFailure);
 
 		expect(rowNames(container)).toEqual(['Salvestused', 'Scores', 'Website']);
 		expect(statusText(container)).toBe('');

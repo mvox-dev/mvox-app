@@ -54,6 +54,7 @@ import {
 	resolveBorrowerNamesMock
 } from '$lib/testing/mocks/library';
 import { resetRepertoireBadgeMocks, signInLibraryReader } from '$lib/testing/pages/library';
+import { findMyMemberIdMock } from '$lib/testing/moduleHandles';
 
 const SEASONS = [
 	{
@@ -187,6 +188,25 @@ describe('#92 TR.4 — library browse tree repertoire badges', () => {
 		expect(container.querySelector('[data-testid="library-work-work-dropped"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="repertoire-badge-work-retired"]')).toBeNull();
 		expect(container.querySelector('[data-testid="repertoire-badge-work-dropped"]')).toBeNull();
+	});
+});
+
+
+describe('a failed supplementary read is reported (#756)', () => {
+	it.each([
+		{ read: 'the repertoire badges', fail: (e: Error) => listSeasonsMock.mockRejectedValue(e) },
+		{ read: 'your member record', fail: (e: Error) => findMyMemberIdMock.mockRejectedValue(e) }
+	])('$read', async ({ read, fail }) => {
+		mockHappyPath();
+		signInLibraryReader();
+		const boom = new Error('read failed');
+		fail(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		await renderReady();
+		const action =
+			read === 'your member record' ? 'finding your member record' : 'loading the repertoire badges';
+		await waitFor(() => expect(consoleSpy).toHaveBeenCalledWith(`library: ${action} failed`, boom));
+		consoleSpy.mockRestore();
 	});
 });
 

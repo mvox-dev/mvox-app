@@ -577,6 +577,37 @@ describe('/profile — a removal that FAILS says so, and the numbers stay honest
 // listAllEditions fetches every edition in the collective; a settings page must not pay
 // that when it cannot change what is shown.
 
+describe('/profile — a failed storage read is reported (#756)', () => {
+	it('a failed usage read is reported and the section stays absent', async () => {
+		const boom = new Error('usage read failed');
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		seedDevice();
+		installStorageControls().usageForPartition.mockRejectedValue(boom);
+		listMyProfilesMock.mockResolvedValue([
+			{ _id: 'prof-dom', name: 'Ada', email: '', _sharing: 'domain' as const }
+		]);
+		signInMember();
+		const { container } = render(ProfilePage);
+		await waitFor(() =>
+			expect(consoleSpy).toHaveBeenCalledWith('profile: reading the storage usage failed', boom)
+		);
+		expect(q(container, 'profile-storage')).toBeNull();
+		consoleSpy.mockRestore();
+	});
+
+	it('a failed part-name read is reported', async () => {
+		const boom = new Error('editions read failed');
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		seedDevice();
+		h.listAllEditionsMock.mockRejectedValue(boom);
+		await renderReady();
+		await waitFor(() =>
+			expect(consoleSpy).toHaveBeenCalledWith('profile: reading the stored part names failed', boom)
+		);
+		consoleSpy.mockRestore();
+	});
+});
+
 describe('/profile — the fileId→filename join only fires when it can change the answer', () => {
 	it('nothing downloaded → the catalogue read never happens (the section still renders its zeroes)', async () => {
 		mockLibraryMetadata();

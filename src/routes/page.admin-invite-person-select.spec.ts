@@ -359,9 +359,8 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
 		loadOk();
-		h.listJoinStatesMock.mockRejectedValue(
-			new Error('listLinkedIdentities: identity read failed: HTTP 500')
-		);
+		const boom = new Error('listLinkedIdentities: identity read failed: HTTP 500');
+		h.listJoinStatesMock.mockRejectedValue(boom);
 		createInviteMock.mockResolvedValue({
 			personId: 'p-new',
 			memberId: 'm-new',
@@ -377,6 +376,7 @@ describe('#301 /admin invite — when the select is not rendered', () => {
 		);
 		expect(container.textContent).not.toContain('HTTP 500');
 		expect(q(section, 'invite-person-select')).toBeNull();
+		expect(consoleSpy).toHaveBeenCalledWith('admin/invite: loading the join states failed', boom);
 
 		const submit = submitButton(section);
 		expect(submit.disabled).toBe(false);
@@ -452,6 +452,42 @@ describe('#301 /admin invite — person-path (mint) failures surface their own d
 		expect(container.textContent).not.toContain('self-_editor');
 		expect(container.textContent).not.toContain('HTTP 403');
 
+		consoleSpy.mockRestore();
+	});
+});
+
+describe('/admin invite — a failed read is reported (#756)', () => {
+	async function spyAndLoad() {
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		selectSampledb();
+		loadOk();
+		return consoleSpy;
+	}
+
+	it('a failed owner-tier read is reported', async () => {
+		const consoleSpy = await spyAndLoad();
+		const boom = new Error('tier read failed');
+		resolveOwnerTierMock.mockRejectedValue(boom);
+		await renderInviteReady();
+		await waitFor(() =>
+			expect(consoleSpy).toHaveBeenCalledWith('admin/invite: reading the owner tier failed', boom)
+		);
+		consoleSpy.mockRestore();
+	});
+
+	it('a failed re-read after a person mint is reported and the done panel still shows', async () => {
+		const consoleSpy = await spyAndLoad();
+		const boom = new Error('join-state re-read failed');
+		h.listJoinStatesMock.mockResolvedValueOnce({ ...JOIN_STATES }).mockRejectedValue(boom);
+		h.mintSelfLinkInviteMock.mockResolvedValue({ inviteToken: MINTED_TOKEN });
+		const { container, section } = await renderInviteReady();
+		await pick(await waitFor(() => personSelect(section)), 'p-cilla');
+		await fireEvent.click(submitButton(section));
+		await waitFor(() => expect(q(container, 'invite-admin-result')).not.toBeNull());
+		expect(consoleSpy).toHaveBeenCalledWith(
+			'admin/invite: re-reading the join state after an invite failed',
+			boom
+		);
 		consoleSpy.mockRestore();
 	});
 });
