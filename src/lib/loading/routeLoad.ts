@@ -1,6 +1,7 @@
 // The shared route-load machine (#232); routeLoad.spec.ts pins its contract.
 import { getToken } from '$lib/auth/storage';
 import { isAuthExpiredError } from '$lib/entu/auth-expired';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export const ROUTE_LOAD_STATUSES = [
 	'loading',
@@ -118,7 +119,7 @@ export function createRouteLoadMachine<TSelected extends { db: string }>(
 				opts.setStatus('session-expired');
 				return;
 			}
-			console.error(`${opts.name}: load failed`, e);
+			reportProblem({ area: opts.name, action: 'load', error: e });
 			opts.setStatus('load-error');
 		}
 	}

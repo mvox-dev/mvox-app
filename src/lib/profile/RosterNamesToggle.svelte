@@ -1,6 +1,7 @@
 <!-- #267 — the admin-only roster-names toggle. The page calls load() and reset() through
 	bind:this, so the generation-guarded read keeps the page's load order. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { adminStore } from '$lib/nav/adminStore';
@@ -39,7 +40,7 @@
 	}
 
 	// Fired apart from the profile-fields read, so a fields load-error cannot take this
-	// control down. console.warn, not .error: a failed read leaves the default standing.
+	// control down. A failed read leaves the default standing.
 	export async function load(cfg: EntuCfg, g: number): Promise<void> {
 		try {
 			const setting = await readRosterNamesSetting(cfg);
@@ -48,7 +49,7 @@
 			rosterShowRealNames = setting.showRealNames;
 		} catch (err) {
 			if (g !== generation()) return;
-			console.warn('profile: roster-names setting read failed', err);
+			reportProblem({ area: 'profile', action: 'reading the roster names setting', error: err });
 		}
 	}
 

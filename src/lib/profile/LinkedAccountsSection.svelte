@@ -2,6 +2,7 @@
 	return-link verdict read once from the URL outlives reloads; the page calls load() and
 	reset() through bind:this. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { isAuthExpiredError } from '$lib/entu/request';
@@ -127,7 +128,7 @@
 				onSessionExpired();
 				return;
 			}
-			console.error('profile: linked identities load failed', linkedErr);
+			reportProblem({ area: 'profile', action: 'loading the linked accounts', error: linkedErr });
 			linkedIdentities = [];
 			linkedLoadFailed = true;
 		}

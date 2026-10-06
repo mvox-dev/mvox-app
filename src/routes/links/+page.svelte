@@ -1,5 +1,6 @@
 <!-- /links: the collective's link list; admins add, edit, reorder and remove links. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
@@ -101,7 +102,7 @@
 			return true;
 		} catch (e) {
 			if (selected?.db !== cfg.db || g !== routeLoad.generation) return false;
-			console.error('links: refresh failed', e);
+			reportProblem({ area: 'links', action: 'loading the links', error: e });
 			return false;
 		}
 	}

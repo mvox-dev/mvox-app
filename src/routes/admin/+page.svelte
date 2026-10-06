@@ -1,5 +1,6 @@
 <!-- /admin: role management (admins, librarians), the collective name, and invites. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
@@ -94,10 +95,7 @@
 			})
 			.catch((e) => {
 				if (!isCurrent()) return;
-				console.error(
-					'admin roles: section tree read failed — the person selects fall back to name order',
-					e
-				);
+				reportProblem({ area: 'admin', action: 'loading the section tree', error: e });
 				sectionsError = true;
 			});
 	}
