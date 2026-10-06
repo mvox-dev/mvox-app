@@ -8,6 +8,7 @@
 		disabled?: boolean;
 		busy?: boolean;
 		class?: string;
+		pressedClass?: string;
 	}
 </script>
 
@@ -104,7 +105,7 @@
 			onfocus={() => (roving = o.value)}
 			onclick={() => choose(o)}
 			class="border-r border-ink-4 last:border-r-0 {buttonClass} {isPressed
-				? 'bg-ink text-paper'
+				? (o.pressedClass ?? 'bg-ink text-paper')
 				: 'text-ink-2'} {blocked ? 'opacity-[0.45]' : ''} {isBlocked(o)
 				? 'cursor-default'
 				: ''} {o.class ?? ''}"

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
-	import RadioChips from '$lib/components/RadioChips.svelte';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -329,16 +329,16 @@
 			/>
 
 			{#if roster.view === 'grouped' && !roster.sectionsError}
-				<RadioChips
+				<SegmentedPill
 					testid="roster-view-modes"
 					label={m.roster_view_modes_label()}
-					class="inline-flex flex-wrap items-center gap-1.5 self-start"
+					class="self-start"
 					options={modeOptions}
 					selected={roster.viewMode}
-					onselect={setViewMode}
-					chipClass="rounded-full border px-2.5 py-1 text-xs tracking-wide uppercase"
-					onClass="border-ink bg-ink text-paper"
-					offClass="border-ink-4 text-ink-2 hover:text-ink"
+					emptyAllowed={false}
+					kind="ui"
+					buttonClass="px-2.5 py-1 text-xs tracking-wide uppercase"
+					onselect={(mode) => mode && setViewMode(mode)}
 				/>
 				{#if roster.viewMode === 'arrange' && admin === 'admin'}
 					<SectionArrange

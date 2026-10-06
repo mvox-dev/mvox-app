@@ -6,7 +6,7 @@
 	import type { EditionFilesState, LibraryState, TreeActions } from '$lib/library/libraryState';
 	import type { LendingView } from '$lib/library/lendingView';
 	import { COPY_SORT_KEYS, sortCopies } from '$lib/library/copySort';
-	import RadioChips from '$lib/components/RadioChips.svelte';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import CopyRow from '$lib/library/CopyRow.svelte';
 	import EditionFiles from '$lib/library/EditionFiles.svelte';
 
@@ -63,20 +63,20 @@
 			{:else if copies.length === 0}
 				<p class="text-xs text-ink-2">{m.library_copies_empty()}</p>
 			{:else}
-				<RadioChips
+				<SegmentedPill
 					testid="copy-sort-{edition.id}"
 					label={m.library_copy_sort_label()}
-					class="mb-1 flex items-center gap-1"
+					class="mb-1"
 					options={COPY_SORT_KEYS.map((key) => ({
 						value: key,
 						label: COPY_SORT_LABEL[key](),
 						testid: `copy-sort-${key}-${edition.id}`
 					}))}
 					selected={lib.copySortKey}
-					onselect={actions.setCopySortKey}
-					chipClass="rounded border px-1.5 py-0.5 text-[10px]"
-					onClass="border-ink bg-ink text-paper"
-					offClass="border-ink-5 text-ink-2"
+					emptyAllowed={false}
+					kind="ui"
+					buttonClass="px-1.5 py-0.5 text-[10px]"
+					onselect={(key) => key && actions.setCopySortKey(key)}
 				/>
 				{#each sortCopies(copies, lib.copySortKey, { activeLendingForCopy: view.activeLendingForCopy, borrowerNames: lib.borrowerNames }) as copy (copy.id)}
 					<CopyRow
