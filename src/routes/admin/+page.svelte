@@ -1,6 +1,7 @@
 <!-- /admin: role management (admins, librarians), the collective name, and invites. -->
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
+	import { isAuthExpiredError } from '$lib/entu/auth-expired';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore, selectedCollectiveIdentityStore } from '$lib/collectives/store';
@@ -15,6 +16,7 @@
 	import { resolveLibrarian } from '$lib/library/librarianStore';
 	import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 	import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
+	import { resolveNamesFromRoster } from '$lib/admin/rosterNames';
 	import {
 		listAdmins,
 		addAdmin,
@@ -52,6 +54,12 @@
 	let roster = $state<RosterRow[]>([]);
 	/** The member read was partial: a missing person would read as "not a member". */
 	let rosterPartial = $state(false);
+	// The roster read does not hold up the page: the pickers say it is loading or failed.
+	let rosterLoading = $state(false);
+	let rosterFailed = $state(false);
+	// The role lists may be read before the roster lands.
+	const namedAdmins = $derived(resolveNamesFromRoster(admins, roster));
+	const namedLibrarians = $derived(resolveNamesFromRoster(librarians, roster));
 	// [] (no sections) falls back to the roster's own name order.
 	let sections = $state<SectionNode[]>([]);
 	// The section read only orders the pickers: a failure falls back to name order.
@@ -100,6 +108,31 @@
 			});
 	}
 
+	function loadMembers(c: EntuCfg, isCurrent: () => boolean): void {
+		roster = [];
+		rosterPartial = false;
+		rosterFailed = false;
+		rosterLoading = true;
+		loadRoster(c)
+			.then((read) => {
+				if (!isCurrent()) return;
+				roster = read.items;
+				rosterPartial = read.truncated;
+			})
+			.catch((e) => {
+				if (!isCurrent()) return;
+				if (isAuthExpiredError(e)) {
+					status = 'session-expired';
+					return;
+				}
+				reportProblem({ area: 'admin', action: 'loading members', error: e });
+				rosterFailed = true;
+			})
+			.finally(() => {
+				if (isCurrent()) rosterLoading = false;
+			});
+	}
+
 	const routeLoad = createRouteLoadMachine({
 		name: 'admin roles',
 		selected: () => identity,
@@ -129,11 +162,9 @@
 			const resolvedDbEntityId = gatedDbEntityId!;
 			// Read alongside the blocking reads, never as one: a failure costs only the order.
 			loadSections(c, isCurrent);
-			// The partial notice goes down while the list is re-read.
-			rosterPartial = false;
-			const [libResult, rosterRead, resolvedNameMarker] = await Promise.all([
+			loadMembers(c, isCurrent);
+			const [libResult, resolvedNameMarker] = await Promise.all([
 				resolveLibrarian(c, target.personId, undefined, resolvedDbEntityId),
-				loadRoster(c),
 				// A failed marker read is a load-error, never "no name".
 				resolveCollectiveNameMarker(c)
 			]);
@@ -142,8 +173,6 @@
 			if (libResult.state === 'error') throw new Error('admin roles: librarian resolution failed');
 			dbEntityId = resolvedDbEntityId;
 			libraryId = libResult.libraryId;
-			roster = rosterRead.items;
-			rosterPartial = rosterRead.truncated;
 			nameMarker = resolvedNameMarker;
 			await Promise.all([
 				refreshRole('admin', g),
@@ -217,12 +246,14 @@
 				{dbEntityId}
 				{libraryId}
 				{viewerId}
-				{admins}
-				{librarians}
+				admins={namedAdmins}
+				librarians={namedLibrarians}
 				{canManageAdmins}
 				{canManageLibrarians}
 				{roster}
 				{rosterPartial}
+				{rosterLoading}
+				{rosterFailed}
 				{sections}
 				{sectionsError}
 				{isOffline}

@@ -1,6 +1,5 @@
 // The agenda's rsvp, attendance and part-open handlers, writing the page's own state object.
 import { get } from 'svelte/store';
-import { m } from '$lib/paraglide/messages.js';
 import { cfgFor } from '$lib/entu/cfg';
 import { selectedCollectiveIdentityStore, sameCollectiveIdentity } from '$lib/collectives/store';
 import type { AgendaItem } from '$lib/agenda/types';
@@ -18,6 +17,7 @@ import { createPresenceRefresh } from '$lib/files/presenceRefresh';
 import { openPart } from '$lib/parts/openPart';
 import type { WorkRow } from '$lib/repertoire/types';
 import { rosterOrder } from '$lib/sections/sectionData';
+import { pickerPromptText as sharedPickerPromptText } from '$lib/roster/pickerPrompt';
 import { withEntry, withItem, withItemIfPresent } from '$lib/collections/immutable';
 
 export interface AgendaPageHandlerDeps {
@@ -43,11 +43,11 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 	}
 
 	function pickerPromptText(optionCount: number, addPrompt: string): string {
-		if (optionCount > 0) return addPrompt;
-		if (ag.rosterReadFailed) return m.picker_roster_unavailable();
-		if (ag.rosterReadsInFlight > 0) return m.picker_roster_loading();
-		if (ag.rosterRows.length === 0) return m.picker_no_members();
-		return m.picker_everyone_added();
+		return sharedPickerPromptText(optionCount, addPrompt, {
+			failed: ag.rosterReadFailed,
+			loading: ag.rosterReadsInFlight > 0,
+			rowCount: ag.rosterRows.length
+		});
 	}
 
 	const rsvpQueue = createRsvpChangeQueue(

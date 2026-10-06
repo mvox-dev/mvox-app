@@ -5,6 +5,7 @@
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { RosterRow } from '$lib/roster/rosterData';
+import { resolveNamesFromRoster } from '$lib/admin/rosterNames';
 
 export interface RolePerson {
 	id: string;
@@ -119,13 +120,6 @@ function toRolePersons(ownOwners: RightsValue[], ownEditors: RightsValue[]): Rol
 	for (const v of ownOwners) fold(v, 'owner');
 	for (const v of ownEditors) fold(v, 'editor');
 	return [...byPerson.values()];
-}
-
-// The roster name wins: a rights value's `string` is baked at grant time and never refreshes.
-function resolveNamesFromRoster(persons: RolePerson[], roster: RosterRow[]): RolePerson[] {
-	if (roster.length === 0) return persons;
-	const byPersonId = new Map(roster.map((r) => [r.personId, r.name]));
-	return persons.map((p) => ({ ...p, name: byPersonId.get(p.id) ?? p.name }));
 }
 
 /** Grants _editor, then deletes the person's older own _editor values (POST before DELETE). */
