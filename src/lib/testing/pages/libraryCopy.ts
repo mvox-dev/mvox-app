@@ -2,6 +2,7 @@
 import { copyWith, englishMessages, type Copy } from '../messageMocks';
 
 export const LIBRARY_COPY = {
+	write_unavailable_no_signal: () => 'No signal — nothing can be saved right now.',
 	library_title: () => 'Library',
 	library_no_collective: () => 'Select a collective to view the library.',
 	library_load_error: () => 'Something went wrong loading the library.',
