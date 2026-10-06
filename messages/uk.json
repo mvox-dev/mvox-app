@@ -732,8 +732,5 @@
 	"feedback_send_failed": "Не вдалося надіслати відгук.",
 	"feedback_saved_send_later": "Відгук збережено на цьому пристрої. Його буде надіслано, коли з'явиться сигнал.",
 	"feedback_send_after_sign_in": "Відгук збережено. Його буде надіслано після входу.",
-	"feedback_problems_legend": "Збої, які буде надіслано з цим відгуком",
-	"lab_entu_heading": "Експериментальна сторінка: вхід через Entu",
-	"lab_entu_sign_in": "Увійти через Entu",
-	"lab_entu_add_passkey": "Додати ключ доступу в Entu"
+	"feedback_problems_legend": "Збої, які буде надіслано з цим відгуком"
 }

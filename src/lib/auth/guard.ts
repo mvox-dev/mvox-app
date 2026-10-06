@@ -1,8 +1,16 @@
-// Client-side route guard: no server (ssr = false), so "is the user signed in?" is answered
-// from the localStorage JWT. Pure functions; `+layout.ts` wires the decision to `redirect()`.
+// Client-side route guard — replaces the old SSR `hooks.server.ts` cookie gate.
+//
+// There is no server in this SPA (ssr = false), so "is the user logged in?" is
+// answered in the browser from the localStorage JWT. These are PURE functions (no
+// SvelteKit / browser-global imports beyond `atob`) so they unit-test without a
+// request; `+layout.ts` wires the decision to `redirect()`.
+//
+// `decodeJwtExpMs` + `isProtectedPath` are the reusable halves harvested from the
+// old `src/lib/server/auth/session-cookie.ts`; everything cookie-related is dropped.
 
 import { sessionExpiredSignInHref } from './session-expired';
 
+/** Decode an unverified JWT payload (base64url) to a plain object, or null on any malformed input. */
 export function decodeJwtPayload(token: string | null | undefined): Record<string, unknown> | null {
 	const parts = token?.split('.');
 	if (!parts || parts.length < 2 || !parts[1]) return null;
@@ -15,18 +23,20 @@ export function decodeJwtPayload(token: string | null | undefined): Record<strin
 	}
 }
 
+/** Decode an unverified JWT and return its `exp` in milliseconds, or null on any malformed input. */
 export function decodeJwtExpMs(token: string | null | undefined): number | null {
 	const payload = decodeJwtPayload(token);
 	return payload && typeof payload.exp === 'number' ? payload.exp * 1000 : null;
 }
 
+/** True iff a token is present and its decoded `exp` is in the future relative to `nowMs`. */
 export function isTokenValid(token: string | null | undefined, nowMs: number): boolean {
 	if (!token) return false;
 	const expMs = decodeJwtExpMs(token);
 	return expMs !== null && expMs > nowMs;
 }
 
-const PUBLIC_EXACT = new Set(['/about', '/lab/entu']);
+const PUBLIC_EXACT = new Set(['/about']);
 
 /** True iff the path requires a session. Public allowlist + assets/internal paths pass through. */
 export function isProtectedPath(pathname: string): boolean {
@@ -38,8 +48,13 @@ export function isProtectedPath(pathname: string): boolean {
 	return true;
 }
 
-// Where a visitor without a valid session goes: login, the session-expired sign-in when the
-// token's exp has passed, or null when the path is public or the token is valid.
+/**
+ * Decide where an unauthenticated visitor should be sent. Returns a
+ * `/auth/login?redirect=<target>` path when the requested route is protected and
+ * the token is missing (or undecodable), `sessionExpiredSignInHref(...)` when a
+ * token is present but its decoded `exp` has passed (so the login page explains
+ * why), or `null` when the visit is allowed to proceed.
+ */
 export function resolveGuardRedirect(args: {
 	pathname: string;
 	search?: string;

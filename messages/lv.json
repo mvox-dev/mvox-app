@@ -731,8 +731,5 @@
 	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt.",
 	"feedback_saved_send_later": "Atsauksme saglabāta šajā ierīcē. Tā tiks nosūtīta, kad atjaunosies signāls.",
 	"feedback_send_after_sign_in": "Atsauksme saglabāta. Tā tiks nosūtīta pēc pierakstīšanās.",
-	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi",
-	"lab_entu_heading": "Eksperimentāla lapa: pierakstīšanās ar Entu",
-	"lab_entu_sign_in": "Pierakstīties ar Entu",
-	"lab_entu_add_passkey": "Pievienot piekļuves atslēgu Entu"
+	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi"
 }
