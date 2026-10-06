@@ -602,10 +602,7 @@ describe('agenda — #237 the series delete triggers render the shared red trash
 			expect(btn.classList.contains('text-ink-2'), `${testid}: muted tone must go`).toBe(false);
 
 			// Accessible name: the SAME glyph-independent key as before the sweep.
-			const expectedKey = testid.includes('series-delete')
-				? 'season_manage_series_delete'
-				: 'season_manage_event_delete';
-			expect(btn.getAttribute('aria-label') ?? '').toMatch(new RegExp(`^${expectedKey}`));
+			expect(btn.getAttribute('aria-label') ?? '').toMatch(/^season_manage_series_delete/);
 		}
 	});
 

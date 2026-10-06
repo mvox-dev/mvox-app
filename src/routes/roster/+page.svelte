@@ -13,6 +13,7 @@
 	import { adminStore } from '$lib/nav/adminStore';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
 	import { isAuthExpiredError } from '$lib/entu/request';
+	import { cfgFor } from '$lib/entu/cfg';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	// The write gate: every write here (member lifecycle, record, invites, section tree)
@@ -239,11 +240,14 @@
 
 	const actions = createRosterActions();
 
+	// Writes read the token now, not the one from load, so a cleared session sends nothing (#550).
+	const writeCfg = () => (currentCfg ? cfgFor(currentCfg.db) : null);
+
 	const ops = createMemberOps({
 		roster,
 		mo: memberOps,
 		actions,
-		cfg: () => currentCfg,
+		cfg: writeCfg,
 		generation: () => routeLoad.generation,
 		isCurrent: (g) => routeLoad.isCurrent(g),
 		isOffline: () => isOffline,
@@ -260,7 +264,7 @@
 		roster,
 		arrange,
 		actions,
-		cfg: () => currentCfg,
+		cfg: writeCfg,
 		generation: () => routeLoad.generation,
 		isOffline: () => isOffline,
 		visibleSections: () => visibleSections,

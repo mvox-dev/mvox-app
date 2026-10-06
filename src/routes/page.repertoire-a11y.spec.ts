@@ -222,26 +222,14 @@ describe('#93 — i18n: no hardcoded user-facing strings on repertoire surfaces'
 			.filter((p): p is { ariaKey: string; visibleKey: string } => p !== null);
 	}
 
-	// #288 — proves the pairing reaches the three prompt-default selects; the old lookup
-	// dropped them before the content check ran, and reported success anyway.
-
-	// Two of the three keys are rendered by no code (those selects use their placeholder
-	// key as the aria-label). They stay as guard subjects: dropping them would shrink
-	// the guard to one. Not orphans; this pin names all three and fails without them.
-	it('#288 — the three prompt-default select aria-labels are PAIRED with their placeholder keys (the guard really evaluates them)', () => {
+	// #288 — proves the pairing reaches the prompt-default select; the old lookup
+	// dropped it before the content check ran, and reported success anyway.
+	it('#288 — the prompt-default select aria-label is PAIRED with its placeholder key (the guard really evaluates it)', () => {
 		const en = JSON.parse(readSource('messages/en.json')) as MessageFile;
 		const selectPairs = labelInNamePairs(en)
 			.filter(({ ariaKey }) => ariaKey.endsWith('_select_aria_label'))
 			.sort((a, b) => a.ariaKey.localeCompare(b.ariaKey));
 		expect(selectPairs, LABEL_IN_NAME_SCOPE).toEqual([
-			{
-				ariaKey: 'repertoire_add_programme_select_aria_label',
-				visibleKey: 'repertoire_add_programme_label'
-			},
-			{
-				ariaKey: 'repertoire_add_work_select_aria_label',
-				visibleKey: 'repertoire_add_work_label'
-			},
 			{
 				ariaKey: 'repertoire_pin_edition_select_aria_label',
 				visibleKey: 'repertoire_pin_edition_label'

@@ -253,7 +253,20 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 		path: '/links',
 		Page: LinksPage,
 		arrange: arrangeAdminRights,
-		ready: (c) => waitFor(() => must(c, 'links-add-submit'))
+		wire: (url) =>
+			url.includes('_type.string=link')
+				? {
+						entities: [
+							{ _id: 'link-1', name: [{ string: 'Scores' }], url: [{ string: 'https://a.test' }], display_order: [{ number: 1 }] },
+							{ _id: 'link-2', name: [{ string: 'Rota' }], url: [{ string: 'https://b.test' }], display_order: [{ number: 2 }] }
+						]
+					}
+				: undefined,
+		ready: (c) =>
+			waitFor(() => {
+				must(c, 'links-add-submit');
+				expect(c.querySelectorAll('[data-testid="links-row"]')).toHaveLength(2);
+			})
 	},
 	'/profile': {
 		path: '/profile',
@@ -272,10 +285,27 @@ export const WRITE_PAGES: Record<string, WritePage> = {
 			loadRosterMock.mockResolvedValue(
 				toListRead([{ memberId: 'm-1', personId: 'p-anna', name: 'Anna Arro', email: '', sectionIds: [] }])
 			);
+			const root = (id: string, name: string, displayOrder: number) => ({
+				id,
+				name,
+				displayOrder,
+				parentId: null,
+				dbEntityId: 'org-1',
+				depth: 0,
+				children: []
+			});
+			listSectionsMock.mockResolvedValue([root('sec-s', 'Soprano', 1), root('sec-a', 'Alto', 2)]);
 		},
+		wire: (url) =>
+			url.includes('/entity/sec-a?props=_parent')
+				? { entity: { _id: 'sec-a', _parent: [{ _id: 'pv-a', reference: 'org-1' }] } }
+				: undefined,
 		ready: async (c) => {
 			await fireEvent.click(await waitFor(() => must(c, 'roster-view-chip-arrange')));
-			await waitFor(() => must(c, 'roster-new-section'));
+			await waitFor(() => {
+				must(c, 'roster-new-section');
+				must(c, 'arrange-row-sec-a');
+			});
 		}
 	}
 };

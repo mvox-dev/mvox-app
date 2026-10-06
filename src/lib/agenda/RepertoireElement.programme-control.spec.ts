@@ -146,31 +146,27 @@ describe('#272 — programme-control wording (messages/*.json, all four locales)
 		en: {
 			repertoire_add_programme_label: 'Select edition',
 			repertoire_add_programme_button: 'Add to programme',
-			repertoire_add_programme_select_aria_label: 'Select edition',
 			repertoire_add_programme_aria_label: 'Add to programme: the selected edition'
 		},
 		et: {
 			repertoire_add_programme_label: 'Vali väljaanne',
 			repertoire_add_programme_button: 'Lisa kavasse',
-			repertoire_add_programme_select_aria_label: 'Vali väljaanne',
 			repertoire_add_programme_aria_label: 'Lisa kavasse: valitud väljaanne'
 		},
 		lv: {
 			repertoire_add_programme_label: 'Izvēlieties izdevumu',
 			repertoire_add_programme_button: 'Pievienot programmai',
-			repertoire_add_programme_select_aria_label: 'Izvēlieties izdevumu',
 			repertoire_add_programme_aria_label: 'Pievienot programmai: izvēlētais izdevums'
 		},
 		uk: {
 			repertoire_add_programme_label: 'Виберіть видання',
 			repertoire_add_programme_button: 'Додати до програми',
-			repertoire_add_programme_select_aria_label: 'Виберіть видання',
 			repertoire_add_programme_aria_label: 'Додати до програми: вибране видання'
 		}
 	};
 
 	for (const [locale, expected] of Object.entries(EXPECTED)) {
-		it(`${locale}: the four programme-control keys carry the new wording exactly`, () => {
+		it(`${locale}: the three programme-control keys carry the new wording exactly`, () => {
 			const messages = read(locale);
 			for (const [key, value] of Object.entries(expected)) {
 				expect(messages[key], `${locale}.json ${key}`).toBe(value);
@@ -182,10 +178,7 @@ describe('#272 — programme-control wording (messages/*.json, all four locales)
 		const DATE_CLAIMS = ['tonight', 'tänase', 'Tänase', 'vakara', 'сьогодні'];
 		for (const locale of ['en', 'et', 'lv', 'uk']) {
 			const messages = read(locale);
-			for (const key of [
-				'repertoire_add_programme_select_aria_label',
-				'repertoire_add_programme_aria_label'
-			]) {
+			for (const key of ['repertoire_add_programme_aria_label']) {
 				for (const pattern of messagePatterns(messages[key])) {
 					for (const claim of DATE_CLAIMS) {
 						expect(

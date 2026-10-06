@@ -227,16 +227,9 @@
 		</div>
 	</div>
 {/if}
-{#if series.status}
-	<p
-		data-testid="event-series-status"
-		role="status"
-		aria-live="polite"
-		class="text-xs text-ink-3"
-	>
-		{series.status}
-	</p>
-{/if}
+<p data-testid="event-series-status" role="status" aria-live="polite" class="text-xs text-ink-3">
+	{series.status}
+</p>
 {#if series.error}
 	<FormError data-testid="event-series-error">
 		{series.error}

@@ -38,6 +38,7 @@ import { MY_RSVP_ROW } from '$lib/testing/pages/eventRsvp';
 import { seriesEntity } from '$lib/testing/pages/eventFixtures';
 import { q } from '$lib/testing/pages/dom';
 import { rowByName } from '$lib/testing/pages/seasonRepertoire';
+import { fill } from '$lib/testing/pages/seasonPanel';
 import { reaches } from '$lib/testing/pageReach';
 import { findSourceFiles } from '$lib/testing/soleLiteralGuard';
 
@@ -48,17 +49,13 @@ type Route = (url: string, method: string, init: RequestInit | undefined, write:
 
 type Surface = {
 	component: string;
-	persistent: boolean;
-	/** A cue still on screen after a collective switch; that case is expected to fail. */
-	staysAfterSwitch?: boolean;
 	event: Record<string, unknown>;
 	route: Route;
 	ready: (container: HTMLElement) => Promise<unknown>;
 	write: (container: HTMLElement) => Promise<unknown>;
 	status: string;
-	saved: string;
 	error: string;
-};
+} & ({ saved: string } | { saved?: undefined; noSavedCue: string });
 
 const settled = async (write: Write, ok: () => Response) => {
 	if (write.hold) await write.hold;
@@ -93,7 +90,6 @@ const MEMBERS: Record<string, string> = { m1: 'pp-1', m2: 'pp-2' };
 const SURFACES: Record<string, Surface> = {
 	rsvp: {
 		component: 'src/lib/components/agenda/RsvpControl.svelte',
-		persistent: true,
 		event: editableEvent(),
 		route: async (url, method, _init, write) => {
 			if (url.includes('/entity/p-viewer') && url.includes('props=_owner')) {
@@ -126,7 +122,6 @@ const SURFACES: Record<string, Surface> = {
 	},
 	attendance: {
 		component: 'src/lib/components/attendance/AttendanceSurface.svelte',
-		persistent: true,
 		event: editableEvent({ start_datetime: [{ _id: 'val-start-1', datetime: '2026-08-19T16:00:00.000Z' }] }),
 		route: async (url, method, _init, write) => {
 			if (method === 'POST' && /\/entity(\?|$)/.test(url)) return settled(write, () => json({ _id: 'att-new' }));
@@ -161,7 +156,6 @@ const SURFACES: Record<string, Surface> = {
 	},
 	'event field': {
 		component: 'src/lib/events/EventFieldEdit.svelte',
-		persistent: true,
 		event: editableEvent(),
 		route: async (url, method, _init, write) =>
 			url.includes('/entity/ev1') && method === 'POST' ? settled(write, () => json({})) : undefined,
@@ -178,7 +172,6 @@ const SURFACES: Record<string, Surface> = {
 	},
 	schedule: {
 		component: 'src/lib/events/EventScheduleSection.svelte',
-		persistent: true,
 		event: editableEvent(),
 		route: async (url, method, _init, write) => {
 			if (url.includes('name.string=schedule_item')) return json({ entities: [{ _id: 'type-schedule-item' }] });
@@ -204,7 +197,6 @@ const SURFACES: Record<string, Surface> = {
 	},
 	works: {
 		component: 'src/lib/events/EventWorksSection.svelte',
-		persistent: true,
 		event: editableEvent({ _parent: [{ reference: 'season1', entity_type: 'season' }] }),
 		route: async (url, method, _init, write) => {
 			if (url.includes('/entity/ri-1') && method === 'POST') return settled(write, () => json({ _id: 'ri-1' }));
@@ -241,9 +233,6 @@ const SURFACES: Record<string, Surface> = {
 	},
 	series: {
 		component: 'src/lib/events/EventSeriesPicker.svelte',
-		// #796 fix pending: its region mounts with the message, not before the write.
-		persistent: false,
-		staysAfterSwitch: true,
 		event: editableEvent({
 			description: [{ _id: 'val-desc-1', string: 'Own note.' }],
 			_editor: [],
@@ -271,6 +260,25 @@ const SURFACES: Record<string, Surface> = {
 		status: 'event-series-status',
 		saved: '[event_detail_series_saved]',
 		error: 'event-series-error'
+	},
+	convert: {
+		component: 'src/lib/events/EventConvertForm.svelte',
+		event: editableEvent({ _parent: [{ reference: 'season1', entity_type: 'season' }] }),
+		route: async (url, method, _init, write) => {
+			if (url.endsWith('/entity') && method === 'POST') return settled(write, () => json({ _id: 'series-new' }));
+			if (url.includes('_type.string=database')) return json({ entities: [{ _id: 'org-1' }] });
+			if (url.includes('name.string=')) return json({ entities: [{ _id: 'type-1' }] });
+			return undefined;
+		},
+		ready: async (c) => {
+			if (!q(c, 'event-convert-form')) await fireEvent.click(await until(c, 'event-detail-convert'));
+			await fill(c, 'event-convert-duration', '90');
+			await fill(c, 'event-convert-end-date', '2026-09-15');
+		},
+		write: (c) => fireEvent.click(q(c, 'event-convert-submit')!),
+		status: 'event-convert-progress',
+		noSavedCue: 'the form closes on success',
+		error: 'event-convert-error'
 	}
 };
 
@@ -311,7 +319,8 @@ describe('the saved cue, on every write surface of the event page', () => {
 		const found = [...new Set(findSourceFiles('src', ['.svelte']))].filter(
 			(file) => saysSaved(file) && reaches('src/routes/event/[id]/+page.svelte', file)
 		);
-		expect(found.sort()).toEqual(Object.values(SURFACES).map((s) => s.component).sort());
+		const saidSaved = Object.values(SURFACES).filter((s) => !('noSavedCue' in s));
+		expect(found.sort()).toEqual(saidSaved.map((s) => s.component).sort());
 	});
 
 	async function blankRegionBeforeWrite(name: string) {
@@ -326,17 +335,11 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(container.querySelectorAll(`[data-testid="${surface.status}"]`)).toHaveLength(1);
 	}
 
-	const surfaces = Object.keys(SURFACES);
-	it.each(surfaces.filter((name) => SURFACES[name].persistent))(
-		'%s: a blank role=status region is there before any write',
-		blankRegionBeforeWrite
-	);
-	it.fails.each(surfaces.filter((name) => !SURFACES[name].persistent))(
-		'%s: known gap (#796 fix pending), no region before the first write',
-		blankRegionBeforeWrite
-	);
+	it.each(Object.keys(SURFACES))('%s: a blank role=status region is there before any write', blankRegionBeforeWrite);
 
-	it.each(Object.keys(SURFACES))('%s: says nothing while the write is in flight, then saved once it settles', async (name) => {
+	const saying = Object.keys(SURFACES).filter((name) => !('noSavedCue' in SURFACES[name]));
+
+	it.each(saying)('%s: says nothing while the write is in flight, then saved once it settles', async (name) => {
 		const surface = SURFACES[name];
 		const { container, write } = renderSurface(surface);
 		await surface.ready(container);
@@ -348,7 +351,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(statusText(container, surface)).toBe('');
 
 		held.resolve();
-		await waitFor(() => expect(statusText(container, surface)).toContain(surface.saved));
+		await waitFor(() => expect(statusText(container, surface)).toContain(surface.saved!));
 		expect(q(container, surface.error)).toBeNull();
 	});
 
@@ -363,10 +366,10 @@ describe('the saved cue, on every write surface of the event page', () => {
 		await waitFor(() => expect(q(container, surface.error)?.getAttribute('role')).toBe('alert'));
 		expect(wire.mock.calls.some(([, init]) => (init?.method ?? 'GET') === 'POST')).toBe(true);
 		expect(statusText(container, surface)).toBe('');
-		expect(container.textContent).not.toContain(surface.saved);
+		if (surface.saved) expect(container.textContent).not.toContain(surface.saved);
 	});
 
-	it.each(Object.keys(SURFACES))('%s: a write that settles after a collective switch never paints the cue', async (name) => {
+	it.each(saying)('%s: a write that settles after a collective switch never paints the cue', async (name) => {
 		const surface = SURFACES[name];
 		const { container, write, wire } = renderSurface(surface, ['sampledb', 'other-choir']);
 		await surface.ready(container);
@@ -381,7 +384,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		await flushMicrotasks();
 
 		expect(statusText(container, surface)).toBe('');
-		expect(container.textContent).not.toContain(surface.saved);
+		expect(container.textContent).not.toContain(surface.saved!);
 	});
 
 	async function settledThenSwitch(name: string) {
@@ -389,7 +392,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		const { container, wire } = renderSurface(surface, ['sampledb', 'other-choir']);
 		await surface.ready(container);
 		await surface.write(container);
-		await waitFor(() => expect(statusText(container, surface)).toContain(surface.saved));
+		await waitFor(() => expect(statusText(container, surface)).toContain(surface.saved!));
 
 		selectedCollectiveDbStore.set('other-choir');
 		await waitFor(() => expect(wire.mock.calls.some(([url]) => String(url).includes('/other-choir/'))).toBe(true));
@@ -398,15 +401,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		expect(statusText(container, surface)).toBe('');
 	}
 
-	const names = Object.keys(SURFACES);
-	it.each(names.filter((name) => !SURFACES[name].staysAfterSwitch))(
-		'%s: a settled cue does not follow the viewer to the next collective',
-		settledThenSwitch
-	);
-	it.fails.each(names.filter((name) => SURFACES[name].staysAfterSwitch))(
-		'%s: known gap (#796 fix pending), the settled cue follows the viewer to the next collective',
-		settledThenSwitch
-	);
+	it.each(saying)('%s: a settled cue does not follow the viewer to the next collective', settledThenSwitch);
 });
 
 // (*MVOX:Josquin*)

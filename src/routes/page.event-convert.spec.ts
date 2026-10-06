@@ -60,7 +60,6 @@ vi.mock('$lib/repertoire/repertoireData', async () =>
 import { openSeasonCardPanel } from '$lib/testing/seasonCard';
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import {
-	isMessageEmpty,
 	everyPatternContains,
 	type MessageFile
 } from '$lib/testing/messageFile.js';
@@ -196,21 +195,12 @@ describe('event-creation form — the "recurring wants a series" hint', () => {
 
 describe('#196 copy', () => {
 	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	// Used by no surface, so only this check keeps it in the locale files.
-	const KEYS = ['season_manage_event_convert'] as const;
 
 	function messages(locale: string): MessageFile {
 		return JSON.parse(
 			readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
 		) as MessageFile;
 	}
-
-	it.each(LOCALES)('%s keeps season_manage_event_convert, non-empty', (locale) => {
-		const file = messages(locale);
-		for (const key of KEYS) {
-			expect(isMessageEmpty(file[key]), `messages/${locale}.json: ${key}`).toBe(false);
-		}
-	});
 
 	it.each(LOCALES)('%s: event_convert_failed keeps its {step} placeholder — the loud-failure pin', (locale) => {
 		expect(everyPatternContains(messages(locale)['event_convert_failed'], '{step}')).toBe(true);

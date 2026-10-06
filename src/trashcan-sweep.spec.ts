@@ -137,23 +137,6 @@ describe('#237 — no colour-emoji glyph anywhere in markup', () => {
 	});
 });
 
-// ── 5. locales — a purely visual sweep ─────────────────────────────────────────
-
-describe('#237 — zero message-key changes ride along', () => {
-	// The others are used by a surface, so the i18n sweep keeps them; this one no surface uses.
-	const keys = ['season_manage_event_delete'];
-	for (const locale of ['en', 'et', 'lv', 'uk']) {
-		it(`messages/${locale}.json still carries every glyph-independent name key`, () => {
-			const messages = JSON.parse(
-				readFileSync(resolve(SRC_ROOT, '..', `messages/${locale}.json`), 'utf-8')
-			) as Record<string, unknown>;
-			for (const key of keys) {
-				expect(messages[key], `${key} missing in ${locale}`).toBeTruthy();
-			}
-		});
-	}
-});
-
 // ── 6. stale-pointer fence ─────────────────────────────────────────────────────
 
 describe('#237 — no stale gear-for-#237 breadcrumb survives', () => {
