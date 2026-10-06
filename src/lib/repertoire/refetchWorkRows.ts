@@ -1,4 +1,5 @@
 // The one re-read of work rows and season repertoire after a repertoire write.
+import { reportProblem } from '$lib/problems/reportProblem';
 import { refreshEventPageWorkRows } from '$lib/events/eventPageData';
 import type { RepertoireItem } from '$lib/repertoire/repertoireData';
 import type { WorkRow } from '$lib/repertoire/types';
@@ -24,8 +25,10 @@ export function refetchWorkRows(
 		.then((byEvent) => {
 			if (options.isCurrent()) options.onRows(byEvent);
 		})
-		.catch(() => {
-			if (options.isCurrent()) options.onFailure?.();
+		.catch((e) => {
+			if (!options.isCurrent()) return;
+			reportProblem({ area: 'repertoire', action: 're-reading the work rows', error: e });
+			options.onFailure?.();
 		});
 }
 
@@ -40,6 +43,9 @@ export function refetchSeasonRepertoire(
 		.then((items) => {
 			if (isCurrent()) onItems(items);
 		})
-		.catch(() => {
+		.catch((e) => {
+			if (isCurrent()) {
+				reportProblem({ area: 'repertoire', action: 're-reading the season repertoire', error: e });
+			}
 		});
 }

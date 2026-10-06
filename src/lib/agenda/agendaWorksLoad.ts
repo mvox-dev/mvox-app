@@ -11,6 +11,7 @@ import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { mergePendingRows as mergeRows } from '$lib/repertoire/repertoirePending';
 import { refetchSeasonRepertoire, refetchWorkRows } from '$lib/repertoire/refetchWorkRows';
 import { readManagePickers } from '$lib/repertoire/managePickers';
+import { reportProblem } from '$lib/problems/reportProblem';
 import type { AgendaLoadDeps, AgendaLoadState, LoadCounters } from '$lib/agenda/agendaLoad';
 
 export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, deps: AgendaLoadDeps) {
@@ -140,8 +141,9 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 				ag.worksRowsLoading = false;
 				runPressureSweepThenPrefetch(cfg, thisRequest);
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (thisRequest !== seq.requestId || thisWorksLoad !== seq.worksLoadId) return;
+				reportProblem({ area: 'agenda', action: 'loading the work rows', error: e });
 				ag.worksByEventId = {};
 				ag.worksRowsLoading = false;
 			});
@@ -200,8 +202,9 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
 				ag.scheduleByEventId = byEvent;
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (thisRequest !== seq.requestId || thisScheduleLoad !== seq.scheduleLoadId) return;
+				reportProblem({ area: 'agenda', action: 'loading the schedule items', error: e });
 				ag.scheduleByEventId = {};
 			});
 	}

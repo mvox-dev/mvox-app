@@ -2,6 +2,7 @@
 import type { ListRead } from '$lib/entu/listRead';
 import type { Edition, Work } from '$lib/library/libraryData';
 import type { PickerOption, WorkRow } from '$lib/repertoire/types';
+import { reportProblem } from '$lib/problems/reportProblem';
 import { workLabel } from '$lib/repertoire/workLabel';
 
 export function editionsByWorkId(editions: readonly Edition[]): Map<string, Edition[]> {
@@ -78,7 +79,10 @@ export function readScopedEditions(
 					read.items.map((edition) => ({ id: edition.id, label: editionLabel(edition) }))
 				);
 			})
-			.catch(() => {
+			.catch((e) => {
+				if (isCurrent()) {
+					reportProblem({ area: 'repertoire', action: 'loading the editions of a work', error: e });
+				}
 			});
 	}
 }

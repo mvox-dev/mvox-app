@@ -1,3 +1,5 @@
+import { reportProblem } from '$lib/problems/reportProblem';
+
 export type Membership = 'loading' | 'member' | 'non-member';
 
 export function loadMembership(
@@ -13,8 +15,9 @@ export function loadMembership(
 			state.membership = id ? 'member' : 'non-member';
 			onresolved?.(id);
 		})
-		.catch(() => {
+		.catch((e) => {
 			if (!isCurrent()) return;
+			reportProblem({ area: 'rsvp', action: 'finding your member record', error: e });
 			state.memberId = null;
 			state.membership = 'loading';
 		});

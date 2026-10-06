@@ -1,4 +1,4 @@
-// #756: the shared repertoire reads report a failure to the problem-handler; a superseded one does not.
+// #756: shared repertoire reads report a failure; a superseded one does not.
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/problems/reportProblem', async () =>

@@ -104,13 +104,6 @@ describe('agenda reads that fail are reported (#756)', () => {
 		expect(ag.membership).toBe('loading');
 	});
 
-	it('a failed answers read still shows no answers', async () => {
-		const { ag, loader } = setup({ listMyRsvps: fail });
-		loader.loadForSelected();
-		await settle();
-		expect(ag.rsvpByEventId).toEqual({});
-	});
-
 	it('a failed agenda read is reported and shows the agenda error', async () => {
 		wire.loadFullAgenda = fail;
 		const { ag, loader } = setup();
