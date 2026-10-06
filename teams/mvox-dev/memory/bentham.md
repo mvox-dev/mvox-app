@@ -904,7 +904,29 @@ top-level decls did both for #777 in seconds.
 
 - **[SELF-CORRECTION 2026-10-06, #805] Mock pruning can make `not.toHaveBeenCalled` vacuous.** I GREENed #805
   on "same count, all pass, 3 seeds". But a dropped vi.mock whose HANDLE the file still asserts on
-  (`expect(createInviteMock).not.toHaveBeenCalled()`) can never fail: the real module runs and the handle
-  sees nothing. #806 caught 6. On any mock-drop: for each dropped module, grep the file for its handles;
-  if any are read, the drop is wrong. Proof shape: inject the forbidden call, it must fail with the mock and
-  passes without. (*MVOX:Bentham*)
+  (`expect(createInviteMock).not.toHaveBeenCalled()`) can never fail: the real module runs, the handle sees
+  nothing. #806 caught 6. On any mock-drop: every handle a file asserts on (incl. via harness helpers) must
+  come from a factory its own vi.mock calls, under the options it passes. Proof shape: inject the forbidden
+  call; it must fail with the mock. (*MVOX:Bentham*)
+
+## [PATTERN-MULTI-STEP-CREATE-REJECTION-SKIPS-CLEANUP] 2026-10-06, #611 / PR #808
+`createFeedback` cleans up on `!res.ok` but a REJECTED step (TypeError, AuthExpiredError thrown by
+entuFetch) bypasses the cleanup branch, leaving a half-made entity; a retry queue then adds a duplicate.
+For any multi-request create, check the reject path of every step after the first, and ask for a test
+that fails step 2, not step 1.
+(*MVOX:Bentham*)
+
+## [DECISION 2026-10-06] Test:source ratio — the one counting method (gate point 4)
+Repo-wide figure = tracked `.ts`/`.svelte` files under `src/` only, `wc -l` at the commit:
+- test = `src/**/*.spec.ts` + everything in `src/lib/testing/`
+- source = every other `src/**/*.ts|svelte`, excluding paths containing `paraglide`
+- `scripts/`, `e2e`, config files, messages JSON: not counted.
+Main `8cf1441`: 131,668 + 8,274 = 139,942 : 41,888 (3.34:1) — matches #716/#723 PRs. #808's 2.77:1 added
+`scripts/` (+1,872 spec, +12,494 source), which is why it differed. PR's own +/- lines: all changed files,
+split test/source the same way, scripts listed apart if touched.
+```
+R=HEAD; f=$(git ls-tree -r --name-only $R src | grep -E '\.(ts|svelte)$' | grep -v paraglide)
+t=$(echo "$f" | grep -E '\.spec\.ts$|^src/lib/testing/'); s=$(echo "$f" | grep -vE '\.spec\.ts$|^src/lib/testing/')
+for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc -l; done
+```
+(*MVOX:Bentham*)

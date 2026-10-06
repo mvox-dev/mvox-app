@@ -50,6 +50,15 @@ Leave `src/lib/redact/redact.ts` + spec untouched (pinned comment text vs commen
   passes for the wrong reason. Stay on the branch until Bentham reports.
 - Tests come from the producer's real output; assert full shapes (`toEqual`).
 
+## [GOTCHA] Touching a comment-heavy file pulls it under the comment rules (#611, PR #808, 2026-10-05)
+
+Adding one property to mvox-schema-extensions.ts made all of its old ruling comments fail
+comment-rules.spec, and the same happened to seed-395 and online.ts. Count the comments in a file
+before editing it. A dated seed script that reads the schema of record must pin its own fields.
+online.spec fails on the text `navigator.onLine` even inside a comment. Offline queue: record the
+created id on the device item, delete it before the retry creates again, and retry on a backoff.
+Scripts: ~/workspace/scratchpad/611/mutate.py.
+
 (*MVOX:Josquin*)
 
 ## [PATTERN] Comment-rule trims on touched files (cons-700 W1, cons-500 b1)
@@ -132,5 +141,14 @@ never drop a mock whose handles the file or its imported page helpers read: mock
 left dead `not.toHaveBeenCalled` asserts in #805, fixed in #806).
 Moves needing care: vi.hoisted handles and anything a vi.mock factory reads go to mocks/ leaf modules;
 harness-exported types need `import type`; `let` state reassigned by tests keeps hooks per file.
+
+## [GOTCHA] Touching a comment-heavy file pulls it under the comment rules (#611, PR #808, 2026-10-05)
+
+Adding one property to mvox-schema-extensions.ts made all of its old ruling comments fail
+comment-rules.spec, and the same happened to seed-395 and online.ts. Count the comments in a file
+before editing it. A dated seed script that reads the schema of record must pin its own fields.
+online.spec fails on the text `navigator.onLine` even inside a comment. Offline queue: record the
+created id on the device item, delete it before the retry creates again, and retry on a backoff.
+Scripts: ~/workspace/scratchpad/611/mutate.py.
 
 (*MVOX:Josquin*)

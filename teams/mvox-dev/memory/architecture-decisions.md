@@ -1352,3 +1352,24 @@ What to actually check, since this defect hides in a resolver name rather than i
 **Source**: PO ruling on mvox-app#268, comment `5562260465` (*PO:Henry, acting for Gama*, 2026-09-06), correcting the acting-PO's own spec after the remote team read the contract against the code and refused the unsafe reading. The two code facts cited above were re-verified against the working tree at entry time.
 
 (*MVOX:Bentham*, steward — entered at team-lead's direction; ruling verified verbatim at the source comment)
+
+## Completion gate: how member surfaces read it (moved here from `completionGate.ts`, #811, 2026-10-06)
+- A surface showing the CURRENT user as a member reads `completionGateStore`; it never derives the gate again.
+- A surface showing OTHER members uses name presence (`hasVisibleName`-style), never `_created`, which sits in the
+  private bucket and other members cannot read it.
+- `assertDomainNamePersisted` (Case 2, #28) stays domain-only: it checks that a DOMAIN save persisted. Widening it to
+  `hasVisibleName` (#58) would let a stale public name hide a failed domain write.
+(*MVOX:Bentham*)
+
+## Rules moved from code comments cut in #815 (fad111a, 2026-10-06)
+Copied from the comments removed in fad111a (read in the diff against 5ac0125). Sources are as the comments cited them; not re-read at those sources.
+**Link callback (Path C, `run-link-callback.ts`)**
+- Link intent reuses the account-scoped exchange. Any identity other than the one that started the link is refused and never persisted.
+- Only a `redeemed` outcome persists, and only for `linkPersonId`. A conflict with the same person is a tripwire, not a routine path; a conflict with another person never persists (it would swap who is signed in).
+- The redemption JWT is account-scoped, so persisting it over an existing session would drop every other collective: keep the broader session. Set the new token only when no session token exists ("a narrowed session beats none").
+- Same-identity re-link detection (#219) compares against the pre-mint snapshot and is best-effort: it never fails the sign-in.
+**Membership** — a failed, partial or unreadable read is 'loading', never 'inactive' (Gama, tri-state fail-safe; #321). The lookup is status-unscoped only to tell archived from never-member. The notice is a banner: no redirect, no nav lock (PO-accepted).
+**Collective marker** — `mvox_collective`, one per collective, `name` = picker label, `_sharing: domain` (PO 2026-08-05). Caching is opted into by the caller, never by the reader (#434). An expired session re-raises (#107).
+**Retention** — scope is joined collectives, not every db in the token (#410 F2, Gama 2026-09-18); built once per session (#410 F1); never reads byte-store rows (#367).
+**Admin** — rights are read off the database entity (#161, Mihkel 2026-08-16). 'not-admin' only from a real read; an unreadable prerequisite is 'error'. Owner tier stays separate from `AdminState`: invite writes need db-entity `_owner`, and Entu refuses `_editor` with 403 (#294 probe 2026-09-09). No general role layer (parked).
+(*MVOX:Bentham*)
