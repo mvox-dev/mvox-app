@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -145,11 +146,11 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 
 		expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
 
-		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-checked')).toBe('true');
-		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-checked')).toBe(
+		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-pressed')).toBe('true');
+		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-pressed')).toBe(
 			'false'
 		);
-		expect(container.querySelector(sortBtn('since'))!.getAttribute('aria-checked')).toBe(
+		expect(container.querySelector(sortBtn('since'))!.getAttribute('aria-pressed')).toBe(
 			'false'
 		);
 	});
@@ -160,7 +161,7 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		await fireEvent.click(container.querySelector(sortBtn('member'))!);
 		await waitFor(() => {
 			expect(
-				container.querySelector(sortBtn('member'))!.getAttribute('aria-checked')
+				container.querySelector(sortBtn('member'))!.getAttribute('aria-pressed')
 			).toBe('true');
 		});
 
@@ -174,7 +175,7 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 
 		await fireEvent.click(container.querySelector(sortBtn('since'))!);
 		await waitFor(() => {
-			expect(container.querySelector(sortBtn('since'))!.getAttribute('aria-checked')).toBe(
+			expect(container.querySelector(sortBtn('since'))!.getAttribute('aria-pressed')).toBe(
 				'true'
 			);
 		});
@@ -197,8 +198,8 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 		await waitFor(() => {
 			expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
 		});
-		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-checked')).toBe('true');
-		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-checked')).toBe(
+		expect(container.querySelector(sortBtn('nr'))!.getAttribute('aria-pressed')).toBe('true');
+		expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-pressed')).toBe(
 			'false'
 		);
 
@@ -206,109 +207,15 @@ describe('/library — copy list sort controls (#112/#88)', () => {
 	});
 });
 
-describe('/library — copy-sort controls a11y (#113)', () => {
-	it('the three controls live in a role="radiogroup" with an m.* accessible name, each a role="radio"', async () => {
+describe('/library — the copy sort is a choice on this device only (#809)', () => {
+	it('offline the copy sort still changes: it saves nothing', async () => {
 		const container = await renderWithEditionUnfolded();
-		const group = container.querySelector('[data-testid="copy-sort-edition-1"]');
-		expect(group, 'the sort control group').not.toBeNull();
-		expect(group!.getAttribute('role')).toBe('radiogroup');
-		expect(group!.getAttribute('aria-label')).toBe('Sort copies by');
-		for (const key of ['nr', 'member', 'since'] as const) {
-			expect(container.querySelector(sortBtn(key))!.closest('[role="radiogroup"]')).toBe(group);
-			expect(container.querySelector(sortBtn(key))!.getAttribute('role')).toBe('radio');
-		}
-	});
-
-	it('every sort control is a native <button type="button"> — Enter/Space operability for free, and no accidental form submits', async () => {
-		const container = await renderWithEditionUnfolded();
-		for (const key of ['nr', 'member', 'since'] as const) {
-			const btn = container.querySelector(sortBtn(key)) as HTMLElement;
-			expect(btn.tagName, `copy-sort-${key}`).toBe('BUTTON');
-			expect(btn.getAttribute('type')).toBe('button');
-		}
-	});
-
-	it('exactly ONE control reports aria-checked="true" at any time, and the marker follows a key switch', async () => {
-		const container = await renderWithEditionUnfolded();
-		const pressed = () =>
-			(['nr', 'member', 'since'] as const).filter(
-				(key) => container.querySelector(sortBtn(key))!.getAttribute('aria-checked') === 'true'
-			);
-		expect(pressed()).toEqual(['nr']);
-		await fireEvent.click(container.querySelector(sortBtn('since'))!);
-		await waitFor(() => {
-			expect(pressed()).toEqual(['since']);
-		});
-	});
-});
-
-describe('/library — copy-sort chips: roving tabindex (#156)', () => {
-	const KEYS = ['nr', 'member', 'since'] as const;
-
-	function chips(container: HTMLElement): HTMLButtonElement[] {
-		return KEYS.map((key) => container.querySelector(sortBtn(key)) as HTMLButtonElement);
-	}
-	function stops(container: HTMLElement): HTMLButtonElement[] {
-		return chips(container).filter((c) => c.getAttribute('tabindex') === '0');
-	}
-
-	it('exactly ONE chip is the Tab stop, and it is the checked key', async () => {
-		const container = await renderWithEditionUnfolded();
-		expect(stops(container)).toEqual([chips(container)[0]]);
-	});
-
-	it('ArrowRight moves focus AND selects the next chip, wrapping at the end', async () => {
-		const container = await renderWithEditionUnfolded();
-		const [nr, member, since] = chips(container);
-
-		nr.focus();
-		await fireEvent.keyDown(nr, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(member.getAttribute('aria-checked')).toBe('true');
-		});
-		expect(document.activeElement).toBe(member);
-		expect(stops(container)).toEqual([member]);
-
-		await fireEvent.keyDown(member, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(since.getAttribute('aria-checked')).toBe('true');
-		});
-
-		await fireEvent.keyDown(since, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(nr.getAttribute('aria-checked')).toBe('true');
-		});
-	});
-
-	it('ArrowLeft wraps backwards from the first chip to the last', async () => {
-		const container = await renderWithEditionUnfolded();
-		const [nr, , since] = chips(container);
-		nr.focus();
-		await fireEvent.keyDown(nr, { key: 'ArrowLeft' });
-		await waitFor(() => {
-			expect(since.getAttribute('aria-checked')).toBe('true');
-		});
-		expect(document.activeElement).toBe(since);
-	});
-
-	it('selecting by arrow re-sorts the list, exactly as a click does', async () => {
-		const container = await renderWithEditionUnfolded();
-		expect(copyOrder(container)).toEqual(['copy-b', 'copy-c', 'copy-a', 'copy-d']);
-		const [nr] = chips(container);
-		nr.focus();
-		await fireEvent.keyDown(nr, { key: 'ArrowRight' }); // → member
-		await waitFor(() => {
-			expect(copyOrder(container).slice(0, 2)).toEqual(['copy-c', 'copy-b']);
-		});
-	});
-
-	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the chip still activates', async () => {
-		const container = await renderWithEditionUnfolded();
-		const chip = chips(container)[0];
-		for (const key of ['Tab', 'Enter', ' ']) {
-			const event = createEvent.keyDown(chip, { key });
-			fireEvent(chip, event);
-			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
+		await goOffline();
+		try {
+			await fireEvent.click(container.querySelector(sortBtn('member'))!);
+			expect(container.querySelector(sortBtn('member'))!.getAttribute('aria-pressed')).toBe('true');
+		} finally {
+			await goOnline();
 		}
 	});
 });

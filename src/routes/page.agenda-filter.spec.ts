@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { fullAgendaResult } from '$lib/testing/agendaFixtures';
 import { render, fireEvent, waitFor } from '@testing-library/svelte';
+import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -186,6 +187,20 @@ describe('#214 — single-select TOGGLE (polyphony.uk pattern)', () => {
 		expect(recentRowIds(container)).toEqual(['rec-soc', 'rec-con']);
 		expect(chip(container, 'agenda-filter-all').getAttribute('aria-pressed')).toBe('true');
 		expect(chip(container, 'agenda-filter-concert').getAttribute('aria-pressed')).toBe('false');
+	});
+
+	it('offline, the type filter and the view switch still choose: they save nothing (#809)', async () => {
+		const container = await renderAgenda([UP_REHEARSAL, UP_CONCERT]);
+		await goOffline();
+		try {
+			await fireEvent.click(chip(container, 'agenda-filter-concert'));
+			expect(upcomingRowIds(container)).toEqual(['up-con']);
+			await fireEvent.click(chip(container, 'agenda-view-month'));
+			expect(chip(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('true');
+			await fireEvent.click(chip(container, 'agenda-view-list'));
+		} finally {
+			await goOnline();
+		}
 	});
 
 	it('the explicit All chip clears an active filter too', async () => {

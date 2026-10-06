@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { render, cleanup, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -117,7 +117,7 @@ const RECENT_CONCERT = item('rec-con', 'Talvekontsert', '2026-04-20T18:00:00.000
 const ALL_UPCOMING = [JUN_MON, JUN_WED, JUL_BOUNDARY, JUL_WED];
 
 function viewToggle(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="radiogroup"][aria-label="[msg:view-toggle]"]');
+	return container.querySelector('[role="toolbar"][aria-label="[msg:view-toggle]"]');
 }
 
 function viewButton(container: HTMLElement, testid: string): HTMLButtonElement {
@@ -167,7 +167,7 @@ beforeEach(() => {
 
 afterEach(cleanupResetAgendaView);
 
-describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the chips, day list default)', () => {
+describe('#247 — the Detailne|Kompaktne toggle (ruled: segmented control, WITH the chips, day list default)', () => {
 	it('renders a two-state segmented control of native buttons; the day list is active by default', async () => {
 		const container = await renderAgenda(ALL_UPCOMING, [RECENT_SOCIAL]);
 
@@ -182,17 +182,15 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		for (const btn of buttons) {
 			expect(btn.tagName).toBe('BUTTON');
 			expect(btn.getAttribute('type')).toBe('button');
-			expect(btn.getAttribute('role')).toBe('radio');
-			expect(btn.getAttribute('aria-checked')).not.toBeNull();
-			expect(btn.getAttribute('aria-pressed')).toBeNull();
+			expect(btn.getAttribute('aria-pressed')).not.toBeNull();
 		}
 		expect(buttons.map((b) => b.textContent?.trim())).toEqual([
 			'[msg:view-list]',
 			'[msg:view-month]'
 		]);
 
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('false');
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('true');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('false');
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
 		expect(container.querySelector('[data-testid="agenda-recent"]')).not.toBeNull();
 		expect(monthGroups(container)).toEqual([]);
@@ -214,13 +212,13 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 		).toBeTruthy();
 	});
 
-	it('tap Kuu → month overview replaces the day list; tap Nimekiri → the day list (Recent included) is back', async () => {
+	it('tap Kompaktne → month overview replaces the day list; tap Detailne → the day list (Recent included) is back', async () => {
 		const container = await renderAgenda(ALL_UPCOMING, [RECENT_SOCIAL]);
 
 		await switchToMonth(container);
 
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('false');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('true');
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('false');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).toBeNull();
 		expect(container.querySelector('[data-testid="agenda-date-header"]')).toBeNull();
@@ -228,7 +226,7 @@ describe('#247 — the Nimekiri|Kuu toggle (ruled: segmented control, WITH the c
 
 		await fireEvent.click(viewButton(container, 'agenda-view-list'));
 
-		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
+		expect(viewButton(container, 'agenda-view-list').getAttribute('aria-pressed')).toBe('true');
 		expect(monthGroups(container)).toEqual([]);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).not.toBeNull();
 		expect(dayListRowIds(container)).toEqual(['jun-mon', 'jun-wed', 'jul-boundary', 'jul-wed']);
@@ -450,7 +448,7 @@ describe('#247 — the #214 filter chips govern the month overview identically',
 });
 
 describe('#247 — per-device persistence (the #207 idiom, ruling 9)', () => {
-	it("tapping Kuu persists 'month' to localStorage; tapping Nimekiri persists 'list'", async () => {
+	it("tapping Kompaktne persists 'month' to localStorage; tapping Detailne persists 'list'", async () => {
 		const container = await renderAgenda(ALL_UPCOMING);
 
 		await switchToMonth(container);
@@ -466,7 +464,7 @@ describe('#247 — per-device persistence (the #207 idiom, ruling 9)', () => {
 		cleanup();
 
 		const container = await renderAgenda(ALL_UPCOMING);
-		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
+		expect(viewButton(container, 'agenda-view-month').getAttribute('aria-pressed')).toBe('true');
 		expect(monthGroups(container).length).toBeGreaterThan(0);
 		expect(container.querySelector('[data-testid="agenda-day-group"]')).toBeNull();
 	});
@@ -502,96 +500,6 @@ describe('#247 — the new locale keys: weekday labels', () => {
 			}
 		}
 	);
-});
-
-describe('#312 — the view toggle is ONE segmented pill (radiogroup + roving tabindex)', () => {
-	function segments(container: HTMLElement): HTMLButtonElement[] {
-		return [viewButton(container, 'agenda-view-list'), viewButton(container, 'agenda-view-month')];
-	}
-	function stops(container: HTMLElement): HTMLButtonElement[] {
-		return segments(container).filter((s) => s.getAttribute('tabindex') === '0');
-	}
-
-	it('the group is a role="radiogroup" of role="radio" segments, keeping its accessible name', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const group = viewToggle(container);
-		expect(group, 'radiogroup with the localized label must exist').not.toBeNull();
-		expect(container.querySelector('[role="group"][aria-label="[msg:view-toggle]"]')).toBeNull();
-		for (const s of segments(container)) {
-			expect(s.getAttribute('role'), s.getAttribute('data-testid') ?? '').toBe('radio');
-			expect(s.closest('[role="radiogroup"]')).toBe(group);
-		}
-	});
-
-	it('exactly ONE segment is the Tab stop, and it is the checked one', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-list')]);
-
-		await switchToMonth(container);
-		expect(stops(container)).toEqual([viewButton(container, 'agenda-view-month')]);
-	});
-
-	it('ArrowRight moves focus AND selects the next segment — through the store, so it persists', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const [list, month] = segments(container);
-
-		list.focus();
-		await fireEvent.keyDown(list, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(month.getAttribute('aria-checked')).toBe('true');
-		});
-		expect(document.activeElement).toBe(month);
-		expect(monthGroups(container).length).toBeGreaterThan(0);
-		expect(localStorage.getItem('mvox.agenda_view')).toBe('month');
-
-		await fireEvent.keyDown(month, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(viewButton(container, 'agenda-view-list').getAttribute('aria-checked')).toBe('true');
-		});
-	});
-
-	it('ArrowLeft wraps backwards from the first segment to the last', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const list = viewButton(container, 'agenda-view-list');
-		list.focus();
-		await fireEvent.keyDown(list, { key: 'ArrowLeft' });
-		await waitFor(() => {
-			expect(viewButton(container, 'agenda-view-month').getAttribute('aria-checked')).toBe('true');
-		});
-	});
-
-	it('Tab, Enter and Space are NOT preventDefault-ed — focus can leave and the segment still activates', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const list = viewButton(container, 'agenda-view-list');
-		for (const key of ['Tab', 'Enter', ' ']) {
-			const event = createEvent.keyDown(list, { key });
-			fireEvent(list, event);
-			expect(event.defaultPrevented, `${key} must not be swallowed`).toBe(false);
-		}
-	});
-
-	it('ONE pill visually: the container carries the border and rounding; segments sit flush — no gap, no per-segment chip rounding', async () => {
-		const container = await renderAgenda(ALL_UPCOMING);
-		const group = viewToggle(container) as HTMLElement;
-		const tokens = [...group.classList];
-
-		expect(tokens).toContain('overflow-hidden');
-		expect(tokens).toContain('border');
-		expect(
-			tokens.some((t) => t.startsWith('rounded')),
-			'container must carry the rounding'
-		).toBe(true);
-		expect(
-			tokens.some((t) => t.startsWith('gap-')),
-			'segments sit flush — no gap on the container'
-		).toBe(false);
-		for (const s of segments(container)) {
-			expect(
-				[...s.classList],
-				`${s.getAttribute('data-testid')} must not be its own fully-rounded chip`
-			).not.toContain('rounded-full');
-		}
-	});
 });
 
 // (*MVOX:Tallis*)

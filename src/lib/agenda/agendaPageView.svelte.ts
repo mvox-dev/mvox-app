@@ -35,7 +35,7 @@ export function createAgendaPageView(
 	const filteredAgendaItems = $derived(filterAgendaItems(ag.agendaItems, ag.agendaTypeFilter));
 	const filteredRecentItems = $derived(filterAgendaItems(ag.recentItems, ag.agendaTypeFilter));
 	function selectAgendaTypeFilter(value: AgendaTypeFilter) {
-		ag.agendaTypeFilter = ag.agendaTypeFilter === value ? 'all' : value;
+		ag.agendaTypeFilter = value;
 	}
 
 	$effect(() => {
