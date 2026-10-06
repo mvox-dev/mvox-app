@@ -1117,10 +1117,13 @@ describe('#616 — her ink stays on the device', () => {
 	}
 
 	/** Closes the viewer and opens the same part again, with a fresh store on the same device. */
-	async function reopen(personId = 'person-p'): Promise<HTMLElement> {
+	async function reopen(personId = 'person-p', seed = false): Promise<HTMLElement> {
 		cleanup();
+		pdfjs.renderCalls.length = 0;
 		inkStore = createInkStore(inkDevice);
-		return open(personId, false);
+		const c = await open(personId, seed);
+		await waitFor(() => expect(c.querySelector('[data-testid="part-viewer-ink"]')).not.toBeNull());
+		return c;
 	}
 
 	const tool = (c: HTMLElement, key: string) => control(c, key) as HTMLButtonElement;
@@ -1193,9 +1196,7 @@ describe('#616 — her ink stays on the device', () => {
 		await stroke(c, ACROSS);
 		await saved(1, 1);
 
-		cleanup();
-		inkStore = createInkStore(inkDevice);
-		const other = await open('person-q');
+		const other = await reopen('person-q', true);
 		expect(marks(other)).toEqual([]);
 		expect(hideMarks(other)).toBeNull();
 		await fireEvent.click(pen(other));
