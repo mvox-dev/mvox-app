@@ -2,7 +2,7 @@
 	import { reportProblem } from '$lib/problems/reportProblem';
 	// The fullscreen part viewer (#427): bytes via openFileBytes, identity from the JWT alone so a
 	// cold offline start works, corner taps turn pages (#333). The fence forbids store and wire
-	// writes here; recordPartLabel is the #353 label index, which only names stored bytes.
+	// writes here: her ink goes to src/lib/strokes/inkStore, and recordPartLabel only names bytes.
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
@@ -16,7 +16,9 @@
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
 	import PageInk from '$lib/strokes/PageInk.svelte';
-	import { DEFAULT_PENS, type StrokeData } from '$lib/strokes/strokes';
+	import { getInkStore } from '$lib/strokes/inkStore';
+	import { createPartInk } from '$lib/strokes/partInk.svelte';
+	import { DEFAULT_PENS } from '$lib/strokes/strokes';
 
 	// 'missing': nothing reachable and nothing stored. 'open-failed': something answered and the
 	// part still did not open. The two are never collapsed (see wireUnreachable).
@@ -29,12 +31,11 @@
 	let rootEl = $state<HTMLDivElement | undefined>(undefined);
 	let pageSize = $state<{ width: number; height: number } | null>(null);
 
-	// Her marks, per page, for this session only (#615); nothing here is stored.
+	// Her marks, per page (#615), read from and saved on the device (#616).
 	let penOn = $state(false);
 	let penId = $state(DEFAULT_PENS[0].id);
 	let marksHidden = $state(false);
-	let marks = $state<Record<number, StrokeData>>({});
-	const hasMarks = $derived(Object.values(marks).some((page) => page.strokes.length > 0));
+	const ink = createPartInk(getInkStore());
 
 	// Two separate disposals: opened.release() and pdf.destroy() (openFileBytes.ts).
 	let opened: OpenedFileBytes | null = null;
@@ -173,6 +174,9 @@
 				}
 				try {
 					const doc = await openPdf(result.url);
+					if (!cancelled) {
+						await ink.open({ db: identity.db, personId: identity.personId, fileId }, doc.numPages);
+					}
 					if (cancelled) {
 						doc.destroy();
 						result.release();
@@ -305,10 +309,10 @@
 					width={pageSize.width}
 					height={pageSize.height}
 					page={currentPage}
-					strokes={marks[currentPage] ?? { v: 1, strokes: [] }}
+					strokes={ink.marks[currentPage] ?? { v: 1, strokes: [] }}
 					editable={penOn}
 					bind:penId
-					onchange={(strokes) => (marks = { ...marks, [currentPage]: strokes })}
+					onchange={(strokes) => ink.change(currentPage, strokes)}
 					onprev={previous}
 					onnext={next}
 				/>
@@ -319,16 +323,18 @@
 				{m.part_viewer_page_of({ current: currentPage, total: numPages })}
 			</span>
 			<div class="flex items-center gap-4">
-				<button
-					type="button"
-					class="font-sans text-sm text-paper underline aria-pressed:font-semibold aria-pressed:no-underline"
-					data-testid="part-viewer-pen"
-					aria-pressed={penOn}
-					onclick={togglePen}
-				>
-					{m.part_viewer_draw()}
-				</button>
-				{#if hasMarks && !penOn}
+				{#if ink.drawable}
+					<button
+						type="button"
+						class="font-sans text-sm text-paper underline aria-pressed:font-semibold aria-pressed:no-underline"
+						data-testid="part-viewer-pen"
+						aria-pressed={penOn}
+						onclick={togglePen}
+					>
+						{m.part_viewer_draw()}
+					</button>
+				{/if}
+				{#if ink.hasMarks && !penOn}
 					<button
 						type="button"
 						class="font-sans text-sm text-paper underline aria-pressed:font-semibold aria-pressed:no-underline"
