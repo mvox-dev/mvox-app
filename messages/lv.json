@@ -709,6 +709,8 @@
 	"agenda_downloads_link": "Atvērt lejupielādētās partijas",
 	"last_read_as_of": "Stāvoklis uz {time}",
 	"part_viewer_close": "Aizvērt",
+	"part_viewer_draw": "Zīmēt",
+	"part_viewer_hide_marks": "Paslēpt iezīmes",
 	"part_viewer_not_on_device": "Šī partija nav saglabāta šajā ierīcē.",
 	"part_viewer_page_of": "{current} / {total}",
 	"entu_ref_aria_label": "Atvērt Entu ierakstu {short} (atveras jaunā cilnē)",

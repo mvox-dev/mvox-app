@@ -710,6 +710,8 @@
 	"agenda_downloads_link": "Відкрити завантажені партії",
 	"last_read_as_of": "Станом на {time}",
 	"part_viewer_close": "Закрити",
+	"part_viewer_draw": "Малювати",
+	"part_viewer_hide_marks": "Сховати позначки",
 	"part_viewer_not_on_device": "Ця партія не збережена на цьому пристрої.",
 	"part_viewer_page_of": "{current} / {total}",
 	"entu_ref_aria_label": "Відкрити запис Entu {short} (відкриється в новій вкладці)",

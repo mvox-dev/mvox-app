@@ -52,10 +52,12 @@
 	let drawing = $state(false);
 	let drawPts = $state<number[]>([]);
 	let capturedPointerId: number | null = null;
+	let capturedPointerType = '';
 	let drawPressures: number[] | null = null;
 
+	// One finger draws, two fingers pinch-zoom and pan the page.
 	const svgStyle = $derived(
-		`position: absolute; inset: 0; width: 100%; height: 100%;${readonly ? '' : ' touch-action: none;'}`
+		`position: absolute; inset: 0; width: 100%; height: 100%;${readonly ? '' : ' touch-action: pinch-zoom;'}`
 	);
 
 	// The stored box is [0,1]x[0,1] but the rendered box is not square: this puts y in x's unit.
@@ -241,11 +243,16 @@
 
 	function handlePointerDown(e: PointerEvent): void {
 		if (readonly) return;
-		// One stroke at a time: a second finger taking over would orphan the first one's pointerup
-		// and lose the line.
+		// A second finger is a pinch or pan: the finger stroke is dropped. Otherwise one stroke at a
+		// time, so another pointer never orphans the first one's pointerup.
+		if (e.pointerType === 'touch' && !e.isPrimary) {
+			if (drawing && capturedPointerType === 'touch') abortStroke();
+			return;
+		}
 		if (drawing) return;
 		drawing = true;
 		capturedPointerId = e.pointerId;
+		capturedPointerType = e.pointerType;
 		svgEl?.setPointerCapture(e.pointerId);
 		const [x, y] = unitPoint(e);
 		drawPts = [x, y];
@@ -274,11 +281,16 @@
 		endStroke();
 	}
 
+	function abortStroke(): void {
+		const id = capturedPointerId as number;
+		if (svgEl?.hasPointerCapture(id)) svgEl.releasePointerCapture(id);
+		endStroke();
+	}
+
 	// The pointer left without a pointerup: commit nothing, or a phantom stroke stays on screen.
 	function handlePointerAbort(e: PointerEvent): void {
 		if (!drawing || e.pointerId !== capturedPointerId) return;
-		if (svgEl?.hasPointerCapture(e.pointerId)) svgEl.releasePointerCapture(e.pointerId);
-		endStroke();
+		abortStroke();
 	}
 
 	// touch-action alone does not hold the page under a finger on iOS Safari (#825). Two fingers

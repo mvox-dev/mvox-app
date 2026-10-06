@@ -912,6 +912,26 @@ describe('#615 — drawing on the page', () => {
 		expect(marks(c)).toEqual([BLACK]);
 	});
 
+	it('undo on a page never brings back a mark from another page', async () => {
+		const c = await openWithPen();
+		await stroke(c, ACROSS);
+		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
+		await fireEvent.click(control(c, 'strokes_pen_black_aria_label') as HTMLButtonElement);
+		await stroke(c, ACROSS);
+		await fireEvent.click(control(c, 'strokes_erase_aria_label') as HTMLButtonElement);
+		await stroke(c, [
+			[200, 180],
+			[200, 220]
+		]);
+		expect(marks(c)).toEqual([]);
+
+		await turn(c, 'ArrowLeft', INDICATOR_1_OF_3);
+		await fireEvent.click(control(c, 'strokes_undo_aria_label') as HTMLButtonElement);
+		expect(marks(c)).toEqual([RED]);
+		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
+		expect(marks(c)).toEqual([]);
+	});
+
 	it('with the pen on, a tap in a corner turns the page and draws nothing', async () => {
 		const c = await openWithPen();
 		await stroke(c, [[380, 200]], FINGER);
@@ -923,6 +943,14 @@ describe('#615 — drawing on the page', () => {
 		expect(marks(c)).toEqual([]);
 		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
 		expect(marks(c), 'the tap left no dot on the page it turned from').toEqual([]);
+	});
+
+	it('a corner tap with no page to turn to draws nothing either', async () => {
+		const c = await openWithPen();
+		await stroke(c, [[20, 200]], FINGER);
+		expect(indicator(c)).toEqual(INDICATOR_1_OF_3);
+		expect(marks(c)).toEqual([]);
+		expect(surface(c).querySelector('[data-testid="live-stroke"]')).toBeNull();
 	});
 
 	it('with the pen on, a stroke that starts in a corner draws and turns nothing', async () => {
@@ -988,8 +1016,9 @@ describe('#615 — drawing on the page', () => {
 	});
 
 	it('"Hide marks" appears once there is ink, and hides and shows it on every page without losing it', async () => {
-		const c = await openWithPen();
+		const c = await open();
 		expect(hideMarks(c)).toBeNull();
+		await fireEvent.click(pen(c));
 		await stroke(c, ACROSS);
 		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
 		await stroke(c, ACROSS);
