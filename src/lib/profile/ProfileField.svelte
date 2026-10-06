@@ -5,6 +5,7 @@
 	import type { FieldKey } from '$lib/profile/fieldMove';
 	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
+	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { REDACT_ATTR } from '$lib/redact/redact';
 	import { focusOnMount } from '$lib/a11y/focusable';
 
@@ -234,15 +235,10 @@
 		{/snippet}
 		<label class="flex flex-col gap-1 text-sm">
 			{FIELD_LABEL[field]()}
-			<!-- #361 — the name editor is marked through a wrapping span (::after cannot render
-			     on an <input>); the email editor stays unmarked (see #361). -->
-			{#if field === 'name'}
-				<span {...{ [REDACT_ATTR]: '' }} class="relative flex flex-col">
-					{@render fieldInput()}
-				</span>
-			{:else}
+			<!-- #361, #618 — marked through a wrapping span: ::after cannot render on an <input>. -->
+			<span {...{ [REDACT_ATTR]: '' }} class="relative flex flex-col">
 				{@render fieldInput()}
-			{/if}
+			</span>
 		</label>
 	{:else}
 		<div class="flex flex-col gap-1 text-sm">
@@ -263,7 +259,7 @@
 					{#if field === 'name'}
 						<PersonName name={displayValue} />
 					{:else}
-						{displayValue}
+						<RedactedText>{displayValue}</RedactedText>
 					{/if}
 				</span>
 			</button>
