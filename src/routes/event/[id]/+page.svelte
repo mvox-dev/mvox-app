@@ -18,6 +18,7 @@
 	import { canMarkAttendance, manageRightsFrom } from '$lib/repertoire/repertoireActions';
 	import { manageRightsOrNone } from '$lib/repertoire/manageRights';
 	import { readManagePickers } from '$lib/repertoire/managePickers';
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { getAppByteStore } from '$lib/files/appByteStore';
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
@@ -160,8 +161,9 @@
 				if (g !== routeLoad.generation) return;
 				ev.workRows = byEvent[loaded.id] ?? [];
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (g !== routeLoad.generation) return;
+				reportProblem({ area: 'event', action: 'loading the work rows', error: e });
 				ev.workRows = [];
 			});
 

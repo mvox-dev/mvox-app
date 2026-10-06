@@ -106,8 +106,9 @@ export function createAgendaPanels(ag: AgendaLoadState, seq: LoadCounters, deps:
 				ag.seasonRatesLoaded = true;
 				ag.seasonRatesLoading = false;
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (thisRequestSnapshot !== seq.requestId) return;
+				reportProblem({ area: 'agenda', action: 'loading the season attendance rates', error: e });
 				ag.seasonRatesLoading = false;
 				ag.seasonRatesError = true;
 				ag.seasonMemberRates = [];

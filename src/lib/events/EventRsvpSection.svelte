@@ -12,6 +12,7 @@
 	import { createRsvpWriteStatus, existingRsvp } from '$lib/rsvp/rsvpWriteStatus';
 	import { createWriteTokens } from '$lib/net/writeTokens';
 	import type { EntuCfg } from '$lib/seasons/entuSeasons';
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import type { Collective } from '$lib/collectives/types';
 	import type { EventDetail } from '$lib/events/eventDetail';
 	import type { EventActions, EventPageState } from '$lib/events/eventPageState';
@@ -76,8 +77,9 @@
 				if (g !== generation()) return;
 				myRsvp = entry;
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (g !== generation()) return;
+				reportProblem({ area: 'event', action: 'loading your answer', error: e });
 				myRsvp = null;
 			});
 	}

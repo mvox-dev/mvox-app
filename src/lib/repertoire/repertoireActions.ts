@@ -1,4 +1,5 @@
 import { entuFetch } from '$lib/entu/request';
+import { reportProblem } from '$lib/problems/reportProblem';
 import { referenceIds } from '$lib/entu/references';
 import { replaceEntityProperty } from '$lib/entu/replaceProperty';
 import { resolveTypeId, type EntuCfg } from '$lib/seasons/entuSeasons';
@@ -188,7 +189,10 @@ export async function resolveManageRights(
 			{},
 			fetchImpl
 		);
-		if (!res.ok) return 'error';
+		if (!res.ok) {
+			reportRightsReadFailure(entityId, new Error(`HTTP ${res.status}`));
+			return 'error';
+		}
 		const body = (await res.json()) as {
 			entity?: {
 				_owner?: Array<{ reference?: string }>;
@@ -199,9 +203,14 @@ export async function resolveManageRights(
 		const owners = referenceIds(entity._owner);
 		const editors = referenceIds(entity._editor);
 		return manageRightsFrom(owners, editors, personId);
-	} catch {
+	} catch (e) {
+		reportRightsReadFailure(entityId, e);
 		return 'error';
 	}
+}
+
+function reportRightsReadFailure(entityId: string, error: unknown): void {
+	reportProblem({ area: 'rights', action: `reading the rights on ${entityId}`, error });
 }
 
 export function canMarkAttendance(

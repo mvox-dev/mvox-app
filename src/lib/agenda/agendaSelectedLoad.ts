@@ -3,6 +3,7 @@ import { loadFullAgenda } from '$lib/agenda/agendaData';
 import { sameCollectiveIdentity } from '$lib/collectives/store';
 import { isAuthExpiredError } from '$lib/entu/request';
 import { resetServedFromCache } from '$lib/entu/readCache';
+import { reportProblem } from '$lib/problems/reportProblem';
 import type { ManageRightsState } from '$lib/repertoire/types';
 import { loadMembership } from '$lib/rsvp/membershipLoad';
 import type { createAgendaWorksLoad } from '$lib/agenda/agendaWorksLoad';
@@ -251,6 +252,7 @@ export function createSelectedLoad(
 				if (isAuthExpiredError(err)) {
 					ag.sessionExpired = true;
 				} else {
+					reportProblem({ area: 'agenda', action: 'loading the agenda', error: err });
 					ag.agendaError = true;
 				}
 				ag.recentItems = [];
@@ -281,8 +283,9 @@ export function createSelectedLoad(
 							ag.myAttendance = result.items;
 							ag.attendancePartial = result.truncated;
 						})
-						.catch(() => {
+						.catch((e) => {
 							if (thisRequest !== seq.requestId) return;
+							reportProblem({ area: 'agenda', action: 'loading your attendance', error: e });
 							ag.myAttendance = [];
 							ag.attendancePartial = false;
 						});
@@ -299,8 +302,9 @@ export function createSelectedLoad(
 				ag.rsvpByEventId = rsvpsByEventId(result.items);
 				ag.rsvpPartial = result.truncated;
 			})
-			.catch(() => {
+			.catch((e) => {
 				if (thisRequest !== seq.requestId) return;
+				reportProblem({ area: 'agenda', action: 'loading your answers', error: e });
 				ag.rsvpByEventId = {};
 				ag.rsvpPartial = false;
 			});
