@@ -6,11 +6,11 @@
 
 **State:** main f9c73a5 (plus this seam commit), no branch open, no teammates up. The released queue is done.
 
-**Landed 10-06:** #611 code (PR #808; the issue stays OPEN for Done-when 6: Mihkel sends one feedback from the app, then Pérotin reads it back: owner = member, `_sharing: domain`; no authorization needed). #795 + #796 + #803 (#810). #800 (#811). #756 (#813-#816). #790 (#818, follow-up #820). Seams #807, #817.
+**Landed 10-06:** #611 CLOSED (PR #808 + live read-back passed 10:27Z: owner Mihkel, _sharing domain, metadata keys exact; 611-readback.md). #795 + #796 + #803 (#810). #800 (#811). #756 (#813-#816). #790 (#818, follow-up #820). Seams #807, #817.
 
-**Next:** board order #684 → #617/#618/#619 → #615 → #616; briefs exist in ~/workspace/scratchpad (prepped). Re-read each body, add the 10-05 test-gate and contract notes to the brief, spawn a fresh Josquin plus Bentham.
+**Next (Mihkel 10-06: context break, then launch remaining tasks):** board order #684 → #617/#618/#619 → #615 → #616; briefs exist in ~/workspace/scratchpad (prepped). Re-read each body, add the 10-05 test-gate and contract notes to the brief, spawn a fresh Josquin plus Bentham.
 
-**Waiting on Gama:** filing the record save-lock bug (recordSavingMemberId isn't reset on a collective switch; B's editor locked while A's save is in flight) and the domain-only name-check test pin (#811 finding).
+**Filed, unreleased (waits on Mihkel):** #819 record save-lock bug (recordSavingMemberId not reset on switch). **Waiting on Gama:** the domain-only name-check test pin (#811 finding).
 
 **Rules learned this run:** epic labels are the PO's (script); label only issues you pick. Closing comments are encouraged; the merge skill posts one per closed issue. Rule out a fix that adds a regression even when Bentham says "mergeable" (#811 gate drop, #808 duplicate send). Move rules that lived only in cut comments to architecture-decisions.md. Teammates must not edit on main or commit during review; one final SHA. The ratio method is src/ only, matching Gama's line report (3.42:1 now).
 
