@@ -564,6 +564,32 @@ describe('#394 — readonly (view mode)', () => {
 	});
 });
 
+describe('#825 — a one-finger stroke holds the page', () => {
+	/** A touchmove on the surface with the given number of fingers; true when the page may move. */
+	function touchMove(container: HTMLElement, fingers: number): boolean {
+		const svg = surface(container);
+		const touches = Array.from({ length: fingers }, (_, i) =>
+			new Touch({ identifier: i, target: svg, clientX: 50 + i * 40, clientY: 50 })
+		);
+		return svg.dispatchEvent(new TouchEvent('touchmove', { bubbles: true, cancelable: true, touches }));
+	}
+
+	it('one finger moving on the surface does not move the page', () => {
+		const { container } = mount();
+		expect(touchMove(container, 1)).toBe(false);
+	});
+
+	it('two fingers still reach the page', () => {
+		const { container } = mount();
+		expect(touchMove(container, 2)).toBe(true);
+	});
+
+	it('in view mode one finger scrolls the page', () => {
+		const { container } = mount({ readonly: true });
+		expect(touchMove(container, 1)).toBe(true);
+	});
+});
+
 describe('#394 — controls', () => {
 	it('four native buttons, each named', () => {
 		const { container } = mount();
