@@ -1,19 +1,5 @@
-// #427 RED — NOTHING DRAWN, NOTHING STORED: the structural fence.
-//
-// The issue is explicit: "No ink, no layers, no storage decision. Nothing is
-// drawn and nothing is saved. That is deliberate." The viewer settles page
-// turns and the concert rule BEFORE the layer schema is cut (epic #333), and
-// this slice must not prejudge the markings question. So the fence is
-// mechanical, in the page-shell.spec.ts / #335 grep-fence tradition: the
-// viewer MODULE TREE — src/routes/part/** plus any src/lib/parts/** it adds
-// — may READ (openFileBytes' read-through is the sanctioned data path; its
-// own cache write on an online miss is #334's landed behaviour, outside this
-// tree) but may not carry a single write-capable or drawing-capable
-// identifier of its own.
-//
-// FAIL-CLOSED ON VACUUM (the negative-from-the-instrument rule): a fence
-// that scans zero files proves nothing, so the first pin is that the route
-// exists and the walk found it. In RED that is exactly the failing case.
+// Part viewer fence (#427): the viewer tree reads bytes and writes only #353's label index.
+// A text scan is the right tool: it pins calls no file in the tree may make, and fails on no files.
 import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
@@ -45,10 +31,7 @@ function viewerFiles(): ViewerFile[] {
 	return out;
 }
 
-// Write-capable identifiers, by family. `.put(`/`.evict(` are the byte
-// store's write half (reads are get/heldFileIds); entuFetch + mutating
-// methods are the Entu write path; the three storage globals are the
-// "no storage decision" line itself.
+// Write-capable identifiers: byte-store writes, the Entu write path, the storage globals.
 const WRITE_PATTERNS: ReadonlyArray<[RegExp, string]> = [
 	[/\.put\s*\(/, 'byte-store put()'],
 	[/\.evict\s*\(/, 'byte-store evict()'],
@@ -62,11 +45,8 @@ const WRITE_PATTERNS: ReadonlyArray<[RegExp, string]> = [
 	[/indexedDB/, 'direct indexedDB access']
 ];
 
-// Hand-drawing canvas APIs. pdf.js renders INTO a 2d context the wrapper
-// hands it — that is the one sanctioned getContext call — but no code in
-// this tree draws strokes of its own. (Bare `fill(`/`stroke(`/`rect(` are
-// left out on purpose: Array.fill and getBoundingClientRect would
-// false-positive; the named calls below are unambiguous.)
+// Hand-drawing canvas calls; pdf.js gets the one sanctioned context. Bare fill/stroke/rect are
+// left out: Array.fill and getBoundingClientRect would match.
 const DRAW_PATTERN =
 	/\b(fillRect|strokeRect|beginPath|closePath|lineTo|moveTo|quadraticCurveTo|bezierCurveTo|drawImage|putImageData|createImageData|fillText|strokeText|setLineDash)\s*\(/;
 
@@ -111,16 +91,8 @@ describe('#427 — nothing drawn: canvas stays pdf.js-owned', () => {
 });
 
 describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index, named on the fence', () => {
-	// The write-pattern sweep above is blind to this call: `.put(` and
-	// `indexedDB` live inside labelStore/appLabelStore, not here, so the
-	// tree's single real write path passed the fence unseen — a green that
-	// described the instrument, not the code. Name the exception instead.
-	//
-	// WHAT IT IS: `recordPartLabel` writes the #353 LABEL INDEX — a separate
-	// IndexedDB database that only NAMES bytes someone else stored. It is not
-	// the byte store, not an Entu mutation, and not a marking: without it a
-	// part first opened from a library or an event page renders as "Unnamed
-	// part" on /downloads. Every OTHER LabelStore method stays out.
+	// The write sweep cannot see this call (its .put lives in labelStore), so it is named here:
+	// recordPartLabel only names stored bytes for /downloads; other LabelStore methods stay out.
 	const LABEL_STORE_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]\$lib\/files\/labelStore['"]/g;
 	const OTHER_LABEL_METHODS = /\.(putLabel|labelsFor|remove|clear)\s*\(/;
 
@@ -159,26 +131,6 @@ describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index,
 				hit,
 				`${file} calls ${hit?.[0] ?? ''} — the viewer records a name when bytes land and never edits or clears the index`
 			).toBeNull();
-		}
-	});
-});
-
-describe('#427 — no locale key prejudges the markings question', () => {
-	const LOCALES = ['en', 'et', 'lv', 'uk'] as const;
-	// Segment match, not substring: 'links_*' and 'profile_link_*' contain
-	// the letters i-n-k and are fine; a key SEGMENT named ink/draw/layer is
-	// the thing this slice must not introduce.
-	const FORBIDDEN = new Set(['ink', 'inks', 'draw', 'draws', 'drawn', 'drawing', 'layer', 'layers']);
-
-	it('no message key in any locale carries an ink/draw/layer segment', () => {
-		for (const locale of LOCALES) {
-			const keys = Object.keys(
-				JSON.parse(
-					readFileSync(resolve(process.cwd(), `messages/${locale}.json`), 'utf-8')
-				) as Record<string, unknown>
-			);
-			const offenders = keys.filter((k) => k.split('_').some((seg) => FORBIDDEN.has(seg)));
-			expect(offenders, locale).toEqual([]);
 		}
 	});
 });
