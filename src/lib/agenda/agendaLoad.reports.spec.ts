@@ -31,45 +31,45 @@ const CFG = testCfg('sampledb', 'jwt-1');
 const never = () => new Promise<never>(() => {});
 const settle = () => new Promise((r) => setTimeout(r, 0));
 
-type Reads = Partial<
-	Record<
-		| 'findMyMemberId'
-		| 'listMyAttendance'
-		| 'listMyRsvps'
-		| 'resolveManageRights'
-		| 'listScheduleItemsByEventId'
-		| 'listAttendance',
-		() => Promise<unknown>
-	>
->;
+type Loader = ReturnType<typeof setup>;
+type Read = () => Promise<unknown>;
+const boom = new Error('read broke');
+const fail: Read = () => Promise.reject(boom);
 
-function setup(reads: Reads = {}) {
+function setup(reads: Partial<Record<string, Read>> = {}) {
 	const ag = createAgendaLoadState();
 	const seq = createLoadCounters();
+	const noop = () => {};
 	const deps = {
+		...Object.fromEntries(
+			[
+				'findMyMemberId',
+				'listMyRsvps',
+				'listMyAttendance',
+				'resolveManageRights',
+				'listScheduleItemsByEventId',
+				'listAttendance',
+				'loadActiveAndArchivedRosters'
+			].map((name) => [name, reads[name] ?? never])
+		),
 		selected: () => ({ db: 'sampledb', personId: 'person-p' }),
 		seasonManageOpen: () => false,
-		seasonManageSwitchGeneration: () => 0,
-		resetSeasonManage: () => {},
-		closeSeasonCreateForm: () => {},
-		closeEventCreateForm: () => {},
-		closeSeriesCreateForm: () => {},
-		restoreSeriesCreateRun: () => {},
-		refreshPresence: () => {},
-		findMyMemberId: reads.findMyMemberId ?? never,
-		listMyRsvps: reads.listMyRsvps ?? never,
-		rsvpsByEventId: () => ({}),
-		listMyAttendance: reads.listMyAttendance ?? never,
-		resolveManageRights: reads.resolveManageRights ?? never,
-		listScheduleItemsByEventId: reads.listScheduleItemsByEventId ?? never,
-		listAttendance: reads.listAttendance ?? never,
-		loadActiveAndArchivedRosters: never,
-		listWorks: never,
-		listAllEditions: never,
-		listRepertoireItems: never
+		...Object.fromEntries(
+			[
+				'resetSeasonManage',
+				'closeSeasonCreateForm',
+				'closeEventCreateForm',
+				'closeSeriesCreateForm',
+				'restoreSeriesCreateRun',
+				'refreshPresence'
+			].map((name) => [name, noop])
+		),
+		rsvpsByEventId: () => ({})
 	} as unknown as AgendaLoadDeps;
 	return { ag, seq, loader: createAgendaLoader(ag, seq, deps) };
 }
+
+const select = ({ loader }: Loader) => loader.loadForSelected();
 
 beforeEach(() => {
 	reportProblem.mockReset();
@@ -78,49 +78,71 @@ beforeEach(() => {
 });
 
 describe('agenda reads that fail are reported (#756)', () => {
-	const boom = new Error('read broke');
-	const fail = () => Promise.reject(boom);
-
 	it.each([
-		{ read: 'the member lookup', reads: { findMyMemberId: fail }, action: 'finding your member record', area: 'rsvp' },
+		{
+			read: 'the member lookup',
+			reads: { findMyMemberId: fail },
+			run: select,
+			area: 'rsvp',
+			action: 'finding your member record',
+			shown: (l: Loader) => expect(l.ag.membership).toBe('loading')
+		},
 		{
 			read: 'your attendance',
 			reads: { findMyMemberId: () => Promise.resolve('member-1'), listMyAttendance: fail },
-			action: 'loading your attendance',
-			area: 'agenda'
+			run: select,
+			action: 'loading your attendance'
 		},
-		{ read: 'your answers', reads: { listMyRsvps: fail }, action: 'loading your answers', area: 'agenda' }
-	])('a failed read of $read is reported', async ({ reads, action, area }) => {
-		const { loader } = setup(reads as Reads);
-		loader.loadForSelected();
+		{ read: 'your answers', reads: { listMyRsvps: fail }, run: select, action: 'loading your answers' },
+		{
+			read: 'the agenda',
+			feed: fail,
+			run: select,
+			action: 'loading the agenda',
+			shown: (l: Loader) => expect(l.ag.agendaError).toBe(true)
+		},
+		{
+			read: 'the work rows',
+			rows: fail,
+			run: (l: Loader) => l.loader.loadWorksAndManagement(CFG, ['ev-1'], 's-1', l.seq.requestId),
+			action: 'loading the work rows',
+			shown: (l: Loader) => expect(l.ag.worksByEventId).toEqual({})
+		},
+		{
+			read: 'the schedule items',
+			reads: { listScheduleItemsByEventId: fail },
+			run: (l: Loader) => l.loader.loadScheduleItems(CFG, ['ev-1'], l.seq.requestId),
+			action: 'loading the schedule items',
+			shown: (l: Loader) => expect(l.ag.scheduleByEventId).toEqual({})
+		},
+		{
+			read: 'the season rates',
+			reads: { listAttendance: fail },
+			run: (l: Loader) => {
+				l.ag.recentItems = [{ id: 'ev-1' } as (typeof l.ag.recentItems)[number]];
+				l.loader.handleExpandSeasonSummary();
+			},
+			action: 'loading the season attendance rates',
+			shown: (l: Loader) => expect(l.ag.seasonRatesError).toBe(true)
+		}
+	])('a failed read of $read is reported', async (row) => {
+		if (row.feed) wire.loadFullAgenda = row.feed;
+		if (row.rows) wire.workRows = row.rows;
+		const l = setup(row.reads);
+		row.run(l);
 		await settle();
-		expect(reportProblem.mock.calls).toEqual([[{ area, action, error: boom }]]);
-	});
-
-	it('a failed member lookup still leaves membership loading', async () => {
-		const { ag, loader } = setup({ findMyMemberId: fail });
-		loader.loadForSelected();
-		await settle();
-		expect(ag.membership).toBe('loading');
-	});
-
-	it('a failed agenda read is reported and shows the agenda error', async () => {
-		wire.loadFullAgenda = fail;
-		const { ag, loader } = setup();
-		loader.loadForSelected();
-		await settle();
-		expect(ag.agendaError).toBe(true);
+		row.shown?.(l);
 		expect(reportProblem.mock.calls).toEqual([
-			[{ area: 'agenda', action: 'loading the agenda', error: boom }]
+			[{ area: row.area ?? 'agenda', action: row.action, error: boom }]
 		]);
 	});
 
 	it('an expired session is not reported (entuFetch already redirects)', async () => {
 		wire.loadFullAgenda = () => Promise.reject(new AuthExpiredError());
-		const { ag, loader } = setup();
-		loader.loadForSelected();
+		const l = setup();
+		select(l);
 		await settle();
-		expect(ag.sessionExpired).toBe(true);
+		expect(l.ag.sessionExpired).toBe(true);
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
@@ -130,43 +152,11 @@ describe('agenda reads that fail are reported (#756)', () => {
 			.fn()
 			.mockImplementationOnce(() => new Promise((_, reject) => (rejectFirst = reject)))
 			.mockImplementation(never);
-		const { loader } = setup({ listMyRsvps });
-		loader.loadForSelected();
-		loader.loadForSelected();
+		const l = setup({ listMyRsvps });
+		select(l);
+		select(l);
 		rejectFirst(boom);
 		await settle();
 		expect(reportProblem).not.toHaveBeenCalled();
-	});
-
-	it('a failed work-rows read is reported and shows no works', async () => {
-		wire.workRows = fail;
-		const { ag, seq, loader } = setup();
-		loader.loadWorksAndManagement(CFG, ['ev-1'], 'season-1', seq.requestId);
-		await settle();
-		expect(ag.worksByEventId).toEqual({});
-		expect(reportProblem.mock.calls).toEqual([
-			[{ area: 'agenda', action: 'loading the work rows', error: boom }]
-		]);
-	});
-
-	it('a failed schedule read is reported and shows no schedule', async () => {
-		const { ag, seq, loader } = setup({ listScheduleItemsByEventId: fail });
-		loader.loadScheduleItems(CFG, ['ev-1'], seq.requestId);
-		await settle();
-		expect(ag.scheduleByEventId).toEqual({});
-		expect(reportProblem.mock.calls).toEqual([
-			[{ area: 'agenda', action: 'loading the schedule items', error: boom }]
-		]);
-	});
-
-	it('a failed season-rates read is reported and shows the rates error', async () => {
-		const { ag, loader } = setup({ listAttendance: fail });
-		ag.recentItems = [{ id: 'ev-1' } as (typeof ag.recentItems)[number]];
-		loader.handleExpandSeasonSummary();
-		await settle();
-		expect(ag.seasonRatesError).toBe(true);
-		expect(reportProblem.mock.calls).toEqual([
-			[{ area: 'agenda', action: 'loading the season attendance rates', error: boom }]
-		]);
 	});
 });
