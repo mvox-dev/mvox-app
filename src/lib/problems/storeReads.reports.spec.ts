@@ -232,10 +232,10 @@ describe('a failed store read is reported (#756)', () => {
 });
 
 // Answers 500 for the one URL under test and a minimal 2xx body for every other read.
-function failingAt(match: string) {
+function failingAt(match: string, status = 500) {
 	return vi.fn(async (input: RequestInfo | URL) => {
 		const url = String(input);
-		if (url.includes(match)) return json({}, 500);
+		if (url.includes(match)) return json({}, status);
 		if (url.includes('_type.string=library')) return json({ entities: [{ _id: 'lib-1' }] });
 		if (url.includes('/entity/ev-1')) {
 			return json({
@@ -305,5 +305,13 @@ describe('a non-2xx store read is reported (#756)', () => {
 		await run();
 		expect(reportProblem.mock.calls).toEqual([[{ area, action, error: new Error('HTTP 500') }]]);
 	});
+
+	it.each(['/entity/season-1', '/entity/series-1'])(
+		"a 403 on the event's parent %s is an answer, not reported",
+		async (parent) => {
+			await loadEventDetail(CFG, 'ev-1', failingAt(parent, 403));
+			expect(reportProblem).not.toHaveBeenCalled();
+		}
+	);
 });
 
