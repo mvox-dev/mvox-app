@@ -10,14 +10,27 @@
     "propdef": "name (6ac4cebc1b0a34e1c208cede)"
   },
   "writes": [
-    { "op": "DELETE /property/6ac4cf011b0a34e1c208ceea", "status": 200, "removed": "'foo' ' — ' CONCAT_WS" },
-    { "op": "POST /entity/6ac4cebc1b0a34e1c208cede formula", "status": 200, "newValueId": "6ac4d1651b0a34e1c208ceec",
-      "added": "metadata '^.*\"route\":\"([^\"]*)\".*$' '$1' REGEX metadata '^.*\"time\":\"(\\d{4}-\\d{2}-\\d{2}).*$' '$1' REGEX ' ' CONCAT_WS" }
+    {
+      "op": "DELETE /property/6ac4cf011b0a34e1c208ceea",
+      "status": 200,
+      "removed": "'foo' ' — ' CONCAT_WS"
+    },
+    {
+      "op": "POST /entity/6ac4cebc1b0a34e1c208cede formula",
+      "status": 200,
+      "newValueId": "6ac4d1651b0a34e1c208ceec",
+      "added": "metadata '^.*\"route\":\"([^\"]*)\".*$' '$1' REGEX metadata '^.*\"time\":\"(\\d{4}-\\d{2}-\\d{2}).*$' '$1' REGEX ' ' CONCAT_WS"
+    }
   ],
   "readBack": {
     "propdefFormula": "one value, equals the added formula: PASS",
     "newFeedbackName": "pending: needs a new feedback submit (#823 done-when 1)"
   },
   "memberValuesRead": "none (the one existing feedback's name was read: '/ 2026-10-06', route + date only)",
-  "author": "(*MVOX:Palestrina*)"
+  "author": "(*MVOX:Palestrina*)",
+  "followUp": {
+    "step": "Mihkel removed the `name` formula on crede by hand (reported by Henry, po-team courier 2026-10-06 15:15 EEST); the app keeps writing `name` itself on submit",
+    "readBack": "not run: no team read-back of the removal",
+    "issue": "#823 withdrawn 15:11, closed out by Gama"
+  }
 }
