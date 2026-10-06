@@ -1,32 +1,6 @@
-/**
- * #305 — Roadmap board fetch step.
- *
- * Pulls this repo's issues (open + closed) from the GitHub REST API using
- * the Action's own `GITHUB_TOKEN`, resolves native sub-issues for every
- * issue whose kind is epic (#373: native type first, `epic` label for the
- * pre-type archive), and writes the result as the
- * `RoadmapIssue[]` JSON that scripts/roadmap/render.ts consumes.
- *
- * Deliberately separate from render.ts: this file talks to the network and
- * is the only part of the build that does; render.ts stays a pure function
- * of the JSON this script produces (see render.ts's own doc comment), so
- * the renderer's tests never need a live token or a mocked network.
- *
- * 302 issues live on this board today (2026-09-10) — well past one REST
- * page (max 100/page) — so this PAGINATES via the `Link: rel="next"`
- * response header rather than assuming one response covers the board.
- * The plain `/issues` endpoint also mixes in pull requests, so entries
- * carrying a `pull_request` field are filtered out (verified live 2026-09-10;
- * see teams/mvox-dev/memory/research/research-305.json, key "api-shape").
- *
- * CLI:
- *   node --import tsx scripts/roadmap/fetch-issues.ts --out <issues.json>
- * Env:
- *   GITHUB_TOKEN       — required; the Action's own token, read-only usage here.
- *   GITHUB_REPOSITORY  — "owner/repo"; set automatically inside a GitHub Action.
- *
- * (*MVOX:Palestrina*)
- */
+// The build's only network step: fetches this repo's issues (PRs excluded, paginated) with epics'
+// sub-issues, writes the RoadmapIssue[] JSON render.ts reads. Env: GITHUB_TOKEN, GITHUB_REPOSITORY.
+// CLI: node --import tsx scripts/roadmap/fetch-issues.ts --out <issues.json> (*MVOX:Palestrina*)
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -74,9 +48,7 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 	const state = raw.state === 'closed' ? 'closed' : 'open';
 	const stateReason =
 		raw.state_reason === 'completed' || raw.state_reason === 'not_planned' ? raw.state_reason : null;
-	// GitHub reports label colour as hex WITHOUT the leading '#'; kept exactly
-	// as reported here, '#' is prepended at render time only (label-color.ts /
-	// render.ts's renderLabel).
+	// Label colour stays as GitHub reports it, without '#'; render.ts adds the '#'.
 	const labels: RoadmapLabel[] = raw.labels
 		.map((l) => (typeof l === 'string' ? { name: l, color: null } : { name: l.name ?? '', color: l.color ?? null }))
 		.filter((l): l is RoadmapLabel => l.name.length > 0);
@@ -88,10 +60,7 @@ export function normalizeIssue(raw: GitHubIssue): RoadmapIssue {
 		labels,
 		body: raw.body,
 		closedAt: raw.closed_at ?? null,
-		// #403: the card's corner time. Carried verbatim; GitHub moves this on an
-		// edit, a comment, a label and a close, and NOT when a commit or another
-		// issue merely references this one (verified on #369 and #371) — which is
-		// the whole of what the corner claims.
+		// #403: GitHub moves this on an edit, comment, label or close, not on a reference.
 		updatedAt: raw.updated_at ?? null,
 		htmlUrl: raw.html_url,
 		subIssues: [],
@@ -130,19 +99,8 @@ async function fetchAllIssues(repo: string, token: string, fetchImpl: typeof fet
 	return issues;
 }
 
-/**
- * The direct sub-issues of one issue number.
- *
- * `per_page=100` because GitHub caps a parent at 100 sub-issues, which is also
- * this endpoint's maximum page size — one request therefore always covers a
- * parent in full, and there is no `Link` header worth following. The endpoint's
- * own default is 30, which would nest the first 30 children of a larger epic
- * and quietly leave the rest to render flat at top level.
- *
- * Depth is not this function's concern: it returns one parent's direct children
- * and fetchBoard assembles however many levels the board's epics form (GitHub
- * allows up to eight).
- */
+// One parent's direct sub-issues. per_page=100 covers a parent in full (GitHub caps it at 100;
+// the default 30 would leave the rest flat at top level).
 async function fetchSubIssues(
 	repo: string,
 	token: string,
@@ -158,6 +116,37 @@ async function fetchSubIssues(
 	return body.map(normalizeIssue);
 }
 
+interface GitHubIssueEvent {
+	event?: string;
+	created_at?: string;
+	label?: { name?: string };
+}
+
+/** When `in process` was last added, from an issue's events; null when it never was. */
+export function inProcessSince(events: GitHubIssueEvent[]): string | null {
+	let since: string | null = null;
+	for (const e of events) {
+		if (e.event === 'labeled' && e.label?.name === 'in process' && e.created_at) since = e.created_at;
+	}
+	return since;
+}
+
+async function fetchInProcessSince(
+	repo: string,
+	token: string,
+	issueNumber: number,
+	fetchImpl: typeof fetch
+): Promise<string | null> {
+	const events: GitHubIssueEvent[] = [];
+	let url: string | null = `${API_BASE}/repos/${repo}/issues/${issueNumber}/events?per_page=${PER_PAGE}`;
+	for (let page = 0; url && page < MAX_PAGES; page++) {
+		const res = await githubFetch(url, token, fetchImpl);
+		events.push(...((await res.json()) as GitHubIssueEvent[]));
+		url = parseNextLink(res.headers.get('link'));
+	}
+	return inProcessSince(events);
+}
+
 /** Fetch the full board: all issues, with sub-issues resolved for every `epic`-labeled issue. */
 export async function fetchBoard(
 	repo: string,
@@ -166,35 +155,27 @@ export async function fetchBoard(
 ): Promise<RoadmapIssue[]> {
 	const rawIssues = await fetchAllIssues(repo, token, fetchImpl);
 	const issues = rawIssues.map(normalizeIssue);
+	for (const issue of issues) {
+		if (issue.state === 'open' && issue.labels.some((l) => l.name === 'in process')) {
+			issue.inProcessSince = await fetchInProcessSince(repo, token, issue.number, fetchImpl);
+		}
+	}
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
 	for (const issue of issues) {
-		// #373: kind is read through the model — native type first, `epic` label
-		// only for the pre-type archive. A post-#393 epic carries no labels at all.
+		// #373: native type first, the `epic` label only for the pre-type archive.
 		if (kindOf(issue.issueType, issue.labels.map((l) => l.name)) === 'epic') {
 			const fetched = await fetchSubIssues(repo, token, issue.number, fetchImpl);
-			// Nest the object from the top-level list, not the sub_issues copy of it.
-			// The copy is a distinct object whose own subIssues stay empty forever, so
-			// nesting it would strand every grandchild: a nested epic's children are
-			// resolved onto its top-level object, which the copy never sees. Sharing
-			// one object per number makes the depth independent of loop order.
+			// Nest the top-level object, not the sub_issues copy, so grandchildren resolve
+			// onto the same object whatever the loop order.
 			issue.subIssues = fetched.map((sub) => byNumber.get(sub.number) ?? sub);
 			for (const sub of issue.subIssues) childNumbers.add(sub.number);
 		}
 	}
-	// Sub-issues are ordinary repo issues, so the list above already returned each
-	// one at top level too. Drop those entries: the renderer walks both the top
-	// level and the nested subIssues, so leaving them in renders every sub-issue
-	// twice. A nested epic is unaffected — it keeps its children because it IS the
-	// same object, and only loses its top-level position.
+	// Sub-issues also came back at top level; drop those, or each renders twice.
 	const roots = issues.filter((issue) => !childNumbers.has(issue.number));
 
-	// De-parenting is only safe for a child something still reaches. If the API
-	// ever reports a parent cycle (289 under 290 under 289), every member is some
-	// other member's child, so the filter above would drop the whole ring off the
-	// board without a word. Walk what the roots reach and put anything stranded
-	// back at top level: the page keeps every issue it fetched, whatever shape the
-	// sub-issue graph turns out to have.
+	// A parent cycle would drop its whole ring above; anything the roots miss goes back on top.
 	const reachable = new Set<number>();
 	const stack = [...roots];
 	for (let node = stack.pop(); node != null; node = stack.pop()) {

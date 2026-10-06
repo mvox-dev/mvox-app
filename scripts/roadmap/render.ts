@@ -23,6 +23,9 @@ export interface RoadmapIssue {
 
 	updatedAt?: string | null;
 
+	// When `in process` was last put on the issue; the card shows the time since then.
+	inProcessSince?: string | null;
+
 	htmlUrl: string;
 
 	subIssues?: RoadmapIssue[];
@@ -220,6 +223,31 @@ export function renderUpdatedAt(updatedAt: string | null | undefined): string {
 	return `<time class="issue-updated" datetime="${iso}">${escapeHtml(formatGeneratedAt(iso))}</time>`;
 }
 
+// The page's script embeds this function's own source, so it keeps to plain JavaScript.
+export function formatElapsed(ms: number): string {
+	const minutes = Math.max(0, Math.floor(ms / 60000));
+	const days = Math.floor(minutes / 1440);
+	const hours = Math.floor((minutes % 1440) / 60);
+	const mins = minutes % 60;
+	if (days > 0) return days + ' p ' + hours + ' h';
+	if (hours > 0) return hours + ' h ' + mins + ' min';
+	return mins + ' min';
+}
+
+function inProcessSinceIso(issue: RoadmapIssue): string | null {
+	if (issue.state !== 'open' || !(issue.labels ?? []).some((l) => l?.name === 'in process')) return null;
+	const parsed = Date.parse(issue.inProcessSince ?? '');
+	return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
+}
+
+export function renderElapsed(sinceIso: string, generatedAt: string): string {
+	const text = formatElapsed(Date.parse(generatedAt) - Date.parse(sinceIso));
+	return (
+		`<time class="issue-updated issue-elapsed" datetime="${sinceIso}" ` +
+		`title="in process since ${escapeHtml(formatGeneratedAt(sinceIso))}">${escapeHtml(text)}</time>`
+	);
+}
+
 // #690: every sub-issue closed, at every depth.
 function allFinished(issues: RoadmapIssue[], seen: Set<number> = new Set<number>()): boolean {
 	return issues.every((sub) => {
@@ -240,7 +268,7 @@ function activeSummary(issues: RoadmapIssue[]): string {
 	return `${total}, ${open} pooleli`;
 }
 
-function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
+function renderIssue(issue: RoadmapIssue, rendered: Set<number>, generatedAt: string): string {
 	if (rendered.has(issue.number)) return '';
 	rendered.add(issue.number);
 	const title = displayTitle(issue);
@@ -262,9 +290,10 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 	const labelsHtml = [kindChipHtml, ...chipLabels.map(renderLabel)]
 		.filter((html) => html.length > 0)
 		.join(' ');
+	const sinceIso = inProcessSinceIso(issue);
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
-		.map((sub) => renderIssue(sub, rendered))
+		.map((sub) => renderIssue(sub, rendered, generatedAt))
 		.filter((html) => html.length > 0)
 		.map((html) => `<li>${html}</li>`)
 		.join('');
@@ -277,7 +306,7 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>): string {
 			: `<details class="sub-issues-fold" open><summary>${activeSummary(subIssues)}</summary>${listHtml}</details>`;
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
-		renderUpdatedAt(issue.updatedAt) +
+		(sinceIso ? renderElapsed(sinceIso, generatedAt) : renderUpdatedAt(issue.updatedAt)) +
 		`<a class="issue-link" href="${escapeHtml(issue.htmlUrl)}">` +
 		`<span class="issue-number">#${issue.number}</span>` +
 		`<span class="issue-title">${escapeHtml(title)}</span>` +
@@ -313,7 +342,18 @@ const REFRESH_SCRIPT = (stamp: string) => `(function () {
 			window.scrollTo(0, parseInt(saved, 10));
 		}
 	});
-	setInterval(poll, 60000);
+	var formatElapsed = ${formatElapsed.toString()};
+	function showElapsed() {
+		if (typeof document === 'undefined') return;
+		var now = Date.now();
+		var els = document.querySelectorAll('time.issue-elapsed');
+		for (var i = 0; i < els.length; i++) {
+			var since = Date.parse(els[i].getAttribute('datetime'));
+			if (!isNaN(since)) els[i].textContent = formatElapsed(now - since);
+		}
+	}
+	showElapsed();
+	setInterval(function () { poll(); showElapsed(); }, 60000);
 })();`;
 
 export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string {
@@ -323,12 +363,12 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	const ordered = boardOrder(issues);
 	const openHtml = ordered
 		.filter((issue) => issue.state === 'open')
-		.map((issue) => renderIssue(issue, rendered))
+		.map((issue) => renderIssue(issue, rendered, generatedAt))
 		.filter((html) => html.length > 0)
 		.join('\n');
 	const closedHtml = ordered
 		.filter((issue) => issue.state === 'closed')
-		.map((issue) => renderIssue(issue, rendered))
+		.map((issue) => renderIssue(issue, rendered, generatedAt))
 		.filter((html) => html.length > 0)
 		.join('\n');
 	const violators = stalenessViolators(issues);
