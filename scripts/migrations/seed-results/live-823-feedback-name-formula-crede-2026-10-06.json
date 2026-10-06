@@ -1,0 +1,23 @@
+{
+  "db": "mvox_crede",
+  "kind": "live hand run: feedback `name` prop-def formula replaced (Palestrina, from the team-lead session, 2026-10-06)",
+  "sensitive": false,
+  "issue": "mvox-app#823",
+  "authorizedBy": "Mihkel, in the team-lead session: \"yes\" to setting the formula on crede (hook stamp 2026-10-06 13:44:30 EEST); release recorded in the #823 body (13:43)",
+  "runWindow": "between hook stamps 2026-10-06 10:45:35Z and 10:46:17Z",
+  "target": {
+    "type": "feedback (6abb6b9256069f238dec7ce2)",
+    "propdef": "name (6ac4cebc1b0a34e1c208cede)"
+  },
+  "writes": [
+    { "op": "DELETE /property/6ac4cf011b0a34e1c208ceea", "status": 200, "removed": "'foo' ' — ' CONCAT_WS" },
+    { "op": "POST /entity/6ac4cebc1b0a34e1c208cede formula", "status": 200, "newValueId": "6ac4d1651b0a34e1c208ceec",
+      "added": "metadata '^.*\"route\":\"([^\"]*)\".*$' '$1' REGEX metadata '^.*\"time\":\"(\\d{4}-\\d{2}-\\d{2}).*$' '$1' REGEX ' ' CONCAT_WS" }
+  ],
+  "readBack": {
+    "propdefFormula": "one value, equals the added formula: PASS",
+    "newFeedbackName": "pending: needs a new feedback submit (#823 done-when 1)"
+  },
+  "memberValuesRead": "none (the one existing feedback's name was read: '/ 2026-10-06', route + date only)",
+  "author": "(*MVOX:Palestrina*)"
+}
