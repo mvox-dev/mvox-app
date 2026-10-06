@@ -129,7 +129,7 @@ async function renderWithEditionUnfolded() {
 async function activate(container: HTMLElement, key: 'nr' | 'member' | 'since') {
 	await fireEvent.click(container.querySelector(sortBtn(key))!);
 	await waitFor(() => {
-		expect(container.querySelector(sortBtn(key))!.getAttribute('aria-checked')).toBe('true');
+		expect(container.querySelector(sortBtn(key))!.getAttribute('aria-pressed')).toBe('true');
 	});
 }
 

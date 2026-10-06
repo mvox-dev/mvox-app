@@ -79,9 +79,9 @@ function chip(container: HTMLElement, mode: 'collapsed' | 'expanded' | 'arrange'
 
 function pressedStates(container: HTMLElement): Record<string, string | null> {
 	return {
-		collapsed: chip(container, 'collapsed')?.getAttribute('aria-checked') ?? null,
-		expanded: chip(container, 'expanded')?.getAttribute('aria-checked') ?? null,
-		arrange: chip(container, 'arrange')?.getAttribute('aria-checked') ?? null
+		collapsed: chip(container, 'collapsed')?.getAttribute('aria-pressed') ?? null,
+		expanded: chip(container, 'expanded')?.getAttribute('aria-pressed') ?? null,
+		arrange: chip(container, 'arrange')?.getAttribute('aria-pressed') ?? null
 	};
 }
 
@@ -93,7 +93,7 @@ async function selectMode(
 	expect(target, `chip for ${mode}`).not.toBeNull();
 	await fireEvent.click(target as HTMLElement);
 	await waitFor(() => {
-		expect((chip(container, mode) as HTMLElement).getAttribute('aria-checked')).toBe('true');
+		expect((chip(container, mode) as HTMLElement).getAttribute('aria-pressed')).toBe('true');
 	});
 }
 
@@ -140,7 +140,7 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 		expect(q(container, 'sections-toggle-all')).toBeNull();
 	});
 
-	it('default selection is Collapsed: aria-checked="true" on the Collapsed chip ONLY, and no member row is on screen', async () => {
+	it('default selection is Collapsed: aria-pressed="true" on the Collapsed chip ONLY, and no member row is on screen', async () => {
 		const container = await renderReady('admin');
 
 		expect(pressedStates(container)).toEqual({
@@ -412,18 +412,18 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 		return chips(container).filter((c) => c.getAttribute('tabindex') === '0');
 	}
 
-	it('the group is a role="radiogroup" of role="radio" chips, with an accessible name', async () => {
+	it('the group is a role="toolbar" of toggle buttons, with an accessible name (#809)', async () => {
 		const container = await renderReady('admin');
 		const group = q(container, 'roster-view-modes') as HTMLElement;
-		expect(group.getAttribute('role')).toBe('radiogroup');
+		expect(group.getAttribute('role')).toBe('toolbar');
 		expect(group.getAttribute('aria-label')).toBeTruthy();
 		for (const c of chips(container)) {
-			expect(c.getAttribute('role'), c.getAttribute('data-testid') ?? '').toBe('radio');
-			expect(c.closest('[role="radiogroup"]')).toBe(group);
+			expect(c.getAttribute('aria-pressed'), c.getAttribute('data-testid') ?? '').not.toBeNull();
+			expect(c.closest('[role="toolbar"]')).toBe(group);
 		}
 	});
 
-	it('exactly ONE chip is the Tab stop, and it is the checked one', async () => {
+	it('exactly ONE chip is the Tab stop, and it is the pressed one', async () => {
 		const container = await renderReady('admin');
 		expect(stops(container)).toEqual([chip(container, 'collapsed')]);
 
@@ -431,37 +431,21 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 		expect(stops(container)).toEqual([chip(container, 'arrange')]);
 	});
 
-	it('ArrowRight moves focus AND selects the next chip, wrapping at the end', async () => {
+	it('arrows move focus and wrap, and never change the mode (#809)', async () => {
 		const container = await renderReady('admin');
 		const [collapsed, expanded, arrange] = chips(container);
 		expect(chips(container)).toHaveLength(3);
 
 		collapsed.focus();
 		await fireEvent.keyDown(collapsed, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(expanded.getAttribute('aria-checked')).toBe('true');
-		});
 		expect(document.activeElement).toBe(expanded);
-
 		await fireEvent.keyDown(expanded, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(arrange.getAttribute('aria-checked')).toBe('true');
-		});
-
+		expect(document.activeElement).toBe(arrange);
 		await fireEvent.keyDown(arrange, { key: 'ArrowRight' });
-		await waitFor(() => {
-			expect(chip(container, 'collapsed')!.getAttribute('aria-checked')).toBe('true');
-		});
-	});
-
-	it('ArrowLeft wraps backwards from the first chip to the last', async () => {
-		const container = await renderReady('admin');
-		const collapsed = chip(container, 'collapsed') as HTMLButtonElement;
-		collapsed.focus();
+		expect(document.activeElement).toBe(collapsed);
 		await fireEvent.keyDown(collapsed, { key: 'ArrowLeft' });
-		await waitFor(() => {
-			expect(chip(container, 'arrange')!.getAttribute('aria-checked')).toBe('true');
-		});
+		expect(document.activeElement).toBe(arrange);
+		expect(pressedStates(container)).toEqual({ collapsed: 'true', expanded: 'false', arrange: 'false' });
 	});
 
 	it('the group is only as wide as it renders — a non-admin has TWO members and the wrap respects that', async () => {
@@ -470,9 +454,7 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 		const collapsed = chip(container, 'collapsed') as HTMLButtonElement;
 		collapsed.focus();
 		await fireEvent.keyDown(collapsed, { key: 'ArrowLeft' });
-		await waitFor(() => {
-			expect(chip(container, 'expanded')!.getAttribute('aria-checked')).toBe('true');
-		});
+		expect(document.activeElement).toBe(chip(container, 'expanded'));
 	});
 
 	it('Tab, Enter and Space are NOT preventDefault-ed — focus leaves the group and the chip still activates', async () => {

@@ -188,6 +188,21 @@ describe('#214 — single-select TOGGLE (polyphony.uk pattern)', () => {
 		expect(chip(container, 'agenda-filter-concert').getAttribute('aria-pressed')).toBe('false');
 	});
 
+	it('the chips are a toolbar: arrows move focus and wrap, and never filter (#809)', async () => {
+		const container = await renderAgenda([UP_REHEARSAL, UP_CONCERT]);
+		const [all, rehearsal, concert] = chips(container);
+		expect(chips(container).filter((c) => c.tabIndex === 0)).toEqual([all]);
+		all.focus();
+		await fireEvent.keyDown(all, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(rehearsal);
+		await fireEvent.keyDown(rehearsal, { key: 'End' });
+		expect(document.activeElement).toBe(concert);
+		await fireEvent.keyDown(concert, { key: 'ArrowRight' });
+		expect(document.activeElement).toBe(all);
+		expect(upcomingRowIds(container)).toEqual(['up-reh', 'up-con']);
+		expect(all.getAttribute('aria-pressed')).toBe('true');
+	});
+
 	it('the explicit All chip clears an active filter too', async () => {
 		const container = await renderAgenda([UP_REHEARSAL, UP_CONCERT], [RECENT_SOCIAL]);
 

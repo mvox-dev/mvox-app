@@ -1,27 +1,5 @@
 // @vitest-environment happy-dom
-//
-// #247 RED — the agenda view-mode preference store (Ruled 2026-09-06, item 9:
-// the day list stays the DEFAULT; the Nimekiri|Kuu choice "persists on the
-// device the same way the time-format preference does" — the #207 idiom).
-//
-// CONTRACT (GREEN must implement — src/lib/preferences/agendaView.ts, a
-// transplant of the timeFormat.ts shape, NOT a hand-rolled variant):
-//
-//   export type AgendaView = 'list' | 'month';
-//   export const AGENDA_VIEW_KEY = 'mvox.agenda_view';   // mvox.<name> convention
-//   export function readStoredAgendaView(): AgendaView;  // sanitizing read of
-//                                                        // localStorage NOW:
-//                                                        // absent/invalid → 'list'
-//   export const agendaViewStore: Writable<AgendaView>;  // init from readStoredAgendaView()
-//   export function setAgendaView(v: AgendaView): void;  // store.set + persist
-//
-//   SSR-safe: the module guards `typeof localStorage !== 'undefined'` — import,
-//   read and setAgendaView must not throw where localStorage is absent, and
-//   the store then defaults to 'list'. A raw `localStorage.getItem(...)` read
-//   trusted verbatim is exactly the trap this spec exists to close.
-//
-// Every init-behaviour test goes through a FRESH module instance
-// (vi.resetModules + dynamic import) — module-level init runs once per import.
+// The agenda view preference: Detailne by default, a sanitized per-device read, SSR-safe (#247).
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -32,9 +10,7 @@ async function freshModule(): Promise<AgendaViewModule> {
 	return await import('./agendaView');
 }
 
-// `vi.unstubAllGlobals()` FIRST in afterEach — the SSR-safety tests stub
-// `localStorage` away, so an unguarded `localStorage.clear()` ahead of the
-// unstub would throw and leave the stub in place to poison every later test.
+// Unstub before clearing: the SSR tests stub localStorage away.
 function clearStorage(): void {
 	if (typeof localStorage !== 'undefined') localStorage.clear();
 }

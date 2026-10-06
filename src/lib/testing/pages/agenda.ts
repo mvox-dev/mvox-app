@@ -46,7 +46,7 @@ export const UP_REHEARSAL = item('up-reh', 'Tavaline proov', '2030-06-10T16:00:0
 export const UP_FREETEXT = item('up-proov', 'Eriproov', '2030-06-14T16:00:00.000Z', 'proov');
 
 export function chipGroup(container: HTMLElement): HTMLElement | null {
-	return container.querySelector('[role="group"][aria-label="[msg:filter-group]"]');
+	return container.querySelector('[role="toolbar"][aria-label="[msg:filter-group]"]');
 }
 
 export function chips(container: HTMLElement): HTMLButtonElement[] {
