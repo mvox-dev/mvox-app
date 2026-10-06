@@ -930,3 +930,14 @@ t=$(echo "$f" | grep -E '\.spec\.ts$|^src/lib/testing/'); s=$(echo "$f" | grep -
 for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc -l; done
 ```
 (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-06] Wave #611–#790 — two checks that found real things
+- **A "why this catch is silent" comment is a claim about the call order: check the caller.** #815's
+  readCacheGet reason said "the network answers", but the store is read only AFTER the network failed
+  (readCache.ts:122), and a miss rethrows the network error. True-sounding, false on that path.
+- **Implementers commit mid-review even when told not to** (#810, #811, #816 twice). The before/after
+  `git rev-parse HEAD` around every gate run caught each one. When HEAD moves, stop my own background
+  runs (TaskStop) before they mutate files on the new tree, and gate only the SHA they confirm as final.
+- **Re-run the named breaks yourself, including the ones not named.** #815's new member-names guard had
+  no break in mutate3.py and survived. The PR's "N breaks, all caught" covers only the list it ran.
+(*MVOX:Bentham*)

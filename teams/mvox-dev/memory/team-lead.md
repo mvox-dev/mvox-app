@@ -2,7 +2,24 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-33 checkpoint 2026-10-05 22:05Z]
+### [NEXT SESSION — MVOX-34 checkpoint 2026-10-06 08:00Z]
+
+**State:** main f9c73a5 (plus this seam commit), no branch open, no teammates up. The released queue is done.
+
+**Landed 10-06:** #611 code (PR #808; the issue stays OPEN for Done-when 6: Mihkel sends one feedback from the app, then Pérotin reads it back: owner = member, `_sharing: domain`; no authorization needed). #795 + #796 + #803 (#810). #800 (#811). #756 (#813-#816). #790 (#818, follow-up #820). Seams #807, #817.
+
+**Next:** board order #684 → #617/#618/#619 → #615 → #616; briefs exist in ~/workspace/scratchpad (prepped). Re-read each body, add the 10-05 test-gate and contract notes to the brief, spawn a fresh Josquin plus Bentham.
+
+**Waiting on Gama:** filing the record save-lock bug (recordSavingMemberId isn't reset on a collective switch; B's editor locked while A's save is in flight) and the domain-only name-check test pin (#811 finding).
+
+**Rules learned this run:** epic labels are the PO's (script); label only issues you pick. Closing comments are encouraged; the merge skill posts one per closed issue. Rule out a fix that adds a regression even when Bentham says "mergeable" (#811 gate drop, #808 duplicate send). Move rules that lived only in cut comments to architecture-decisions.md. Teammates must not edit on main or commit during review; one final SHA. The ratio method is src/ only, matching Gama's line report (3.42:1 now).
+
+**Team at seam:** none up.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-33 checkpoint 2026-10-05]
 
 **State:** main fe45b42 (after this seam PR: one more chore commit), tree clean apart from memory files, no branch open. The #706 test-review queue is DONE: #708-#718 and #723 all closed. Repo test:source 3.34:1 (from 3.9:1 on 10-01).
 
@@ -17,23 +34,6 @@
 **Lessons this wave:** grep closing keywords case-insensitively, in both the squash body and the PR description (mvox-merge skill updated). Release = shutdown_request, never a text message. Mutation runs: check the branch first and restore before reporting (a stray mutation sat on main). Never pkill shared processes. A mock dropped while its handle is still asserted makes a never-failing test (#805 → #806). Never prove a negative after a fixed wait (#792).
 
 **Team at seam:** none up. Spawn fresh josquin/bentham/finn per task.
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-32 checkpoint 2026-10-03, restart seam]
-
-**State (2026-10-03 20:27Z, restart seam — Mihkel asked for fresh context):** main 6bb3246, tree clean apart from memory files. #711 in process: b1 merged (PR #772); next b2 admin+profile (32), then event 33, roster 35, season panel 21, agenda 21+21; plan in ~/workspace/scratchpad/711-inventory.md, scripts in scratchpad/711/. Spawn a fresh Josquin for b2 (point at the inventory + findings-mvox-29.md tail for rules) and a fresh Bentham (bentham.md has the traps). Then #712-#718 (research after #711), #723, then features #611 → #684 → #617, #618, #619, #615 → #616. #756 (swallowed reads) not ready yet; finds go to Gama for its body.
-
-**Landed 10-03:** #708 (PRs #724-#733), #710 (#734-#739), #709 (#740-#771, closed e58ed92), #704, #711 b1.
-
-**Batch rules (shared setup):** ≤40 files; mutation proof + 2 shuffled seeds; only last batch says Closes (GitHub acts on "Closes #N" anywhere in a PR body); author lines kept; comment rules on touched files.
-
-**Rules learned today:** labels per transition are steps in mvox-pickup/mvox-merge skills. research-pack markers: no regex metachars. Teammate subagent hand-backs land in team-lead: have them write files. Line report = po-team's tool, ask Gama.
-
-**Nits:** soleCreatePath guard now a subset of rightsWrites (retire at next touch); t4-10-plan.ts:435 stale comment; resolveAdmin/resolveLibrarian auth-expired → load-error (pre-existing).
-
-**Team at seam:** perotin up. Spawn fresh josquin/bentham/finn per task.
 
 (*MVOX:Palestrina*)
 
