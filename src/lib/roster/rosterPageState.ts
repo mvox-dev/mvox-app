@@ -166,7 +166,10 @@ export function resetMemberOps(mo: MemberOpsState, { isSwitch }: { isSwitch: boo
 	mo.recordEditorLookup = null;
 	mo.recordSaveError = null;
 	mo.recordStatus = '';
-	if (isSwitch) clearInvites(mo);
+	if (isSwitch) {
+		mo.recordSavingMemberId = null;
+		clearInvites(mo);
+	}
 }
 
 export function clearInvites(mo: MemberOpsState): void {

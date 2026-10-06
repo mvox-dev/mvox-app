@@ -49,10 +49,6 @@ import {
 import { q } from '$lib/testing/pages/dom';
 
 const WRITES = [createMemberRecordMock, updateMemberRecordMock];
-// The editor controls recordSavingMemberId disables; the lock is page-wide and outlives a switch.
-const SAVE_LOCKED = ['name', 'phone', 'email', 'birthdate', 'id-code', 'save', 'cancel']
-	.map((field) => `[data-testid="roster-record-${field}"]`)
-	.join(', ');
 
 function lookup(name: string): MemberRecordLookup {
 	return {
@@ -137,9 +133,7 @@ describe('/roster — a record editor settle from before a switch away and back 
 			expect(nameInput(container).value).toBe('Ada Lovelace');
 		});
 
-		await expectLateSettleChangesNothing(container, held, row.outcome, WRITES, {
-			lockClears: row.start === saveRename ? SAVE_LOCKED : null
-		});
+		await expectLateSettleChangesNothing(container, held, row.outcome, WRITES);
 	});
 });
 

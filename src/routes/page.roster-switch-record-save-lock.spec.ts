@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-// A record save in flight in one collective does not lock the next collective's record editor (#819).
+// A record save in flight in one collective must not lock the next one's record editor (#819).
 import { fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
