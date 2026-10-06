@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	// #427 — the fullscreen part viewer. A full-viewport in-app route (NOT
 	// the house shell — allowlisted in src/page-shell.spec.ts, the /auth/*
 	// full-screen family taken one shape further): a singer reads her part
@@ -230,7 +231,12 @@
 						getAppByteStore()
 					);
 				} catch (error) {
-					if (!wireUnreachable(error)) deliveryFailed = true;
+					if (!wireUnreachable(error)) {
+						deliveryFailed = true;
+						if (!cancelled) {
+							reportProblem({ area: 'part', action: 'delivering the part', error });
+						}
+					}
 					continue;
 				}
 				if (cancelled) {
@@ -269,7 +275,8 @@
 					if (label) {
 						recordPartLabel(getAppLabelStore(), identity, fileId, label, result.reason);
 					}
-				} catch {
+				} catch (error) {
+					if (!cancelled) reportProblem({ area: 'part', action: 'opening the part', error });
 					// Bytes in hand that pdf.js cannot open: a failure of this
 					// FILE, not of this partition — no other identity would open
 					// it either. The bytes ARE on the device, so this is an open

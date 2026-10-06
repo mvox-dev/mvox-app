@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	// Lists downloaded parts by label and opens them in the viewer, with no network.
 	// heldFileIds is the source of truth for what is held; labelsFor only names held ids,
@@ -66,9 +67,10 @@
 				rows = out;
 				loaded = true;
 			})
-			.catch(() => {
+			.catch((e) => {
 				// An IDB read error shows as a failure, never as an endless "Loading…".
 				if (g !== loadGen) return;
+				reportProblem({ area: 'downloads', action: 'loading the downloaded parts', error: e });
 				loaded = true;
 				loadError = true;
 			});

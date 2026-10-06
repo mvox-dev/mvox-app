@@ -685,6 +685,52 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 		}
 	});
 
+	it('a delivery that fails after the viewer closed is not reported (#756)', async () => {
+		deadFetch();
+		let rejectSigning!: (e: unknown) => void;
+		signFileUrlMock.mockReturnValue(new Promise((_, reject) => (rejectSigning = reject)));
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { unmount } = renderViewer();
+			await waitFor(() => expect(signFileUrlMock).toHaveBeenCalled());
+			unmount();
+			rejectSigning(new Error('signFileUrl: file file-score signing failed: 500'));
+			await new Promise((r) => setTimeout(r, 0));
+			expect(consoleSpy).not.toHaveBeenCalledWith(
+				'part: delivering the part failed',
+				expect.anything()
+			);
+		} finally {
+			consoleSpy.mockRestore();
+			restore();
+		}
+	});
+
+	it('held bytes pdf.js fails to open after the viewer closed are not reported (#756)', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		seedHeldPart();
+		let rejectOpen!: (e: unknown) => void;
+		pdfjs.getDocument.mockReturnValueOnce({
+			promise: new Promise((_, reject) => (rejectOpen = reject)),
+			destroy: pdfjs.destroy
+		} as never);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { unmount } = renderViewer();
+			await waitFor(() => expect(pdfjs.getDocument).toHaveBeenCalled());
+			unmount();
+			rejectOpen(new Error('Invalid PDF structure'));
+			await new Promise((r) => setTimeout(r, 0));
+			expect(consoleSpy).not.toHaveBeenCalledWith('part: opening the part failed', expect.anything());
+		} finally {
+			consoleSpy.mockRestore();
+			restore();
+		}
+	});
+
 	it('held bytes pdf.js cannot open are reported and show the open-failure notice (#756)', async () => {
 		deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
