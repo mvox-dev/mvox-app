@@ -32,10 +32,18 @@ import {
 	sendFeedback,
 	sendSavedFeedback
 } from './sendFeedback';
+import type { SentProblem } from '$lib/problems/problemLog';
 
 const PNG = new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' });
 const STROKES = { v: 1 as const, strokes: [{ pen: 'red' as const, w: 0.004, pts: [0.1, 0.1, 0.5, 0.5] }] };
-const draft = () => ({ screenshot: PNG, strokes: STROKES, description: 'typed', pagePath: '/roster' });
+const draft = (problems: SentProblem[] = []) => ({
+	screenshot: PNG,
+	strokes: STROKES,
+	description: 'typed',
+	pagePath: '/roster',
+	problems
+});
+const PROBLEM = { area: 'roster', action: 'loading the join states', time: '2026-10-05T08:29:00.000Z', detail: 'Error: HTTP 500' };
 
 const P = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
 const Q = { db: 'sampledb', name: 'Sampledb', personId: 'person-q' };
@@ -91,7 +99,7 @@ describe('#611 send, online', () => {
 		}
 	});
 
-	it('metadata is the route path, time, app version, locale and viewport, and nothing personal', async () => {
+	it('metadata is the route path, time, app version, locale, viewport and failures sent, and nothing personal', async () => {
 		signInP();
 		const entu = feedbackEntu();
 
@@ -103,8 +111,46 @@ describe('#611 send, online', () => {
 			time: '2026-10-05T08:30:15.250Z',
 			version: { branch: 'main', commit: COMMIT },
 			locale: 'en',
-			viewport: '390x844'
+			viewport: '390x844',
+			problems: []
 		});
+	});
+
+	it('the failures sent with it travel in the metadata (#684)', async () => {
+		signInP();
+		const entu = feedbackEntu();
+
+		await sendFeedback(draft([PROBLEM]), { fetchImpl: entu.fetchImpl, store });
+
+		expect(JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!).problems).toEqual([PROBLEM]);
+	});
+
+	it('the failures of a feedback saved on the device travel when it is sent (#684)', async () => {
+		signInP();
+		const entu = feedbackEntu();
+		await goOffline();
+		await sendFeedback(draft([PROBLEM]), { fetchImpl: entu.fetchImpl, store });
+		await goOnline();
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect(JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!).problems).toEqual([PROBLEM]);
+	});
+
+	it('a feedback saved before failures travelled with it is sent with none (#684)', async () => {
+		signInP();
+		const entu = feedbackEntu();
+		const { problems: _none, ...older } = draft();
+		await store.put({
+			id: 'older-1',
+			...P,
+			...older,
+			page: { route: '/roster', time: '2026-10-04T08:00:00.000Z', locale: 'en', viewport: '390x844' }
+		});
+
+		await sendSavedFeedback({ fetchImpl: entu.fetchImpl, store });
+
+		expect(JSON.parse(prop(createBodies(entu.fetchImpl)[0], 'metadata')!).problems).toEqual([]);
 	});
 
 	it("writes nothing but the feedback's own create, screenshot property and upload", async () => {

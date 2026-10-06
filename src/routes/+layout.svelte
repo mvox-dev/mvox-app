@@ -3,6 +3,8 @@
 	import { install401Recovery } from '$lib/auth/install-401-recovery';
 	import { startUpdateForcing } from '$lib/sw/swUpdate';
 	import { startSendingSavedFeedback } from '$lib/feedback/sendFeedback';
+	import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
+	import { setProblemOwner } from '$lib/problems/problemLog';
 
 	// Module scope: runs once, before any page can issue an Entu read.
 	install401Recovery();
@@ -10,6 +12,8 @@
 	startUpdateForcing();
 
 	startSendingSavedFeedback();
+
+	setProblemOwner(selectedCollectiveIdentityStore);
 </script>
 
 <script lang="ts">
@@ -27,7 +31,6 @@
 		collectiveState,
 		urlCollectiveDbStore,
 		selectedCollectiveStore,
-		selectedCollectiveIdentityStore,
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { ensureRetentionSweep } from '$lib/files/retention';

@@ -20,16 +20,18 @@ afterEach(() => {
 });
 
 describe('#611 page metadata', () => {
-	it('carries exactly the route path, time, app version, locale and viewport', () => {
+	it('carries exactly the route path, time, app version, locale, viewport and the failures sent', () => {
 		setLocale('et', { reload: false });
-		const metadata = feedbackMetadata(capturePage('/event/abc'), { branch: 'main', commit: COMMIT });
+		const problem = { area: 'event', action: 'load', time: '2026-10-05T08:29:00.000Z', detail: 'Error: HTTP 500' };
+		const metadata = feedbackMetadata(capturePage('/event/abc'), { branch: 'main', commit: COMMIT }, [problem]);
 
 		expect(JSON.parse(metadata)).toEqual({
 			route: '/event/abc',
 			time: '2026-10-05T08:30:15.250Z',
 			version: { branch: 'main', commit: COMMIT },
 			locale: 'et',
-			viewport: '390x844'
+			viewport: '390x844',
+			problems: [problem]
 		});
 	});
 

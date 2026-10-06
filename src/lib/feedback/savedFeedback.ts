@@ -1,6 +1,7 @@
 // Feedback saved on the device until it reaches Entu, keyed (db, personId, id) like #343's parts.
 import type { StrokeData } from '$lib/strokes/strokes';
 import { compositeKey, lazyDb, reqToPromise } from '$lib/files/idb';
+import type { SentProblem } from '$lib/problems/problemLog';
 import type { PageContext } from './pageMetadata';
 
 export interface SavedFeedback {
@@ -12,6 +13,8 @@ export interface SavedFeedback {
 	description: string;
 	pagePath: string;
 	page: PageContext;
+	/** Absent on a feedback saved before failures travelled with it (#684). */
+	problems?: SentProblem[];
 	/** Set once a send's create has landed, so a retry replaces that entity instead of adding one. */
 	entityId?: string;
 }
