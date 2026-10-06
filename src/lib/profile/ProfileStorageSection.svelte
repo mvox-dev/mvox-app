@@ -1,6 +1,7 @@
 <!-- #352 — "Remove downloaded parts from this device", scoped to the signed-in (db,
 	personId). The page calls load() and reset() through bind:this. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getAppByteStore } from '$lib/files/appByteStore';
@@ -69,8 +70,8 @@
 			storageHeldFileIds = heldIds;
 		} catch (err) {
 			if (g !== generation()) return;
-			// console.warn, not .error: the section just stays absent.
-			console.warn('profile: storage usage read failed', err);
+			// The section just stays absent.
+			reportProblem({ area: 'profile', action: 'reading the storage usage', error: err });
 			return;
 		}
 
@@ -95,7 +96,7 @@
 			storageNamesTruncated = editions.truncated;
 		} catch (err) {
 			if (g !== generation()) return;
-			console.warn('profile: storage part-name metadata read failed', err);
+			reportProblem({ area: 'profile', action: 'reading the stored part names', error: err });
 			storagePartNames = {};
 			// A read that never landed is a failure, not a truncation.
 			storageNamesTruncated = false;

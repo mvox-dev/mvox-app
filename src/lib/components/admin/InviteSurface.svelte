@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
@@ -113,7 +114,7 @@
 		try {
 			tier = await resolveOwnerTier(cfg, personIdForTier, undefined, dbEntityIdForTier);
 		} catch (e) {
-			console.error('admin/invite: owner-tier read failed — the select stays absent', e);
+			reportProblem({ area: 'admin/invite', action: 'reading the owner tier', error: e });
 			tier = 'error';
 		}
 		ownerTier = tier;
@@ -124,10 +125,7 @@
 		try {
 			joinStates = await listJoinStates(cfg, personIds);
 		} catch (e) {
-			console.error(
-				'admin/invite: person-select prerequisite read failed — the select stays absent',
-				e
-			);
+			reportProblem({ area: 'admin/invite', action: 'loading the join states', error: e });
 			joinStates = {};
 			personListError = true;
 		}
@@ -170,7 +168,7 @@
 			if (e instanceof InviteCreateError && e.reason === 'not-visible') {
 				status = 'no-access';
 			} else {
-				console.error('admin/invite: load failed', e);
+				reportProblem({ area: 'admin/invite', action: 'load', error: e });
 				status = 'load-error';
 			}
 		}
@@ -237,10 +235,7 @@
 					const updated = await listJoinStates(cfg, [targetPersonId]);
 					joinStates = { ...joinStates, ...updated };
 				} catch (refreshErr) {
-					console.error(
-						'admin/invite: post-mint join-state refresh failed — the list may show a stale entry until the next reload',
-						refreshErr
-					);
+					reportProblem({ area: 'admin/invite', action: 're-reading the join state after an invite', error: refreshErr });
 				}
 				status = 'done';
 			} catch (e) {

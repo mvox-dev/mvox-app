@@ -262,7 +262,8 @@ describe('#338 — collectives status error', () => {
 
 	it('a retry that fails again keeps the error panel standing — no unhandled rejection, button live again', async () => {
 		setErrored();
-		hydrateCollectivesMock.mockRejectedValue(new Error('discovery down'));
+		const boom = new Error('discovery down');
+		hydrateCollectivesMock.mockRejectedValue(boom);
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const { container } = render(Page);
 
@@ -272,7 +273,10 @@ describe('#338 — collectives status error', () => {
 		await fireEvent.click(q(container, 'collectives-retry')!);
 
 		await waitFor(() => {
-			expect(consoleError).toHaveBeenCalled();
+			expect(consoleError).toHaveBeenCalledWith(
+				'collectives: retrying the collective discovery failed',
+				boom
+			);
 		});
 		expect(get(collectiveState)).toEqual({ status: 'error', erroredDbs: ['alpha-db', 'beta-db'] });
 		expect(container.textContent).toContain(

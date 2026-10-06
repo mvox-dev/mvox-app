@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import RadioChips from '$lib/components/RadioChips.svelte';
 	import { untrack } from 'svelte';
@@ -103,7 +104,7 @@
 					status = 'session-expired';
 					return;
 				}
-				console.error('roster: load failed', rowResult.reason);
+				reportProblem({ area: 'roster', action: 'load', error: rowResult.reason });
 				status = 'load-error';
 				return;
 			}
@@ -118,7 +119,7 @@
 				roster.joinStates = bareJoinStates(details);
 			} catch (e) {
 				if (!isCurrent()) return;
-				console.error('roster: join-state load failed, showing no join-state badges', e);
+				reportProblem({ area: 'roster', action: 'loading the join states', error: e });
 				roster.joinStateDetails = {};
 				roster.joinStates = {};
 			}
@@ -128,7 +129,7 @@
 					status = 'session-expired';
 					return;
 				}
-				console.error('roster: section tree load failed', sectionResult.reason);
+				reportProblem({ area: 'roster', action: 'loading the section tree', error: sectionResult.reason });
 				roster.sections = [];
 				roster.expandedIds = new Set();
 				roster.sectionsError = true;
@@ -161,7 +162,7 @@
 			const both = await loadActiveAndArchivedRosters(cfg);
 			return { active: both.active, inactive: both.inactive, archivedFailed: false };
 		} catch (e) {
-			console.error('roster: archived half failed, loading the active list alone', e);
+			reportProblem({ area: 'roster', action: 'loading the archived roster', error: e });
 			return { active: await loadRoster(cfg), inactive: null, archivedFailed: true };
 		}
 	}

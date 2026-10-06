@@ -99,6 +99,26 @@ afterEach(() => {
 	resetGate();
 });
 
+describe('#756 — a failed gate refresh is reported', () => {
+	it('a rejected gate read after a save is reported', async () => {
+		wireProfilesPerCollective();
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		const boom = new Error('gate read failed');
+		resolveGateMock.mockRejectedValueOnce(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		signInWithTwoCollectives();
+
+		const { container } = render(Page);
+		await waitReadyShowing(container, 'Ada');
+		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
+
+		await waitFor(() =>
+			expect(consoleSpy).toHaveBeenCalledWith('profile: refreshing the completion gate failed', boom)
+		);
+		consoleSpy.mockRestore();
+	});
+});
+
 describe('#260 — a stale resolveGate settle after a collective switch must not write the SSOT', () => {
 	it("THE RACE (deterministic): A's read held → switch to B (gate 'incomplete') → A settles 'complete' → the store stays on B's 'incomplete', never A's stale answer", async () => {
 		wireProfilesPerCollective();

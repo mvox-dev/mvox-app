@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { collectiveState, hydrateCollectives } from '$lib/collectives/store';
 	import type { CollectiveState } from '$lib/collectives/types';
 	import { m } from '$lib/paraglide/messages.js';
@@ -17,7 +18,7 @@
 		try {
 			await hydrateCollectives();
 		} catch (err) {
-			console.error('collective discovery retry failed', err);
+			reportProblem({ area: 'collectives', action: 'retrying the collective discovery', error: err });
 			collectiveState.set({ status: 'error', erroredDbs: knownErroredDbs });
 		} finally {
 			collectivesRetrying = false;

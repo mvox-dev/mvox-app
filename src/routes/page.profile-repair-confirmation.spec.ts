@@ -433,7 +433,11 @@ describe('#257 fold-in — live resolveGate rejection is logged, stale stays sil
 		staleRead.reject(new Error('resolveGate: network down'));
 		await flushMicrotasks();
 
-		expect(consoleSpy).not.toHaveBeenCalled();
+		// Other reads in this harness report too; only the gate read must stay silent.
+		const gateReports = consoleSpy.mock.calls.filter(([line]) =>
+			String(line).includes('completion gate')
+		);
+		expect(gateReports).toEqual([]);
 		expect(get(completionGateStore)).toBe('loading');
 		consoleSpy.mockRestore();
 	});

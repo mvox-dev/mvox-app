@@ -88,9 +88,11 @@ describe('/admin/invite — prerequisites', () => {
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		selectSampledb();
-		resolveInviteParentMock.mockRejectedValue(
-			new InviteCreateError('resolve failed: 500', { phase: 'org-resolve', reason: 'http' })
-		);
+		const failure = new InviteCreateError('resolve failed: 500', {
+			phase: 'org-resolve',
+			reason: 'http'
+		});
+		resolveInviteParentMock.mockRejectedValue(failure);
 
 		const { container } = render(Page);
 		await waitFor(() => {
@@ -101,12 +103,7 @@ describe('/admin/invite — prerequisites', () => {
 		expect(container.textContent).toContain('Could not load invite prerequisites.');
 		expect(container.textContent).not.toContain('resolve failed: 500');
 
-		expect(consoleSpy).toHaveBeenCalled();
-		const loggedArgs = consoleSpy.mock.calls.flat();
-		const loggedDetail = loggedArgs.some(
-			(arg) => arg instanceof Error && arg.message === 'resolve failed: 500'
-		);
-		expect(loggedDetail).toBe(true);
+		expect(consoleSpy).toHaveBeenCalledWith('admin/invite: load failed', failure);
 
 		loadOk();
 		const retry = container.querySelector(

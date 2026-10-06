@@ -31,6 +31,8 @@ export async function checkCollectiveMarker(
 		);
 
 		if (!res.ok) {
+			const action = 'checking a database for the collective marker';
+			reportProblem({ area: 'collectives', action, error: new Error(`HTTP ${res.status}`) });
 			return { db, kind: 'error', reason: `marker query ${res.status}` };
 		}
 

@@ -111,8 +111,8 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 		expect(propertyCalls(fetchImpl)).toHaveLength(0);
 	});
 
-	it('property read non-2xx — skip-and-warn per row (#456 shape): the STATE survives without `at`, console.warn NAMES the property id, other rows are untouched (full toEqual)', async () => {
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	it('property read non-2xx — skip-and-warn per row (#456 shape): the STATE survives without `at`, the report NAMES the property id, other rows are untouched (full toEqual)', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetchImpl = routedFetch(
 			{ 'p-6': [PLACEHOLDER], 'p-7': [BOUND] },
 			{ 'eu-p': { status: 500 }, 'eu-b': { created: { at: AT_JOINED, by: 'author' } } }
@@ -122,9 +122,11 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			'p-6': { state: 'invited' },
 			'p-7': { state: 'joined', at: AT_JOINED }
 		});
-		expect(warnSpy).toHaveBeenCalled();
-		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('eu-p'))).toBe(true);
-		warnSpy.mockRestore();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'profile: reading when a linked account was added failed',
+			new Error('property eu-p: HTTP 500')
+		);
+		errorSpy.mockRestore();
 	});
 
 	it('property read 2xx but created.at MISSING — same skip-and-warn: state without `at`, warn names the id, no throw', async () => {
@@ -162,13 +164,16 @@ describe('readPropertyCreatedAt — the small GET /property/{_id} reader (fileUr
 		expect(String(fetchImpl.mock.calls[0][0])).toContain('property/v-1');
 	});
 
-	it('non-2xx → undefined + console.warn naming the property id — never a throw (#456: one bad stamp must not sink the batch)', async () => {
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	it('non-2xx → undefined, reported naming the property id — never a throw (#456: one bad stamp must not sink the batch)', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetchImpl = vi.fn().mockResolvedValue(json({}, 500));
 		const at = await readPropertyCreatedAt(cfg, 'v-2', fetchImpl as unknown as typeof fetch);
 		expect(at).toBeUndefined();
-		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('v-2'))).toBe(true);
-		warnSpy.mockRestore();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'profile: reading when a linked account was added failed',
+			new Error('property v-2: HTTP 500')
+		);
+		errorSpy.mockRestore();
 	});
 
 	it('2xx without created.at → undefined + warn naming the id', async () => {

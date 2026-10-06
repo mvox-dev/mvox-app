@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken, getUser } from '$lib/auth/storage';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -145,7 +146,9 @@
 			refreshGate(
 				() => resolveGate({ db: current.db, token }, current.personId),
 				() => g === routeLoad.generation
-			).catch((err) => console.error('profile: completion gate refresh failed', err));
+			).catch((err) =>
+				reportProblem({ area: 'profile', action: 'refreshing the completion gate', error: err })
+			);
 		}
 	}
 

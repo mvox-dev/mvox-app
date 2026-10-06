@@ -551,9 +551,9 @@ describe('/profile — link round-trip outcome from the URL (#193 review F1)', (
 
 describe('/profile — linked-identities read failure (#193 review F1)', () => {
 	it('says WHICH step failed instead of rendering an empty "Linked accounts" list', async () => {
-		h.listLinkedIdentitiesMock.mockRejectedValue(
-			new Error('listLinkedIdentities: identity read failed: HTTP 500')
-		);
+		const boom = new Error('listLinkedIdentities: identity read failed: HTTP 500');
+		h.listLinkedIdentitiesMock.mockRejectedValue(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const container = await renderReady();
 
 		await waitFor(() =>
@@ -562,6 +562,8 @@ describe('/profile — linked-identities read failure (#193 review F1)', () => {
 		const alert = q(container, '[data-testid="profile-linked-load-error"]') as HTMLElement;
 		expect(alert.getAttribute('role')).toBe('alert');
 		expect(alert.textContent).toContain('it stopped at step: identity-read');
+		expect(consoleSpy).toHaveBeenCalledWith('profile: loading the linked accounts failed', boom);
+		consoleSpy.mockRestore();
 		// The name/email editing surface — the page's primary purpose — survives.
 		expect(q(container, '[data-testid="profile-field-name"]')).not.toBeNull();
 	});

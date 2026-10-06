@@ -296,7 +296,8 @@ describe('/roster — F3 code-review fix: a section-tree failure does not black 
 	it('rows load OK, sections load REJECTS → flat list renders (not roster-load-error) with a visible error banner; all rows stay visible; failure is still logged', async () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		loadRosterMock.mockResolvedValue(toListRead(fixtureRows()));
-		listSectionsMock.mockRejectedValue(new Error('sections boom'));
+		const boom = new Error('sections boom');
+		listSectionsMock.mockRejectedValue(boom);
 		setAuthedWithOneCollective();
 
 		const { container } = render(Page);
@@ -310,7 +311,7 @@ describe('/roster — F3 code-review fix: a section-tree failure does not black 
 		for (const m of ['m-ada', 'm-bea', 'm-carol', 'm-eva', 'm-pete']) {
 			expect(container.querySelector(`[data-testid="roster-row-${m}"]`)).not.toBeNull();
 		}
-		expect(consoleSpy).toHaveBeenCalled();
+		expect(consoleSpy).toHaveBeenCalledWith('roster: loading the section tree failed', boom);
 		consoleSpy.mockRestore();
 	});
 

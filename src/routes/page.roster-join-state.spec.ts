@@ -416,13 +416,12 @@ describe('(A) dated status lines — #467: one line per row, four display states
 		listJoinStatesMock.mockRejectedValue(
 			new Error('listLinkedIdentities: identity read failed: HTTP 403')
 		);
-		listJoinStateDetailsMock.mockRejectedValue(
-			new Error('listLinkedIdentities: identity read failed: HTTP 403')
-		);
+		const refused = new Error('listLinkedIdentities: identity read failed: HTTP 403');
+		listJoinStateDetailsMock.mockRejectedValue(refused);
 		const { container } = await renderRoster({ admin: 'not-admin' });
 		expect(q(container, 'roster-row-m3'), 'the roster rows must be on screen').not.toBeNull();
 		expect(chipSet(container)).toEqual({});
-		expect(errSpy).toHaveBeenCalled();
+		expect(errSpy).toHaveBeenCalledWith('roster: loading the join states failed', refused);
 		errSpy.mockRestore();
 	});
 
@@ -804,7 +803,7 @@ describe('(H) a superseded load\'s join-state tail writes NOTHING', () => {
 		);
 		expect(q(container, 'roster-member-invite-m-bob')).not.toBeNull();
 		expect(
-			errSpy.mock.calls.some((c) => String(c[0]).includes('join-state load failed'))
+			errSpy.mock.calls.some((c) => String(c[0]).includes('loading the join states'))
 		).toBe(false);
 		errSpy.mockRestore();
 	});

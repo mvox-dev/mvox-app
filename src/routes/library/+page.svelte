@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	// #54/#73 — the library: works, editions and copies with availability from lending, the
@@ -109,12 +110,12 @@
 					if (isCurrent()) myMemberId = id;
 				})
 				.catch((e) => {
-					console.error('library: my-loans member resolution failed', e);
+					if (isCurrent()) reportProblem({ area: 'library', action: 'finding your member record', error: e });
 				});
 
 			refreshPresence(cfg.db, current.personId, isCurrent);
 
-			// #92 — repertoire badges for the current season only; supplementary, so a failure logs.
+			// #92 — repertoire badges for the current season only; supplementary, so a failure reports.
 			listSeasons(cfg)
 				.then((seasons) => {
 					if (!isCurrent()) return;
@@ -132,7 +133,7 @@
 					});
 				})
 				.catch((e) => {
-					console.error('library: repertoire badge load failed', e);
+					if (isCurrent()) reportProblem({ area: 'library', action: 'loading the repertoire badges', error: e });
 				});
 		}
 	});

@@ -7,6 +7,7 @@ import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 import { referenceIds } from '$lib/entu/references';
 import type { EventWire, SeasonWire, SeriesWire } from '$lib/entu/wireTypes';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type EventInheritedField = 'name' | 'durationMinutes' | 'location' | 'description';
 
@@ -190,6 +191,12 @@ export async function loadEventDetail(
 	};
 }
 
+// Under the grants a 403 or 404 is an answer (not readable here), not a failed read.
+function reportParentReadFailure(action: string, status: number): void {
+	if (status === 403 || status === 404) return;
+	reportProblem({ area: 'event', action, error: new Error(`HTTP ${status}`) });
+}
+
 // Rights ride on the conductor GET: an unrequested prop reads as "no rights".
 async function fetchSeason(
 	cfg: EntuCfg,
@@ -205,7 +212,10 @@ async function fetchSeason(
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) return undefined;
+	if (!res.ok) {
+		reportParentReadFailure('reading the season', res.status);
+		return undefined;
+	}
 	const body = (await res.json()) as { entity?: SeasonRaw };
 	return body.entity;
 }
@@ -254,7 +264,10 @@ async function fetchSeries(
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) return undefined;
+	if (!res.ok) {
+		reportParentReadFailure('reading the series', res.status);
+		return undefined;
+	}
 	const body = (await res.json()) as { entity?: SeriesRaw };
 	return body.entity;
 }

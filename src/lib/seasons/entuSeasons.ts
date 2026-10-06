@@ -2,6 +2,7 @@ import { entuFetch, type EntuFetchOptions } from '$lib/entu/request';
 import type { AgendaItem } from '$lib/agenda/types';
 import { referenceIds } from '$lib/entu/references';
 import type { EventRaw, Season, SeasonRaw, SeriesRaw } from './types';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface EntuCfg {
 	/** Runtime db (the selected collective) — threaded as the URL path segment. */
@@ -119,7 +120,11 @@ export async function listEvents(
 				fetchImpl,
 				opts
 			);
-			if (!sRes.ok) return;
+			if (!sRes.ok) {
+				const error = new Error(`HTTP ${sRes.status}`);
+				reportProblem({ area: 'agenda', action: 'reading an event series', error });
+				return;
+			}
 			const sBody = (await sRes.json()) as { entity?: SeriesRaw };
 			if (sBody.entity) seriesCache.set(sid, sBody.entity);
 		})

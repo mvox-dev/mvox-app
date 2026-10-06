@@ -418,9 +418,13 @@ describe('/admin — a failed section read costs the pickers their order, not th
 	it('listSections rejects: the page still reaches READY (lists, remove buttons, invite section intact), both selects still offer the whole roster in name order, and each says its order degraded', async () => {
 		selectSampledb();
 		loadOk();
-		listSectionsMock.mockReset().mockRejectedValue(new Error('sections boom'));
+		const boom = new Error('sections boom');
+		listSectionsMock.mockReset().mockRejectedValue(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const { container } = await renderReady();
+		expect(consoleSpy).toHaveBeenCalledWith('admin: loading the section tree failed', boom);
+		consoleSpy.mockRestore();
 
 		expect(q(container, 'admin-roles-load-error')).toBeNull();
 		expect(q(container, 'admin-entry-p-anna')).not.toBeNull();

@@ -44,7 +44,9 @@ import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
 import { createMemberOpsState, createRosterState } from '$lib/roster/rosterPageState';
 import type { RosterRow } from '$lib/roster/rosterData';
 import { setToken } from '$lib/auth/storage';
-import { testCfg } from '$lib/testing/entuFetchKit';
+import { json, testCfg } from '$lib/testing/entuFetchKit';
+import { loadEventDetail } from '$lib/events/eventDetail';
+import { listEvents } from '$lib/seasons/entuSeasons';
 import { reportProblem } from '$lib/testing/mocks/session';
 
 const CFG = testCfg('sampledb', 'jwt-1');
@@ -228,3 +230,88 @@ describe('a failed store read is reported (#756)', () => {
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 });
+
+// Answers 500 for the one URL under test and a minimal 2xx body for every other read.
+function failingAt(match: string, status = 500) {
+	return vi.fn(async (input: RequestInfo | URL) => {
+		const url = String(input);
+		if (url.includes(match)) return json({}, status);
+		if (url.includes('_type.string=library')) return json({ entities: [{ _id: 'lib-1' }] });
+		if (url.includes('/entity/ev-1')) {
+			return json({
+				entity: {
+					_id: 'ev-1',
+					_parent: [
+						{ reference: 'season-1', entity_type: 'season' },
+						{ reference: 'series-1', entity_type: 'event_series' }
+					]
+				}
+			});
+		}
+		if (url.includes('_type.string=event&')) {
+			return json({
+				entities: [{ _id: 'ev-1', _parent: [{ reference: 'series-1', entity_type: 'event_series' }] }]
+			});
+		}
+		return json({ entities: [] });
+	}) as unknown as typeof fetch;
+}
+
+describe('a non-2xx store read is reported (#756)', () => {
+	it.each([
+		{
+			read: 'the membership',
+			run: () => resolveMembership(CFG, 'person-p', failingAt('_type.string=member')),
+			area: 'membership',
+			action: 'reading your membership'
+		},
+		{
+			read: 'the collective marker',
+			run: () => checkCollectiveMarker('sampledb', 'person-p', 'jwt-1', failingAt('mvox_collective')),
+			area: 'collectives',
+			action: 'checking a database for the collective marker'
+		},
+		{
+			read: 'the librarian rights',
+			run: () => resolveLibrarian(CFG, 'person-p', failingAt('/entity/lib-1'), 'db-entity'),
+			area: 'library',
+			action: 'reading the librarian rights'
+		},
+		{
+			read: 'the database entity rights',
+			run: () => resolveAdmin(CFG, 'person-p', failingAt('/entity/db-entity'), 'db-entity'),
+			area: 'admin',
+			action: 'reading the database entity rights'
+		},
+		{
+			read: "the event's season",
+			run: () => loadEventDetail(CFG, 'ev-1', failingAt('/entity/season-1')),
+			area: 'event',
+			action: 'reading the season'
+		},
+		{
+			read: "the event's series",
+			run: () => loadEventDetail(CFG, 'ev-1', failingAt('/entity/series-1')),
+			area: 'event',
+			action: 'reading the series'
+		},
+		{
+			read: "an agenda event's series",
+			run: () => listEvents(CFG, 'season-1', failingAt('/entity/series-1')),
+			area: 'agenda',
+			action: 'reading an event series'
+		}
+	])('a 500 on $read is reported', async ({ run, area, action }) => {
+		await run();
+		expect(reportProblem.mock.calls).toEqual([[{ area, action, error: new Error('HTTP 500') }]]);
+	});
+
+	it.each(['/entity/season-1', '/entity/series-1'])(
+		"a 403 on the event's parent %s is an answer, not reported",
+		async (parent) => {
+			await loadEventDetail(CFG, 'ev-1', failingAt(parent, 403));
+			expect(reportProblem).not.toHaveBeenCalled();
+		}
+	);
+});
+

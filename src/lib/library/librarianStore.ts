@@ -83,7 +83,10 @@ export async function resolveLibrarian(
 			fetchImpl,
 			opts
 		);
-		if (!res.ok) return { state: 'error', libraryId: null };
+		if (!res.ok) {
+			reportProblem({ area: 'library', action: 'reading the librarian rights', error: new Error(`HTTP ${res.status}`) });
+			return { state: 'error', libraryId: null };
+		}
 
 		const body = (await res.json()) as {
 			entity?: {
