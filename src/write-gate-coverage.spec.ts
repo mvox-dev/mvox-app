@@ -47,6 +47,9 @@ const GATE_EXCEPTIONS: Record<string, string[]> = {
 	'src/routes/+layout.svelte': ['$lib/feedback/feedbackEditor.svelte', '$lib/feedback/sendFeedback']
 };
 
+// The shared pill disables a data choice offline; each surface using it says why, once (#809).
+const SILENT_GATE_READERS = new Set(['src/lib/components/SegmentedPill.svelte']);
+
 const WRITE_SEAMS = [...WRITING]
 	.filter(([, names]) => names.size > 0)
 	.map(([p]) => '$lib/' + relative(LIB, p).replace(/\.ts$/, '').split(/[\\/]/).join('/'));
@@ -243,6 +246,7 @@ describe('#434 — every write surface reads the write gate', () => {
 	it('every gate reader also renders the reason — a disabled control with no sentence is half the fix', () => {
 		const silent: string[] = [];
 		for (const path of ALL.filter((p) => p.endsWith('.svelte'))) {
+			if (SILENT_GATE_READERS.has(rel(path))) continue;
 			const source = readFileSync(path, 'utf-8');
 			if (!valueImportSpecifiers(source).includes(GATE_MODULE)) continue;
 			if (!/m\.write_unavailable_no_signal\(\)/.test(source)) silent.push(rel(path));

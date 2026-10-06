@@ -10,7 +10,6 @@ afterEach(() => {
 	resetOnLine();
 });
 
-type V = 'a' | 'b' | 'c';
 const OPTIONS = (['a', 'b', 'c'] as const).map((value) => ({
 	value,
 	label: value.toUpperCase(),
@@ -18,7 +17,7 @@ const OPTIONS = (['a', 'b', 'c'] as const).map((value) => ({
 }));
 
 function renderPill(props: Record<string, unknown> = {}) {
-	const onselect = vi.fn<(v: V | null) => void>();
+	const onselect = vi.fn<(v: string | null) => void>();
 	const rendered = render(SegmentedPill, {
 		props: {
 			testid: 'pill',
@@ -128,8 +127,10 @@ describe('SegmentedPill — tapping', () => {
 		const { buttons, onselect } = renderPill({ emptyAllowed: true, defaultValue: 'a' });
 		await fireEvent.click(buttons[1]);
 		expect(onselect.mock.calls).toEqual([['a']]);
-		await fireEvent.click(buttons[0]);
-		expect(onselect.mock.calls).toEqual([['a']]);
+		cleanup();
+		const atDefault = renderPill({ emptyAllowed: true, defaultValue: 'a', selected: null });
+		await fireEvent.click(atDefault.buttons[0]);
+		expect(atDefault.onselect).not.toHaveBeenCalled();
 	});
 
 	it('a disabled option chooses nothing', async () => {

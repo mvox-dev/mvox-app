@@ -3,7 +3,7 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Level } from '$lib/profile/profileData';
 	import type { FieldKey } from '$lib/profile/fieldMove';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { REDACT_ATTR } from '$lib/redact/redact';
 	import { focusOnMount } from '$lib/a11y/focusable';
@@ -140,7 +140,8 @@
 
 	const namePrivateDisabled = $derived(field === 'name');
 
-	function stateOf(level: Level): 'transport' | 'active' | 'leak' | 'conflict' | 'inactive' {
+	type TierState = 'transport' | 'active' | 'leak' | 'conflict' | 'inactive';
+	function stateOf(level: Level): TierState {
 		if (transportLevel === level) return 'transport';
 		if (activeLevel === level) return 'active';
 		if (leakLevels.includes(level)) return 'leak';
@@ -179,27 +180,27 @@
 		}
 	}
 
-	// #156 — roving tabindex falls back to the first enabled tier, so the only tab stop
-	// never sits on a disabled button. Arrows only move focus: activation can resolve.
-	let rovingLevel = $state<Level | null>(null);
-	const firstEnabledLevel = $derived.by(() => {
-		for (const level of LEVELS) {
-			if (!isButtonDisabled(level, stateOf(level))) return level;
-		}
-		return LEVELS[0];
-	});
-	const activeTabLevel = $derived(
-		rovingLevel !== null && !isButtonDisabled(rovingLevel, stateOf(rovingLevel))
-			? rovingLevel
-			: firstEnabledLevel
-	);
+	let rovingLevel = $state<Level | null | undefined>(null);
+
+	function tierAriaLabel(level: Level, s: TierState): string {
+		const label = LEVEL_LABEL[level]();
+		if (namePrivateDisabled && level === 'private') return m.profile_name_private_disabled();
+		if (previewLevel === level) return m.profile_visibility_confirm_preview({ level: label });
+		if (s === 'active') return m.profile_visibility_active({ level: label });
+		if (s === 'leak' || s === 'conflict') return m.profile_visibility_leak({ level: label });
+		return m.profile_visibility_move({ field: FIELD_LABEL[field](), level: label });
+	}
+
+	function tierClass(level: Level, s: TierState): string {
+		if (namePrivateDisabled && level === 'private') return 'opacity-50';
+		if (s === 'leak') return 'text-red-700';
+		if (s === 'conflict') return 'text-amber-700';
+		if (s !== 'inactive') return '';
+		return movable && !disabled ? 'hover:bg-ink hover:text-paper' : 'opacity-50';
+	}
 
 	function handleGroupKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape' && previewLevel !== null) {
-			previewLevel = null;
-			return;
-		}
-		rovingKeydown(e, { selector: 'button:not([disabled])' });
+		if (e.key === 'Escape') previewLevel = null;
 	}
 
 	function handleInput(e: Event) {
@@ -269,72 +270,54 @@
 		</div>
 	{/if}
 
-	<!-- #156 — an APG toolbar, not a radiogroup: arrows move focus and never activate,
-	     since a second activation on a conflict tier resolves it. -->
-	<div
-		class="flex gap-2"
-		role="toolbar"
-		tabindex="-1"
-		aria-label={FIELD_LABEL[field]()}
+	<!-- #156 — arrows never activate: a second activation on a conflict tier resolves it. -->
+	<SegmentedPill
+		testid="profile-tiers-{field}"
+		label={FIELD_LABEL[field]()}
+		options={LEVELS.map((level) => {
+			const s = stateOf(level);
+			return {
+				value: level,
+				label: LEVEL_LABEL[level](),
+				testid: `profile-vis-${field}-${level}`,
+				ariaLabel: tierAriaLabel(level, s),
+				disabled: isButtonDisabled(level, s),
+				busy: s === 'transport' || (s === 'active' && saving),
+				class: tierClass(level, s)
+			};
+		})}
+		selected={LEVELS.find((level) => stateOf(level) === 'active') ?? null}
+		emptyAllowed={false}
+		kind="data"
+		buttonClass="flex items-center gap-1 px-2 py-1 text-xs"
+		bind:roving={rovingLevel}
+		onselect={(level) => level && clickLevel(level)}
 		onkeydown={handleGroupKeydown}
 	>
-		{#each LEVELS as level (level)}
+		{#snippet option(o)}
+			{@const level = o.value}
 			{@const s = stateOf(level)}
-			{@const btnDisabled = isButtonDisabled(level, s)}
-			{@const previewing = previewLevel === level}
-			<button
-				type="button"
-				data-testid="profile-vis-{field}-{level}"
-				disabled={btnDisabled}
-				aria-busy={s === 'transport' ? 'true' : (s === 'active' && saving) ? 'true' : undefined}
-				aria-pressed={s === 'active'}
-				aria-label={namePrivateDisabled && level === 'private'
-					? m.profile_name_private_disabled()
-					: previewing
-						? m.profile_visibility_confirm_preview({ level: LEVEL_LABEL[level]() })
-						: s === 'active'
-							? m.profile_visibility_active({ level: LEVEL_LABEL[level]() })
-							: s === 'leak' || s === 'conflict'
-								? m.profile_visibility_leak({ level: LEVEL_LABEL[level]() })
-								: m.profile_visibility_move({ field: FIELD_LABEL[field](), level: LEVEL_LABEL[level]() })}
-				tabindex={activeTabLevel === level ? 0 : -1}
-				onfocus={() => (rovingLevel = level)}
-				onclick={() => clickLevel(level)}
-				class="flex items-center gap-1 rounded-md border px-2 py-1 text-xs disabled:cursor-default"
-				class:border-ink={s === 'active'}
-				class:bg-ink={s === 'active' && !saving}
-				class:text-paper={s === 'active' && !saving}
-				class:border-red-500={s === 'leak'}
-				class:text-red-700={s === 'leak'}
-				class:border-amber-500={s === 'conflict'}
-				class:text-amber-700={s === 'conflict'}
-				class:border-ink-4={s === 'inactive' || s === 'transport'}
-				class:hover:bg-ink={s === 'inactive' && movable && !disabled && !(namePrivateDisabled && level === 'private')}
-				class:hover:text-paper={s === 'inactive' && movable && !disabled && !(namePrivateDisabled && level === 'private')}
-				class:opacity-50={(btnDisabled && s === 'inactive') || (namePrivateDisabled && level === 'private')}
-			>
-				{#if previewing}
-					<span data-testid="profile-vis-{field}-{level}-preview" aria-hidden="true">◐</span>
-				{:else if s === 'transport'}
-					<span data-testid="profile-vis-{field}-{level}-transport" aria-hidden="true">…</span>
-				{:else if s === 'active' && saving}
-					<span data-testid="profile-vis-{field}-{level}-saving" aria-hidden="true">●</span>
-					{m.profile_saving()}
-				{:else if s === 'active'}
-					<span data-testid="profile-vis-{field}-{level}-active" aria-hidden="true">●</span>
-				{:else if s === 'leak'}
-					<span aria-hidden="true">!</span>
-				{:else if s === 'conflict'}
-					<span data-testid="profile-vis-{field}-{level}-conflict" aria-hidden="true">≠</span>
-				{:else}
-					<span aria-hidden="true">○</span>
-				{/if}
-				{#if !(s === 'active' && saving)}
-					{LEVEL_LABEL[level]()}
-				{/if}
-			</button>
-		{/each}
-	</div>
+			{#if previewLevel === level}
+				<span data-testid="profile-vis-{field}-{level}-preview" aria-hidden="true">◐</span>
+			{:else if s === 'transport'}
+				<span data-testid="profile-vis-{field}-{level}-transport" aria-hidden="true">…</span>
+			{:else if s === 'active' && saving}
+				<span data-testid="profile-vis-{field}-{level}-saving" aria-hidden="true">●</span>
+				{m.profile_saving()}
+			{:else if s === 'active'}
+				<span data-testid="profile-vis-{field}-{level}-active" aria-hidden="true">●</span>
+			{:else if s === 'leak'}
+				<span aria-hidden="true">!</span>
+			{:else if s === 'conflict'}
+				<span data-testid="profile-vis-{field}-{level}-conflict" aria-hidden="true">≠</span>
+			{:else}
+				<span aria-hidden="true">○</span>
+			{/if}
+			{#if !(s === 'active' && saving)}
+				{o.label}
+			{/if}
+		{/snippet}
+	</SegmentedPill>
 
 	<p class="min-h-[16px] text-xs leading-4 text-red-700">
 		{#if saveFailed}

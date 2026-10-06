@@ -21,12 +21,7 @@
 	const NO_RESOLVED_WORK_IDS: ReadonlySet<string> = new Set<string>();
 
 	// Keyed by row and held here, not in RepertoireWorkRow, so a row's stop survives a collapse.
-	let rovingStatusByRow = $state<Record<string, RepertoireStatus>>({});
-	function activeStatusFor(row: WorkRow): RepertoireStatus {
-		const roving = rovingStatusByRow[row.id];
-		if (roving !== undefined) return roving;
-		return row.status ?? 'active';
-	}
+	let rovingStatusByRow = $state<Record<string, RepertoireStatus | null | undefined>>({});
 
 	/** Not being sung: only a season editor sees these, so the status toggle is two-way. */
 	const INACTIVE_STATUSES = new Set<RepertoireStatus>(['retired', 'dropped']);
@@ -303,9 +298,7 @@
 								{isOffline}
 								{heldFileIds}
 								{partLinkDb}
-								activeStatus={activeStatusFor(row)}
-								onstatusfocus={(status) =>
-									(rovingStatusByRow = { ...rovingStatusByRow, [row.id]: status })}
+								bind:statusRoving={rovingStatusByRow[row.id]}
 								{onpdfclick}
 								{onstatuschange}
 								{onpinedition}
