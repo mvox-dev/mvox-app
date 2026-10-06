@@ -90,6 +90,21 @@ describe('+layout — completion gate redirect (app-wide enforcement)', () => {
 		expect(gotoMock).not.toHaveBeenCalledWith('/profile');
 	});
 
+	it('#800 a gate answer landing after sign-out is dropped: the store stays loading', async () => {
+		let answer: (state: 'incomplete') => void = () => {};
+		resolveGateMock.mockReturnValue(new Promise((r) => (answer = r)));
+		render(Layout);
+		setAuthedWithOneCollective();
+		await vi.waitFor(() => expect(resolveGateMock).toHaveBeenCalledTimes(1));
+
+		authStore.set({ status: 'anonymous' });
+		await new Promise((r) => setTimeout(r, 0));
+		answer('incomplete');
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(get(completionGateStore)).toBe('loading');
+	});
+
 	it('redirects EXACTLY ONCE for an incomplete member (no redirect loop)', async () => {
 		resolveGateMock.mockResolvedValue('incomplete');
 		render(Layout);

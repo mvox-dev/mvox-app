@@ -260,6 +260,25 @@ describe('#800 — a gate read settling after /profile unmounts writes nothing',
 
 		expect(get(completionGateStore)).toBe('complete');
 	});
+
+	it("a name saved just before leaving still opens the gate when its answer lands late", async () => {
+		wireProfilesPerCollective();
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		const read = deferred<GateState>();
+		resolveGateMock.mockReturnValueOnce(read.promise);
+		signInWithTwoCollectives();
+		completionGateStore.set('incomplete');
+
+		const { container } = render(Page);
+		await waitReadyShowing(container, 'Ada');
+		await saveNameToInitiateGateRead(container, 'Ada M.', 1);
+		cleanup();
+
+		read.resolve('complete');
+		await flushMicrotasks();
+
+		expect(get(completionGateStore)).toBe('complete');
+	});
 });
 
 // (*MVOX:Tallis*)
