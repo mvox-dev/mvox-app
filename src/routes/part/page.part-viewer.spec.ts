@@ -39,6 +39,10 @@ vi.mock('$lib/files/appLabelStore', () => ({
 		remove: async () => {}
 	})
 }));
+vi.mock('$lib/strokes/inkStore', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/strokes/inkStore')>()),
+	getInkStore: () => inkStore
+}));
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
@@ -82,8 +86,12 @@ import type { PartLabel } from '$lib/files/labelStore';
 import { resetAppState } from '$lib/testing/appReset';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { signFileUrlMock } from '$lib/testing/mocks/files';
+import { IDBFactory } from 'fake-indexeddb';
+import { createInkStore, liveInk, type InkStore } from '$lib/strokes/inkStore';
 
 let fakeByteStore: FakeByteStore;
+let inkDevice: IDBFactory;
+let inkStore: InkStore | null;
 
 const PDF_BYTES = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
 
@@ -99,8 +107,8 @@ function deadFetch() {
 	return fetchMock;
 }
 
-function seedHeldPart(): void {
-	fakeByteStore.seed({ db: 'sampledb', personId: 'person-p' }, 'file-score', {
+function seedHeldPart(personId = 'person-p'): void {
+	fakeByteStore.seed({ db: 'sampledb', personId }, 'file-score', {
 		bytes: PDF_BYTES.slice().buffer,
 		filetype: 'application/pdf',
 		sha256: 'sha-fixture'
@@ -108,14 +116,14 @@ function seedHeldPart(): void {
 }
 
 // collectives stay loading: the cold offline start
-function renderViewer(state: { partLabel?: PartLabel } = {}) {
+function renderViewer(state: { partLabel?: PartLabel } = {}, personId = 'person-p') {
 	pageStub.params = { fileId: 'file-score' };
 	pageStub.url = new URL('http://localhost/part/file-score?db=sampledb');
 	pageStub.state = state;
 	setToken('jwt-abc');
 	authStore.set({
 		status: 'authenticated',
-		personIdByDb: { sampledb: 'person-p' },
+		personIdByDb: { sampledb: personId },
 		expMs: Date.now() + 100_000
 	});
 	collectiveState.set({ status: 'loading' });
@@ -183,6 +191,8 @@ function setRequestFullscreen(impl: (() => Promise<void>) | undefined): () => vo
 
 beforeEach(() => {
 	fakeByteStore = createFakeByteStore();
+	inkDevice = new IDBFactory();
+	inkStore = createInkStore(inkDevice);
 });
 
 afterEach(() => {
@@ -755,83 +765,87 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 	});
 });
 
-describe('#615 — drawing on the page', () => {
-	const RECT = { left: 0, top: 0, x: 0, y: 0, width: 400, height: 400, right: 400, bottom: 400 };
-	const MOUSE = { pointerType: 'mouse', pointerId: 1, isPrimary: true };
-	const FINGER = { pointerType: 'touch', pointerId: 3, isPrimary: true };
-	const RED = '#dc2626';
-	const BLACK = '#111827';
-	const ACROSS: Array<[number, number]> = [
-		[160, 200],
-		[240, 200]
-	];
+const RECT = { left: 0, top: 0, x: 0, y: 0, width: 400, height: 400, right: 400, bottom: 400 };
+const MOUSE = { pointerType: 'mouse', pointerId: 1, isPrimary: true };
+const FINGER = { pointerType: 'touch', pointerId: 3, isPrimary: true };
+const RED = '#dc2626';
+const BLACK = '#111827';
+const ACROSS: Array<[number, number]> = [
+	[160, 200],
+	[240, 200]
+];
 
+let fetchMock: ReturnType<typeof deadFetch>;
+
+// A sized page box and no fullscreen API, for every spec that draws.
+function usePageBox(): void {
 	let restoreFullscreen: () => void;
 	let rectSpy: { mockRestore: () => void };
-	let fetchMock: ReturnType<typeof deadFetch>;
-
 	beforeEach(() => {
 		rectSpy = vi
 			.spyOn(Element.prototype, 'getBoundingClientRect')
 			.mockReturnValue({ ...RECT, toJSON: () => RECT } as DOMRect);
 		restoreFullscreen = setRequestFullscreen(undefined);
 	});
-
 	afterEach(() => {
 		rectSpy.mockRestore();
 		restoreFullscreen();
 	});
+}
 
-	async function open(): Promise<HTMLElement> {
-		fetchMock = deadFetch();
-		signFileUrlMock.mockRejectedValue(deadWire());
-		seedHeldPart();
-		const { container } = renderViewer();
-		await loaded(container);
-		await waitFor(() => expect(pdfjs.renderCalls.length).toBe(1));
-		return container;
-	}
+async function open(personId = 'person-p', seed = true): Promise<HTMLElement> {
+	fetchMock = deadFetch();
+	signFileUrlMock.mockRejectedValue(deadWire());
+	if (seed) seedHeldPart(personId);
+	const { container } = renderViewer({}, personId);
+	await loaded(container);
+	await waitFor(() => expect(pdfjs.renderCalls.length).toBe(1));
+	return container;
+}
 
-	async function openWithPen(): Promise<HTMLElement> {
-		const container = await open();
-		await fireEvent.click(pen(container));
-		return container;
-	}
+async function openWithPen(): Promise<HTMLElement> {
+	const container = await open();
+	await fireEvent.click(pen(container));
+	return container;
+}
 
-	const pen = (c: HTMLElement) =>
-		c.querySelector('[data-testid="part-viewer-pen"]') as HTMLButtonElement;
-	const hideMarks = (c: HTMLElement) =>
-		c.querySelector('[data-testid="part-viewer-hide-marks"]') as HTMLButtonElement | null;
-	const control = (c: HTMLElement, key: string) =>
-		c.querySelector(`button[aria-label="[${key}]"]`) as HTMLButtonElement | null;
-	const surface = (c: HTMLElement) =>
-		c.querySelector('svg[data-testid="stroke-surface"]') as SVGSVGElement;
+const pen = (c: HTMLElement) =>
+	c.querySelector('[data-testid="part-viewer-pen"]') as HTMLButtonElement;
+const hideMarks = (c: HTMLElement) =>
+	c.querySelector('[data-testid="part-viewer-hide-marks"]') as HTMLButtonElement | null;
+const control = (c: HTMLElement, key: string) =>
+	c.querySelector(`button[aria-label="[${key}]"]`) as HTMLButtonElement | null;
+const surface = (c: HTMLElement) =>
+	c.querySelector('svg[data-testid="stroke-surface"]') as SVGSVGElement;
 
-	/** The colour of every finished mark on the shown page; none when no surface shows. */
-	function marks(c: HTMLElement): string[] {
-		const svg = c.querySelector('svg[data-testid="stroke-surface"]');
-		if (!svg) return [];
-		return [...svg.querySelectorAll('path:not([data-testid="live-stroke"])')].map(
-			(p) => p.getAttribute('stroke') ?? ''
-		);
-	}
+/** The colour of every finished mark on the shown page; none when no surface shows. */
+function marks(c: HTMLElement): string[] {
+	const svg = c.querySelector('svg[data-testid="stroke-surface"]');
+	if (!svg) return [];
+	return [...svg.querySelectorAll('path:not([data-testid="live-stroke"])')].map(
+		(p) => p.getAttribute('stroke') ?? ''
+	);
+}
 
-	async function stroke(
-		c: HTMLElement,
-		points: Array<[number, number]>,
-		init: Record<string, unknown> = MOUSE
-	): Promise<void> {
-		const svg = surface(c);
-		const at = (i: number) => ({ ...init, clientX: points[i][0], clientY: points[i][1] });
-		await fireEvent.pointerDown(svg, at(0));
-		for (let i = 1; i < points.length; i++) await fireEvent.pointerMove(svg, at(i));
-		await fireEvent.pointerUp(svg, at(points.length - 1));
-	}
+async function stroke(
+	c: HTMLElement,
+	points: Array<[number, number]>,
+	init: Record<string, unknown> = MOUSE
+): Promise<void> {
+	const svg = surface(c);
+	const at = (i: number) => ({ ...init, clientX: points[i][0], clientY: points[i][1] });
+	await fireEvent.pointerDown(svg, at(0));
+	for (let i = 1; i < points.length; i++) await fireEvent.pointerMove(svg, at(i));
+	await fireEvent.pointerUp(svg, at(points.length - 1));
+}
 
-	async function turn(c: HTMLElement, key: 'ArrowRight' | 'ArrowLeft', expected: string) {
-		await fireEvent.keyDown(window, { key });
-		await waitFor(() => expect(indicator(c)).toEqual(expected));
-	}
+async function turn(c: HTMLElement, key: 'ArrowRight' | 'ArrowLeft', expected: string) {
+	await fireEvent.keyDown(window, { key });
+	await waitFor(() => expect(indicator(c)).toEqual(expected));
+}
+
+describe('#615 — drawing on the page', () => {
+	usePageBox();
 
 	it('the pen toggle sits between the page indicator and Close and shows the pen controls only while on', async () => {
 		const c = await open();
@@ -1081,6 +1095,175 @@ describe('#615 — drawing on the page', () => {
 		} finally {
 			getContext.mockRestore();
 		}
+	});
+});
+
+describe('#616 — her ink stays on the device', () => {
+	usePageBox();
+
+	const at = (page: number, personId = 'person-p') => ({
+		db: 'sampledb',
+		personId,
+		fileId: 'file-score',
+		page
+	});
+
+	/** Waits until the device holds `live` marks on the page, read through a fresh store. */
+	async function saved(page: number, live: number, personId = 'person-p'): Promise<void> {
+		await waitFor(async () => {
+			const log = await createInkStore(inkDevice).load(at(page, personId));
+			expect(liveInk(log).strokes).toHaveLength(live);
+		});
+	}
+
+	/** Closes the viewer and opens the same part again, with a fresh store on the same device. */
+	async function reopen(personId = 'person-p'): Promise<HTMLElement> {
+		cleanup();
+		inkStore = createInkStore(inkDevice);
+		return open(personId, false);
+	}
+
+	const tool = (c: HTMLElement, key: string) => control(c, key) as HTMLButtonElement;
+
+	it('she marks two pages, closes the viewer and opens it again offline: each page has its marks', async () => {
+		const c = await openWithPen();
+		await stroke(c, ACROSS);
+		const pageOne = surface(c).querySelector('path')?.getAttribute('d');
+		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
+		await fireEvent.click(tool(c, 'strokes_pen_black_aria_label'));
+		await stroke(c, [
+			[160, 300],
+			[240, 300]
+		]);
+		await saved(1, 1);
+		await saved(2, 1);
+
+		const again = await reopen();
+		expect(indicator(again)).toEqual(INDICATOR_1_OF_3);
+		expect(marks(again)).toEqual([RED]);
+		expect(surface(again).querySelector('path')?.getAttribute('d')).toBe(pageOne);
+		expect(hideMarks(again)).not.toBeNull();
+		await turn(again, 'ArrowRight', INDICATOR_2_OF_3);
+		expect(marks(again)).toEqual([BLACK]);
+		await turn(again, 'ArrowRight', INDICATOR_3_OF_3);
+		expect(marks(again)).toEqual([]);
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('an erase survives a reopen, before and after one, and each is stored as a tombstone', async () => {
+		const c = await openWithPen();
+		await stroke(c, [
+			[160, 100],
+			[240, 100]
+		]);
+		await fireEvent.click(tool(c, 'strokes_pen_black_aria_label'));
+		await stroke(c, [
+			[160, 300],
+			[240, 300]
+		]);
+		await saved(1, 2);
+		await fireEvent.click(tool(c, 'strokes_erase_aria_label'));
+		await stroke(c, [
+			[200, 80],
+			[200, 120]
+		]);
+		expect(marks(c)).toEqual([BLACK]);
+		await saved(1, 1);
+
+		const again = await reopen();
+		expect(marks(again)).toEqual([BLACK]);
+		await fireEvent.click(pen(again));
+		await fireEvent.click(tool(again, 'strokes_erase_aria_label'));
+		await stroke(again, [
+			[200, 280],
+			[200, 320]
+		]);
+		expect(marks(again)).toEqual([]);
+		await saved(1, 0);
+
+		const third = await reopen();
+		expect(marks(third)).toEqual([]);
+		const log = await createInkStore(inkDevice).load(at(1));
+		expect(log.strokes.map((s) => s.stroke.pen)).toEqual(['red', 'black']);
+		expect(log.erased).toEqual([log.strokes[0].id, log.strokes[1].id]);
+	});
+
+	it('another person signed in on the same device never sees her ink, and hers waits for her', async () => {
+		const c = await openWithPen();
+		await stroke(c, ACROSS);
+		await saved(1, 1);
+
+		cleanup();
+		inkStore = createInkStore(inkDevice);
+		const other = await open('person-q');
+		expect(marks(other)).toEqual([]);
+		expect(hideMarks(other)).toBeNull();
+		await fireEvent.click(pen(other));
+		expect(marks(other)).toEqual([]);
+		await fireEvent.click(tool(other, 'strokes_pen_black_aria_label'));
+		await stroke(other, [
+			[160, 300],
+			[240, 300]
+		]);
+		await saved(1, 1, 'person-q');
+
+		const hers = await reopen('person-p');
+		expect(marks(hers)).toEqual([RED]);
+		await saved(1, 1);
+	});
+
+	it("the part's bytes are byte-identical after any amount of drawing, erasing and reopening", async () => {
+		const c = await openWithPen();
+		for (let y = 40; y <= 360; y += 40) {
+			await stroke(c, [
+				[160, y],
+				[240, y]
+			]);
+		}
+		await fireEvent.click(tool(c, 'strokes_erase_aria_label'));
+		await stroke(c, [
+			[200, 20],
+			[200, 60]
+		]);
+		await saved(1, 8);
+
+		const again = await reopen();
+		await fireEvent.click(pen(again));
+		await stroke(again, [
+			[100, 380],
+			[300, 380]
+		]);
+		await saved(1, 9);
+
+		const held = await fakeByteStore.get({ db: 'sampledb', personId: 'person-p' }, 'file-score');
+		expect(new Uint8Array(held?.bytes ?? new ArrayBuffer(0))).toEqual(PDF_BYTES);
+		expect(fakeByteStore.puts).toEqual([]);
+	});
+
+	it('ink the device cannot read is reported, and the pen is not offered over it', async () => {
+		const broken = new Error('ink unreadable');
+		const save = vi.fn(async () => {});
+		inkStore = { load: () => Promise.reject(broken), save };
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		try {
+			const c = await open();
+			expect(indicator(c)).toEqual(INDICATOR_1_OF_3);
+			expect(pen(c)).toBeNull();
+			expect(consoleSpy).toHaveBeenCalledWith('part: loading the marks failed', broken);
+			expect(save).not.toHaveBeenCalled();
+		} finally {
+			consoleSpy.mockRestore();
+		}
+	});
+
+	it('a device with no IndexedDB still draws, for the session only', async () => {
+		inkStore = null;
+		const c = await openWithPen();
+		await stroke(c, ACROSS);
+		expect(marks(c)).toEqual([RED]);
+		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
+		await turn(c, 'ArrowLeft', INDICATOR_1_OF_3);
+		expect(marks(c)).toEqual([RED]);
 	});
 });
 
