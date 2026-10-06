@@ -54,10 +54,8 @@ type Surface = {
 	ready: (container: HTMLElement) => Promise<unknown>;
 	write: (container: HTMLElement) => Promise<unknown>;
 	status: string;
-	/** Absent: the region reports progress while writing and has no saved cue. */
-	saved?: string;
 	error: string;
-};
+} & ({ saved: string } | { saved?: undefined; noSavedCue: string });
 
 const settled = async (write: Write, ok: () => Response) => {
 	if (write.hold) await write.hold;
@@ -279,6 +277,7 @@ const SURFACES: Record<string, Surface> = {
 		},
 		write: (c) => fireEvent.click(q(c, 'event-convert-submit')!),
 		status: 'event-convert-progress',
+		noSavedCue: 'the form closes on success',
 		error: 'event-convert-error'
 	}
 };
@@ -320,7 +319,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 		const found = [...new Set(findSourceFiles('src', ['.svelte']))].filter(
 			(file) => saysSaved(file) && reaches('src/routes/event/[id]/+page.svelte', file)
 		);
-		const saidSaved = Object.values(SURFACES).filter((s) => s.saved);
+		const saidSaved = Object.values(SURFACES).filter((s) => !('noSavedCue' in s));
 		expect(found.sort()).toEqual(saidSaved.map((s) => s.component).sort());
 	});
 
@@ -338,7 +337,7 @@ describe('the saved cue, on every write surface of the event page', () => {
 
 	it.each(Object.keys(SURFACES))('%s: a blank role=status region is there before any write', blankRegionBeforeWrite);
 
-	const saying = Object.keys(SURFACES).filter((name) => SURFACES[name].saved);
+	const saying = Object.keys(SURFACES).filter((name) => !('noSavedCue' in SURFACES[name]));
 
 	it.each(saying)('%s: says nothing while the write is in flight, then saved once it settles', async (name) => {
 		const surface = SURFACES[name];
