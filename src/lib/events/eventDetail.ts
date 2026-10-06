@@ -191,6 +191,12 @@ export async function loadEventDetail(
 	};
 }
 
+// Under the grants a 403 or 404 is an answer (not readable here), not a failed read.
+function reportParentReadFailure(action: string, status: number): void {
+	if (status === 403 || status === 404) return;
+	reportProblem({ area: 'event', action, error: new Error(`HTTP ${status}`) });
+}
+
 // Rights ride on the conductor GET: an unrequested prop reads as "no rights".
 async function fetchSeason(
 	cfg: EntuCfg,
@@ -207,7 +213,7 @@ async function fetchSeason(
 		opts
 	);
 	if (!res.ok) {
-		reportProblem({ area: 'event', action: 'reading the season', error: new Error(`HTTP ${res.status}`) });
+		reportParentReadFailure('reading the season', res.status);
 		return undefined;
 	}
 	const body = (await res.json()) as { entity?: SeasonRaw };
@@ -259,7 +265,7 @@ async function fetchSeries(
 		opts
 	);
 	if (!res.ok) {
-		reportProblem({ area: 'event', action: 'reading the series', error: new Error(`HTTP ${res.status}`) });
+		reportParentReadFailure('reading the series', res.status);
 		return undefined;
 	}
 	const body = (await res.json()) as { entity?: SeriesRaw };
