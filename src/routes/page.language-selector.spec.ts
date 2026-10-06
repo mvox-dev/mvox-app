@@ -127,6 +127,13 @@ describe('LanguageSelector — selection (#123)', () => {
 		expect(setLocaleImpl.mock.calls[0][0]).toBe('et');
 	});
 
+	it('tapping the current locale keeps it and sets nothing (#809)', async () => {
+		const setLocaleImpl = vi.fn();
+		const { container } = await renderSelector({ setLocaleImpl });
+		await fireEvent.click(option(container, 'en')!);
+		expect(setLocaleImpl).not.toHaveBeenCalled();
+	});
+
 	it('selecting a locale changes the app language (default seam → paraglide)', async () => {
 		const { restore } = spyOnReload();
 		try {
