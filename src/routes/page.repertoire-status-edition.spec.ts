@@ -181,11 +181,11 @@ describe('+page — repertoire status/edition UX on the real agenda route (#125)
 
 	it('tapping the chosen status keeps it and writes nothing (#809)', async () => {
 		const { container, fetchMock } = await renderExpandedAsEditor();
-		const li = workRowOf(container, 'Spem in alium');
-		await fireEvent.click(li.querySelector('[data-testid="work-status-active"]')!);
+		const li = workRowOf(container, 'Old warhorse');
+		await fireEvent.click(li.querySelector('[data-testid="work-status-retired"]')!);
 		await settle();
-		expect(workRowOf(container, 'Spem in alium').getAttribute('data-status')).toBe('active');
-		expect(postsTo(fetchMock, 'entity/ri-1')).toEqual([]);
+		expect(workRowOf(container, 'Old warhorse').getAttribute('data-status')).toBe('retired');
+		expect(postsTo(fetchMock, 'entity/ri-2')).toEqual([]);
 	});
 
 	it('the page renders ONE unified edition picker showing the pinned edition, no [Pin] button (F5b)', async () => {
