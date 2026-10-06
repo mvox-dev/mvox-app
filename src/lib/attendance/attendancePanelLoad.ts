@@ -4,6 +4,7 @@ import { without } from '$lib/collections/immutable';
 import type { AttendanceEntry } from '$lib/attendance/attendanceChangeQueue';
 import type * as AttendanceData from '$lib/attendance/attendanceData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type AttendanceMap = Record<string, AttendanceEntry>;
 export type AttendanceRsvpMap = Record<string, { rsvpId: string; status: string }>;
@@ -97,8 +98,8 @@ export function createAttendancePanelLoad(deps: AttendancePanelLoadDeps) {
 				});
 			})
 			.catch((e) => {
-				console.error(`${deps.label}: attendance panel load failed`, e);
 				if (!current()) return;
+				reportProblem({ area: deps.label, action: 'loading the attendance panel', error: e });
 				target.failed();
 			});
 	}

@@ -2,6 +2,7 @@
 	prefetch runs once at construction. `surfaceCreatedEvent` and the row-watcher
 	stay in the page — they must outlive this form's own close. -->
 <script lang="ts">
+	import { alreadyReported, reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { tick, untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -145,7 +146,7 @@
 			})
 			.catch((e) => {
 				if (stale()) return;
-				console.error('agenda: loading series options for event create failed', e);
+				reportProblem({ area: 'agenda', action: 'loading the series options', error: e });
 				eventCreateSeriesOptions = [];
 			});
 	}
@@ -153,12 +154,8 @@
 	untrack(() => {
 		const initialCfg = selected ? cfgFor(selected.db) : null;
 		if (!initialCfg) return;
-		getRoster(initialCfg).catch((e) => {
-			console.error('agenda: loading the roster for the event conductor picker failed', e);
-		});
-		getSections(initialCfg).catch((e) => {
-			console.error('agenda: loading the section tree for the event conductor picker failed', e);
-		});
+		getRoster(initialCfg).catch(alreadyReported);
+		getSections(initialCfg).catch(alreadyReported);
 		if (eventCreateSeasonId) loadEventCreateSeriesOptions(initialCfg, eventCreateSeasonId);
 	});
 
@@ -197,7 +194,7 @@
 			})
 			.catch((e) => {
 				if (stale()) return;
-				console.error('agenda: loading series defaults for event create failed', e);
+				reportProblem({ area: 'agenda', action: 'loading the series defaults', error: e });
 				eventCreateSeriesDefaults = null;
 			});
 	}

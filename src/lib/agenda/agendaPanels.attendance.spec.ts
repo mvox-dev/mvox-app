@@ -1,9 +1,12 @@
 // @vitest-environment happy-dom
-// The agenda's attendance panel load: a fresh roster on every open, and a logged failure.
+// The agenda's attendance panel load: a fresh roster on every open, and a reported failure.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/roster/rosterData', async () =>
 	(await import('$lib/testing/mocks/roster')).rosterModule()
+);
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
 );
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
@@ -24,6 +27,7 @@ import { testCfg } from '$lib/testing/entuFetchKit';
 import { resetAppState } from '$lib/testing/appReset';
 import { applyAttendanceChangeMock } from '$lib/testing/mocks/events';
 import { loadRosterMock } from '$lib/testing/mocks/roster';
+import { reportProblem } from '$lib/testing/mocks/session';
 
 const ITEM: AgendaItem = {
 	id: 'ev1',
@@ -126,16 +130,18 @@ describe('agenda attendance panel load', () => {
 		expect(ag.attendancePendingMemberIds).toEqual(new Set(['m1']));
 	});
 
-	it('logs a failed load', async () => {
+	it('reports a failed load', async () => {
 		const failure = new Error('read failed');
 		const { ag, loader } = setup(vi.fn().mockRejectedValue(failure));
 		loadRosterMock.mockResolvedValue({ items: [ALICE], total: 1, truncated: false });
-		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		reportProblem.mockReset();
 
 		loader.openAttendancePanel(ITEM);
 		await settle();
 
 		expect(ag.attendanceError).toBe(true);
-		expect(errorSpy).toHaveBeenCalledWith('agenda: attendance panel load failed', failure);
+		expect(reportProblem.mock.calls).toEqual([
+			[{ area: 'agenda', action: 'loading the attendance panel', error: failure }]
+		]);
 	});
 });

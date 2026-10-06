@@ -25,7 +25,15 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
+vi.mock('$lib/files/appByteStore', async () =>
+	(await import('$lib/testing/mocks/files')).fakeAppByteStoreModule()
+);
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
+
 import Page from './+page.svelte';
+import { reportProblem } from '$lib/testing/mocks/session';
 import {
 	cleanupRealTimersReset,
 	editPosts,
@@ -205,12 +213,16 @@ describe('#248 — detail-route location suggestions load LAZILY (PO ruling c)',
 
 describe('#248 — corpus fetch failure degrades silently', () => {
 	it('a 500 corpus answer surfaces NO error and NO suggestions; the input stays plain free text and the save path is untouched (byte-identical write)', async () => {
+		reportProblem.mockReset();
 		const { container, fetchStub, corpusUrls } = renderDetail({ failCorpus: true });
 		await detailReady(container);
 		const input = await beginLocationEdit(container);
 		await fireEvent.focus(input);
 		await waitFor(() => {
 			expect(corpusUrls.length).toBeGreaterThan(0);
+			expect(reportProblem.mock.calls).toEqual([
+				[{ area: 'event', action: 'loading the location suggestions', error: expect.any(Error) }]
+			]);
 		});
 		await flush();
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -95,7 +96,7 @@
 			);
 			if (seasonManageDeleteArmed === series.id) seasonManageArmedSeriesCount = live;
 		} catch (e) {
-			console.error('agenda: live occurrence count for the delete confirm failed', series.id, e);
+			reportProblem({ area: 'agenda', action: 'counting the series occurrences', error: e });
 		}
 	}
 

@@ -1,6 +1,7 @@
 <!-- #508 — season-create dialog, mounted only while open, so its roster/section
 	prefetch runs once at construction. -->
 <script lang="ts">
+	import { alreadyReported } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -60,12 +61,8 @@
 		const current = selected;
 		if (!current) return;
 		const cfg = cfgFor(current.db);
-		getRoster(cfg).catch((e) => {
-			console.error('agenda: loading the roster for the conductor picker failed', e);
-		});
-		getSections(cfg).catch((e) => {
-			console.error('agenda: loading the section tree for the conductor picker failed', e);
-		});
+		getRoster(cfg).catch(alreadyReported);
+		getSections(cfg).catch(alreadyReported);
 	});
 
 	function clearSeasonCreateError(): void {

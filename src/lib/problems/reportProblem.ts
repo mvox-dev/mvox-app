@@ -12,4 +12,6 @@ export function reportProblem({ area, action, error }: Problem): void {
 	console.error(`${area}: ${action} failed`, error);
 }
 
+export function alreadyReported(): void {}
+
 // (*MVOX:Josquin*)

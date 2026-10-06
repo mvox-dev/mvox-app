@@ -25,7 +25,15 @@ vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
 
+vi.mock('$lib/files/appByteStore', async () =>
+	(await import('$lib/testing/mocks/files')).fakeAppByteStoreModule()
+);
+vi.mock('$lib/problems/reportProblem', async () =>
+	(await import('$lib/testing/mocks/session')).reportProblemModule()
+);
+
 import Page from './+page.svelte';
+import { reportProblem } from '$lib/testing/mocks/session';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
 import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import {
@@ -81,6 +89,7 @@ type WireOpts = {
 	schedule?: Array<Record<string, unknown>>;
 	holdFirstScheduleGet?: boolean;
 	failItemWrites?: boolean;
+	failScheduleRefetch?: boolean;
 };
 
 function scheduleWireStub(opts: WireOpts = {}) {
@@ -108,6 +117,7 @@ function scheduleWireStub(opts: WireOpts = {}) {
 		}
 		if (url.includes('_type.string=schedule_item')) {
 			scheduleGets += 1;
+			if (opts.failScheduleRefetch && scheduleGets > 1) return json({}, 500);
 			if (opts.holdFirstScheduleGet && scheduleGets === 1) {
 				const entities = await staleGate;
 				return json({ entities });
@@ -725,6 +735,31 @@ describe('#262 — remove flow (two-step confirm, TrashIcon trigger)', () => {
 			expect(deletes).toHaveLength(1);
 			expect(String(deletes[0][0])).toContain('/entity/si1');
 			expect(String(deletes[0][0])).not.toContain('/property/');
+		});
+	});
+});
+
+describe('#756 — a failed schedule re-read is reported', () => {
+	it('the re-read after an add fails and is reported', async () => {
+		reportProblem.mockReset();
+		const { container } = renderSchedulePage({ event: editorEvent(), failScheduleRefetch: true });
+		await waitReady(container);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-schedule-add"]')).not.toBeNull();
+		});
+		await fireEvent.click(container.querySelector('[data-testid="event-schedule-add"]')!);
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="event-schedule-add-name"]')).not.toBeNull();
+		});
+		await fireEvent.input(container.querySelector('[data-testid="event-schedule-add-name"]')!, {
+			target: { value: 'kogunemine' }
+		});
+		await fillDateTime(container as HTMLElement, 'event-schedule-add-datetime', '2026-12-01', '17:30');
+		await fireEvent.click(container.querySelector('[data-testid="event-schedule-add-submit"]')!);
+		await waitFor(() => {
+			expect(reportProblem.mock.calls).toEqual([
+				[{ area: 'event', action: 're-reading the schedule', error: expect.any(Error) }]
+			]);
 		});
 	});
 });

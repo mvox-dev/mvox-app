@@ -1,5 +1,6 @@
 <!-- #641 — the season card's expand list and the open season's title row with its delete. -->
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
@@ -77,7 +78,8 @@
 				sm.seasonManageDeleteScope = scope;
 			}
 		} catch (e) {
-			console.error('agenda: live season scope for the delete confirm failed', seasonId, e);
+			if (generation !== sm.seasonManageDeleteGeneration) return;
+			reportProblem({ area: 'agenda', action: 'counting what the season delete removes', error: e });
 		}
 	}
 

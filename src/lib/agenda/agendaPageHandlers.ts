@@ -14,7 +14,7 @@ import { createAttendanceChangeQueue } from '$lib/attendance/attendanceChangeQue
 import { existingAttendance } from '$lib/attendance/attendanceWriteStatus';
 import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 import { createWriteTokens } from '$lib/net/writeTokens';
-import { getAppByteStore } from '$lib/files/appByteStore';
+import { createPresenceRefresh } from '$lib/files/presenceRefresh';
 import { openPart } from '$lib/parts/openPart';
 import type { WorkRow } from '$lib/repertoire/types';
 import { rosterOrder } from '$lib/sections/sectionData';
@@ -32,23 +32,7 @@ export function createAgendaPageHandlers(ag: AgendaLoadState, deps: AgendaPageHa
 	const collectiveTokens = () =>
 		createWriteTokens(() => get(selectedCollectiveIdentityStore), sameCollectiveIdentity);
 
-	let presenceSeq = 0;
-	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
-		const seq = ++presenceSeq;
-		try {
-			getAppByteStore()
-				.heldFileIds(db, personId)
-				.then((ids) => {
-					if (seq !== presenceSeq || !isCurrent()) return;
-					ag.heldFileIds = new Set(ids);
-				})
-				.catch((e) => {
-					console.error('agenda: file presence read failed', e);
-				});
-		} catch (e) {
-			console.error('agenda: file presence read failed', e);
-		}
-	}
+	const refreshPresence = createPresenceRefresh('agenda', (ids) => (ag.heldFileIds = ids));
 
 	function rosterPickerOptions(
 		excludeIds: readonly string[]

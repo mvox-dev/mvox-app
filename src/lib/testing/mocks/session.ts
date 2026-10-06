@@ -43,7 +43,7 @@ export function profileWritesModule() {
 }
 
 export function reportProblemModule() {
-	return { reportProblem };
+	return { reportProblem, alreadyReported: () => {} };
 }
 
 // The spec switches the locale with localeMock.state.set('locale', …).

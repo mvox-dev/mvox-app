@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -44,7 +45,7 @@
 				}
 			})
 			.catch((e) => {
-				console.error('event detail: loading location suggestions failed', e);
+				reportProblem({ area: 'event', action: 'loading the location suggestions', error: e });
 			});
 	}
 </script>
