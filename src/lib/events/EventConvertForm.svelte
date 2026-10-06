@@ -356,19 +356,14 @@
 					/>
 				{/snippet}
 			</Field>
-			{#if eventConvertProgress}
-				<p
-					data-testid="event-convert-progress"
-					role="status"
-					aria-live="polite"
-					class="text-xs text-ink-2"
-				>
+			<p data-testid="event-convert-progress" role="status" aria-live="polite" class="text-xs text-ink-2">
+				{#if eventConvertProgress}
 					{m.event_convert_progress({
 						current: eventConvertProgress.current,
 						total: eventConvertProgress.total
 					})}
-				</p>
-			{/if}
+				{/if}
+			</p>
 			{#if eventConvertResume}
 				<p data-testid="event-convert-resume-notice" class="text-xs text-ink-2">
 					{m.event_convert_resume_notice({

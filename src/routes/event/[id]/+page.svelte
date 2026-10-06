@@ -102,6 +102,7 @@
 		reset: ({ selected: current }) => {
 			detail = null;
 			resetEventPageState(ev);
+			resetEventSeriesState(series);
 			if (current && eventId) resetServedFromCache();
 		},
 		onNoCollective: () => resetEventSeriesState(series),

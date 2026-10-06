@@ -626,8 +626,7 @@ describe('#304 — the committed write (owner view)', () => {
 		expect(dels[0].url).toContain('/property/pv-series');
 		expect(parentPosts(fetchStub)).toEqual([]);
 		await waitFor(() => {
-			const status = q(container, 'event-series-status');
-			expect(status).not.toBeNull();
+			expect(q(container, 'event-series-status')?.textContent).toContain('[event_detail_series_saved]');
 		});
 		expect(q(container, 'event-detail-location')?.textContent ?? '').not.toContain('Church Hall');
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('');
@@ -649,7 +648,7 @@ describe('#304 — the committed write (owner view)', () => {
 			expect(error!.textContent).toContain('[event_detail_series_save_error]');
 		});
 		expect((q<HTMLSelectElement>(container, 'event-series-select'))!.value).toBe('series1');
-		expect(q(container, 'event-series-status')).toBeNull();
+		expect(q(container, 'event-series-status')?.textContent?.trim()).toBe('');
 		expect(q(container, 'event-detail-location')?.textContent ?? '').toContain('Church Hall');
 	});
 
@@ -678,7 +677,7 @@ describe('#304 — the committed write (owner view)', () => {
 		await new Promise((r) => setTimeout(r, 0));
 		await new Promise((r) => setTimeout(r, 0));
 
-		expect(q(container, 'event-series-status')).toBeNull();
+		expect(q(container, 'event-series-status')?.textContent?.trim()).toBe('');
 		expect(q(container, 'event-detail-name')?.textContent).toContain('Crede Event');
 		const credeSelect = q<HTMLSelectElement>(container, 'event-series-select');
 		if (credeSelect) {

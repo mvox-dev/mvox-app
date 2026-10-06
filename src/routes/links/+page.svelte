@@ -7,6 +7,7 @@
 	import { listLinks, type LinkRow } from '$lib/links/linkData';
 	import { createLink, updateLink, reorderLinks, deleteLink } from '$lib/links/linkActions';
 	import { normalizeUrl } from '$lib/links/normalizeUrl';
+	import { cfgFor } from '$lib/entu/cfg';
 	import { createRouteLoadMachine, type RouteLoadStatus } from '$lib/loading/routeLoad';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import LinksAddForm from '$lib/links/LinksAddForm.svelte';
@@ -112,7 +113,7 @@
 		// Before the attempt-start clear, so a refused submit keeps the last real failure.
 		if (isOffline) return;
 		if (!currentCfg) return;
-		const cfg = currentCfg;
+		const cfg = cfgFor(currentCfg.db);
 		const name = addName.trim();
 		// Non-empty is the only validation (#256 ruling).
 		if (!name || !/\S/.test(addUrl)) return;
@@ -160,7 +161,7 @@
 		// Offline: refuse before the `writeError` clear, and keep the form open on its draft.
 		if (isOffline) return;
 		if (!currentCfg) return;
-		const cfg = currentCfg;
+		const cfg = cfgFor(currentCfg.db);
 		const name = editName.trim();
 		if (!name || !/\S/.test(editUrl)) return;
 		const description = editDescription.trim() ? editDescription : null;
@@ -181,7 +182,7 @@
 	async function handleRemove(id: string): Promise<void> {
 		if (isOffline) return;
 		if (!currentCfg) return;
-		const cfg = currentCfg;
+		const cfg = cfgFor(currentCfg.db);
 		const g = routeLoad.generation;
 		writeError = null;
 		try {
@@ -201,7 +202,7 @@
 		// Before the attempt-start clears, so a refused move leaves the arrows as they were.
 		if (isOffline) return;
 		if (!currentCfg) return;
-		const cfg = currentCfg;
+		const cfg = cfgFor(currentCfg.db);
 		const g = routeLoad.generation;
 		const newOrder = rows.map((r) => r.id);
 		const [movedId] = newOrder.splice(from, 1);
