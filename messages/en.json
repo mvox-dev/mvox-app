@@ -708,6 +708,8 @@
 	"agenda_downloads_link": "Open downloaded parts",
 	"last_read_as_of": "As of {time}",
 	"part_viewer_close": "Close",
+	"part_viewer_draw": "Draw",
+	"part_viewer_hide_marks": "Hide marks",
 	"part_viewer_not_on_device": "This part isn't saved on this device.",
 	"part_viewer_page_of": "{current} / {total}",
 	"entu_ref_aria_label": "Open the Entu record {short} (opens in a new tab)",

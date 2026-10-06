@@ -15,6 +15,8 @@
 	import { openFileBytes, type OpenedFileBytes } from '$lib/files/openFileBytes';
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
+	import PageInk from '$lib/strokes/PageInk.svelte';
+	import { DEFAULT_PENS, type StrokeData } from '$lib/strokes/strokes';
 
 	// 'missing': nothing reachable and nothing stored. 'open-failed': something answered and the
 	// part still did not open. The two are never collapsed (see wireUnreachable).
@@ -25,6 +27,14 @@
 	let numPages = $state(0);
 	let canvasEl = $state<HTMLCanvasElement | undefined>(undefined);
 	let rootEl = $state<HTMLDivElement | undefined>(undefined);
+	let pageSize = $state<{ width: number; height: number } | null>(null);
+
+	// Her marks, per page, for this session only (#615); nothing here is stored.
+	let penOn = $state(false);
+	let penId = $state(DEFAULT_PENS[0].id);
+	let marksHidden = $state(false);
+	let marks = $state<Record<number, StrokeData>>({});
+	const hasMarks = $derived(Object.values(marks).some((page) => page.strokes.length > 0));
 
 	// Two separate disposals: opened.release() and pdf.destroy() (openFileBytes.ts).
 	let opened: OpenedFileBytes | null = null;
@@ -40,7 +50,8 @@
 		renderChain = renderChain
 			.then(async () => {
 				if (!pdf || !canvasEl) return;
-				await pdf.renderPage(currentPage, canvasEl);
+				const rendered = await pdf.renderPage(currentPage, canvasEl);
+				pageSize = { width: rendered.cssWidth, height: rendered.cssHeight };
 			})
 			.catch(() => {
 				// A failed render leaves the previous page on screen; no retry loop.
@@ -92,6 +103,11 @@
 	function handlePointerUp(tracker: TapTracker, event: PointerEvent, onTap: () => void): void {
 		const wasTap = tracker.end({ x: event.clientX, y: event.clientY, timeMs: pointerTimeMs() });
 		if (wasTap) onTap();
+	}
+
+	function togglePen(): void {
+		penOn = !penOn;
+		if (penOn) marksHidden = false;
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
@@ -284,11 +300,46 @@
 				onpointermove={(event) => handlePointerMove(tapNext, event)}
 				onpointerup={(event) => handlePointerUp(tapNext, event, next)}
 			></div>
+			{#if pageSize && (penOn || !marksHidden)}
+				<PageInk
+					width={pageSize.width}
+					height={pageSize.height}
+					page={currentPage}
+					strokes={marks[currentPage] ?? { v: 1, strokes: [] }}
+					editable={penOn}
+					bind:penId
+					onchange={(strokes) => (marks = { ...marks, [currentPage]: strokes })}
+					onprev={previous}
+					onnext={next}
+				/>
+			{/if}
 		</div>
 		<div class="flex shrink-0 items-center justify-between px-6 py-3">
 			<span data-testid="part-viewer-page-indicator" class="font-sans text-sm text-ink-5">
 				{m.part_viewer_page_of({ current: currentPage, total: numPages })}
 			</span>
+			<div class="flex items-center gap-4">
+				<button
+					type="button"
+					class="font-sans text-sm text-paper underline aria-pressed:font-semibold aria-pressed:no-underline"
+					data-testid="part-viewer-pen"
+					aria-pressed={penOn}
+					onclick={togglePen}
+				>
+					{m.part_viewer_draw()}
+				</button>
+				{#if hasMarks && !penOn}
+					<button
+						type="button"
+						class="font-sans text-sm text-paper underline aria-pressed:font-semibold aria-pressed:no-underline"
+						data-testid="part-viewer-hide-marks"
+						aria-pressed={marksHidden}
+						onclick={() => (marksHidden = !marksHidden)}
+					>
+						{m.part_viewer_hide_marks()}
+					</button>
+				{/if}
+			</div>
 			<button
 				type="button"
 				class="font-sans text-sm text-paper underline"

@@ -166,4 +166,10 @@ src/lib, the rest. A `pgrep -f vitest` waiter matches its own command line. Scri
 Commit GREEN first, then mutate and restore with `git checkout -- src/`. A full page mock of
 roleManagement hides any new export from it: helpers pages need go in their own module.
 
+## [GOTCHA] Mutation runs: a compile error reads as zero failures (#615, 2026-10-06)
+
+A mutation that breaks the .svelte syntax fails the suite, not tests: grep "Failed Suites" too.
+Corner tap over StrokeSurface: a capture-phase pointerup on a wrapper dispatches pointercancel to
+the target, so the surface drops the dot itself. ~/workspace/scratchpad/615/mutate.py.
+
 (*MVOX:Josquin*)

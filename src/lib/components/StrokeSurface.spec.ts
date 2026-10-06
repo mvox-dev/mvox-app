@@ -313,6 +313,30 @@ describe('#394 — a second pointer never takes over the stroke in progress', ()
 	});
 });
 
+describe('#615 — a second finger hands the gesture to the page', () => {
+	it('a second finger landing mid-stroke drops the finger stroke, and neither finger draws on', async () => {
+		const { container, onchange } = mount();
+		const svg = surface(container);
+		const first = { pointerType: 'touch', pointerId: 3, isPrimary: true } as const;
+		const second = { pointerType: 'touch', pointerId: 4, isPrimary: false } as const;
+
+		await fireEvent.pointerDown(svg, { ...first, clientX: 20, clientY: 10 });
+		await fireEvent.pointerMove(svg, { ...first, clientX: 100, clientY: 10 });
+		await fireEvent.pointerDown(svg, { ...second, clientX: 20, clientY: 90 });
+		expect(svg.querySelector('[data-testid="live-stroke"]')).toBeNull();
+
+		await fireEvent.pointerMove(svg, { ...first, clientX: 180, clientY: 10 });
+		await fireEvent.pointerMove(svg, { ...second, clientX: 100, clientY: 90 });
+		await fireEvent.pointerUp(svg, { ...second, clientX: 100, clientY: 90 });
+		await fireEvent.pointerUp(svg, { ...first, clientX: 180, clientY: 10 });
+		expect(onchange).not.toHaveBeenCalled();
+		expect(svg.querySelectorAll('path')).toHaveLength(0);
+
+		await pass(container, LINE_TOP, first);
+		expect(lastEmitted(onchange)).toEqual({ v: 1, strokes: [S1] });
+	});
+});
+
 describe('#394 — a cancelled pointer takes its live mark with it', () => {
 	const liveEl = (container: HTMLElement) =>
 		surface(container).querySelector('[data-testid="live-stroke"]');
@@ -558,9 +582,10 @@ describe('#394 — readonly (view mode)', () => {
 		expect(surface(container).querySelectorAll('path')).toHaveLength(1);
 	});
 
-	it('draw mode suppresses touch panning on the surface only', () => {
+	// Named guard: happy-dom applies no touch-action, so the declared value is all a test can see.
+	it('draw mode keeps one-finger panning off the surface and lets two fingers pinch-zoom and pan', () => {
 		const { container } = mount();
-		expect(surface(container).getAttribute('style')).toContain('touch-action: none');
+		expect(surface(container).getAttribute('style')).toContain('touch-action: pinch-zoom');
 	});
 });
 
