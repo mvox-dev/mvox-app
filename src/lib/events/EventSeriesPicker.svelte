@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import { tick } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
@@ -82,8 +83,8 @@
 			if (series.armedTarget?.id !== newId) return;
 			series.previewDefaults = defaults;
 		} catch (err) {
-			console.error('event detail: series preview load failed', err);
 			if (series.armedTarget?.id !== newId) return;
+			reportProblem({ area: 'event', action: 'loading the series defaults', error: err });
 			series.armedTarget = null;
 			selectEl.value = previousId;
 			series.error = m.event_detail_series_save_error();

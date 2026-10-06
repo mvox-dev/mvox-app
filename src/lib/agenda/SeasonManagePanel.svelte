@@ -1,6 +1,7 @@
 <!-- #508 — season card + season-manage panel. The page keeps what it shares (open flag,
 	panel element, switch generation, panel repertoire) and passes it in. -->
 <script lang="ts">
+	import { alreadyReported, reportProblem } from '$lib/problems/reportProblem';
 	import { type ComponentProps } from 'svelte';
 	import type { Collective } from '$lib/collectives/types';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -178,32 +179,16 @@
 		const cfg = cfgFor(selected.db);
 		const seasonId = manageableSeasonId;
 		const thisRequest = currentRequestId();
-		const thisSwitch = switchGeneration();
 		sm.seasonManageSeriesError = false;
 		sm.seasonManageRosterLoading = true;
 		getRoster(cfg)
-			.catch((e) => {
-				console.error('agenda: loading the roster for season management failed', e);
-			})
+			.catch(alreadyReported)
 			.finally(() => {
 				if (thisRequest !== currentRequestId()) return;
 				sm.seasonManageRosterLoading = false;
 			});
-		getSections(cfg).catch((e) => {
-			console.error('agenda: loading the section tree for season management failed', e);
-		});
-		listEventSeriesForSeason(cfg, seasonId)
-			.then((result) => {
-				if (thisRequest !== currentRequestId() || thisSwitch !== switchGeneration()) return;
-				sm.seasonManageSeries = result.items;
-				sm.seasonManagePartial = result.truncated;
-			})
-			.catch((e) => {
-				if (thisRequest !== currentRequestId() || thisSwitch !== switchGeneration()) return;
-				console.error('agenda: loading the season\'s event series failed', e);
-				sm.seasonManageSeriesError = true;
-				sm.seasonManagePartial = false;
-			});
+		getSections(cfg).catch(alreadyReported);
+		loadSeriesList(cfg, seasonId, { opening: true });
 		loadPanelRepertoire(cfg, seasonId);
 	}
 
@@ -243,20 +228,26 @@
 	}
 
 	export function refreshSeasonManageLists(cfg: EntuCfg, seasonId: string): void {
+		loadPanelRepertoire(cfg, seasonId);
+		loadSeriesList(cfg, seasonId, { opening: false });
+	}
+
+	function loadSeriesList(cfg: EntuCfg, seasonId: string, { opening }: { opening: boolean }): void {
 		const thisRequest = currentRequestId();
 		const thisSwitch = switchGeneration();
-		loadPanelRepertoire(cfg, seasonId);
+		const stale = () => thisRequest !== currentRequestId() || thisSwitch !== switchGeneration();
 		listEventSeriesForSeason(cfg, seasonId)
 			.then((result) => {
-				if (thisRequest !== currentRequestId() || thisSwitch !== switchGeneration()) return;
+				if (stale()) return;
 				sm.seasonManageSeries = result.items;
 				sm.seasonManageSeriesError = false;
 				sm.seasonManagePartial = result.truncated;
 			})
 			.catch((e) => {
-				if (thisRequest !== currentRequestId() || thisSwitch !== switchGeneration()) return;
-				console.error('agenda: refreshing the season\'s event series after an event create failed', e);
+				if (stale()) return;
+				reportProblem({ area: 'agenda', action: "loading the season's event series", error: e });
 				sm.seasonManageSeriesError = true;
+				if (opening) sm.seasonManagePartial = false;
 			});
 	}
 

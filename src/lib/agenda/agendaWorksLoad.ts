@@ -78,7 +78,7 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 					: resolveManageRights(cfg, dbEntityId, personId)
 			)
 			.catch((e): ManageRightsState => {
-				console.error('agenda: resolving database entity rights failed', e);
+				reportProblem({ area: 'agenda', action: 'resolving the database entity rights', error: e });
 				return 'error';
 			})
 			.then((state) => {
@@ -174,7 +174,8 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 		const nextEventId = ag.agendaItems[0]?.id;
 		if (nextEventId) {
 			refreshEventPageDetail(cfg, nextEventId, fetch).catch((e) => {
-				console.error('agenda: next-event detail prefetch failed', e);
+				if (thisRequest !== seq.requestId) return;
+				reportProblem({ area: 'agenda', action: 'prefetching the next event', error: e });
 			});
 		}
 
@@ -191,7 +192,8 @@ export function createAgendaWorksLoad(ag: AgendaLoadState, seq: LoadCounters, de
 				}
 			})
 			.catch((e) => {
-				console.error('agenda: next-event prefetch failed', e);
+				if (thisRequest !== seq.requestId) return;
+				reportProblem({ area: 'agenda', action: 'prefetching the next event parts', error: e });
 			});
 	}
 

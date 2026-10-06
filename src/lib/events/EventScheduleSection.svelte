@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { reportProblem } from '$lib/problems/reportProblem';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { cfgFor } from '$lib/entu/cfg';
@@ -130,7 +131,8 @@
 				ev.scheduleRows = rows;
 			})
 			.catch((e) => {
-				console.error('event detail: schedule refresh failed', e);
+				if (g !== generation()) return;
+				reportProblem({ area: 'event', action: 're-reading the schedule', error: e });
 			});
 	}
 

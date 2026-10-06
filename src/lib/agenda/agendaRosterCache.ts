@@ -1,6 +1,7 @@
 import { loadRoster, type RosterRow } from '$lib/roster/rosterData';
 import { listSections, type SectionNode } from '$lib/sections/sectionData';
 import type { AgendaLoadState } from '$lib/agenda/agendaLoad';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 const ROSTER_CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -15,6 +16,7 @@ interface CacheSlot<C extends { db: string; fetchedAt: number }> {
 export function createAgendaRosterCache(ag: AgendaLoadState) {
 	function cached<C extends { db: string; fetchedAt: number }, T>(
 		cfg: Cfg,
+		action: string,
 		slot: CacheSlot<C>,
 		load: () => Promise<C>,
 		apply: (entry: C) => T
@@ -33,6 +35,7 @@ export function createAgendaRosterCache(ag: AgendaLoadState) {
 			})
 			.catch((e: unknown) => {
 				slot.setFailed(true);
+				reportProblem({ area: 'agenda', action, error: e });
 				throw e;
 			})
 			.finally(() => {
@@ -43,6 +46,7 @@ export function createAgendaRosterCache(ag: AgendaLoadState) {
 	function getRoster(cfg: Cfg): Promise<RosterRow[]> {
 		return cached(
 			cfg,
+			'loading the roster',
 			{
 				read: () => ag.rosterCache,
 				write: (entry) => (ag.rosterCache = entry),
@@ -69,6 +73,7 @@ export function createAgendaRosterCache(ag: AgendaLoadState) {
 	function getSections(cfg: Cfg): Promise<SectionNode[]> {
 		return cached(
 			cfg,
+			'loading the section tree',
 			{
 				read: () => ag.sectionsCache,
 				write: (entry) => (ag.sectionsCache = entry),

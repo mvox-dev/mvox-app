@@ -19,7 +19,7 @@
 	import { manageRightsOrNone } from '$lib/repertoire/manageRights';
 	import { readManagePickers } from '$lib/repertoire/managePickers';
 	import { reportProblem } from '$lib/problems/reportProblem';
-	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { createPresenceRefresh } from '$lib/files/presenceRefresh';
 	import type { EditableEventField } from '$lib/events/eventFieldEdit';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { listScheduleItems } from '$lib/schedule/scheduleData';
@@ -57,23 +57,7 @@
 
 	const series = $state(createEventSeriesState());
 
-	let presenceSeq = 0;
-	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
-		const seq = ++presenceSeq;
-		try {
-			getAppByteStore()
-				.heldFileIds(db, personId)
-				.then((ids) => {
-					if (seq !== presenceSeq || !isCurrent()) return;
-					ev.heldFileIds = new Set(ids);
-				})
-				.catch((e) => {
-					console.error('event detail: file presence read failed', e);
-				});
-		} catch (e) {
-			console.error('event detail: file presence read failed', e);
-		}
-	}
+	const refreshPresence = createPresenceRefresh('event', (ids) => (ev.heldFileIds = ids));
 
 	const isEditor = $derived(
 		detail !== null &&
@@ -128,7 +112,7 @@
 			} catch (e) {
 				if (!(e instanceof EventDetailLoadError && e.unavailable)) throw e;
 				if (!isCurrent()) return;
-				console.error('event detail: load failed', e);
+				// Not readable here (gone or not shared) is an answer, not a failed read.
 				status = 'not-available';
 			}
 		}
@@ -178,8 +162,8 @@
 				ev.scheduleLoaded = true;
 			})
 			.catch((e) => {
-				console.error('event detail: schedule load failed', e);
 				if (g !== routeLoad.generation) return;
+				reportProblem({ area: 'event', action: 'loading the schedule', error: e });
 				ev.scheduleRows = [];
 				ev.scheduleLoaded = true;
 			});
@@ -191,8 +175,8 @@
 					ev.attendanceMap = attendanceByMemberId(records);
 				})
 				.catch((e) => {
-					console.error('event detail: attendance load failed', e);
 					if (g !== routeLoad.generation) return;
+					reportProblem({ area: 'event', action: 'loading the attendance', error: e });
 					ev.attendanceMap = {};
 				});
 		}
@@ -206,8 +190,8 @@
 				series.optionsLoaded = true;
 			})
 			.catch((e) => {
-				console.error('event detail: series options load failed', e);
 				if (g !== routeLoad.generation) return;
+				reportProblem({ area: 'event', action: 'loading the series options', error: e });
 				series.options = [];
 				series.optionsLoaded = true;
 			});
@@ -222,7 +206,7 @@
 			detail = refreshed;
 		} catch (err) {
 			if (g !== routeLoad.generation) return;
-			console.error('event detail: post-series-write refresh failed', evId, err);
+			reportProblem({ area: 'event', action: 're-reading the event after a series change', error: err });
 		}
 	}
 

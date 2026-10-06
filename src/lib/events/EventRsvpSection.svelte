@@ -119,7 +119,7 @@
 			})
 			.catch((e) => {
 				if (g !== generation()) return;
-				console.error('event detail: tally load failed', e);
+				reportProblem({ area: 'event', action: 'loading the answer tally', error: e });
 				tally = null;
 				tallyError = true;
 				tallyMemberIdsByStatus = null;
@@ -200,8 +200,8 @@
 				tallyCardNamesPartial = rosterRead.truncated;
 			})
 			.catch((e) => {
-				console.error('event detail: tally card roster load failed', e);
 				if (g !== generation() || detail?.id !== evId) return;
+				reportProblem({ area: 'event', action: 'loading the tally card names', error: e });
 				tallyCardNames = null;
 				tallyCardNamesPartial = false;
 				tallyCardNamesError = true;

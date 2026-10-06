@@ -20,7 +20,7 @@
 	import { resetServedFromCache, servedFromCache } from '$lib/entu/readCache';
 	import { librarianStore } from '$lib/library/librarianStore';
 	import { formatFileSize } from '$lib/library/editionFiles';
-	import { getAppByteStore } from '$lib/files/appByteStore';
+	import { createPresenceRefresh } from '$lib/files/presenceRefresh';
 	import { listSeasons } from '$lib/seasons/entuSeasons';
 	import { currentSeason } from '$lib/attendance/conductorLogic';
 	import { listRepertoireItems, type RepertoireItem } from '$lib/repertoire/repertoireData';
@@ -73,25 +73,7 @@
 	);
 
 	// #351 — one keys-only query per load, never a per-row get(), which counts as an open.
-	// The last query issued wins: an earlier one resolving late describes an older store.
-	let presenceSeq = 0;
-	function refreshPresence(db: string, personId: string, isCurrent: () => boolean): void {
-		const seq = ++presenceSeq;
-		// Badges are supplementary: even a synchronous store failure must not take the tree down.
-		try {
-			getAppByteStore()
-				.heldFileIds(db, personId)
-				.then((ids) => {
-					if (seq !== presenceSeq || !isCurrent()) return;
-					lib.heldFileIds = new Set(ids);
-				})
-				.catch((e) => {
-					console.error('library: file presence read failed', e);
-				});
-		} catch (e) {
-			console.error('library: file presence read failed', e);
-		}
-	}
+	const refreshPresence = createPresenceRefresh('library', (ids) => (lib.heldFileIds = ids));
 
 	const routeLoad = createRouteLoadMachine({
 		name: 'library',
