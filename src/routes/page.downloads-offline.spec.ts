@@ -224,7 +224,9 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 	});
 
 	it('a store-read rejection surfaces a load error — never a forever-loading page', async () => {
-		vi.spyOn(fakeByteStore, 'heldFileIds').mockRejectedValueOnce(new Error('idb: read failed'));
+		const boom = new Error('idb: read failed');
+		vi.spyOn(fakeByteStore, 'heldFileIds').mockRejectedValueOnce(boom);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		const { container } = await renderDownloadsPage();
 
@@ -236,6 +238,8 @@ describe('#353 — /downloads lists held parts BY LABEL, with zero network', () 
 		});
 		expect(container.querySelector('[data-testid="downloads-loading"]')).toBeNull();
 		expect(container.querySelector('[data-testid="downloads-empty"]')).toBeNull();
+		expect(consoleSpy).toHaveBeenCalledWith('downloads: loading the downloaded parts failed', boom);
+		consoleSpy.mockRestore();
 	});
 });
 

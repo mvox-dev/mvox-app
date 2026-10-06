@@ -606,9 +606,9 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 			throw new Error('the byte GET is never reached');
 		});
 		vi.stubGlobal('fetch', fetchMock);
-		signFileUrlMock.mockRejectedValue(
-			new Error('signFileUrl: file file-score signing failed: 500')
-		);
+		const refused = new Error('signFileUrl: file file-score signing failed: 500');
+		signFileUrlMock.mockRejectedValue(refused);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const restore = setRequestFullscreen(undefined);
 		try {
 			const { container } = renderViewer();
@@ -626,7 +626,9 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 			expect(close).not.toBeNull();
 			expect(close.tagName).toBe('BUTTON');
 			expect(close.getAttribute('class')).toBeTruthy();
+			expect(consoleSpy).toHaveBeenCalledWith('part: delivering the part failed', refused);
 		} finally {
+			consoleSpy.mockRestore();
 			restore();
 		}
 	});
@@ -663,6 +665,7 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 	it('a dead wire with no stored copy still reads as not-on-device — the two are never collapsed', async () => {
 		deadFetch();
 		signFileUrlMock.mockRejectedValue(deadWire());
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const restore = setRequestFullscreen(undefined);
 		try {
 			const { container } = renderViewer();
@@ -671,7 +674,36 @@ describe('#427 review round 2, finding 2 — a REFUSED delivery is not a claim a
 				expect(container.querySelector('[data-testid="part-viewer-not-on-device"]')).not.toBeNull();
 			});
 			expect(container.querySelector('[data-testid="part-viewer-open-failed"]')).toBeNull();
+			// Offline is the not-on-device answer, not a failed delivery: nothing is reported.
+			expect(consoleSpy).not.toHaveBeenCalledWith(
+				'part: delivering the part failed',
+				expect.anything()
+			);
 		} finally {
+			consoleSpy.mockRestore();
+			restore();
+		}
+	});
+
+	it('held bytes pdf.js cannot open are reported and show the open-failure notice (#756)', async () => {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		seedHeldPart();
+		const broken = new Error('Invalid PDF structure');
+		pdfjs.getDocument.mockReturnValueOnce({
+			promise: Promise.reject(broken),
+			destroy: pdfjs.destroy
+		} as never);
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const restore = setRequestFullscreen(undefined);
+		try {
+			const { container } = renderViewer();
+			await waitFor(() => {
+				expect(container.querySelector('[data-testid="part-viewer-open-failed"]')).not.toBeNull();
+			});
+			expect(consoleSpy).toHaveBeenCalledWith('part: opening the part failed', broken);
+		} finally {
+			consoleSpy.mockRestore();
 			restore();
 		}
 	});
