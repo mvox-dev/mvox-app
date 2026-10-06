@@ -7,6 +7,7 @@ import {
 	ownsFocus as ownsFocusOf
 } from '$lib/a11y/focusable';
 import type { MemberOpsDeps } from '$lib/roster/rosterMemberOps';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 	const { roster, mo, actions, generation, isCurrent, isOffline } = deps;
@@ -81,7 +82,7 @@ export function createDeactivateOps<Halves>(deps: MemberOpsDeps<Halves>) {
 			deps.applyRosterHalves(read);
 		} catch (e) {
 			if (!isCurrent(g)) return;
-			console.error('roster: inactive roster load failed', e);
+			reportProblem({ area: 'roster', action: 'loading the inactive roster', error: e });
 			roster.inactiveLoadError = true;
 			roster.inactiveRows = [];
 			roster.inactivePartial = false;

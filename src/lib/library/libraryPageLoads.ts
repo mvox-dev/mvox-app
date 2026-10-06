@@ -15,6 +15,7 @@ import { without } from '$lib/collections/immutable';
 import type { LibraryState, NodeStatus } from '$lib/library/libraryState';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { ListRead } from '$lib/entu/listRead';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface LibraryTreeContext {
 	selected: () => Collective | null;
@@ -66,7 +67,7 @@ function createNodeLoad<T>(ctx: LibraryTreeContext, spec: NodeLoadSpec<T>) {
 				ctx.setStatus('session-expired');
 				return;
 			}
-			console.error(`library: ${spec.label} load failed`, id, e);
+			reportProblem({ area: 'library', action: `loading the ${spec.label}`, error: e });
 			setNodeStatus(id, 'error');
 		}
 	}
@@ -163,10 +164,13 @@ export function createLibrarianLoad(lib: LibraryState) {
 						.then((names) => {
 							if (g === librarianGen) lib.memberNames = names;
 						})
-						.catch((e) => console.error('library: member name resolution failed', e));
+						.catch((e) => {
+							if (g !== librarianGen) return;
+							reportProblem({ area: 'library', action: 'loading the member names', error: e });
+						});
 				} catch (e) {
-					console.error('library: checkout data load failed', e);
 					if (g !== librarianGen) return;
+					reportProblem({ area: 'library', action: 'loading the checkout data', error: e });
 					librarianStore.set('error');
 					return;
 				}

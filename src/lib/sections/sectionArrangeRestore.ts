@@ -2,6 +2,7 @@
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import type { SectionNode } from '$lib/sections/sectionData';
 import type { ArrangeOpsDeps } from '$lib/sections/sectionArrangeOps';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export function createRestoreSections(deps: ArrangeOpsDeps) {
 	const { roster, actions, generation } = deps;
@@ -18,8 +19,9 @@ export function createRestoreSections(deps: ArrangeOpsDeps) {
 			if (g !== generation()) return false;
 			roster.sections = fresh;
 		} catch (refetchError) {
-			console.error(`roster: section refetch after a failed ${what} failed`, refetchError);
 			if (g !== generation()) return false;
+			const action = `re-reading the sections after a failed ${what}`;
+			reportProblem({ area: 'roster', action, error: refetchError });
 			roster.sections = restore();
 		}
 		return true;

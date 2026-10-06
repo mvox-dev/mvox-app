@@ -133,6 +133,7 @@ export async function readCacheGet(
 		const entry = (await reqToPromise(req)) as ReadCacheEntry | undefined;
 		return generation === factoryGeneration ? entry : undefined;
 	} catch {
+		// The cache is never a gate: a failed store read is a miss, and the network answers.
 		return undefined;
 	}
 }
@@ -145,6 +146,7 @@ export async function readCacheEntryCount(): Promise<number> {
 		const tx = database.transaction(STORE_NAME, 'readonly');
 		return await reqToPromise(tx.objectStore(STORE_NAME).count());
 	} catch {
+		// A count the store cannot give is zero entries held, as far as this device can tell.
 		return 0;
 	}
 }
@@ -191,6 +193,7 @@ export async function readCacheTotalBytes(): Promise<number> {
 			| undefined;
 		return total ?? 0;
 	} catch {
+		// Same as the count: an unreadable total is nothing held.
 		return 0;
 	}
 }

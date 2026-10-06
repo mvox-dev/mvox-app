@@ -2,6 +2,7 @@
 import { writable, type Writable } from 'svelte/store';
 import type { MyProfile } from './profileData';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type GateState = 'loading' | 'complete' | 'incomplete';
 
@@ -59,7 +60,8 @@ export async function resolveGate(
 	try {
 		const { listMyProfiles } = await import('./profileData');
 		return hasVisibleName(await listMyProfiles(cfg, personId, fetchImpl));
-	} catch {
+	} catch (e) {
+		reportProblem({ area: 'profile', action: 'reading your profiles for the completion gate', error: e });
 		return 'loading';
 	}
 }

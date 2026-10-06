@@ -1,6 +1,7 @@
 // Its own module so specs that mock resolveDatabaseEntityId also reach this caller.
 import { resolveDatabaseEntityId } from '$lib/collective/databaseEntity';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface DbEntityLogLabel {
 	area: string;
@@ -16,7 +17,8 @@ export async function resolveDbEntityOrLog(
 	try {
 		dbEntityId = await resolveDatabaseEntityId(cfg);
 	} catch (e) {
-		console.error(`${label.area}: resolving the database entity for ${label.action} failed`, e);
+		const action = `resolving the database entity for ${label.action}`;
+		reportProblem({ area: label.area, action, error: e });
 		return null;
 	}
 	if (!dbEntityId) {

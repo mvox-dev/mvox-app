@@ -1,6 +1,7 @@
 // src/lib/nav/adminStore.ts
 import { writable, type Writable } from 'svelte/store';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type AdminState = 'loading' | 'admin' | 'not-admin' | 'error';
 
@@ -107,7 +108,8 @@ export async function resolveAdmin(
 		const isOwner = rights.owners.includes(personId);
 		const isEditor = rights.editors.includes(personId);
 		return isOwner || isEditor ? 'admin' : 'not-admin';
-	} catch {
+	} catch (e) {
+		reportProblem({ area: 'admin', action: 'reading the admin rights', error: e });
 		return 'error';
 	}
 }
@@ -146,7 +148,8 @@ export async function resolveOwnerTier(
 		if (rights.owners.includes(personId)) return 'owner';
 		if (rights.editors.includes(personId)) return 'editor';
 		return 'none';
-	} catch {
+	} catch (e) {
+		reportProblem({ area: 'admin', action: 'reading the owner tier', error: e });
 		return 'error';
 	}
 }

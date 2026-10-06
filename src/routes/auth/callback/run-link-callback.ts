@@ -22,6 +22,7 @@ import { hydrateCollectives } from '$lib/collectives/store';
 import { listLinkedIdentities } from '$lib/profile/linkedIdentities';
 import { entuFetch } from '$lib/entu/request';
 import type { CallbackOutcome } from './run-callback-exchange';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 const SAME_IDENTITY_NOOP: CallbackOutcome = {
 	ok: true,
@@ -157,7 +158,8 @@ export async function runLinkCallbackExchange(
 				return SAME_IDENTITY_NOOP;
 			}
 		} catch (e) {
-			console.warn('run-link-callback: same-identity re-read failed', e);
+			const action = 're-reading the linked accounts';
+			reportProblem({ area: 'link callback', action, error: e });
 		}
 	}
 

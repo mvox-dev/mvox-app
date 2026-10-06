@@ -2,6 +2,7 @@ import { writable, type Writable } from 'svelte/store';
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
 import { isTruncated } from '$lib/entu/listRead';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 // #255 done-when 6 — app-level membership resolution, lifted into a store on
 // the `completionGate` precedent (completionGate.ts:3-6: "the ONE app-wide
@@ -91,7 +92,8 @@ export async function resolveMembership(
 		// never 'inactive'.
 		if (statuses.some((s) => s === undefined)) return 'loading';
 		return 'inactive';
-	} catch {
+	} catch (e) {
+		reportProblem({ area: 'membership', action: 'reading your membership', error: e });
 		return 'loading';
 	}
 }

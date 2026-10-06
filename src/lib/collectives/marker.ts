@@ -1,5 +1,6 @@
 import { entuFetch, isAuthExpiredError, type EntuFetchOptions } from '$lib/entu/request';
 import type { MarkerResult } from './types';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 // ─── The mvox-collective MARKER ──────────────────────────────────────────────
 //
@@ -88,6 +89,8 @@ export async function checkCollectiveMarker(
 		// the misleading data-error class #107 exists to remove. Re-raise so
 		// discoverCollectives -> hydrateCollectives can settle at 'anonymous'.
 		if (isAuthExpiredError(err)) throw err;
+		const action = 'checking a database for the collective marker';
+		reportProblem({ area: 'collectives', action, error: err });
 		return { db, kind: 'error', reason: err instanceof Error ? err.message : String(err) };
 	}
 }

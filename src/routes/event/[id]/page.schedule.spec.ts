@@ -757,7 +757,8 @@ describe('#756 — a failed schedule re-read is reported', () => {
 		await fillDateTime(container as HTMLElement, 'event-schedule-add-datetime', '2026-12-01', '17:30');
 		await fireEvent.click(container.querySelector('[data-testid="event-schedule-add-submit"]')!);
 		await waitFor(() => {
-			expect(reportProblem.mock.calls).toEqual([
+			const reports = reportProblem.mock.calls.filter(([p]) => p.action === 're-reading the schedule');
+			expect(reports).toEqual([
 				[{ area: 'event', action: 're-reading the schedule', error: expect.any(Error) }]
 			]);
 		});

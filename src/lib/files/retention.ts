@@ -29,6 +29,7 @@ import { listFullAgenda } from '$lib/agenda/agendaData';
 import { loadWorksByEventId } from '$lib/repertoire/workRows';
 import { nextEventFileIds } from '$lib/agenda/nextEventFileIds';
 import { getAppByteStore } from '$lib/files/appByteStore';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 /** A collective she has joined: which db, acting as which person. */
 export type RetentionCollective = { db: string; personId: string };
@@ -152,7 +153,7 @@ async function runRetentionSweep({
 				)
 			);
 		} catch (e) {
-			console.error('retention: protected-set read failed', collective.db, e);
+			reportProblem({ area: 'retention', action: 'reading the protected set', error: e });
 		}
 	}
 	publish();
