@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
-// A stale completion-gate result after a collective switch is dropped.
+// A stale completion-gate result after a collective switch is dropped, and so is one
+// from a page already left (#800).
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
@@ -231,6 +232,33 @@ describe('#260 — a stale resolveGate settle after a collective switch must not
 		expect(seen).toEqual(['loading', 'complete']);
 		actual.resetGate();
 		expect(get(actual.completionGateStore)).toBe('loading');
+	});
+});
+
+describe('#800 — a gate read settling after /profile unmounts writes nothing', () => {
+	it("the left page's late 'incomplete' leaves the next page's 'complete'", async () => {
+		wireProfilesPerCollective();
+		applyProfileSaveMock.mockResolvedValue({ profileId: 'prof-a-dom' });
+		const left = deferred<GateState>();
+		const next = deferred<GateState>();
+		resolveGateMock.mockReturnValueOnce(left.promise).mockReturnValueOnce(next.promise);
+		signInWithTwoCollectives();
+
+		const first = render(Page);
+		await waitReadyShowing(first.container, 'Ada');
+		await saveNameToInitiateGateRead(first.container, 'Ada M.', 1);
+		cleanup();
+
+		const { container } = render(Page);
+		await waitReadyShowing(container, 'Ada');
+		await saveNameToInitiateGateRead(container, 'Ada N.', 2);
+		next.resolve('complete');
+		await waitFor(() => expect(get(completionGateStore)).toBe('complete'));
+
+		left.resolve('incomplete');
+		await flushMicrotasks();
+
+		expect(get(completionGateStore)).toBe('complete');
 	});
 });
 

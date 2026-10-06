@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-// A late librarian answer from a retry must not overwrite a newer load (#546).
-import { render, fireEvent, waitFor } from '@testing-library/svelte';
+// A late librarian answer from a retry must not overwrite a newer load (#546), nor one
+// from a page already left (#800).
+import { cleanup, render, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { deferred } from '$lib/testing/entuFetchKit';
 
@@ -127,6 +128,30 @@ describe('/library — #546 the librarian retry ignores a late answer', () => {
 		await waitFor(() => expect(q(container, 'librarian-tools')).not.toBeNull());
 
 		first.resolve({ state: 'error', libraryId: null });
+		await settle();
+
+		expect(get(librarianStore)).toBe('librarian');
+		expect(q(container, 'librarian-tools')).not.toBeNull();
+		expect(q(container, 'librarian-retry-load')).toBeNull();
+	});
+});
+
+describe('/library — #800 a page left mid-load writes nothing late', () => {
+	it('the left page\'s answer, settling after the next page loaded, leaves the next page\'s state', async () => {
+		const left = deferred<Answer>();
+		const next = deferred<Answer>();
+		answersForA([left.promise, next.promise]);
+		setAuthedWithTwoCollectives();
+		render(Page);
+		await waitFor(() => expect(resolveLibrarianMock).toHaveBeenCalledTimes(1));
+		cleanup();
+
+		const { container } = render(Page);
+		await waitFor(() => expect(resolveLibrarianMock).toHaveBeenCalledTimes(2));
+		next.resolve({ state: 'librarian', libraryId: 'lib-a' });
+		await waitFor(() => expect(q(container, 'librarian-tools')).not.toBeNull());
+
+		left.resolve({ state: 'error', libraryId: null });
 		await settle();
 
 		expect(get(librarianStore)).toBe('librarian');
