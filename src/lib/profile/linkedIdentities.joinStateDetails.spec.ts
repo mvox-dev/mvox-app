@@ -111,8 +111,8 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 		expect(propertyCalls(fetchImpl)).toHaveLength(0);
 	});
 
-	it('property read non-2xx — skip-and-warn per row (#456 shape): the STATE survives without `at`, console.warn NAMES the property id, other rows are untouched (full toEqual)', async () => {
-		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+	it('property read non-2xx — skip-and-warn per row (#456 shape): the STATE survives without `at`, the report NAMES the property id, other rows are untouched (full toEqual)', async () => {
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const fetchImpl = routedFetch(
 			{ 'p-6': [PLACEHOLDER], 'p-7': [BOUND] },
 			{ 'eu-p': { status: 500 }, 'eu-b': { created: { at: AT_JOINED, by: 'author' } } }
@@ -122,9 +122,11 @@ describe('listJoinStateDetails — state plus the dated stamp, one property read
 			'p-6': { state: 'invited' },
 			'p-7': { state: 'joined', at: AT_JOINED }
 		});
-		expect(warnSpy).toHaveBeenCalled();
-		expect(warnSpy.mock.calls.some((c) => c.map(String).join(' ').includes('eu-p'))).toBe(true);
-		warnSpy.mockRestore();
+		expect(errorSpy).toHaveBeenCalledWith(
+			'profile: reading when a linked account was added failed',
+			new Error('property eu-p: HTTP 500')
+		);
+		errorSpy.mockRestore();
 	});
 
 	it('property read 2xx but created.at MISSING — same skip-and-warn: state without `at`, warn names the id, no throw', async () => {

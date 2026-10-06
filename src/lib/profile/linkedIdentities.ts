@@ -16,6 +16,7 @@
 
 import { entuFetch } from '$lib/entu/request';
 import type { EntuCfg } from '$lib/seasons/entuSeasons';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export interface LinkedIdentity {
 	_id: string;
@@ -222,9 +223,8 @@ export async function readPropertyCreatedAt(
 ): Promise<string | undefined> {
 	const res = await entuFetch(cfg.db, `property/${propertyId}`, cfg.token, {}, fetchImpl);
 	if (!res.ok) {
-		console.warn(
-			`readPropertyCreatedAt: property ${propertyId} read failed: HTTP ${res.status}`
-		);
+		const error = new Error(`property ${propertyId}: HTTP ${res.status}`);
+		reportProblem({ area: 'profile', action: 'reading when a linked account was added', error });
 		return undefined;
 	}
 	const body = (await res.json()) as { created?: { at?: string } };

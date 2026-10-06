@@ -7,6 +7,7 @@ import { resolveRealNameByPerson } from '$lib/roster/rosterData';
 import { deriveListRead, type ListRead } from '$lib/entu/listRead';
 import { referenceIds } from '$lib/entu/references';
 import type { EventWire, SeasonWire, SeriesWire } from '$lib/entu/wireTypes';
+import { reportProblem } from '$lib/problems/reportProblem';
 
 export type EventInheritedField = 'name' | 'durationMinutes' | 'location' | 'description';
 
@@ -205,7 +206,10 @@ async function fetchSeason(
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) return undefined;
+	if (!res.ok) {
+		reportProblem({ area: 'event', action: 'reading the season', error: new Error(`HTTP ${res.status}`) });
+		return undefined;
+	}
 	const body = (await res.json()) as { entity?: SeasonRaw };
 	return body.entity;
 }
@@ -254,7 +258,10 @@ async function fetchSeries(
 		fetchImpl,
 		opts
 	);
-	if (!res.ok) return undefined;
+	if (!res.ok) {
+		reportProblem({ area: 'event', action: 'reading the series', error: new Error(`HTTP ${res.status}`) });
+		return undefined;
+	}
 	const body = (await res.json()) as { entity?: SeriesRaw };
 	return body.entity;
 }

@@ -27,7 +27,10 @@ export async function resolveMembership(
 			{},
 			fetchImpl
 		);
-		if (!res.ok) return 'loading';
+		if (!res.ok) {
+			reportProblem({ area: 'membership', action: 'reading your membership', error: new Error(`HTTP ${res.status}`) });
+			return 'loading';
+		}
 		const body = (await res.json()) as {
 			count?: number;
 			entities?: Array<{ status?: Array<{ string?: string }> }>;

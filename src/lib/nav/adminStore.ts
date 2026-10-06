@@ -36,7 +36,10 @@ async function readDbRightsLists(
 		{},
 		fetchImpl
 	);
-	if (!res.ok) return 'error';
+	if (!res.ok) {
+		reportProblem({ area: 'admin', action: 'reading the database entity rights', error: new Error(`HTTP ${res.status}`) });
+		return 'error';
+	}
 
 	const body = (await res.json()) as {
 		entity?: {
