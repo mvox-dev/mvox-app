@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
 import { fireEvent, render, waitFor, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { expectNameMarkedOnce } from '$lib/testing/nameMarker';
-import { REDACT_ATTR } from '$lib/redact/redact';
+import { expectNameMarkedOnce, markerOf, textNodesContaining } from '$lib/testing/nameMarker';
+import { REDACT_ATTR, REDACT_TOGGLE_ATTR, withRedaction } from '$lib/redact/redact';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
@@ -380,15 +380,11 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		expectNameMarkedOnce(value!, 'Ada', 'in the profile name display value');
 	});
 
-	it('email: the display-state value never carries nested markers', async () => {
+	it('email: the display-state value sits inside exactly one marker (#618)', async () => {
 		const container = await renderSeeded();
 		const value = valueEl(container, 'email');
 		expect(value, 'profile-email-value must render').not.toBeNull();
-		const markers = value!.querySelectorAll(`[${REDACT_ATTR}]`);
-		for (const mk of markers) {
-			expect(mk.parentElement?.closest(`[${REDACT_ATTR}]`) ?? null).toBeNull();
-		}
-		expect(markers.length).toBeLessThanOrEqual(1);
+		expectNameMarkedOnce(value!, 'ada@x.io', 'in the profile email display value');
 	});
 
 	const markerAncestors = (el: Element): number => {
@@ -406,12 +402,49 @@ describe('#361 — /profile: the displayed name value is marked', () => {
 		expect(markerAncestors(input(container, 'name') as HTMLInputElement)).toBe(1);
 	});
 
-	it('email: the edit-state input carries no marker', async () => {
+	it('email: the edit-state input sits inside exactly one marker (#618)', async () => {
 		const container = await renderSeeded();
 		await fireEvent.click(valueEl(container, 'email') as HTMLElement);
 		await waitFor(() => expect(input(container, 'email')).not.toBeNull());
-		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(0);
+		expect(markerAncestors(input(container, 'email') as HTMLInputElement)).toBe(1);
+	});
+});
+
+describe('#618 — /profile: no unmarked email in a capture', () => {
+	const EMAIL = 'ada@x.io';
+
+	/** Each place the email shows under `root` (text or input value) with no marker around it. */
+	function unmarkedEmails(root: Element): { found: number; unmarked: string[] } {
+		const unmarked: string[] = [];
+		let found = 0;
+		const where = (el: Element | null) =>
+			el?.closest('[data-testid]')?.getAttribute('data-testid') ?? el?.tagName ?? '?';
+		for (const node of textNodesContaining(root, EMAIL)) {
+			found += 1;
+			if (!markerOf(node)) unmarked.push(`text @ ${where(node.parentElement)}`);
+		}
+		for (const el of root.querySelectorAll('input')) {
+			if (!el.value.includes(EMAIL)) continue;
+			found += 1;
+			if (!el.closest(`[${REDACT_ATTR}]`)) unmarked.push(`input @ ${where(el)}`);
+		}
+		return { found, unmarked };
+	}
+
+	it.each([
+		['shown', false],
+		['being edited', true]
+	] as const)('with redaction engaged, the email %s is marked everywhere it appears', async (_label, edit) => {
+		const container = await renderSeeded();
+		if (edit) await openEditor(container, 'email');
+		const result = await withRedaction(async () => {
+			expect(document.documentElement.hasAttribute(REDACT_TOGGLE_ATTR)).toBe(true);
+			return unmarkedEmails(document.body);
+		});
+		expect(result.found, 'the email must be on the page').toBeGreaterThan(0);
+		expect(result.unmarked).toEqual([]);
 	});
 });
 
 // (*MVOX:Tallis* — #361 RED: profile name display value marked)
+// (*MVOX:Josquin* — #618 RED: email marked)
