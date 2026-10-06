@@ -209,6 +209,18 @@ describe('a failed store read is reported (#756)', () => {
 		expect(reportProblem).not.toHaveBeenCalled();
 	});
 
+	it('a member-names read superseded by a collective switch is not reported', async () => {
+		let rejectNames!: (e: unknown) => void;
+		page.names = () => new Promise((_, reject) => (rejectNames = reject));
+		const load = librarian('names');
+		load.select(SELECTED);
+		await settle();
+		load.select(null);
+		rejectNames(boom);
+		await settle();
+		expect(reportProblem).not.toHaveBeenCalled();
+	});
+
 	it('a member record read for a closed editor is not reported', async () => {
 		const ops = createRecordOps(memberDeps({ loadMemberRecord: fail }, () => false));
 		await ops.openRecordEditor({ memberId: 'm-1', personId: 'p-1' } as RosterRow);
