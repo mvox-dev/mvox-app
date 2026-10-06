@@ -133,7 +133,7 @@ export async function readCacheGet(
 		const entry = (await reqToPromise(req)) as ReadCacheEntry | undefined;
 		return generation === factoryGeneration ? entry : undefined;
 	} catch {
-		// The cache is never a gate: a failed store read is a miss, and the network answers.
+		// A failed store read is a miss: the caller gets the network's own error.
 		return undefined;
 	}
 }
