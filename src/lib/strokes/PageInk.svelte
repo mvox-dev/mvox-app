@@ -2,7 +2,7 @@
 <script lang="ts">
 	import StrokeSurface from '$lib/components/StrokeSurface.svelte';
 	import { createTapTracker, type TapPoint } from '$lib/parts/tapZone';
-	import type { StrokeData } from './strokes';
+	import { DEFAULT_PENS, type StrokeData } from './strokes';
 
 	let {
 		width,
@@ -10,6 +10,7 @@
 		page,
 		strokes,
 		editable,
+		penId = $bindable(DEFAULT_PENS[0].id),
 		onchange,
 		onprev,
 		onnext
@@ -19,6 +20,7 @@
 		page: number;
 		strokes: StrokeData;
 		editable: boolean;
+		penId?: string;
 		onchange: (strokes: StrokeData) => void;
 		onprev: () => void;
 		onnext: () => void;
@@ -97,6 +99,7 @@
 				naturalHeight={height}
 				{strokes}
 				readonly={!editable}
+				bind:activePenId={penId}
 				{onchange}
 			/>
 		{/key}

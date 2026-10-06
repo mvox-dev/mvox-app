@@ -912,6 +912,16 @@ describe('#615 — drawing on the page', () => {
 		expect(marks(c)).toEqual([BLACK]);
 	});
 
+	it('the chosen pen stays chosen through page turns', async () => {
+		const c = await openWithPen();
+		await fireEvent.click(control(c, 'strokes_pen_black_aria_label') as HTMLButtonElement);
+		await turn(c, 'ArrowRight', INDICATOR_2_OF_3);
+		const black = control(c, 'strokes_pen_black_aria_label') as HTMLButtonElement;
+		expect(black.getAttribute('aria-pressed')).toBe('true');
+		await stroke(c, ACROSS);
+		expect(marks(c)).toEqual([BLACK]);
+	});
+
 	it('undo on a page never brings back a mark from another page', async () => {
 		const c = await openWithPen();
 		await stroke(c, ACROSS);

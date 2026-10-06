@@ -1,7 +1,6 @@
 <!-- One pen-marks surface over any base snippet; persistence stays with the consumer. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import EraserIcon from './icons/EraserIcon.svelte';
 	import UndoIcon from './icons/UndoIcon.svelte';
@@ -30,6 +29,7 @@
 		pens = DEFAULT_PENS,
 		strokes = $bindable({ v: 1, strokes: [] }),
 		readonly = false,
+		activePenId = $bindable(pens[0]?.id ?? ''),
 		onchange
 	}: {
 		base: Snippet;
@@ -38,11 +38,10 @@
 		pens?: Pen[];
 		strokes?: StrokeData;
 		readonly?: boolean;
+		activePenId?: string;
 		onchange?: (strokes: StrokeData) => void;
 	} = $props();
 
-	// A one-time snapshot: a later `pens` change never reassigns the active pick.
-	let activePenId = $state(untrack(() => pens[0]?.id ?? ''));
 	let eraseMode = $state(false);
 	let history = $state<Op[]>([]);
 

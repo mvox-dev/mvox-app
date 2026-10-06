@@ -16,7 +16,7 @@
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
 	import PageInk from '$lib/strokes/PageInk.svelte';
-	import type { StrokeData } from '$lib/strokes/strokes';
+	import { DEFAULT_PENS, type StrokeData } from '$lib/strokes/strokes';
 
 	// 'missing': nothing reachable and nothing stored. 'open-failed': something answered and the
 	// part still did not open. The two are never collapsed (see wireUnreachable).
@@ -31,6 +31,7 @@
 
 	// Her marks, per page, for this session only (#615); nothing here is stored.
 	let penOn = $state(false);
+	let penId = $state(DEFAULT_PENS[0].id);
 	let marksHidden = $state(false);
 	let marks = $state<Record<number, StrokeData>>({});
 	const hasMarks = $derived(Object.values(marks).some((page) => page.strokes.length > 0));
@@ -306,6 +307,7 @@
 					page={currentPage}
 					strokes={marks[currentPage] ?? { v: 1, strokes: [] }}
 					editable={penOn}
+					bind:penId
 					onchange={(strokes) => (marks = { ...marks, [currentPage]: strokes })}
 					onprev={previous}
 					onnext={next}
