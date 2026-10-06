@@ -86,14 +86,26 @@ describe('resolveLocalFirst', () => {
 		expect(fetched.apply).not.toHaveBeenCalled();
 	});
 
-	it('logs a failed read under its own label', async () => {
+	it('reports a failed read under its own label', async () => {
 		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
 		const failure = new Error('boom');
 		const { opts, apply } = setup({ fetch: vi.fn(async () => Promise.reject(failure)) });
 		resolveLocalFirst(opts);
 		await vi.waitFor(() => expect(error).toHaveBeenCalled());
-		expect(error).toHaveBeenCalledWith('library: copy name resolution failed', failure);
+		expect(error).toHaveBeenCalledWith('library: resolving the copy name failed', failure);
 		expect(apply).not.toHaveBeenCalled();
+		error.mockRestore();
+	});
+
+	it('a failed read for a superseded selection is not logged (#756)', async () => {
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const fetch = vi.fn(async () => Promise.reject(new Error('boom')));
+		const { opts } = setup({ fetch, isCurrent: () => false });
+		resolveLocalFirst(opts);
+		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+		await Promise.resolve();
+		await Promise.resolve();
+		expect(error).not.toHaveBeenCalled();
 		error.mockRestore();
 	});
 });
