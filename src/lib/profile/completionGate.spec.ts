@@ -144,6 +144,13 @@ describe('assertDomainNamePersisted — Case 2 write-path post-condition (fail l
 		expect(err).toBeInstanceOf(DomainNameInconsistencyError);
 		expect((err as Error).message).toContain('person-p');
 	});
+
+	it('read-back holds only a PUBLIC name, no domain entity → throws (a stale public name must not hide a failed domain write)', async () => {
+		listMyProfilesMock.mockResolvedValue([profile('public', 'Ann')]);
+		const err = await assertDomainNamePersisted(cfg, 'person-p').catch((e) => e);
+		expect(err).toBeInstanceOf(DomainNameInconsistencyError);
+		expect((err as Error).message).toContain('person-p');
+	});
 });
 
 // (*MVOX:Tallis*)
