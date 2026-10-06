@@ -15,7 +15,9 @@ const PERSON_NAME_SURFACES: Reasons = {
 		'option.label': 'it is a member picker, so it shows names by design'
 	},
 	'src/lib/components/attendance/AttendanceSurface.svelte': {
-		'member.name': 'the conductor marks attendance per named member ("Present: Ann")'
+		'member.name':
+			'the conductor marks attendance per named member: the pill label ("Present: Ann") ' +
+			'and the RSVP mark (:173) on the same row'
 	},
 	'src/lib/components/admin/InviteSurface.svelte': {
 		'p.name': 'the uninvited-person picker: choosing whom to invite'
