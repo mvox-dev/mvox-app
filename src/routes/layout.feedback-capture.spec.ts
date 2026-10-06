@@ -198,7 +198,8 @@ describe('+layout — a double tap captures the screen and opens the feedback ed
 			screenshot: PNG,
 			strokes: { v: 1, strokes: [] },
 			description: 'typed',
-			pagePath: '/roster'
+			pagePath: '/roster',
+			problems: []
 		});
 	});
 
