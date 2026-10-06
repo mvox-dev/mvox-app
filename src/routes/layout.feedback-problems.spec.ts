@@ -116,6 +116,7 @@ afterEach(() => {
 describe('#684 failures in the feedback editor', () => {
 	it('lists each kept failure by area, action and Tallinn time, all ticked, without its detail', async () => {
 		await renderSignedIn();
+		vi.setSystemTime(new Date('2026-10-05T08:30:15.250Z'));
 		reportProblem({ area: 'roster', action: 'loading the join states', error: new Error('roster broke') });
 		await kept(1);
 		vi.setSystemTime(new Date('2026-10-05T08:31:40.000Z'));
@@ -143,6 +144,7 @@ describe('#684 failures in the feedback editor', () => {
 
 	it('send carries the ticked failures, redacted, in the metadata; they leave the list, the unticked stay', async () => {
 		await renderSignedIn();
+		vi.setSystemTime(new Date('2026-10-05T08:30:15.250Z'));
 		reportProblem({ area: 'roster', action: 'loading the join states', error: new Error('roster broke for mari@example.ee') });
 		await kept(1);
 		reportProblem({ area: 'library', action: 'loading the checkout data', error: new Error('library broke') });

@@ -6,11 +6,12 @@ import { isAuthExpiredError } from '$lib/entu/auth-expired';
 import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { online } from '$lib/net/online';
 import { findMyMemberId } from '$lib/rsvp/rsvpData';
+import type { SentProblem } from '$lib/problems/problemLog';
 import { createFeedback, discardFeedback, type CreateFeedbackInput } from './feedbackActions';
 import { capturePage, feedbackMetadata, readAppVersion } from './pageMetadata';
 import { getSavedFeedbackStore, type SavedFeedback, type SavedFeedbackStore } from './savedFeedback';
 
-export type FeedbackDraft = Omit<CreateFeedbackInput, 'metadata'>;
+export type FeedbackDraft = Omit<CreateFeedbackInput, 'metadata'> & { problems: SentProblem[] };
 export type SendOutcome = 'sent' | 'saved' | 'after-sign-in';
 
 interface SendDeps {
@@ -57,7 +58,8 @@ async function deliver(
 	const cfg = { db: item.db, token };
 	// An earlier attempt was cut off after its create: replace that entity, never add a second.
 	if (item.entityId) await discardFeedback(cfg, item.entityId, fetchImpl);
-	const metadata = feedbackMetadata(item.page, await readAppVersion(fetchImpl));
+	const version = await readAppVersion(fetchImpl);
+	const metadata = feedbackMetadata(item.page, version, item.problems ?? []);
 	const memberId = await findMyMemberId(cfg, item.personId, fetchImpl);
 	if (!memberId) throw new Error(`sendFeedback: no active member row in '${item.db}'`);
 	const { screenshot, strokes, description, pagePath } = item;

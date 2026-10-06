@@ -1,11 +1,23 @@
 // @vitest-environment happy-dom
-// #684: each failure reportProblem receives is kept on the device under its owner, redacted, last 50.
+// #684: each failure reportProblem receives is kept on the device under its owner, redacted.
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('$lib/entu-config', async () =>
+	(await import('$lib/testing/routeMocks')).entuConfigModule()
+);
+
+import { selectedCollectiveIdentityStore } from '$lib/collectives/store';
 import { AuthExpiredError } from '$lib/entu/auth-expired';
 import { resetAppState } from '$lib/testing/appReset';
 import { signIn } from '$lib/testing/session';
-import { createProblemLog, getProblemLog, resetProblemLog, KEPT_PROBLEMS } from './problemLog';
+import {
+	createProblemLog,
+	getProblemLog,
+	resetProblemLog,
+	setProblemOwner,
+	KEPT_PROBLEMS
+} from './problemLog';
 import { reportProblem } from './reportProblem';
 
 const P = { db: 'sampledb', name: 'Sampledb', personId: 'person-p' };
@@ -16,6 +28,7 @@ const listP = () => getProblemLog()!.list('sampledb', 'person-p');
 beforeEach(() => {
 	vi.stubGlobal('indexedDB', new IDBFactory());
 	resetProblemLog();
+	setProblemOwner(selectedCollectiveIdentityStore);
 	vi.spyOn(console, 'error').mockImplementation(() => {});
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(new Date('2026-10-05T08:30:15.250Z'));
@@ -26,6 +39,7 @@ afterEach(() => {
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 	resetProblemLog();
+	setProblemOwner(null);
 	resetAppState();
 });
 
@@ -78,6 +92,14 @@ describe('#684 reportProblem keeps each failure for feedback', () => {
 
 		await vi.waitFor(async () => expect((await listP()).map((p) => p.detail)).toEqual(['Error: p broke']));
 		expect((await getProblemLog()!.list('sampledb', 'person-q')).map((p) => p.detail)).toEqual(['Error: q broke']);
+	});
+
+	it('nothing is kept while no collective is selected', async () => {
+		reportProblem({ area: 'collectives', action: 'load', error: new Error('before') });
+		signIn({ collectives: [P] });
+		reportProblem({ area: 'agenda', action: 'load', error: new Error('after') });
+
+		await vi.waitFor(async () => expect((await listP()).map((p) => p.detail)).toEqual(['Error: after']));
 	});
 
 	it('an expired session is not kept', async () => {

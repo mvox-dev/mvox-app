@@ -99,7 +99,7 @@ describe('#611 send, online', () => {
 		}
 	});
 
-	it('metadata is the route path, time, app version, locale and viewport, and nothing personal', async () => {
+	it('metadata is the route path, time, app version, locale, viewport and failures sent, and nothing personal', async () => {
 		signInP();
 		const entu = feedbackEntu();
 

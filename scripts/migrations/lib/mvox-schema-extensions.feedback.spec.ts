@@ -49,7 +49,7 @@ const EXPECTED_FEEDBACK_DEF = {
 			name: 'metadata',
 			type: 'text',
 			sharing: 'domain',
-			note: 'JSON: route path, time, app version (the #350 build stamp), locale and viewport; nothing personal (#611)',
+			note: 'JSON: route path, time, app version (the #350 build stamp), locale and viewport; nothing personal (#611); the failures sent with it, redacted (#684)',
 			descriptionEn: 'The page the feedback was given on: route path, time, app version, locale and viewport size, as JSON.',
 			descriptionEt: 'Leht, mille kohta tagasiside anti: aadress, aeg, rakenduse versioon, keel ja vaate mõõdud JSON-vormingus.',
 			ordinal: 4

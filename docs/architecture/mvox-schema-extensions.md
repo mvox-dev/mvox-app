@@ -257,7 +257,7 @@ isolate-and-assert-explicit `_inheritrights: false` pattern.
 | `screenshot`   | file | no       | screenshot of the page the member is giving feedback on                                               |
 | `doodle_layer` | text | no       | ink drawn over the screenshot — [mvox-app#394](https://github.com/mvox-dev/mvox-app/issues/394)'s StrokeData JSON (`src/lib/strokes/strokes.ts` serialize/parse) |
 | `description`  | text | no       | the member's feedback in their own words                                                             |
-| `metadata`     | text | no       | JSON: route path, time, app version (the [mvox-app#350](https://github.com/mvox-dev/mvox-app/issues/350) build stamp), locale and viewport; nothing personal. Added on crede by hand (Mihkel, 2026-10-01) and recorded here by [mvox-app#611](https://github.com/mvox-dev/mvox-app/issues/611); no provisioning run |
+| `metadata`     | text | no       | JSON: route path, time, app version (the [mvox-app#350](https://github.com/mvox-dev/mvox-app/issues/350) build stamp), locale and viewport; nothing personal. Since [mvox-app#684](https://github.com/mvox-dev/mvox-app/issues/684) also the failures sent with it, each its area, action, time and redacted error. Added on crede by hand (Mihkel, 2026-10-01) and recorded here by [mvox-app#611](https://github.com/mvox-dev/mvox-app/issues/611); no provisioning run |
 
 **Rights posture**: the member who created a feedback owns it (`_owner`,
 Entu's create-time auto-grant); every domain-tier reader in the same

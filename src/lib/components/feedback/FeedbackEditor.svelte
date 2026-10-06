@@ -1,13 +1,19 @@
-<!-- The feedback editor: the screenshot under the pen, and the description. -->
+<!-- The feedback editor: the screenshot under the pen, the description, the failures to send. -->
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { FeedbackEditor } from '$lib/feedback/feedbackEditor.svelte';
+	import { formatTime, tallinnWallClockParts, timeFormatStore } from '$lib/preferences/timeFormat';
 	import FormError from '../FormError.svelte';
 	import StrokeSurface from '../StrokeSurface.svelte';
 
 	let { editor }: { editor: FeedbackEditor } = $props();
 
 	let surfaceWrap: HTMLDivElement | undefined = $state();
+
+	function when(iso: string): string {
+		const { date, time } = tallinnWallClockParts(iso);
+		return `${date} ${formatTime(time, $timeFormatStore)}`;
+	}
 
 	// StrokeSurface's own box holds just the screenshot and its ink, not the pen controls.
 	$effect(() => {
@@ -55,5 +61,21 @@
 				bind:value={editor.description}
 			></textarea>
 		</label>
+		{#if editor.problems.length > 0}
+			<fieldset class="flex flex-col gap-1 text-sm text-ink-2">
+				<legend>{m.feedback_problems_legend()}</legend>
+				{#each editor.problems as problem (problem.id)}
+					<label class="flex items-center gap-2">
+						<input
+							type="checkbox"
+							checked={editor.isTicked(problem.id)}
+							onchange={() => editor.toggleProblem(problem.id)}
+						/>
+						<span>{problem.area}: {problem.action}</span>
+						<time datetime={problem.time}>{when(problem.time)}</time>
+					</label>
+				{/each}
+			</fieldset>
+		{/if}
 	{/if}
 </div>

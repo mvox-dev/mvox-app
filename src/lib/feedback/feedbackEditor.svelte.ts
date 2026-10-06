@@ -1,5 +1,8 @@
 // The feedback editor's state, shared by its overlay and the bar that replaces the nav.
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
+import { selectedCollectiveIdentityStore, type CollectiveIdentity } from '$lib/collectives/store';
+import { getProblemLog, type LoggedProblem } from '$lib/problems/problemLog';
 import type { StrokeData } from '$lib/strokes/strokes';
 import { captureScreen, ClipboardImageUnsupported, copyInked, type Capture } from './capture';
 import { sendFeedback } from './sendFeedback';
@@ -26,6 +29,9 @@ export function createFeedbackEditor() {
 	let description = $state('');
 	let notice = $state<EditorNotice | null>(null);
 	let savedForLater = $state(false);
+	let problems = $state.raw<LoggedProblem[]>([]);
+	let ticked = $state.raw<ReadonlySet<string>>(new Set());
+	let problemOwner: CollectiveIdentity | null = null;
 	let capturing = false;
 	let stage: HTMLElement | undefined;
 	let returnFocus: HTMLElement | null = null;
@@ -49,7 +55,40 @@ export function createFeedbackEditor() {
 		}
 		strokes = noStrokes();
 		description = '';
+		await loadProblems();
 		open = true;
+	}
+
+	// Every unsent failure starts ticked (#684).
+	async function loadProblems(): Promise<void> {
+		problemOwner = get(selectedCollectiveIdentityStore);
+		const log = getProblemLog();
+		problems = [];
+		if (problemOwner && log) {
+			try {
+				problems = await log.list(problemOwner.db, problemOwner.personId);
+			} catch (e) {
+				console.error('reading the kept failures failed', e);
+			}
+		}
+		ticked = new Set(problems.map((p) => p.id));
+	}
+
+	function toggleProblem(id: string): void {
+		const next = new Set(ticked);
+		if (!next.delete(id)) next.add(id);
+		ticked = next;
+	}
+
+	// A failure leaves the list once a feedback carries it, sent now or kept to send later.
+	async function forgetSent(ids: string[]): Promise<void> {
+		const log = getProblemLog();
+		if (!problemOwner || !log || ids.length === 0) return;
+		try {
+			await log.remove(problemOwner.db, problemOwner.personId, ids);
+		} catch (e) {
+			console.error('clearing the sent failures failed', e);
+		}
 	}
 
 	// Focus waits a tick: the page is inert until the overlay has gone.
@@ -79,13 +118,16 @@ export function createFeedbackEditor() {
 	async function send(): Promise<void> {
 		if (!shot || notice === 'send-after-sign-in') return;
 		notice = null;
+		const sending = problems.filter((p) => ticked.has(p.id));
 		try {
 			const outcome = await sendFeedback({
 				screenshot: shot.blob,
 				strokes: $state.snapshot(strokes),
 				description,
-				pagePath: shot.pagePath
+				pagePath: shot.pagePath,
+				problems: sending.map(({ area, action, time, detail }) => ({ area, action, time, detail }))
 			});
+			await forgetSent(sending.map((p) => p.id));
 			if (outcome === 'after-sign-in') {
 				notice = 'send-after-sign-in';
 				return;
@@ -126,6 +168,13 @@ export function createFeedbackEditor() {
 		dismissSaved() {
 			savedForLater = false;
 		},
+		get problems() {
+			return problems;
+		},
+		isTicked(id: string) {
+			return ticked.has(id);
+		},
+		toggleProblem,
 		get stage() {
 			return stage;
 		},
