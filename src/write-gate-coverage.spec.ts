@@ -47,6 +47,31 @@ const GATE_EXCEPTIONS: Record<string, string[]> = {
 	'src/routes/+layout.svelte': ['$lib/feedback/feedbackEditor.svelte', '$lib/feedback/sendFeedback']
 };
 
+// The pill reads the gate for its data callers; they say why, checked below (#809).
+const PILL = join(LIB, 'components', 'SegmentedPill.svelte');
+
+/** Source files that import the component `target`, by $lib or relative specifier. */
+function importersOf(target: string): string[] {
+	const resolves = (spec: string, from: string) =>
+		spec.startsWith('$lib/') ? join(LIB, spec.slice(5)) : resolve(dirname(from), spec);
+	return ALL.filter((p) => /\.(svelte|ts)$/.test(p) && !p.endsWith('.spec.ts')).filter((p) =>
+		[...readFileSync(p, 'utf-8').matchAll(/from\s*['"]((?:\$lib\/|\.)[^'"]*\.svelte)['"]/g)].some(
+			([, spec]) => resolves(spec, p) === target
+		)
+	);
+}
+
+const rendersReason = (p: string) => /m\.write_unavailable_no_signal\(\)/.test(readFileSync(p, 'utf-8'));
+
+/** The file says why, or every chain of files that render it reaches one that does. */
+function reasonCovers(p: string, seen = new Set<string>()): boolean {
+	if (rendersReason(p)) return true;
+	if (seen.has(p)) return false;
+	seen.add(p);
+	const up = importersOf(p);
+	return up.length > 0 && up.every((q) => reasonCovers(q, seen));
+}
+
 const WRITE_SEAMS = [...WRITING]
 	.filter(([, names]) => names.size > 0)
 	.map(([p]) => '$lib/' + relative(LIB, p).replace(/\.ts$/, '').split(/[\\/]/).join('/'));
@@ -243,11 +268,23 @@ describe('#434 — every write surface reads the write gate', () => {
 	it('every gate reader also renders the reason — a disabled control with no sentence is half the fix', () => {
 		const silent: string[] = [];
 		for (const path of ALL.filter((p) => p.endsWith('.svelte'))) {
+			if (path === PILL) continue;
 			const source = readFileSync(path, 'utf-8');
 			if (!valueImportSpecifiers(source).includes(GATE_MODULE)) continue;
 			if (!/m\.write_unavailable_no_signal\(\)/.test(source)) silent.push(rel(path));
 		}
 		expect(silent).toEqual([]);
+	});
+
+	// A text scan on purpose: which pills save is markup, not an export (#809).
+	it('every pill that saves to Entu sits on a surface that says why it is disabled offline', () => {
+		const callers = importersOf(PILL).filter((p) =>
+			[...readFileSync(p, 'utf-8').matchAll(/<SegmentedPill\b([\s\S]*?)\n\s*\/?>/g)].some(
+				([, attrs]) => !/kind="ui"/.test(attrs)
+			)
+		);
+		expect(callers.length).toBeGreaterThanOrEqual(4);
+		expect(callers.filter((p) => !reasonCovers(p)).map(rel)).toEqual([]);
 	});
 });
 

@@ -7,7 +7,7 @@
 		rowEditionUnknown as isEditionUnknown,
 		readerEditionUnknownReason as getReaderEditionUnknownReason
 	} from '$lib/repertoire/editionUnknown';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 
 	interface Props {
 		row: WorkRow;
@@ -22,15 +22,14 @@
 		isOffline: boolean;
 		heldFileIds: ReadonlySet<string> | null;
 		partLinkDb: string | undefined;
-		activeStatus: RepertoireStatus;
-		onstatusfocus: (status: RepertoireStatus) => void;
+		statusRoving?: RepertoireStatus | null;
 		onpdfclick?: (fileId: string) => void;
 		onstatuschange?: (itemId: string, status: RepertoireStatus) => void;
 		onpinedition?: (itemId: string, editionId: string) => void;
 		onremoveitem?: (itemId: string) => void;
 		onmoveitem?: (itemId: string, direction: 'up' | 'down') => void;
 	}
-	const {
+	let {
 		row,
 		index,
 		rowCount,
@@ -43,8 +42,7 @@
 		isOffline,
 		heldFileIds,
 		partLinkDb,
-		activeStatus,
-		onstatusfocus,
+		statusRoving = $bindable(),
 		onpdfclick,
 		onstatuschange,
 		onpinedition,
@@ -62,10 +60,6 @@
 	/** Same lookup as the management buttons, so no raw status leaks into a locale. */
 	function statusLabel(status: RepertoireStatus): string {
 		return STATUS_OPTIONS.find((opt) => opt.value === status)?.label() ?? status;
-	}
-
-	function handleStatusGroupKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e, { selector: 'button:not([disabled])' });
 	}
 
 	/** A held part renders the link instead of the PDF button: same destination, one control. */
@@ -102,11 +96,6 @@
 	 *  the editor feed; the looser reader rule would make the removal permanent. */
 	function pickerPinIsUnknown(row: WorkRow): boolean {
 		return row.editionId !== '' && rowEditionUnknown(row);
-	}
-
-	function handleStatusChange(rowId: string, status: RepertoireStatus) {
-		if (pendingKeys.has(rowId) || isOffline) return;
-		onstatuschange?.(rowId, status);
 	}
 
 	function handlePinEdition(rowId: string, editionId: string) {
@@ -277,34 +266,24 @@
 		class="flex flex-wrap items-center gap-2 border-t border-ink-5 pt-2 mt-1"
 	>
 		{#if canEditRepertoire}
-			<!-- Toolbar: arrows move focus only, never activate. -->
-			<div
-				data-testid="work-status-group-{row.id}"
-				role="toolbar"
-				tabindex="-1"
-				aria-label={m.repertoire_status_group_label({ work: row.workName })}
-				class="flex flex-wrap gap-1"
-				onkeydown={handleStatusGroupKeydown}
-			>
-				{#each STATUS_OPTIONS as opt (opt.value)}
-					<button
-						type="button"
-						data-testid={`work-status-${opt.value}`}
-						class="rounded-full border border-ink-4 px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase disabled:cursor-default disabled:opacity-[0.45] aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-paper"
-						aria-pressed={(row.status ?? 'active') === opt.value}
-						disabled={pendingKeys.has(row.id) || isOffline}
-						tabindex={activeStatus === opt.value ? 0 : -1}
-						onfocus={() => onstatusfocus(opt.value)}
-						aria-label={m.repertoire_status_button_aria_label({
-							status: opt.label(),
-							work: row.workName
-						})}
-						onclick={() => handleStatusChange(row.id, opt.value)}
-					>
-						{opt.label()}
-					</button>
-				{/each}
-			</div>
+			<SegmentedPill
+				testid="work-status-group-{row.id}"
+				label={m.repertoire_status_group_label({ work: row.workName })}
+				options={STATUS_OPTIONS.map((opt) => ({
+					value: opt.value,
+					label: opt.label(),
+					testid: `work-status-${opt.value}`,
+					ariaLabel: m.repertoire_status_button_aria_label({ status: opt.label(), work: row.workName })
+				}))}
+				selected={row.status}
+				emptyAllowed={false}
+				defaultValue="active"
+				kind="data"
+				busy={pendingKeys.has(row.id)}
+				buttonClass="px-2 py-0.5 font-mono text-[9px] tracking-wide uppercase"
+				bind:roving={statusRoving}
+				onselect={(status) => status && onstatuschange?.(row.id, status)}
+			/>
 			<!-- Remove sits inside each branch: the id is a repertoire_item here and a program_item
 			     below, and they go to different delete handlers. -->
 			{@render removeButton(row)}

@@ -37,6 +37,7 @@ import { loadFullAgendaMock } from '$lib/testing/moduleHandles';
 import { workRowOf } from '$lib/testing/pages/eventEdition';
 import { REPERTOIRE_ITEMS, cleanupUnstubResetAgenda, future } from '$lib/testing/pages/agendaWorks';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
+import { settle } from '$lib/testing/networkSignal';
 
 function installWorld() {
 	loadFullAgendaMock.mockResolvedValue(fullAgendaResult({ seasons: [],
@@ -176,6 +177,15 @@ describe('+page — repertoire status/edition UX on the real agenda route (#125)
 				)
 			).toBe(true);
 		});
+	});
+
+	it('tapping the chosen status keeps it and writes nothing (#809)', async () => {
+		const { container, fetchMock } = await renderExpandedAsEditor();
+		const li = workRowOf(container, 'Old warhorse');
+		await fireEvent.click(li.querySelector('[data-testid="work-status-retired"]')!);
+		await settle();
+		expect(workRowOf(container, 'Old warhorse').getAttribute('data-status')).toBe('retired');
+		expect(postsTo(fetchMock, 'entity/ri-2')).toEqual([]);
 	});
 
 	it('the page renders ONE unified edition picker showing the pinned edition, no [Pin] button (F5b)', async () => {

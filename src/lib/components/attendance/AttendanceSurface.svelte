@@ -7,7 +7,7 @@
 	import type { AgendaItem } from '$lib/agenda/types';
 	import type { AttendanceStatus } from '$lib/attendance/attendanceData';
 	import type { RosterRow } from '$lib/roster/rosterData';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import PersonName from '$lib/components/PersonName.svelte';
 	import { writesAvailable } from '$lib/net/online';
 
@@ -88,26 +88,6 @@
 	}
 
 	const isOffline = $derived(!$writesAvailable);
-
-	function handleToggle(memberId: string, status: AttendanceStatus) {
-		if (pendingMemberIds.has(memberId) || isOffline || !ontoggle) return;
-		// Tap the ACTIVE status -> clear the record (null); tap any other -> set it.
-		const current = attendanceByMemberId[memberId]?.status;
-		ontoggle(memberId, current === status ? null : status);
-	}
-
-	// Keyed by member: all rows live in one instance, so a scalar would move every tab stop.
-	let rovingByMember = $state<Record<string, AttendanceStatus>>({});
-	function activeStatusFor(memberId: string): AttendanceStatus {
-		const roving = rovingByMember[memberId];
-		if (roving !== undefined && STATUSES.some((s) => s.value === roving)) return roving;
-		return attendanceByMemberId[memberId]?.status ?? STATUSES[0].value;
-	}
-
-	// Members include aria-disabled buttons: a member with a pending write stays reachable.
-	function handleAttendanceKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e);
-	}
 
 	/** Mounted for the panel's whole life, so the loading and loaded text are both announced.
 	 *  The error branch is '' because the error line already has role="alert". */
@@ -194,40 +174,23 @@
 						>
 							{rsvpLabel(member.memberId)}
 						</span>
-						<!-- Toolbar: arrows move focus only; tapping the active status clears the record. -->
-						<div
-							data-testid="attendance-status-group-{member.memberId}"
-							role="toolbar"
-							tabindex="-1"
-							aria-label={m.attendance_group_label({ name: member.name })}
-							class="inline-flex overflow-hidden rounded-md border border-ink-4"
-							aria-busy={pendingMemberIds.has(member.memberId) ? 'true' : undefined}
-							onkeydown={handleAttendanceKeydown}
-						>
-							{#each STATUSES as status (status.value)}
-								<button
-									data-testid="attendance-toggle-{member.memberId}-{status.value}"
-									type="button"
-									aria-disabled={pendingMemberIds.has(member.memberId) || isOffline
-										? 'true'
-										: undefined}
-									aria-pressed={attendanceByMemberId[member.memberId]?.status === status.value
-										? 'true'
-										: 'false'}
-									aria-label={m.attendance_toggle_aria_label({ name: member.name, status: status.label() })}
-									tabindex={activeStatusFor(member.memberId) === status.value ? 0 : -1}
-									onfocus={() =>
-										(rovingByMember = { ...rovingByMember, [member.memberId]: status.value })}
-									class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 aria-disabled:cursor-default aria-disabled:opacity-[0.45]"
-									class:bg-ink={attendanceByMemberId[member.memberId]?.status === status.value}
-									class:text-paper={attendanceByMemberId[member.memberId]?.status === status.value}
-									class:text-ink-2={attendanceByMemberId[member.memberId]?.status !== status.value}
-									onclick={() => handleToggle(member.memberId, status.value)}
-								>
-									{status.label()}
-								</button>
-							{/each}
-						</div>
+						<!-- Tapping the chosen status clears the record; a pending row stays reachable. -->
+						<SegmentedPill
+							testid="attendance-status-group-{member.memberId}"
+							label={m.attendance_group_label({ name: member.name })}
+							options={STATUSES.map((status) => ({
+								value: status.value,
+								label: status.label(),
+								testid: `attendance-toggle-${member.memberId}-${status.value}`,
+								ariaLabel: m.attendance_toggle_aria_label({ name: member.name, status: status.label() })
+							}))}
+							selected={attendanceByMemberId[member.memberId]?.status ?? null}
+							emptyAllowed={true}
+							kind="data"
+							busy={pendingMemberIds.has(member.memberId)}
+							reachableWhenBlocked={true}
+							onselect={(status) => ontoggle?.(member.memberId, status)}
+						/>
 					</div>
 					{#if failedMemberIds.has(member.memberId)}
 						<FormError data-testid="attendance-save-failed-{member.memberId}">

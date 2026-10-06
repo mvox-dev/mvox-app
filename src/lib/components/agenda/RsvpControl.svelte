@@ -2,7 +2,7 @@
 <script lang="ts">
 	import { m } from '$lib/paraglide/messages.js';
 	import type { RsvpStatus } from '$lib/rsvp/rsvpData';
-	import { rovingKeydown } from '$lib/a11y/roving';
+	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import { writesAvailable } from '$lib/net/online';
 
 	interface Props {
@@ -22,7 +22,6 @@
 	}: Props = $props();
 
 	const isOffline = $derived(!$writesAvailable);
-	const isDisabled = $derived(pending || isOffline);
 
 	const BUTTONS: { value: RsvpStatus; label: () => string }[] = [
 		{ value: 'going', label: m.rsvp_status_going },
@@ -30,22 +29,6 @@
 		{ value: 'maybe', label: m.rsvp_status_maybe },
 		{ value: 'late', label: m.rsvp_status_late }
 	];
-
-	function handleClick(value: RsvpStatus) {
-		if (isDisabled || !onchange) return;
-		// Tap the ACTIVE status -> clear the answer (null); tap any other -> set it.
-		onchange(status === value ? null : value);
-	}
-
-	// An unanswered rsvp has no status, so the first button holds the tab stop.
-	let roving = $state<RsvpStatus | null>(null);
-	const activeStatus = $derived(
-		roving !== null && BUTTONS.some((b) => b.value === roving) ? roving : (status ?? BUTTONS[0].value)
-	);
-
-	function handleKeydown(e: KeyboardEvent): void {
-		rovingKeydown(e, { selector: 'button:not([disabled])' });
-	}
 </script>
 
 <div
@@ -53,33 +36,17 @@
 	class="flex flex-col gap-1"
 	aria-busy={pending ? 'true' : undefined}
 >
-	<!-- Toolbar: arrows move focus only; tapping the active status clears the answer. -->
-	<div
-		data-testid="rsvp-status-group"
-		role="toolbar"
-		tabindex="-1"
-		aria-label={m.rsvp_group_label()}
-		class="inline-flex overflow-hidden rounded-md border border-ink-4"
-		onkeydown={handleKeydown}
-	>
-		{#each BUTTONS as btn (btn.value)}
-			<button
-				data-testid="rsvp-btn-{btn.value}"
-				type="button"
-				disabled={isDisabled}
-				aria-pressed={status === btn.value ? 'true' : 'false'}
-				tabindex={activeStatus === btn.value ? 0 : -1}
-				onfocus={() => (roving = btn.value)}
-				class="border-r border-ink-4 px-2 py-1 font-mono text-[9px] tracking-wide last:border-r-0 disabled:cursor-default disabled:opacity-[0.45]"
-				class:bg-ink={status === btn.value}
-				class:text-paper={status === btn.value}
-				class:text-ink-2={status !== btn.value}
-				onclick={() => handleClick(btn.value)}
-			>
-				{btn.label()}
-			</button>
-		{/each}
-	</div>
+	<!-- Tapping the chosen answer clears it. -->
+	<SegmentedPill
+		testid="rsvp-status-group"
+		label={m.rsvp_group_label()}
+		options={BUTTONS.map((b) => ({ value: b.value, label: b.label(), testid: `rsvp-btn-${b.value}` }))}
+		selected={status}
+		emptyAllowed={true}
+		kind="data"
+		busy={pending}
+		onselect={(s) => onchange?.(s)}
+	/>
 	{#if isOffline}
 		<p data-testid="rsvp-write-unavailable" class="text-xs text-ink-2">
 			{m.write_unavailable_no_signal()}
