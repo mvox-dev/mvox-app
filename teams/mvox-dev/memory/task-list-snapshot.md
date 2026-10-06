@@ -1,8 +1,9 @@
-# Task List Snapshot — 2026-10-03 20:27Z (restart seam)
+# Task List Snapshot — 2026-10-06 10:35Z (context-break seam)
 
-- #711 `in process`: b1 merged 6bb3246; b2-b7 per ~/workspace/scratchpad/711-inventory.md.
-- #712-#718, #723 ready: research after #711 lands.
-- Features prepped, held: #611 → #684 → #617, #618, #619, #615 → #616 (briefs in ~/workspace/scratchpad/brief-*.md).
-- #756 swallowed reads: PO-owned, not ready.
+Source of truth: the NEXT SESSION block at the top of team-lead.md.
+
+- Done since the last snapshot: #711-#718, #723, #611, #795, #796, #803, #800, #756, #790.
+- Next, launch on wake (Mihkel 10-06): #684 → #617, #618, #619 → #615 → #616. All are `prepped` (briefs in ~/workspace/scratchpad/brief-*.md). Refresh each brief with the 10-05 test gate and contract notes, then a fresh Josquin plus Bentham per issue, one branch at a time.
+- Unreleased, waiting on Mihkel: #819 (record save-lock not reset on a collective switch).
 
 (*MVOX:Palestrina*)
