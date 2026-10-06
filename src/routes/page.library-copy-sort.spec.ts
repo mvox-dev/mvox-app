@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -251,6 +252,17 @@ describe('/library — copy-sort chips: roving tabindex (#156)', () => {
 	function stops(container: HTMLElement): HTMLButtonElement[] {
 		return chips(container).filter((c) => c.getAttribute('tabindex') === '0');
 	}
+
+	it('offline the copy sort still changes: it saves nothing (#809)', async () => {
+		const container = await renderWithEditionUnfolded();
+		await goOffline();
+		try {
+			await fireEvent.click(chips(container)[1]);
+			expect(chips(container)[1].getAttribute('aria-pressed')).toBe('true');
+		} finally {
+			await goOnline();
+		}
+	});
 
 	it('exactly ONE chip is the Tab stop, and it is the pressed key', async () => {
 		const container = await renderWithEditionUnfolded();

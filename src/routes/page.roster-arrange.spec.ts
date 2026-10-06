@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { render, createEvent, fireEvent, waitFor } from '@testing-library/svelte';
+import { goOffline, goOnline } from '$lib/testing/networkSignal';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -420,6 +421,16 @@ describe('/roster — view-mode chips: roving tabindex (#156)', () => {
 		for (const c of chips(container)) {
 			expect(c.getAttribute('aria-pressed'), c.getAttribute('data-testid') ?? '').not.toBeNull();
 			expect(c.closest('[role="toolbar"]')).toBe(group);
+		}
+	});
+
+	it('offline the view mode still changes: it saves nothing (#809)', async () => {
+		const container = await renderReady('admin');
+		await goOffline();
+		try {
+			await selectMode(container, 'expanded');
+		} finally {
+			await goOnline();
 		}
 	});
 
