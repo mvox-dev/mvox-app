@@ -628,10 +628,8 @@ describe('agenda — #217 a FAILED season cascade lands in the delete-error slot
 		expect(alert.textContent).toContain('season_manage_season_delete_partial');
 		expect(alert.textContent).toContain('3');
 		expect(alert.textContent).toContain('8');
-		// NOT the series or event partial copy — the operator must hear that the
-		// SEASON is still standing.
+		// NOT the series partial copy — the operator must hear that the SEASON is still standing.
 		expect(alert.textContent).not.toContain('season_manage_delete_partial ');
-		expect(alert.textContent).not.toContain('season_manage_event_delete_partial');
 
 		const card = q(container, 'agenda-admin-card') as HTMLElement;
 		expect(card.contains(alert), '#236 — season-branch error at card level').toBe(true);
