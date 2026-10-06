@@ -31,8 +31,12 @@
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { ensureRetentionSweep } from '$lib/files/retention';
-	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
-	import { beginGateRead } from '$lib/profile/gateRead';
+	import {
+		beginGateRead,
+		completionGateStore,
+		resetGate,
+		resolveGate
+	} from '$lib/profile/completionGate';
 	import { membershipStore, resetMembership, resolveMembership } from '$lib/collective/membershipStore';
 	import NavShell from '$lib/components/nav/NavShell.svelte';
 	import { NAV_ENTRIES } from '$lib/nav/entries';
@@ -115,9 +119,9 @@
 	$effect(() => {
 		const auth = $authStore;
 		const selected = $selectedCollectiveIdentityStore;
-		const isCurrent = beginGateRead();
 		resetGate();
 		if (auth.status !== 'authenticated' || !selected) return;
+		const isCurrent = beginGateRead();
 		const cfg = cfgFor(selected.db);
 		resolveGate(cfg, selected.personId).then((state) => {
 			if (isCurrent()) completionGateStore.set(state);

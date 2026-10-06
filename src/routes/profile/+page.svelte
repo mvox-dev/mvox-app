@@ -9,8 +9,7 @@
 		resolveField,
 		type Level
 	} from '$lib/profile/profileData';
-	import { completionGateStore, resolveGate } from '$lib/profile/completionGate';
-	import { beginGateRead } from '$lib/profile/gateRead';
+	import { beginGateRead, completionGateStore, resolveGate } from '$lib/profile/completionGate';
 	import { planLoadedDuplicateRepairs, type FieldKey } from '$lib/profile/fieldMove';
 	import {
 		FIELDS,
