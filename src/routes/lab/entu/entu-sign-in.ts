@@ -12,7 +12,6 @@ export function entuSignInHref(origin: string, appLocale: string): string {
 	return `${ENTU_API_BASE}auth?${params.toString()}`;
 }
 
-// The callback accepts a sign-in only with this state on the device; it returns the user here.
 export function rememberSignInStarted(): void {
 	const state = encodeState({
 		nonce: createNonce(),

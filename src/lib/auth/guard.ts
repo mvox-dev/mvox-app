@@ -3,7 +3,6 @@
 
 import { sessionExpiredSignInHref } from './session-expired';
 
-/** Decode an unverified JWT payload (base64url), or null on any malformed input. */
 export function decodeJwtPayload(token: string | null | undefined): Record<string, unknown> | null {
 	const parts = token?.split('.');
 	if (!parts || parts.length < 2 || !parts[1]) return null;
