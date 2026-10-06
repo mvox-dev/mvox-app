@@ -144,6 +144,33 @@ describe('/roster — a record save in flight does not lock the next collective 
 		});
 		await expectLateSettleChangesNothing(container, heldA, { value: undefined }, WRITES);
 	});
+
+	it('A first save settling late leaves the second save of the same member locked', async () => {
+		setAuthedWithTwoCollectives();
+		adminStore.set('admin');
+		const { container } = render(Page);
+		const first = await startSaveInAThenSwitch(container);
+		await switchTo(container, 'sampledb', 'section-toggle-sec-sop');
+		await expandGroup(container, 'unassigned', 'roster-row-m-ada');
+
+		const second = holdNext(updateMemberRecordMock);
+		await rename(container, 'm-ada', 'Ada again');
+		await waitFor(() => {
+			expect(updates()).toEqual([
+				['sampledb', 'rec-ada', { name: 'Ada A' }],
+				['sampledb', 'rec-ada', { name: 'Ada again' }]
+			]);
+		});
+		expect(editorDisabled(container)).toEqual(allAre(true));
+
+		await expectLateSettleChangesNothing(container, first, { value: undefined }, WRITES);
+		expect(editorDisabled(container)).toEqual(allAre(true));
+
+		second.resolve(undefined);
+		await waitFor(() => {
+			expect(q(container, 'roster-record-name')).toBeNull();
+		});
+	});
 });
 
 // (*MVOX:Josquin*)

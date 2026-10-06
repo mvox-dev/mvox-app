@@ -45,27 +45,23 @@ export function callCounts(mocks: Mock[]): number[] {
 }
 
 // innerHTML misses typed values, which live on the control, not in an attribute.
-function screen(container: HTMLElement, lockClears: string | null) {
+function screen(container: HTMLElement) {
 	const controls = container.querySelectorAll<HTMLInputElement>('input, select, textarea');
-	const copy = container.cloneNode(true) as HTMLElement;
-	if (lockClears) copy.querySelectorAll(lockClears).forEach((el) => el.removeAttribute('disabled'));
-	return { html: copy.innerHTML, values: [...controls].map((el) => el.value) };
+	return { html: container.innerHTML, values: [...controls].map((el) => el.value) };
 }
 
 // Settling the old write late must leave the page and the wire exactly as they were.
-// lockClears: controls whose disabled state may change, the one release allowed (a save lock).
 export async function expectLateSettleChangesNothing<T>(
 	container: HTMLElement,
 	held: Deferred<T>,
 	outcome: Outcome<T>,
-	writes: Mock[],
-	{ lockClears = null as string | null } = {}
+	writes: Mock[]
 ): Promise<void> {
-	const page = screen(container, lockClears);
+	const page = screen(container);
 	const calls = callCounts(writes);
 	await settle(held, outcome);
 	expect(callCounts(writes), 'no write fires for the collective the user left').toEqual(calls);
-	expect(screen(container, lockClears)).toEqual(page);
+	expect(screen(container)).toEqual(page);
 }
 
 // (*MVOX:Josquin*)
