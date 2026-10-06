@@ -9,7 +9,7 @@
 		resolveField,
 		type Level
 	} from '$lib/profile/profileData';
-	import { completionGateStore, resolveGate } from '$lib/profile/completionGate';
+	import { completionGateStore, refreshGate, resolveGate } from '$lib/profile/completionGate';
 	import { planLoadedDuplicateRepairs, type FieldKey } from '$lib/profile/fieldMove';
 	import {
 		FIELDS,
@@ -142,17 +142,10 @@
 		if (current && token) {
 			// #260 — a settle for a collective the user has left must not overwrite the gate.
 			const g = routeLoad.generation;
-			resolveGate({ db: current.db, token }, current.personId).then(
-				(state) => {
-					if (g !== routeLoad.generation) return;
-					completionGateStore.set(state);
-				},
-				(err) => {
-					// A stale rejection stays silent; a live one is a real failure and is logged.
-					if (g !== routeLoad.generation) return;
-					console.error('profile: completion gate refresh failed', err);
-				}
-			);
+			refreshGate(
+				() => resolveGate({ db: current.db, token }, current.personId),
+				() => g === routeLoad.generation
+			).catch((err) => console.error('profile: completion gate refresh failed', err));
 		}
 	}
 

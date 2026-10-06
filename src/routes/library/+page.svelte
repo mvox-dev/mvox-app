@@ -225,6 +225,7 @@
 	const librarian = createLibrarianLoad(lib);
 	$effect(() => {
 		librarian.select(selected);
+		return () => librarian.destroy();
 	});
 
 	function retryLibrarianLoad(): void {

@@ -31,7 +31,12 @@
 		COLLECTIVE_URL_PARAM
 	} from '$lib/collectives/store';
 	import { ensureRetentionSweep } from '$lib/files/retention';
-	import { completionGateStore, resetGate, resolveGate } from '$lib/profile/completionGate';
+	import {
+		completionGateStore,
+		refreshGate,
+		resetGate,
+		resolveGate
+	} from '$lib/profile/completionGate';
 	import { membershipStore, resetMembership, resolveMembership } from '$lib/collective/membershipStore';
 	import NavShell from '$lib/components/nav/NavShell.svelte';
 	import { NAV_ENTRIES } from '$lib/nav/entries';
@@ -110,21 +115,14 @@
 	});
 
 	// Completion gate, app-wide. Keyed on collective identity, not its label, so a rename
-	// does not reset the gate; generation-guarded against a stale collective.
-	let gateGen = 0;
+	// does not reset the gate; a newer read, here or on /profile, drops a stale answer.
 	$effect(() => {
 		const auth = $authStore;
 		const selected = $selectedCollectiveIdentityStore;
-		const g = ++gateGen;
-		if (auth.status !== 'authenticated' || !selected) {
-			resetGate();
-			return;
-		}
 		resetGate();
+		if (auth.status !== 'authenticated' || !selected) return;
 		const cfg = cfgFor(selected.db);
-		resolveGate(cfg, selected.personId).then((state) => {
-			if (g === gateGen) completionGateStore.set(state);
-		});
+		void refreshGate(() => resolveGate(cfg, selected.personId));
 	});
 
 	// Enforce: redirect only on a resolved 'incomplete', never from /profile itself.
