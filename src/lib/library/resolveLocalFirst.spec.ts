@@ -103,8 +103,7 @@ describe('resolveLocalFirst', () => {
 		const { opts } = setup({ fetch, isCurrent: () => false });
 		resolveLocalFirst(opts);
 		await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
-		await Promise.resolve();
-		await Promise.resolve();
+		await new Promise((r) => setTimeout(r, 0));
 		expect(error).not.toHaveBeenCalled();
 		error.mockRestore();
 	});
