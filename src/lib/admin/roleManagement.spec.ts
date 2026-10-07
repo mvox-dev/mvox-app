@@ -219,18 +219,50 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		expect(result.persons.map((p) => p.id)).toEqual(['p-anna']);
 	});
 
-	it('a value without a `string` display name falls back to the reference id — never a blank row', async () => {
+	it('#841: a value without a `string` display name is a nameless row (name null), never the raw id as its name', async () => {
 		const fetchImpl = vi
 			.fn()
 			.mockResolvedValue(json(rollup({ ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }] })));
 
 		const result = await listAdmins(cfg, 'org-1', 'p-ghost', fetchImpl);
 		expect(result.persons).toEqual([
-			{ id: 'p-ghost', name: 'p-ghost', role: 'owner', valueIds: ['pv-x'] }
+			{ id: 'p-ghost', name: null, role: 'owner', valueIds: ['pv-x'] }
 		]);
 	});
 
-	it('#146: a display-name-less row (id fallback) is resolved against a passed roster, by personId', async () => {
+	it('#841: a nameless owner value folded with a named editor value takes the editor value\'s name', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json(
+				rollup({
+					ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }],
+					ownEditors: [{ _id: 'pv-y', reference: 'p-ghost', string: 'Ghost Gould' }]
+				})
+			)
+		);
+
+		const result = await listAdmins(cfg, 'org-1', 'p-ghost', fetchImpl);
+		expect(result.persons).toEqual([
+			{ id: 'p-ghost', name: 'Ghost Gould', role: 'owner', valueIds: ['pv-x', 'pv-y'] }
+		]);
+	});
+
+	it('#841: a roster row with an empty name neither blanks a named row nor names a nameless one', async () => {
+		const fetchImpl = vi.fn().mockResolvedValue(
+			json(rollup({ ownOwners: [ANNA_OWNER, { _id: 'pv-x', reference: 'p-ghost' }] }))
+		);
+		const roster = [
+			{ memberId: 'm-1', personId: 'p-anna', name: '', email: '' },
+			{ memberId: 'm-2', personId: 'p-ghost', name: '', email: '' }
+		];
+
+		const result = await listAdmins(cfg, 'org-1', 'p-anna', fetchImpl, roster);
+		expect(result.persons).toEqual([
+			{ id: 'p-anna', name: 'Anna Arro', role: 'owner', valueIds: ['pv-own-anna'] },
+			{ id: 'p-ghost', name: null, role: 'owner', valueIds: ['pv-x'] }
+		]);
+	});
+
+	it('#146: a nameless row is named off a passed roster against a passed roster, by personId', async () => {
 		const fetchImpl = vi
 			.fn()
 			.mockResolvedValue(json(rollup({ ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }] })));
@@ -267,7 +299,7 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 		]);
 	});
 
-	it('#146: a person absent from the roster keeps the id fallback — no roster entry to resolve against', async () => {
+	it('#146: a nameless person absent from the roster stays nameless — no roster entry to resolve against', async () => {
 		const fetchImpl = vi
 			.fn()
 			.mockResolvedValue(json(rollup({ ownOwners: [{ _id: 'pv-x', reference: 'p-ghost' }] })));
@@ -275,7 +307,7 @@ describe('listAdmins — one rights GET mapped to { persons: {id, name, role, va
 
 		const result = await listAdmins(cfg, 'org-1', 'p-ghost', fetchImpl, roster);
 		expect(result.persons).toEqual([
-			{ id: 'p-ghost', name: 'p-ghost', role: 'owner', valueIds: ['pv-x'] }
+			{ id: 'p-ghost', name: null, role: 'owner', valueIds: ['pv-x'] }
 		]);
 	});
 

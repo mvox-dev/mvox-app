@@ -7,6 +7,8 @@
 	import type * as RoleManagement from '$lib/admin/roleManagement';
 	import type { RoleKind, RolePerson } from '$lib/admin/roleManagement';
 	import PersonName from '$lib/components/PersonName.svelte';
+	import EntuRef from '$lib/components/EntuRef.svelte';
+	import { shortEntuId } from '$lib/entu/shortId';
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import RosterPersonSelect from '$lib/roster/RosterPersonSelect.svelte';
 	import { pickerPromptText } from '$lib/roster/pickerPrompt';
@@ -194,7 +196,10 @@
 				class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
 			>
 				<span
-					><PersonName name={person.name} />
+					>{#if person.name !== null}<PersonName name={person.name} />{:else}<EntuRef
+							id={person.id}
+							db={cfg?.db}
+						/>{/if}
 					<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 				>
 				<!-- The viewer's own row gets no Remove button; the reason sits in its place. -->
@@ -206,7 +211,9 @@
 						class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 						onclick={() => onRemoveAdmin(person.id)}
 					>
-						<RedactedText>{m.admin_roles_remove({ name: person.name })}</RedactedText>
+						<RedactedText>{m.admin_roles_remove({
+							name: person.name ?? shortEntuId(person.id)
+						})}</RedactedText>
 					</button>
 				{:else}
 					<span data-testid="admin-roles-admins-self-hint" class="text-xs text-ink-2">
@@ -249,7 +256,10 @@
 					class="flex items-center justify-between gap-2 border-b border-ink-5 py-1 text-sm"
 				>
 					<span
-						><PersonName name={person.name} />
+						>{#if person.name !== null}<PersonName name={person.name} />{:else}<EntuRef
+								id={person.id}
+								db={cfg?.db}
+							/>{/if}
 						<span class="text-xs text-ink-2">({roleLabel(person.role)})</span></span
 					>
 					<!-- A library owner's grant is not revocable here, so no control is offered. -->
@@ -262,7 +272,9 @@
 							class="min-h-11 rounded-md border border-ink px-2 py-1 text-xs hover:bg-ink hover:text-paper disabled:opacity-50"
 							onclick={() => onRemoveLibrarian(person.id)}
 						>
-							<RedactedText>{m.admin_roles_remove({ name: person.name })}</RedactedText>
+							<RedactedText>{m.admin_roles_remove({
+								name: person.name ?? shortEntuId(person.id)
+							})}</RedactedText>
 						</button>
 					{/if}
 				</li>
