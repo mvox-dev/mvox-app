@@ -30,14 +30,15 @@ import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import { AUTH_PROVIDERS, providerLabel } from './providers';
 
 describe('AUTH_PROVIDERS — canonical order (#206)', () => {
-	it('is exactly smart-id, mobile-id, id-card, e-mail, google, apple', () => {
+	it('is exactly smart-id, mobile-id, id-card, e-mail, google, apple, passkey (#855)', () => {
 		expect(AUTH_PROVIDERS.map((p) => p.id)).toEqual([
 			'smart-id',
 			'mobile-id',
 			'id-card',
 			'e-mail',
 			'google',
-			'apple'
+			'apple',
+			'passkey'
 		]);
 	});
 });
@@ -124,6 +125,12 @@ describe('providerLabel — the ONE resolution every consumer shares (#218)', ()
 		overwriteGetLocale(() => 'et');
 		expect(providerLabel('id-card')).toBe('ID-kaart');
 		expect(providerLabel('e-mail')).toBe('E-post');
+	});
+
+	// Break: drop auth_provider_passkey or the entry and the fallback reads 'Passkey'.
+	it("names a passkey sign-in 'Pääsuvõti' under et, as /profile's sign-in line shows it (#855)", () => {
+		overwriteGetLocale(() => 'et');
+		expect(providerLabel('passkey')).toBe('Pääsuvõti');
 	});
 
 	it('keeps the capitalised-id fallback for unknown ids (the old profile-page contract)', () => {

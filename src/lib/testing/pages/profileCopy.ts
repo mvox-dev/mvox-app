@@ -78,7 +78,8 @@ export const PROFILE_COPY = {
 	auth_provider_id_card: () => 'ID-card',
 	auth_provider_e_mail: () => 'E-mail',
 	auth_provider_google: () => 'Google',
-	auth_provider_apple: () => 'Apple'
+	auth_provider_apple: () => 'Apple',
+	auth_provider_passkey: () => 'Passkey'
 } satisfies Copy;
 
 export function profileMessages(overrides: Partial<typeof PROFILE_COPY> = {}) {

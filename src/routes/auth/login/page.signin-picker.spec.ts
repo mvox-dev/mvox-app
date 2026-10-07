@@ -19,7 +19,15 @@ import { setLastProvider } from '$lib/auth/storage';
 import { gotoMock } from '$lib/testing/routeMocks';
 import { cleanupResetGotoStorage } from '$lib/testing/pages/login';
 
-const CANONICAL_ORDER = ['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple'];
+const CANONICAL_ORDER = [
+	'smart-id',
+	'mobile-id',
+	'id-card',
+	'e-mail',
+	'google',
+	'apple',
+	'passkey'
+];
 
 function renderAt(search = '') {
 	pageStub.url = new URL(`http://localhost/auth/login${search}`);
@@ -54,7 +62,7 @@ describe('/auth/login — no auto-redirect, picker always renders (#206)', () =>
 		}
 	});
 
-	it('renders the CTAs in the canonical order (smart-id, mobile-id, id-card, e-mail, google, apple)', () => {
+	it('renders the CTAs in the canonical order (smart-id, mobile-id, id-card, e-mail, google, apple, passkey)', () => {
 		const { container } = renderAt();
 
 		expect(renderedProviderIds(container)).toEqual(CANONICAL_ORDER);

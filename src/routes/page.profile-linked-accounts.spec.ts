@@ -832,6 +832,15 @@ describe('provider display names (#218)', () => {
 		expect(rowText(emailRow)).toBe('E-mail — me@example.com');
 	});
 
+	// Break: let the picker read AUTH_PROVIDERS unfiltered and passkey joins the list.
+	it('the link picker does not offer passkey — it is added through "Add a passkey" (#855)', async () => {
+		const container = await openPicker();
+		const offered = qa(container, '[data-testid^="profile-link-provider-"]').map((el) =>
+			(el.getAttribute('data-testid') ?? '').replace(/^profile-link-provider-/, '')
+		);
+		expect(offered).toEqual(['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple']);
+	});
+
 	it("the link picker's google button reads 'Google' — the 'Continue with' framing is retired", async () => {
 		const container = await openPicker();
 		const google = q(container, '[data-testid="profile-link-provider-google"]');
