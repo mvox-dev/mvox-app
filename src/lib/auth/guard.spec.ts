@@ -57,9 +57,9 @@ describe('isProtectedPath', () => {
 		for (const p of ['/about', '/auth/login', '/auth/callback', '/_app/immutable/x.js', '/favicon.png'])
 			expect(isProtectedPath(p)).toBe(false);
 	});
-	it('protects app routes — including the root agenda (#221)', () => {
-		for (const p of ['/', '/agenda', '/library', '/roster', '/settings', '/library/x'])
-			expect(isProtectedPath(p)).toBe(true);
+	it('protects app routes — including the root agenda (#221) and the archived /lab/entu (#856)', () => {
+		const paths = ['/', '/agenda', '/library', '/roster', '/settings', '/library/x', '/lab/entu'];
+		for (const p of paths) expect(isProtectedPath(p)).toBe(true);
 	});
 
 	// T4.5/#31 — the unauthed invite landing rides the /invite/ prefix allowlist.

@@ -73,6 +73,7 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './profile/+page.svelte';
+import LinkedAccountsSection from '$lib/profile/LinkedAccountsSection.svelte';
 import { setUser, setLastProvider } from '$lib/auth/storage';
 import { decodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
 import { selectedCollectiveDbStore } from '$lib/collectives/store';
@@ -736,6 +737,54 @@ describe('/profile — same-identity no-op notice is neutral (#219)', () => {
 			expect(section.innerHTML).not.toContain(code);
 		}
 	);
+});
+
+describe('/profile — "Add a passkey" links to Entu for the selected database (#856)', () => {
+	const passkeyLink = (c: HTMLElement) =>
+		q(c, '[data-testid="profile-linked-accounts"] [data-testid="profile-add-passkey"]');
+
+	// Break: build the href from a fixed or stale db and the switch keeps the old one.
+	it('links to the selected collective’s Entu passkey page and follows a switch', async () => {
+		signIn({
+			token: 'jwt-member',
+			collectives: [
+				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
+				{ db: 'kammerkoor', name: 'Kammerkoor', personId: 'person-k' }
+			],
+			selected: 'sampledb'
+		});
+		const { container } = render(Page);
+		await waitFor(() => expect(passkeyLink(container)).not.toBeNull());
+		const link = passkeyLink(container) as HTMLAnchorElement;
+		expect(link.tagName).toBe('A');
+		expect(link.textContent?.trim()).toBe('Add a passkey');
+		expect(link.getAttribute('href')).toBe('https://entu.app/sampledb/passkey');
+
+		selectedCollectiveDbStore.set('kammerkoor');
+
+		await waitFor(() =>
+			expect(passkeyLink(container)?.getAttribute('href')).toBe(
+				'https://entu.app/kammerkoor/passkey'
+			)
+		);
+	});
+
+	// Break: drop the no-database check and a link to entu.app/null/passkey appears.
+	it('is hidden when no database is selected', async () => {
+		signIn({ token: 'jwt-member', collectives: [] });
+		const { container } = render(LinkedAccountsSection, {
+			ready: true,
+			isOffline: false,
+			scopeName: '',
+			generation: () => 0,
+			activeContext: () => null,
+			onSessionExpired: () => {},
+			mintSelfLinkInvite: h.mintSelfLinkInviteMock,
+			mintErrorMessage: () => ''
+		});
+		expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull();
+		expect(q(container, '[data-testid="profile-add-passkey"]')).toBeNull();
+	});
 });
 
 // ── i18n — the #193 keys exist, non-empty, in ALL FOUR locales ──────────────────
