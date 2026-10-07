@@ -290,6 +290,31 @@ function allFinished(issues: RoadmapIssue[], seen: Set<number> = new Set<number>
 	});
 }
 
+/** Research and build time summed over every descendant, each issue counted once. */
+export function subTimes(issues: RoadmapIssue[]): { researchMs: number; buildMs: number } {
+	const seen = new Set<number>();
+	const sum = { researchMs: 0, buildMs: 0 };
+	const walk = (list: RoadmapIssue[]) => {
+		for (const sub of list) {
+			if (seen.has(sub.number)) continue;
+			seen.add(sub.number);
+			sum.researchMs += sub.researchMs ?? 0;
+			if (sub.state === 'closed') sum.buildMs += sub.buildMs ?? 0;
+			walk(sub.subIssues ?? []);
+		}
+	};
+	walk(issues);
+	return sum;
+}
+
+function timesSuffix(issues: RoadmapIssue[]): string {
+	const { researchMs, buildMs } = subTimes(issues);
+	const parts: string[] = [];
+	if (researchMs > 0) parts.push(`uuritud ${formatElapsed(researchMs)}`);
+	if (buildMs > 0) parts.push(`ehitatud ${formatElapsed(buildMs)}`);
+	return parts.map((p) => ` · ${p}`).join('');
+}
+
 function finishedSummary(count: number): string {
 	return count === 1 ? '1 tehtud alamülesanne' : `${count} tehtud alamülesannet`;
 }
@@ -335,8 +360,8 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>, generatedAt: st
 	const subIssuesHtml = !listHtml
 		? ''
 		: finished
-			? `<details class="sub-issues-fold"><summary>${finishedSummary(subIssues.length)}</summary>${listHtml}</details>`
-			: `<details class="sub-issues-fold" open><summary>${activeSummary(subIssues)}</summary>${listHtml}</details>`;
+			? `<details class="sub-issues-fold"><summary>${escapeHtml(finishedSummary(subIssues.length) + timesSuffix(subIssues))}</summary>${listHtml}</details>`
+			: `<details class="sub-issues-fold" open><summary>${escapeHtml(activeSummary(subIssues) + timesSuffix(subIssues))}</summary>${listHtml}</details>`;
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
 		(sinceIso ? renderElapsed(elapsedLabel(issue) ?? '', sinceIso, generatedAt) : renderUpdatedAt(issue.updatedAt)) +
