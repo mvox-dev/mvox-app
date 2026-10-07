@@ -26,6 +26,10 @@ export interface RoadmapIssue {
 	// When the card's elapsed label (see elapsedLabel) was last put on; the card shows the time since.
 	statusSince?: string | null;
 
+	// Time `in research` was on, and on a closed card time `in process` was on, summed over spans.
+	researchMs?: number | null;
+	buildMs?: number | null;
+
 	htmlUrl: string;
 
 	subIssues?: RoadmapIssue[];
@@ -258,6 +262,13 @@ export function renderElapsed(label: string, sinceIso: string, generatedAt: stri
 	);
 }
 
+export function renderSpans(issue: RoadmapIssue): string {
+	const parts: string[] = [];
+	if (issue.researchMs != null) parts.push(`researched in ${formatElapsed(issue.researchMs)}`);
+	if (issue.state === 'closed' && issue.buildMs != null) parts.push(`built in ${formatElapsed(issue.buildMs)}`);
+	return parts.length > 0 ? `<span class="issue-spans">${escapeHtml(parts.join(' · '))}</span>` : '';
+}
+
 // #690: every sub-issue closed, at every depth.
 function allFinished(issues: RoadmapIssue[], seen: Set<number> = new Set<number>()): boolean {
 	return issues.every((sub) => {
@@ -323,6 +334,7 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>, generatedAt: st
 		`</a>` +
 		leadHtml +
 		`<span class="issue-labels">${labelsHtml}</span>` +
+		renderSpans(issue) +
 		subIssuesHtml +
 		`</article>`
 	);
@@ -410,6 +422,7 @@ export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string
 	.issue-title { font-weight: 600; }
 	.issue-lead { display: block; margin-top: 0.25rem; color: #444; }
 	.issue-labels { display: block; margin-top: 0.25rem; }
+	.issue-spans { display: block; margin-top: 0.25rem; font-size: 0.75rem; color: #666; }
 	.label { display: inline-block; font-size: 0.75rem; background: #eee; border: 1px solid rgba(0, 0, 0, 0.15); border-radius: 0.75rem; padding: 0.1rem 0.5rem; margin-right: 0.25rem; }
 	.board-group h2 { font-size: 1rem; color: #666; margin: 1.5rem 0 0.5rem; }
 	.sub-issues { list-style: none; margin: 0.5rem 0 0; padding-left: 1.5rem; }

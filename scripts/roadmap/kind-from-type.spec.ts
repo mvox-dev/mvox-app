@@ -6,6 +6,7 @@ import { kindFromLabels, kindFromType, kindOf } from './issue-model';
 import { displayLead, displayTitle, renderBoard, type RoadmapIssue, type RoadmapLabel } from './render';
 import { json } from '$lib/testing/entuFetchKit';
 
+const EMPTY_HISTORY = { data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } };
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
 const GENERATED_AT = '2026-09-18T09:00:00.000Z';
@@ -322,6 +323,7 @@ describe('#373 — fetchBoard resolves sub-issues for a typed Epic with no label
 			const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
 			if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
 			if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
+			if (url.endsWith('/graphql')) return json(EMPTY_HISTORY, 200, JSON_HEADERS);
 			throw new Error(`unexpected request: ${url}`);
 		}) as unknown as typeof fetch;
 

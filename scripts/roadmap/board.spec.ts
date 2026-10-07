@@ -44,6 +44,7 @@ function raw(number: number, labels: string[], overrides: Partial<RawIssue> = {}
 	};
 }
 
+const EMPTY_HISTORY = { data: { repository: { issues: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } } } };
 const JSON_HEADERS = { 'content-type': 'application/json' };
 
 function githubStub(list: RawIssue[], subs: Record<number, RawIssue[]> = {}): typeof fetch {
@@ -51,8 +52,8 @@ function githubStub(list: RawIssue[], subs: Record<number, RawIssue[]> = {}): ty
 		const url = String(input);
 		const match = /\/issues\/(\d+)\/sub_issues/.exec(url);
 		if (match) return json(subs[Number(match[1])] ?? [], 200, JSON_HEADERS);
-		if (/\/issues\/\d+\/events/.test(url)) return json([], 200, JSON_HEADERS);
 		if (url.includes('/issues?')) return json(list, 200, JSON_HEADERS);
+		if (url.endsWith('/graphql')) return json(EMPTY_HISTORY, 200, JSON_HEADERS);
 		throw new Error(`unexpected request: ${url}`);
 	}) as unknown as typeof fetch;
 }
