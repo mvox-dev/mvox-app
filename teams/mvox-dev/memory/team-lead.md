@@ -2,19 +2,19 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-37 checkpoint 2026-10-07 08:15Z]
+### [NEXT SESSION — MVOX-37 checkpoint 2026-10-07 11:20Z]
 
-**State:** main 383a62b (plus this seam commit), no branch open, no teammates up. The released queue is done.
+**State:** main 8cca8d0 (plus this seam commit), no branch open, no teammates up. Released queue done.
 
-**Landed this session:** #832 (#851, 93e36b7; prod curl 07:37Z: missing /_app file 404 no-store, real chunks unchanged), #841 (#852, 383a62b; nameless /admin role row → EntuRef). Both closed with comments.
+**Landed this session:** #832 (#851, 93e36b7; prod curl: missing /_app file 404 no-store), #841 (#852, 383a62b), #856 + #855 one branch (#857, 8cca8d0: /profile "Add a passkey", /lab/entu removed, passkey 7th provider, kept out of the link picker via LINKABLE_PROVIDERS). #826 closed not planned (archived).
 
-**Next:** no `ready` issue. Check the board and Gama's mail for a new release.
+**Waiting on Mihkel:** live checks #855 (passkey sign-in lands signed in) and #856 (/profile link reaches Entu add-passkey). Both reopened for that only; he closes them.
 
-**Waiting on Mihkel:** #826 live checks (/lab/entu sign-in returns signed in; passkey link opens Entu add-passkey).
+**Next:** no `ready` issue. Check the board and Gama's mail.
 
-**Loose ends:** untracked scripts/migrations/seed-results/probe-701-...-committed.json in the app tree (from #701; check before deleting).
+**Loose ends:** untracked probe-701-...-committed.json in the app tree (check before deleting). providers.spec.ts lost the #193 F3 note (re-point the link-picker fixture if provider order changes; smart-id still first).
 
-**Learned:** a research-pack blast agent took the operator's "check the mail" line as its task; re-run via resume with a changed blast arg (verify replayed from cache). Bentham ran the suite in the background once and went idle; told to keep gates foreground.
+**Learned:** a research-pack blast agent took the operator's "check the mail" line as its task; resume with a changed blast arg reruns only it. Passepartout (Mihkel's talk) wanted one hub line per step for passkey work: done; use machine stamps only (one hand-typed time had to be corrected).
 
 (*MVOX:Palestrina*)
 
