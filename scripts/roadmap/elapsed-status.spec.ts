@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Open `in process` / `in research` cards count time since that label in the browser; cards also
-// show how long research and building took, from the label history. (*PO:Gama*)
+// show how long research and building took, and an epic sums its sub-issues'. (*PO:Gama*)
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchBoard, labelSince, labelSpanMs, type LabelEvent } from './fetch-issues';
 import { formatClock, formatElapsed, renderBoard, type RoadmapIssue } from './render';
@@ -232,5 +232,40 @@ describe('researched in · built in', () => {
 		}) as unknown as typeof fetch;
 		const [fetched] = await fetchBoard('mvox-dev/mvox-app', 'test-token', stub);
 		expect(fetched.statusSince).toBe(H(4));
+	});
+});
+
+describe("an epic's summary sums its sub-issues' times", () => {
+	const HOUR = 3600000;
+	const sub = (number: number, state: 'open' | 'closed', over: Partial<RoadmapIssue> = {}): RoadmapIssue =>
+		issue({ number, state, labels: [], statusSince: null, ...over });
+	const summary = (epic: RoadmapIssue) =>
+		new DOMParser()
+			.parseFromString(renderBoard([epic], GENERATED_AT), 'text/html')
+			.querySelector(`article[data-issue="${epic.number}"] summary`)?.textContent ?? null;
+
+	it('a finished epic adds research and build time over all its sub-issues, nested ones included', () => {
+		const nested = sub(902, 'closed', {
+			issueType: 'Epic',
+			subIssues: [sub(903, 'closed', { researchMs: HOUR, buildMs: 2 * HOUR })]
+		});
+		const epic = sub(900, 'closed', {
+			issueType: 'Epic',
+			subIssues: [sub(901, 'closed', { researchMs: 30 * 60000, buildMs: HOUR }), nested]
+		});
+		expect(summary(epic)).toBe('2 tehtud alamülesannet · uuritud 1 h 30 min · ehitatud 3 h 0 min');
+	});
+
+	it('an active epic sums too; an open sub-issue adds its research but not a build time yet', () => {
+		const epic = sub(900, 'open', {
+			issueType: 'Epic',
+			subIssues: [sub(901, 'closed', { buildMs: HOUR }), sub(902, 'open', { researchMs: HOUR, buildMs: HOUR })]
+		});
+		expect(summary(epic)).toBe('2 alamülesannet, 1 pooleli · uuritud 1 h 0 min · ehitatud 1 h 0 min');
+	});
+
+	it('no times, no suffix', () => {
+		const epic = sub(900, 'closed', { issueType: 'Epic', subIssues: [sub(901, 'closed')] });
+		expect(summary(epic)).toBe('1 tehtud alamülesanne');
 	});
 });
