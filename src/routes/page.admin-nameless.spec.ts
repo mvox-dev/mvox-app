@@ -42,7 +42,10 @@ vi.mock('$app/navigation', async () =>
 vi.mock('$lib/entu-config', async () =>
 	(await import('$lib/testing/routeMocks')).entuConfigModule()
 );
+import { render } from '@testing-library/svelte';
+import AdminRoles from '$lib/admin/AdminRoles.svelte';
 import type { RolePerson } from '$lib/admin/roleManagement';
+import { testCfg } from '$lib/testing/entuFetchKit';
 import {
 	listAdminsMock,
 	listJoinStatesMock,
@@ -95,6 +98,41 @@ describe('/admin — a role row with no name (#841)', () => {
 		expect(link?.getAttribute('href')).toBe(`https://entu.app/sampledb/${GHOST_LIBRARIAN_ID}`);
 		expect(link?.textContent?.trim()).toBe('8ac0c2');
 		expect(row?.textContent).not.toContain(GHOST_LIBRARIAN_ID);
+	});
+
+	it('the link names the db the rows were read from, not the one selected since', () => {
+		const { container } = render(AdminRoles, {
+			cfg: testCfg('readdb', 'jwt-admin'),
+			dbEntityId: 'org-1',
+			libraryId: 'lib-1',
+			viewerId: 'p-anna',
+			admins: [nameless(GHOST_ADMIN_ID)],
+			librarians: [nameless(GHOST_LIBRARIAN_ID)],
+			canManageAdmins: false,
+			canManageLibrarians: false,
+			roster: [],
+			rosterPartial: false,
+			rosterLoading: false,
+			rosterFailed: false,
+			sections: [],
+			sectionsError: false,
+			isOffline: false,
+			loadSeq: () => 0,
+			refreshRole: vi.fn(),
+			writes: {
+				addAdmin: vi.fn(),
+				removeAdmin: vi.fn(),
+				addLibrarian: vi.fn(),
+				removeLibrarian: vi.fn()
+			}
+		});
+
+		expect(entuLink(q(container, `admin-entry-${GHOST_ADMIN_ID}`))?.getAttribute('href')).toBe(
+			`https://entu.app/readdb/${GHOST_ADMIN_ID}`
+		);
+		expect(
+			entuLink(q(container, `librarian-entry-${GHOST_LIBRARIAN_ID}`))?.getAttribute('href')
+		).toBe(`https://entu.app/readdb/${GHOST_LIBRARIAN_ID}`);
 	});
 
 	it('a named row is unchanged: the name, no Entu link', async () => {
