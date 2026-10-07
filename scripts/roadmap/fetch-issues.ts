@@ -5,7 +5,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { kindOf } from './issue-model';
-import type { RoadmapIssue, RoadmapLabel } from './render';
+import { elapsedLabel, type RoadmapIssue, type RoadmapLabel } from './render';
 
 const API_BASE = 'https://api.github.com';
 const DEFAULT_REPO = 'mvox-dev/mvox-app';
@@ -122,19 +122,20 @@ interface GitHubIssueEvent {
 	label?: { name?: string };
 }
 
-/** When `in process` was last added, from an issue's events; null when it never was. */
-export function inProcessSince(events: GitHubIssueEvent[]): string | null {
+/** When `label` was last added, from an issue's events; null when it never was. */
+export function labelSince(events: GitHubIssueEvent[], label: string): string | null {
 	let since: string | null = null;
 	for (const e of events) {
-		if (e.event === 'labeled' && e.label?.name === 'in process' && e.created_at) since = e.created_at;
+		if (e.event === 'labeled' && e.label?.name === label && e.created_at) since = e.created_at;
 	}
 	return since;
 }
 
-async function fetchInProcessSince(
+async function fetchLabelSince(
 	repo: string,
 	token: string,
 	issueNumber: number,
+	label: string,
 	fetchImpl: typeof fetch
 ): Promise<string | null> {
 	const events: GitHubIssueEvent[] = [];
@@ -144,7 +145,7 @@ async function fetchInProcessSince(
 		events.push(...((await res.json()) as GitHubIssueEvent[]));
 		url = parseNextLink(res.headers.get('link'));
 	}
-	return inProcessSince(events);
+	return labelSince(events, label);
 }
 
 /** Fetch the full board: all issues, with sub-issues resolved for every `epic`-labeled issue. */
@@ -156,9 +157,8 @@ export async function fetchBoard(
 	const rawIssues = await fetchAllIssues(repo, token, fetchImpl);
 	const issues = rawIssues.map(normalizeIssue);
 	for (const issue of issues) {
-		if (issue.state === 'open' && issue.labels.some((l) => l.name === 'in process')) {
-			issue.inProcessSince = await fetchInProcessSince(repo, token, issue.number, fetchImpl);
-		}
+		const label = elapsedLabel(issue);
+		if (label) issue.statusSince = await fetchLabelSince(repo, token, issue.number, label, fetchImpl);
 	}
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();

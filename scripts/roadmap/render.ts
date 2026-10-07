@@ -23,8 +23,8 @@ export interface RoadmapIssue {
 
 	updatedAt?: string | null;
 
-	// When `in process` was last put on the issue; the card shows the time since then.
-	inProcessSince?: string | null;
+	// When the card's elapsed label (see elapsedLabel) was last put on; the card shows the time since.
+	statusSince?: string | null;
 
 	htmlUrl: string;
 
@@ -234,17 +234,27 @@ export function formatElapsed(ms: number): string {
 	return mins + ' min';
 }
 
-function inProcessSinceIso(issue: RoadmapIssue): string | null {
-	if (issue.state !== 'open' || !(issue.labels ?? []).some((l) => l?.name === 'in process')) return null;
-	const parsed = Date.parse(issue.inProcessSince ?? '');
+export const ELAPSED_LABELS = ['in process', 'in research'] as const;
+
+/** The label an open card counts its elapsed time from, the first of ELAPSED_LABELS it wears. */
+export function elapsedLabel(issue: Pick<RoadmapIssue, 'state' | 'labels'>): string | null {
+	if (issue.state !== 'open') return null;
+	const names = (issue.labels ?? []).map((l) => l?.name);
+	return ELAPSED_LABELS.find((label) => names.includes(label)) ?? null;
+}
+
+function statusSinceIso(issue: RoadmapIssue): string | null {
+	if (!elapsedLabel(issue)) return null;
+	const parsed = Date.parse(issue.statusSince ?? '');
 	return Number.isNaN(parsed) ? null : new Date(parsed).toISOString();
 }
 
-export function renderElapsed(sinceIso: string, generatedAt: string): string {
+export function renderElapsed(label: string, sinceIso: string, generatedAt: string): string {
 	const text = formatElapsed(Date.parse(generatedAt) - Date.parse(sinceIso));
+	const title = `${label} since ${formatGeneratedAt(sinceIso)}`;
 	return (
 		`<time class="issue-updated issue-elapsed" datetime="${sinceIso}" ` +
-		`title="in process since ${escapeHtml(formatGeneratedAt(sinceIso))}">${escapeHtml(text)}</time>`
+		`title="${escapeHtml(title)}">${escapeHtml(text)}</time>`
 	);
 }
 
@@ -290,7 +300,7 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>, generatedAt: st
 	const labelsHtml = [kindChipHtml, ...chipLabels.map(renderLabel)]
 		.filter((html) => html.length > 0)
 		.join(' ');
-	const sinceIso = inProcessSinceIso(issue);
+	const sinceIso = statusSinceIso(issue);
 	const subIssues = issue.subIssues ?? [];
 	const childrenHtml = boardOrder(subIssues)
 		.map((sub) => renderIssue(sub, rendered, generatedAt))
@@ -306,7 +316,7 @@ function renderIssue(issue: RoadmapIssue, rendered: Set<number>, generatedAt: st
 			: `<details class="sub-issues-fold" open><summary>${activeSummary(subIssues)}</summary>${listHtml}</details>`;
 	return (
 		`<article class="issue" data-issue="${issue.number}" data-state="${issue.state}"${stateReasonAttr}>` +
-		(sinceIso ? renderElapsed(sinceIso, generatedAt) : renderUpdatedAt(issue.updatedAt)) +
+		(sinceIso ? renderElapsed(elapsedLabel(issue) ?? '', sinceIso, generatedAt) : renderUpdatedAt(issue.updatedAt)) +
 		`<a class="issue-link" href="${escapeHtml(issue.htmlUrl)}">` +
 		`<span class="issue-number">#${issue.number}</span>` +
 		`<span class="issue-title">${escapeHtml(title)}</span>` +
