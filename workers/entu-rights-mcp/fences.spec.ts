@@ -30,10 +30,10 @@ describe('the doc and its guard spec are byte-identical to HEAD — this slice r
 
 describe('the static app is untouched', () => {
 	it('svelte.config.js is unchanged', () => {
-		// Repinned for #368 (the service worker's precache list); pinned on its own terms
+		// Repinned for #368 and #832 (the service worker manifest); pinned on its own terms
 		// in src/lib/sw/swUpdate.spec.ts.
 		expect(sha256('svelte.config.js')).toBe(
-			'f9224c961ef6d940b1ab5524e2aa78871019fa7a60fa9594f0fe25cf9699eece'
+			'2dc1fada04898ec8171d3a9f4a544c72ecfdcd1a1ac7509d13479130dfb82a6c'
 		);
 	});
 
