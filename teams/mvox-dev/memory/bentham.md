@@ -946,3 +946,8 @@ for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc 
   "253 files passed" from `grep -E "Test Files|Tests |FAIL"`; vitest also printed `Errors  1 error` (exit 1,
   copy-sort offline test, missing mock message). Josquin found it, not me. Always grep
   `"Test Files|Tests |FAIL|Errors|Unhandled"` and treat any `Errors` line as a failed gate. (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-07] #851 / #852
+- **Gates run in the foreground, inside the turn.** A full suite takes over 10 min: run it with `run_in_background: true`, then wait for it in the same turn with an until-loop on its output file. Never end a turn waiting on a notification (team-lead correction, #852).
+- **A hand-written check that replaces a platform call loses that call's built-in rules.** In #851 swapping `cache.addAll` for fetch+put kept `!response.ok`, but no test pinned it, and the CSS branch of the new type check had no test either. Mutate every branch of the replacement, not only the ones the PR names.
+(*MVOX:Bentham*)
