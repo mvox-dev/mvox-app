@@ -4,10 +4,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const ORIGIN = 'https://mvox.eu';
 const ENTRY = '/_app/immutable/entry/start.abc123.js';
 const NODE = '/_app/immutable/nodes/14.d00d.js';
+const STYLE = '/_app/immutable/assets/0.cafe.css';
 const WORKER = '/_app/immutable/assets/pdf.worker.C0ffee.mjs';
 
 vi.mock('$service-worker', () => ({
-	build: [ENTRY, NODE],
+	build: [ENTRY, STYLE, NODE],
 	files: ['/robots.txt'],
 	prerendered: ['/version.json'],
 	version: 'v42'
@@ -25,6 +26,7 @@ interface FakeCache {
 let listeners: Map<string, Listener>;
 let cacheStore: Map<string, FakeCache>;
 let unreachable: Set<string>;
+let missing: Set<string>;
 let servedAs: Map<string, string>;
 let fetchMock: ReturnType<typeof vi.fn>;
 let skipWaiting: ReturnType<typeof vi.fn>;
@@ -39,6 +41,7 @@ function pathOf(request: string | { url: string }): string {
 
 function typeOf(path: string): string {
 	if (/\.m?js$/.test(path)) return 'application/javascript';
+	if (path.endsWith('.css')) return 'text/css';
 	if (path === '/') return 'text/html; charset=utf-8';
 	return 'text/plain; charset=utf-8';
 }
@@ -90,6 +93,7 @@ beforeEach(() => {
 	listeners = new Map();
 	cacheStore = new Map();
 	unreachable = new Set();
+	missing = new Set();
 	servedAs = new Map();
 	putPhases = [];
 	phase = 'boot';
@@ -97,6 +101,9 @@ beforeEach(() => {
 		const url = typeof request === 'string' ? request : request.url;
 		const path = pathOf(request);
 		if (unreachable.has(path)) throw new TypeError('Failed to fetch');
+		if (missing.has(path)) {
+			return new Response('Not found', { status: 404, headers: { 'content-type': 'text/plain' } });
+		}
 		return new Response(`network ${url}`, {
 			headers: { 'content-type': servedAs.get(path) ?? typeOf(path) }
 		});
@@ -138,7 +145,7 @@ describe('install', () => {
 		await waited;
 
 		expect([...cacheStore.keys()]).toEqual(['mvox-shell-v42']);
-		expect(cached().sort()).toEqual([ENTRY, NODE, WORKER, '/', '/_app/env.js', '/robots.txt'].sort());
+		expect(cached().sort()).toEqual([ENTRY, STYLE, NODE, WORKER, '/', '/_app/env.js', '/robots.txt'].sort());
 		const entry = cacheStore.get('mvox-shell-v42')!.entries.get(ENTRY)!;
 		expect(await entry.text()).toBe(`network ${ENTRY}`);
 		expect(skipWaiting).toHaveBeenCalledTimes(1);
@@ -159,6 +166,24 @@ describe('install', () => {
 		const { waited } = await install();
 
 		await expect(waited).rejects.toThrow(/Failed to fetch/);
+		expect(skipWaiting).not.toHaveBeenCalled();
+	});
+
+	it('a core file that answers 404 fails the install, is never cached, and the worker does not take over', async () => {
+		missing.add('/robots.txt');
+		const { waited, cached } = await install();
+
+		await expect(waited).rejects.toThrow('/robots.txt');
+		expect(cached()).not.toContain('/robots.txt');
+		expect(skipWaiting).not.toHaveBeenCalled();
+	});
+
+	it('a core stylesheet answered as HTML fails the install and is never cached', async () => {
+		servedAs.set(STYLE, 'text/html; charset=utf-8');
+		const { waited, cached } = await install();
+
+		await expect(waited).rejects.toThrow(STYLE);
+		expect(cached()).not.toContain(STYLE);
 		expect(skipWaiting).not.toHaveBeenCalled();
 	});
 
