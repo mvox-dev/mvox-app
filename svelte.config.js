@@ -31,7 +31,7 @@ const config = {
 			// replaces wholesale. `file` arrives relative to static/, no leading
 			// slash — see kit's build_service_worker.js.)
 			files: (file) =>
-				!/^_(headers|redirects|routes\.json)$/.test(file) && !/\.DS_Store/.test(file),
+				!/^(_(headers|redirects|routes\.json)|_app\/404\.html)$/.test(file) && !/\.DS_Store/.test(file),
 		},
 	},
 };
