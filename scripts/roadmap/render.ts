@@ -227,7 +227,6 @@ export function renderUpdatedAt(updatedAt: string | null | undefined): string {
 	return `<time class="issue-updated" datetime="${iso}">${escapeHtml(formatGeneratedAt(iso))}</time>`;
 }
 
-// The page's script embeds this function's own source, so it keeps to plain JavaScript.
 export function formatElapsed(ms: number): string {
 	const minutes = Math.max(0, Math.floor(ms / 60000));
 	const days = Math.floor(minutes / 1440);
@@ -236,6 +235,19 @@ export function formatElapsed(ms: number): string {
 	if (days > 0) return days + ' p ' + hours + ' h';
 	if (hours > 0) return hours + ' h ' + mins + ' min';
 	return mins + ' min';
+}
+
+// A running stopwatch: "2:15:07", and "2 p 04:15:07" past a day. The page's script embeds this
+// function's own source, so it keeps to plain JavaScript.
+export function formatClock(ms: number): string {
+	const total = Math.max(0, Math.floor(ms / 1000));
+	const days = Math.floor(total / 86400);
+	const h = Math.floor((total % 86400) / 3600);
+	const m = Math.floor((total % 3600) / 60);
+	const sec = total % 60;
+	const two = (n: number) => (n < 10 ? '0' : '') + n;
+	const clock = two(m) + ':' + two(sec);
+	return days > 0 ? days + ' p ' + two(h) + ':' + clock : h + ':' + clock;
 }
 
 export const ELAPSED_LABELS = ['in process', 'in research'] as const;
@@ -254,7 +266,7 @@ function statusSinceIso(issue: RoadmapIssue): string | null {
 }
 
 export function renderElapsed(label: string, sinceIso: string, generatedAt: string): string {
-	const text = formatElapsed(Date.parse(generatedAt) - Date.parse(sinceIso));
+	const text = formatClock(Date.parse(generatedAt) - Date.parse(sinceIso));
 	const title = `${label} since ${formatGeneratedAt(sinceIso)}`;
 	return (
 		`<time class="issue-updated issue-elapsed" datetime="${sinceIso}" ` +
@@ -364,18 +376,19 @@ const REFRESH_SCRIPT = (stamp: string) => `(function () {
 			window.scrollTo(0, parseInt(saved, 10));
 		}
 	});
-	var formatElapsed = ${formatElapsed.toString()};
+	var formatClock = ${formatClock.toString()};
 	function showElapsed() {
 		if (typeof document === 'undefined') return;
 		var now = Date.now();
 		var els = document.querySelectorAll('time.issue-elapsed');
 		for (var i = 0; i < els.length; i++) {
 			var since = Date.parse(els[i].getAttribute('datetime'));
-			if (!isNaN(since)) els[i].textContent = formatElapsed(now - since);
+			if (!isNaN(since)) els[i].textContent = formatClock(now - since);
 		}
 	}
 	showElapsed();
-	setInterval(function () { poll(); showElapsed(); }, 60000);
+	setInterval(showElapsed, 1000);
+	setInterval(poll, 60000);
 })();`;
 
 export function renderBoard(issues: RoadmapIssue[], generatedAt: string): string {
