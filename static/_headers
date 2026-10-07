@@ -1,2 +1,5 @@
 /service-worker.js
   Cache-Control: max-age=0, must-revalidate
+
+/_app/404.html
+  Cache-Control: no-store

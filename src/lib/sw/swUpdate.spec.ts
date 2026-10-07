@@ -222,13 +222,13 @@ describe('#368 — static/_headers hardens /service-worker.js', () => {
 		expect(cacheControl).toContain('must-revalidate');
 	});
 
-	it('is scoped to /service-worker.js ONLY — no blanket header rules ride along', () => {
+	it('names only the worker and the missing-file page — no blanket header rules ride along', () => {
 		const content = readFileSync(headersPath, 'utf-8');
 		// Every non-empty, non-indented, non-comment line is a path rule.
 		const pathRules = content
 			.split('\n')
 			.filter((line) => line.trim() !== '' && !/^\s/.test(line) && !line.startsWith('#'));
-		expect(pathRules).toEqual(['/service-worker.js']);
+		expect(pathRules).toEqual(['/service-worker.js', '/_app/404.html']);
 	});
 });
 
@@ -251,6 +251,11 @@ describe('#368 — CF Pages config files are excluded from the service worker ma
 		expect(files('_headers')).toBe(false);
 		expect(files('_redirects')).toBe(false);
 		expect(files('_routes.json')).toBe(false);
+	});
+
+	it('the filter rejects the missing-file page — CF answers its own path with a redirect', async () => {
+		const kit = await loadKitConfig();
+		expect(kit.serviceWorker.files('_app/404.html')).toBe(false);
 	});
 
 	it('the filter still accepts real static assets — this is an exclusion, not an opt-in list', async () => {
