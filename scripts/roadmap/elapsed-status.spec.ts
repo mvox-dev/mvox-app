@@ -3,7 +3,7 @@
 // show how long research and building took, from the label history. (*PO:Gama*)
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchBoard, labelSince, labelSpanMs, type LabelEvent } from './fetch-issues';
-import { formatElapsed, renderBoard, type RoadmapIssue } from './render';
+import { formatClock, formatElapsed, renderBoard, type RoadmapIssue } from './render';
 
 const GENERATED_AT = '2026-10-06T18:00:00.000Z';
 const SINCE = '2026-10-06T15:45:00.000Z';
@@ -37,14 +37,14 @@ afterEach(() => {
 describe('elapsed time on in-process and in-research cards', () => {
 	it('an open in-process card shows the time since the label was set, not a timestamp', () => {
 		const time = corner(renderBoard([issue()], GENERATED_AT));
-		expect(time?.textContent).toBe('2 h 15 min');
+		expect(time?.textContent).toBe('2:15:00');
 		expect(time?.getAttribute('datetime')).toBe(SINCE);
 		expect(time?.getAttribute('title')).toMatch(/^in process since /);
 	});
 
 	it('an open in-research card shows the time since that label was set, and says which label', () => {
 		const time = corner(renderBoard([issue({ labels: [{ name: 'in research', color: null }] })], GENERATED_AT));
-		expect(time?.textContent).toBe('2 h 15 min');
+		expect(time?.textContent).toBe('2:15:00');
 		expect(time?.getAttribute('title')).toMatch(/^in research since /);
 	});
 
@@ -75,7 +75,7 @@ describe('elapsed time on in-process and in-research cards', () => {
 		expect(time?.getAttribute('datetime')).toBe(UPDATED);
 	});
 
-	it('the page counts on in the browser: the shown time follows the clock, not the build', () => {
+	it('the page ticks every second from the browser clock, not the build', () => {
 		vi.useFakeTimers({ toFake: ['Date', 'setInterval'] });
 		vi.setSystemTime(new Date('2026-10-08T19:50:00.000Z'));
 		const html = renderBoard([issue()], GENERATED_AT);
@@ -83,10 +83,19 @@ describe('elapsed time on in-process and in-research cards', () => {
 		document.body.innerHTML = doc.body.innerHTML;
 		new Function(doc.querySelector('script')?.textContent ?? '')();
 		const time = document.querySelector('article[data-issue="809"] time');
-		expect(time?.textContent).toBe('2 p 4 h');
-		vi.setSystemTime(new Date('2026-10-08T20:50:00.000Z'));
-		vi.advanceTimersByTime(60000);
-		expect(time?.textContent).toBe('2 p 5 h');
+		expect(time?.textContent).toBe('2 p 04:05:00');
+		vi.advanceTimersByTime(1000);
+		expect(time?.textContent).toBe('2 p 04:05:01');
+	});
+});
+
+describe('formatClock', () => {
+	it('h:mm:ss under a day, then days and hh:mm:ss', () => {
+		expect(formatClock(0)).toBe('0:00:00');
+		expect(formatClock(7 * 1000)).toBe('0:00:07');
+		expect(formatClock((2 * 3600 + 15 * 60 + 7) * 1000)).toBe('2:15:07');
+		expect(formatClock(((2 * 24 + 4) * 3600 + 5 * 60 + 1) * 1000)).toBe('2 p 04:05:01');
+		expect(formatClock(-1000)).toBe('0:00:00');
 	});
 });
 
