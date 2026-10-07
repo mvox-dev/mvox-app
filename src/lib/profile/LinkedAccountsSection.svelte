@@ -9,6 +9,8 @@
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
 	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
+	import { selectedDbStore } from '$lib/collectives/store';
+	import { entuAddPasskeyHref } from '$lib/profile/passkey';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
@@ -279,6 +281,16 @@
 					{m.profile_link_cancel()}
 				</button>
 			</div>
+		{/if}
+
+		{#if $selectedDbStore}
+			<a
+				href={entuAddPasskeyHref($selectedDbStore)}
+				data-testid="profile-add-passkey"
+				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+			>
+				{m.profile_add_passkey()}
+			</a>
 		{/if}
 
 		{#if shownLinkError}

@@ -26,7 +26,7 @@ export function isTokenValid(token: string | null | undefined, nowMs: number): b
 	return expMs !== null && expMs > nowMs;
 }
 
-const PUBLIC_EXACT = new Set(['/about', '/lab/entu']);
+const PUBLIC_EXACT = new Set(['/about']);
 
 /** True iff the path requires a session. Public allowlist + assets/internal paths pass through. */
 export function isProtectedPath(pathname: string): boolean {
