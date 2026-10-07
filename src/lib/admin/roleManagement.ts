@@ -9,7 +9,8 @@ import { resolveNamesFromRoster } from '$lib/admin/rosterNames';
 
 export interface RolePerson {
 	id: string;
-	name: string;
+	// null: no name on the grant or the roster; the row shows the id as an EntuRef.
+	name: string | null;
 	role: 'owner' | 'editor';
 	valueIds: string[];
 }
@@ -105,13 +106,13 @@ function toRolePersons(ownOwners: RightsValue[], ownEditors: RightsValue[]): Rol
 		const existing = byPerson.get(v.reference);
 		if (existing) {
 			if (role === 'owner') existing.role = 'owner';
-			if (existing.name === existing.id && v.string) existing.name = v.string;
+			if (existing.name === null && v.string) existing.name = v.string;
 			if (!existing.valueIds.includes(v._id)) existing.valueIds.push(v._id);
 			return;
 		}
 		byPerson.set(v.reference, {
 			id: v.reference,
-			name: v.string ?? v.reference,
+			name: v.string || null,
 			role,
 			valueIds: [v._id]
 		});

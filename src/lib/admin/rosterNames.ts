@@ -5,7 +5,7 @@ import type { RosterRow } from '$lib/roster/rosterData';
 export function resolveNamesFromRoster(persons: RolePerson[], roster: RosterRow[]): RolePerson[] {
 	if (roster.length === 0) return persons;
 	const byPersonId = new Map(roster.map((r) => [r.personId, r.name]));
-	return persons.map((p) => ({ ...p, name: byPersonId.get(p.id) ?? p.name }));
+	return persons.map((p) => ({ ...p, name: byPersonId.get(p.id) || p.name }));
 }
 
 // (*MVOX:Josquin*)
