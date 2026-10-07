@@ -177,6 +177,7 @@
 	"profile_link_another": "Lisa teine sisselogimisviis",
 	"profile_link_choose_provider": "Vali teenusepakkuja sidumiseks",
 	"profile_link_cancel": "Loobu",
+	"profile_add_passkey": "Lisa pääsuvõti",
 	"profile_link_error_conflict": "See konto on juba mõne teise liikme kasutuses.",
 	"profile_link_error_dead": "Sidumiskatse aegus või oli juba kasutatud.",
 	"profile_link_error_failed": "Sidumine ebaõnnestus — proovi uuesti.",
@@ -668,6 +669,7 @@
 	"auth_provider_e_mail": "E-post",
 	"auth_provider_google": "Google",
 	"auth_provider_apple": "Apple",
+	"auth_provider_passkey": "Pääsuvõti",
 	"agenda_view_toggle_label": "Vaate valik",
 	"agenda_view_list": "Detailne",
 	"agenda_view_month": "Kompaktne",
@@ -732,8 +734,5 @@
 	"feedback_send_failed": "Tagasisidet ei õnnestunud saata.",
 	"feedback_saved_send_later": "Tagasiside on sellesse seadmesse salvestatud. See saadetakse, kui signaal taastub.",
 	"feedback_send_after_sign_in": "Tagasiside on salvestatud. See saadetakse pärast sisselogimist.",
-	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega",
-	"lab_entu_heading": "Katseleht: sisselogimine Entu kaudu",
-	"lab_entu_sign_in": "Logi sisse Entu kaudu",
-	"lab_entu_add_passkey": "Lisa pääsuvõti Entus"
+	"feedback_problems_legend": "Tõrked, mis saadetakse koos selle tagasisidega"
 }

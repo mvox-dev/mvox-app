@@ -177,6 +177,7 @@
 	"profile_link_another": "Piesaistīt citu kontu",
 	"profile_link_choose_provider": "Izvēlieties pakalpojumu sniedzēju piesaistei",
 	"profile_link_cancel": "Atcelt",
+	"profile_add_passkey": "Pievienot piekļuves atslēgu",
 	"profile_link_error_conflict": "Šis konts jau tiek izmantots cita dalībnieka kontā.",
 	"profile_link_error_dead": "Piesaistes mēģinājumam beidzās derīguma termiņš vai tas jau bija izmantots.",
 	"profile_link_error_failed": "Piesaiste neizdevās — varat mēģināt vēlreiz.",
@@ -669,6 +670,7 @@
 	"auth_provider_e_mail": "E-pasts",
 	"auth_provider_google": "Google",
 	"auth_provider_apple": "Apple",
+	"auth_provider_passkey": "Piekļuves atslēga",
 	"agenda_view_toggle_label": "Skata izvēle",
 	"agenda_view_list": "Detalizēts",
 	"agenda_view_month": "Kompakts",
@@ -733,8 +735,5 @@
 	"feedback_send_failed": "Atsauksmi neizdevās nosūtīt.",
 	"feedback_saved_send_later": "Atsauksme saglabāta šajā ierīcē. Tā tiks nosūtīta, kad atjaunosies signāls.",
 	"feedback_send_after_sign_in": "Atsauksme saglabāta. Tā tiks nosūtīta pēc pierakstīšanās.",
-	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi",
-	"lab_entu_heading": "Eksperimentāla lapa: pierakstīšanās ar Entu",
-	"lab_entu_sign_in": "Pierakstīties ar Entu",
-	"lab_entu_add_passkey": "Pievienot piekļuves atslēgu Entu"
+	"feedback_problems_legend": "Kļūmes, ko nosūtīt kopā ar šo atsauksmi"
 }

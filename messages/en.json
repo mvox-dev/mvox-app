@@ -177,6 +177,7 @@
 	"profile_link_another": "Link another account",
 	"profile_link_choose_provider": "Choose a provider to link",
 	"profile_link_cancel": "Cancel",
+	"profile_add_passkey": "Add a passkey",
 	"profile_link_error_conflict": "That account is already in use by another member here.",
 	"profile_link_error_dead": "The link attempt expired or was already used.",
 	"profile_link_error_failed": "Linking failed — you can try again.",
@@ -668,6 +669,7 @@
 	"auth_provider_e_mail": "E-mail",
 	"auth_provider_google": "Google",
 	"auth_provider_apple": "Apple",
+	"auth_provider_passkey": "Passkey",
 	"agenda_view_toggle_label": "Agenda view",
 	"agenda_view_list": "Detailed",
 	"agenda_view_month": "Compact",
@@ -732,8 +734,5 @@
 	"feedback_send_failed": "The feedback could not be sent.",
 	"feedback_saved_send_later": "Feedback saved on this device. It will be sent when the signal returns.",
 	"feedback_send_after_sign_in": "Feedback saved. It will be sent after you sign in.",
-	"feedback_problems_legend": "Failures to send with this feedback",
-	"lab_entu_heading": "Experimental: sign in via Entu",
-	"lab_entu_sign_in": "Sign in via Entu",
-	"lab_entu_add_passkey": "Add a passkey in Entu"
+	"feedback_problems_legend": "Failures to send with this feedback"
 }

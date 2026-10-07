@@ -28,7 +28,8 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 		auth_provider_id_card: () => 'ID-card',
 		auth_provider_e_mail: () => 'E-mail',
 		auth_provider_google: () => 'Google',
-		auth_provider_apple: () => 'Apple'
+		auth_provider_apple: () => 'Apple',
+		auth_provider_passkey: () => 'Passkey'
 	})
 );
 
@@ -136,7 +137,7 @@ describe('/invite/[token] — callback outcomes (take precedence over fresh pars
 // ── #218 — provider CTA labels come from Paraglide, bare nouns ─────────────────
 
 describe('/invite/[token] — provider CTA labels come from Paraglide (#218)', () => {
-	it("renders six provider CTAs with the message-function label — google reads 'Google'", () => {
+	it("renders one CTA per provider, passkey included (#855) — google reads 'Google'", () => {
 		const { container } = renderAt(TOKEN);
 		const EXPECTED: Record<string, string> = {
 			'smart-id': 'Smart-ID',
@@ -144,14 +145,16 @@ describe('/invite/[token] — provider CTA labels come from Paraglide (#218)', (
 			'id-card': 'ID-card',
 			'e-mail': 'E-mail',
 			google: 'Google',
-			apple: 'Apple'
+			apple: 'Apple',
+			passkey: 'Passkey'
 		};
 		const ctas = Array.from(container.querySelectorAll('[data-testid^="invite-cta-"]'));
-		expect(ctas).toHaveLength(6);
-		for (const cta of ctas) {
-			const id = (cta.getAttribute('data-testid') ?? '').replace(/^invite-cta-/, '');
-			expect(cta.textContent?.trim(), `invite CTA label for ${id}`).toBe(EXPECTED[id]);
-		}
+		const shown = ctas.map((cta) => [
+			(cta.getAttribute('data-testid') ?? '').replace(/^invite-cta-/, ''),
+			cta.textContent?.trim()
+		]);
+		expect(Object.fromEntries(shown)).toEqual(EXPECTED);
+		expect(shown).toHaveLength(Object.keys(EXPECTED).length);
 		expect(container.textContent).not.toContain('Continue with');
 	});
 });

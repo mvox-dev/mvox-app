@@ -177,6 +177,7 @@
 	"profile_link_another": "Додати інший спосіб входу",
 	"profile_link_choose_provider": "Виберіть постачальника для прив'язки",
 	"profile_link_cancel": "Скасувати",
+	"profile_add_passkey": "Додати ключ доступу",
 	"profile_link_error_conflict": "Цей обліковий запис уже використовується іншим учасником.",
 	"profile_link_error_dead": "Спроба прив'язки застаріла або вже була використана.",
 	"profile_link_error_failed": "Прив'язка не вдалася — спробуйте ще раз.",
@@ -670,6 +671,7 @@
 	"auth_provider_e_mail": "Електронна пошта",
 	"auth_provider_google": "Google",
 	"auth_provider_apple": "Apple",
+	"auth_provider_passkey": "Ключ доступу",
 	"agenda_view_toggle_label": "Вибір вигляду",
 	"agenda_view_list": "Детальний",
 	"agenda_view_month": "Компактний",
@@ -734,8 +736,5 @@
 	"feedback_send_failed": "Не вдалося надіслати відгук.",
 	"feedback_saved_send_later": "Відгук збережено на цьому пристрої. Його буде надіслано, коли з'явиться сигнал.",
 	"feedback_send_after_sign_in": "Відгук збережено. Його буде надіслано після входу.",
-	"feedback_problems_legend": "Збої, які буде надіслано з цим відгуком",
-	"lab_entu_heading": "Експериментальна сторінка: вхід через Entu",
-	"lab_entu_sign_in": "Увійти через Entu",
-	"lab_entu_add_passkey": "Додати ключ доступу в Entu"
+	"feedback_problems_legend": "Збої, які буде надіслано з цим відгуком"
 }

@@ -8,7 +8,9 @@
 	import RedactedText from '$lib/components/RedactedText.svelte';
 	import { isAuthExpiredError } from '$lib/entu/request';
 	import { listLinkedIdentities, type LinkedIdentity } from '$lib/profile/linkedIdentities';
-	import { AUTH_PROVIDERS, providerLabel } from '$lib/auth/providers';
+	import { LINKABLE_PROVIDERS, providerLabel } from '$lib/auth/providers';
+	import { selectedDbStore } from '$lib/collectives/store';
+	import { entuAddPasskeyHref } from '$lib/profile/passkey';
 	import { createNonce } from '$lib/auth/state';
 	import { buildOAuthInitUrl } from '../../routes/auth/[provider]/build-oauth-init-url';
 	import type * as InviteData from '$lib/invite/inviteData';
@@ -258,7 +260,7 @@
 		{:else}
 			<p class="text-sm text-ink-2">{m.profile_link_choose_provider()}</p>
 			<div class="flex flex-col gap-2" bind:this={linkPickerEl}>
-				{#each AUTH_PROVIDERS as provider (provider.id)}
+				{#each LINKABLE_PROVIDERS as provider (provider.id)}
 					<button
 						type="button"
 						data-testid={`profile-link-provider-${provider.id}`}
@@ -279,6 +281,16 @@
 					{m.profile_link_cancel()}
 				</button>
 			</div>
+		{/if}
+
+		{#if $selectedDbStore}
+			<a
+				href={entuAddPasskeyHref($selectedDbStore)}
+				data-testid="profile-add-passkey"
+				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+			>
+				{m.profile_add_passkey()}
+			</a>
 		{/if}
 
 		{#if shownLinkError}

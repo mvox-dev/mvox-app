@@ -1,14 +1,4 @@
-// Shared OAuth provider list — extracted (verbatim) from the login page's local
-// constant so the invite landing (T4.5) can render the same provider CTAs without
-// duplicating the list. Slice-1 acceptance is Google sign-in; the rest are wired
-// for parity and cost nothing.
-//
-// #218 — labels resolve through Paraglide. Each entry's `label` IS the
-// auth_provider_<id> message function itself (a static reference, never a
-// computed key access), so `provider.label()` always renders in the active
-// locale. Gama copy ruling (2026-09-02): six bare-noun keys; the Google entry
-// reads plain 'Google' like its siblings — the 'Continue with Google' framing
-// is retired.
+// The sign-in providers in the one order every picker shows; labels are Paraglide messages.
 import { m } from '$lib/paraglide/messages.js';
 
 interface AuthProvider {
@@ -22,12 +12,14 @@ export const AUTH_PROVIDERS: ReadonlyArray<AuthProvider> = [
 	{ id: 'id-card', label: m.auth_provider_id_card },
 	{ id: 'e-mail', label: m.auth_provider_e_mail },
 	{ id: 'google', label: m.auth_provider_google },
-	{ id: 'apple', label: m.auth_provider_apple }
+	{ id: 'apple', label: m.auth_provider_apple },
+	{ id: 'passkey', label: m.auth_provider_passkey }
 ];
 
-// The one provider-label resolution every consumer shares (#218) — replaces
-// the profile page's local PROVIDER_LABELS map (from #60, predates #193).
-// Unknown ids keep the capitalised-id fallback that map used to implement.
+// A passkey is added on Entu's own page (/profile's "Add a passkey"), not by an OAuth link.
+export const LINKABLE_PROVIDERS = AUTH_PROVIDERS.filter((p) => p.id !== 'passkey');
+
+// Unknown ids fall back to the capitalised id.
 export function providerLabel(id: string | null): string {
 	if (!id) return '';
 	const provider = AUTH_PROVIDERS.find((p) => p.id === id);

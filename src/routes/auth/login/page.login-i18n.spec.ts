@@ -124,6 +124,14 @@ describe('et copy ruled by Gama on #218', () => {
 			container.querySelector('[data-testid="provider-e-mail"]')?.textContent?.trim()
 		).toBe('E-post');
 	});
+
+	it('the login page offers Pääsuvõti under et (#855)', () => {
+		overwriteGetLocale(() => 'et');
+		const { container } = renderAt();
+		expect(
+			container.querySelector('[data-testid="provider-passkey"]')?.textContent?.trim()
+		).toBe('Pääsuvõti');
+	});
 });
 
 // ── i18n — every sign-in key present, non-empty, in all four locales ─────────────
@@ -147,6 +155,13 @@ describe('#218 locale copy — product names', () => {
 	it('et localizes ID-card and E-mail per Estonian convention', () => {
 		expect(msg('et', 'auth_provider_id_card')).toBe('ID-kaart');
 		expect(msg('et', 'auth_provider_e_mail')).toBe('E-post');
+	});
+
+	it('the passkey label reads as ruled on #855 in all four locales', () => {
+		const ruled = { en: 'Passkey', et: 'Pääsuvõti', lv: 'Piekļuves atslēga', uk: 'Ключ доступу' };
+		for (const [locale, label] of Object.entries(ruled)) {
+			expect(msg(locale, 'auth_provider_passkey'), `messages/${locale}.json`).toBe(label);
+		}
 	});
 });
 
