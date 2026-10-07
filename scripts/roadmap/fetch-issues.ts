@@ -116,36 +116,155 @@ async function fetchSubIssues(
 	return body.map(normalizeIssue);
 }
 
-interface GitHubIssueEvent {
+export interface LabelEvent {
+	kind: 'labeled' | 'unlabeled' | 'closed' | 'reopened';
+	label?: string;
+	at: string;
+}
+
+/** When `label` was last added; null when it never was. */
+export function labelSince(history: LabelEvent[], label: string): string | null {
+	let since: string | null = null;
+	for (const e of history) if (e.kind === 'labeled' && e.label === label) since = e.at;
+	return since;
+}
+
+/** Total time `label` was on, over spans that ended (removed or closed); null when none did. */
+export function labelSpanMs(history: LabelEvent[], label: string): number | null {
+	let on = false;
+	let open = true;
+	let start = 0;
+	let total = 0;
+	let ended = 0;
+	const close = (at: string) => {
+		total += Date.parse(at) - start;
+		ended++;
+	};
+	for (const e of history) {
+		if (e.kind === 'labeled' && e.label === label && !on) {
+			on = true;
+			if (open) start = Date.parse(e.at);
+		} else if (e.kind === 'unlabeled' && e.label === label && on) {
+			on = false;
+			if (open) close(e.at);
+		} else if (e.kind === 'closed' && open) {
+			open = false;
+			if (on) close(e.at);
+		} else if (e.kind === 'reopened' && !open) {
+			open = true;
+			if (on) start = Date.parse(e.at);
+		}
+	}
+	return ended > 0 ? total : null;
+}
+
+const HISTORY_QUERY = `query($owner: String!, $name: String!, $after: String) {
+  repository(owner: $owner, name: $name) {
+    issues(first: 25, after: $after) {
+      pageInfo { hasNextPage endCursor }
+      nodes {
+        number
+        timelineItems(first: 100, itemTypes: [LABELED_EVENT, UNLABELED_EVENT, CLOSED_EVENT, REOPENED_EVENT]) {
+          pageInfo { hasNextPage }
+          nodes {
+            __typename
+            ... on LabeledEvent { createdAt label { name } }
+            ... on UnlabeledEvent { createdAt label { name } }
+            ... on ClosedEvent { createdAt }
+            ... on ReopenedEvent { createdAt }
+          }
+        }
+      }
+    }
+  }
+}`;
+
+interface TimelineNode {
+	__typename: string;
+	createdAt: string;
+	label?: { name: string };
+}
+
+interface HistoryResponse {
+	data?: {
+		repository?: {
+			issues?: {
+				pageInfo: { hasNextPage: boolean; endCursor: string | null };
+				nodes: { number: number; timelineItems: { pageInfo: { hasNextPage: boolean }; nodes: TimelineNode[] } }[];
+			};
+		};
+	};
+}
+
+const KINDS: Record<string, LabelEvent['kind']> = {
+	LabeledEvent: 'labeled',
+	UnlabeledEvent: 'unlabeled',
+	ClosedEvent: 'closed',
+	ReopenedEvent: 'reopened'
+};
+
+export function toLabelEvents(nodes: TimelineNode[]): LabelEvent[] {
+	return nodes
+		.filter((n) => KINDS[n.__typename])
+		.map((n) => ({ kind: KINDS[n.__typename], label: n.label?.name, at: n.createdAt }));
+}
+
+interface RestEvent {
 	event?: string;
 	created_at?: string;
 	label?: { name?: string };
 }
 
-/** When `label` was last added, from an issue's events; null when it never was. */
-export function labelSince(events: GitHubIssueEvent[], label: string): string | null {
-	let since: string | null = null;
-	for (const e of events) {
-		if (e.event === 'labeled' && e.label?.name === label && e.created_at) since = e.created_at;
-	}
-	return since;
-}
-
-async function fetchLabelSince(
-	repo: string,
-	token: string,
-	issueNumber: number,
-	label: string,
-	fetchImpl: typeof fetch
-): Promise<string | null> {
-	const events: GitHubIssueEvent[] = [];
-	let url: string | null = `${API_BASE}/repos/${repo}/issues/${issueNumber}/events?per_page=${PER_PAGE}`;
+async function restHistory(repo: string, token: string, n: number, fetchImpl: typeof fetch): Promise<LabelEvent[]> {
+	const events: LabelEvent[] = [];
+	let url: string | null = `${API_BASE}/repos/${repo}/issues/${n}/events?per_page=${PER_PAGE}`;
 	for (let page = 0; url && page < MAX_PAGES; page++) {
 		const res = await githubFetch(url, token, fetchImpl);
-		events.push(...((await res.json()) as GitHubIssueEvent[]));
+		for (const e of (await res.json()) as RestEvent[]) {
+			const kind = e.event as LabelEvent['kind'];
+			if (Object.values(KINDS).includes(kind) && e.created_at) {
+				events.push({ kind, label: e.label?.name, at: e.created_at });
+			}
+		}
 		url = parseNextLink(res.headers.get('link'));
 	}
-	return labelSince(events, label);
+	return events;
+}
+
+// Pages of 25: at 60 or more, GitHub silently answers some timelines empty (seen 2026-10-07).
+// A labeled issue whose timeline still comes back empty is read again over REST.
+export async function fetchHistories(
+	repo: string,
+	token: string,
+	labeled: Set<number>,
+	fetchImpl: typeof fetch
+): Promise<Map<number, LabelEvent[]>> {
+	const [owner, name] = repo.split('/');
+	const histories = new Map<number, LabelEvent[]>();
+	let after: string | null = null;
+	for (let page = 0; page < MAX_PAGES; page++) {
+		const res = await fetchImpl(`${API_BASE}/graphql`, {
+			method: 'POST',
+			headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+			body: JSON.stringify({ query: HISTORY_QUERY, variables: { owner, name, after } })
+		});
+		if (!res.ok) throw new Error(`GitHub GraphQL request failed: ${res.status} ${res.statusText}`);
+		const body = (await res.json()) as HistoryResponse;
+		const issues = body.data?.repository?.issues;
+		if (!issues) throw new Error('GitHub GraphQL: no issues in the history response');
+		for (const node of issues.nodes) {
+			histories.set(
+				node.number,
+				node.timelineItems.pageInfo.hasNextPage ||
+					(node.timelineItems.nodes.length === 0 && labeled.has(node.number))
+					? await restHistory(repo, token, node.number, fetchImpl)
+					: toLabelEvents(node.timelineItems.nodes)
+			);
+		}
+		if (!issues.pageInfo.hasNextPage) break;
+		after = issues.pageInfo.endCursor;
+	}
+	return histories;
 }
 
 /** Fetch the full board: all issues, with sub-issues resolved for every `epic`-labeled issue. */
@@ -156,9 +275,14 @@ export async function fetchBoard(
 ): Promise<RoadmapIssue[]> {
 	const rawIssues = await fetchAllIssues(repo, token, fetchImpl);
 	const issues = rawIssues.map(normalizeIssue);
+	const labeled = new Set(issues.filter((i) => i.labels.length > 0).map((i) => i.number));
+	const histories = await fetchHistories(repo, token, labeled, fetchImpl);
 	for (const issue of issues) {
+		const history = histories.get(issue.number) ?? [];
 		const label = elapsedLabel(issue);
-		if (label) issue.statusSince = await fetchLabelSince(repo, token, issue.number, label, fetchImpl);
+		if (label) issue.statusSince = labelSince(history, label);
+		issue.researchMs = labelSpanMs(history, 'in research');
+		if (issue.state === 'closed') issue.buildMs = labelSpanMs(history, 'in process');
 	}
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
