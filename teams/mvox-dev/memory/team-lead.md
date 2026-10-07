@@ -2,7 +2,22 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-35 checkpoint 2026-10-06 20:15Z]
+### [NEXT SESSION — MVOX-36 checkpoint 2026-10-07 05:39Z]
+
+**State:** main 069e536 (plus this seam commit), no branch open, no teammates up. The released queue is done.
+
+**Landed since MVOX-35:** #615 (#844, pen test #845), #616 (#845). #825 CLOSED 10-07 (Mihkel's iOS Safari + Brave checks, relayed by Henry).
+
+**Next:** no `ready` issue except #826. Check the board and Gama's mail for a new release.
+
+**Waiting on Mihkel:** #826 live checks (/lab/entu sign-in returns signed in; passkey link opens Entu add-passkey). #832 (deploy/SW: missing /_app/immutable/* answers cacheable 200 HTML) filed, NOT released. **Waiting on Gama:** "unknown member" issue for a raw member id in /admin role rows.
+
+**Loose ends:** untracked scripts/migrations/seed-results/probe-701-rights-sweep-crede-live-2026-10-02T18-19-14-618Z-committed.json in the app tree (from #701, not committed; check before deleting). josquin.md is 176 lines: duplicate #611 section cut; the next Josquin should trim it under 100.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-35 checkpoint 2026-10-06 20:15Z]
 
 **State:** main 25dad04, no branch open. Bentham up (standing for the wave); no Josquin up.
 
@@ -13,23 +28,6 @@
 **Waiting on Mihkel:** #832 (deploy/SW: missing /_app/immutable/* answers cacheable 200 HTML; Edge held it until reboot) filed, NOT released. Live checks #826, #825. **Waiting on Gama:** whether a raw member id in /admin role rows (roster failed, grant has no name) gets an "unknown member" issue.
 
 **Rules learned this run:** Entu ids are globally unique (memory). During review the tree is the reviewer's: the implementer runs nothing; undo breaks with git checkout, never a saved copy (#618 overwrite). Briefs state the ratio method inline (src/ only, *.spec.ts + src/lib/testing as test, paraglide excluded). Count vitest "Errors" lines as failures. A PR's CI may not start: close/reopen it. Re-check an issue body's edit history before launch (#809 moved 4 times). Headless Chromium can't run here (missing libs).
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-34 checkpoint 2026-10-06 08:00Z]
-
-**State:** main f9c73a5 (plus this seam commit), no branch open, no teammates up. The released queue is done.
-
-**Landed 10-06:** #611 CLOSED (PR #808 + live read-back passed 10:27Z: owner Mihkel, _sharing domain, metadata keys exact; 611-readback.md). #795 + #796 + #803 (#810). #800 (#811). #756 (#813-#816). #790 (#818, follow-up #820). Seams #807, #817.
-
-**Next (Mihkel 10-06: context break, then launch remaining tasks):** board order #684 → #617/#618/#619 → #615 → #616; briefs exist in ~/workspace/scratchpad (prepped). Re-read each body, add the 10-05 test-gate and contract notes to the brief, spawn a fresh Josquin plus Bentham.
-
-**Filed, unreleased (waits on Mihkel):** #819 record save-lock bug (recordSavingMemberId not reset on switch). **Waiting on Gama:** the domain-only name-check test pin (#811 finding).
-
-**Rules learned this run:** epic labels are the PO's (script); label only issues you pick. Closing comments are encouraged; the merge skill posts one per closed issue. Rule out a fix that adds a regression even when Bentham says "mergeable" (#811 gate drop, #808 duplicate send). Move rules that lived only in cut comments to architecture-decisions.md. Teammates must not edit on main or commit during review; one final SHA. The ratio method is src/ only, matching Gama's line report (3.42:1 now).
-
-**Team at seam:** none up.
 
 (*MVOX:Palestrina*)
 
