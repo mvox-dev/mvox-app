@@ -23,15 +23,10 @@ on:
     types: [opened, edited, labeled, unlabeled, closed, reopened]
   workflow_dispatch: {}
 
-# Serializes deploys so stacked issue events (e.g. a label flip right after
-# an edit) queue rather than race each other for the live Pages deployment.
-# Matches GitHub's own reference Pages workflow: queue, don't cancel — a
-# cancelled mid-deploy run is the one way this could ship a half-written
-# page, which the render step's atomicity (whole HTML string, one write)
-# does not protect against on its own.
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
+# The newest issue event wins, and a stuck run never freezes the board. A deploy once sat
+# waiting for a runner for 12 hours (2026-10-06, run 37508931485) while every later run
+# queued behind it. A cancelled deploy leaves the last good page live (seen that day).
+# Builds: a newer run cancels an older build. Deploys: a newer deploy cancels a stuck one.
 
 # Scoped to what the `build` job below actually calls. Job-level `permissions:`
 # REPLACE this block rather than merging with it, so the write scopes the deploy
@@ -56,6 +51,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: roadmap-build
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -114,6 +112,10 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: roadmap-deploy
+      cancel-in-progress: true
+    timeout-minutes: 10
     runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
