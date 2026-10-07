@@ -1,30 +1,5 @@
-// #206 RED — canonical sign-in provider order.
-//
-// The picker leads with the Estonian national auth methods (Smart-ID first),
-// then e-mail, then the big-tech providers. This list is the single source of
-// truth for THREE consumers, so the order is pinned here as a full-shape
-// assertion (toEqual, not objectContaining — partial assertions hide bugs):
-//   1. the login page          — src/routes/auth/login/+page.svelte
-//   2. the invite landing      — src/routes/invite/[token]/+page.svelte
-//   3. the #193 profile link-picker — src/routes/profile/+page.svelte
-//
-// Consumer 3 reorders too: Google moves from first to fifth in the "Link another
-// account" picker. That is an intended side effect of #206 — one canonical order
-// everywhere the user picks a provider — not an oversight.
-//
-// Coupled assertion to re-arm on any future reorder:
-// src/routes/page.profile-linked-accounts.spec.ts (#193 review F3) asserts that
-// opening the profile picker skips PAST the leading provider to the first one the
-// user can actually pick. That test only has teeth while its fixture binds — and
-// therefore DISABLES — whichever provider leads this list: with an enabled leader
-// it passes whether or not the implementation filters on `:not([disabled])`.
-// So a reorder does not merely mean "update that test", it means point its
-// fixture at the NEW leader and re-check that dropping the `:not([disabled])`
-// selector in src/routes/profile/+page.svelte turns it RED again.
+// The canonical provider order and labels, read through the real Paraglide messages (#206, #218).
 import { afterEach, describe, expect, it } from 'vitest';
-// #218 — the REAL paraglide surface, deliberately NOT mocked: the provider
-// labels' single source of truth is the four locale files, and this spec pins
-// that each AUTH_PROVIDERS entry binds the actual message function.
 import { m } from '$lib/paraglide/messages.js';
 import { overwriteGetLocale } from '$lib/paraglide/runtime.js';
 import { AUTH_PROVIDERS, providerLabel } from './providers';
@@ -42,25 +17,6 @@ describe('AUTH_PROVIDERS — canonical order (#206)', () => {
 		]);
 	});
 });
-
-// ── #218 — provider labels resolve through Paraglide ────────────────────────────
-//
-// CONTRACT (for the GREEN implementer):
-//   - src/lib/auth/providers.ts imports { m } from '$lib/paraglide/messages.js'
-//     and each entry's `label` IS the message function itself — a STATIC member
-//     reference (m.auth_provider_<id with underscores>), never a computed key
-//     access. Keys: auth_provider_smart_id, auth_provider_mobile_id,
-//     auth_provider_id_card, auth_provider_e_mail, auth_provider_google,
-//     auth_provider_apple. Consumers render {provider.label()}.
-//   - Gama copy ruling (issue #218, 2026-09-02): six bare-noun keys. Google
-//     reads 'Google' EVERYWHERE — the 'Continue with Google' framing goes.
-//     Product names stay untranslated in all locales (Smart-ID, Mobile-ID,
-//     Google, Apple); ID-card and E-mail localize per locale convention
-//     (et: 'ID-kaart' / 'E-post').
-//   - providerLabel(id) is exported HERE as the one resolution every consumer
-//     shares; unknown ids keep the capitalised-id fallback the profile page
-//     used to implement locally (its PROVIDER_LABELS map is deleted — see
-//     src/routes/page.profile-linked-accounts.spec.ts for that pin).
 
 describe('AUTH_PROVIDERS — labels are Paraglide message functions (#218)', () => {
 	afterEach(() => {
@@ -139,4 +95,3 @@ describe('providerLabel — the ONE resolution every consumer shares (#218)', ()
 });
 
 // (*MVOX:Tallis*)
-// (*MVOX:Tallis* — #218 RED: labels through Paraglide, providerLabel single source)
