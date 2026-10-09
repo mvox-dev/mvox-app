@@ -28,7 +28,7 @@ import Page from './roster/+page.svelte';
 import { adminStore } from '$lib/nav/adminStore';
 import { toListRead } from '$lib/testing/listReadFixtures';
 import { listSectionsMock } from '$lib/testing/moduleHandles';
-import { loadInactiveRosterMock } from '$lib/testing/mocks/roster';
+import { loadInactiveRosterMock, loadRosterMock } from '$lib/testing/mocks/roster';
 import { altoSection } from '$lib/testing/pages/rosterFixtures';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { useRosterDeactivatePage } from '$lib/testing/pages/rosterDeactivate';
@@ -99,5 +99,19 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 		});
 		expect(q(container, 'list-of-stuff-body')!.contains(list)).toBe(true);
 		expect(follows(q(container, 'roster-groups')!, list)).toBe(true);
+	});
+
+	it('admin, every member inactive: the toggle still shows and opening it lists them', async () => {
+		listSectionsMock.mockResolvedValue([]);
+		loadRosterMock.mockResolvedValue(toListRead([]));
+		loadInactiveRosterMock.mockResolvedValue(toListRead([gone]));
+		const { container } = render(Page);
+		setAuthedWithOneCollective();
+		adminStore.set('admin');
+		await waitFor(() => expect(q(container, 'roster-empty')).not.toBeNull());
+		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
+		expect(inside(container, 'list-of-stuff-filter', 'roster-inactive-toggle')).toBe(true);
+		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
+		await waitFor(() => expect(q(container, 'inactive-member-row-m9')).not.toBeNull());
 	});
 });
