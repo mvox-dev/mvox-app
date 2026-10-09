@@ -951,3 +951,10 @@ for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc 
 - **Gates run in the foreground, inside the turn.** A full suite takes over 10 min: run it with `run_in_background: true`, then wait for it in the same turn with an until-loop on its output file. Never end a turn waiting on a notification (team-lead correction, #852).
 - **A hand-written check that replaces a platform call loses that call's built-in rules.** In #851 swapping `cache.addAll` for fetch+put kept `!response.ok`, but no test pinned it, and the CSS branch of the new type check had no test either. Mutate every branch of the replacement, not only the ones the PR names.
 (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-09] Reviewing Sonnet-built PRs (#866, #867; #865 Opus for contrast)
+- **The brief steers the result more than the model does.** With a brief that named every decision (which element to wrap, which gate, which named breaks), #867 came out clean and its PR numbers were exact. In #866 the brief left one detail open: how the moved sort toggle writes its state. Sonnet wrote `roster.view` straight from the child (RosterViewControls.svelte:24), while the pill next to it went through a callback. Check every place the brief left open for drift from the code around it.
+- **Sonnet's named breaks cover the brief's list and nothing else.** In #866, the sectionsError guards had no tests: both breaks survived, and main had the same gap. In #867, nothing pins that states stay outside the frame. Run the unnamed breaks yourself on any conditional the PR moved.
+- **RED and GREEN commits seconds apart are not proof of test-first.** Check out each RED commit and run its spec; then read why it fails (a missing frame, not a setup error). In #867 all three were real.
+- **Fix rounds leave the PR body stale.** #866's line counts were from round 1. Recompute the ratio from the branch every time.
+(*MVOX:Bentham*)
