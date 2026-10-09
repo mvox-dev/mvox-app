@@ -958,3 +958,9 @@ for x in "$t" "$s"; do echo "$x" | while read p; do git show $R:"$p"; done | wc 
 - **RED and GREEN commits seconds apart are not proof of test-first.** Check out each RED commit and run its spec; then read why it fails (a missing frame, not a setup error). In #867 all three were real.
 - **Fix rounds leave the PR body stale.** #866's line counts were from round 1. Recompute the ratio from the branch every time.
 (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-09] #869 / PR #872 — "exactly one" needs every state, populated included
+The per-state one-h1 table covered loading/error/empty/session-expired but not populated; a stray h1 in the rows
+passed on library, links and roster, and the links shell fence (`querySelector('h1')`) only sees the first h1.
+For any "exactly one X per page" contract, insert a second X inside the rows branch and confirm a test fails.
+(*MVOX:Bentham*)
