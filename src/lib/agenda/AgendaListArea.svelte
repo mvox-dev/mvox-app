@@ -4,7 +4,9 @@
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaList from '$lib/agenda/AgendaList.svelte';
 	import AgendaMonthView from '$lib/agenda/AgendaMonthView.svelte';
-	import AgendaFilterBar from '$lib/agenda/AgendaFilterBar.svelte';
+	import AgendaTypeFilter from '$lib/agenda/AgendaTypeFilter.svelte';
+	import AgendaViewToggle from '$lib/agenda/AgendaViewToggle.svelte';
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import SeasonSummary from '$lib/components/attendance/SeasonSummary.svelte';
 	import { agendaViewStore } from '$lib/preferences/agendaView';
 	import { completionGateStore } from '$lib/profile/completionGate';
@@ -60,13 +62,16 @@
 	);
 </script>
 
-{#if view.agendaFilterChips.length > 0}
-	<AgendaFilterBar
+{#snippet typeFilter()}
+	<AgendaTypeFilter
 		chips={view.agendaFilterChips}
 		filter={ag.agendaTypeFilter}
 		onselect={view.selectAgendaTypeFilter}
 	/>
-{/if}
+{/snippet}
+{#snippet viewToggle()}
+	<AgendaViewToggle />
+{/snippet}
 {#snippet agendaFilterEmptyState()}
 	<div data-testid="agenda-filter-empty" class="flex min-h-[30vh] items-center justify-center">
 		<p class="font-display text-xl text-ink-2">{m.agenda_filter_empty()}</p>
@@ -77,6 +82,10 @@
 		{m.agenda_filter_recent_empty()}
 	</p>
 {/snippet}
+<ListOfStuff
+	filter={view.agendaFilterChips.length > 0 ? typeFilter : undefined}
+	view={view.agendaFilterChips.length > 0 ? viewToggle : undefined}
+>
 {#if $agendaViewStore === 'list'}
 	{#key selected?.db}
 	<AgendaList
@@ -128,6 +137,7 @@
 		emptyState={ag.agendaTypeFilter !== 'all' ? agendaFilterEmptyState : undefined}
 	/>
 {/if}
+</ListOfStuff>
 {#if ag.manageError}
 	<FormError data-testid="repertoire-manage-error" class="pt-2">
 		{m.repertoire_manage_error()}
