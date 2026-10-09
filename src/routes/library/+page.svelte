@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
@@ -343,20 +344,22 @@
 				<p class="font-display text-xl text-ink-2">{m.library_empty()}</p>
 			</div>
 		{:else}
-			<ul data-testid="library-work-list" class="flex flex-col gap-1">
-				{#each lib.works as work (work.id)}
-					<WorkRow
-						{work}
-						{lib}
-						bind:drafts={editionDrafts}
-						files={fileUploads}
-						{view}
-						actions={treeActions}
-						{isLibrarian}
-						{isOffline}
-					/>
-				{/each}
-			</ul>
+			<ListOfStuff>
+				<ul data-testid="library-work-list" class="flex flex-col gap-1">
+					{#each lib.works as work (work.id)}
+						<WorkRow
+							{work}
+							{lib}
+							bind:drafts={editionDrafts}
+							files={fileUploads}
+							{view}
+							actions={treeActions}
+							{isLibrarian}
+							{isOffline}
+						/>
+					{/each}
+				</ul>
+			</ListOfStuff>
 		{/if}
 	</div>
 </main>
