@@ -2,7 +2,22 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-37 checkpoint 2026-10-07 11:20Z]
+### [NEXT SESSION — MVOX-38 checkpoint 2026-10-09 10:10Z]
+
+**State:** main 09a5d29 (plus this seam commit), no branch open, no teammates up. Nothing `ready`.
+
+**Landed 10-09:** epic #859 list-of-stuff: #860 (#865, 8a2176f, Opus) ListOfStuff + agenda; #861 (#866, 40fee3c, Sonnet, 2 fix rounds) roster; #862–#864 (#867, 09a5d29, Sonnet, first-pass GREEN) library/links/downloads.
+
+**Sonnet trial (Mihkel 10-09):** Opus sets the pattern, Sonnet follows with a prescriptive brief (decisions made, tests placed, STOP points). Results in auto-memory project_josquin_sonnet_trial.md. Asked Mihkel: keep Josquin on Sonnet for small issues?
+
+**Waiting on Mihkel:** live checks #855 (passkey sign-in), #856 (/profile add-passkey link); both open for that only.
+
+**Loose ends:** untracked probe-701-...-committed.json in the app tree. Untested: agenda view toggle with no chips (AgendaListArea.svelte:87); "states stay outside the frame" on links/downloads.
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-37 checkpoint 2026-10-07 11:20Z]
 
 **State:** main 8cca8d0 (plus this seam commit), no branch open, no teammates up. Released queue done.
 
@@ -17,19 +32,3 @@
 **Learned:** a research-pack blast agent took the operator's "check the mail" line as its task; resume with a changed blast arg reruns only it. Passepartout (Mihkel's talk) wanted one hub line per step for passkey work: done; use machine stamps only (one hand-typed time had to be corrected).
 
 (*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-36 checkpoint 2026-10-07 05:39Z]
-
-**State:** main 069e536 (plus this seam commit), no branch open, no teammates up. The released queue is done.
-
-**Landed since MVOX-35:** #615 (#844, pen test #845), #616 (#845). #825 CLOSED 10-07 (Mihkel's iOS Safari + Brave checks, relayed by Henry).
-
-**Next:** no `ready` issue except #826. Check the board and Gama's mail for a new release.
-
-**Waiting on Mihkel:** #826 live checks (/lab/entu sign-in returns signed in; passkey link opens Entu add-passkey). #832 (deploy/SW: missing /_app/immutable/* answers cacheable 200 HTML) filed, NOT released. **Waiting on Gama:** "unknown member" issue for a raw member id in /admin role rows.
-
-**Loose ends:** untracked scripts/migrations/seed-results/probe-701-rights-sweep-crede-live-2026-10-02T18-19-14-618Z-committed.json in the app tree (from #701, not committed; check before deleting). josquin.md is 176 lines: duplicate #611 section cut; the next Josquin should trim it under 100.
-
-(*MVOX:Palestrina*)
-
