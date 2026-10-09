@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import FormError from '$lib/components/FormError.svelte';
 	// Lists downloaded parts by label and opens them in the viewer, with no network.
@@ -94,30 +95,32 @@
 	{:else if rows.length === 0}
 		<p data-testid="downloads-empty" class="mt-4 text-sm text-ink-2">{m.downloads_empty()}</p>
 	{:else}
-		<ul class="mt-4 flex flex-col gap-3">
-			{#each rows as row (row.identity.db + ':' + row.identity.personId + ':' + row.fileId)}
-				<li
-					data-testid="downloads-part-{row.fileId}"
-					class="flex items-center justify-between gap-3 text-sm"
-				>
-					<span>
-						{#if row.label}
-							{row.label.work} — {row.label.composer} — {row.label.filename}
-						{:else}
-							{m.downloads_unnamed_part()}
-						{/if}
-					</span>
-					<button
-						type="button"
-						data-testid="downloads-open-{row.fileId}"
-						class="shrink-0 text-xs underline"
-						onclick={() => handleOpen(row.identity, row.fileId)}
+		<ListOfStuff>
+			<ul class="mt-4 flex flex-col gap-3">
+				{#each rows as row (row.identity.db + ':' + row.identity.personId + ':' + row.fileId)}
+					<li
+						data-testid="downloads-part-{row.fileId}"
+						class="flex items-center justify-between gap-3 text-sm"
 					>
-						{m.downloads_open()}
-					</button>
-				</li>
-			{/each}
-		</ul>
+						<span>
+							{#if row.label}
+								{row.label.work} — {row.label.composer} — {row.label.filename}
+							{:else}
+								{m.downloads_unnamed_part()}
+							{/if}
+						</span>
+						<button
+							type="button"
+							data-testid="downloads-open-{row.fileId}"
+							class="shrink-0 text-xs underline"
+							onclick={() => handleOpen(row.identity, row.fileId)}
+						>
+							{m.downloads_open()}
+						</button>
+					</li>
+				{/each}
+			</ul>
+		</ListOfStuff>
 	{/if}
 </main>
 
