@@ -1,4 +1,4 @@
-<!-- The frame for a main list (#859): title and view control on one header line, filter below. -->
+<!-- The frame for a main list (#859): filter, then title and view control on one line, rows. -->
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 
@@ -11,6 +11,11 @@
 </script>
 
 <div data-testid="list-of-stuff" class="flex flex-col">
+	{#if filter}
+		<div data-testid="list-of-stuff-filter" class="flex flex-wrap justify-start pb-3">
+			{@render filter()}
+		</div>
+	{/if}
 	<div
 		data-testid="list-of-stuff-header"
 		class="flex flex-wrap items-center justify-between gap-2 pb-3"
@@ -22,11 +27,6 @@
 			</div>
 		{/if}
 	</div>
-	{#if filter}
-		<div data-testid="list-of-stuff-filter" class="flex flex-wrap justify-start pb-3">
-			{@render filter()}
-		</div>
-	{/if}
 	<div data-testid="list-of-stuff-body" class="flex flex-col">
 		{@render children()}
 	</div>
