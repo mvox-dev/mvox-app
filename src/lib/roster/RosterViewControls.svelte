@@ -7,26 +7,26 @@
 	let {
 		roster,
 		modeOptions,
-		onSetViewMode
+		onSetViewMode,
+		onToggleView
 	}: {
 		roster: RosterState;
 		modeOptions: ReturnType<typeof viewModeOptions>;
 		onSetViewMode: (mode: RosterViewMode) => void;
+		onToggleView: () => void;
 	} = $props();
 </script>
 
-{#if !roster.sectionsError}
-	<button
-		type="button"
-		data-testid="roster-sort-toggle"
-		aria-pressed={roster.view === 'flat'}
-		class="text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
-		onclick={() => (roster.view = roster.view === 'grouped' ? 'flat' : 'grouped')}
-	>
-		{roster.view === 'grouped' ? m.roster_sort_alphabetical() : m.roster_sort_grouped()}
-	</button>
-{/if}
-{#if roster.view === 'grouped' && !roster.sectionsError}
+<button
+	type="button"
+	data-testid="roster-sort-toggle"
+	aria-pressed={roster.view === 'flat'}
+	class="text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
+	onclick={onToggleView}
+>
+	{roster.view === 'grouped' ? m.roster_sort_alphabetical() : m.roster_sort_grouped()}
+</button>
+{#if roster.view === 'grouped'}
 	<SegmentedPill
 		testid="roster-view-modes"
 		label={m.roster_view_modes_label()}

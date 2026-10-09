@@ -288,7 +288,12 @@
 	<InactiveToggle {roster} {ops} />
 {/snippet}
 {#snippet viewControls()}
-	<RosterViewControls {roster} {modeOptions} onSetViewMode={setViewMode} />
+	<RosterViewControls
+		{roster}
+		{modeOptions}
+		onSetViewMode={setViewMode}
+		onToggleView={() => (roster.view = roster.view === 'grouped' ? 'flat' : 'grouped')}
+	/>
 {/snippet}
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
@@ -336,7 +341,9 @@
 			</ListOfStuff>
 		{:else}
 			<RosterNotices {roster} {arrange} {admin} />
-			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined} view={viewControls}>
+			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}
+				view={roster.sectionsError ? undefined : viewControls}
+			>
 				<RosterListHeader />
 				{#if roster.view === 'grouped' && !roster.sectionsError}
 					{#if roster.viewMode === 'arrange' && admin === 'admin'}
