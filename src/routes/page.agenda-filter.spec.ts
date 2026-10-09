@@ -163,7 +163,7 @@ describe('#214 — chip DERIVATION from the rendered agenda', () => {
 });
 
 describe('#869 — the agenda list has a title', () => {
-	it('one h1 shares the header line with the view pill, above the chips and the Recent heading', async () => {
+	it('one h1 shares the header line with the view pill, below the chips, above the Recent heading', async () => {
 		const container = await renderAgenda([UP_REHEARSAL], [RECENT_SOCIAL]);
 		const header = container.querySelector('[data-testid="list-of-stuff-header"]') as HTMLElement;
 		const titles = [...container.querySelectorAll('h1')];
@@ -172,9 +172,10 @@ describe('#869 — the agenda list has a title', () => {
 		expect(titles.map((h1) => h1.textContent?.trim())).toEqual(['[nav_agenda]']);
 		expect(header.contains(titles[0])).toBe(true);
 		expect(header.contains(container.querySelector('[data-testid="agenda-view-toggle"]'))).toBe(true);
-		for (const below of [chipGroup(container) as HTMLElement, recent]) {
+		const order = [chipGroup(container) as HTMLElement, titles[0], recent];
+		for (let i = 1; i < order.length; i++) {
 			// eslint-disable-next-line no-bitwise
-			expect(titles[0].compareDocumentPosition(below) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+			expect(order[i - 1].compareDocumentPosition(order[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 		}
 	});
 });
