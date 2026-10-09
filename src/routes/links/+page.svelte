@@ -244,101 +244,101 @@
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div data-testid="links-page" class="mx-auto flex w-full max-w-md flex-col gap-4">
-	<h1 class="font-display text-2xl">{m.links_title()}</h1>
+	<ListOfStuff title={m.links_title()}>
+		<div class="flex flex-col gap-4">
+			{#if admin === 'admin'}
+				<!-- Visible, not sr-only, by choice: a saved move otherwise looks identical to one that
+				     failed to persist. Present from first render, so its text change fires aria-live. -->
+				<div
+					data-testid="links-reorder-status"
+					role="status"
+					aria-live="polite"
+					class="min-h-[1.25rem] text-sm text-ink-70"
+				>
+					{reorderStatus}
+				</div>
+			{/if}
 
-	{#if admin === 'admin'}
-		<!-- Visible, not sr-only, by choice: a saved move otherwise looks identical to one that
-		     failed to persist. Present from first render, so its text change fires aria-live. -->
-		<div
-			data-testid="links-reorder-status"
-			role="status"
-			aria-live="polite"
-			class="min-h-[1.25rem] text-sm text-ink-70"
-		>
-			{reorderStatus}
+			{#if reorderError}
+				<p data-testid="links-reorder-error" role="alert" class="text-sm text-red-700">
+					{reorderError === 'stale' ? m.links_reorder_failed_stale() : m.links_reorder_failed()}
+				</p>
+			{/if}
+
+			{#if writeError}
+				<!-- Failure only: for explicit-submit forms success is self-evident. -->
+				<p data-testid="links-write-error" role="alert" class="text-sm text-red-700">
+					{writeError === 'create'
+						? m.links_create_failed()
+						: writeError === 'update'
+							? m.links_update_failed()
+							: m.links_remove_failed()}
+				</p>
+			{/if}
+
+			<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
+			{#if admin === 'admin' && isOffline}
+				<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
+					{m.write_unavailable_no_signal()}
+				</p>
+			{/if}
+
+			{#if admin === 'admin'}
+				<LinksAddForm
+					bind:addName
+					bind:addUrl
+					bind:addDescription
+					{isOffline}
+					onsubmit={() => void submitAdd()}
+				/>
+			{/if}
+
+			{#if status === 'no-collective'}
+				<p data-testid="links-no-collective" class="text-sm">{m.links_no_collective()}</p>
+			{:else if status === 'loading'}
+				<div data-testid="links-skeleton" aria-hidden="true" aria-busy="true"></div>
+			{:else if status === 'session-expired'}
+				<SessionExpiredNotice />
+			{:else if status === 'load-error'}
+				<div data-testid="links-load-error" role="alert" class="flex flex-col gap-2">
+					<p class="text-sm text-red-700">{m.links_load_error()}</p>
+					<button
+						type="button"
+						data-testid="links-retry-load"
+						onclick={() => loadForSelected()}
+						class="self-start rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
+					>
+						{m.links_retry()}
+					</button>
+				</div>
+			{:else if rows.length === 0}
+				<div data-testid="links-empty" class="text-sm">{m.links_empty()}</div>
+			{:else}
+				<ul data-testid="links-list" class="flex flex-col gap-2">
+					{#each rows as row, i (row.id)}
+						<LinksRow
+							{row}
+							index={i}
+							rowCount={rows.length}
+							isAdmin={admin === 'admin'}
+							{isOffline}
+							{reorderPending}
+							editing={editingId === row.id}
+							bind:editName
+							bind:editUrl
+							bind:editDescription
+							onsave={(id) => void saveEdit(id)}
+							oncancel={cancelEdit}
+							onmoveup={moveUp}
+							onmovedown={moveDown}
+							onedit={startEdit}
+							onremove={(id) => void handleRemove(id)}
+						/>
+					{/each}
+				</ul>
+			{/if}
 		</div>
-	{/if}
-
-	{#if reorderError}
-		<p data-testid="links-reorder-error" role="alert" class="text-sm text-red-700">
-			{reorderError === 'stale' ? m.links_reorder_failed_stale() : m.links_reorder_failed()}
-		</p>
-	{/if}
-
-	{#if writeError}
-		<!-- Failure only: for explicit-submit forms success is self-evident. -->
-		<p data-testid="links-write-error" role="alert" class="text-sm text-red-700">
-			{writeError === 'create'
-				? m.links_create_failed()
-				: writeError === 'update'
-					? m.links_update_failed()
-					: m.links_remove_failed()}
-		</p>
-	{/if}
-
-	<!-- One reason for every disabled write control; admin-gated, as only admins see them. -->
-	{#if admin === 'admin' && isOffline}
-		<p data-testid="links-write-unavailable" class="text-sm text-ink-2">
-			{m.write_unavailable_no_signal()}
-		</p>
-	{/if}
-
-	{#if admin === 'admin'}
-		<LinksAddForm
-			bind:addName
-			bind:addUrl
-			bind:addDescription
-			{isOffline}
-			onsubmit={() => void submitAdd()}
-		/>
-	{/if}
-
-	{#if status === 'no-collective'}
-		<p data-testid="links-no-collective" class="text-sm">{m.links_no_collective()}</p>
-	{:else if status === 'loading'}
-		<div data-testid="links-skeleton" aria-hidden="true" aria-busy="true"></div>
-	{:else if status === 'session-expired'}
-		<SessionExpiredNotice />
-	{:else if status === 'load-error'}
-		<div data-testid="links-load-error" role="alert" class="flex flex-col gap-2">
-			<p class="text-sm text-red-700">{m.links_load_error()}</p>
-			<button
-				type="button"
-				data-testid="links-retry-load"
-				onclick={() => loadForSelected()}
-				class="self-start rounded-md border border-ink-4 px-2 py-1 text-xs text-ink-2 hover:text-ink disabled:opacity-50"
-			>
-				{m.links_retry()}
-			</button>
-		</div>
-	{:else if rows.length === 0}
-		<div data-testid="links-empty" class="text-sm">{m.links_empty()}</div>
-	{:else}
-		<ListOfStuff>
-			<ul data-testid="links-list" class="flex flex-col gap-2">
-				{#each rows as row, i (row.id)}
-					<LinksRow
-						{row}
-						index={i}
-						rowCount={rows.length}
-						isAdmin={admin === 'admin'}
-						{isOffline}
-						{reorderPending}
-						editing={editingId === row.id}
-						bind:editName
-						bind:editUrl
-						bind:editDescription
-						onsave={(id) => void saveEdit(id)}
-						oncancel={cancelEdit}
-						onmoveup={moveUp}
-						onmovedown={moveDown}
-						onedit={startEdit}
-						onremove={(id) => void handleRemove(id)}
-					/>
-				{/each}
-			</ul>
-		</ListOfStuff>
-	{/if}
+	</ListOfStuff>
 	</div>
 </main>
 

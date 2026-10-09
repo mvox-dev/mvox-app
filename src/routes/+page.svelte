@@ -12,6 +12,7 @@
 	import { canDeleteSeries } from '$lib/repertoire/repertoireActions';
 	import type SeasonManagePanel from '$lib/agenda/SeasonManagePanel.svelte';
 	import { createAgendaCreateFlows, createCreateFlowState } from '$lib/agenda/agendaCreateFlows';
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import AgendaNotices from '$lib/agenda/AgendaNotices.svelte';
@@ -265,20 +266,24 @@
 					{/if}
 				</header>
 				<div class="rounded-lg bg-paper p-4">
-					{#if ag.sessionExpired}
-						<SessionExpiredNotice centered />
-					{:else if ag.agendaError}
-						<div data-testid="agenda-error" class="flex flex-col items-center gap-3 py-10 text-center">
-							<p class="text-sm text-ink-2">{m.agenda_load_error()}</p>
-							<button
-								type="button"
-								class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper"
-								data-testid="agenda-retry"
-								onclick={() => loadForSelected()}
-							>
-								{m.agenda_retry()}
-							</button>
-						</div>
+					{#if ag.sessionExpired || ag.agendaError}
+						<ListOfStuff title={m.nav_agenda()}>
+							{#if ag.sessionExpired}
+								<SessionExpiredNotice centered />
+							{:else}
+								<div data-testid="agenda-error" class="flex flex-col items-center gap-3 py-10 text-center">
+									<p class="text-sm text-ink-2">{m.agenda_load_error()}</p>
+									<button
+										type="button"
+										class="rounded-md border border-ink px-4 py-2 text-sm text-ink hover:bg-ink hover:text-paper"
+										data-testid="agenda-retry"
+										onclick={() => loadForSelected()}
+									>
+										{m.agenda_retry()}
+									</button>
+								</div>
+							{/if}
+						</ListOfStuff>
 					{:else}
 						<AgendaNotices
 							rsvpPartial={ag.rsvpPartial}

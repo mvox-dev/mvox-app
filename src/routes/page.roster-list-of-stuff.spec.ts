@@ -33,6 +33,7 @@ import { altoSection } from '$lib/testing/pages/rosterFixtures';
 import { setAuthedWithOneCollective } from '$lib/testing/pages/roster';
 import { useRosterDeactivatePage } from '$lib/testing/pages/rosterDeactivate';
 import { q } from '$lib/testing/pages/dom';
+import { goOffline, goOnline } from '$lib/testing/networkSignal';
 
 useRosterDeactivatePage();
 
@@ -72,6 +73,18 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 		expect(inside(container, 'list-of-stuff-filter', 'roster-inactive-toggle')).toBe(true);
 		expect(inside(container, 'list-of-stuff-view', 'roster-sort-toggle')).toBe(true);
 		expect(inside(container, 'list-of-stuff-view', 'roster-view-modes')).toBe(true);
+	});
+
+	it('admin, offline: filter, title line, then the offline notice in the list body (#869)', async () => {
+		await goOffline();
+		const container = await renderAs('admin');
+		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
+		const notice = q(container, 'roster-write-unavailable')!;
+		const toggle = q(container, 'roster-inactive-toggle')!;
+		const order = [toggle, q(container, 'list-of-stuff-header')!, notice];
+		expect(order.slice(1).every((el, i) => follows(order[i], el))).toBe(true);
+		expect(q(container, 'list-of-stuff-body')!.contains(notice)).toBe(true);
+		await goOnline();
 	});
 
 	it('admin, A–Z: the sort toggle stays in the view slot and the view modes are gone', async () => {

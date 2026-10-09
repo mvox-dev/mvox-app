@@ -85,17 +85,16 @@
 </script>
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
-	<h1 class="text-lg font-semibold">{m.downloads_title()}</h1>
-	{#if !loaded}
-		<p data-testid="downloads-loading" class="mt-4 text-sm text-ink-2">{m.downloads_loading()}</p>
-	{:else if loadError}
-		<FormError data-testid="downloads-load-error" class="mt-4">
-			{m.downloads_load_error()}
-		</FormError>
-	{:else if rows.length === 0}
-		<p data-testid="downloads-empty" class="mt-4 text-sm text-ink-2">{m.downloads_empty()}</p>
-	{:else}
-		<ListOfStuff>
+	<ListOfStuff title={m.downloads_title()}>
+		{#if !loaded}
+			<p data-testid="downloads-loading" class="mt-4 text-sm text-ink-2">{m.downloads_loading()}</p>
+		{:else if loadError}
+			<FormError data-testid="downloads-load-error" class="mt-4">
+				{m.downloads_load_error()}
+			</FormError>
+		{:else if rows.length === 0}
+			<p data-testid="downloads-empty" class="mt-4 text-sm text-ink-2">{m.downloads_empty()}</p>
+		{:else}
 			<ul class="mt-4 flex flex-col gap-3">
 				{#each rows as row (row.identity.db + ':' + row.identity.personId + ':' + row.fileId)}
 					<li
@@ -120,8 +119,8 @@
 					</li>
 				{/each}
 			</ul>
-		</ListOfStuff>
-	{/if}
+		{/if}
+	</ListOfStuff>
 </main>
 
 <!-- (*MVOX:Josquin* — #353 GREEN; review-fix round *MVOX:Byrd*) -->
