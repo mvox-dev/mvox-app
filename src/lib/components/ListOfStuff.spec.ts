@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-// The list frame every main list renders through (#859, #869): filter, header line, rows. Usage:
+// The list every main list renders through (#859, #869): filter, then a frame of title line + rows.
 //   <ListOfStuff title={m.x_title()} filter={typeFilter} view={viewToggle}>{rows}</ListOfStuff>
 // The title is required; both snippets are optional and a missing one gets no slot.
 import { cleanup, render } from '@testing-library/svelte';
@@ -28,7 +28,7 @@ function testids(el: Element): (string | null)[] {
 }
 
 describe('ListOfStuff', () => {
-	it('filter first, then the title and view control on one header line, then the rows', () => {
+	it('filter outside, then a frame of the title line (title, view control) and the rows', () => {
 		const { container } = render(ListOfStuff, {
 			props: {
 				title: 'Members',
@@ -49,9 +49,13 @@ describe('ListOfStuff', () => {
 		expect(follows(title, view)).toBe(true);
 		expect(testids(q(container, 'list-of-stuff')!)).toEqual([
 			'list-of-stuff-filter',
+			'list-of-stuff-frame'
+		]);
+		expect(testids(q(container, 'list-of-stuff-frame')!)).toEqual([
 			'list-of-stuff-header',
 			'list-of-stuff-body'
 		]);
+		expect(q(container, 'list-of-stuff-frame')!.contains(filter)).toBe(false);
 		expect(q(container, 'list-of-stuff-filter')!.contains(filter)).toBe(true);
 		expect(testids(list)).toEqual(['my-rows']);
 	});
@@ -61,7 +65,8 @@ describe('ListOfStuff', () => {
 			props: { title: 'Members', children: snippet('my-rows') }
 		});
 
-		expect(testids(q(container, 'list-of-stuff')!)).toEqual([
+		expect(testids(q(container, 'list-of-stuff')!)).toEqual(['list-of-stuff-frame']);
+		expect(testids(q(container, 'list-of-stuff-frame')!)).toEqual([
 			'list-of-stuff-header',
 			'list-of-stuff-body'
 		]);
