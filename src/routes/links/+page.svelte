@@ -1,5 +1,6 @@
 <!-- /links: the collective's link list; admins add, edit, reorder and remove links. -->
 <script lang="ts">
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import { page } from '$app/state';
 	import { m } from '$lib/paraglide/messages.js';
@@ -313,28 +314,30 @@
 	{:else if rows.length === 0}
 		<div data-testid="links-empty" class="text-sm">{m.links_empty()}</div>
 	{:else}
-		<ul data-testid="links-list" class="flex flex-col gap-2">
-			{#each rows as row, i (row.id)}
-				<LinksRow
-					{row}
-					index={i}
-					rowCount={rows.length}
-					isAdmin={admin === 'admin'}
-					{isOffline}
-					{reorderPending}
-					editing={editingId === row.id}
-					bind:editName
-					bind:editUrl
-					bind:editDescription
-					onsave={(id) => void saveEdit(id)}
-					oncancel={cancelEdit}
-					onmoveup={moveUp}
-					onmovedown={moveDown}
-					onedit={startEdit}
-					onremove={(id) => void handleRemove(id)}
-				/>
-			{/each}
-		</ul>
+		<ListOfStuff>
+			<ul data-testid="links-list" class="flex flex-col gap-2">
+				{#each rows as row, i (row.id)}
+					<LinksRow
+						{row}
+						index={i}
+						rowCount={rows.length}
+						isAdmin={admin === 'admin'}
+						{isOffline}
+						{reorderPending}
+						editing={editingId === row.id}
+						bind:editName
+						bind:editUrl
+						bind:editDescription
+						onsave={(id) => void saveEdit(id)}
+						oncancel={cancelEdit}
+						onmoveup={moveUp}
+						onmovedown={moveDown}
+						onedit={startEdit}
+						onremove={(id) => void handleRemove(id)}
+					/>
+				{/each}
+			</ul>
+		</ListOfStuff>
 	{/if}
 	</div>
 </main>
