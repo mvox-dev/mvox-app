@@ -196,7 +196,7 @@ describe('#247 — the Detailne|Kompaktne toggle (ruled: segmented control, WITH
 		expect(monthGroups(container)).toEqual([]);
 	});
 
-	it('#860: chips sit left above the list; the toggle sits inside it, above the rows, in both views', async () => {
+	it('#860, #869: chips sit left above the list; the toggle sits on its title line, in both views', async () => {
 		const container = await renderAgenda(ALL_UPCOMING, [RECENT_SOCIAL]);
 		const list = () => container.querySelector('[data-testid="list-of-stuff-body"]') as HTMLElement;
 		const toggle = viewToggle(container) as HTMLElement;
@@ -215,7 +215,8 @@ describe('#247 — the Detailne|Kompaktne toggle (ruled: segmented control, WITH
 		).toBeTruthy();
 
 		await switchToMonth(container);
-		expect(list().contains(viewToggle(container))).toBe(true);
+		const header = container.querySelector('[data-testid="list-of-stuff-header"]')!;
+		expect(header.contains(viewToggle(container))).toBe(true);
 		expect(list().contains(monthGroups(container)[0]!)).toBe(true);
 	});
 

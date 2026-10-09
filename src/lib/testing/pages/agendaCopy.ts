@@ -2,6 +2,7 @@
 import { copyWith, englishMessages, type Copy } from '../messageMocks';
 
 export const AGENDA_COPY = {
+	nav_agenda: () => 'Agenda',
 	agenda_empty_no_events: () => 'No upcoming events.',
 	agenda_duration_min: (p: { minutes: number }) => `${p.minutes} min`,
 	agenda_today: () => 'Today',
