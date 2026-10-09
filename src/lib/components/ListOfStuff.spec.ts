@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+
 // The list frame every main list renders through (#859). Usage, for #861-#864:
 //   <ListOfStuff filter={typeFilter} view={viewToggle}>{list body}</ListOfStuff>
 // Both snippets are optional; a list with no such control passes neither and gets no slot.
