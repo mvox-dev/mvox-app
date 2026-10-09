@@ -169,7 +169,7 @@ describe('#869 — the agenda list has a title', () => {
 		const titles = [...container.querySelectorAll('h1')];
 		const recent = container.querySelector('[data-testid="agenda-recent-header"]') as HTMLElement;
 
-		expect(titles.map((h1) => h1.textContent?.trim())).toEqual(['[msg:nav_agenda]']);
+		expect(titles.map((h1) => h1.textContent?.trim())).toEqual(['[nav_agenda]']);
 		expect(header.contains(titles[0])).toBe(true);
 		expect(header.contains(container.querySelector('[data-testid="agenda-view-toggle"]'))).toBe(true);
 		for (const below of [chipGroup(container) as HTMLElement, recent]) {

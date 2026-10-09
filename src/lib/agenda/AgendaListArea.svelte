@@ -83,6 +83,7 @@
 	</p>
 {/snippet}
 <ListOfStuff
+	title={m.nav_agenda()}
 	filter={view.agendaFilterChips.length > 0 ? typeFilter : undefined}
 	view={view.agendaFilterChips.length > 0 ? viewToggle : undefined}
 >

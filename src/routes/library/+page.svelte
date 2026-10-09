@@ -235,131 +235,131 @@
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
-		<h1 class="font-display text-2xl">{m.library_title()}</h1>
-
-		<!-- #321 — a truncated list is a standing fact: visible, never sr-only, and gone
-		     once every read is complete. -->
-		{#if libraryPartial}
-			<PartialNotice
-				testid="library-partial-notice"
-				text={m.library_partial_notice()}
-				class="text-sm"
-			/>
-		{/if}
-
-		{#if isLibrarian}
-			<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
-				{m.library_librarian_tools()}
-
-				<!-- #434 — the one reason for every write control on the page that is disabled
-				     offline, said once, where only the viewer holding those controls sees it. -->
-				{#if isOffline}
-					<p data-testid="library-write-unavailable" class="mt-2 text-xs text-ink-2">
-						{m.write_unavailable_no_signal()}
-					</p>
+		<ListOfStuff title={m.library_title()}>
+			<div class="flex flex-col gap-4">
+				<!-- #321 — a truncated list is a standing fact: visible, never sr-only, and gone
+				     once every read is complete. -->
+				{#if libraryPartial}
+					<PartialNotice
+						testid="library-partial-notice"
+						text={m.library_partial_notice()}
+						class="text-sm"
+					/>
 				{/if}
 
-				<BulkCheckoutPanel
-					bind:bulk
-					works={lib.works}
-					allEditions={lib.allEditions}
-					allMembers={lib.allMembers}
-					memberNames={lib.memberNames}
-					optionsPartial={lib.optionsPartial}
-					membersPartial={lib.membersPartial}
-					{view}
-					{isOffline}
-					submit={writes.handleBulkCheckout}
-				/>
+				{#if isLibrarian}
+					<section data-testid="librarian-tools" class="rounded-md border border-dashed border-ink-5 px-4 py-3 text-sm">
+						{m.library_librarian_tools()}
 
-				<InlineCreateForm
-					kind="work"
-					view={workFormView(workForm)}
-					{isOffline}
-					submit={writes.submitCreateWork}
-				/>
-			</section>
-		{:else if $librarianStore === 'error'}
-			<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
-				<p class="text-xs text-red-700">{m.library_librarian_load_error()}</p>
-				<button
-					type="button"
-					data-testid="librarian-retry-load"
-					class="text-xs underline"
-					onclick={retryLibrarianLoad}
-				>
-					{m.library_librarian_retry()}
-				</button>
-			</div>
-		{/if}
+						<!-- #434 — the one reason for every write control on the page that is disabled
+						     offline, said once, where only the viewer holding those controls sees it. -->
+						{#if isOffline}
+							<p data-testid="library-write-unavailable" class="mt-2 text-xs text-ink-2">
+								{m.write_unavailable_no_signal()}
+							</p>
+						{/if}
 
-		{#if returnError}
-			<FormError data-testid="return-error">{returnError}</FormError>
-		{/if}
-
-		<MyLoansSection
-			{selected}
-			lendings={lib.lendings}
-			{myMemberId}
-			works={lib.works}
-			allCopies={lib.allCopies}
-			allEditions={lib.allEditions}
-			loadCopyNames={(...a) => loadMyLoanCopyNames(...a)}
-			loadCopyChains={(...a) => loadMyLoanCopyChains(...a)}
-			chainLabel={(chain) => formatLoanChainLabel(chain)}
-		/>
-
-		<!-- #434 — set to the oldest readAt of any read this load served from the cache. -->
-		{#if status === 'ready' && $servedFromCache}
-			<AsOfLine readAt={$servedFromCache} testid="library-as-of" class="mb-3" />
-		{/if}
-
-		{#if status === 'no-collective'}
-			<p data-testid="library-no-collective" class="text-sm">{m.library_no_collective()}</p>
-		{:else if status === 'loading'}
-			<div data-testid="library-skeleton" class="flex flex-col gap-3" aria-hidden="true" aria-busy="true">
-				{#each [0, 1, 2] as row (row)}
-					<div class="flex animate-pulse flex-col gap-1.5 py-2">
-						<div class="h-3 w-1/2 rounded bg-ink-5"></div>
-						<div class="h-2.5 w-1/3 rounded bg-ink-5"></div>
-					</div>
-				{/each}
-			</div>
-		{:else if status === 'session-expired'}
-			<SessionExpiredNotice />
-		{:else if status === 'load-error'}
-			<div data-testid="library-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.library_load_error()}</p>
-				<button
-					type="button"
-					data-testid="library-retry-load"
-					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={() => loadForSelected()}
-				>
-					{m.library_retry()}
-				</button>
-			</div>
-		{:else if lib.works.length === 0}
-			<div data-testid="library-empty" class="flex min-h-[30vh] items-center justify-center">
-				<p class="font-display text-xl text-ink-2">{m.library_empty()}</p>
-			</div>
-		{:else}
-			<ListOfStuff>
-				<ul data-testid="library-work-list" class="flex flex-col gap-1">
-					{#each lib.works as work (work.id)}
-						<WorkRow
-							{work}
-							{lib}
-							bind:drafts={editionDrafts}
-							files={fileUploads}
+						<BulkCheckoutPanel
+							bind:bulk
+							works={lib.works}
+							allEditions={lib.allEditions}
+							allMembers={lib.allMembers}
+							memberNames={lib.memberNames}
+							optionsPartial={lib.optionsPartial}
+							membersPartial={lib.membersPartial}
 							{view}
-							actions={treeActions}
-							{isLibrarian}
 							{isOffline}
+							submit={writes.handleBulkCheckout}
 						/>
-					{/each}
-				</ul>
-			</ListOfStuff>
-		{/if}
+
+						<InlineCreateForm
+							kind="work"
+							view={workFormView(workForm)}
+							{isOffline}
+							submit={writes.submitCreateWork}
+						/>
+					</section>
+				{:else if $librarianStore === 'error'}
+					<div data-testid="librarian-load-error" class="flex items-center gap-2" role="alert">
+						<p class="text-xs text-red-700">{m.library_librarian_load_error()}</p>
+						<button
+							type="button"
+							data-testid="librarian-retry-load"
+							class="text-xs underline"
+							onclick={retryLibrarianLoad}
+						>
+							{m.library_librarian_retry()}
+						</button>
+					</div>
+				{/if}
+
+				{#if returnError}
+					<FormError data-testid="return-error">{returnError}</FormError>
+				{/if}
+
+				<MyLoansSection
+					{selected}
+					lendings={lib.lendings}
+					{myMemberId}
+					works={lib.works}
+					allCopies={lib.allCopies}
+					allEditions={lib.allEditions}
+					loadCopyNames={(...a) => loadMyLoanCopyNames(...a)}
+					loadCopyChains={(...a) => loadMyLoanCopyChains(...a)}
+					chainLabel={(chain) => formatLoanChainLabel(chain)}
+				/>
+
+				<!-- #434 — set to the oldest readAt of any read this load served from the cache. -->
+				{#if status === 'ready' && $servedFromCache}
+					<AsOfLine readAt={$servedFromCache} testid="library-as-of" class="mb-3" />
+				{/if}
+
+				{#if status === 'no-collective'}
+					<p data-testid="library-no-collective" class="text-sm">{m.library_no_collective()}</p>
+				{:else if status === 'loading'}
+					<div data-testid="library-skeleton" class="flex flex-col gap-3" aria-hidden="true" aria-busy="true">
+						{#each [0, 1, 2] as row (row)}
+							<div class="flex animate-pulse flex-col gap-1.5 py-2">
+								<div class="h-3 w-1/2 rounded bg-ink-5"></div>
+								<div class="h-2.5 w-1/3 rounded bg-ink-5"></div>
+							</div>
+						{/each}
+					</div>
+				{:else if status === 'session-expired'}
+					<SessionExpiredNotice />
+				{:else if status === 'load-error'}
+					<div data-testid="library-load-error" class="flex flex-col gap-2" role="alert">
+						<p class="text-sm text-red-700">{m.library_load_error()}</p>
+						<button
+							type="button"
+							data-testid="library-retry-load"
+							class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+							onclick={() => loadForSelected()}
+						>
+							{m.library_retry()}
+						</button>
+					</div>
+				{:else if lib.works.length === 0}
+					<div data-testid="library-empty" class="flex min-h-[30vh] items-center justify-center">
+						<p class="font-display text-xl text-ink-2">{m.library_empty()}</p>
+					</div>
+				{:else}
+					<ul data-testid="library-work-list" class="flex flex-col gap-1">
+						{#each lib.works as work (work.id)}
+							<WorkRow
+								{work}
+								{lib}
+								bind:drafts={editionDrafts}
+								files={fileUploads}
+								{view}
+								actions={treeActions}
+								{isLibrarian}
+								{isOffline}
+							/>
+						{/each}
+					</ul>
+				{/if}
+			</div>
+		</ListOfStuff>
 	</div>
 </main>

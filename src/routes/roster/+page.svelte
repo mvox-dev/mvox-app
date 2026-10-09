@@ -65,6 +65,7 @@
 	const arrange = $state(createArrangeState());
 
 	const rosterPartial = $derived(roster.membersPartial || roster.inactivePartial);
+	const listShown = $derived(status === 'ready' && roster.rows.length + roster.sections.length > 0);
 
 	let currentCfg: EntuCfg | null = null;
 
@@ -298,103 +299,102 @@
 
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
-		<h1 class="font-display text-2xl">{m.roster_title()}</h1>
-
-		{#if admin === 'admin' && isOffline}
-			<p data-testid="roster-write-unavailable" class="text-sm text-ink-2">
-				{m.write_unavailable_no_signal()}
-			</p>
-		{/if}
-
-		{#if rosterPartial}
-			<PartialNotice testid="roster-partial-notice" text={m.roster_partial_notice()} class="text-sm" />
-		{/if}
-
-		<RosterStatusRegions {arrange} {memberOps} {admin} />
-
-		{#if status === 'no-collective'}
-			<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
-		{:else if status === 'loading'}
-			<RosterSkeleton />
-		{:else if status === 'session-expired'}
-			<SessionExpiredNotice />
-		{:else if status === 'load-error'}
-			<div data-testid="roster-load-error" class="flex flex-col gap-2" role="alert">
-				<p class="text-sm text-red-700">{m.roster_load_error()}</p>
-				<button
-					type="button"
-					data-testid="roster-retry-load"
-					class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-					onclick={() => loadForSelected()}
-				>
-					{m.roster_retry()}
-				</button>
-			</div>
-		{:else if roster.rows.length === 0 && roster.sections.length === 0}
-			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}>
-				<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
-					<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
-				</div>
-				{#if admin === 'admin' && status === 'ready'}
-					<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
+		<ListOfStuff
+			title={m.roster_title()}
+			filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}
+			view={listShown && !roster.sectionsError ? viewControls : undefined}
+		>
+			<div class="flex flex-col gap-4">
+				{#if admin === 'admin' && isOffline}
+					<p data-testid="roster-write-unavailable" class="text-sm text-ink-2">
+						{m.write_unavailable_no_signal()}
+					</p>
 				{/if}
-			</ListOfStuff>
-		{:else}
-			<RosterNotices {roster} {arrange} {admin} />
-			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}
-				view={roster.sectionsError ? undefined : viewControls}
-			>
-				<RosterListHeader />
-				{#if roster.view === 'grouped' && !roster.sectionsError}
-					{#if roster.viewMode === 'arrange' && admin === 'admin'}
-						<SectionArrange
-							{roster}
-							{arrange}
-							ops={arrangeOps}
-							{drag}
-							{arrangeRows}
-							{visibleSections}
-							{admin}
-							{isOffline}
-							{isOwnDbEntitySection}
-						/>
-					{:else}
-						<RosterSectionTree
-							{visibleSections}
-							{groupById}
-							{unassignedGroup}
-							onToggleSection={toggleSection}
-							{admin}
-							{selected}
-							{isOffline}
-							{roster}
-							{memberOps}
-							{ops}
-							{sectionNameById}
-						/>
+				{#if rosterPartial}
+					<PartialNotice testid="roster-partial-notice" text={m.roster_partial_notice()} class="text-sm" />
+				{/if}
+				<RosterStatusRegions {arrange} {memberOps} {admin} />
+				{#if status === 'no-collective'}
+					<p data-testid="roster-no-collective" class="text-sm">{m.roster_no_collective()}</p>
+				{:else if status === 'loading'}
+					<RosterSkeleton />
+				{:else if status === 'session-expired'}
+					<SessionExpiredNotice />
+				{:else if status === 'load-error'}
+					<div data-testid="roster-load-error" class="flex flex-col gap-2" role="alert">
+						<p class="text-sm text-red-700">{m.roster_load_error()}</p>
+						<button
+							type="button"
+							data-testid="roster-retry-load"
+							class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
+							onclick={() => loadForSelected()}
+						>
+							{m.roster_retry()}
+						</button>
+					</div>
+				{:else if roster.rows.length === 0 && roster.sections.length === 0}
+					<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
+						<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
+					</div>
+					{#if admin === 'admin' && status === 'ready'}
+						<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
 					{/if}
 				{:else}
-					<ul data-testid="roster-flat-list" class="flex flex-col">
-						{#each flatRows as row (row.memberId)}
-							<MemberRow
-								{row}
-								showSection={true}
-								groupSectionId={null}
-								{admin}
-								{selected}
-								{isOffline}
-								{roster}
-								{memberOps}
-								{ops}
-								{sectionNameById}
-							/>
-						{/each}
-					</ul>
+					<RosterNotices {roster} {arrange} {admin} />
+					<div class="flex flex-col">
+						<RosterListHeader />
+						{#if roster.view === 'grouped' && !roster.sectionsError}
+							{#if roster.viewMode === 'arrange' && admin === 'admin'}
+								<SectionArrange
+									{roster}
+									{arrange}
+									ops={arrangeOps}
+									{drag}
+									{arrangeRows}
+									{visibleSections}
+									{admin}
+									{isOffline}
+									{isOwnDbEntitySection}
+								/>
+							{:else}
+								<RosterSectionTree
+									{visibleSections}
+									{groupById}
+									{unassignedGroup}
+									onToggleSection={toggleSection}
+									{admin}
+									{selected}
+									{isOffline}
+									{roster}
+									{memberOps}
+									{ops}
+									{sectionNameById}
+								/>
+							{/if}
+						{:else}
+							<ul data-testid="roster-flat-list" class="flex flex-col">
+								{#each flatRows as row (row.memberId)}
+									<MemberRow
+										{row}
+										showSection={true}
+										groupSectionId={null}
+										{admin}
+										{selected}
+										{isOffline}
+										{roster}
+										{memberOps}
+										{ops}
+										{sectionNameById}
+									/>
+								{/each}
+							</ul>
+						{/if}
+						{#if admin === 'admin' && status === 'ready'}
+							<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
+						{/if}
+					</div>
 				{/if}
-				{#if admin === 'admin' && status === 'ready'}
-					<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
-				{/if}
-			</ListOfStuff>
-		{/if}
+			</div>
+		</ListOfStuff>
 	</div>
 </main>
