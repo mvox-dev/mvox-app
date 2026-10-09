@@ -31,20 +31,34 @@ import { resetTypeIdCache } from '$lib/seasons/entuSeasons';
 import { cleanupUnstubResetAuth, q } from '$lib/testing/pages/dom';
 import { pagesReaching } from '$lib/testing/pageReach';
 import { signIn } from '$lib/testing/session';
+import { collectiveState } from '$lib/collectives/store';
+import type { CollectiveState } from '$lib/collectives/types';
 
-type State = 'loading' | 'load-error' | 'session-expired' | 'empty';
+type State = 'loading' | 'load-error' | 'session-expired' | 'empty' | 'ready' | Discovery;
+type Discovery = 'collectives-loading' | 'collectives-none' | 'collectives-error';
+
+const DISCOVERY: Record<Discovery, CollectiveState> = {
+	'collectives-loading': { status: 'loading' },
+	'collectives-none': { status: 'none' },
+	'collectives-error': { status: 'error', erroredDbs: ['sampledb'] }
+};
 
 // Downloads reads the device's byte store, not Entu: its states live in its own spec.
 // Each page lists the states it reaches by fetch alone and the testid each one shows.
+// The agenda with rows is in page.agenda-filter.spec.ts: an event needs more than one ROW.
 type ListPage = { Page: Component; title: string; shown: Partial<Record<State, string>> };
 const PAGES: Record<string, ListPage> = {
 	'/': {
 		Page: AgendaPage,
 		title: 'nav_agenda',
 		shown: {
+			loading: 'agenda-skeleton',
 			'load-error': 'agenda-error',
 			'session-expired': 'session-expired',
-			empty: 'agenda-empty'
+			empty: 'agenda-empty',
+			'collectives-loading': 'auth-status',
+			'collectives-none': 'auth-status',
+			'collectives-error': 'collectives-retry'
 		}
 	},
 	'/library': { Page: LibraryPage, title: 'library_title', shown: routeStates('library') },
@@ -52,12 +66,13 @@ const PAGES: Record<string, ListPage> = {
 	'/roster': { Page: RosterPage, title: 'roster_title', shown: routeStates('roster') }
 };
 
-function routeStates(name: string): Record<State, string> {
+function routeStates(name: 'library' | 'links' | 'roster'): Partial<Record<State, string>> {
 	return {
 		loading: `${name}-skeleton`,
 		'load-error': `${name}-load-error`,
 		'session-expired': 'session-expired',
-		empty: `${name}-empty`
+		empty: `${name}-empty`,
+		ready: { library: 'library-work-list', links: 'links-list', roster: 'roster-groups' }[name]!
 	};
 }
 
@@ -65,10 +80,21 @@ const cases = Object.entries(PAGES).flatMap(([route, { shown }]) =>
 	(Object.keys(shown) as State[]).map((state) => [route, state] as const)
 );
 
+// One entity every list reads as a row of its own kind: a work, a link, a member.
+const ROW = {
+	_id: 'row-1',
+	_sharing: [{ string: 'private' }],
+	name: [{ string: 'Row one' }],
+	url: [{ string: 'https://example.com' }],
+	status: [{ string: 'active' }],
+	person: [{ reference: 'person-1', string: 'Row one' }]
+};
+
 function fetchFor(state: State) {
 	if (state === 'loading') return vi.fn(() => new Promise<Response>(() => {}));
 	const status = state === 'load-error' ? 500 : state === 'session-expired' ? 401 : 200;
-	return vi.fn(async () => new Response('{"entities":[],"count":0}', { status }));
+	const body = state === 'ready' ? { entities: [ROW], count: 1 } : { entities: [], count: 0 };
+	return vi.fn(async () => new Response(JSON.stringify(body), { status }));
 }
 
 beforeEach(() => {
@@ -93,6 +119,7 @@ describe('every main list has one title in its header line', () => {
 		vi.stubGlobal('fetch', fetchFor(state));
 		pageStub.url = new URL(`http://localhost${route}`);
 		signIn();
+		if (state in DISCOVERY) collectiveState.set(DISCOVERY[state as Discovery]);
 		const { container } = render(PAGES[route].Page);
 		const shown = PAGES[route].shown[state]!;
 

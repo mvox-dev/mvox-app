@@ -77,11 +77,19 @@ describe('/downloads — list of stuff', () => {
 	const states: [string, () => Promise<Map<string, unknown>>][] = [
 		['downloads-loading', () => new Promise(() => {})],
 		['downloads-load-error', async () => Promise.reject(new Error('idb boom'))],
-		['downloads-empty', async () => new Map()]
+		['downloads-empty', async () => new Map()],
+		['downloads-part-file-a', async () => new Map()]
 	];
 	it.each(states)('%s: one h1, the list title, in the list header', async (shown, labels) => {
 		vi.spyOn(console, 'error').mockImplementation(() => {});
 		labelsFor = labels;
+		if (shown === 'downloads-part-file-a') {
+			fakeByteStore.seed({ db: 'sampledb', personId: 'person-1' }, 'file-a', {
+				bytes: new Uint8Array(8).fill(1).buffer,
+				filetype: 'application/pdf',
+				sha256: 'sha-1'
+			});
+		}
 		const mod = await import('./downloads/+page.svelte');
 		const { container } = render(mod.default);
 		await waitFor(() => expect(q(container, shown)).not.toBeNull());
