@@ -196,20 +196,27 @@ describe('#247 — the Detailne|Kompaktne toggle (ruled: segmented control, WITH
 		expect(monthGroups(container)).toEqual([]);
 	});
 
-	it('sits WITH the #214 filter chips: same parent element, above the agenda list', async () => {
+	it('#860: chips sit left above the list; the toggle sits inside it, above the rows, in both views', async () => {
 		const container = await renderAgenda(ALL_UPCOMING, [RECENT_SOCIAL]);
-
+		const list = () => container.querySelector('[data-testid="list-of-stuff-body"]') as HTMLElement;
 		const toggle = viewToggle(container) as HTMLElement;
 		const chips = chipGroup(container) as HTMLElement;
 		expect(toggle).not.toBeNull();
 		expect(chips).not.toBeNull();
-		expect(toggle.parentElement).toBe(chips.parentElement);
 
-		const agendaList = container.querySelector('[data-testid="agenda-list"]') as HTMLElement;
+		expect(container.querySelector('[data-testid="list-of-stuff-filter"]')!.contains(chips)).toBe(true);
+		expect(list().contains(chips)).toBe(false);
+		expect(container.querySelector('[data-testid="list-of-stuff-view"]')!.contains(toggle)).toBe(true);
+		expect(list().contains(container.querySelector('[data-testid="agenda-list"]'))).toBe(true);
 		expect(
 			// eslint-disable-next-line no-bitwise
-			toggle.compareDocumentPosition(agendaList) & Node.DOCUMENT_POSITION_FOLLOWING
+			toggle.compareDocumentPosition(container.querySelector('[data-testid="agenda-recent"]')!) &
+				Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
+
+		await switchToMonth(container);
+		expect(list().contains(viewToggle(container))).toBe(true);
+		expect(list().contains(monthGroups(container)[0]!)).toBe(true);
 	});
 
 	it('tap Kompaktne → month overview replaces the day list; tap Detailne → the day list (Recent included) is back', async () => {
