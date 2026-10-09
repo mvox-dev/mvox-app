@@ -35,36 +35,34 @@ import { signIn } from '$lib/testing/session';
 type State = 'loading' | 'load-error' | 'session-expired' | 'empty';
 
 // Downloads reads the device's byte store, not Entu: its states live in its own spec.
-const PAGES: Record<string, { Page: Component; title: string; states: State[]; shown: string }> = {
-	'/': { Page: AgendaPage, title: 'nav_agenda', states: ['empty'], shown: 'agenda-empty' },
-	'/library': {
-		Page: LibraryPage,
-		title: 'library_title',
-		states: ['loading', 'load-error', 'session-expired', 'empty'],
-		shown: 'library-empty'
+// Each page lists the states it reaches by fetch alone and the testid each one shows.
+type ListPage = { Page: Component; title: string; shown: Partial<Record<State, string>> };
+const PAGES: Record<string, ListPage> = {
+	'/': {
+		Page: AgendaPage,
+		title: 'nav_agenda',
+		shown: {
+			'load-error': 'agenda-error',
+			'session-expired': 'session-expired',
+			empty: 'agenda-empty'
+		}
 	},
-	'/links': {
-		Page: LinksPage,
-		title: 'links_title',
-		states: ['loading', 'load-error', 'session-expired', 'empty'],
-		shown: 'links-empty'
-	},
-	'/roster': {
-		Page: RosterPage,
-		title: 'roster_title',
-		states: ['loading', 'load-error', 'session-expired', 'empty'],
-		shown: 'roster-empty'
-	}
+	'/library': { Page: LibraryPage, title: 'library_title', shown: routeStates('library') },
+	'/links': { Page: LinksPage, title: 'links_title', shown: routeStates('links') },
+	'/roster': { Page: RosterPage, title: 'roster_title', shown: routeStates('roster') }
 };
 
-const SHOWN: Record<Exclude<State, 'empty'>, (route: string) => string> = {
-	loading: (route) => `${route.slice(1)}-skeleton`,
-	'load-error': (route) => `${route.slice(1)}-load-error`,
-	'session-expired': () => 'session-expired'
-};
+function routeStates(name: string): Record<State, string> {
+	return {
+		loading: `${name}-skeleton`,
+		'load-error': `${name}-load-error`,
+		'session-expired': 'session-expired',
+		empty: `${name}-empty`
+	};
+}
 
-const cases = Object.entries(PAGES).flatMap(([route, { states }]) =>
-	states.map((state) => [route, state] as const)
+const cases = Object.entries(PAGES).flatMap(([route, { shown }]) =>
+	(Object.keys(shown) as State[]).map((state) => [route, state] as const)
 );
 
 function fetchFor(state: State) {
@@ -96,7 +94,7 @@ describe('every main list has one title in its header line', () => {
 		pageStub.url = new URL(`http://localhost${route}`);
 		signIn();
 		const { container } = render(PAGES[route].Page);
-		const shown = state === 'empty' ? PAGES[route].shown : SHOWN[state](route);
+		const shown = PAGES[route].shown[state]!;
 
 		await waitFor(() => expect(q(container, shown)).not.toBeNull());
 		const titles = [...container.querySelectorAll('h1')];
