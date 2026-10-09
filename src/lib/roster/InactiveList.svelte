@@ -22,17 +22,8 @@
 	} = $props();
 </script>
 
-<div class="flex flex-col gap-2 border-t border-dashed border-ink-5 pt-3">
-	<button
-		type="button"
-		data-testid="roster-inactive-toggle"
-		aria-expanded={roster.showInactive}
-		class="self-start text-xs tracking-wide text-ink-2 uppercase underline hover:text-ink"
-		onclick={() => ops.toggleInactive()}
-	>
-		{roster.showInactive ? m.roster_inactive_hide() : m.roster_inactive_show()}
-	</button>
-	{#if roster.showInactive}
+{#if roster.showInactive}
+	<div class="flex flex-col gap-2 border-t border-dashed border-ink-5 pt-3">
 		{#if roster.inactiveLoadError}
 			<p data-testid="roster-inactive-load-error" role="alert" class="text-sm text-red-700">
 				{m.roster_inactive_load_error()}
@@ -72,5 +63,5 @@
 				{/each}
 			</ul>
 		{/if}
-	{/if}
-</div>
+	</div>
+{/if}

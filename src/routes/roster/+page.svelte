@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { reportProblem } from '$lib/problems/reportProblem';
 	import PartialNotice from '$lib/components/PartialNotice.svelte';
-	import SegmentedPill from '$lib/components/SegmentedPill.svelte';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { selectedCollectiveStore } from '$lib/collectives/store';
@@ -44,6 +43,9 @@
 	import { flattenSections, listArrangeRows } from '$lib/sections/sectionTree';
 	import MemberRow from '$lib/roster/MemberRow.svelte';
 	import InactiveList from '$lib/roster/InactiveList.svelte';
+	import InactiveToggle from '$lib/roster/InactiveToggle.svelte';
+	import ListOfStuff from '$lib/components/ListOfStuff.svelte';
+	import RosterViewControls from '$lib/roster/RosterViewControls.svelte';
 	import RosterListHeader from '$lib/roster/RosterListHeader.svelte';
 	import RosterNotices from '$lib/roster/RosterNotices.svelte';
 	import RosterSectionTree from '$lib/roster/RosterSectionTree.svelte';
@@ -282,6 +284,13 @@
 	});
 </script>
 
+{#snippet inactiveFilter()}
+	<InactiveToggle {roster} {ops} />
+{/snippet}
+{#snippet viewControls()}
+	<RosterViewControls {roster} {modeOptions} onSetViewMode={setViewMode} />
+{/snippet}
+
 <main class="min-h-screen bg-paper px-6 py-10 text-ink">
 	<div class="mx-auto flex w-full max-w-md flex-col gap-4">
 		<h1 class="font-display text-2xl">{m.roster_title()}</h1>
@@ -322,59 +331,27 @@
 			</div>
 		{:else}
 			<RosterNotices {roster} {arrange} {admin} />
-			<RosterListHeader
-				view={roster.view}
-				sectionsError={roster.sectionsError}
-				onToggleView={() => (roster.view = roster.view === 'grouped' ? 'flat' : 'grouped')}
-			/>
-
-			{#if roster.view === 'grouped' && !roster.sectionsError}
-				<SegmentedPill
-					testid="roster-view-modes"
-					label={m.roster_view_modes_label()}
-					class="self-start"
-					options={modeOptions}
-					selected={roster.viewMode}
-					emptyAllowed={false}
-					defaultValue="collapsed"
-					kind="ui"
-					buttonClass="px-2.5 py-1 text-xs tracking-wide uppercase"
-					onselect={(mode) => mode && setViewMode(mode)}
-				/>
-				{#if roster.viewMode === 'arrange' && admin === 'admin'}
-					<SectionArrange
-						{roster}
-						{arrange}
-						ops={arrangeOps}
-						{drag}
-						{arrangeRows}
-						{visibleSections}
-						{admin}
-						{isOffline}
-						{isOwnDbEntitySection}
-					/>
-				{:else}
-					<RosterSectionTree
-						{visibleSections}
-						{groupById}
-						{unassignedGroup}
-						onToggleSection={toggleSection}
-						{admin}
-						{selected}
-						{isOffline}
-						{roster}
-						{memberOps}
-						{ops}
-						{sectionNameById}
-					/>
-				{/if}
-			{:else}
-				<ul data-testid="roster-flat-list" class="flex flex-col">
-					{#each flatRows as row (row.memberId)}
-						<MemberRow
-							{row}
-							showSection={true}
-							groupSectionId={null}
+			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined} view={viewControls}>
+				<RosterListHeader />
+				{#if roster.view === 'grouped' && !roster.sectionsError}
+					{#if roster.viewMode === 'arrange' && admin === 'admin'}
+						<SectionArrange
+							{roster}
+							{arrange}
+							ops={arrangeOps}
+							{drag}
+							{arrangeRows}
+							{visibleSections}
+							{admin}
+							{isOffline}
+							{isOwnDbEntitySection}
+						/>
+					{:else}
+						<RosterSectionTree
+							{visibleSections}
+							{groupById}
+							{unassignedGroup}
+							onToggleSection={toggleSection}
 							{admin}
 							{selected}
 							{isOffline}
@@ -383,13 +360,29 @@
 							{ops}
 							{sectionNameById}
 						/>
-					{/each}
-				</ul>
-			{/if}
-		{/if}
-
-		{#if admin === 'admin' && status === 'ready'}
-			<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
+					{/if}
+				{:else}
+					<ul data-testid="roster-flat-list" class="flex flex-col">
+						{#each flatRows as row (row.memberId)}
+							<MemberRow
+								{row}
+								showSection={true}
+								groupSectionId={null}
+								{admin}
+								{selected}
+								{isOffline}
+								{roster}
+								{memberOps}
+								{ops}
+								{sectionNameById}
+							/>
+						{/each}
+					</ul>
+				{/if}
+				{#if admin === 'admin' && status === 'ready'}
+					<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
+				{/if}
+			</ListOfStuff>
 		{/if}
 	</div>
 </main>
