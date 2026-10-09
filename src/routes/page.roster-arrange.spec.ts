@@ -103,7 +103,7 @@ function memberRowCount(container: HTMLElement): number {
 }
 
 describe('/roster — the 3-chip view-mode selector replaces the collapse/expand toggle (#155/S1)', () => {
-	it('admin: roster-view-modes renders ABOVE the groups with Collapsed, Expanded and Arrange chips in that document order, each with an accessible name', async () => {
+	it('admin: roster-view-modes renders in the view slot ABOVE the groups with Collapsed, Expanded and Arrange chips in that document order, each with an accessible name', async () => {
 		const container = await renderReady('admin');
 
 		const selector = q(container, 'roster-view-modes');
@@ -129,11 +129,11 @@ describe('/roster — the 3-chip view-mode selector replaces the collapse/expand
 				Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 
+		const view = q(container, 'list-of-stuff-view') as HTMLElement;
+		expect(view?.contains(selector)).toBe(true);
 		const groups = q(container, 'roster-groups') as HTMLElement;
 		expect(groups).not.toBeNull();
-		expect(
-			(selector as HTMLElement).compareDocumentPosition(groups) & Node.DOCUMENT_POSITION_FOLLOWING
-		).toBeTruthy();
+		expect(view.compareDocumentPosition(groups) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	it('the old sections-toggle-all control is GONE — the chips replace it, they do not sit beside it', async () => {
