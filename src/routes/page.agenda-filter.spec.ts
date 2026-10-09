@@ -162,6 +162,23 @@ describe('#214 — chip DERIVATION from the rendered agenda', () => {
 	});
 });
 
+describe('#869 — the agenda list has a title', () => {
+	it('one h1 shares the header line with the view pill, above the chips and the Recent heading', async () => {
+		const container = await renderAgenda([UP_REHEARSAL], [RECENT_SOCIAL]);
+		const header = container.querySelector('[data-testid="list-of-stuff-header"]') as HTMLElement;
+		const titles = [...container.querySelectorAll('h1')];
+		const recent = container.querySelector('[data-testid="agenda-recent-header"]') as HTMLElement;
+
+		expect(titles.map((h1) => h1.textContent?.trim())).toEqual(['[msg:nav_agenda]']);
+		expect(header.contains(titles[0])).toBe(true);
+		expect(header.contains(container.querySelector('[data-testid="agenda-view-toggle"]'))).toBe(true);
+		for (const below of [chipGroup(container) as HTMLElement, recent]) {
+			// eslint-disable-next-line no-bitwise
+			expect(titles[0].compareDocumentPosition(below) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		}
+	});
+});
+
 describe('#214 — single-select TOGGLE (polyphony.uk pattern)', () => {
 	it('tap concert → only concert rows in BOTH sections; tap concert again → all rows back', async () => {
 		const container = await renderAgenda(
