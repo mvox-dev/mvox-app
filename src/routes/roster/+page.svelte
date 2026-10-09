@@ -326,9 +326,14 @@
 				</button>
 			</div>
 		{:else if roster.rows.length === 0 && roster.sections.length === 0}
-			<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
-				<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
-			</div>
+			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined}>
+				<div data-testid="roster-empty" class="flex min-h-[30vh] items-center justify-center">
+					<p class="font-display text-xl text-ink-2">{m.roster_empty()}</p>
+				</div>
+				{#if admin === 'admin' && status === 'ready'}
+					<InactiveList {roster} {memberOps} {ops} {isOffline} {sectionNameById} />
+				{/if}
+			</ListOfStuff>
 		{:else}
 			<RosterNotices {roster} {arrange} {admin} />
 			<ListOfStuff filter={admin === 'admin' && status === 'ready' ? inactiveFilter : undefined} view={viewControls}>
