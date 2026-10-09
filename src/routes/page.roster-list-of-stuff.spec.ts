@@ -114,4 +114,17 @@ describe('/roster — members list on list-of-stuff (#861)', () => {
 		await fireEvent.click(q(container, 'roster-inactive-toggle')!);
 		await waitFor(() => expect(q(container, 'inactive-member-row-m9')).not.toBeNull());
 	});
+
+	it('sections fail to load: no view slot, no sort toggle, no view modes', async () => {
+		const console_ = vi.spyOn(console, 'error').mockImplementation(() => {});
+		listSectionsMock.mockRejectedValue(new Error('sections boom'));
+		const { container } = render(Page);
+		setAuthedWithOneCollective();
+		adminStore.set('admin');
+		await waitFor(() => expect(q(container, 'roster-inactive-toggle')).not.toBeNull());
+		expect(q(container, 'list-of-stuff-view')).toBeNull();
+		expect(q(container, 'roster-sort-toggle')).toBeNull();
+		expect(q(container, 'roster-view-modes')).toBeNull();
+		console_.mockRestore();
+	});
 });
