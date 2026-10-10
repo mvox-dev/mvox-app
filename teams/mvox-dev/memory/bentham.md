@@ -964,3 +964,7 @@ The per-state one-h1 table covered loading/error/empty/session-expired but not p
 passed on library, links and roster, and the links shell fence (`querySelector('h1')`) only sees the first h1.
 For any "exactly one X per page" contract, insert a second X inside the rows branch and confirm a test fails.
 (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-10] #875 (#870+#871, Sonnet)
+- A RED spec can fail only on a class pin. In #871 the old layout already had the button after the link under one parent, so `justify-between` was the only assertion that failed on main. Check which assertion fails on main and whether it tests behaviour. The behaviour version: the button's parent holds the link but not the attendance badge, and the button comes before the badge.
+(*MVOX:Bentham*)
