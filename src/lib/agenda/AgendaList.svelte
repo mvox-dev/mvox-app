@@ -270,7 +270,12 @@
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>
 				<div class="flex min-w-0 flex-col gap-1">
-					{@render rowBody(item)}
+					<div class="flex items-start justify-between gap-2">
+						<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
+						{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
+							<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
+						{/if}
+					</div>
 					{#if membership === 'member'}
 						<div class="flex items-center gap-1">
 							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
@@ -281,9 +286,6 @@
 								>
 							{/if}
 						</div>
-					{/if}
-					{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
-						<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
 					{/if}
 					{#if attendancePanel && attendancePanel.item.id === item.id}
 						<div data-card-controls>
