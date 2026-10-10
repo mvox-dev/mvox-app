@@ -265,12 +265,13 @@
 						{/if}
 					</div>
 					{#if membership === 'member'}
+						{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
 						<div class="flex items-center gap-1">
 							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
-							{#if rsvpAnswerText(rsvpByEventId[item.id]?.status)}
+							{#if answer}
 								<span
 									data-testid="attendance-answer-{item.id}"
-									class="font-mono text-[9px] tracking-wide text-ink-2">({rsvpAnswerText(rsvpByEventId[item.id]?.status)})</span
+									class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
 								>
 							{/if}
 						</div>

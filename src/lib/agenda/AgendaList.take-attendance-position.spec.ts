@@ -40,26 +40,24 @@ function item(id: string, startDatetime: string): AgendaItem {
 const past = item('p1', '2026-06-01T16:00:00.000Z');
 const upcoming = item('u1', '2026-06-15T16:00:00.000Z');
 
-// Layout is unmeasurable in happy-dom, so position is pinned by DOM order under one parent.
 describe('AgendaList take-attendance button position', () => {
-	it('a conductor sees the button in the same row as the event name link, after it', () => {
+	it('a member who conducts sees the button beside the event name, before the attendance badge', () => {
 		const { container } = render(AgendaList, {
 			items: [upcoming],
 			recentItems: [past],
+			membership: 'member',
 			conductorEventIds: new Set(['p1']),
 			ontakeattendance: vi.fn()
 		});
 		const row = container.querySelector('[data-testid="agenda-recent-row-p1"]')!;
 		const button = row.querySelector('[data-testid="take-attendance-btn"]')!;
 		const link = row.querySelector('a[aria-label]')!;
+		const badge = row.querySelector('[data-testid="attendance-badge-p1"]')!;
 		const head = button.parentElement!;
-		expect(head.classList.contains('justify-between')).toBe(true);
 		expect(head.contains(link)).toBe(true);
-		const linkSide = [...head.children].find((child) => child.contains(link))!;
-		expect([...head.children].indexOf(linkSide)).toBeLessThan(
-			[...head.children].indexOf(button)
-		);
+		expect(head.contains(badge)).toBe(false);
 		expect(link.contains(button)).toBe(false);
+		expect(button.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 	});
 
 	it('a non-conductor sees no button', () => {
