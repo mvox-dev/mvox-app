@@ -29,6 +29,7 @@ export interface RoadmapIssue {
 	// Time `in research` was on, and on a closed card time `in process` was on, summed over spans.
 	researchMs?: number | null;
 	buildMs?: number | null;
+	reviewMs?: number | null;
 
 	htmlUrl: string;
 
@@ -105,10 +106,11 @@ function closedAtRank(issue: RoadmapIssue): number {
 	return Number.isNaN(parsed) ? -Infinity : parsed;
 }
 
-const ACTIVE_TIER_LABELS = ['in process', 'prepped', 'researched', 'in research'] as const;
+const ACTIVE_TIER_LABELS = ['in human review', 'in process', 'prepped', 'researched', 'in research'] as const;
 
 export const MOTION_LABELS = [
 	'ready',
+	'in human review',
 	'in process',
 	'prepped',
 	'researched',
@@ -238,19 +240,21 @@ export function formatElapsed(ms: number): string {
 }
 
 // A running stopwatch: "2:15:07", and "2 p 04:15:07" past a day. The page's script embeds this
-// function's own source, so it keeps to plain JavaScript.
+// function's own source, so it keeps to plain JavaScript with no inner functions (the build wraps
+// those in a helper the browser does not have).
 export function formatClock(ms: number): string {
 	const total = Math.max(0, Math.floor(ms / 1000));
 	const days = Math.floor(total / 86400);
 	const h = Math.floor((total % 86400) / 3600);
 	const m = Math.floor((total % 3600) / 60);
 	const sec = total % 60;
-	const two = (n: number) => (n < 10 ? '0' : '') + n;
-	const clock = two(m) + ':' + two(sec);
-	return days > 0 ? days + ' p ' + two(h) + ':' + clock : h + ':' + clock;
+	const mm = (m < 10 ? '0' : '') + m;
+	const ss = (sec < 10 ? '0' : '') + sec;
+	const hh = (h < 10 ? '0' : '') + h;
+	return days > 0 ? days + ' p ' + hh + ':' + mm + ':' + ss : h + ':' + mm + ':' + ss;
 }
 
-export const ELAPSED_LABELS = ['in process', 'in research'] as const;
+export const ELAPSED_LABELS = ['in human review', 'in process', 'in research'] as const;
 
 /** The label an open card counts its elapsed time from, the first of ELAPSED_LABELS it wears. */
 export function elapsedLabel(issue: Pick<RoadmapIssue, 'state' | 'labels'>): string | null {
@@ -278,6 +282,9 @@ export function renderSpans(issue: RoadmapIssue): string {
 	const parts: string[] = [];
 	if (issue.researchMs != null) parts.push(`researched in ${formatElapsed(issue.researchMs)}`);
 	if (issue.state === 'closed' && issue.buildMs != null) parts.push(`built in ${formatElapsed(issue.buildMs)}`);
+	if (issue.state === 'closed' && issue.reviewMs != null) {
+		parts.push(`human review ${formatElapsed(issue.reviewMs)}`);
+	}
 	return parts.length > 0 ? `<span class="issue-spans">${escapeHtml(parts.join(' · '))}</span>` : '';
 }
 
@@ -291,15 +298,16 @@ function allFinished(issues: RoadmapIssue[], seen: Set<number> = new Set<number>
 }
 
 /** Research and build time summed over every descendant, each issue counted once. */
-export function subTimes(issues: RoadmapIssue[]): { researchMs: number; buildMs: number } {
+export function subTimes(issues: RoadmapIssue[]): { researchMs: number; buildMs: number; reviewMs: number } {
 	const seen = new Set<number>();
-	const sum = { researchMs: 0, buildMs: 0 };
+	const sum = { researchMs: 0, buildMs: 0, reviewMs: 0 };
 	const walk = (list: RoadmapIssue[]) => {
 		for (const sub of list) {
 			if (seen.has(sub.number)) continue;
 			seen.add(sub.number);
 			sum.researchMs += sub.researchMs ?? 0;
 			if (sub.state === 'closed') sum.buildMs += sub.buildMs ?? 0;
+			if (sub.state === 'closed') sum.reviewMs += sub.reviewMs ?? 0;
 			walk(sub.subIssues ?? []);
 		}
 	};
@@ -308,10 +316,11 @@ export function subTimes(issues: RoadmapIssue[]): { researchMs: number; buildMs:
 }
 
 function timesSuffix(issues: RoadmapIssue[]): string {
-	const { researchMs, buildMs } = subTimes(issues);
+	const { researchMs, buildMs, reviewMs } = subTimes(issues);
 	const parts: string[] = [];
 	if (researchMs > 0) parts.push(`uuritud ${formatElapsed(researchMs)}`);
 	if (buildMs > 0) parts.push(`ehitatud ${formatElapsed(buildMs)}`);
+	if (reviewMs > 0) parts.push(`ülevaadatud ${formatElapsed(reviewMs)}`);
 	return parts.map((p) => ` · ${p}`).join('');
 }
 
