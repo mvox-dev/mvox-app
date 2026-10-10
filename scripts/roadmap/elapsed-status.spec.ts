@@ -269,3 +269,27 @@ describe("an epic's summary sums its sub-issues' times", () => {
 		expect(summary(epic)).toBe('1 tehtud alamülesanne');
 	});
 });
+
+describe('in human review', () => {
+	it('an open card in human review ticks from that label, ahead of in process', () => {
+		const labels = [
+			{ name: 'in process', color: null },
+			{ name: 'in human review', color: null }
+		];
+		const time = corner(renderBoard([issue({ labels })], GENERATED_AT));
+		expect(time?.getAttribute('title')).toMatch(/^in human review since /);
+	});
+
+	it('a closed card adds "human review X", and an epic sums it as "ülevaadatud"', () => {
+		const sub = issue({ number: 901, state: 'closed', stateReason: 'completed', labels: [], reviewMs: 2 * 3600000 });
+		const html = renderBoard(
+			[issue({ number: 900, state: 'closed', stateReason: 'completed', labels: [], issueType: 'Epic', subIssues: [sub] })],
+			GENERATED_AT
+		);
+		const doc = new DOMParser().parseFromString(html, 'text/html');
+		expect(doc.querySelector('article[data-issue="901"] .issue-spans')?.textContent).toBe('human review 2 h 0 min');
+		expect(doc.querySelector('article[data-issue="900"] summary')?.textContent).toBe(
+			'1 tehtud alamülesanne · ülevaadatud 2 h 0 min'
+		);
+	});
+});

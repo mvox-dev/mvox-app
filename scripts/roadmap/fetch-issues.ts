@@ -282,7 +282,10 @@ export async function fetchBoard(
 		const label = elapsedLabel(issue);
 		if (label) issue.statusSince = labelSince(history, label);
 		issue.researchMs = labelSpanMs(history, 'in research');
-		if (issue.state === 'closed') issue.buildMs = labelSpanMs(history, 'in process');
+		if (issue.state === 'closed') {
+			issue.buildMs = labelSpanMs(history, 'in process');
+			issue.reviewMs = labelSpanMs(history, 'in human review');
+		}
 	}
 	const byNumber = new Map(issues.map((issue) => [issue.number, issue]));
 	const childNumbers = new Set<number>();
