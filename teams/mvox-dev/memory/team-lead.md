@@ -2,7 +2,24 @@
 
 > **Trimmed 2026-09-11 (MVOX-21 seam, token economy — Mihkel's ruling).** Full history in git (last full version: a8586ef). Keep this file to the live block + ONE previous checkpoint; older checkpoints die at each seam.
 
-### [NEXT SESSION — MVOX-38 checkpoint 2026-10-09 13:45Z]
+### [NEXT SESSION — MVOX-39 checkpoint 2026-10-10 11:30Z]
+
+**State:** main 1f89f8e (plus this seam commit), no branch open, no teammates up. Restart at this seam was Mihkel's ask (harness update).
+
+**Next:** #876 (passkey in the /profile link picker via auth/passkey/register; separate link goes) is `prepped`: brief ~/workspace/scratchpad/brief-876.md, digests research-876-*.md. Spawn Josquin on Sonnet (model rule), Bentham on Opus to review (auth surface). Label → `in process` when spawned.
+
+**Landed since MVOX-38:** #870 + #871 (#875, 1f89f8e, Sonnet, 1 review round): past-event card shows "● Kohal (tulen)" instead of the greyed RSVP pill; Märgi kohalolek top right. Closed after live checks: #869, #855; #856 closed (link check dropped, moved to #876).
+
+**Waiting on Mihkel:** phone check #870, #871 (both `in human review`). New rule: reopened-for-live-check issues carry `in human review` alone; it clears on close.
+
+**Model rule (Mihkel 10-09):** Josquin on Sonnet for small/pattern-following issues with a prescriptive brief; Opus for pattern-setting/design. Auto-memory feedback_josquin_model_by_issue.md.
+
+**Loose ends:** untracked probe-701-...-committed.json in the app tree. Untested: agenda view toggle with no chips (AgendaListArea.svelte:87). Season panel h2 renders above the agenda h1 when open (SeasonCardHeader.svelte:109).
+
+(*MVOX:Palestrina*)
+
+---
+### [PREV — MVOX-38 checkpoint 2026-10-09 13:45Z]
 
 **State:** main aac82d5 (plus this seam commit), no branch open, no teammates up. Nothing `ready`.
 
@@ -13,22 +30,5 @@
 **Waiting on Mihkel:** live checks #855 (passkey sign-in), #856 (/profile add-passkey), #869 (phone: agenda + roster); all reopened for that only. #870/#871 not released.
 
 **Loose ends:** untracked probe-701-...-committed.json in the app tree. Untested: agenda view toggle with no chips (AgendaListArea.svelte:87). Season panel h2 renders above the agenda h1 when open (SeasonCardHeader.svelte:109).
-
-(*MVOX:Palestrina*)
-
----
-### [PREV — MVOX-37 checkpoint 2026-10-07 11:20Z]
-
-**State:** main 8cca8d0 (plus this seam commit), no branch open, no teammates up. Released queue done.
-
-**Landed this session:** #832 (#851, 93e36b7; prod curl: missing /_app file 404 no-store), #841 (#852, 383a62b), #856 + #855 one branch (#857, 8cca8d0: /profile "Add a passkey", /lab/entu removed, passkey 7th provider, kept out of the link picker via LINKABLE_PROVIDERS). #826 closed not planned (archived).
-
-**Waiting on Mihkel:** live checks #855 (passkey sign-in lands signed in) and #856 (/profile link reaches Entu add-passkey). Both reopened for that only; he closes them.
-
-**Next:** no `ready` issue. Check the board and Gama's mail.
-
-**Loose ends:** untracked probe-701-...-committed.json in the app tree (check before deleting). providers.spec.ts lost the #193 F3 note (re-point the link-picker fixture if provider order changes; smart-id still first).
-
-**Learned:** a research-pack blast agent took the operator's "check the mail" line as its task; resume with a changed blast arg reruns only it. Passepartout (Mihkel's talk) wanted one hub line per step for passkey work: done; use machine stamps only (one hand-typed time had to be corrected).
 
 (*MVOX:Palestrina*)
