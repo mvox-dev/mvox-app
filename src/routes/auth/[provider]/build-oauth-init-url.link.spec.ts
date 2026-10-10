@@ -84,4 +84,31 @@ describe('buildOAuthInitUrl — link intent (#193)', () => {
 	});
 });
 
+describe('buildOAuthInitUrl — passkey path (#876)', () => {
+	const NEXT = 'next=https%3A%2F%2Fmvox.app%2Fauth%2Fcallback%3Fkey%3D';
+	const build = (intent: 'login' | 'reauth' | 'invite' | 'link', provider = 'passkey') =>
+		buildOAuthInitUrl({
+			provider,
+			origin: 'https://mvox.app',
+			returnTo: '/profile?linked=1',
+			intent,
+			nonce: 'n-pk',
+			...(intent === 'link' || intent === 'invite'
+				? { invite: { db: 'sampledb', token: LINK_TOKEN } }
+				: {})
+		});
+
+	it('link intent registers a new passkey: auth/passkey/register with next', () => {
+		expect(build('link')).toBe(`https://api.entu-test.invalid/auth/passkey/register?${NEXT}`);
+	});
+
+	it.each(['login', 'reauth', 'invite'] as const)('%s intent stays on auth/passkey', (intent) => {
+		expect(new URL(build(intent)).pathname).toBe('/auth/passkey');
+	});
+
+	it('link intent for another provider is unchanged', () => {
+		expect(build('link', 'google')).toBe(`https://api.entu-test.invalid/auth/google?${NEXT}`);
+	});
+});
+
 // (*MVOX:Tallis*)
