@@ -177,7 +177,6 @@
 	"profile_link_another": "Додати інший спосіб входу",
 	"profile_link_choose_provider": "Виберіть постачальника для прив'язки",
 	"profile_link_cancel": "Скасувати",
-	"profile_add_passkey": "Додати ключ доступу",
 	"profile_link_error_conflict": "Цей обліковий запис уже використовується іншим учасником.",
 	"profile_link_error_dead": "Спроба прив'язки застаріла або вже була використана.",
 	"profile_link_error_failed": "Прив'язка не вдалася — спробуйте ще раз.",

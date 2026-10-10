@@ -16,9 +16,6 @@ export const AUTH_PROVIDERS: ReadonlyArray<AuthProvider> = [
 	{ id: 'passkey', label: m.auth_provider_passkey }
 ];
 
-// A passkey is added on Entu's own page (/profile's "Add a passkey"), not by an OAuth link.
-export const LINKABLE_PROVIDERS = AUTH_PROVIDERS.filter((p) => p.id !== 'passkey');
-
 // Unknown ids fall back to the capitalised id.
 export function providerLabel(id: string | null): string {
 	if (!id) return '';

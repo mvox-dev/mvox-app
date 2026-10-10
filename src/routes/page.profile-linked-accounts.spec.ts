@@ -739,51 +739,38 @@ describe('/profile — same-identity no-op notice is neutral (#219)', () => {
 	);
 });
 
-describe('/profile — "Add a passkey" links to Entu for the selected database (#856)', () => {
-	const passkeyLink = (c: HTMLElement) =>
-		q(c, '[data-testid="profile-linked-accounts"] [data-testid="profile-add-passkey"]');
-
-	// Break: build the href from a fixed or stale db and the switch keeps the old one.
-	it('links to the selected collective’s Entu passkey page and follows a switch', async () => {
-		signIn({
-			token: 'jwt-member',
-			collectives: [
-				{ db: 'sampledb', name: 'Sampledb', personId: 'person-p' },
-				{ db: 'kammerkoor', name: 'Kammerkoor', personId: 'person-k' }
-			],
-			selected: 'sampledb'
-		});
+describe('/profile — passkey is added from the picker (#876)', () => {
+	it('has no separate "Add a passkey" link', async () => {
+		signIn({ token: 'jwt-member' });
 		const { container } = render(Page);
-		await waitFor(() => expect(passkeyLink(container)).not.toBeNull());
-		const link = passkeyLink(container) as HTMLAnchorElement;
-		expect(link.tagName).toBe('A');
-		expect(link.textContent?.trim()).toBe('Add a passkey');
-		expect(link.getAttribute('href')).toBe('https://entu.app/sampledb/passkey');
-
-		selectedCollectiveDbStore.set('kammerkoor');
-
 		await waitFor(() =>
-			expect(passkeyLink(container)?.getAttribute('href')).toBe(
-				'https://entu.app/kammerkoor/passkey'
-			)
+			expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull()
 		);
+		expect(q(container, '[data-testid="profile-add-passkey"]')).toBeNull();
 	});
 
-	// Break: drop the no-database check and a link to entu.app/null/passkey appears.
-	it('is hidden when no database is selected', async () => {
-		signIn({ token: 'jwt-member', collectives: [] });
-		const { container } = render(LinkedAccountsSection, {
-			ready: true,
-			isOffline: false,
-			scopeName: '',
-			generation: () => 0,
-			activeContext: () => null,
-			onSessionExpired: () => {},
-			mintSelfLinkInvite: h.mintSelfLinkInviteMock,
-			mintErrorMessage: () => ''
+	it('choosing passkey starts auth/passkey/register with the same link state', async () => {
+		h.listLinkedIdentitiesMock.mockResolvedValue({ identities: [GOOGLE_ID], pendingInvites: 0 });
+		const container = await openPicker();
+
+		await fireEvent.click(
+			q(container, '[data-testid="profile-link-provider-passkey"]') as HTMLElement
+		);
+
+		await waitFor(() => expect(h.mintSelfLinkInviteMock).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(localStorage.getItem(OAUTH_STATE_KEY)).not.toBeNull());
+		expect(decodeState(localStorage.getItem(OAUTH_STATE_KEY)!)).toEqual({
+			nonce: expect.any(String),
+			return_to: '/profile?linked=1',
+			intent: 'link',
+			provider: 'passkey',
+			invite: { db: 'sampledb', token: 'tok.link.1' },
+			linkPersonId: 'person-p',
+			linkedSnapshot: [{ _id: 'eu-1', uid: 'uid-g-1', provider: 'google' }]
 		});
-		expect(q(container, '[data-testid="profile-linked-accounts"]')).not.toBeNull();
-		expect(q(container, '[data-testid="profile-add-passkey"]')).toBeNull();
+		expect(window.location.href).toBe(
+			'https://api.entu-test.invalid/auth/passkey/register?next=http%3A%2F%2Flocalhost%2Fauth%2Fcallback%3Fkey%3D'
+		);
 	});
 });
 
@@ -832,13 +819,21 @@ describe('provider display names (#218)', () => {
 		expect(rowText(emailRow)).toBe('E-mail — me@example.com');
 	});
 
-	// Break: let the picker read AUTH_PROVIDERS unfiltered and passkey joins the list.
-	it('the link picker does not offer passkey — it is added through "Add a passkey" (#855)', async () => {
+	// Break: filter passkey out of the picker list.
+	it('the link picker offers every provider, passkey last (#876)', async () => {
 		const container = await openPicker();
 		const offered = qa(container, '[data-testid^="profile-link-provider-"]').map((el) =>
 			(el.getAttribute('data-testid') ?? '').replace(/^profile-link-provider-/, '')
 		);
-		expect(offered).toEqual(['smart-id', 'mobile-id', 'id-card', 'e-mail', 'google', 'apple']);
+		expect(offered).toEqual([
+			'smart-id',
+			'mobile-id',
+			'id-card',
+			'e-mail',
+			'google',
+			'apple',
+			'passkey'
+		]);
 	});
 
 	it("the link picker's google button reads 'Google' — the 'Continue with' framing is retired", async () => {

@@ -177,7 +177,6 @@
 	"profile_link_another": "Link another account",
 	"profile_link_choose_provider": "Choose a provider to link",
 	"profile_link_cancel": "Cancel",
-	"profile_add_passkey": "Add a passkey",
 	"profile_link_error_conflict": "That account is already in use by another member here.",
 	"profile_link_error_dead": "The link attempt expired or was already used.",
 	"profile_link_error_failed": "Linking failed — you can try again.",
