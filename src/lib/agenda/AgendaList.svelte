@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
-	import { getLocale } from '$lib/paraglide/runtime.js';
 	import type { AgendaItem } from '$lib/agenda/types';
 	import { goto } from '$app/navigation';
 	import {
@@ -11,7 +10,7 @@
 		longDayFormatter,
 		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
-	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
+	import { rowLinkLabel, rsvpAnswerText } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
 	import AgendaCreatedMark from '$lib/agenda/AgendaCreatedMark.svelte';
@@ -110,17 +109,6 @@
 		if (worksByEventId[eventId]?.length) return true;
 		if (!worksManage) return false;
 		return worksManage.seasonRights === 'editor' || eventRightsFor(eventId) === 'editor';
-	}
-
-	const ANSWER_LABEL: Record<RsvpStatus, () => string> = {
-		going: m.rsvp_status_going,
-		not_going: m.rsvp_status_not_going,
-		maybe: m.rsvp_status_maybe,
-		late: m.rsvp_status_late
-	};
-	function answerText(eventId: string): string | null {
-		const status = rsvpByEventId[eventId]?.status;
-		return status ? ANSWER_LABEL[status]().toLocaleLowerCase(getLocale()) : null;
 	}
 
 	function badgeStatus(eventId: string): BadgeStatus {
@@ -279,10 +267,10 @@
 					{#if membership === 'member'}
 						<div class="flex items-center gap-1">
 							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
-							{#if answerText(item.id)}
+							{#if rsvpAnswerText(rsvpByEventId[item.id]?.status)}
 								<span
 									data-testid="attendance-answer-{item.id}"
-									class="font-mono text-[9px] tracking-wide text-ink-2">({answerText(item.id)})</span
+									class="font-mono text-[9px] tracking-wide text-ink-2">({rsvpAnswerText(rsvpByEventId[item.id]?.status)})</span
 								>
 							{/if}
 						</div>
