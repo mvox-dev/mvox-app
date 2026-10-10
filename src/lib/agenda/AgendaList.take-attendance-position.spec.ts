@@ -63,7 +63,11 @@ describe('AgendaList take-attendance button position', () => {
 	});
 
 	it('a non-conductor sees no button', () => {
-		const { container } = render(AgendaList, { items: [upcoming], recentItems: [past] });
+		const { container } = render(AgendaList, {
+			items: [upcoming],
+			recentItems: [past],
+			ontakeattendance: vi.fn()
+		});
 		expect(container.querySelector('[data-testid="take-attendance-btn"]')).toBeNull();
 	});
 
