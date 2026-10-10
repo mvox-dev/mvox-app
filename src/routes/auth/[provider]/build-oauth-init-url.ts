@@ -1,3 +1,4 @@
+// Builds the Entu OAuth-init URL and stashes the CSRF/return state in localStorage.
 import { ENTU_API_BASE } from '$lib/entu-config';
 import { getUser } from '$lib/auth/storage';
 import { encodeState, OAUTH_STATE_KEY } from '$lib/auth/state';
@@ -8,46 +9,17 @@ interface OAuthInitArgs {
 	returnTo: string;
 	intent: 'login' | 'reauth' | 'invite' | 'link';
 	nonce: string;
-	/**
-	 * T4.5/#31: for `intent: 'invite'` the invite token + db must ride the
-	 * localStorage state blob (never the Entu init URL — the token must not
-	 * transit oauth.ee). #193: `intent: 'link'` reuses the same carrier — the
-	 * self-minted invite has no cross-page handoff, so the token must never enter
-	 * ANY URL (neither the Entu init URL nor an mvox one).
-	 */
 	invite?: { db: string; token: string };
-	/**
-	 * #193 — `intent: 'link'` only: the initiating (already-authenticated)
-	 * person, replayed by the callback as the redemption's expectedEntityId
-	 * tripwire.
-	 */
 	linkPersonId?: string;
-	/**
-	 * #219 — `intent: 'link'` only: the pre-mint snapshot of the identities already
-	 * bound to `linkPersonId`, replayed by the callback's same-identity duplicate
-	 * check (see state.ts `linkedSnapshot`).
-	 */
 	linkedSnapshot?: Array<{ _id: string; uid: string; provider: string }>;
 }
 
-/**
- * Build the Entu OAuth-init URL and stash the CSRF/return state in localStorage.
- *
- * DB-AGNOSTIC (T3): no `?db=` is passed. Entu's OAuth init does not need a db, and
- * the subsequent token exchange is deliberately db-less too (see exchange.ts) so
- * the issued token's `accounts` map spans every collective the user belongs to.
- */
 export function buildOAuthInitUrl(args: OAuthInitArgs): string {
-	// Persist state to localStorage BEFORE redirect — Entu's redirect appends the
-	// JWT directly after the `key=` stub in `next`, with no separator and no new
-	// query param. State must NOT live in the URL.
 	const state = encodeState({
 		nonce: args.nonce,
 		return_to: args.returnTo,
 		intent: args.intent,
 		provider: args.provider,
-		// Invite/link intent only: the blob is the ONLY carrier of the invite token
-		// across the OAuth round-trip. It never enters the returned Entu init URL.
 		...(args.invite ? { invite: args.invite } : {}),
 		...(args.linkPersonId ? { linkPersonId: args.linkPersonId } : {}),
 		...(args.intent === 'link' && args.linkedSnapshot
@@ -59,9 +31,6 @@ export function buildOAuthInitUrl(args: OAuthInitArgs): string {
 	const callbackUrl = `${args.origin}/auth/callback?key=`;
 	const params = new URLSearchParams({ next: callbackUrl });
 
-	// #193 Hazard 3: `intent: 'link'` SUPPRESSES login_hint — the user is linking
-	// a NEW provider, so pre-filling the account they already have would steer
-	// them back into the identity they're trying to add a second one alongside.
 	if (args.intent !== 'link') {
 		const user = getUser();
 		if (user?.email) {
@@ -69,7 +38,8 @@ export function buildOAuthInitUrl(args: OAuthInitArgs): string {
 		}
 	}
 
-	return `${ENTU_API_BASE}auth/${args.provider}?${params.toString()}`;
+	const path =
+		args.intent === 'link' && args.provider === 'passkey' ? 'passkey/register' : args.provider;
+	return `${ENTU_API_BASE}auth/${path}?${params.toString()}`;
 }
 
-// (*MVOX:Josquin*)

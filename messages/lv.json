@@ -177,7 +177,6 @@
 	"profile_link_another": "Piesaistīt citu kontu",
 	"profile_link_choose_provider": "Izvēlieties pakalpojumu sniedzēju piesaistei",
 	"profile_link_cancel": "Atcelt",
-	"profile_add_passkey": "Pievienot piekļuves atslēgu",
 	"profile_link_error_conflict": "Šis konts jau tiek izmantots cita dalībnieka kontā.",
 	"profile_link_error_dead": "Piesaistes mēģinājumam beidzās derīguma termiņš vai tas jau bija izmantots.",
 	"profile_link_error_failed": "Piesaiste neizdevās — varat mēģināt vēlreiz.",
