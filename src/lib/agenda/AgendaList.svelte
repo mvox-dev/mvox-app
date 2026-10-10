@@ -10,7 +10,7 @@
 		longDayFormatter,
 		tallinnDayKey
 	} from '$lib/preferences/timeFormat';
-	import { rowLinkLabel } from '$lib/agenda/agendaRowParts';
+	import { rowLinkLabel, rsvpAnswerText } from '$lib/agenda/agendaRowParts';
 	import AgendaEmpty from '$lib/agenda/AgendaEmpty.svelte';
 	import EventTypeBadge from '$lib/agenda/EventTypeBadge.svelte';
 	import AgendaCreatedMark from '$lib/agenda/AgendaCreatedMark.svelte';
@@ -258,13 +258,23 @@
 					<span class="text-[10px] text-ink-2">{m.agenda_duration_min({ minutes: item.durationMinutes })}</span>
 				</a>
 				<div class="flex min-w-0 flex-col gap-1">
-					{@render rowBody(item)}
-					<RsvpControl status={rsvpByEventId[item.id]?.status ?? null} pending={true} />
+					<div class="flex items-start justify-between gap-2">
+						<div class="flex min-w-0 flex-col gap-1">{@render rowBody(item)}</div>
+						{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
+							<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
+						{/if}
+					</div>
 					{#if membership === 'member'}
-						<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
-					{/if}
-					{#if conductorEventIds.has(item.id) && ontakeattendance && !(attendancePanel && attendancePanel.item.id === item.id)}
-						<TakeAttendanceButton eventName={item.name} onclick={() => ontakeattendance?.(item)} />
+						{@const answer = rsvpAnswerText(rsvpByEventId[item.id]?.status)}
+						<div class="flex items-center gap-1">
+							<AttendanceBadge status={badgeStatus(item.id)} testid="attendance-badge-{item.id}" />
+							{#if answer}
+								<span
+									data-testid="attendance-answer-{item.id}"
+									class="font-mono text-[9px] tracking-wide text-ink-2">({answer})</span
+								>
+							{/if}
+						</div>
 					{/if}
 					{#if attendancePanel && attendancePanel.item.id === item.id}
 						<div data-card-controls>
