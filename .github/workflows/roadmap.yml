@@ -49,6 +49,26 @@ permissions:
   pages: read
 
 jobs:
+  # A closed issue is out of the queue: strip its motion labels (Mihkel, 2026-10-10).
+  clear-motion-labels:
+    if: github.event_name == 'issues' && github.event.action == 'closed'
+    permissions:
+      issues: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove motion labels from the closed issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.issue.number }}
+          LABELS: ${{ toJSON(github.event.issue.labels.*.name) }}
+        run: |
+          for label in "ready" "in research" "researched" "prepped" "in process" "in human review"; do
+            if echo "$LABELS" | jq -e --arg l "$label" 'index($l)' > /dev/null; then
+              gh issue edit "$NUMBER" --repo "$REPO" --remove-label "$label"
+            fi
+          done
+
   build:
     runs-on: ubuntu-latest
     concurrency:
