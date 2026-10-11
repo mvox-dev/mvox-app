@@ -15,6 +15,7 @@
 	import { openFileBytes, type OpenedFileBytes } from '$lib/files/openFileBytes';
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
+	import DownloadLink from './DownloadLink.svelte';
 	import PageInk from '$lib/strokes/PageInk.svelte';
 	import { getInkStore } from '$lib/strokes/inkStore';
 	import { createPartInk } from '$lib/strokes/partInk.svelte';
@@ -40,9 +41,7 @@
 	// Two separate disposals: opened.release() and pdf.destroy() (openFileBytes.ts).
 	let opened: OpenedFileBytes | null = null;
 	let pdf: OpenedPdf | null = null;
-	// The saved file's name: the label handed down, else the stored one; '' lets the browser name it.
-	let downloadName = $state('');
-	let downloadUrl = $state('');
+	let source = $state<{ url: string; db: string; personId: string } | null>(null);
 
 	const tapPrev: TapTracker = createTapTracker();
 	const tapNext: TapTracker = createTapTracker();
@@ -119,14 +118,6 @@
 		else if (event.key === 'ArrowLeft' || event.key === 'PageUp') previous();
 	}
 
-	async function storedFilename(db: string, personId: string, fileId: string): Promise<string> {
-		try {
-			return (await getAppLabelStore().labelsFor(db, personId)).get(fileId)?.filename ?? '';
-		} catch {
-			return '';
-		}
-	}
-
 	// Only a fetch TypeError means nothing answered (not on this device). Anything else is a
 	// server that answered and refused: an open failure, never "not on this device".
 	function wireUnreachable(error: unknown): boolean {
@@ -193,16 +184,8 @@
 						result.release();
 						return;
 					}
-					downloadName =
-						label?.filename ??
-						(await storedFilename(identity.db, identity.personId, fileId));
-					if (cancelled) {
-						doc.destroy();
-						result.release();
-						return;
-					}
 					opened = result;
-					downloadUrl = result.url;
+					source = { url: result.url, db: identity.db, personId: identity.personId };
 					pdf = doc;
 					numPages = doc.numPages;
 					currentPage = 1;
@@ -231,6 +214,7 @@
 			pdf = null;
 			opened?.release();
 			opened = null;
+			source = null;
 		};
 	});
 
@@ -365,14 +349,9 @@
 						{m.part_viewer_hide_marks()}
 					</button>
 				{/if}
-				<a
-					href={downloadUrl}
-					download={downloadName}
-					class="font-sans text-sm text-paper underline"
-					data-testid="part-download"
-				>
-					{m.part_download()}
-				</a>
+				{#if source}
+					<DownloadLink {...source} fileId={page.params.fileId ?? ''} label={page.state.partLabel} />
+				{/if}
 			</div>
 			<button
 				type="button"
