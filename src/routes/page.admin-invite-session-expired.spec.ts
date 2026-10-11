@@ -6,8 +6,15 @@ vi.mock('$lib/paraglide/messages.js', async () =>
 	(await import('$lib/testing/messageMocks')).echoMessages()
 );
 
-vi.mock('$lib/invite/inviteData', async () =>
-	(await import('$lib/testing/mocks/admin')).inviteDataModule({ errors: true })
+vi.mock('$lib/invite/inviteData', async () => {
+	const admin = await import('$lib/testing/mocks/admin');
+	return { ...admin.inviteDataModule({ errors: true }), mintSelfLinkInvite: admin.mintSelfLinkInviteMock };
+});
+vi.mock('$lib/nav/adminStore', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).ownerTierOverRealModule(importOriginal)
+);
+vi.mock('$lib/profile/linkedIdentities', async (importOriginal) =>
+	(await import('$lib/testing/mocks/admin')).joinStateDetailsModule(importOriginal)
 );
 vi.mock('$lib/collectives/discover', async () =>
 	(await import('$lib/testing/routeMocks')).discoverModule()
@@ -20,16 +27,25 @@ vi.mock('$lib/entu-config', async () =>
 );
 
 import Page from './admin/invite/+page.svelte';
+import InviteSurface from '$lib/invite/InviteSurface.svelte';
 import {
 	InviteCreateError,
 	createInviteMock,
+	listJoinStatesMock,
+	mintSelfLinkInviteMock,
 	resolveInviteParentMock,
+	resolveOwnerTierMock,
 	resolveParentMock
 } from '$lib/testing/mocks/admin';
 import { authExpiredError, resetInviteMocks, selectSampledb } from '$lib/testing/pages/admin';
 import { cleanupReset } from '$lib/testing/pages/dom';
 
-beforeEach(resetInviteMocks);
+beforeEach(() => {
+	resetInviteMocks();
+	for (const mock of [resolveOwnerTierMock, listJoinStatesMock, mintSelfLinkInviteMock]) {
+		mock.mockReset();
+	}
+});
 
 afterEach(cleanupReset);
 
@@ -57,6 +73,38 @@ describe('/admin/invite — session expired (#107 review F2)', () => {
 			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="invite-admin-error"]')).toBeNull();
+	});
+
+	it('an auth-expired person-targeted MINT shows the session-expired notice — not the person error', async () => {
+		resolveOwnerTierMock.mockResolvedValue('owner');
+		listJoinStatesMock.mockResolvedValue({ 'p-cilla': 'absent' });
+		mintSelfLinkInviteMock.mockRejectedValue(authExpiredError());
+		selectSampledb();
+
+		const { container } = render(InviteSurface, {
+			presetDb: 'sampledb',
+			presetDbEntityId: 'org-1',
+			viewerPersonId: 'admin-p',
+			layout: 'embedded',
+			roster: [{ personId: 'p-cilla', name: 'Cilla Cane' }]
+		});
+		const select = await waitFor(() => {
+			const el = container.querySelector(
+				'[data-testid="invite-person-select"]'
+			) as HTMLSelectElement | null;
+			expect(el).not.toBeNull();
+			return el!;
+		});
+		await fireEvent.change(select, { target: { value: 'p-cilla' } });
+		await fireEvent.click(
+			container.querySelector('[data-testid="invite-admin-submit"]') as HTMLButtonElement
+		);
+
+		await waitFor(() => {
+			expect(container.querySelector('[data-testid="session-expired"]')).not.toBeNull();
+		});
+		expect(mintSelfLinkInviteMock).toHaveBeenCalledTimes(1);
+		expect(container.querySelector('[data-testid="invite-mint-error"]')).toBeNull();
 	});
 
 	it('a not-visible prerequisite shows no-access, not the session-expired notice', async () => {

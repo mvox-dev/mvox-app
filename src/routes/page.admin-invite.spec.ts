@@ -83,6 +83,7 @@ describe('/admin/invite — prerequisites', () => {
 			expect(container.querySelector('[data-testid="invite-admin-no-access"]')).not.toBeNull();
 		});
 		expect(container.querySelector('[data-testid="invite-db"]')).toBeNull();
+		expect(resolveParentMock).not.toHaveBeenCalled();
 	});
 
 	it('an HTTP/network prerequisite failure → generic localized error (not raw message); logs detail to console.error; retry works', async () => {

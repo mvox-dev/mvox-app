@@ -46,55 +46,57 @@ interface CreateInviteResult {
 	inviteToken: string;
 }
 
-// The database entity is the person parent; `add_user` is never read, so it cannot re-arm #22.
-export async function resolvePersonParentId(
+async function resolveDbEntityOrInviteFail(
 	cfg: EntuCfg,
-	fetchImpl: typeof fetch = fetch
+	phase: InviteCreatePhase,
+	messages: { http: (detail: string) => string; notVisible: string },
+	fetchImpl: typeof fetch
 ): Promise<string> {
 	let dbEntityId: string | null;
 	try {
 		dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
 	} catch (e) {
 		if (e instanceof DatabaseEntityLookupError) {
-			throw new InviteCreateError(
-				`resolving the person parent failed: ${e.message}`,
-				{ phase: 'person-parent-resolve', reason: 'http' }
-			);
+			throw new InviteCreateError(messages.http(e.message), { phase, reason: 'http' });
 		}
 		throw e;
 	}
 	if (!dbEntityId) {
-		throw new InviteCreateError(
-			'no database entity is readable — creating invites requires rights on the database entity that this account does not appear to have',
-			{ phase: 'person-parent-resolve', reason: 'not-visible' }
-		);
+		throw new InviteCreateError(messages.notVisible, { phase, reason: 'not-visible' });
 	}
 	return dbEntityId;
 }
 
-export async function resolveInviteParentId(
+// The database entity is the person parent; `add_user` is never read, so it cannot re-arm #22.
+export function resolvePersonParentId(
 	cfg: EntuCfg,
 	fetchImpl: typeof fetch = fetch
 ): Promise<string> {
-	let dbEntityId: string | null;
-	try {
-		dbEntityId = await resolveDatabaseEntityId(cfg, fetchImpl);
-	} catch (e) {
-		if (e instanceof DatabaseEntityLookupError) {
-			throw new InviteCreateError(`resolving the invite collective failed: ${e.message}`, {
-				phase: 'org-resolve',
-				reason: 'http'
-			});
-		}
-		throw e;
-	}
-	if (!dbEntityId) {
-		throw new InviteCreateError(
-			`no database entity is readable in db '${cfg.db}' — inviting requires visibility into the collective`,
-			{ phase: 'org-resolve', reason: 'not-visible' }
-		);
-	}
-	return dbEntityId;
+	return resolveDbEntityOrInviteFail(
+		cfg,
+		'person-parent-resolve',
+		{
+			http: (detail) => `resolving the person parent failed: ${detail}`,
+			notVisible:
+				'no database entity is readable — creating invites requires rights on the database entity that this account does not appear to have'
+		},
+		fetchImpl
+	);
+}
+
+export function resolveInviteParentId(
+	cfg: EntuCfg,
+	fetchImpl: typeof fetch = fetch
+): Promise<string> {
+	return resolveDbEntityOrInviteFail(
+		cfg,
+		'org-resolve',
+		{
+			http: (detail) => `resolving the invite collective failed: ${detail}`,
+			notVisible: `no database entity is readable in db '${cfg.db}' — inviting requires visibility into the collective`
+		},
+		fetchImpl
+	);
 }
 
 export async function createInvite(
