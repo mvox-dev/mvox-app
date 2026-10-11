@@ -132,6 +132,27 @@ describe('season panel — a STOPPED bulk run resumes instead of duplicating', (
 		expect(q(container, 'series-create-preview-count')).toBeNull();
 	});
 
+	it('a stopped run blocks "add event": the entry is disabled and a click opens no event form', async () => {
+		createEventMock.mockImplementation(async () => {
+			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
+			return `ev-new-${createEventMock.mock.calls.length}`;
+		});
+		const container = await renderReady();
+		await openSeriesForm(container);
+		await fillValidTemplate(container);
+		await enableMondayGeneration(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(q(container, 'series-create-resume')).not.toBeNull();
+		});
+
+		const add = q(container, 'season-manage-add-event') as HTMLButtonElement;
+		expect(add.disabled).toBe(true);
+		await fireEvent.click(add);
+		await flush();
+		expect(q(container, 'event-create-form')).toBeNull();
+	});
+
 	it('review F3 — the preview ROWS shrink to the remainder too: the list and the resume notice describe the SAME set (never 3 dates over a "2 remaining")', async () => {
 		createEventMock.mockImplementation(async () => {
 			if (createEventMock.mock.calls.length === 2) throw new Error('boom');
