@@ -3,9 +3,7 @@ import { COMMENT_FIXTURES_DIR, changedFiles, splitLines, type GitRunner } from '
 export const STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
-export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/events/EventRsvpSection.svelte'
-];
+export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
 
 const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];
 const SOURCE_FILE = /\.(ts|svelte)$/;

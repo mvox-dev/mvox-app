@@ -12,7 +12,7 @@ import { svelteSurfaces } from '$lib/testing/svelteSurfaces';
 const FILES = [
 	'src/lib/admin/AdminRoles.svelte',
 	'src/lib/events/EventFieldEditNotes.svelte',
-	'src/lib/events/EventRsvpSection.svelte',
+	'src/lib/events/EventRsvpTally.svelte',
 	'src/lib/library/BulkCheckoutPanel.svelte',
 	'src/lib/agenda/ConductorChip.svelte',
 	'src/lib/components/attendance/AttendanceSurface.svelte',
