@@ -107,6 +107,8 @@
 			return;
 		}
 		const cfg = cfgFor(current.db);
+		const runDb = cfg.db;
+		const dbChanged = (): boolean => selected?.db !== runDb;
 
 		submitting = true;
 		try {
@@ -115,6 +117,7 @@
 				{ area: 'agenda', action: 'season create' },
 				current.personId
 			);
+			if (dbChanged()) return;
 			if (!dbEntityId) {
 				setSeasonCreateError(m.season_create_failed, null);
 				return;
@@ -130,9 +133,10 @@
 				});
 			} catch (e) {
 				console.error('agenda: season create failed', name, e);
-				setSeasonCreateError(m.season_create_failed, null);
+				if (!dbChanged()) setSeasonCreateError(m.season_create_failed, null);
 				return;
 			}
+			if (dbChanged()) return;
 
 			status = m.season_created({ name });
 			onclose();
