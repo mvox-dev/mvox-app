@@ -28,7 +28,7 @@
 		type RolePerson
 	} from '$lib/admin/roleManagement';
 	import { listSections, type SectionNode } from '$lib/sections/sectionData';
-	import InviteSurface from '$lib/components/admin/InviteSurface.svelte';
+	import InviteSurface from '$lib/invite/InviteSurface.svelte';
 	// Role writes and the rename are refused while offline; nothing is queued.
 	import { writesAvailable } from '$lib/net/online';
 	import AdminRoles from '$lib/admin/AdminRoles.svelte';

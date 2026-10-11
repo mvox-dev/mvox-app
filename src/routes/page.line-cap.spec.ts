@@ -1,18 +1,12 @@
-// Source files stay small enough to read whole: one cap, a shrink-only exception list, and a
-// register of every file over the next step.
-import { afterEach, describe, expect, it } from 'vitest';
-import { readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+// Source files stay small enough to read whole: one cap and a shrink-only exception list.
+import { describe, expect, it } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import {
 	LINE_CAP_EXCEPTIONS,
-	LINE_CAP_REGISTER,
-	NEXT_STEP,
 	STEP,
-	addedFiles,
-	addedOverNextStep,
 	capViolations,
 	countLines,
-	registerMismatch,
 	selectSourceFiles
 } from '$lib/testing/lineCap';
 
@@ -44,27 +38,9 @@ describe('#508 — no agenda file over the line cap', () => {
 });
 
 const ORIGINAL_EXCEPTIONS = [
-	'src/lib/agenda/EventCreateForm.svelte',
-	'src/lib/agenda/RepertoireElement.svelte',
-	'src/lib/agenda/SeasonManagePanel.svelte',
-	'src/lib/entity/entityCreate.ts',
-	'src/lib/entu/readCache.ts',
-	'src/lib/events/EventFieldEdit.svelte',
-	'src/lib/events/EventScheduleSection.svelte',
-	'src/lib/files/byteStore.ts',
-	'src/lib/invite/inviteData.ts',
-	'src/lib/library/libraryData.ts',
-	'src/lib/roster/rosterData.ts',
-	'src/lib/roster/rosterMemberOps.ts',
-	'src/lib/sections/sectionActions.ts',
-	'src/lib/sections/sectionArrangeOps.ts',
-	'src/routes/+page.svelte',
-	'src/routes/admin/+page.svelte',
-	'src/routes/event/[id]/+page.svelte',
-	'src/routes/library/+page.svelte',
-	'src/routes/links/+page.svelte',
-	'src/routes/profile/+page.svelte',
-	'src/routes/roster/+page.svelte'
+	'src/lib/agenda/SeriesCreateForm.svelte',
+	'src/lib/components/admin/InviteSurface.svelte',
+	'src/lib/events/EventRsvpSection.svelte'
 ];
 
 const planted = (n: number) => 'x\n'.repeat(n);
@@ -107,40 +83,6 @@ describe('#525 — the line-cap rules, each shown by a planted example', () => {
 		]);
 	});
 
-	it('a register missing a file over the next step fails', () => {
-		expect(registerMismatch({ 'src/big.ts': NEXT_STEP + 1 }, [])).toEqual({
-			missing: ['src/big.ts'],
-			stale: []
-		});
-	});
-
-	it('a register listing a file at or under the next step, or no longer there, fails', () => {
-		expect(
-			registerMismatch({ 'src/small.ts': NEXT_STEP }, ['src/small.ts', 'src/gone.ts'])
-		).toEqual({ missing: [], stale: ['src/gone.ts', 'src/small.ts'] });
-	});
-
-	it('an added file over the next step fails; one at the next step passes', () => {
-		const counts = { 'src/new-big.ts': NEXT_STEP + 1, 'src/new-ok.ts': NEXT_STEP };
-		expect(addedOverNextStep(['src/new-big.ts', 'src/new-ok.ts'], counts)).toEqual([
-			{ file: 'src/new-big.ts', lines: NEXT_STEP + 1 }
-		]);
-	});
-
-	it('added files are read against the merge-base with main, renames excluded, untracked included', () => {
-		const calls: string[][] = [];
-		const git = (args: string[]) => {
-			calls.push(args);
-			if (args[0] === 'merge-base') return 'base123\n';
-			return args[0] === 'ls-files' ? 'src/lib/untracked.ts\n' : 'src/lib/new.ts\n';
-		};
-		expect(addedFiles({ git })).toEqual(['src/lib/new.ts', 'src/lib/untracked.ts']);
-		expect(calls).toEqual([
-			['merge-base', 'origin/main', 'HEAD'],
-			['diff', '--name-only', '--diff-filter=A', 'base123'],
-			['ls-files', '--others', '--exclude-standard']
-		]);
-	});
 });
 
 describe('#525 — every source file under src/ obeys the line cap', () => {
@@ -157,30 +99,9 @@ describe('#525 — every source file under src/ obeys the line cap', () => {
 		expect(capViolations(counts, LINE_CAP_EXCEPTIONS)).toEqual([]);
 	});
 
-	it('the exception list only shrinks: every entry is one of the original 21', () => {
+	it('the exception list only shrinks: every entry is one of the original 3', () => {
 		expect(LINE_CAP_EXCEPTIONS.filter((file) => !ORIGINAL_EXCEPTIONS.includes(file))).toEqual([]);
 		expect(new Set(LINE_CAP_EXCEPTIONS).size).toBe(LINE_CAP_EXCEPTIONS.length);
-	});
-
-	it(`the register lists exactly the source files over ${NEXT_STEP} lines`, () => {
-		expect(registerMismatch(counts, LINE_CAP_REGISTER)).toEqual({ missing: [], stale: [] });
-	});
-
-	it(`every source file this change adds is at most ${NEXT_STEP} lines`, () => {
-		expect(addedOverNextStep(selectSourceFiles(addedFiles()), counts)).toEqual([]);
-	});
-});
-
-describe('#568 — an untracked new file counts as added', () => {
-	const plantedFile = 'src/lib/testing/comment-rules-fixtures/planted-over-next-step.ts';
-
-	afterEach(() => rmSync(resolve(ROOT, plantedFile), { force: true }));
-
-	it('an untracked new file over the next step fails the added-file check', () => {
-		writeFileSync(resolve(ROOT, plantedFile), planted(NEXT_STEP + 1));
-		const added = addedFiles().filter((file) => file === plantedFile);
-		const counts = { [plantedFile]: lineCount(resolve(ROOT, plantedFile)) };
-		expect(addedOverNextStep(added, counts)).toEqual([{ file: plantedFile, lines: NEXT_STEP + 1 }]);
 	});
 });
 

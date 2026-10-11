@@ -19,7 +19,7 @@ const PERSON_NAME_SURFACES: Reasons = {
 			'the conductor marks attendance per named member: the pill label ("Present: Ann") ' +
 			'and the RSVP mark (:173) on the same row'
 	},
-	'src/lib/components/admin/InviteSurface.svelte': {
+	'src/lib/invite/InviteSurface.svelte': {
 		'p.name': 'the uninvited-person picker: choosing whom to invite'
 	},
 	'src/lib/library/CopyRow.svelte': {
@@ -50,7 +50,7 @@ const NOT_A_PERSONS_NAME: Reasons = {
 	'src/lib/components/SegmentedPill.svelte': {
 		label: 'its own label prop; each caller is scanned at its <SegmentedPill label=…>'
 	},
-	'src/lib/components/admin/InviteSurface.svelte': { 'c.name': 'a collective (database)' },
+	'src/lib/invite/InviteSurface.svelte': { 'c.name': 'a collective (database)' },
 	'src/lib/components/attendance/AttendanceSurface.svelte': {
 		'status.label': 'the attendance status word'
 	},

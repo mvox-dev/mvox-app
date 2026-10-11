@@ -1,16 +1,9 @@
-import { COMMENT_FIXTURES_DIR, changedFiles, splitLines, type GitRunner } from './commentRules';
+import { COMMENT_FIXTURES_DIR, splitLines } from './commentRules';
 
-export const STEP = 500;
-export const NEXT_STEP = 400;
+export const STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [];
-
-export const LINE_CAP_REGISTER: readonly string[] = [
-	'src/lib/agenda/SeriesCreateForm.svelte',
-	'src/lib/components/admin/InviteSurface.svelte',
-	'src/lib/events/EventRsvpSection.svelte'
-];
 
 const FIXTURE_DIRS = [COMMENT_FIXTURES_DIR, 'src/lib/testing/line-cap-fixtures/'];
 const SOURCE_FILE = /\.(ts|svelte)$/;
@@ -45,29 +38,4 @@ export function capViolations(counts: LineCounts, exceptions: readonly string[])
 		.filter((file) => (counts[file] ?? 0) <= STEP)
 		.map((file) => ({ file, lines: counts[file] ?? 0, reason: 'exception-within-cap' }));
 	return [...over, ...within].sort((a, b) => a.file.localeCompare(b.file));
-}
-
-export function registerMismatch(
-	counts: LineCounts,
-	register: readonly string[]
-): { missing: string[]; stale: string[] } {
-	const missing = Object.entries(counts)
-		.filter(([file, lines]) => lines > NEXT_STEP && !register.includes(file))
-		.map(([file]) => file)
-		.sort();
-	const stale = register.filter((file) => (counts[file] ?? 0) <= NEXT_STEP).sort();
-	return { missing, stale };
-}
-
-export function addedOverNextStep(
-	added: string[],
-	counts: LineCounts
-): Array<{ file: string; lines: number }> {
-	return added
-		.map((file) => ({ file, lines: counts[file] ?? 0 }))
-		.filter(({ lines }) => lines > NEXT_STEP);
-}
-
-export function addedFiles(options: { git?: GitRunner } = {}): string[] {
-	return changedFiles({ ...options, diffFilter: 'A' });
 }

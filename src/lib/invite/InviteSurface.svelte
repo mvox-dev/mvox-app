@@ -1,25 +1,18 @@
 <script lang="ts">
-	import { reportProblem } from '$lib/problems/reportProblem';
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import { getToken } from '$lib/auth/storage';
 	import { cfgFor } from '$lib/entu/cfg';
 	import { collectiveState } from '$lib/collectives/store';
 	import RedactedText from '$lib/components/RedactedText.svelte';
-	import {
-		createInvite,
-		InviteCreateError,
-		resolveInviteParentId,
-		mintSelfLinkInvite,
-		SelfLinkMintError
-	} from '$lib/invite/inviteData';
+	import { createInvite, mintSelfLinkInvite } from './inviteData';
+	import { loadPersonInviteData, loadPrerequisites, submitInvite } from './inviteSurfaceOps';
 	import { buildInviteUrl } from '$lib/invite/invite-links';
 	import { parseInviteToken } from '$lib/invite/parse-invite-token';
 	import { createInviteLinkCopier } from '$lib/invite/copy-invite-link';
-	import { resolveOwnerTier, type OwnerTier } from '$lib/nav/adminStore';
+	import type { OwnerTier } from '$lib/nav/adminStore';
 	import { writesAvailable } from '$lib/net/online';
-	import { listJoinStates, type JoinState } from '$lib/profile/linkedIdentities';
-	import { isAuthExpiredError } from '$lib/entu/request';
+	import type { JoinState } from '$lib/profile/linkedIdentities';
 	import SessionExpiredNotice from '$lib/components/auth/SessionExpiredNotice.svelte';
 	import { isoDateFormatter } from '$lib/preferences/timeFormat';
 	import type { RouteLoadStatus } from '$lib/loading/routeLoad';
@@ -103,34 +96,6 @@
 
 	let resolvedPersonDataKey = '';
 
-	async function loadPersonInviteData(
-		cfg: { db: string; token: string },
-		dbEntityIdForTier: string,
-		personIdForTier: string,
-		personIds: string[]
-	): Promise<void> {
-		personListError = false;
-		let tier: OwnerTier;
-		try {
-			tier = await resolveOwnerTier(cfg, personIdForTier, undefined, dbEntityIdForTier);
-		} catch (e) {
-			reportProblem({ area: 'admin/invite', action: 'reading the owner tier', error: e });
-			tier = 'error';
-		}
-		ownerTier = tier;
-		if (tier !== 'owner') {
-			joinStates = {};
-			return;
-		}
-		try {
-			joinStates = await listJoinStates(cfg, personIds);
-		} catch (e) {
-			reportProblem({ area: 'admin/invite', action: 'loading the join states', error: e });
-			joinStates = {};
-			personListError = true;
-		}
-	}
-
 	$effect(() => {
 		if (!controlled || !presetDbEntityId || !viewerPersonId) return;
 		const token = getToken();
@@ -139,38 +104,29 @@
 		const key = `${presetDb}|${presetDbEntityId}|${viewerPersonId}|${personIds.join(',')}`;
 		if (key === resolvedPersonDataKey) return;
 		resolvedPersonDataKey = key;
-		void loadPersonInviteData({ db: presetDb, token }, presetDbEntityId, viewerPersonId, personIds);
+		personListError = false;
+		void loadPersonInviteData({ db: presetDb, token }, presetDbEntityId, viewerPersonId, personIds).then(
+			(loaded) => {
+				ownerTier = loaded.ownerTier;
+				joinStates = loaded.joinStates;
+				personListError = loaded.personListError;
+			}
+		);
 	});
 
 	let hasShownForm = !!(initialPresetDb && initialPresetDbEntityId);
 
-	async function loadPrerequisites(targetDb: string): Promise<void> {
+	async function loadDbPrerequisites(targetDb: string): Promise<void> {
 		if (!hasShownForm) status = 'loading';
 		dbEntityId = '';
-		const token = getToken();
-		if (!token) {
-			console.error('admin/invite: no auth token in storage on a protected route');
-			status = 'load-error';
-			return;
-		}
-		const cfg = { db: targetDb, token };
-		try {
-			const resolvedDbEntityId = await resolveInviteParentId(cfg);
-			dbEntityId = resolvedDbEntityId;
+		const result = await loadPrerequisites(targetDb);
+		if (result.status === 'ready') {
+			dbEntityId = result.dbEntityId;
 			resolvedForDb = targetDb;
 			status = 'ready';
 			hasShownForm = true;
-		} catch (e) {
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			if (e instanceof InviteCreateError && e.reason === 'not-visible') {
-				status = 'no-access';
-			} else {
-				reportProblem({ area: 'admin/invite', action: 'load', error: e });
-				status = 'load-error';
-			}
+		} else {
+			status = result.status;
 		}
 	}
 
@@ -204,12 +160,22 @@
 		if (availableDbs.length === 0) return; // effect A already set no-collective
 		if (dbId) {
 			if (dbId === resolvedForDb) return; // already resolved — no redundant fetch
-			void loadPrerequisites(dbId);
+			void loadDbPrerequisites(dbId);
 		} else {
 			status = 'ready';
 			hasShownForm = true;
 		}
 	});
+
+	function showInviteLink(inviteToken: string): void {
+		inviteLink = buildInviteUrl(window.location.origin, inviteToken);
+		const parsed = parseInviteToken(inviteToken, Date.now());
+		inviteExpiryDate =
+			parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
+		copied = false;
+		copyFailed = false;
+		selectedPersonId = '';
+	}
 
 	async function submit(): Promise<void> {
 		if (isOffline) return;
@@ -217,61 +183,26 @@
 		const cfg = cfgFor(dbId);
 		createError = null;
 		personMintError = null;
-
-		if (selectedPersonId) {
-			const targetPersonId = selectedPersonId;
-			const targetName = selectedPerson?.name ?? '';
-			status = 'creating';
-			try {
-				const { inviteToken } = await mintSelfLinkInvite(cfg, targetPersonId);
-				inviteLink = buildInviteUrl(window.location.origin, inviteToken);
-				const parsed = parseInviteToken(inviteToken, Date.now());
-				inviteExpiryDate =
-					parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
-				copied = false;
-				copyFailed = false;
-				selectedPersonId = '';
-				try {
-					const updated = await listJoinStates(cfg, [targetPersonId]);
-					joinStates = { ...joinStates, ...updated };
-				} catch (refreshErr) {
-					reportProblem({ area: 'admin/invite', action: 're-reading the join state after an invite', error: refreshErr });
-				}
-				status = 'done';
-			} catch (e) {
-				if (isAuthExpiredError(e)) {
-					status = 'session-expired';
-					return;
-				}
-				console.error('admin/invite: person-targeted mint failed', e);
-				const ownerOnly = e instanceof SelfLinkMintError && e.reason === 'missing-self-editor';
-				personMintError = { name: targetName, ownerOnly };
-				status = 'create-error';
-			}
-			return;
-		}
-
 		status = 'creating';
-		try {
-			const result = await createInvite(cfg, { dbEntityId });
-			inviteLink = buildInviteUrl(window.location.origin, result.inviteToken);
-			const parsed = parseInviteToken(result.inviteToken, Date.now());
-			inviteExpiryDate =
-				parsed.status === 'invalid' ? '' : inviteExpiryDateFmt.format(new Date(parsed.expMs));
-			copied = false;
-			copyFailed = false;
+		const result = await submitInvite(
+			cfg,
+			{ dbEntityId, personId: selectedPersonId, personName: selectedPerson?.name ?? '' },
+			{
+				createInvite: (c, input) => createInvite(c, input),
+				mintSelfLinkInvite: (c, personId) => mintSelfLinkInvite(c, personId)
+			},
+			showInviteLink
+		);
+		if (result.kind === 'done') {
+			joinStates = { ...joinStates, ...result.refreshedJoinStates };
 			status = 'done';
-		} catch (e) {
-			if (isAuthExpiredError(e)) {
-				status = 'session-expired';
-				return;
-			}
-			console.error('admin/invite: create failed', e);
-			if (e instanceof InviteCreateError) {
-				createError = { personId: e.personId };
-			} else {
-				createError = {};
-			}
+		} else if (result.kind === 'session-expired') {
+			status = 'session-expired';
+		} else if (result.kind === 'person-error') {
+			personMintError = { name: result.name, ownerOnly: result.ownerOnly };
+			status = 'create-error';
+		} else {
+			createError = { personId: result.personId };
 			status = 'create-error'; // form values stay — retry enabled
 		}
 	}
@@ -324,7 +255,7 @@
 				type="button"
 				data-testid="invite-admin-retry-load"
 				class="self-start rounded-md border border-ink px-4 py-2 text-sm hover:bg-ink hover:text-paper"
-				onclick={() => dbId && loadPrerequisites(dbId)}
+				onclick={() => dbId && loadDbPrerequisites(dbId)}
 			>
 				{m.admin_invite_retry_load()}
 			</button>
