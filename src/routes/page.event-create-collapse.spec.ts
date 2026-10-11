@@ -465,6 +465,36 @@ describe('#244 amendment — when the active filter excludes the created type, t
 		expect(q(container, `agenda-row-${UP_REHEARSAL.id}`)).not.toBeNull();
 	});
 
+	it('the filter is read when the create lands: pressed to rehearsal mid-create, the panel STAYS and the status says hidden', async () => {
+		let resolveCreate!: (id: string) => void;
+		createEventMock.mockImplementation(
+			() =>
+				new Promise<string>((r) => {
+					resolveCreate = r;
+				})
+		);
+		const container = await renderReady();
+		await openFormFromPanel(container);
+		await fillConcert(container);
+		await submit(container);
+		await waitFor(() => {
+			expect(createEventMock).toHaveBeenCalledTimes(1);
+		});
+		await fireEvent.click(q(container, 'agenda-filter-rehearsal') as HTMLElement);
+		worldHasNewEvent = true;
+		resolveCreate(NEW_EVENT_ID);
+
+		await waitFor(() => {
+			expect(q(container, 'event-create-form')).toBeNull();
+		});
+		await new Promise((r) => setTimeout(r, 0));
+		await settleMicro();
+		expect(q(container, 'season-manage-panel')).not.toBeNull();
+		expect(q(container, 'event-create-status')?.textContent).toContain(
+			'event_created_hidden_by_filter'
+		);
+	});
+
 	it('stayed-open focus is deliberate too: the panel keeps focus (today’s restoreEventCreateFocus outcome) — never <body>', async () => {
 		const container = await renderReady();
 		await fireEvent.click(q(container, 'agenda-filter-rehearsal') as HTMLElement);
