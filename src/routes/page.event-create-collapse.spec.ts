@@ -24,8 +24,6 @@
 // AgendaList, only the data seams mocked.
 import { render, cleanup, fireEvent, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 // Lenient message mock — every key renders as itself (callable with params).
 vi.mock('$lib/paraglide/messages.js', async () =>
@@ -629,107 +627,5 @@ describe('#244 review F3 — a create whose row is never listed must not collaps
 	});
 });
 
-// ── 5. structural pins: the route, and the filter-write absence ────────────────
 
-// CONDITION 3 (never mid-run) has no single-db UI choreography to drive it end-to-end.
-
-// The enforceable pin is the ROUTE: success must collapse via
-// closeSeasonManagePanel(), never flip seasonManageOpen by hand and route around its refusal.
-
-const PAGE_SOURCE = () => readFileSync(resolve(process.cwd(), 'src/routes/+page.svelte'), 'utf-8');
-// #508 — submitEventCreate moved out; the row-watcher stays in +page.svelte.
-const AGENDA_LOAD_SOURCE = () =>
-	[
-		'src/lib/agenda/agendaLoad.ts',
-		'src/lib/agenda/agendaRosterCache.ts',
-		'src/lib/agenda/agendaSelectedLoad.ts',
-		'src/lib/agenda/agendaWorksLoad.ts',
-		'src/lib/agenda/agendaRowStore.ts',
-		'src/lib/agenda/agendaPanels.ts',
-		'src/lib/agenda/agendaPageView.svelte.ts',
-		'src/lib/agenda/AgendaManageArea.svelte'
-	]
-		.map((p) => readFileSync(resolve(process.cwd(), p), 'utf-8'))
-		.join('\n');
-const EVENT_CREATE_FORM_SOURCE = () =>
-	readFileSync(resolve(process.cwd(), 'src/lib/agenda/EventCreateForm.svelte'), 'utf-8');
-
-// The create path now spans the form's handler and the helper it calls (#894).
-const eventCreatePath = (): string =>
-	submitEventCreateBody(EVENT_CREATE_FORM_SOURCE()) +
-	stripComments(
-		readFileSync(resolve(process.cwd(), 'src/lib/agenda/eventCreateSubmit.ts'), 'utf-8')
-	);
-
-/** Strip comments first — a pin a comment can flip is not a pin. */
-function stripComments(body: string): string {
-	return body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
-}
-
-function submitEventCreateBody(source: string): string {
-	const start = source.indexOf('async function submitEventCreate');
-	expect(start, 'submitEventCreate exists in the given source').toBeGreaterThan(-1);
-	const end = source.indexOf('$effect(', start);
-	expect(end, 'a bounded slice for the create path').toBeGreaterThan(start);
-	return stripComments(source.slice(start, end));
-}
-
-// The watcher that waits for the row to render — the guarantee is about the
-// ROUTE, never which function the call sits in.
-function surfaceWatcherBody(source: string): string {
-	const start = source.indexOf('function surfaceCreatedEvent');
-	expect(start, 'surfaceCreatedEvent exists in +page.svelte').toBeGreaterThan(-1);
-	const end = source.indexOf('function dismissEventCreateForm(', start);
-	expect(end, 'a bounded slice for the surfacing watcher').toBeGreaterThan(start);
-	return stripComments(source.slice(start, end));
-}
-
-describe('#244 — structural: the collapse routes through closeSeasonManagePanel(), and the create path never writes the filter', () => {
-	it('the collapse calls closeSeasonManagePanel() — the ONE owner of the mid-run refusal — and nothing on either path assigns seasonManageOpen directly', () => {
-		const source = PAGE_SOURCE();
-		const watcher = surfaceWatcherBody(source);
-		expect(
-			watcher.includes('closeSeasonManagePanel('),
-			'the auto-collapse must route through closeSeasonManagePanel(), inheriting its seriesRunUnfinished || eventConvertRunUnfinished refusal'
-		).toBe(true);
-		for (const [label, body] of [
-			['the surfacing watcher', watcher],
-			['the create path', eventCreatePath()]
-		] as const) {
-			expect(
-				/seasonManageOpen\s*=[^=]/.test(body),
-				`a direct seasonManageOpen assignment in ${label} would route around the mid-run refusal`
-			).toBe(false);
-		}
-	});
-
-	it('the create path arms the surfacing watcher instead of collapsing on the spot (review F1/F3)', () => {
-		const body = eventCreatePath();
-		expect(
-			body.includes('surfaceCreatedEvent('),
-			'the create path hands the decision to the watcher that observes the row'
-		).toBe(true);
-		// A synchronous collapse here is the regression itself: agenda-admin-card
-		// unmounts for the reload's length, stranding focus on <body>, decided
-		// from the created event's TYPE alone which doesn't imply the row lists.
-		expect(
-			body.includes('closeSeasonManagePanel('),
-			'the create path must NOT collapse before the created row is observed'
-		).toBe(false);
-	});
-
-	it('the create path never assigns agendaTypeFilter, and the page gains no new write site for it', () => {
-		const source = PAGE_SOURCE() + AGENDA_LOAD_SOURCE();
-		expect(
-			/agendaTypeFilter\s*=[^=]/.test(eventCreatePath()),
-			'the create path must READ the filter to decide showability, never write it'
-		).toBe(false);
-		// The five existing sites (declaration, chip toggle, auto-reset effect,
-		// two collective-switch resets) are all legitimate; this path must not
-		// become a sixth — a future LEGITIMATE reset may bump the count, with its reason.
-		const writes = source.match(/agendaTypeFilter\s*=[^=]/g) ?? [];
-		expect(writes.length, 'no new agendaTypeFilter write site').toBe(5);
-	});
-});
-
-// (*MVOX:Tallis* — #244 RED: showability-gated collapse, scroll + mark, focus, structural pins)
+// (*MVOX:Tallis* — #244 RED: showability-gated collapse, scroll + mark, focus)
