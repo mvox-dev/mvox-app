@@ -708,6 +708,7 @@
 	"downloads_open": "Ava",
 	"agenda_downloads_link": "Ava allalaaditud partiid",
 	"last_read_as_of": "Seisuga {time}",
+	"part_download": "Laadi alla",
 	"part_viewer_close": "Sulge",
 	"part_viewer_draw": "Joonista",
 	"part_viewer_hide_marks": "Peida märgid",

@@ -40,6 +40,9 @@
 	// Two separate disposals: opened.release() and pdf.destroy() (openFileBytes.ts).
 	let opened: OpenedFileBytes | null = null;
 	let pdf: OpenedPdf | null = null;
+	// The saved file's name: the label handed down, else the stored one; '' lets the browser name it.
+	let downloadName = $state('');
+	let downloadUrl = $state('');
 
 	const tapPrev: TapTracker = createTapTracker();
 	const tapNext: TapTracker = createTapTracker();
@@ -116,6 +119,14 @@
 		else if (event.key === 'ArrowLeft' || event.key === 'PageUp') previous();
 	}
 
+	async function storedFilename(db: string, personId: string, fileId: string): Promise<string> {
+		try {
+			return (await getAppLabelStore().labelsFor(db, personId)).get(fileId)?.filename ?? '';
+		} catch {
+			return '';
+		}
+	}
+
 	// Only a fetch TypeError means nothing answered (not on this device). Anything else is a
 	// server that answered and refused: an open failure, never "not on this device".
 	function wireUnreachable(error: unknown): boolean {
@@ -182,7 +193,16 @@
 						result.release();
 						return;
 					}
+					downloadName =
+						label?.filename ??
+						(await storedFilename(identity.db, identity.personId, fileId));
+					if (cancelled) {
+						doc.destroy();
+						result.release();
+						return;
+					}
 					opened = result;
+					downloadUrl = result.url;
 					pdf = doc;
 					numPages = doc.numPages;
 					currentPage = 1;
@@ -345,6 +365,14 @@
 						{m.part_viewer_hide_marks()}
 					</button>
 				{/if}
+				<a
+					href={downloadUrl}
+					download={downloadName}
+					class="font-sans text-sm text-paper underline"
+					data-testid="part-download"
+				>
+					{m.part_download()}
+				</a>
 			</div>
 			<button
 				type="button"

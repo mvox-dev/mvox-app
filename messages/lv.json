@@ -709,6 +709,7 @@
 	"downloads_open": "Atvērt",
 	"agenda_downloads_link": "Atvērt lejupielādētās partijas",
 	"last_read_as_of": "Stāvoklis uz {time}",
+	"part_download": "Lejupielādēt",
 	"part_viewer_close": "Aizvērt",
 	"part_viewer_draw": "Zīmēt",
 	"part_viewer_hide_marks": "Paslēpt iezīmes",
