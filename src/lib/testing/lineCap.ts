@@ -1,4 +1,4 @@
-import { COMMENT_FIXTURES_DIR, changedFiles, splitLines, type GitRunner } from './commentRules';
+import { COMMENT_FIXTURES_DIR, splitLines } from './commentRules';
 
 export const STEP = 400;
 
@@ -38,8 +38,4 @@ export function capViolations(counts: LineCounts, exceptions: readonly string[])
 		.filter((file) => (counts[file] ?? 0) <= STEP)
 		.map((file) => ({ file, lines: counts[file] ?? 0, reason: 'exception-within-cap' }));
 	return [...over, ...within].sort((a, b) => a.file.localeCompare(b.file));
-}
-
-export function addedFiles(options: { git?: GitRunner } = {}): string[] {
-	return changedFiles({ ...options, diffFilter: 'A' });
 }

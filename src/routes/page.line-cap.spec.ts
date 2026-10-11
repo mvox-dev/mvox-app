@@ -5,7 +5,6 @@ import { join, relative, resolve } from 'node:path';
 import {
 	LINE_CAP_EXCEPTIONS,
 	STEP,
-	addedFiles,
 	capViolations,
 	countLines,
 	selectSourceFiles
@@ -84,20 +83,6 @@ describe('#525 — the line-cap rules, each shown by a planted example', () => {
 		]);
 	});
 
-	it('added files are read against the merge-base with main, renames excluded, untracked included', () => {
-		const calls: string[][] = [];
-		const git = (args: string[]) => {
-			calls.push(args);
-			if (args[0] === 'merge-base') return 'base123\n';
-			return args[0] === 'ls-files' ? 'src/lib/untracked.ts\n' : 'src/lib/new.ts\n';
-		};
-		expect(addedFiles({ git })).toEqual(['src/lib/new.ts', 'src/lib/untracked.ts']);
-		expect(calls).toEqual([
-			['merge-base', 'origin/main', 'HEAD'],
-			['diff', '--name-only', '--diff-filter=A', 'base123'],
-			['ls-files', '--others', '--exclude-standard']
-		]);
-	});
 });
 
 describe('#525 — every source file under src/ obeys the line cap', () => {
