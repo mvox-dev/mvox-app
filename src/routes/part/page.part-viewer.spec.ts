@@ -31,12 +31,16 @@ const labelWrites = vi.hoisted(
 	() => [] as Array<{ identity: unknown; fileId: string; label: unknown }>
 );
 const storedLabels = vi.hoisted(() => new Map<string, unknown>());
+const labelRead = vi.hoisted(() => ({ throws: false }));
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({
 		putLabel: async (identity: unknown, fileId: string, label: unknown) => {
 			labelWrites.push({ identity, fileId, label });
 		},
-		labelsFor: async () => new Map(storedLabels),
+		labelsFor: async (db: string, personId: string) => {
+			if (labelRead.throws) throw new Error('label store unreadable');
+			return db === 'sampledb' && personId === 'person-p' ? new Map(storedLabels) : new Map();
+		},
 		remove: async () => {}
 	})
 }));
@@ -1353,6 +1357,7 @@ describe('#881 — downloading the original PDF', () => {
 		mintSpy.mockRestore();
 		minted.clear();
 		storedLabels.clear();
+		labelRead.throws = false;
 	});
 
 	const link = (c: HTMLElement) =>
@@ -1385,6 +1390,19 @@ describe('#881 — downloading the original PDF', () => {
 		storedLabels.set('file-score', LABEL);
 		const c = await openWith({});
 		await waitFor(() => expect(link(c).getAttribute('download')).toBe('SOPRAN.pdf'));
+		expect(await savedBytes(c)).toEqual(PDF_BYTES);
+	});
+
+	it('still offers the download, nameless, when the label store cannot be read', async () => {
+		labelRead.throws = true;
+		const rejected: unknown[] = [];
+		const onRejected = (reason: unknown) => rejected.push(reason);
+		process.on('unhandledRejection', onRejected);
+		const c = await openWith({});
+		await new Promise((resolve) => setTimeout(resolve, 20));
+		process.off('unhandledRejection', onRejected);
+		expect(rejected).toEqual([]);
+		expect(link(c).getAttribute('download')).toBe('');
 		expect(await savedBytes(c)).toEqual(PDF_BYTES);
 	});
 
