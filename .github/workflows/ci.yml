@@ -50,16 +50,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # #882 — a PR that changes only teams/mvox-dev/memory/ or inboxes/ skips the suite.
+      # The gate is per step, never per job, so the required check always reports.
+      - name: Detect notes-only PR
+        id: scope
+        if: github.event_name == 'pull_request'
+        run: |
+          echo "notes_only=$(git diff --name-only --no-renames origin/${{ github.base_ref }}...HEAD | scripts/ci/notes-only.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Setup pnpm
+        if: steps.scope.outputs.notes_only != 'true'
         uses: pnpm/action-setup@v6
 
       - name: Setup Node
+        if: steps.scope.outputs.notes_only != 'true'
         uses: actions/setup-node@v7
         with:
           node-version-file: package.json
           cache: pnpm
 
       - name: Install dependencies
+        if: steps.scope.outputs.notes_only != 'true'
         run: pnpm install --frozen-lockfile
 
       # `src/lib/paraglide/` is generated and gitignored. Vite's paraglide
@@ -70,12 +81,19 @@ jobs:
       # is why this step cannot be discovered without running CI once. Same
       # project/outdir as vite.config.ts's plugin.
       - name: Compile messages (generated, gitignored)
+        if: steps.scope.outputs.notes_only != 'true'
         run: npx paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide
 
       # Typecheck before the suite: it is the faster of the two, so a type
       # error reports in about a minute instead of after the suite.
       - name: Typecheck
+        if: steps.scope.outputs.notes_only != 'true'
         run: pnpm check
 
       - name: Test
+        if: steps.scope.outputs.notes_only != 'true'
         run: pnpm test
+
+      - name: Notes-only PR
+        if: steps.scope.outputs.notes_only == 'true'
+        run: echo "notes-only PR, suite skipped"
