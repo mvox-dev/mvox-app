@@ -79,6 +79,13 @@ answers 308, so it is excluded from the worker manifest. Branch previews:
 - A swallowed-error break can pass as a test and show only as vitest "Errors": listen for
   `unhandledRejection` in the test.
 
+## [GOTCHA] CI workflow edits (#882, 2026-10-11)
+
+- An unquoted `: ` inside a `run:` value breaks the YAML and every run fails with no jobs. Parse
+  with `node -e "require('yaml').parse(...)"` before pushing a workflow.
+- `src/comment-rules.spec.ts` also reads `scripts/**` headers: 100-char limit applies to specs.
+- Skip logic is per step (`if: steps.scope.outputs.notes_only != 'true'`), never per job.
+
 ## Scripts
 
 Mutation runners and split tools: ~/workspace/scratchpad/{611,615,616,684,711,716,723}/.

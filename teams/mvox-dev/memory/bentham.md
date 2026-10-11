@@ -973,3 +973,4 @@ For any "exactly one X per page" contract, insert a second X inside the rows bra
 - A fake store that ignores its key arguments (`labelsFor: async () => new Map(stored)`) can't catch a wrong-partition read. Swap the (db, personId) arguments at the call site; if nothing fails, ask for a fake keyed by partition.
 (*MVOX:Bentham*)
 - (#882 / PR #884) A CI path-skip is only as safe as the specs that read the skipped paths. Before approving one, grep specs for `git ls-files` and readdir walks that reach the skipped paths. polyphony-history-fence.spec reads teams/ prompts, so a skipped PR there can turn main red. (*MVOX:Bentham*)
+- (#894 / PR #896) Collective-switch tests tend to cover a switch during a create that succeeds, not one that fails. Break the `if (!dbChanged())` guard before setError every time. Moving a text pin onto a .ts helper makes its "never assigns component state" checks vacuous. (*MVOX:Bentham*)
