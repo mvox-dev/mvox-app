@@ -12,8 +12,8 @@
 	import { formKeydown } from '$lib/a11y/formKeys';
 	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
 	import EventCreateFormFields from '$lib/agenda/EventCreateFormFields.svelte';
-	import { createEvent, type CreateEventInput } from '$lib/entity/entityCreate';
-	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
+	import { createEvent } from '$lib/entity/entityCreate';
+	import { runEventCreate } from '$lib/agenda/eventCreateSubmit';
 	import {
 		tallinnHHMM,
 		formatTime,
@@ -246,73 +246,39 @@
 			return;
 		}
 
-		const current = selected;
-		if (!current) {
-			console.error('agenda: event create submitted with no selected collective');
-			setEventCreateError(m.event_create_failed, null);
-			return;
-		}
-		const cfg = cfgFor(current.db);
-
 		submitting = true;
 		try {
-			const dbEntityId = await resolveDbEntityOrLog(
-				cfg,
-				{ area: 'agenda', action: 'event create' },
-				current.personId
-			);
-			if (!dbEntityId) {
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
-
-			const capacityValue = eventCreateNumberOrUndefined(eventCreateCapacity);
-			const trimmedLocation = eventCreateLocation.trim();
-			const trimmedDescription = eventCreateDescription.trim();
-
-			const input: CreateEventInput = {
-				dbEntityId,
-				extraParentIds: [seasonId],
-				eventType: typeValue,
-				startDatetime,
-				...(trimmedName ? { name: trimmedName } : {}),
-				...(eventCreateSeriesId ? { seriesId: eventCreateSeriesId } : {}),
-				...(durationValue !== undefined ? { durationMinutes: durationValue } : {}),
-				...(trimmedLocation ? { location: trimmedLocation } : {}),
-				...(trimmedDescription ? { description: trimmedDescription } : {}),
-				...(eventCreateConductors.length > 0
-					? { conductorRefs: eventCreateConductors.map((c) => c.id) }
-					: {}),
-				...(capacityValue !== undefined ? { capacity: capacityValue } : {})
-			};
-
-			let newEventId: string;
-			try {
-				newEventId = await createEvent(cfg, input);
-			} catch (e) {
-				console.error('agenda: event create failed', e);
-				setEventCreateError(m.event_create_failed, null);
-				return;
-			}
-
-			const panel = mounted;
-			const showableUnderFilter =
-				agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter;
-			const createdName = trimmedName || eventCreateSeriesDefaults?.name || typeValue;
-			const createdWhen = eventCreateStatusFmt(new Date(startDatetime));
-			status = showableUnderFilter
-				? m.event_created({ name: createdName, when: createdWhen })
-				: m.event_created_hidden_by_filter({ name: createdName, when: createdWhen });
-			onclose();
-			loadForSelected({ keepSeasonManage: panel });
-			if (panel && panelSeasonId === seasonId) {
-				refreshSeasonManageLists(cfg, panelSeasonId);
-			}
-
-			if (panel && showableUnderFilter) {
-				surfaceCreatedEvent(newEventId);
-			}
-			if (panel) restoreEventCreateFocus();
+			await runEventCreate({
+				form: {
+					seasonId,
+					type: typeValue,
+					startDatetime,
+					durationMinutes: durationValue,
+					name: trimmedName,
+					seriesId: eventCreateSeriesId,
+					seriesName: () => eventCreateSeriesDefaults?.name,
+					location: eventCreateLocation.trim(),
+					description: eventCreateDescription.trim(),
+					capacity: eventCreateNumberOrUndefined(eventCreateCapacity),
+					conductorIds: eventCreateConductors.map((c) => c.id)
+				},
+				panelSeasonId,
+				selected: () => selected,
+				isMounted: () => mounted,
+				showableUnderFilter: () =>
+					agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter,
+				when: () => eventCreateStatusFmt(new Date(startDatetime)),
+				seams: { createEvent },
+				setError: (msg) => setEventCreateError(msg, null),
+				setStatus: (text) => {
+					status = text;
+				},
+				onclose,
+				loadForSelected,
+				refreshSeasonManageLists,
+				surfaceCreatedEvent,
+				restoreFocus: restoreEventCreateFocus
+			});
 		} finally {
 			submitting = false;
 		}
