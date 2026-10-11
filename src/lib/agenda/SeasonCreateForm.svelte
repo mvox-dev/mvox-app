@@ -13,7 +13,7 @@
 	import { formKeydown } from '$lib/a11y/formKeys';
 	import ConductorChips from '$lib/agenda/ConductorChips.svelte';
 	import { createSeason } from '$lib/entity/entityCreate';
-	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
+	import { runSeasonCreate } from '$lib/agenda/seasonCreateSubmit';
 	import type { RosterRow } from '$lib/roster/rosterData';
 	import type { SectionNode } from '$lib/sections/sectionData';
 	import { writesAvailable } from '$lib/net/online';
@@ -100,47 +100,24 @@
 			return;
 		}
 
-		const current = selected;
-		if (!current) {
-			console.error('agenda: season create submitted with no selected collective');
-			setSeasonCreateError(m.season_create_failed, null);
-			return;
-		}
-		const cfg = cfgFor(current.db);
-		const runDb = cfg.db;
-		const dbChanged = (): boolean => selected?.db !== runDb;
-
 		submitting = true;
 		try {
-			const dbEntityId = await resolveDbEntityOrLog(
-				cfg,
-				{ area: 'agenda', action: 'season create' },
-				current.personId
-			);
-			if (dbChanged()) return;
-			if (!dbEntityId) {
-				setSeasonCreateError(m.season_create_failed, null);
-				return;
-			}
-
-			try {
-				await createSeason(cfg, {
+			await runSeasonCreate({
+				form: {
 					name,
-					dbEntityId,
 					startDate: seasonCreateStartDate,
 					endDate: seasonCreateEndDate,
-					conductorRefs: seasonCreateConductors.map((c) => c.id)
-				});
-			} catch (e) {
-				console.error('agenda: season create failed', name, e);
-				if (!dbChanged()) setSeasonCreateError(m.season_create_failed, null);
-				return;
-			}
-			if (dbChanged()) return;
-
-			status = m.season_created({ name });
-			onclose();
-			loadForSelected();
+					conductorIds: seasonCreateConductors.map((c) => c.id)
+				},
+				selected: () => selected,
+				seams: { createSeason },
+				setError: (msg) => setSeasonCreateError(msg, null),
+				setStatus: (text) => {
+					status = text;
+				},
+				onclose,
+				loadForSelected
+			});
 		} finally {
 			submitting = false;
 		}

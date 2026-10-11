@@ -256,6 +256,31 @@ describe.each(FLOWS)('$kind create — a collective switch mid-create', (flow) =
 		expect((q(container, flow.status)?.textContent ?? '').trim()).toBe('');
 		expect(loadFullAgendaMock).toHaveBeenCalledTimes(loadsAfterSwitch);
 	});
+
+	it('switch while the write is in flight, then the write rejects: no error shows in the new collective', async () => {
+		const rejecters: Array<(e: Error) => void> = [];
+		flow.write.mockImplementation(
+			() =>
+				new Promise<string>((_resolve, reject) => {
+					rejecters.push(reject);
+				})
+		);
+		const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+		const container = await renderAgenda();
+		await flow.open(container);
+		await fireEvent.click(q(container, flow.submit) as HTMLElement);
+		await waitFor(() => {
+			expect(rejecters.length).toBe(1);
+		});
+
+		await switchToB(container);
+		rejecters[0](new Error('entu down'));
+		await settle();
+		errorSpy.mockRestore();
+
+		expect(q(container, `${flow.kind}-create-error`)).toBeNull();
+		expect((q(container, flow.status)?.textContent ?? '').trim()).toBe('');
+	});
 });
 
 // (*MVOX:Josquin*)
