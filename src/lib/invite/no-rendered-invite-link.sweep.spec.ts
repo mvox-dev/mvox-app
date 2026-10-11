@@ -139,7 +139,7 @@ describe('#360 tree sweep — no composed invite URL reaches rendered text, ever
 				// the one composer module (script only, exports pure builders)
 				'src/lib/invite/invite-links.ts :: script-compose',
 				// admin surface — composes in script, egress is the clipboard only
-				'src/lib/components/admin/InviteSurface.svelte :: script-compose',
+				'src/lib/invite/InviteSurface.svelte :: script-compose',
 				// roster rows — compose in script, {#if} guards gate the copy panel
 				'src/lib/roster/rosterInviteOps.ts :: script-compose',
 				'src/lib/roster/MemberInvite.svelte :: markup-guard',

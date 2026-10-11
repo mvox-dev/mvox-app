@@ -42,7 +42,7 @@ const SENTENCE_EXPRS: ReadonlyArray<[RegExp, string]> = [
 
 const SENTENCE_FILES = [
 	...FILES,
-	'src/lib/components/admin/InviteSurface.svelte',
+	'src/lib/invite/InviteSurface.svelte',
 	'src/lib/library/CopyRow.svelte'
 ] as const;
 
