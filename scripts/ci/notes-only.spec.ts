@@ -1,4 +1,4 @@
-// Runs scripts/ci/notes-only.sh on path lists: true only when every changed path is under teams/.
+// Runs scripts/ci/notes-only.sh on path lists: true only when every changed path is under teams/mvox-dev/memory/ or inboxes/.
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -15,10 +15,17 @@ function verdict(paths: string[]): string {
 }
 
 describe('notes-only.sh', () => {
-	it('is true when every path is under teams/', () => {
+	it('is true when every path is under memory/ or inboxes/', () => {
 		expect(verdict(['teams/mvox-dev/memory/josquin.md', 'teams/mvox-dev/inboxes/a.json'])).toBe(
 			'true\n'
 		);
+	});
+
+	it('is false for other teams/ paths', () => {
+		expect(verdict(['teams/mvox-dev/memory/a.md', 'teams/mvox-dev/prompts/josquin.md'])).toBe(
+			'false\n'
+		);
+		expect(verdict(['teams/mvox-dev/roster.json'])).toBe('false\n');
 	});
 
 	it('is false when a path outside teams/ is mixed in', () => {

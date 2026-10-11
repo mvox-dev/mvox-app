@@ -50,8 +50,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      # #882 — a PR that changes only teams/ skips the suite. The gate is per
-      # step, never per job, so the required check always reports.
+      # #882 — a PR that changes only teams/mvox-dev/memory/ or inboxes/ skips the suite.
+      # The gate is per step, never per job, so the required check always reports.
       - name: Detect notes-only PR
         id: scope
         if: github.event_name == 'pull_request'
