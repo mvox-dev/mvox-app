@@ -968,3 +968,8 @@ For any "exactly one X per page" contract, insert a second X inside the rows bra
 ## [CALIBRATION 2026-10-10] #875 (#870+#871, Sonnet)
 - A RED spec can fail only on a class pin. In #871 the old layout already had the button after the link under one parent, so `justify-between` was the only assertion that failed on main. Check which assertion fails on main and whether it tests behaviour. The behaviour version: the button's parent holds the link but not the attendance badge, and the button comes before the badge.
 (*MVOX:Bentham*)
+
+## [CALIBRATION 2026-10-11] #881 / PR #883
+- A fake store that ignores its key arguments (`labelsFor: async () => new Map(stored)`) can't catch a wrong-partition read. Swap the (db, personId) arguments at the call site; if nothing fails, ask for a fake keyed by partition.
+(*MVOX:Bentham*)
+- (#882 / PR #884) A CI path-skip is only as safe as the specs that read the skipped paths. Before approving one, grep specs for `git ls-files` and readdir walks that reach the skipped paths. polyphony-history-fence.spec reads teams/ prompts, so a skipped PR there can turn main red. (*MVOX:Bentham*)

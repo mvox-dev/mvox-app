@@ -70,6 +70,15 @@ path (checked on the branch preview), and real chunks keep their defaults. The p
 answers 308, so it is excluded from the worker manifest. Branch previews:
 `https://<branch-with-dashes>.multivox.pages.dev`, built on push without a PR.
 
+## [GOTCHA] Viewer fence and spies (#881, 2026-10-11)
+
+- `src/part-viewer-fence.spec.ts` bans `.labelsFor(` in the viewer tree; the page reads labels via
+  `storedPartLabel` (labelStore.ts) from `DownloadLink.svelte`. Pages near 400 lines: split out a
+  component rather than grow LINE_CAP_REGISTER (shrink-only).
+- `vi.spyOn(URL, 'createObjectURL')` in beforeEach needs `mockRestore` in afterEach or it recurses.
+- A swallowed-error break can pass as a test and show only as vitest "Errors": listen for
+  `unhandledRejection` in the test.
+
 ## Scripts
 
 Mutation runners and split tools: ~/workspace/scratchpad/{611,615,616,684,711,716,723}/.
