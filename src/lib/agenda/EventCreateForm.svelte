@@ -265,9 +265,9 @@
 				panelSeasonId,
 				selected: () => selected,
 				isMounted: () => mounted,
-				showableUnderFilter:
+				showableUnderFilter: () =>
 					agendaTypeFilter === 'all' || agendaFilterBucketOf(typeValue) === agendaTypeFilter,
-				when: eventCreateStatusFmt(new Date(startDatetime)),
+				when: () => eventCreateStatusFmt(new Date(startDatetime)),
 				seams: { createEvent },
 				setError: (msg) => setEventCreateError(msg, null),
 				setStatus: (text) => {
