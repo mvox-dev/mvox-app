@@ -55,3 +55,19 @@ describe('#427 — part_viewer_ keys: placeholders, translation, key set', () =>
 });
 
 // (*MVOX:Tallis* — #427 RED)
+
+describe('#881 — part_download', () => {
+	it('is the issue wording in every locale', () => {
+		const expected = {
+			en: 'Download',
+			et: 'Laadi alla',
+			lv: 'Lejupielādēt',
+			uk: 'Завантажити'
+		};
+		for (const locale of LOCALES) {
+			expect(messages(locale)['part_download'], `${locale}.json › part_download`).toBe(
+				expected[locale]
+			);
+		}
+	});
+});
