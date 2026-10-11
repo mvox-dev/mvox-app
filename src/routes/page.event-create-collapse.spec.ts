@@ -654,6 +654,13 @@ const AGENDA_LOAD_SOURCE = () =>
 const EVENT_CREATE_FORM_SOURCE = () =>
 	readFileSync(resolve(process.cwd(), 'src/lib/agenda/EventCreateForm.svelte'), 'utf-8');
 
+// The create path now spans the form's handler and the helper it calls (#894).
+const eventCreatePath = (): string =>
+	submitEventCreateBody(EVENT_CREATE_FORM_SOURCE()) +
+	stripComments(
+		readFileSync(resolve(process.cwd(), 'src/lib/agenda/eventCreateSubmit.ts'), 'utf-8')
+	);
+
 /** Strip comments first — a pin a comment can flip is not a pin. */
 function stripComments(body: string): string {
 	return body.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
@@ -687,7 +694,7 @@ describe('#244 — structural: the collapse routes through closeSeasonManagePane
 		).toBe(true);
 		for (const [label, body] of [
 			['the surfacing watcher', watcher],
-			['the create path', submitEventCreateBody(EVENT_CREATE_FORM_SOURCE())]
+			['the create path', eventCreatePath()]
 		] as const) {
 			expect(
 				/seasonManageOpen\s*=[^=]/.test(body),
@@ -697,7 +704,7 @@ describe('#244 — structural: the collapse routes through closeSeasonManagePane
 	});
 
 	it('the create path arms the surfacing watcher instead of collapsing on the spot (review F1/F3)', () => {
-		const body = submitEventCreateBody(EVENT_CREATE_FORM_SOURCE());
+		const body = eventCreatePath();
 		expect(
 			body.includes('surfaceCreatedEvent('),
 			'the create path hands the decision to the watcher that observes the row'
@@ -714,7 +721,7 @@ describe('#244 — structural: the collapse routes through closeSeasonManagePane
 	it('the create path never assigns agendaTypeFilter, and the page gains no new write site for it', () => {
 		const source = PAGE_SOURCE() + AGENDA_LOAD_SOURCE();
 		expect(
-			/agendaTypeFilter\s*=[^=]/.test(submitEventCreateBody(EVENT_CREATE_FORM_SOURCE())),
+			/agendaTypeFilter\s*=[^=]/.test(eventCreatePath()),
 			'the create path must READ the filter to decide showability, never write it'
 		).toBe(false);
 		// The five existing sites (declaration, chip toggle, auto-reset effect,
