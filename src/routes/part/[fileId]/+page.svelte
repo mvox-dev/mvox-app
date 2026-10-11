@@ -15,6 +15,7 @@
 	import { openFileBytes, type OpenedFileBytes } from '$lib/files/openFileBytes';
 	import { openPdf, type OpenedPdf } from '$lib/parts/pdfRenderer';
 	import { createTapTracker, type TapTracker } from '$lib/parts/tapZone';
+	import DownloadLink from './DownloadLink.svelte';
 	import PageInk from '$lib/strokes/PageInk.svelte';
 	import { getInkStore } from '$lib/strokes/inkStore';
 	import { createPartInk } from '$lib/strokes/partInk.svelte';
@@ -40,6 +41,7 @@
 	// Two separate disposals: opened.release() and pdf.destroy() (openFileBytes.ts).
 	let opened: OpenedFileBytes | null = null;
 	let pdf: OpenedPdf | null = null;
+	let source = $state<{ url: string; db: string; personId: string } | null>(null);
 
 	const tapPrev: TapTracker = createTapTracker();
 	const tapNext: TapTracker = createTapTracker();
@@ -183,6 +185,7 @@
 						return;
 					}
 					opened = result;
+					source = { url: result.url, db: identity.db, personId: identity.personId };
 					pdf = doc;
 					numPages = doc.numPages;
 					currentPage = 1;
@@ -211,6 +214,7 @@
 			pdf = null;
 			opened?.release();
 			opened = null;
+			source = null;
 		};
 	});
 
@@ -344,6 +348,9 @@
 					>
 						{m.part_viewer_hide_marks()}
 					</button>
+				{/if}
+				{#if source}
+					<DownloadLink {...source} fileId={page.params.fileId ?? ''} label={page.state.partLabel} />
 				{/if}
 			</div>
 			<button

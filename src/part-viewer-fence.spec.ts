@@ -92,7 +92,8 @@ describe('#427 — nothing drawn: canvas stays pdf.js-owned', () => {
 
 describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index, named on the fence', () => {
 	// The write sweep cannot see this call (its .put lives in labelStore), so it is named here:
-	// recordPartLabel only names stored bytes for /downloads; other LabelStore methods stay out.
+	// recordPartLabel only names stored bytes for /downloads. The download link reads its own
+	// name back (storedPartLabel); the viewer never edits or clears the index.
 	const LABEL_STORE_IMPORT = /import\s*\{([^}]*)\}\s*from\s*['"]\$lib\/files\/labelStore['"]/g;
 	const OTHER_LABEL_METHODS = /\.(putLabel|labelsFor|remove|clear)\s*\(/;
 
@@ -102,16 +103,16 @@ describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index,
 			for (const match of source.matchAll(LABEL_STORE_IMPORT)) {
 				const names = match[1]
 					.split(',')
-					.map((n) => n.trim().replace(/^type\s+/, ''))
-					.filter(Boolean);
+					.map((n) => n.trim())
+					.filter((n) => n && !n.startsWith('type '));
 				imported.push({ file, names });
 			}
 		}
 		for (const { file, names } of imported) {
 			expect(
 				names,
-				`${file}: the viewer may write #353's label index and nothing else — not the byte store, not a marking`
-			).toEqual(['recordPartLabel']);
+				`${file}: the viewer may write #353's label index and read its own name back, nothing else`
+			).toEqual(file.endsWith('DownloadLink.svelte') ? ['storedPartLabel'] : ['recordPartLabel']);
 		}
 	});
 
@@ -129,7 +130,7 @@ describe('#427 review round 3 — the ONE sanctioned write: #353\'s label index,
 			const hit = source.match(OTHER_LABEL_METHODS);
 			expect(
 				hit,
-				`${file} calls ${hit?.[0] ?? ''} — the viewer records a name when bytes land and never edits or clears the index`
+				`${file} calls ${hit?.[0] ?? ''} — the viewer records a name when bytes land, reads its own name back via storedPartLabel, and never edits or clears the index`
 			).toBeNull();
 		}
 	});
