@@ -1,4 +1,4 @@
-// Runs scripts/ci/notes-only.sh on path lists: true only when every changed path is under teams/mvox-dev/memory/ or inboxes/.
+// Runs notes-only.sh on path lists: true only for team memory/ and inboxes/ files.
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
