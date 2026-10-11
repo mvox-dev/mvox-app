@@ -30,12 +30,13 @@ vi.mock('$lib/files/appByteStore', () => ({ getAppByteStore: () => fakeByteStore
 const labelWrites = vi.hoisted(
 	() => [] as Array<{ identity: unknown; fileId: string; label: unknown }>
 );
+const storedLabels = vi.hoisted(() => new Map<string, unknown>());
 vi.mock('$lib/files/appLabelStore', () => ({
 	getAppLabelStore: () => ({
 		putLabel: async (identity: unknown, fileId: string, label: unknown) => {
 			labelWrites.push({ identity, fileId, label });
 		},
-		labelsFor: async () => new Map(),
+		labelsFor: async () => new Map(storedLabels),
 		remove: async () => {}
 	})
 }));
@@ -849,7 +850,12 @@ describe('#615 — drawing on the page', () => {
 
 	it('the pen toggle sits between the page indicator and Close and shows the pen controls only while on', async () => {
 		const c = await open();
-		const bar = ['part-viewer-page-indicator', 'part-viewer-pen', 'part-viewer-close'];
+		const bar = [
+			'part-viewer-page-indicator',
+			'part-viewer-pen',
+			'part-download',
+			'part-viewer-close'
+		];
 		const order = [...c.querySelectorAll('[data-testid]')]
 			.map((el) => el.getAttribute('data-testid') ?? '')
 			.filter((id) => bar.includes(id));
@@ -1322,3 +1328,84 @@ describe('#616 — her ink stays on the device', () => {
 });
 
 // (*MVOX:Tallis*) (*MVOX:Josquin*)
+
+describe('#881 — downloading the original PDF', () => {
+	usePageBox();
+
+	const minted = new Map<string, Blob>();
+	const LABEL: PartLabel = {
+		work: 'Spem in alium',
+		composer: 'Thomas Tallis',
+		edition: 'Vocal score',
+		filename: 'SOPRAN.pdf'
+	};
+
+	let mintSpy: ReturnType<typeof vi.spyOn>;
+	beforeEach(() => {
+		const create = URL.createObjectURL.bind(URL);
+		mintSpy = vi.spyOn(URL, 'createObjectURL').mockImplementation((obj) => {
+			const url = create(obj);
+			minted.set(url, obj as Blob);
+			return url;
+		});
+	});
+	afterEach(() => {
+		mintSpy.mockRestore();
+		minted.clear();
+		storedLabels.clear();
+	});
+
+	const link = (c: HTMLElement) =>
+		c.querySelector('[data-testid="part-download"]') as HTMLAnchorElement;
+
+	async function savedBytes(c: HTMLElement): Promise<Uint8Array> {
+		const blob = minted.get(link(c).getAttribute('href') ?? '');
+		expect(blob, 'href is a blob URL the viewer minted').toBeDefined();
+		return new Uint8Array(await (blob as Blob).arrayBuffer());
+	}
+
+	async function openWith(state: { partLabel?: PartLabel }): Promise<HTMLElement> {
+		deadFetch();
+		signFileUrlMock.mockRejectedValue(deadWire());
+		seedHeldPart();
+		const { container } = renderViewer(state);
+		await loaded(container);
+		return container;
+	}
+
+	it('saves the opened bytes under the label filename handed down', async () => {
+		const c = await openWith({ partLabel: LABEL });
+		expect(link(c).tagName).toBe('A');
+		expect(link(c).textContent?.trim()).toBe('[part_download]');
+		expect(link(c).getAttribute('download')).toBe('SOPRAN.pdf');
+		expect(await savedBytes(c)).toEqual(PDF_BYTES);
+	});
+
+	it('on a reload takes the name from the stored label', async () => {
+		storedLabels.set('file-score', LABEL);
+		const c = await openWith({});
+		await waitFor(() => expect(link(c).getAttribute('download')).toBe('SOPRAN.pdf'));
+		expect(await savedBytes(c)).toEqual(PDF_BYTES);
+	});
+
+	it('with no name anywhere leaves the name to the browser', async () => {
+		const c = await openWith({});
+		expect(link(c).getAttribute('download')).toBe('');
+	});
+
+	it('saves the plain PDF while ink is drawn, the pen is on and marks are hidden', async () => {
+		const c = await openWith({ partLabel: LABEL });
+		await waitFor(() => expect(pdfjs.renderCalls.length).toBe(1));
+		await fireEvent.click(pen(c));
+		await stroke(c, [
+			[10, 10],
+			[40, 40],
+			[70, 20]
+		]);
+		await waitFor(() => expect(marks(c)).toHaveLength(1));
+		expect(await savedBytes(c)).toEqual(PDF_BYTES);
+		await fireEvent.click(pen(c));
+		await fireEvent.click(hideMarks(c) as HTMLButtonElement);
+		expect(await savedBytes(c)).toEqual(PDF_BYTES);
+	});
+});
