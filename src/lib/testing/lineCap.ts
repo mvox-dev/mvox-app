@@ -4,7 +4,6 @@ export const STEP = 400;
 
 // Shrink-only: each file leaves when its split lands.
 export const LINE_CAP_EXCEPTIONS: readonly string[] = [
-	'src/lib/agenda/SeriesCreateForm.svelte',
 	'src/lib/events/EventRsvpSection.svelte'
 ];
 

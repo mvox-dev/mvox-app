@@ -5,22 +5,19 @@
 	import { untrack } from 'svelte';
 	import { m } from '$lib/paraglide/messages.js';
 	import type { Collective } from '$lib/collectives/types';
-	import { cfgFor } from '$lib/entu/cfg';
 	import { createEvent, createEventSeries } from '$lib/entity/entityCreate';
-	import type { CreateEventSeriesInput } from '$lib/entity/entityCreate';
-	import { generateEventDates, type RepeatPattern } from '$lib/events/recurrence';
-	import { resolveDbEntityOrLog } from '$lib/collective/resolveDbEntityOrLog';
-	import { groupByMonth, tallinnLocalToUtcIso } from '$lib/preferences/timeFormat';
+	import type { RepeatPattern } from '$lib/events/recurrence';
 	import { writesAvailable } from '$lib/net/online';
 	import {
 		setSeriesCreateResume,
 		clearSeriesCreateResume,
 		type SeriesCreateErrorField,
-		type SeriesCreateFormSnapshot,
 		type SeriesCreateResumeByDb
 	} from '$lib/agenda/seriesCreateResume';
 	import { focusAfterRender } from '$lib/a11y/focusable';
 	import { formKeydown } from '$lib/a11y/formKeys';
+	import { createSeriesCreateDateGrid, seriesCreateIsoDay } from '$lib/agenda/seriesCreateDateGrid.svelte';
+	import { runSeriesCreate } from '$lib/agenda/seriesCreateSubmit';
 	import SeriesCreateGeneralFields from '$lib/agenda/SeriesCreateGeneralFields.svelte';
 	import SeriesCreateLocationFields from '$lib/agenda/SeriesCreateLocationFields.svelte';
 	import SeriesCreateScheduleFields from '$lib/agenda/SeriesCreateScheduleFields.svelte';
@@ -76,7 +73,6 @@
 	let seriesCreateSkipDates = $state<string[]>(
 		initialResume ? [...initialResume.form.skipDates] : []
 	);
-	let seriesCreateRevealedCount = $state(50);
 	let seriesCreateError = $state<(() => string) | null>(null);
 	let seriesCreateErrorField = $state<SeriesCreateErrorField>(null);
 	let seriesCreateProgress = $state<{ current: number; total: number } | null>(null);
@@ -93,90 +89,17 @@
 		seriesCreateErrorField = null;
 	}
 
-
 	const seriesCreateLocked = $derived(seriesCreateResume !== null);
 
-	const seriesCreateDayApplies = $derived(seriesCreateRepeat !== 'daily');
-	const seriesCreateDayOfWeek = $derived(seriesCreateDay === '' ? 0 : Number(seriesCreateDay));
-
-	function datesFor(skipDates: string[]): string[] {
-		return generateEventDates({
-			repeat: seriesCreateRepeat,
-			dayOfWeek: seriesCreateDayOfWeek,
-			timeOfDay: seriesCreateTime,
-			from: seriesCreateFrom,
-			until: seriesCreateUntil,
-			skipDates
-		});
-	}
-
-	const seriesCreateDatesReady = $derived(
-		!(seriesCreateDayApplies && seriesCreateDay === '') &&
-			!!seriesCreateTime &&
-			!!seriesCreateFrom &&
-			!!seriesCreateUntil
-	);
-
-	const seriesCreatePreviewDates = $derived(
-		seriesCreateDatesReady ? datesFor(seriesCreateSkipDates) : null
-	);
-
-	const seriesCreateCandidateDates = $derived(seriesCreateDatesReady ? datesFor([]) : null);
-
-	const seriesCreateGridDates = $derived.by(() => {
-		if (seriesCreateCandidateDates === null) return null;
-		return seriesCreateResume ? seriesCreateResume.remaining : seriesCreateCandidateDates;
+	const grid = createSeriesCreateDateGrid({
+		repeat: () => seriesCreateRepeat,
+		day: () => seriesCreateDay,
+		time: () => seriesCreateTime,
+		from: () => seriesCreateFrom,
+		until: () => seriesCreateUntil,
+		skipDates: () => seriesCreateSkipDates,
+		resume: () => seriesCreateResume
 	});
-
-	$effect(() => {
-		void seriesCreateGridDates;
-		seriesCreateRevealedCount = 50;
-	});
-
-	const seriesCreateVisibleGridDates = $derived.by(() => {
-		if (seriesCreateGridDates === null) return null;
-		return seriesCreateGridDates.slice(0, seriesCreateRevealedCount);
-	});
-
-	const seriesCreateHiddenCount = $derived(
-		seriesCreateGridDates === null
-			? 0
-			: Math.max(0, seriesCreateGridDates.length - seriesCreateRevealedCount)
-	);
-
-	const seriesCreateNextBatchSize = $derived(Math.min(50, seriesCreateHiddenCount));
-
-	const seriesCreateShowAllCount = $derived(
-		seriesCreateResume
-			? (seriesCreateGridDates?.length ?? 0)
-			: (seriesCreatePreviewDates?.length ?? 0)
-	);
-
-	function revealSeriesCreateNext(): void {
-		seriesCreateRevealedCount += 50;
-	}
-	function revealSeriesCreateAll(): void {
-		if (seriesCreateGridDates === null) return;
-		seriesCreateRevealedCount = seriesCreateGridDates.length;
-	}
-
-	const seriesCreateNothingToSubmit = $derived(
-		!seriesCreateResume &&
-			seriesCreateCandidateDates !== null &&
-			seriesCreateCandidateDates.length > 0 &&
-			seriesCreatePreviewDates !== null &&
-			seriesCreatePreviewDates.length === 0
-	);
-
-	function seriesCreateIsoDay(date: string): string {
-		return date.slice(0, 10);
-	}
-
-	const seriesCreateMonthGroups = $derived(
-		seriesCreateVisibleGridDates === null
-			? null
-			: groupByMonth(seriesCreateVisibleGridDates, seriesCreateIsoDay)
-	);
 
 	function restoreSeriesCreateFocus(): void {
 		void focusAfterRender(() => seasonManagePanelEl);
@@ -194,7 +117,7 @@
 		formKeydown(event, {
 			close: dismissSeriesCreateForm,
 			submit: () => {
-				if (!seriesCreateNothingToSubmit) void submitSeriesCreate();
+				if (!grid.nothingToSubmit) void submitSeriesCreate();
 			}
 		});
 	}
@@ -210,189 +133,43 @@
 		if (submitting) return;
 		if (isOffline) return;
 		clearSeriesCreateError();
-
-		const resume = seriesCreateResume;
-		const seasonId = seriesCreateSeasonId;
-		const name = seriesCreateName.trim();
-		if (!name) {
-			setSeriesCreateError(m.series_create_name_required, 'name');
-			return;
-		}
-		const typeValue = seriesCreateType.trim();
-		if (!typeValue) {
-			setSeriesCreateError(m.series_create_type_required, 'type');
-			return;
-		}
-		const time = seriesCreateTime;
-		if (!time) {
-			setSeriesCreateError(m.series_create_time_required, 'time');
-			return;
-		}
-		const durationValue = Number(seriesCreateDuration);
-		if (!seriesCreateDuration.trim() || !Number.isFinite(durationValue)) {
-			setSeriesCreateError(m.series_create_duration_required, 'duration');
-			return;
-		}
-		if (!seriesCreateFrom) {
-			setSeriesCreateError(m.series_create_from_required, 'from');
-			return;
-		}
-		if (!seriesCreateUntil) {
-			setSeriesCreateError(m.series_create_until_required, 'until');
-			return;
-		}
-		if (seriesCreateUntil < seriesCreateFrom) {
-			setSeriesCreateError(m.series_create_until_before_from, 'until');
-			return;
-		}
-		if (seriesCreateDayApplies && seriesCreateDay === '') {
-			setSeriesCreateError(m.series_create_day_required, 'day');
-			return;
-		}
-
-		const dates: string[] = resume?.remaining ?? datesFor(seriesCreateSkipDates);
-		if (dates.length === 0) {
-			setSeriesCreateError(m.series_create_no_dates, null);
-			return;
-		}
-		const total = resume?.total ?? dates.length;
-
-		const current = selected;
-		if (!current || !seasonId) {
-			console.error('agenda: series create submitted with no selected collective/season');
-			setSeriesCreateError(m.series_create_failed, null);
-			return;
-		}
-		const cfg = cfgFor(current.db);
-		const panelSeasonId = manageableSeasonId;
-		const runDb = cfg.db;
-		const dbChanged = (): boolean => selected?.db !== runDb;
-		const runForm: SeriesCreateFormSnapshot = resume?.form ?? {
-			seasonId,
-			name,
-			type: typeValue,
-			duration: seriesCreateDuration,
-			location: seriesCreateLocation,
-			description: seriesCreateDescription,
-			repeat: seriesCreateRepeat,
-			day: seriesCreateDay,
-			time,
-			from: seriesCreateFrom,
-			until: seriesCreateUntil,
-			skipDates: [...seriesCreateSkipDates]
-		};
-		const recordStop = (seriesId: string, index: number): void => {
-			resumeByDb = setSeriesCreateResume(resumeByDb, runDb, {
-				seriesId,
-				remaining: dates.slice(index),
-				total,
-				form: runForm
-			});
-		};
-
-		submitting = true;
-		seriesRunDb = runDb;
-		try {
-			const dbEntityId = await resolveDbEntityOrLog(
-				cfg,
-				{ area: 'agenda', action: 'series create' },
-				current.personId
-			);
-			if (!dbEntityId) {
-				if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
-				return;
-			}
-			if (dbChanged()) return;
-
-			const intervalDays =
-				seriesCreateRepeat === 'daily' ? 1 : seriesCreateRepeat === 'biweekly' ? 14 : 7;
-			const trimmedLocation = seriesCreateLocation.trim();
-			const trimmedDescription = seriesCreateDescription.trim();
-
-			const startDate = seriesCreateIsoDay(dates[0]);
-			const endDate = seriesCreateIsoDay(dates[dates.length - 1]);
-
-			const seriesInput: CreateEventSeriesInput = {
-				name,
-				dbEntityId,
-				extraParentIds: [seasonId],
-				eventType: typeValue,
-				intervalDays,
-				startTime: time,
-				durationMinutes: durationValue,
-				startDate,
-				endDate,
-				...(trimmedLocation ? { defaultLocation: trimmedLocation } : {}),
-				...(trimmedDescription ? { defaultDescription: trimmedDescription } : {})
-			};
-
-			let seriesId: string;
-			if (resume) {
-				seriesId = resume.seriesId;
-			} else {
-				try {
-					seriesId = await createEventSeries(cfg, seriesInput);
-				} catch (e) {
-					console.error('agenda: series create failed', e);
-					if (!dbChanged()) setSeriesCreateError(m.series_create_failed, null);
-					return;
-				}
-			}
-			if (dbChanged()) {
-				recordStop(seriesId, 0);
-				return;
-			}
-
-			const alreadyCreated = total - dates.length;
-			let created = alreadyCreated;
-			for (let i = 0; i < dates.length; i += 1) {
-				if (dbChanged()) {
-					recordStop(seriesId, i);
-					break;
-				}
-				seriesCreateProgress = { current: created + 1, total };
-				const startDatetime = tallinnLocalToUtcIso(dates[i]);
-				try {
-					await createEvent(cfg, {
-						dbEntityId,
-						seriesId,
-						extraParentIds: [seasonId],
-						eventType: typeValue,
-						startDatetime
-					});
-					created += 1;
-				} catch (e) {
-					if (dbChanged()) {
-						recordStop(seriesId, i);
-						return;
-					}
-					console.error('agenda: bulk event create failed', e);
-					seriesCreateProgress = null;
-					recordStop(seriesId, i);
-					setSeriesCreateError(() => m.series_create_bulk_failed({ created, total }), null);
-					loadForSelected({ keepSeasonManage: true });
-					if (panelSeasonId === seasonId) {
-						refreshSeasonManageLists(cfg, seasonId);
-					}
-					return;
-				}
-			}
-			if (dbChanged()) {
-				if (created >= total) resumeByDb = clearSeriesCreateResume(resumeByDb, runDb);
-				return;
-			}
-			seriesCreateProgress = null;
-			resumeByDb = clearSeriesCreateResume(resumeByDb, runDb);
-			onclose();
-			loadForSelected({ keepSeasonManage: true });
-			if (panelSeasonId === seasonId) {
-				refreshSeasonManageLists(cfg, seasonId);
-			}
-			restoreSeriesCreateFocus();
-		} finally {
-			submitting = false;
-			seriesRunDb = null;
-		}
+		await runSeriesCreate({
+			form: {
+				seasonId: seriesCreateSeasonId,
+				name: seriesCreateName,
+				type: seriesCreateType,
+				duration: seriesCreateDuration,
+				location: seriesCreateLocation,
+				description: seriesCreateDescription,
+				repeat: seriesCreateRepeat,
+				day: seriesCreateDay,
+				time: seriesCreateTime,
+				from: seriesCreateFrom,
+				until: seriesCreateUntil,
+				skipDates: [...seriesCreateSkipDates]
+			},
+			dayApplies: grid.dayApplies,
+			resume: seriesCreateResume,
+			datesFor: grid.datesFor,
+			selected: () => selected,
+			manageableSeasonId,
+			seams: {
+				createEventSeries: (cfg, input) => createEventSeries(cfg, input),
+				createEvent: (cfg, input) => createEvent(cfg, input)
+			},
+			setError: setSeriesCreateError,
+			setProgress: (progress) => (seriesCreateProgress = progress),
+			setRunning: (runDb) => {
+				submitting = runDb !== null;
+				seriesRunDb = runDb;
+			},
+			recordResume: (db, entry) => (resumeByDb = setSeriesCreateResume(resumeByDb, db, entry)),
+			clearResume: (db) => (resumeByDb = clearSeriesCreateResume(resumeByDb, db)),
+			onclose,
+			loadForSelected,
+			refreshSeasonManageLists,
+			restoreFocus: restoreSeriesCreateFocus
+		});
 	}
 </script>
 
@@ -433,30 +210,30 @@
 		bind:time={seriesCreateTime}
 		bind:from={seriesCreateFrom}
 		bind:until={seriesCreateUntil}
-		dayApplies={seriesCreateDayApplies}
+		dayApplies={grid.dayApplies}
 		errorField={seriesCreateErrorField}
 		locked={seriesCreateLocked}
 		onedit={clearSeriesCreateError}
 	/>
 
 	<SeriesCreatePreviewFields
-		monthGroups={seriesCreateMonthGroups}
-		previewDates={seriesCreatePreviewDates}
+		monthGroups={grid.monthGroups}
+		previewDates={grid.previewDates}
 		resume={seriesCreateResume}
 		skipDates={seriesCreateSkipDates}
 		locked={seriesCreateLocked}
-		hiddenCount={seriesCreateHiddenCount}
-		nextBatchSize={seriesCreateNextBatchSize}
-		showAllCount={seriesCreateShowAllCount}
+		hiddenCount={grid.hiddenCount}
+		nextBatchSize={grid.nextBatchSize}
+		showAllCount={grid.showAllCount}
 		progress={seriesCreateProgress}
 		error={seriesCreateError}
 		{submitting}
-		nothingToSubmit={seriesCreateNothingToSubmit}
+		nothingToSubmit={grid.nothingToSubmit}
 		{isOffline}
 		isoDay={seriesCreateIsoDay}
 		ontoggleskip={toggleSeriesCreateSkipDate}
-		onrevealnext={revealSeriesCreateNext}
-		onrevealall={revealSeriesCreateAll}
+		onrevealnext={grid.revealNext}
+		onrevealall={grid.revealAll}
 		onsubmit={() => void submitSeriesCreate()}
 		oncancel={dismissSeriesCreateForm}
 	/>
