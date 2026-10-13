@@ -31,8 +31,6 @@ Outside the lint:
   A comment in a committed run script; left as is.
 - `prompts/victoria.md` L66, L90 still call `entu/research` canonical (the readers' pass left
   them; victoria is not in the default chain).
-- `common-prompt.md` L58 `git add -N` and `facts/rulings-process.yaml` #289 row: batch 3,
-  awaiting a ruling (02-needs-judgment.md).
 
 ## Fallback and the way back
 

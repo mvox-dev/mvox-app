@@ -4,10 +4,6 @@ facts:
     ref: mihkel:2026-09-10
     refute: "=ref"
     verified: "2026-09-10"
-  - fact: "#289 is an epic released from deferred; its inventory gates the cutting of sub-issues, and the remote team-lead cuts them."
-    ref: "#289"
-    refute: "=ref"
-    verified: "2026-09-09"
   - fact: "Epic labels belong to the PO and are set by script; the team-lead labels only the issues it picks up and never passes epics to research-pack args."
     ref: gama:2026-10-06
     refute: "=ref"

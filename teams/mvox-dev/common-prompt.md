@@ -55,7 +55,6 @@ How `src/comment-rules.spec.ts` counts these, on every code file a change touche
 - The top line is the file's first non-blank line, if it is a whole-line comment (`// x`, `/* x */`, `<!-- x -->`); the rest of its run counts, and it still obeys the 3-line, 100-character and narration rules. A `.svelte` file gets it only for a `<!-- -->` line above `<script>`.
 - The narration rule matches plural and suffixed shapes too: "findings 1a-1d", "slice 4b", "review-round 2".
 - A comment TRAILING code (`const x = 1; // why`) is exempt from the 3-line and 10% counts — that line is code — but NOT from the narration and 100-character rules, which read the comment text alone. A `//` inside a string opens no comment, so URLs are safe.
-- The check skips UNTRACKED files until that is fixed: `git add -N` a new file before running gates.
 
 ## Code Layout and Size
 

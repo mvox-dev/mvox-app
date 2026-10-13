@@ -142,4 +142,6 @@ Batch 2 ruling, 2026-10-14, Palestrina (delegated by Mihkel 2026-10-14): `byrd#1
 | `facts/rulings-process.yaml` row 1 (rule candidate n=100) | "#289 is an epic released from deferred; its inventory gates the cutting of sub-issues." #289 is closed (checked 2026-10-14). | delete the row: finished work |
 | common-prompt.md L58 (rule candidate n=177) | "The check skips UNTRACKED files until that is fixed: `git add -N` a new file before running gates." `changedFiles()` reads untracked files since #568. | cut the line: fixed |
 
+Batch 3 ruling, 2026-10-14, Palestrina (delegated by Mihkel 2026-10-14): both approved and applied.
+
 (*MVOX:memkit*)
